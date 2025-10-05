@@ -88,14 +88,14 @@ async function switchView(view) {
     // Render view
     if (view === 'overview') await renderOverview();
     else if (view === 'organizations') await renderOrganizations();
-    else if (view === 'users') renderUsers();
-    else if (view === 'requests') renderRequests();
+    else if (view === 'users') await renderUsers();
+    else if (view === 'requests') await renderRequests();
 }
 
 async function renderOverview() {
     const orgStats = await dataManager.getAllOrganizationStats();
-    const users = authManager.getUsers();
-    const pendingRequests = authManager.getPendingAccountRequests();
+    const users = await authManager.getUsers();
+    const pendingRequests = await authManager.getPendingAccountRequests();
 
     dom.overviewView.innerHTML = `
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -171,6 +171,7 @@ async function renderOverview() {
 async function renderOrganizations() {
     const organizations = (await authManager.getOrganizations()).filter(org => org.name !== 'SYSTEM');
     const orgStats = await dataManager.getAllOrganizationStats();
+    const allUsers = await authManager.getUsers();
 
     dom.organizationsView.innerHTML = `
         <div class="mb-6 flex justify-between items-center">
@@ -183,7 +184,7 @@ async function renderOrganizations() {
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             ${organizations.map(org => {
                 const stats = orgStats.find(s => s.organizationId === org.id) || { totalAssets: 0, totalVessels: 0, totalScans: 0 };
-                const users = authManager.getUsers().filter(u => u.organizationId === org.id);
+                const users = allUsers.filter(u => u.organizationId === org.id || u.organization_id === org.id);
 
                 return `
                     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
@@ -224,8 +225,8 @@ async function renderOrganizations() {
     });
 }
 
-function renderUsers() {
-    const users = authManager.getUsers();
+async function renderUsers() {
+    const users = await authManager.getUsers();
 
     dom.usersView.innerHTML = `
         <div class="mb-6 flex justify-between items-center">
@@ -307,8 +308,8 @@ function renderUsers() {
     });
 }
 
-function renderRequests() {
-    const requests = authManager.getPendingAccountRequests();
+async function renderRequests() {
+    const requests = await authManager.getPendingAccountRequests();
 
     dom.requestsView.innerHTML = `
         <div class="mb-6">
@@ -370,8 +371,8 @@ function renderRequests() {
     });
 }
 
-function updatePendingBadges() {
-    const pending = authManager.getPendingAccountRequests();
+async function updatePendingBadges() {
+    const pending = await authManager.getPendingAccountRequests();
     const count = pending.length;
 
     if (count > 0) {
@@ -441,7 +442,7 @@ function showOrgMenu(event, orgId) {
 }
 
 async function createUser() {
-    const organizations = authManager.getOrganizations().filter(org => org.name !== 'SYSTEM');
+    const organizations = (await authManager.getOrganizations()).filter(org => org.name !== 'SYSTEM');
 
     const username = prompt('Enter username:');
     if (!username) return;
@@ -477,7 +478,7 @@ async function createUser() {
     });
 
     if (result.success) {
-        renderUsers();
+        await renderUsers();
     } else {
         alert('Error: ' + result.error);
     }
@@ -499,7 +500,7 @@ async function editUser(userId) {
 
     const result = await authManager.updateUser(userId, { role: roles[roleIndex] });
     if (result.success) {
-        renderUsers();
+        await renderUsers();
     } else {
         alert('Error: ' + result.error);
     }
@@ -512,7 +513,7 @@ async function deleteUser(userId) {
     if (confirm(`Delete user "${user.username}"? This cannot be undone.`)) {
         const result = await authManager.deleteUser(userId);
         if (result.success) {
-            renderUsers();
+            await renderUsers();
         } else {
             alert('Error: ' + result.error);
         }
@@ -526,8 +527,8 @@ async function approveRequest(requestId) {
     const result = await authManager.approveAccountRequest(requestId, password);
     if (result.success) {
         alert('Account request approved!');
-        renderRequests();
-        updatePendingBadges();
+        await renderRequests();
+        await updatePendingBadges();
     } else {
         alert('Error: ' + result.error);
     }
@@ -539,8 +540,8 @@ async function rejectRequest(requestId) {
     const result = await authManager.rejectAccountRequest(requestId, reason || '');
     if (result.success) {
         alert('Account request rejected');
-        renderRequests();
-        updatePendingBadges();
+        await renderRequests();
+        await updatePendingBadges();
     } else {
         alert('Error: ' + result.error);
     }
@@ -562,7 +563,7 @@ export default {
         await dataManager.ensureInitialized();
 
         addEventListeners();
-        updatePendingBadges();
+        await updatePendingBadges();
         await switchView('overview');
     },
 
@@ -573,7 +574,7 @@ export default {
     },
 
     refresh: () => {
-        updatePendingBadges();
+        await updatePendingBadges();
         switchView(currentView);
     }
 };
