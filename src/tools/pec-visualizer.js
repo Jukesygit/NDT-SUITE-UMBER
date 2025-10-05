@@ -1,4 +1,5 @@
 // PEC Visualizer Tool Module - Complete with all features
+import dataManager from '../data-manager.js';
 
 let container, dom = {}, heatmapData = null, customColorRange = { min: null, max: null };
 
@@ -35,7 +36,7 @@ const HTML = `
                             <option value="Viridis">Viridis</option>
                             <option value="RdBu">Red-Blue</option>
                             <option value="YlOrRd">Yl-Or-Rd</option>
-                            <option value="Jet">Jet</option>
+                            <option value="Jet" selected>Jet</option>
                             <option value="Hot">Hot</option>
                             <option value="Picnic">Picnic</option>
                             <option value="Portland">Portland</option>
@@ -45,12 +46,13 @@ const HTML = `
                     <div class="control-group">
                         <label for="smoothing-pec" class="label">Smoothing:</label>
                         <select id="smoothing-pec" class="input-field">
-                            <option value="false">None</option>
-                            <option value="best">Smooth</option>
+                            <option value="false">None (Blocky)</option>
+                            <option value="best">Smooth (Best)</option>
+                            <option value="fast">Smooth (Fast)</option>
                         </select>
                     </div>
                     <div class="flex items-center gap-2 pt-5">
-                        <input type="checkbox" id="reverse-scale-pec" class="w-5 h-5 cursor-pointer">
+                        <input type="checkbox" id="reverse-scale-pec" class="w-5 h-5 cursor-pointer" checked>
                         <label for="reverse-scale-pec" class="label">Reverse</label>
                         <input type="checkbox" id="show-grid-pec" checked class="w-5 h-5 cursor-pointer ml-4">
                         <label for="show-grid-pec" class="label">Grid</label>
@@ -75,8 +77,11 @@ const HTML = `
                 <div id="stats-pec" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 text-center"></div>
 
                 <div class="flex flex-wrap justify-center gap-4 pt-4">
+                    <button id="reset-view-btn" class="bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors">Reset View</button>
+                    <button id="load-new-data-btn" class="bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">Load New Data</button>
                     <button id="export-image-btn" class="bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors">Export Image</button>
                     <button id="export-data-btn" class="bg-teal-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-teal-700 transition-colors">Export Data</button>
+                    <button id="export-to-hub-btn" class="bg-orange-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-orange-700 transition-colors">Export to Hub</button>
                 </div>
             </div>
         </div>
@@ -103,8 +108,11 @@ function cacheDom() {
         applyRangeBtn: q('#apply-range-btn'),
         resetRangeBtn: q('#reset-range-btn'),
         statsContainer: q('#stats-pec'),
+        resetViewBtn: q('#reset-view-btn'),
+        loadNewDataBtn: q('#load-new-data-btn'),
         exportImageBtn: q('#export-image-btn'),
-        exportDataBtn: q('#export-data-btn')
+        exportDataBtn: q('#export-data-btn'),
+        exportToHubBtn: q('#export-to-hub-btn')
     };
 }
 
@@ -117,20 +125,73 @@ function showMessage(message, isError = false) {
 }
 
 function parseCSVData(text) {
-    const lines = text.trim().split(/\r?\n/);
-    if (lines.length === 0) throw new Error('No data provided');
+    const lines = text.trim().split(/\r?\n/).filter(line => line.trim());
 
-    const data = lines.map(line => {
-        const values = line.split(/[,\t]/).map(v => parseFloat(v.trim()));
-        return values.filter(v => !isNaN(v));
-    }).filter(row => row.length > 0);
+    if (lines.length < 2) {
+        throw new Error('Not enough data rows found.');
+    }
 
-    if (data.length === 0) throw new Error('No valid numeric data found');
-    return data;
+    const delimiter = lines[0].includes('\t') ? '\t' : ',';
+
+    // Parse first row to get X labels (circumferential positions)
+    const firstRow = lines[0].split(delimiter);
+    const xLabels = [];
+
+    for (let i = 1; i < firstRow.length; i++) {
+        const val = parseFloat(firstRow[i]);
+        if (!isNaN(val)) {
+            xLabels.push(val);
+        }
+    }
+
+    // Parse remaining rows to get Y labels and data matrix
+    const yLabels = [];
+    const dataMatrix = [];
+
+    for (let i = 1; i < lines.length; i++) {
+        const row = lines[i].split(delimiter);
+        const yValue = parseFloat(row[0]);
+        if (!isNaN(yValue)) {
+            yLabels.push(yValue);
+
+            const rowData = [];
+            for (let j = 1; j < row.length && j <= xLabels.length; j++) {
+                const value = parseFloat(row[j]);
+                rowData.push(isNaN(value) ? null : value);
+            }
+
+            // Pad row if needed
+            while (rowData.length < xLabels.length) {
+                rowData.push(null);
+            }
+
+            dataMatrix.push(rowData);
+        }
+    }
+
+    if (dataMatrix.length === 0 || xLabels.length === 0) {
+        throw new Error('No valid data found.');
+    }
+
+    return {
+        x: xLabels,
+        y: yLabels,
+        z: dataMatrix
+    };
 }
 
-function calculateStats(data) {
-    const flatData = data.flat().filter(v => !isNaN(v) && isFinite(v));
+function calculateStats(heatmapData) {
+    if (!heatmapData || !heatmapData.z) return null;
+
+    const flatData = [];
+    for (let row of heatmapData.z) {
+        for (let val of row) {
+            if (val !== null && val !== undefined && !isNaN(val) && isFinite(val)) {
+                flatData.push(val);
+            }
+        }
+    }
+
     if (flatData.length === 0) return null;
 
     const sorted = flatData.slice().sort((a, b) => a - b);
@@ -144,7 +205,9 @@ function calculateStats(data) {
         mean: mean,
         median: sorted[Math.floor(sorted.length / 2)],
         stdDev: Math.sqrt(variance),
-        count: flatData.length
+        count: flatData.length,
+        rows: heatmapData.y.length,
+        cols: heatmapData.x.length
     };
 }
 
@@ -172,7 +235,8 @@ function renderHeatmap() {
     if (!heatmapData) return;
 
     const colorscale = dom.colorscaleSelect.value;
-    const smoothing = dom.smoothingSelect.value === 'best' ? 'best' : false;
+    const smoothingValue = dom.smoothingSelect.value;
+    const smoothing = (smoothingValue === 'best' || smoothingValue === 'fast') ? smoothingValue : false;
     const reverseScale = dom.reverseScaleCheckbox.checked;
     const showGrid = dom.showGridCheckbox.checked;
 
@@ -180,7 +244,9 @@ function renderHeatmap() {
     const zmax = customColorRange.max !== null ? customColorRange.max : undefined;
 
     const trace = {
-        z: heatmapData,
+        x: heatmapData.x,
+        y: heatmapData.y,
+        z: heatmapData.z,
         type: 'heatmap',
         colorscale: colorscale,
         reversescale: reverseScale,
@@ -188,33 +254,56 @@ function renderHeatmap() {
         zmin: zmin,
         zmax: zmax,
         colorbar: {
-            title: 'Thickness (mm)',
-            titleside: 'right'
+            title: 'Thickness<br>(mm)',
+            titleside: 'right',
+            thickness: 20
         },
-        hovertemplate: 'Row: %{y}<br>Col: %{x}<br>Value: %{z:.2f} mm<extra></extra>'
+        hoverongaps: false,
+        hovertemplate: 'Circumferential: %{x:.1f} mm<br>' +
+                      'Axial: %{y:.1f} mm<br>' +
+                      'Thickness: %{z:.1f} mm<br>' +
+                      '<extra></extra>'
     };
 
     const layout = {
         title: 'PEC Wall Thickness Heatmap',
         xaxis: {
-            title: 'Column',
-            showgrid: showGrid
+            title: 'Circumferential Position (mm)',
+            showgrid: showGrid,
+            gridcolor: '#e0e0e0',
+            scaleanchor: 'y',
+            scaleratio: 1
         },
         yaxis: {
-            title: 'Row',
-            showgrid: showGrid
+            title: 'Axial Position (mm)',
+            showgrid: showGrid,
+            gridcolor: '#e0e0e0',
+            autorange: 'reversed'
         },
         autosize: true,
-        margin: { l: 60, r: 60, t: 60, b: 60 }
+        margin: { l: 80, r: 80, t: 60, b: 60 },
+        hoverlabel: {
+            bgcolor: 'white',
+            bordercolor: '#333',
+            font: {size: 12}
+        }
     };
 
     if (document.documentElement.classList.contains('dark')) {
         layout.template = 'plotly_dark';
         layout.paper_bgcolor = 'rgb(31, 41, 55)';
         layout.plot_bgcolor = 'rgb(31, 41, 55)';
+        layout.xaxis.gridcolor = '#4b5563';
+        layout.yaxis.gridcolor = '#4b5563';
     }
 
-    const config = { responsive: true, displaylogo: false };
+    const config = {
+        responsive: true,
+        displaylogo: false,
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['select2d', 'lasso2d']
+    };
+
     Plotly.react(dom.heatmapContainer, [trace], layout, config);
 }
 
@@ -247,14 +336,42 @@ function processData() {
 }
 
 function loadSampleData() {
-    const sampleData = `6.2,6.3,6.5,6.4,6.3,6.2,6.1
-6.3,5.8,5.5,5.6,5.7,6.0,6.2
-6.4,5.5,4.8,4.9,5.2,5.8,6.3
-6.5,5.6,5.0,5.1,5.3,5.9,6.4
-6.3,5.9,5.4,5.5,5.6,6.0,6.2
-6.2,6.1,6.0,6.1,6.0,6.1,6.2`;
+    // Generate realistic grid-based sample data similar to the reference HTML
+    const sampleX = Array.from({length: 54}, (_, i) => (i * 47.4).toFixed(1));
+    const sampleY = Array.from({length: 42}, (_, i) => (1076.2 - i * 23.8).toFixed(1));
+    const sampleZ = [];
 
-    dom.csvInput.value = sampleData;
+    for (let i = 0; i < sampleY.length; i++) {
+        const row = [];
+        for (let j = 0; j < sampleX.length; j++) {
+            const baseThickness = 7.0;
+            const variation = Math.sin(i * 0.15) * 1.5 + Math.cos(j * 0.2) * 1.2;
+            const noise = (Math.random() - 0.5) * 0.5;
+            let thickness = baseThickness + variation + noise;
+
+            // Add a defect zone
+            if (j > 30 && j < 40 && i > 10 && i < 25) {
+                thickness -= 2.0;
+            }
+
+            row.push(Math.max(4.5, Math.min(9.6, thickness)).toFixed(1));
+        }
+        sampleZ.push(row);
+    }
+
+    // Build CSV with X labels in first row and Y labels in first column
+    const csvLines = [];
+
+    // First row: empty cell + X labels
+    csvLines.push(',' + sampleX.join(','));
+
+    // Data rows: Y label + data values
+    for (let i = 0; i < sampleY.length; i++) {
+        csvLines.push(sampleY[i] + ',' + sampleZ[i].join(','));
+    }
+
+    const csvData = csvLines.join('\n');
+    dom.csvInput.value = csvData;
     showMessage('Sample data loaded. Click "Process Data" to visualize.');
 }
 
@@ -311,7 +428,18 @@ function exportData() {
         return;
     }
 
-    const csv = heatmapData.map(row => row.join(',')).join('\n');
+    // Build CSV with X labels in first row and Y labels in first column
+    const csvLines = [];
+
+    // First row: empty cell + X labels
+    csvLines.push(',' + heatmapData.x.join(','));
+
+    // Data rows: Y label + data values
+    for (let i = 0; i < heatmapData.y.length; i++) {
+        csvLines.push(heatmapData.y[i] + ',' + heatmapData.z[i].join(','));
+    }
+
+    const csv = csvLines.join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -321,10 +449,271 @@ function exportData() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+    showMessage('Data exported successfully');
+}
+
+function resetView() {
+    if (!heatmapData) return;
+
+    Plotly.relayout(dom.heatmapContainer, {
+        'xaxis.autorange': true,
+        'yaxis.autorange': true
+    });
+    showMessage('View reset');
+}
+
+function loadNewData() {
+    dom.visualizationSection.classList.add('hidden');
+    dom.uploadSection.classList.remove('hidden');
+    dom.csvInput.value = '';
+    dom.messageArea.innerHTML = '';
+    heatmapData = null;
+    customColorRange = { min: null, max: null };
+}
+
+function exportToHub() {
+    if (!heatmapData) {
+        showMessage('No data to export', true);
+        return;
+    }
+
+    // Create modal dialog
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h2 class="text-xl font-bold mb-4 dark:text-white">Export Scan to Hub</h2>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2 dark:text-gray-200">Scan Name</label>
+                <input type="text" id="scan-name-input" placeholder="e.g., Tank A North Side"
+                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white">
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2 dark:text-gray-200">Asset</label>
+                <select id="asset-select" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white">
+                    <option value="">-- Select Asset --</option>
+                    ${dataManager.getAssets().map(a => `<option value="${a.id}">${a.name}</option>`).join('')}
+                </select>
+                <button id="new-asset-btn" class="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">+ Create New Asset</button>
+            </div>
+
+            <div class="mb-4" id="vessel-section" style="display:none;">
+                <label class="block text-sm font-medium mb-2 dark:text-gray-200">Vessel</label>
+                <select id="vessel-select" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white">
+                    <option value="">-- Select Vessel --</option>
+                </select>
+                <button id="new-vessel-btn" class="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">+ Create New Vessel</button>
+            </div>
+
+            <div class="flex gap-3 mt-6">
+                <button id="export-confirm-btn" class="flex-1 bg-orange-600 text-white py-2 rounded-lg hover:bg-orange-700 transition-colors">Export</button>
+                <button id="export-cancel-btn" class="flex-1 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const scanNameInput = modal.querySelector('#scan-name-input');
+    const assetSelect = modal.querySelector('#asset-select');
+    const vesselSelect = modal.querySelector('#vessel-select');
+    const vesselSection = modal.querySelector('#vessel-section');
+    const newAssetBtn = modal.querySelector('#new-asset-btn');
+    const newVesselBtn = modal.querySelector('#new-vessel-btn');
+    const confirmBtn = modal.querySelector('#export-confirm-btn');
+    const cancelBtn = modal.querySelector('#export-cancel-btn');
+
+    // Set default scan name
+    const stats = calculateStats(heatmapData);
+    scanNameInput.value = `PEC Scan ${new Date().toLocaleDateString()}`;
+
+    // Asset selection handler
+    assetSelect.addEventListener('change', () => {
+        const assetId = assetSelect.value;
+        if (assetId) {
+            const asset = dataManager.getAsset(assetId);
+            vesselSection.style.display = 'block';
+            vesselSelect.innerHTML = '<option value="">-- Select Vessel --</option>' +
+                asset.vessels.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
+        } else {
+            vesselSection.style.display = 'none';
+        }
+    });
+
+    // New asset handler
+    newAssetBtn.addEventListener('click', () => {
+        const name = prompt('Enter asset name:');
+        if (name) {
+            const asset = dataManager.createAsset(name);
+            assetSelect.innerHTML += `<option value="${asset.id}" selected>${asset.name}</option>`;
+            assetSelect.value = asset.id;
+            assetSelect.dispatchEvent(new Event('change'));
+        }
+    });
+
+    // New vessel handler
+    newVesselBtn.addEventListener('click', () => {
+        const assetId = assetSelect.value;
+        if (!assetId) {
+            alert('Please select an asset first');
+            return;
+        }
+        const name = prompt('Enter vessel name:');
+        if (name) {
+            const vessel = dataManager.createVessel(assetId, name);
+            vesselSelect.innerHTML += `<option value="${vessel.id}" selected>${vessel.name}</option>`;
+            vesselSelect.value = vessel.id;
+        }
+    });
+
+    // Generate thumbnails - both full plot and heatmap-only
+    const generateThumbnails = async () => {
+        try {
+            // 1. Generate full plot with axes and colorbar for data hub display
+            const fullThumbnail = await Plotly.toImage(dom.heatmapContainer, {
+                format: 'png',
+                width: 800,
+                height: 600,
+                scale: 2
+            });
+
+            // 2. Generate clean heatmap-only version for 3D texturing
+            const tempDiv = document.createElement('div');
+            tempDiv.style.position = 'absolute';
+            tempDiv.style.left = '-9999px';
+            tempDiv.style.width = '1920px';
+            tempDiv.style.height = '1080px';
+            document.body.appendChild(tempDiv);
+
+            // Clone the current plot data without color bar
+            const cleanData = JSON.parse(JSON.stringify(dom.heatmapContainer.data));
+            if (cleanData[0]) cleanData[0].showscale = false;
+
+            // Layout with no axes or margins
+            const cleanLayout = {
+                xaxis: { visible: false },
+                yaxis: { visible: false },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                margin: { l: 0, r: 0, t: 0, b: 0 },
+                showlegend: false
+            };
+
+            await Plotly.newPlot(tempDiv, cleanData, cleanLayout, { displayModeBar: false });
+
+            const heatmapOnly = await Plotly.toImage(tempDiv, {
+                format: 'png',
+                width: 1920,
+                height: 1080,
+                scale: 2
+            });
+
+            // Cleanup
+            Plotly.purge(tempDiv);
+            document.body.removeChild(tempDiv);
+
+            return {
+                full: fullThumbnail,
+                heatmapOnly: heatmapOnly
+            };
+        } catch (error) {
+            console.error('Error generating thumbnails:', error);
+            return null;
+        }
+    };
+
+    // Confirm export
+    confirmBtn.addEventListener('click', async () => {
+        const scanName = scanNameInput.value.trim();
+        const assetId = assetSelect.value;
+        const vesselId = vesselSelect.value;
+
+        if (!scanName) {
+            alert('Please enter a scan name');
+            return;
+        }
+        if (!assetId) {
+            alert('Please select an asset');
+            return;
+        }
+        if (!vesselId) {
+            alert('Please select a vessel');
+            return;
+        }
+
+        const thumbnails = await generateThumbnails();
+
+        const scanData = {
+            name: scanName,
+            toolType: 'pec',
+            data: {
+                heatmapData: heatmapData,
+                customColorRange: customColorRange,
+                stats: stats
+            },
+            thumbnail: thumbnails ? thumbnails.full : null,
+            heatmapOnly: thumbnails ? thumbnails.heatmapOnly : null
+        };
+
+        const scan = await dataManager.createScan(assetId, vesselId, scanData);
+
+        if (scan) {
+            document.body.removeChild(modal);
+            showMessage('Scan exported to hub successfully!');
+        } else {
+            alert('Failed to export scan');
+        }
+    });
+
+    // Cancel handler
+    cancelBtn.addEventListener('click', () => {
+        document.body.removeChild(modal);
+    });
+
+    // Click outside to close
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            document.body.removeChild(modal);
+        }
+    });
 }
 
 function updateVisualization() {
     renderHeatmap();
+}
+
+function loadScanData(event) {
+    const { scanData } = event.detail;
+
+    if (!scanData || scanData.toolType !== 'pec') return;
+
+    // Load the saved scan data
+    if (scanData.data && scanData.data.heatmapData) {
+        heatmapData = scanData.data.heatmapData;
+        customColorRange = scanData.data.customColorRange || { min: null, max: null };
+
+        const stats = scanData.data.stats || calculateStats(heatmapData);
+
+        if (stats) {
+            dom.minValueInput.value = stats.min.toFixed(2);
+            dom.maxValueInput.value = stats.max.toFixed(2);
+        }
+
+        // Apply custom range if it exists
+        if (customColorRange.min !== null && customColorRange.max !== null) {
+            dom.minValueInput.value = customColorRange.min.toFixed(2);
+            dom.maxValueInput.value = customColorRange.max.toFixed(2);
+        }
+
+        renderHeatmap();
+        renderStats(stats);
+
+        dom.visualizationSection.classList.remove('hidden');
+        dom.uploadSection.classList.add('hidden');
+        showMessage(`Loaded: ${scanData.name}`);
+    }
 }
 
 function addEventListeners() {
@@ -336,13 +725,18 @@ function addEventListeners() {
     dom.showGridCheckbox.addEventListener('change', updateVisualization);
     dom.applyRangeBtn.addEventListener('click', applyCustomRange);
     dom.resetRangeBtn.addEventListener('click', resetRange);
+    dom.resetViewBtn.addEventListener('click', resetView);
+    dom.loadNewDataBtn.addEventListener('click', loadNewData);
     dom.exportImageBtn.addEventListener('click', exportImage);
     dom.exportDataBtn.addEventListener('click', exportData);
+    dom.exportToHubBtn.addEventListener('click', exportToHub);
     document.addEventListener('themeChanged', updateVisualization);
+    window.addEventListener('loadScanData', loadScanData);
 }
 
 function removeEventListeners() {
     document.removeEventListener('themeChanged', updateVisualization);
+    window.removeEventListener('loadScanData', loadScanData);
 }
 
 export default {

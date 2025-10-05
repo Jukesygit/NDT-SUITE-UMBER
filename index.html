@@ -15,19 +15,24 @@
 </head>
 <body class="bg-black text-white">
     <div id="app-container">
-        <header id="toolbar" class="bg-gray-900 flex-shrink-0 flex items-center justify-center z-20 relative">
-            <nav id="toolbar-content" class="flex items-center justify-center gap-4"></nav>
-            <button id="theme-toggle" class="absolute top-4 right-4 p-2 rounded-full bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors">
-                <svg id="theme-icon-light" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
-                </svg>
-                <svg id="theme-icon-dark" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
-                </svg>
-            </button>
+        <header id="toolbar" class="bg-gray-900 flex-shrink-0 flex items-center justify-center z-20 relative border-r border-gray-700">
+            <div class="flex flex-col h-full w-full items-center justify-between py-4">
+                <div class="flex flex-col items-center gap-4 w-full">
+                    <button id="theme-toggle" class="p-2 rounded-full bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors" aria-label="Toggle dark mode">
+                        <svg id="theme-icon-light" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                        </svg>
+                        <svg id="theme-icon-dark" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                        </svg>
+                    </button>
+                    <nav id="toolbar-content" class="flex items-center justify-center gap-4"></nav>
+                </div>
+                <div id="user-info-container" class="hidden w-full"></div>
+            </div>
         </header>
 
-        <main id="main-content" class="flex-grow flex flex-col items-center justify-center relative bg-gray-800" style="min-height: 0;">
+        <main id="main-content" class="flex-grow flex flex-col items-center justify-center relative bg-gray-800">
             <div id="landing-content" class="text-center p-8">
                 <h1 id="landing-title" class="text-4xl md:text-5xl font-bold mb-4 tracking-tight">NDT Tool Suite</h1>
                 <p id="landing-description" class="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto">
@@ -35,10 +40,13 @@
                 </p>
             </div>
             
+            <div id="tool-admin" class="tool-container hidden"></div>
+            <div id="tool-home" class="tool-container hidden"></div>
             <div id="tool-tofd" class="tool-container hidden"></div>
             <div id="tool-cscan" class="tool-container hidden"></div>
             <div id="tool-pec" class="tool-container hidden"></div>
             <div id="tool-3dview" class="tool-container hidden"></div>
+            <div id="tool-nii" class="tool-container hidden"></div>
         </main>
     </div>
 
