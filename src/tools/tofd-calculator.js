@@ -57,7 +57,7 @@ const HTML = `
     <div class="modal-content bg-white dark:bg-slate-800 rounded-lg shadow-xl mx-auto mt-10 mb-10 max-w-3xl w-11/12 relative transform scale-95 max-h-[90vh] flex flex-col">
         <div class="p-5 border-b dark:border-slate-700 flex justify-between items-center flex-shrink-0">
             <h3 class="text-lg font-semibold dark:text-white">Setup Analysis & Recommendations</h3>
-            <button id="close-modal-btn" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-3xl leading-none">&times;</button>
+            <button id="close-modal-btn" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-3xl leading-none" aria-label="Close analysis modal">&times;</button>
         </div>
         <div id="modal-body" class="p-6 overflow-y-auto flex-grow">
             <div id="loader" class="flex justify-center items-center h-full">
@@ -115,6 +115,7 @@ function createUI() {
             rangeInput.step = p.step;
             rangeInput.value = p.value;
             rangeInput.className = 'w-full';
+            rangeInput.setAttribute('aria-label', p.label);
             
             wrapper.appendChild(labelDiv);
             wrapper.appendChild(rangeInput);

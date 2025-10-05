@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import dataManager from '../data-manager.js';
 
 let container, scene, camera, renderer, orbitControls, transformControls, model, decalMaterial, directionalLight;
 let layers = [], selectedLayer = null, needsRender = true, continuousRender = false, animationFrameId;
@@ -20,7 +21,7 @@ const HTML = `
         </div>
         <div id="upload-content" class="panel-content">
             <label for="model-upload" class="upload-label">Choose an .obj File</label>
-            <input type="file" id="model-upload" class="hidden" accept=".obj">
+            <input type="file" id="model-upload" class="hidden" accept=".obj" aria-label="Upload 3D model file">
             <span id="model-file-name" class="text-sm text-gray-600 mt-1 block">Default Cylinder</span>
         </div>
     </div>
@@ -34,8 +35,11 @@ const HTML = `
         </div>
         <div id="layers-content" class="panel-content">
             <div id="layer-list" class="flex flex-col gap-2"></div>
-            <button id="add-layer-btn" class="action-btn mt-4">Add New Layer</button>
-            <input type="file" id="texture-upload" class="hidden" accept="image/png">
+            <div class="flex gap-2 mt-4">
+                <button id="add-layer-btn" class="action-btn flex-1">Upload Image</button>
+                <button id="pick-scan-btn" class="action-btn flex-1">Pick from Scans</button>
+            </div>
+            <input type="file" id="texture-upload" class="hidden" accept="image/png" aria-label="Upload texture image">
         </div>
     </div>
     
@@ -84,10 +88,42 @@ const HTML = `
                         <button id="axis-z-btn" class="mode-btn w-1/3 active">Z</button>
                     </div>
                 </div>
-                <div class="mt-2"><label for="offset-u">Offset (Circumference)</label><input type="range" id="offset-u" min="-1" max="1" step="0.01" value="0"></div>
-                <div class="mt-2"><label for="offset-v">Offset (Length)</label><input type="range" id="offset-v" min="-1" max="1" step="0.01" value="0"></div>
-                <div class="mt-2"><label for="uniform-scale">Scale (Coverage)</label><input type="range" id="uniform-scale" min="0.01" max="2" step="0.01" value="1"></div>
-                <div class="mt-2"><label for="rotation">Rotation</label><input type="range" id="rotation" min="-3.141" max="3.141" step="0.01" value="0"></div>
+                <div class="mt-2">
+                    <label for="offset-u">Offset (Circumference)</label>
+                    <div class="flex items-center gap-2">
+                        <button data-action="dec-offset-u" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Decrease circumference offset">-</button>
+                        <input type="range" id="offset-u" min="-1" max="1" step="0.01" value="0" class="flex-grow">
+                        <button data-action="inc-offset-u" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Increase circumference offset">+</button>
+                        <input type="number" id="offset-u-value" min="-1" max="1" step="0.001" value="0" class="w-20 px-2 py-1 border rounded">
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <label for="offset-v">Offset (Length)</label>
+                    <div class="flex items-center gap-2">
+                        <button data-action="dec-offset-v" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Decrease length offset">-</button>
+                        <input type="range" id="offset-v" min="-1" max="1" step="0.01" value="0" class="flex-grow">
+                        <button data-action="inc-offset-v" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Increase length offset">+</button>
+                        <input type="number" id="offset-v-value" min="-1" max="1" step="0.001" value="0" class="w-20 px-2 py-1 border rounded">
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <label for="uniform-scale">Scale (Coverage)</label>
+                    <div class="flex items-center gap-2">
+                        <button data-action="dec-scale" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Decrease scale">-</button>
+                        <input type="range" id="uniform-scale" min="0.01" max="2" step="0.01" value="1" class="flex-grow">
+                        <button data-action="inc-scale" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Increase scale">+</button>
+                        <input type="number" id="uniform-scale-value" min="0.01" max="2" step="0.001" value="1" class="w-20 px-2 py-1 border rounded">
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <label for="rotation">Rotation</label>
+                    <div class="flex items-center gap-2">
+                        <button data-action="dec-rotation" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Decrease rotation">-</button>
+                        <input type="range" id="rotation" min="-3.141" max="3.141" step="0.01" value="0" class="flex-grow">
+                        <button data-action="inc-rotation" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Increase rotation">+</button>
+                        <input type="number" id="rotation-value" min="-3.141" max="3.141" step="0.001" value="0" class="w-20 px-2 py-1 border rounded">
+                    </div>
+                </div>
                 <div class="mt-4 flex gap-2">
                     <button id="flip-x-btn" class="mode-btn w-1/2">Flip H</button>
                     <button id="flip-y-btn" class="mode-btn w-1/2">Flip V</button>
@@ -102,6 +138,21 @@ const HTML = `
 <div id="renderer-container" class="w-full h-full"></div>
 <div id="message-box" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 bg-red-500 text-white py-2 px-5 rounded-lg shadow-xl transition-opacity duration-300">
     <p id="message-text"></p>
+</div>
+<div id="scan-picker-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] flex flex-col">
+        <div class="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white">Select Scan Image</h3>
+            <button id="close-picker-btn" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300" aria-label="Close scan picker">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        <div id="scan-picker-content" class="flex-1 overflow-y-auto p-4">
+            <!-- Content will be populated dynamically -->
+        </div>
+    </div>
 </div>
 `;
 
@@ -173,7 +224,7 @@ void main() {
         
         float circumferentialAngle, vPos;
         vec3 projAxis = uProjectionAxes[i];
-        
+
         if (projAxis.x > 0.5) {
             circumferentialAngle = atan(vWorldPosition.z, vWorldPosition.y) / (2.0 * PI) + 0.5;
             vPos = (vWorldPosition.x - uModelMin.x) / uModelSize.x;
@@ -261,6 +312,10 @@ function cacheDomElements() {
         messageText: query('#message-text'),
         layerList: query('#layer-list'),
         addLayerBtn: query('#add-layer-btn'),
+        pickScanBtn: query('#pick-scan-btn'),
+        scanPickerModal: query('#scan-picker-modal'),
+        scanPickerContent: query('#scan-picker-content'),
+        closePickerBtn: query('#close-picker-btn'),
         controlsWrapper: query('#controls-wrapper'),
         translateBtn: query('#translate-btn'),
         rotateBtn: query('#rotate-btn'),
@@ -271,6 +326,10 @@ function cacheDomElements() {
         offsetVSlider: query('#offset-v'),
         uniformScaleSlider: query('#uniform-scale'),
         rotationSlider: query('#rotation'),
+        offsetUValue: query('#offset-u-value'),
+        offsetVValue: query('#offset-v-value'),
+        uniformScaleValue: query('#uniform-scale-value'),
+        rotationValue: query('#rotation-value'),
         flipXBtn: query('#flip-x-btn'),
         flipYBtn: query('#flip-y-btn'),
         clampMinSlider: query('#clamp-min'),
@@ -484,8 +543,8 @@ function updateLayerList() {
         if (layer === selectedLayer) item.classList.add('selected');
         item.innerHTML = `
             <span class="flex-grow truncate">${layer.fileName}</span>
-            <button data-action="visible" class="p-1 rounded-md hover:bg-gray-300">${layer.visible ? '👁️' : '🙈'}</button>
-            <button data-action="delete" class="p-1 rounded-md hover:bg-red-200 text-red-600">✕</button>
+            <button data-action="visible" class="p-1 rounded-md hover:bg-gray-300" aria-label="${layer.visible ? 'Hide layer' : 'Show layer'}">${layer.visible ? '👁️' : '🙈'}</button>
+            <button data-action="delete" class="p-1 rounded-md hover:bg-red-200 text-red-600" aria-label="Delete layer ${layer.fileName}">✕</button>
         `;
         item.addEventListener('click', (e) => !e.target.dataset.action && selectLayer(layer));
         item.querySelector('[data-action="visible"]').addEventListener('click', () => {
@@ -503,17 +562,21 @@ function updateLayerList() {
 function updateControlsToLayerState() {
     if (!selectedLayer) return;
     const { uniforms } = selectedLayer;
-    const { offsetUSlider, offsetVSlider, uniformScaleSlider, rotationSlider, clampMinSlider, clampMaxSlider, flipXBtn, flipYBtn, axisXBtn, axisYBtn, axisZBtn } = domElements;
-    
+    const { offsetUSlider, offsetVSlider, uniformScaleSlider, rotationSlider, offsetUValue, offsetVValue, uniformScaleValue, rotationValue, clampMinSlider, clampMaxSlider, flipXBtn, flipYBtn, axisXBtn, axisYBtn, axisZBtn } = domElements;
+
     offsetUSlider.value = uniforms.uOffset.x;
     offsetVSlider.value = uniforms.uOffset.y;
     uniformScaleSlider.value = uniforms.uScale.x;
     rotationSlider.value = uniforms.uRotation;
+    offsetUValue.value = uniforms.uOffset.x.toFixed(3);
+    offsetVValue.value = uniforms.uOffset.y.toFixed(3);
+    uniformScaleValue.value = uniforms.uScale.x.toFixed(3);
+    rotationValue.value = uniforms.uRotation.toFixed(3);
     clampMinSlider.value = uniforms.uClamp.x;
     clampMaxSlider.value = uniforms.uClamp.y;
     flipXBtn.classList.toggle('active', uniforms.uFlip.x < 0);
     flipYBtn.classList.toggle('active', uniforms.uFlip.y < 0);
-    
+
     const axis = uniforms.uProjectionAxis;
     axisXBtn.classList.toggle('active', axis.x > 0.5);
     axisYBtn.classList.toggle('active', axis.y > 0.5);
@@ -526,7 +589,7 @@ function recalculateAspectRatio(layer) {
     const modelSize = decalMaterial.uniforms.uModelSize.value;
     const projAxis = layer.uniforms.uProjectionAxis;
     let modelHeight, modelDiameter;
-    
+
     if (projAxis.x > 0.5) {
         modelHeight = modelSize.x;
         modelDiameter = (modelSize.y + modelSize.z) / 2;
@@ -537,7 +600,7 @@ function recalculateAspectRatio(layer) {
         modelHeight = modelSize.z;
         modelDiameter = (modelSize.x + modelSize.y) / 2;
     }
-    
+
     if (modelHeight > 0 && modelDiameter > 0) {
         const modelAR = (Math.PI * modelDiameter) / modelHeight;
         layer.aspectCorrectionFactor = textureAR / modelAR;
@@ -573,7 +636,7 @@ function requestRender() {
 }
 
 let sliderUpdateFrame = null;
-function throttledSliderUpdate() {
+function throttledSliderUpdate(updateValues = true) {
     if (sliderUpdateFrame) return;
     sliderUpdateFrame = requestAnimationFrame(() => {
         if (!selectedLayer) {
@@ -596,11 +659,41 @@ function throttledSliderUpdate() {
         layer.uniforms.uScale.set(coverage, tiling);
         layer.transformTarget.position.set(layer.uniforms.uOffset.x * 100, layer.uniforms.uOffset.y * 100, 0);
         layer.transformTarget.rotation.z = layer.uniforms.uRotation;
+
+        if (updateValues) {
+            domElements.offsetUValue.value = layer.uniforms.uOffset.x.toFixed(3);
+            domElements.offsetVValue.value = layer.uniforms.uOffset.y.toFixed(3);
+            domElements.uniformScaleValue.value = coverage.toFixed(3);
+            domElements.rotationValue.value = layer.uniforms.uRotation.toFixed(3);
+        }
+
         layer.needsUpdate = true;
         batchUpdateShaderUniforms();
         requestRender();
         sliderUpdateFrame = null;
     });
+}
+
+function syncValueToSlider(slider, valueInput) {
+    if (!selectedLayer) return;
+    const val = parseFloat(valueInput.value);
+    const min = parseFloat(valueInput.min);
+    const max = parseFloat(valueInput.max);
+    const clampedVal = Math.max(min, Math.min(max, val));
+    valueInput.value = clampedVal.toFixed(3);
+    slider.value = clampedVal;
+    throttledSliderUpdate(false);
+}
+
+function adjustValue(slider, valueInput, delta) {
+    if (!selectedLayer) return;
+    const currentVal = parseFloat(slider.value);
+    const min = parseFloat(slider.min);
+    const max = parseFloat(slider.max);
+    const newVal = Math.max(min, Math.min(max, currentVal + delta));
+    slider.value = newVal;
+    valueInput.value = newVal.toFixed(3);
+    throttledSliderUpdate(false);
 }
 
 function addEventListeners() {
@@ -609,6 +702,8 @@ function addEventListeners() {
     domElements.modelUploadInput.addEventListener('change', handleModelUpload);
     domElements.textureUploadInput.addEventListener('change', handleTextureUpload);
     domElements.addLayerBtn.addEventListener('click', () => domElements.textureUploadInput.click());
+    domElements.pickScanBtn.addEventListener('click', showScanPicker);
+    domElements.closePickerBtn.addEventListener('click', closeScanPicker);
     transformControls.addEventListener('objectChange', requestRender);
     transformControls.addEventListener('dragging-changed', (event) => {
         orbitControls.enabled = !event.value;
@@ -627,10 +722,26 @@ function addEventListeners() {
         requestRender();
     });
     [domElements.offsetUSlider, domElements.offsetVSlider, domElements.uniformScaleSlider, domElements.rotationSlider, domElements.clampMinSlider, domElements.clampMaxSlider].forEach(el => {
-        el.addEventListener('input', throttledSliderUpdate);
+        el.addEventListener('input', () => throttledSliderUpdate(true));
         el.addEventListener('mousedown', () => continuousRender = true);
         el.addEventListener('mouseup', () => continuousRender = false);
     });
+
+    // Value input listeners
+    domElements.offsetUValue.addEventListener('change', () => syncValueToSlider(domElements.offsetUSlider, domElements.offsetUValue));
+    domElements.offsetVValue.addEventListener('change', () => syncValueToSlider(domElements.offsetVSlider, domElements.offsetVValue));
+    domElements.uniformScaleValue.addEventListener('change', () => syncValueToSlider(domElements.uniformScaleSlider, domElements.uniformScaleValue));
+    domElements.rotationValue.addEventListener('change', () => syncValueToSlider(domElements.rotationSlider, domElements.rotationValue));
+
+    // Step button listeners
+    container.querySelector('[data-action="dec-offset-u"]').addEventListener('click', () => adjustValue(domElements.offsetUSlider, domElements.offsetUValue, -0.01));
+    container.querySelector('[data-action="inc-offset-u"]').addEventListener('click', () => adjustValue(domElements.offsetUSlider, domElements.offsetUValue, 0.01));
+    container.querySelector('[data-action="dec-offset-v"]').addEventListener('click', () => adjustValue(domElements.offsetVSlider, domElements.offsetVValue, -0.01));
+    container.querySelector('[data-action="inc-offset-v"]').addEventListener('click', () => adjustValue(domElements.offsetVSlider, domElements.offsetVValue, 0.01));
+    container.querySelector('[data-action="dec-scale"]').addEventListener('click', () => adjustValue(domElements.uniformScaleSlider, domElements.uniformScaleValue, -0.01));
+    container.querySelector('[data-action="inc-scale"]').addEventListener('click', () => adjustValue(domElements.uniformScaleSlider, domElements.uniformScaleValue, 0.01));
+    container.querySelector('[data-action="dec-rotation"]').addEventListener('click', () => adjustValue(domElements.rotationSlider, domElements.rotationValue, -0.01));
+    container.querySelector('[data-action="inc-rotation"]').addEventListener('click', () => adjustValue(domElements.rotationSlider, domElements.rotationValue, 0.01));
     [domElements.flipXBtn, domElements.flipYBtn].forEach(el => {
         el.addEventListener('click', () => {
             if (!selectedLayer) return;
@@ -726,6 +837,116 @@ function showMessage(text, type = 'info') {
     }, 3000);
 }
 
+async function showScanPicker() {
+    await dataManager.ensureInitialized();
+    const assets = dataManager.getAssets();
+
+    if (assets.length === 0) {
+        showMessage('No scans available. Save scans from NDT tools first.', 'error');
+        return;
+    }
+
+    // Collect all scans with thumbnails
+    const scansWithThumbnails = [];
+    assets.forEach(asset => {
+        asset.vessels.forEach(vessel => {
+            vessel.scans.forEach(scan => {
+                if (scan.thumbnail) {
+                    scansWithThumbnails.push({
+                        ...scan,
+                        assetName: asset.name,
+                        vesselName: vessel.name
+                    });
+                }
+            });
+        });
+    });
+
+    if (scansWithThumbnails.length === 0) {
+        showMessage('No scans with images found.', 'error');
+        return;
+    }
+
+    // Render scan grid
+    domElements.scanPickerContent.innerHTML = `
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+            ${scansWithThumbnails.map(scan => `
+                <div class="scan-picker-item cursor-pointer bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden hover:ring-2 hover:ring-blue-500 transition-all"
+                     data-scan-id="${scan.id}"
+                     data-thumbnail="${scan.thumbnail}"
+                     ${scan.heatmapOnly ? `data-heatmaponly="${scan.heatmapOnly}"` : ''}>
+                    <div class="aspect-video bg-gray-200 dark:bg-gray-600">
+                        <img src="${scan.thumbnail}" alt="${scan.name}" class="w-full h-full object-cover">
+                    </div>
+                    <div class="p-3">
+                        <div class="font-semibold text-sm text-gray-900 dark:text-white truncate">${scan.name}</div>
+                        <div class="text-xs text-gray-600 dark:text-gray-400 truncate">${scan.assetName} / ${scan.vesselName}</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                            <span class="px-1.5 py-0.5 rounded ${
+                                scan.toolType === 'pec' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' :
+                                scan.toolType === 'cscan' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
+                                'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+                            }">${scan.toolType.toUpperCase()}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+
+    // Add click handlers
+    domElements.scanPickerContent.querySelectorAll('.scan-picker-item').forEach(item => {
+        item.addEventListener('click', () => {
+            // Use heatmapOnly if available, otherwise fall back to thumbnail
+            const heatmapOnly = item.dataset.heatmaponly;
+            const thumbnail = item.dataset.thumbnail;
+            const textureDataURL = heatmapOnly || thumbnail;
+            const scanName = item.querySelector('.font-semibold').textContent;
+
+            console.log('Loading scan texture:', {
+                scanName,
+                hasHeatmapOnly: !!heatmapOnly,
+                hasThumbnail: !!thumbnail,
+                usingHeatmapOnly: !!heatmapOnly
+            });
+
+            loadTextureFromDataURL(textureDataURL, scanName);
+            closeScanPicker();
+        });
+    });
+
+    domElements.scanPickerModal.classList.remove('hidden');
+}
+
+function closeScanPicker() {
+    domElements.scanPickerModal.classList.add('hidden');
+}
+
+function loadTextureFromDataURL(dataURL, fileName) {
+    if (layers.length >= MAX_LAYERS) {
+        showMessage(`Maximum of ${MAX_LAYERS} layers reached.`, 'error');
+        return;
+    }
+
+    const textureLoader = new THREE.TextureLoader();
+    textureLoader.load(dataURL, (texture) => {
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        texture.wrapS = THREE.ClampToEdgeWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
+        texture.generateMipmaps = false;
+
+        const newLayer = new Layer(texture, fileName);
+        layers.push(newLayer);
+        recalculateAspectRatio(newLayer);
+        selectLayer(newLayer);
+        updateLayerList();
+        batchUpdateShaderUniforms();
+        requestRender();
+    });
+}
+
 function animate() {
     animationFrameId = requestAnimationFrame(animate);
     if (continuousRender) needsRender = true;
@@ -742,11 +963,21 @@ export default {
         container.style.overflow = 'hidden';
         cacheDomElements();
         doInit();
+
+        // Listen for 3D model loading events from data hub
+        window.addEventListener('load3DModel', handleLoad3DModelEvent);
+
+        // Check if there's pending model data from app
+        if (window.ndtApp && window.ndtApp.pending3DModelData) {
+            handleLoad3DModelEvent({ detail: window.ndtApp.pending3DModelData });
+            window.ndtApp.pending3DModelData = null;
+        }
     },
     
     destroy: () => {
         cancelAnimationFrame(animationFrameId);
         window.removeEventListener('resize', onWindowResize);
+        window.removeEventListener('load3DModel', handleLoad3DModelEvent);
         if (orbitControls) orbitControls.dispose();
         if (transformControls) transformControls.dispose();
         if (scene) {
@@ -771,4 +1002,28 @@ export default {
         container.style.overflow = 'auto';
     }
 };
+
+function handleLoad3DModelEvent(event) {
+    const { modelData, fileName } = event.detail;
+    loadModelFromDataURL(modelData, fileName);
+}
+
+function loadModelFromDataURL(dataURL, fileName) {
+    domElements.modelFileNameSpan.textContent = fileName || 'Model from Data Hub';
+
+    fetch(dataURL)
+        .then(response => response.text())
+        .then(objText => {
+            const loader = new OBJLoader();
+            const object = loader.parse(objText);
+            object.traverse(child => {
+                if (child.isMesh) child.material = decalMaterial;
+            });
+            setModel(object);
+        })
+        .catch(err => {
+            console.error('Error loading 3D model:', err);
+            showMessage('Failed to load 3D model', 'error');
+        });
+}
 
