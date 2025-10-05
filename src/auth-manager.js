@@ -338,12 +338,17 @@ class AuthManager {
 
             return data || [];
         } else {
+            // If not logged in, return all organizations (for account request flow)
+            if (!this.currentUser) {
+                return this.authData.organizations;
+            }
+
             if (this.isAdmin()) {
                 return this.authData.organizations;
             }
 
             return this.authData.organizations.filter(
-                org => org.id === this.currentUser?.organizationId
+                org => org.id === this.currentUser.organizationId
             );
         }
     }
