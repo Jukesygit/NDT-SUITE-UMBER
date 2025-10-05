@@ -310,6 +310,8 @@ async function renderUsers() {
 
 async function renderRequests() {
     const requests = await authManager.getPendingAccountRequests();
+    console.log('Pending requests:', requests);
+    const allOrganizations = await authManager.getOrganizations();
 
     dom.requestsView.innerHTML = `
         <div class="mb-6">
@@ -327,7 +329,7 @@ async function renderRequests() {
         ` : `
             <div class="space-y-4">
                 ${requests.map(request => {
-                    const org = authManager.getOrganization(request.organizationId);
+                    const org = allOrganizations.find(o => o.id === (request.organizationId || request.organization_id));
                     return `
                         <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
                             <div class="flex justify-between items-start">
@@ -335,13 +337,13 @@ async function renderRequests() {
                                     <div class="flex items-center gap-3 mb-2">
                                         <h3 class="text-lg font-bold text-gray-900 dark:text-white">${request.username}</h3>
                                         <span class="px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-                                            ${request.requestedRole}
+                                            ${request.requested_role || request.requestedRole}
                                         </span>
                                     </div>
                                     <div class="space-y-1 text-sm text-gray-600 dark:text-gray-400">
                                         <div>Email: ${request.email}</div>
                                         <div>Organization: ${org?.name || 'Unknown'}</div>
-                                        <div>Requested: ${new Date(request.createdAt).toLocaleString()}</div>
+                                        <div>Requested: ${new Date(request.created_at || request.createdAt).toLocaleString()}</div>
                                         ${request.message ? `<div class="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded italic">"${request.message}"</div>` : ''}
                                     </div>
                                 </div>
