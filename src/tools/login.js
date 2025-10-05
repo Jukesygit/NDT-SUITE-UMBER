@@ -258,7 +258,7 @@ function showLoginCard() {
 
 async function loadOrganizationsForRequest() {
     await authManager.ensureInitialized();
-    const organizations = authManager.getOrganizations();
+    const organizations = await authManager.getOrganizations();
 
     // Filter out SYSTEM organization
     const publicOrgs = organizations.filter(org => org.name !== 'SYSTEM');
