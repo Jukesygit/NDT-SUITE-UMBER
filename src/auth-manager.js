@@ -140,15 +140,35 @@ class AuthManager {
     }
 
     async loadUserProfile(userId) {
-        const { data: profile, error } = await supabase
+        // First get the profile
+        const { data: profile, error: profileError } = await supabase
             .from('profiles')
-            .select('*, organizations(*)')
+            .select('*')
             .eq('id', userId)
             .single();
 
-        if (error) {
-            console.error('Error loading profile:', error);
+        if (profileError) {
+            console.error('Error loading profile:', profileError);
             return;
+        }
+
+        if (!profile) {
+            console.error('Profile not found for user:', userId);
+            return;
+        }
+
+        // Then get the organization if the user has one
+        let organization = null;
+        if (profile.organization_id) {
+            const { data: orgData, error: orgError } = await supabase
+                .from('organizations')
+                .select('*')
+                .eq('id', profile.organization_id)
+                .single();
+
+            if (!orgError && orgData) {
+                organization = orgData;
+            }
         }
 
         this.currentUser = {
@@ -156,10 +176,12 @@ class AuthManager {
             username: profile.username,
             email: profile.email,
             role: profile.role,
-            organizationId: profile.organization_id,
+            organizationId: profile.organization_id || null,
             isActive: profile.is_active
         };
-        this.currentProfile = profile;
+
+        // Attach organization data to profile for compatibility
+        this.currentProfile = { ...profile, organizations: organization };
     }
 
     async ensureInitialized() {
