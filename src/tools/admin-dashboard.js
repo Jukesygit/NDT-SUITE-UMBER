@@ -249,7 +249,10 @@ async function renderUsers() {
                 </thead>
                 <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                     ${users.map(user => {
-                        const org = authManager.getOrganization(user.organizationId);
+                        // Handle both organizationId and organization_id
+                        const orgId = user.organization_id || user.organizationId;
+                        // Check if organizations data is embedded
+                        const orgName = user.organizations?.name || 'Unknown';
                         return `
                             <tr>
                                 <td class="px-6 py-4 whitespace-nowrap">
@@ -257,7 +260,7 @@ async function renderUsers() {
                                     <div class="text-sm text-gray-500 dark:text-gray-400">${user.email}</div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                                    ${org?.name || 'Unknown'}
+                                    ${orgName}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <span class="px-2 py-1 rounded text-xs font-medium ${
@@ -271,10 +274,10 @@ async function renderUsers() {
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <span class="px-2 py-1 rounded text-xs font-medium ${
-                                        user.isActive ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                                        (user.is_active ?? user.isActive) ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
                                         'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
                                     }">
-                                        ${user.isActive ? 'Active' : 'Inactive'}
+                                        ${(user.is_active ?? user.isActive) ? 'Active' : 'Inactive'}
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm">
@@ -515,6 +518,7 @@ async function deleteUser(userId) {
     if (confirm(`Delete user "${user.username}"? This cannot be undone.`)) {
         const result = await authManager.deleteUser(userId);
         if (result.success) {
+            alert('User deleted successfully');
             await renderUsers();
         } else {
             alert('Error: ' + result.error);
