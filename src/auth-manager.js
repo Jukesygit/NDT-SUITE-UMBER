@@ -366,6 +366,12 @@ class AuthManager {
     }
 
     async getOrganization(organizationId) {
+        // Guard against undefined/null organization IDs
+        if (!organizationId) {
+            console.warn('getOrganization called with invalid ID:', organizationId);
+            return null;
+        }
+
         if (this.useSupabase) {
             const { data, error } = await supabase
                 .from('organizations')
@@ -646,17 +652,30 @@ class AuthManager {
         }
 
         if (this.useSupabase) {
+            console.log('Attempting to delete user from Supabase:', userId);
+
             // Delete profile (can't delete auth user without service role key)
             // Just delete the profile - the auth user will remain but won't be able to access anything
-            const { error } = await supabase
+            const { data, error } = await supabase
                 .from('profiles')
                 .delete()
-                .eq('id', userId);
+                .eq('id', userId)
+                .select();
+
+            console.log('Supabase delete response - data:', data, 'error:', error);
 
             if (error) {
+                console.error('Delete error:', error);
                 return { success: false, error: error.message };
             }
 
+            // Check if any rows were actually deleted
+            if (!data || data.length === 0) {
+                console.warn('No rows were deleted. User may not exist or RLS policy prevented deletion.');
+                return { success: false, error: 'Unable to delete user. Check permissions and RLS policies.' };
+            }
+
+            console.log('User deleted successfully:', data);
             return { success: true };
         } else {
             const index = this.authData.users.findIndex(u => u.id === userId);
