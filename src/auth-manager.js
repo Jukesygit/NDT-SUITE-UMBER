@@ -465,15 +465,17 @@ class AuthManager {
         }
 
         if (this.useSupabase) {
-            // Create auth user
-            const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+            // Create auth user using signUp (admin.createUser requires service role key)
+            const { data: authData, error: authError } = await supabase.auth.signUp({
                 email: userData.email,
                 password: userData.password,
-                email_confirm: true,
-                user_metadata: {
-                    username: userData.username,
-                    role: userData.role,
-                    organization_id: userData.organizationId
+                options: {
+                    data: {
+                        username: userData.username,
+                        role: userData.role,
+                        organization_id: userData.organizationId
+                    },
+                    emailRedirectTo: window.location.origin
                 }
             });
 
@@ -482,7 +484,7 @@ class AuthManager {
             }
 
             // Profile is automatically created via trigger
-            return { success: true, user: { id: authData.user.id, ...userData } };
+            return { success: true, user: { id: authData.user?.id, ...userData } };
         } else {
             // Check if username already exists
             if (this.authData.users.find(u => u.username === userData.username)) {
@@ -726,7 +728,7 @@ class AuthManager {
         }
     }
 
-    async approveAccountRequest(requestId, password) {
+    async approveAccountRequest(requestId) {
         if (this.useSupabase) {
             const { data: request, error: fetchError } = await supabase
                 .from('account_requests')
@@ -738,38 +740,52 @@ class AuthManager {
                 return { success: false, error: 'Request not found' };
             }
 
-            // Create the user
-            const result = await this.createUser({
-                username: request.username,
+            // Create user with signUp and auto-generated password
+            // User will receive confirmation email to set their password
+            const tempPassword = crypto.randomUUID();
+            const { data: authData, error: authError } = await supabase.auth.signUp({
                 email: request.email,
-                password: password,
-                role: request.requested_role,
-                organizationId: request.organization_id
+                password: tempPassword,
+                options: {
+                    data: {
+                        username: request.username,
+                        role: request.requested_role,
+                        organization_id: request.organization_id
+                    }
+                }
             });
 
-            if (result.success) {
-                // Update request status
-                await supabase
-                    .from('account_requests')
-                    .update({
-                        status: 'approved',
-                        approved_by: this.currentUser.id,
-                        approved_at: new Date().toISOString()
-                    })
-                    .eq('id', requestId);
+            if (authError) {
+                return { success: false, error: authError.message };
             }
 
-            return result;
+            // Update request status
+            const { error: updateError } = await supabase
+                .from('account_requests')
+                .update({
+                    status: 'approved',
+                    approved_by: this.currentUser.id,
+                    approved_at: new Date().toISOString()
+                })
+                .eq('id', requestId);
+
+            if (updateError) {
+                return { success: false, error: updateError.message };
+            }
+
+            return { success: true, message: 'User account created. Confirmation email sent.' };
         } else {
             const request = this.authData.accountRequests.find(r => r.id === requestId);
             if (!request) {
                 return { success: false, error: 'Request not found' };
             }
 
+            // For local mode, create with a temporary password
+            const tempPassword = 'ChangeMe123!';
             const result = await this.createUser({
                 username: request.username,
                 email: request.email,
-                password: password,
+                password: tempPassword,
                 role: request.requestedRole,
                 organizationId: request.organizationId
             });
