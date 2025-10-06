@@ -575,8 +575,8 @@ export default {
         }
     },
 
-    refresh: () => {
+    refresh: async () => {
         await updatePendingBadges();
-        switchView(currentView);
+        await switchView(currentView);
     }
 };
