@@ -523,12 +523,13 @@ async function deleteUser(userId) {
 }
 
 async function approveRequest(requestId) {
-    const password = prompt('Set password for new user:');
-    if (!password) return;
+    if (!confirm('Approve this account request? The user will receive an email to set up their account.')) {
+        return;
+    }
 
-    const result = await authManager.approveAccountRequest(requestId, password);
+    const result = await authManager.approveAccountRequest(requestId);
     if (result.success) {
-        alert('Account request approved!');
+        alert(result.message || 'Account request approved! User will receive a confirmation email to set their password.');
         await renderRequests();
         await updatePendingBadges();
     } else {
