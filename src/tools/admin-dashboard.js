@@ -487,7 +487,7 @@ async function createUser() {
 }
 
 async function editUser(userId) {
-    const user = authManager.getUser(userId);
+    const user = await authManager.getUser(userId);
     if (!user) return;
 
     const newRole = prompt(`Change role for ${user.username}:\n1. Viewer\n2. Editor\n3. Org Admin\n\nEnter number (or cancel):`);
@@ -509,7 +509,7 @@ async function editUser(userId) {
 }
 
 async function deleteUser(userId) {
-    const user = authManager.getUser(userId);
+    const user = await authManager.getUser(userId);
     if (!user) return;
 
     if (confirm(`Delete user "${user.username}"? This cannot be undone.`)) {
