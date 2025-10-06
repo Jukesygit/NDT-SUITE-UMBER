@@ -646,8 +646,12 @@ class AuthManager {
         }
 
         if (this.useSupabase) {
-            // Delete auth user (profile will cascade delete)
-            const { error } = await supabase.auth.admin.deleteUser(userId);
+            // Delete profile (can't delete auth user without service role key)
+            // Just delete the profile - the auth user will remain but won't be able to access anything
+            const { error } = await supabase
+                .from('profiles')
+                .delete()
+                .eq('id', userId);
 
             if (error) {
                 return { success: false, error: error.message };
