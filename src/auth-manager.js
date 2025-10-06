@@ -100,7 +100,19 @@ class AuthManager {
         supabase.auth.onAuthStateChange(async (event, session) => {
             console.log('Auth state changed:', event);
 
-            if (session?.user) {
+            if (event === 'PASSWORD_RECOVERY') {
+                // User clicked password reset link - show password update form
+                const newPassword = prompt('Enter your new password:');
+                if (newPassword) {
+                    const { error } = await supabase.auth.updateUser({ password: newPassword });
+                    if (error) {
+                        alert('Error updating password: ' + error.message);
+                    } else {
+                        alert('Password updated successfully! Please log in.');
+                        window.location.reload();
+                    }
+                }
+            } else if (session?.user) {
                 await this.loadUserProfile(session.user.id);
             } else {
                 this.currentUser = null;
@@ -747,6 +759,7 @@ class AuthManager {
                 email: request.email,
                 password: tempPassword,
                 options: {
+                    emailRedirectTo: window.location.origin,
                     data: {
                         username: request.username,
                         role: request.requested_role,
@@ -758,6 +771,11 @@ class AuthManager {
             if (authError) {
                 return { success: false, error: authError.message };
             }
+
+            // Trigger password reset email so user can set their own password
+            await supabase.auth.resetPasswordForEmail(request.email, {
+                redirectTo: window.location.origin
+            });
 
             // Update request status
             const { error: updateError } = await supabase
