@@ -6,8 +6,8 @@ import { createAnimatedHeader } from '../animated-background.js';
 let container, dom = {};
 
 const HTML = `
-<div class="h-full w-full overflow-auto" style="display: flex; flex-direction: column;">
-    <div id="profile-header-container"></div>
+<div class="h-full w-full" style="display: flex; flex-direction: column; overflow: hidden;">
+    <div id="profile-header-container" style="flex-shrink: 0;"></div>
     <div class="glass-scrollbar" style="flex: 1; overflow-y: auto; padding: 24px;">
         <div class="max-w-4xl mx-auto" style="padding-bottom: 40px;">
 
