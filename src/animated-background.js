@@ -70,10 +70,10 @@ export class AnimatedBackground {
             this.particles.push({
                 x: Math.random() * this.canvas.width,
                 y: Math.random() * this.canvas.height,
-                vx: (Math.random() - 0.5) * 0.2,
-                vy: (Math.random() - 0.5) * 0.2,
-                size: Math.random() * 1.5 + 0.5,
-                opacity: Math.random() * 0.3 + 0.1,
+                vx: (Math.random() - 0.5) * 0.4,
+                vy: (Math.random() - 0.5) * 0.4,
+                size: Math.random() * 2.5 + 1,
+                opacity: Math.random() * 0.5 + 0.2,
                 hue: Math.random() * 60 + 180
             });
         }
@@ -112,7 +112,7 @@ export class AnimatedBackground {
     }
 
     updateVertices(time) {
-        const waveDirection = time * 0.8;
+        const waveDirection = time * 1.2; // Faster animation
         const intensity = this.options.waveIntensity;
 
         this.vertices.forEach(vertex => {
@@ -121,15 +121,15 @@ export class AnimatedBackground {
                 Math.pow((vertex.oy - this.canvas.height / 2) / this.canvas.height, 2)
             );
 
-            const waveBend1 = Math.sin(vertex.ox * 0.004 + time * 0.3) * 30 * intensity;
-            const waveBend2 = Math.cos(vertex.ox * 0.007 - time * 0.2) * 20 * intensity;
-            const freqVariation = 1 + Math.sin(vertex.ox * 0.003) * 0.6;
+            const waveBend1 = Math.sin(vertex.ox * 0.004 + time * 0.5) * 50 * intensity;
+            const waveBend2 = Math.cos(vertex.ox * 0.007 - time * 0.3) * 35 * intensity;
+            const freqVariation = 1 + Math.sin(vertex.ox * 0.003) * 0.8;
 
-            const wave1 = Math.sin((vertex.oy + waveBend1) * 0.005 * freqVariation + waveDirection) * 10 * intensity;
-            const wave2 = Math.sin((vertex.oy + waveBend2) * 0.009 * freqVariation + waveDirection * 1.5 + Math.PI / 3) * 6 * intensity;
-            const wave3 = Math.cos((vertex.ox + waveBend1 * 0.5) * 0.004 + waveDirection * 0.9) * 5 * intensity;
+            const wave1 = Math.sin((vertex.oy + waveBend1) * 0.005 * freqVariation + waveDirection) * 18 * intensity;
+            const wave2 = Math.sin((vertex.oy + waveBend2) * 0.009 * freqVariation + waveDirection * 1.5 + Math.PI / 3) * 12 * intensity;
+            const wave3 = Math.cos((vertex.ox + waveBend1 * 0.5) * 0.004 + waveDirection * 0.9) * 10 * intensity;
 
-            const randomFactor = Math.sin(vertex.phase + time * 1.5) * 0.3 + 1;
+            const randomFactor = Math.sin(vertex.phase + time * 2.0) * 0.4 + 1;
             const waveX = (wave1 * 0.3 + wave3) * (0.7 + distanceFromEdge * 0.3) * randomFactor;
             const waveY = (wave1 + wave2 * 0.5) * (0.8 + distanceFromEdge * 0.2) * randomFactor;
 
@@ -155,13 +155,13 @@ export class AnimatedBackground {
         ) / 3;
 
         const normalizedDistortion = Math.min(distortion / 30, 1);
-        const colorIntensity = Math.pow(normalizedDistortion, 2);
-        const greyValue = 15 + 50 * colorIntensity;
-        const accentBlend = Math.pow(colorIntensity, 3) * 0.2;
+        const colorIntensity = Math.pow(normalizedDistortion, 2.5);
+        const greyValue = 15 + 70 * colorIntensity;
+        const accentBlend = Math.pow(colorIntensity, 2.5) * 0.35;
 
-        const r = Math.floor((greyValue * (1 - accentBlend) + 45 * accentBlend + specular * 40) * shadeFactor);
-        const g = Math.floor((greyValue * (1 - accentBlend) + 50 * accentBlend + specular * 40) * shadeFactor);
-        const b = Math.floor((greyValue * (1 - accentBlend) + 65 * accentBlend + specular * 40) * shadeFactor);
+        const r = Math.floor((greyValue * (1 - accentBlend) + 60 * accentBlend + specular * 50) * shadeFactor);
+        const g = Math.floor((greyValue * (1 - accentBlend) + 70 * accentBlend + specular * 50) * shadeFactor);
+        const b = Math.floor((greyValue * (1 - accentBlend) + 90 * accentBlend + specular * 50) * shadeFactor);
 
         this.ctx.beginPath();
         this.ctx.moveTo(v1.x, v1.y);
@@ -293,9 +293,9 @@ export function createAnimatedHeader(title, subtitle, options = {}) {
 
     // Initialize animation
     const animation = new AnimatedBackground(canvas, {
-        particleCount: options.particleCount || 15,
-        waveIntensity: options.waveIntensity || 0.4,
-        vertexDensity: options.vertexDensity || 40
+        particleCount: options.particleCount || 30,
+        waveIntensity: options.waveIntensity || 0.8,
+        vertexDensity: options.vertexDensity || 35
     });
     animation.start();
 
