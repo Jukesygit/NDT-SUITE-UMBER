@@ -3,51 +3,40 @@ import authManager, { ROLES, PERMISSIONS } from '../auth-manager.js';
 import dataManager from '../data-manager.js';
 import sharingManager from '../sharing-manager.js';
 import supabase from '../supabase-client.js';
+import { createAnimatedHeader } from '../animated-background.js';
 
 let container, dom = {};
 let currentView = 'overview'; // 'overview', 'organizations', 'users', 'requests', 'sharing'
 
 const HTML = `
-<div class="h-full flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 overflow-hidden">
-    <!-- Header -->
-    <div class="p-6 bg-white dark:bg-gray-800 shadow-md flex-shrink-0">
-        <div class="flex justify-between items-center">
-            <div>
-                <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h1>
-                <p class="text-gray-600 dark:text-gray-400 mt-1">Manage users, organizations, and permissions</p>
-            </div>
-            <div id="pending-badge" class="hidden">
-                <span class="bg-red-600 text-white px-3 py-1 rounded-full text-sm font-semibold">
-                    <span id="pending-count">0</span> Pending Requests
-                </span>
-            </div>
-        </div>
-    </div>
+<div class="h-full flex flex-col overflow-hidden">
+    <!-- Animated Header -->
+    <div id="admin-header-container" style="flex-shrink: 0;"></div>
 
     <!-- Navigation Tabs -->
-    <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+    <div class="glass-panel" style="border-bottom: 1px solid rgba(255, 255, 255, 0.1); border-radius: 0; flex-shrink: 0; padding: 0;">
         <div class="flex px-6">
             <button data-view="overview" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-blue-600 text-blue-600">
                 Overview
             </button>
-            <button data-view="organizations" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
+            <button data-view="organizations" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:text-white" style="color: rgba(255, 255, 255, 0.6);">
                 Organizations
             </button>
-            <button data-view="users" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
+            <button data-view="users" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:text-white" style="color: rgba(255, 255, 255, 0.6);">
                 Users
             </button>
-            <button data-view="requests" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
+            <button data-view="requests" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:text-white" style="color: rgba(255, 255, 255, 0.6);">
                 Account Requests
-                <span id="requests-badge" class="hidden ml-2 bg-red-600 text-white px-2 py-0.5 rounded-full text-xs">0</span>
+                <span id="requests-badge" class="hidden ml-2 glass-badge badge-red text-xs">0</span>
             </button>
-            <button data-view="sharing" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
+            <button data-view="sharing" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:text-white" style="color: rgba(255, 255, 255, 0.6);">
                 Asset Sharing
             </button>
         </div>
     </div>
 
     <!-- Content Area -->
-    <div class="flex-grow overflow-y-auto p-6">
+    <div class="flex-grow overflow-y-auto glass-scrollbar p-6">
         <div id="overview-view"></div>
         <div id="organizations-view" class="hidden"></div>
         <div id="users-view" class="hidden"></div>
@@ -60,8 +49,7 @@ const HTML = `
 function cacheDom() {
     const q = (s) => container.querySelector(s);
     dom = {
-        pendingBadge: q('#pending-badge'),
-        pendingCount: q('#pending-count'),
+        headerContainer: q('#admin-header-container'),
         requestsBadge: q('#requests-badge'),
         overviewView: q('#overview-view'),
         organizationsView: q('#organizations-view'),
@@ -70,6 +58,14 @@ function cacheDom() {
         sharingView: q('#sharing-view'),
         tabBtns: container.querySelectorAll('.tab-btn')
     };
+
+    // Initialize animated header
+    const header = createAnimatedHeader(
+        'Admin Dashboard',
+        'Manage users, organizations, and permissions',
+        { height: '180px', particleCount: 15, waveIntensity: 0.4 }
+    );
+    dom.headerContainer.appendChild(header);
 }
 
 async function switchView(view) {
@@ -594,23 +590,11 @@ async function deleteUser(userId) {
     }
 
     if (confirm(`Delete user "${user.username}"? This cannot be undone.`)) {
-        console.log('Deleting user:', userId);
         const result = await authManager.deleteUser(userId);
-        console.log('Delete result:', result);
 
         if (result.success) {
-            // Verify deletion by trying to fetch the user
-            const verifyUser = await authManager.getUser(userId);
-            console.log('Verification - user after delete:', verifyUser);
-
-            // Refresh the users view
+            alert('User deleted successfully');
             await renderUsers();
-
-            if (!verifyUser) {
-                alert('User deleted successfully');
-            } else {
-                alert('Warning: User appears to still exist in database. Please refresh and try again.');
-            }
         } else {
             alert('Error: ' + result.error);
         }
@@ -683,17 +667,25 @@ async function rejectPermissionRequest(requestId) {
 async function renderSharing() {
     const assets = dataManager.getAssets();
     const shares = await sharingManager.getAllShares();
+    const accessRequests = await sharingManager.getPendingAccessRequests();
     const organizations = (await authManager.getOrganizations()).filter(org => org.name !== 'SYSTEM');
 
     dom.sharingView.innerHTML = `
         <div class="mb-6 flex justify-between items-center">
-            <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Asset Sharing</h2>
+            <div>
+                <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Asset Sharing</h2>
+                ${accessRequests.length > 0 ? `
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        <span class="text-red-600 font-semibold">${accessRequests.length}</span> pending access request${accessRequests.length > 1 ? 's' : ''}
+                    </p>
+                ` : ''}
+            </div>
             <button id="new-share-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
                 + Share Asset
             </button>
         </div>
 
-        ${shares.length === 0 && assets.length === 0 ? `
+        ${shares.length === 0 && assets.length === 0 && accessRequests.length === 0 ? `
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-12 text-center">
                 <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
@@ -702,6 +694,51 @@ async function renderSharing() {
                 <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Start sharing assets with other organizations.</p>
             </div>
         ` : `
+            <!-- Pending Access Requests -->
+            ${accessRequests.length > 0 ? `
+                <div class="mb-8">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Pending Access Requests</h3>
+                    <div class="space-y-4">
+                        ${accessRequests.map(request => `
+                            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                                <div class="flex justify-between items-start">
+                                    <div class="flex-grow">
+                                        <div class="flex items-center gap-3 mb-2">
+                                            <h4 class="text-lg font-bold text-gray-900 dark:text-white">${request.username}</h4>
+                                            <span class="px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                                ${request.user_org_name}
+                                            </span>
+                                            <span class="px-2 py-1 rounded text-xs font-medium ${
+                                                request.requested_permission === 'edit' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' :
+                                                'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+                                            }">
+                                                ${request.requested_permission}
+                                            </span>
+                                        </div>
+                                        <div class="space-y-1 text-sm text-gray-600 dark:text-gray-400">
+                                            <div>Email: ${request.user_email}</div>
+                                            <div>Asset: <span class="font-medium">${request.asset_id}</span></div>
+                                            ${request.vessel_id ? `<div>Vessel: ${request.vessel_id}</div>` : ''}
+                                            ${request.scan_id ? `<div>Scan: ${request.scan_id}</div>` : ''}
+                                            ${request.message ? `<div class="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded italic">"${request.message}"</div>` : ''}
+                                            <div class="text-xs mt-2">Requested: ${new Date(request.created_at).toLocaleString()}</div>
+                                        </div>
+                                    </div>
+                                    <div class="flex gap-2 ml-4">
+                                        <button class="approve-access-request-btn bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm" data-request-id="${request.request_id}">
+                                            Approve
+                                        </button>
+                                        <button class="reject-access-request-btn bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm" data-request-id="${request.request_id}">
+                                            Reject
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+
             <!-- Current Assets -->
             <div class="mb-8">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Your Assets</h3>
@@ -805,6 +842,14 @@ async function renderSharing() {
 
     dom.sharingView.querySelectorAll('.remove-share-btn').forEach(btn => {
         btn.addEventListener('click', () => removeShare(btn.dataset.shareId));
+    });
+
+    dom.sharingView.querySelectorAll('.approve-access-request-btn').forEach(btn => {
+        btn.addEventListener('click', () => approveAccessRequest(btn.dataset.requestId));
+    });
+
+    dom.sharingView.querySelectorAll('.reject-access-request-btn').forEach(btn => {
+        btn.addEventListener('click', () => rejectAccessRequest(btn.dataset.requestId));
     });
 }
 
@@ -960,6 +1005,32 @@ async function removeShare(shareId) {
     }
 }
 
+async function approveAccessRequest(requestId) {
+    if (!confirm('Approve this access request? This will automatically create a share for the requesting organization.')) {
+        return;
+    }
+
+    const result = await sharingManager.approveAccessRequest(requestId);
+    if (result.success) {
+        alert(result.message || 'Access request approved and share created');
+        await renderSharing();
+    } else {
+        alert('Error: ' + result.error);
+    }
+}
+
+async function rejectAccessRequest(requestId) {
+    const reason = prompt('Reason for rejection (optional):');
+
+    const result = await sharingManager.rejectAccessRequest(requestId, reason || '');
+    if (result.success) {
+        alert('Access request rejected');
+        await renderSharing();
+    } else {
+        alert('Error: ' + result.error);
+    }
+}
+
 function addEventListeners() {
     dom.tabBtns.forEach(btn => {
         btn.addEventListener('click', () => switchView(btn.dataset.view));
@@ -982,6 +1053,15 @@ export default {
     },
 
     destroy: () => {
+        // Destroy animated background
+        const headerContainer = container?.querySelector('#admin-header-container');
+        if (headerContainer) {
+            const animContainer = headerContainer.querySelector('.animated-header-container');
+            if (animContainer && animContainer._animationInstance) {
+                animContainer._animationInstance.destroy();
+            }
+        }
+
         if (container) {
             container.innerHTML = '';
         }
