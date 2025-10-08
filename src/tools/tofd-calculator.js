@@ -39,8 +39,8 @@ const HTML = `
 
                 <div class="lg:col-span-3 glass-card" style="padding: 24px;">
                     <h2 style="font-size: 18px; font-weight: 600; color: #ffffff; margin: 0 0 20px 0; padding-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Coverage Visualization</h2>
-                    <div class="glass-panel" style="padding: 8px; margin-top: 16px;">
-                        <canvas id="tofdCanvas"></canvas>
+                    <div class="glass-panel" style="padding: 8px; margin-top: 16px; height: 400px; min-height: 300px;">
+                        <canvas id="tofdCanvas" style="width: 100%; height: 100%;"></canvas>
                     </div>
                     <div id="results" class="mt-6 text-sm font-medium glass-panel" style="padding: 16px;"></div>
                     <div class="mt-6">
@@ -273,8 +273,9 @@ function calculateTOFD(v) {
 function drawCoverage(values, results) {
     const canvas = dom.canvas;
     const parent = canvas.parentElement;
-    canvas.width = parent.clientWidth;
-    canvas.height = parent.clientHeight;
+    const rect = parent.getBoundingClientRect();
+    canvas.width = rect.width - 16; // Account for padding
+    canvas.height = rect.height - 16;
     
     const w = canvas.width, h = canvas.height;
     const ctx = canvas.getContext('2d');
