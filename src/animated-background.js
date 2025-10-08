@@ -29,6 +29,8 @@ export class AnimatedBackground {
     }
 
     resizeCanvas() {
+        if (!this.canvas.parentElement) return;
+
         const rect = this.canvas.parentElement.getBoundingClientRect();
         this.canvas.width = rect.width;
         this.canvas.height = rect.height;
