@@ -156,12 +156,12 @@ export class AnimatedBackground {
 
         const normalizedDistortion = Math.min(distortion / 30, 1);
         const colorIntensity = Math.pow(normalizedDistortion, 2.5);
-        const greyValue = 15 + 70 * colorIntensity;
+        const greyValue = 15 + 140 * colorIntensity; // Doubled from 70
         const accentBlend = Math.pow(colorIntensity, 2.5) * 0.35;
 
-        const r = Math.floor((greyValue * (1 - accentBlend) + 60 * accentBlend + specular * 50) * shadeFactor);
-        const g = Math.floor((greyValue * (1 - accentBlend) + 70 * accentBlend + specular * 50) * shadeFactor);
-        const b = Math.floor((greyValue * (1 - accentBlend) + 90 * accentBlend + specular * 50) * shadeFactor);
+        const r = Math.floor((greyValue * (1 - accentBlend) + 120 * accentBlend + specular * 100) * shadeFactor);
+        const g = Math.floor((greyValue * (1 - accentBlend) + 140 * accentBlend + specular * 100) * shadeFactor);
+        const b = Math.floor((greyValue * (1 - accentBlend) + 180 * accentBlend + specular * 100) * shadeFactor);
 
         this.ctx.beginPath();
         this.ctx.moveTo(v1.x, v1.y);
