@@ -62,21 +62,21 @@ function createLoginHTML() {
                 <form id="login-form">
                     <!-- Email Input -->
                     <div style="margin-bottom: 24px; position: relative">
-                        <svg id="username-icon" width="20" height="20" viewBox="0 0 20 20" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); opacity: 0.5; transition: opacity 0.3s; z-index: 2; pointer-events: none">
+                        <input type="text" id="username" autocomplete="username" required style="width: 100%; padding: 16px 16px 16px 48px; font-size: 15px; color: #fff; background-color: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; outline: none; box-sizing: border-box; transition: all 0.3s">
+                        <label id="username-label" style="position: absolute; left: 48px; top: 50%; transform: translateY(-50%); font-size: 15px; color: rgba(255,255,255,0.5); transition: all 0.3s; pointer-events: none; font-weight: 500">Email Address</label>
+                        <svg id="username-icon" width="20" height="20" viewBox="0 0 20 20" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); opacity: 0.5; transition: opacity 0.3s">
                             <path d="M2 4h16v12H2V4zm0 1l8 5 8-5M2 5v10" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/>
                         </svg>
-                        <input type="text" id="username" autocomplete="username" placeholder="Email Address" required style="width: 100%; padding: 16px 16px 16px 48px; font-size: 15px; color: #fff; background-color: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; outline: none; box-sizing: border-box; transition: all 0.3s">
-                        <label id="username-label" style="position: absolute; left: 48px; top: 6px; font-size: 11px; color: rgba(100,150,255,0.9); transition: all 0.3s; pointer-events: none; font-weight: 500; opacity: 0">Email Address</label>
                     </div>
 
                     <!-- Password Input -->
                     <div style="margin-bottom: 32px; position: relative">
-                        <svg id="password-icon" width="20" height="20" viewBox="0 0 20 20" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); opacity: 0.5; transition: opacity 0.3s; z-index: 2; pointer-events: none">
+                        <input type="password" id="password" autocomplete="current-password" required style="width: 100%; padding: 16px 16px 16px 48px; font-size: 15px; color: #fff; background-color: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; outline: none; box-sizing: border-box; transition: all 0.3s">
+                        <label id="password-label" style="position: absolute; left: 48px; top: 50%; transform: translateY(-50%); font-size: 15px; color: rgba(255,255,255,0.5); transition: all 0.3s; pointer-events: none; font-weight: 500">Password</label>
+                        <svg id="password-icon" width="20" height="20" viewBox="0 0 20 20" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); opacity: 0.5; transition: opacity 0.3s">
                             <rect x="4" y="8" width="12" height="9" rx="1" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/>
                             <path d="M7 8V6a3 3 0 016 0v2" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/>
                         </svg>
-                        <input type="password" id="password" autocomplete="current-password" placeholder="Password" required style="width: 100%; padding: 16px 16px 16px 48px; font-size: 15px; color: #fff; background-color: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; outline: none; box-sizing: border-box; transition: all 0.3s">
-                        <label id="password-label" style="position: absolute; left: 48px; top: 6px; font-size: 11px; color: rgba(100,150,255,0.9); transition: all 0.3s; pointer-events: none; font-weight: 500; opacity: 0">Password</label>
                     </div>
 
                     <!-- Error Message -->
@@ -397,64 +397,68 @@ function initCanvasAnimation() {
 }
 
 function addInputAnimations() {
+    // Function to update label position and style
+    const updateLabelState = (input, label, icon, isFocused) => {
+        const hasValue = input.value.length > 0;
+        const shouldFloat = isFocused || hasValue;
+
+        if (shouldFloat) {
+            label.style.top = '6px';
+            label.style.transform = 'translateY(0)';
+            label.style.fontSize = '11px';
+            label.style.color = isFocused ? 'rgba(100,150,255,0.9)' : 'rgba(255,255,255,0.5)';
+        } else {
+            label.style.top = '50%';
+            label.style.transform = 'translateY(-50%)';
+            label.style.fontSize = '15px';
+            label.style.color = 'rgba(255,255,255,0.5)';
+        }
+
+        // Update input border and shadow
+        if (isFocused) {
+            input.style.border = '1px solid rgba(100,150,255,0.5)';
+            input.style.boxShadow = '0 0 0 3px rgba(100,150,255,0.1), 0 0 20px rgba(100,150,255,0.2)';
+        } else {
+            input.style.border = '1px solid rgba(255,255,255,0.1)';
+            input.style.boxShadow = 'none';
+        }
+
+        // Update icon
+        icon.style.opacity = isFocused ? '1' : '0.5';
+    };
+
     // Username input animations
     dom.username.addEventListener('focus', () => {
-        dom.username.style.border = '1px solid rgba(100,150,255,0.5)';
-        dom.username.style.boxShadow = '0 0 0 3px rgba(100,150,255,0.1), 0 0 20px rgba(100,150,255,0.2)';
-        dom.username.setAttribute('placeholder', '');
-        dom.usernameLabel.style.opacity = '1';
-        dom.usernameIcon.style.opacity = '1';
+        updateLabelState(dom.username, dom.usernameLabel, dom.usernameIcon, true);
         dom.usernameIcon.querySelector('path').setAttribute('stroke', 'rgba(100,150,255,0.9)');
     });
 
     dom.username.addEventListener('blur', () => {
-        if (!dom.username.value) {
-            dom.username.setAttribute('placeholder', 'Email Address');
-            dom.usernameLabel.style.opacity = '0';
-        }
-        dom.username.style.border = '1px solid rgba(255,255,255,0.1)';
-        dom.username.style.boxShadow = 'none';
-        dom.usernameIcon.style.opacity = '0.5';
+        updateLabelState(dom.username, dom.usernameLabel, dom.usernameIcon, false);
         dom.usernameIcon.querySelector('path').setAttribute('stroke', 'rgba(255,255,255,0.5)');
     });
 
     dom.username.addEventListener('input', () => {
-        if (dom.username.value) {
-            dom.username.setAttribute('placeholder', '');
-            dom.usernameLabel.style.opacity = '1';
-        }
+        updateLabelState(dom.username, dom.usernameLabel, dom.usernameIcon, true);
     });
 
     // Password input animations
     dom.password.addEventListener('focus', () => {
-        dom.password.style.border = '1px solid rgba(100,150,255,0.5)';
-        dom.password.style.boxShadow = '0 0 0 3px rgba(100,150,255,0.1), 0 0 20px rgba(100,150,255,0.2)';
-        dom.password.setAttribute('placeholder', '');
-        dom.passwordLabel.style.opacity = '1';
-        dom.passwordIcon.style.opacity = '1';
+        updateLabelState(dom.password, dom.passwordLabel, dom.passwordIcon, true);
         dom.passwordIcon.querySelectorAll('rect, path').forEach(el => {
             el.setAttribute('stroke', 'rgba(100,150,255,0.9)');
         });
     });
 
     dom.password.addEventListener('blur', () => {
-        if (!dom.password.value) {
-            dom.password.setAttribute('placeholder', 'Password');
-            dom.passwordLabel.style.opacity = '0';
-        }
-        dom.password.style.border = '1px solid rgba(255,255,255,0.1)';
-        dom.password.style.boxShadow = 'none';
-        dom.passwordIcon.style.opacity = '0.5';
+        updateLabelState(dom.password, dom.passwordLabel, dom.passwordIcon, false);
         dom.passwordIcon.querySelectorAll('rect, path').forEach(el => {
             el.setAttribute('stroke', 'rgba(255,255,255,0.5)');
         });
     });
 
     dom.password.addEventListener('input', () => {
-        if (dom.password.value) {
-            dom.password.setAttribute('placeholder', '');
-            dom.passwordLabel.style.opacity = '1';
-        }
+        updateLabelState(dom.password, dom.passwordLabel, dom.passwordIcon, true);
     });
 }
 
