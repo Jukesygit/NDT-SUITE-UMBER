@@ -21,10 +21,7 @@ export class AnimatedBackground {
     }
 
     init() {
-        this.resizeCanvas();
-        this.initVertices();
-        this.initParticles();
-
+        // Don't call resizeCanvas here - it will be called when animation starts
         window.addEventListener('resize', () => this.resizeCanvas());
     }
 
@@ -32,8 +29,11 @@ export class AnimatedBackground {
         if (!this.canvas.parentElement) return;
 
         const rect = this.canvas.parentElement.getBoundingClientRect();
-        this.canvas.width = rect.width;
-        this.canvas.height = rect.height;
+        const width = rect.width || 1920; // Fallback width
+        const height = rect.height || 180; // Fallback height
+
+        this.canvas.width = width;
+        this.canvas.height = height;
 
         if (this.isRunning) {
             this.initVertices();
@@ -211,6 +211,12 @@ export class AnimatedBackground {
     start() {
         if (this.isRunning) return;
         this.isRunning = true;
+
+        // Resize canvas and initialize on start (when element is in DOM)
+        this.resizeCanvas();
+        this.initVertices();
+        this.initParticles();
+
         this.animate();
     }
 
