@@ -1,5 +1,6 @@
 // Data Hub Tool Module - Home page with asset/vessel/scan management
 import dataManager from '../data-manager.js';
+import { createAnimatedHeader } from '../animated-background.js';
 
 let container, dom = {};
 let currentView = 'assets'; // 'assets', 'vessel-detail', 'scan-detail'
@@ -7,34 +8,31 @@ let currentAssetId = null;
 let currentVesselId = null;
 
 const HTML = `
-<div class="h-full flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 overflow-hidden">
-    <div class="p-6 bg-white dark:bg-gray-800 shadow-md flex-shrink-0">
+<div class="h-full flex flex-col overflow-hidden">
+    <div id="datahub-header-container" style="flex-shrink: 0;"></div>
+
+    <div class="glass-panel" style="padding: 16px 24px; flex-shrink: 0; border-radius: 0;">
         <div class="flex justify-between items-center mb-4">
-            <div>
-                <h1 class="text-3xl font-bold text-gray-900 dark:text-white">NDT Data Hub</h1>
-                <p class="text-gray-600 dark:text-gray-400 mt-1">Organize and manage your inspection scans</p>
-            </div>
+            <div id="stats-bar" class="grid grid-cols-2 md:grid-cols-4 gap-4 flex-grow mr-4"></div>
             <div class="flex gap-2">
-                <button id="import-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm">
+                <button id="import-btn" class="btn-secondary text-sm px-3 py-2">
                     Import Data
                 </button>
-                <button id="export-all-btn" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm">
-                    Export All Data
+                <button id="export-all-btn" class="btn-secondary text-sm px-3 py-2">
+                    Export All
                 </button>
-                <button id="new-asset-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm">
+                <button id="new-asset-btn" class="btn-primary text-sm px-3 py-2">
                     + New Asset
                 </button>
             </div>
         </div>
-
-        <div id="stats-bar" class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center"></div>
     </div>
 
-    <div id="breadcrumb" class="px-6 py-3 bg-gray-50 dark:bg-gray-800/50 flex items-center gap-2 text-sm flex-shrink-0 border-b border-gray-200 dark:border-gray-700">
-        <button id="breadcrumb-home" class="text-blue-600 dark:text-blue-400 hover:underline">Home</button>
+    <div id="breadcrumb" class="px-6 py-3 flex items-center gap-2 text-sm flex-shrink-0" style="background: rgba(255, 255, 255, 0.03); border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+        <button id="breadcrumb-home" class="text-blue-400 hover:underline">Home</button>
     </div>
 
-    <div class="flex-grow overflow-y-auto p-6">
+    <div class="flex-grow overflow-y-auto glass-scrollbar p-6">
         <div id="assets-view"></div>
         <div id="vessel-detail-view" class="hidden"></div>
         <div id="scan-detail-view" class="hidden"></div>
@@ -47,6 +45,7 @@ const HTML = `
 function cacheDom() {
     const q = (s) => container.querySelector(s);
     dom = {
+        headerContainer: q('#datahub-header-container'),
         statsBar: q('#stats-bar'),
         breadcrumb: q('#breadcrumb'),
         breadcrumbHome: q('#breadcrumb-home'),
@@ -58,26 +57,34 @@ function cacheDom() {
         importBtn: q('#import-btn'),
         importFileInput: q('#import-file-input')
     };
+
+    // Initialize animated header
+    const header = createAnimatedHeader(
+        'NDT Data Hub',
+        'Organize and manage your inspection scans',
+        { height: '180px', particleCount: 15, waveIntensity: 0.4 }
+    );
+    dom.headerContainer.appendChild(header);
 }
 
 function renderStats() {
     const stats = dataManager.getStats();
     dom.statsBar.innerHTML = `
-        <div class="p-3 bg-white dark:bg-gray-700 rounded-lg shadow-sm">
-            <div class="text-xs text-gray-500 dark:text-gray-400">Assets</div>
-            <div class="text-2xl font-bold text-gray-900 dark:text-white">${stats.totalAssets}</div>
+        <div class="glass-panel" style="padding: 12px; text-align: center;">
+            <div class="text-xs" style="color: rgba(255, 255, 255, 0.6);">Assets</div>
+            <div class="text-2xl font-bold text-white">${stats.totalAssets}</div>
         </div>
-        <div class="p-3 bg-white dark:bg-gray-700 rounded-lg shadow-sm">
-            <div class="text-xs text-gray-500 dark:text-gray-400">Vessels</div>
-            <div class="text-2xl font-bold text-gray-900 dark:text-white">${stats.totalVessels}</div>
+        <div class="glass-panel" style="padding: 12px; text-align: center;">
+            <div class="text-xs" style="color: rgba(255, 255, 255, 0.6);">Vessels</div>
+            <div class="text-2xl font-bold text-white">${stats.totalVessels}</div>
         </div>
-        <div class="p-3 bg-white dark:bg-gray-700 rounded-lg shadow-sm">
-            <div class="text-xs text-gray-500 dark:text-gray-400">Total Scans</div>
-            <div class="text-2xl font-bold text-gray-900 dark:text-white">${stats.totalScans}</div>
+        <div class="glass-panel" style="padding: 12px; text-align: center;">
+            <div class="text-xs" style="color: rgba(255, 255, 255, 0.6);">Total Scans</div>
+            <div class="text-2xl font-bold text-white">${stats.totalScans}</div>
         </div>
-        <div class="p-3 bg-white dark:bg-gray-700 rounded-lg shadow-sm">
-            <div class="text-xs text-gray-500 dark:text-gray-400">PEC / C-Scan / 3D</div>
-            <div class="text-lg font-bold text-gray-900 dark:text-white">
+        <div class="glass-panel" style="padding: 12px; text-align: center;">
+            <div class="text-xs" style="color: rgba(255, 255, 255, 0.6);">PEC / C-Scan / 3D</div>
+            <div class="text-lg font-bold text-white">
                 ${stats.scansByType.pec || 0} / ${stats.scansByType.cscan || 0} / ${stats.scansByType['3dview'] || 0}
             </div>
         </div>
@@ -868,6 +875,15 @@ export default {
     },
 
     destroy: () => {
+        // Destroy animated background
+        const headerContainer = container?.querySelector('#datahub-header-container');
+        if (headerContainer) {
+            const animContainer = headerContainer.querySelector('.animated-header-container');
+            if (animContainer && animContainer._animationInstance) {
+                animContainer._animationInstance.destroy();
+            }
+        }
+
         if (container) {
             container.innerHTML = '';
         }
