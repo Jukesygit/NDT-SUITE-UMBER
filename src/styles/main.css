@@ -2,6 +2,7 @@
 body {
     font-family: 'Inter', sans-serif;
     overflow: hidden;
+    background: linear-gradient(135deg, #2a2a35 0%, #35353f 50%, #2d2d38 100%);
 }
 
 #main-content {
@@ -53,7 +54,7 @@ select option,
     height: auto;
     min-height: 80px;
     padding: 0 1rem;
-    border-bottom: 1px solid rgba(55, 65, 81, 0.5);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 #toolbar-content {
@@ -69,7 +70,7 @@ select option,
     height: 100vh;
     padding: 0;
     border-bottom: none;
-    border-right: 1px solid rgba(55, 65, 81, 0.5);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 #app-container.tool-active #toolbar-content {

@@ -113,10 +113,13 @@ class NDTApp {
     }
 
     createToolbarButton(tool) {
-        const buttonClasses = `tool-btn relative flex items-center justify-center h-16 w-16 rounded-lg text-gray-400 transition-colors ${
-            tool.active ? 'hover:bg-gray-700 hover:text-white cursor-pointer' : 'cursor-not-allowed opacity-50'
+        const buttonClasses = `tool-btn relative flex items-center justify-center h-16 w-16 rounded-lg text-gray-400 transition-all ${
+            tool.active ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
         }`;
-        return `<button id="btn-${tool.id}" data-tool-id="${tool.id}" class="${buttonClasses}" title="${tool.name}" aria-label="${tool.name}" ${!tool.active ? 'disabled' : ''}>${tool.icon}</button>`;
+        const buttonStyle = tool.active ?
+            'background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(4px); border: 1px solid rgba(255, 255, 255, 0.1);' :
+            'background: rgba(255, 255, 255, 0.02);';
+        return `<button id="btn-${tool.id}" data-tool-id="${tool.id}" class="${buttonClasses}" style="${buttonStyle}" title="${tool.name}" aria-label="${tool.name}" ${!tool.active ? 'disabled' : ''} onmouseover="if(!this.disabled) this.style.background='rgba(100, 150, 255, 0.2)'; this.style.borderColor='rgba(100, 150, 255, 0.3)'" onmouseout="if(!this.disabled) this.style.background='rgba(255, 255, 255, 0.05)'; this.style.borderColor='rgba(255, 255, 255, 0.1)'">${tool.icon}</button>`;
     }
 
     updateDescription(tool) {
@@ -197,8 +200,17 @@ class NDTApp {
         // Update toolbar highlighting
         this.dom.toolbarContent.querySelectorAll('.tool-btn').forEach(btn => {
             const isActive = btn.dataset.toolId === (this.activeTool?.id || 'home');
-            btn.classList.toggle('bg-gray-700', isActive);
-            btn.classList.toggle('text-white', isActive);
+            if (isActive) {
+                btn.style.background = 'linear-gradient(135deg, rgba(90,150,255,0.3), rgba(110,170,255,0.3))';
+                btn.style.borderColor = 'rgba(100, 150, 255, 0.5)';
+                btn.style.boxShadow = '0 0 20px rgba(100, 150, 255, 0.3)';
+                btn.classList.add('text-white');
+            } else {
+                btn.style.background = 'rgba(255, 255, 255, 0.05)';
+                btn.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                btn.style.boxShadow = 'none';
+                btn.classList.remove('text-white');
+            }
         });
     }
 
@@ -315,18 +327,19 @@ class NDTApp {
         const userInfoContainer = document.getElementById('user-info-container');
         if (!userInfoContainer) return;
 
-        userInfoContainer.className = 'p-3 border-t border-gray-700 flex flex-col items-center gap-2 w-full';
+        userInfoContainer.className = 'p-3 flex flex-col items-center gap-2 w-full';
+        userInfoContainer.style.borderTop = '1px solid rgba(255, 255, 255, 0.1)';
+
+        const badgeClass = user.role === 'admin' ? 'badge-purple' :
+                          user.role === 'org_admin' ? 'badge-blue' :
+                          user.role === 'editor' ? 'badge-green' : 'glass-badge';
+
         userInfoContainer.innerHTML = `
             <div class="text-xs text-gray-400 text-center w-full">
                 <div class="font-medium text-white mb-1">${user.username}</div>
-                <span class="px-2 py-0.5 rounded text-xs font-medium ${
-                    user.role === 'admin' ? 'bg-purple-900 text-purple-200' :
-                    user.role === 'org_admin' ? 'bg-blue-900 text-blue-200' :
-                    user.role === 'editor' ? 'bg-green-900 text-green-200' :
-                    'bg-gray-700 text-gray-200'
-                }">${user.role}</span>
+                <span class="glass-badge ${badgeClass}">${user.role}</span>
             </div>
-            <button id="logout-btn" class="w-full bg-gray-700 hover:bg-gray-600 text-white text-xs py-2 px-3 rounded-lg transition-colors flex items-center justify-center" aria-label="Logout from account">
+            <button id="logout-btn" class="btn-secondary w-full text-xs py-2 px-3" aria-label="Logout from account">
                 Logout
             </button>
         `;
