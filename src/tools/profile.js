@@ -1,56 +1,55 @@
 // Profile Management Module
 import authManager, { ROLES } from '../auth-manager.js';
 import supabase, { isSupabaseConfigured } from '../supabase-client.js';
+import { createAnimatedHeader } from '../animated-background.js';
 
 let container, dom = {};
 
 const HTML = `
-<div class="h-full w-full overflow-auto bg-gray-900 p-8">
-    <div class="max-w-4xl mx-auto">
-        <div class="mb-8">
-            <h1 class="text-3xl font-bold text-white mb-2">Profile Settings</h1>
-            <p class="text-gray-400">Manage your profile and permissions</p>
-        </div>
+<div class="h-full w-full overflow-auto" style="display: flex; flex-direction: column;">
+    <div id="profile-header-container"></div>
+    <div class="glass-scrollbar" style="flex: 1; overflow-y: auto; padding: 24px;">
+        <div class="max-w-4xl mx-auto" style="padding-bottom: 40px;">
 
         <!-- Profile Information Card -->
-        <div class="bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
-            <h2 class="text-xl font-semibold text-white mb-4">Profile Information</h2>
+        <div class="glass-card" style="padding: 24px; margin-bottom: 24px;">
+            <h2 style="font-size: 18px; font-weight: 600; color: #ffffff; margin: 0 0 20px 0; padding-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Profile Information</h2>
 
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">Username</label>
-                    <div id="profile-username" class="text-white text-lg"></div>
+                    <label style="display: block; font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, 0.6); margin-bottom: 6px;">Username</label>
+                    <div id="profile-username" style="color: #ffffff; font-size: 16px;"></div>
                 </div>
 
                 <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">Email</label>
-                    <div id="profile-email" class="text-white text-lg"></div>
+                    <label style="display: block; font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, 0.6); margin-bottom: 6px;">Email</label>
+                    <div id="profile-email" style="color: #ffffff; font-size: 16px;"></div>
                 </div>
 
                 <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">Organization</label>
-                    <div id="profile-organization" class="text-white text-lg"></div>
+                    <label style="display: block; font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, 0.6); margin-bottom: 6px;">Organization</label>
+                    <div id="profile-organization" style="color: #ffffff; font-size: 16px;"></div>
                 </div>
 
                 <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">Current Role</label>
-                    <div id="profile-role" class="inline-block px-3 py-1 rounded text-sm font-medium"></div>
+                    <label style="display: block; font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, 0.6); margin-bottom: 6px;">Current Role</label>
+                    <div id="profile-role" class="glass-badge"></div>
                 </div>
             </div>
         </div>
 
         <!-- Request Permission Upgrade Card -->
-        <div id="permission-request-card" class="bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
-            <h2 class="text-xl font-semibold text-white mb-4">Request Permission Upgrade</h2>
+        <div id="permission-request-card" class="glass-card" style="padding: 24px; margin-bottom: 24px;">
+            <h2 style="font-size: 18px; font-weight: 600; color: #ffffff; margin: 0 0 20px 0; padding-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Request Permission Upgrade</h2>
 
             <form id="permission-request-form" class="space-y-4">
                 <div>
-                    <label for="requested-role" class="block text-sm font-medium text-gray-400 mb-2">
+                    <label for="requested-role" style="display: block; font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, 0.7); margin-bottom: 8px;">
                         Requested Role
                     </label>
                     <select
                         id="requested-role"
-                        class="w-full px-4 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-700 text-white"
+                        class="glass-select"
                         required
                     >
                         <option value="">Select a role...</option>
@@ -62,24 +61,25 @@ const HTML = `
                 </div>
 
                 <div>
-                    <label for="request-message" class="block text-sm font-medium text-gray-400 mb-2">
+                    <label for="request-message" style="display: block; font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, 0.7); margin-bottom: 8px;">
                         Reason for Request
                     </label>
                     <textarea
                         id="request-message"
                         rows="4"
-                        class="w-full px-4 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-700 text-white"
+                        class="glass-textarea"
                         placeholder="Explain why you need this permission level..."
                         required
                     ></textarea>
                 </div>
 
-                <div id="request-error" class="hidden text-red-400 text-sm"></div>
-                <div id="request-success" class="hidden text-green-400 text-sm"></div>
+                <div id="request-error" class="hidden" style="color: #ff6b6b; font-size: 14px;"></div>
+                <div id="request-success" class="hidden" style="color: #4ade80; font-size: 14px;"></div>
 
                 <button
                     type="submit"
-                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors"
+                    class="btn-primary"
+                    style="width: 100%; padding: 14px;"
                 >
                     Submit Request
                 </button>
@@ -87,17 +87,18 @@ const HTML = `
         </div>
 
         <!-- My Permission Requests Card -->
-        <div class="bg-gray-800 rounded-lg shadow-lg p-6">
-            <h2 class="text-xl font-semibold text-white mb-4">My Permission Requests</h2>
+        <div class="glass-card" style="padding: 24px;">
+            <h2 style="font-size: 18px; font-weight: 600; color: #ffffff; margin: 0 0 20px 0; padding-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">My Permission Requests</h2>
 
             <div id="requests-list" class="space-y-3">
                 <!-- Requests will be loaded here -->
             </div>
 
-            <div id="no-requests" class="text-gray-400 text-center py-4 hidden">
+            <div id="no-requests" class="hidden" style="color: rgba(255, 255, 255, 0.5); text-align: center; padding: 16px;">
                 No permission requests found
             </div>
         </div>
+    </div>
     </div>
 </div>
 `;
@@ -105,6 +106,7 @@ const HTML = `
 function cacheDom() {
     const q = (s) => container.querySelector(s);
     dom = {
+        headerContainer: q('#profile-header-container'),
         profileUsername: q('#profile-username'),
         profileEmail: q('#profile-email'),
         profileOrganization: q('#profile-organization'),
@@ -118,6 +120,14 @@ function cacheDom() {
         requestsList: q('#requests-list'),
         noRequests: q('#no-requests')
     };
+
+    // Initialize animated header
+    const header = createAnimatedHeader(
+        'Profile Settings',
+        'Manage your profile and permissions',
+        { height: '180px', particleCount: 15, waveIntensity: 0.4 }
+    );
+    dom.headerContainer.appendChild(header);
 }
 
 async function loadProfileData() {
@@ -149,14 +159,14 @@ async function loadProfileData() {
 
     // Display role with color coding
     const roleColors = {
-        [ROLES.ADMIN]: 'bg-purple-900 text-purple-200',
-        [ROLES.ORG_ADMIN]: 'bg-blue-900 text-blue-200',
-        [ROLES.EDITOR]: 'bg-green-900 text-green-200',
-        [ROLES.VIEWER]: 'bg-gray-700 text-gray-200'
+        [ROLES.ADMIN]: 'badge-purple',
+        [ROLES.ORG_ADMIN]: 'badge-blue',
+        [ROLES.EDITOR]: 'badge-green',
+        [ROLES.VIEWER]: 'glass-badge'
     };
 
     dom.profileRole.textContent = user.role || 'N/A';
-    dom.profileRole.className = `inline-block px-3 py-1 rounded text-sm font-medium ${roleColors[user.role] || 'bg-gray-700 text-gray-200'}`;
+    dom.profileRole.className = `glass-badge ${roleColors[user.role] || ''}`;
 
     // Hide permission request form if user is already admin
     if (user.role === ROLES.ADMIN) {
@@ -232,10 +242,10 @@ function displayRequests(requests) {
     dom.noRequests.classList.add('hidden');
 
     dom.requestsList.innerHTML = requests.map(request => {
-        const statusColors = {
-            pending: 'bg-yellow-900 text-yellow-200',
-            approved: 'bg-green-900 text-green-200',
-            rejected: 'bg-red-900 text-red-200'
+        const statusBadges = {
+            pending: '<span class="glass-badge" style="background: rgba(251, 191, 36, 0.2); color: rgba(253, 224, 71, 1); border-color: rgba(251, 191, 36, 0.4);">pending</span>',
+            approved: '<span class="glass-badge badge-green">approved</span>',
+            rejected: '<span class="glass-badge badge-red">rejected</span>'
         };
 
         const formattedDate = new Date(request.created_at).toLocaleDateString('en-US', {
@@ -247,26 +257,24 @@ function displayRequests(requests) {
         });
 
         return `
-            <div class="bg-gray-700 rounded-lg p-4">
+            <div class="glass-panel" style="padding: 16px;">
                 <div class="flex justify-between items-start mb-2">
                     <div>
-                        <div class="text-white font-medium">
+                        <div style="color: #ffffff; font-weight: 500; font-size: 14px;">
                             ${request.user_current_role} → ${request.requested_role}
                         </div>
-                        <div class="text-gray-400 text-sm">${formattedDate}</div>
+                        <div style="color: rgba(255, 255, 255, 0.5); font-size: 13px; margin-top: 4px;">${formattedDate}</div>
                     </div>
-                    <span class="px-3 py-1 rounded text-xs font-medium ${statusColors[request.status] || 'bg-gray-600 text-gray-200'}">
-                        ${request.status}
-                    </span>
+                    ${statusBadges[request.status] || '<span class="glass-badge">unknown</span>'}
                 </div>
                 ${request.message ? `
-                    <div class="text-gray-300 text-sm mt-2">
-                        <span class="font-medium">Reason:</span> ${request.message}
+                    <div style="color: rgba(255, 255, 255, 0.7); font-size: 13px; margin-top: 12px;">
+                        <span style="font-weight: 500;">Reason:</span> ${request.message}
                     </div>
                 ` : ''}
                 ${request.rejection_reason ? `
-                    <div class="text-red-400 text-sm mt-2">
-                        <span class="font-medium">Rejection reason:</span> ${request.rejection_reason}
+                    <div style="color: #ff6b6b; font-size: 13px; margin-top: 12px;">
+                        <span style="font-weight: 500;">Rejection reason:</span> ${request.rejection_reason}
                     </div>
                 ` : ''}
             </div>
@@ -361,6 +369,15 @@ export default {
     },
 
     destroy: () => {
+        // Destroy animated background
+        const headerContainer = container?.querySelector('#profile-header-container');
+        if (headerContainer) {
+            const animContainer = headerContainer.querySelector('.animated-header-container');
+            if (animContainer && animContainer._animationInstance) {
+                animContainer._animationInstance.destroy();
+            }
+        }
+
         if (container) {
             container.innerHTML = '';
         }
