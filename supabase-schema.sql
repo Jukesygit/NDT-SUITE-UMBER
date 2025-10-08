@@ -140,7 +140,8 @@ CREATE POLICY "Admins can create users"
 CREATE POLICY "Admins can delete users"
     ON profiles FOR DELETE
     USING (
-        EXISTS (
+        id != auth.uid() -- Can't delete yourself
+        AND EXISTS (
             SELECT 1 FROM profiles p
             WHERE p.id = auth.uid()
             AND (
@@ -148,7 +149,6 @@ CREATE POLICY "Admins can delete users"
                 OR (p.role = 'org_admin' AND p.organization_id = profiles.organization_id)
             )
         )
-        AND id != auth.uid() -- Can't delete yourself
     );
 
 -- RLS Policies for account_requests

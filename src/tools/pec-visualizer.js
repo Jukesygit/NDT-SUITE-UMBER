@@ -1,12 +1,15 @@
 // PEC Visualizer Tool Module - Complete with all features
 import dataManager from '../data-manager.js';
+import { createAnimatedHeader } from '../animated-background.js';
 
 let container, dom = {}, heatmapData = null, customColorRange = { min: null, max: null };
 
 const HTML = `
-<div class="p-4 md:p-8 h-full flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+<div class="h-full w-full" style="display: flex; flex-direction: column; overflow: hidden;">
+    <div id="pec-header-container" style="flex-shrink: 0;"></div>
+    <div class="glass-scrollbar" style="flex: 1; overflow-y: auto; padding: 24px;">
     <div class="bg-white dark:bg-gray-800 shadow-md rounded-xl p-6 flex-grow flex flex-col">
-        <header class="text-center mb-6">
+        <header class="text-center mb-6" style="display: none;">
             <h1 class="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">PEC Data Visualizer</h1>
             <p class="mt-2 text-gray-600 dark:text-gray-400">Paste Pulsed Eddy Current data to generate a wall thickness heatmap.</p>
         </header>
@@ -86,12 +89,14 @@ const HTML = `
             </div>
         </div>
     </div>
+    </div>
 </div>
 `;
 
 function cacheDom() {
     const q = (s) => container.querySelector(s);
     dom = {
+        headerContainer: q('#pec-header-container'),
         uploadSection: q('#upload-section-pec'),
         csvInput: q('#csv-input-pec'),
         processBtn: q('#process-data-btn'),
@@ -114,6 +119,14 @@ function cacheDom() {
         exportDataBtn: q('#export-data-btn'),
         exportToHubBtn: q('#export-to-hub-btn')
     };
+
+    // Initialize animated header
+    const header = createAnimatedHeader(
+        'PEC Data Visualizer',
+        'Paste Pulsed Eddy Current data to generate a wall thickness heatmap',
+        { height: '180px', particleCount: 15, waveIntensity: 0.4 }
+    );
+    dom.headerContainer.appendChild(header);
 }
 
 function showMessage(message, isError = false) {
@@ -749,6 +762,15 @@ export default {
     },
 
     destroy: () => {
+        // Destroy animated background
+        const headerContainer = container?.querySelector('#pec-header-container');
+        if (headerContainer) {
+            const animContainer = headerContainer.querySelector('.animated-header-container');
+            if (animContainer && animContainer._animationInstance) {
+                animContainer._animationInstance.destroy();
+            }
+        }
+
         if (dom && dom.heatmapContainer) {
             Plotly.purge(dom.heatmapContainer);
         }

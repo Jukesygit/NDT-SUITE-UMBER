@@ -1,11 +1,14 @@
 // C-Scan Visualizer Tool Module - Complete with all features (Part 1)
 import dataManager from '../data-manager.js';
+import { createAnimatedHeader } from '../animated-background.js';
 
 let container, dom = {}, processedScans = [], currentScanData = null, compositeWorker = null, isShowingComposite = false, customColorRange = { min: null, max: null };
 
 const HTML = `
-<div class="container mx-auto p-4 md:p-8 h-full flex flex-col dark:bg-gray-900 text-gray-800 dark:text-gray-200">
-    <header class="bg-white dark:bg-gray-800 shadow-md rounded-xl p-6 mb-8 flex justify-between items-center flex-shrink-0">
+<div class="h-full w-full" style="display: flex; flex-direction: column; overflow: hidden;">
+    <div id="cscan-header-container" style="flex-shrink: 0;"></div>
+    <div class="glass-scrollbar" style="flex: 1; overflow-y: auto; padding: 24px;">
+    <header class="bg-white dark:bg-gray-800 shadow-md rounded-xl p-6 mb-8 flex justify-between items-center flex-shrink-0" style="display: none;">
         <div>
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Phased Array C-Scan Visualizer</h1>
             <p class="mt-2 text-gray-600 dark:text-gray-400">Upload a C-Scan data file (.txt or .csv) to generate an interactive corrosion heatmap.</p>
@@ -111,12 +114,14 @@ const HTML = `
             <div id="metadata-content" class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm"></div>
         </div>
     </main>
+    </div>
 </div>
 `;
 
 function cacheDom() {
     const q = (s) => container.querySelector(s);
     dom = {
+        headerContainer: q('#cscan-header-container'),
         uploadButton: q('#upload-button'),
         fileInput: q('#file-input'),
         uploadSection: q('#upload-section'),
@@ -144,6 +149,14 @@ function cacheDom() {
         showGridCheckbox: q('#show-grid-cscan'),
         statsContainer: q('#stats-cscan')
     };
+
+    // Initialize animated header
+    const header = createAnimatedHeader(
+        'Phased Array C-Scan Visualizer',
+        'Upload C-Scan data files to generate interactive corrosion heatmaps',
+        { height: '180px', particleCount: 15, waveIntensity: 0.4 }
+    );
+    dom.headerContainer.appendChild(header);
 }
 
 function preventDefaults(e) {
@@ -1017,6 +1030,15 @@ export default {
     },
     
     destroy: () => {
+        // Destroy animated background
+        const headerContainer = container?.querySelector('#cscan-header-container');
+        if (headerContainer) {
+            const animContainer = headerContainer.querySelector('.animated-header-container');
+            if (animContainer && animContainer._animationInstance) {
+                animContainer._animationInstance.destroy();
+            }
+        }
+
         if (compositeWorker) compositeWorker.terminate();
         if (dom && dom.plotContainer) Plotly.purge(dom.plotContainer);
         removeEventListeners();
