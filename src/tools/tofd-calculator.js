@@ -1,4 +1,5 @@
 // TOFD Calculator Tool Module - Complete with all features
+import { createAnimatedHeader } from '../animated-background.js';
 
 let container, dom = {}, resizeObserver;
 
@@ -26,27 +27,28 @@ const resultDisplayOrder = [
 ];
 
 const HTML = `
-<div class="container mx-auto p-4 md:p-8 max-w-7xl dark:bg-slate-900 text-slate-800 dark:text-slate-200">
-    <header class="mb-8">
-        <h1 class="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">TOFD Calculator</h1>
-    </header>
-    
-    <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
-        <div class="lg:col-span-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
-            <h2 class="text-lg font-semibold dark:text-white pb-4 border-b dark:border-slate-700">Inspection Parameters</h2>
-            <div class="space-y-5 pt-5" id="input-container"></div>
-        </div>
-        
-        <div class="lg:col-span-3 bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
-            <h2 class="text-lg font-semibold dark:text-white pb-4 border-b dark:border-slate-700">Coverage Visualization</h2>
-            <div class="bg-slate-100 dark:bg-slate-900/50 border dark:border-slate-700 rounded-md mt-4 aspect-[4/3] p-2 overflow-hidden">
-                <canvas id="tofdCanvas"></canvas>
-            </div>
-            <div id="results" class="mt-6 text-sm font-medium border dark:border-slate-700 rounded-md"></div>
-            <div class="mt-6">
-                <button id="analyze-btn" class="w-full bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-md shadow-sm hover:bg-blue-700 transition-colors">
-                    Run Analysis
-                </button>
+<div class="h-full w-full" style="display: flex; flex-direction: column; overflow: hidden;">
+    <div id="tofd-header-container" style="flex-shrink: 0;"></div>
+    <div class="glass-scrollbar" style="flex: 1; overflow-y: auto; padding: 24px;">
+        <div class="container mx-auto max-w-7xl">
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                <div class="lg:col-span-2 glass-card" style="padding: 24px;">
+                    <h2 style="font-size: 18px; font-weight: 600; color: #ffffff; margin: 0 0 20px 0; padding-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Inspection Parameters</h2>
+                    <div class="space-y-5" id="input-container"></div>
+                </div>
+
+                <div class="lg:col-span-3 glass-card" style="padding: 24px;">
+                    <h2 style="font-size: 18px; font-weight: 600; color: #ffffff; margin: 0 0 20px 0; padding-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Coverage Visualization</h2>
+                    <div class="glass-panel" style="padding: 8px; margin-top: 16px;">
+                        <canvas id="tofdCanvas"></canvas>
+                    </div>
+                    <div id="results" class="mt-6 text-sm font-medium glass-panel" style="padding: 16px;"></div>
+                    <div class="mt-6">
+                        <button id="analyze-btn" class="btn-primary w-full py-3">
+                            Run Analysis
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -151,6 +153,7 @@ function createUI() {
 function cacheDom() {
     const q = (s) => container.querySelector(s);
     dom = {
+        headerContainer: q('#tofd-header-container'),
         canvas: q('#tofdCanvas'),
         inputContainer: q('#input-container'),
         resultsContainer: q('#results'),
@@ -161,6 +164,14 @@ function cacheDom() {
         analysisTextEl: q('#analysis-text'),
         loader: q('#loader')
     };
+
+    // Initialize animated header
+    const header = createAnimatedHeader(
+        'TOFD Calculator',
+        'Calculate and visualize TOFD inspection coverage',
+        { height: '180px', particleCount: 15, waveIntensity: 0.4 }
+    );
+    dom.headerContainer.appendChild(header);
 }
 
 function updateAll() {
@@ -448,6 +459,15 @@ export default {
     },
     
     destroy: () => {
+        // Destroy animated background
+        const headerContainer = container?.querySelector('#tofd-header-container');
+        if (headerContainer) {
+            const animContainer = headerContainer.querySelector('.animated-header-container');
+            if (animContainer && animContainer._animationInstance) {
+                animContainer._animationInstance.destroy();
+            }
+        }
+
         removeEventListeners();
         container.innerHTML = '';
         container.classList.remove('bg-slate-100', 'dark:bg-slate-900');
