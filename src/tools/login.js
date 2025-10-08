@@ -575,6 +575,30 @@ function showRequestSuccess(message) {
     dom.requestErrorMessage.style.display = 'none';
 }
 
+async function handleForgotPassword(e) {
+    e.preventDefault();
+
+    const email = prompt('Enter your email address to receive a password reset link:');
+    if (!email) return;
+
+    // Basic email validation
+    if (!email.includes('@')) {
+        alert('Please enter a valid email address');
+        return;
+    }
+
+    const { supabase } = await import('../supabase-client.js');
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin
+    });
+
+    if (error) {
+        alert('Error: ' + error.message);
+    } else {
+        alert('Password reset link sent! Please check your email.');
+    }
+}
+
 function addEventListeners() {
     dom.loginForm.addEventListener('submit', handleLogin);
     dom.requestAccountBtn.addEventListener('click', (e) => {
@@ -583,6 +607,11 @@ function addEventListeners() {
     });
     dom.backToLoginBtn.addEventListener('click', showLoginCard);
     dom.requestForm.addEventListener('submit', handleRequestSubmit);
+
+    const forgotPasswordLink = container.querySelector('#forgot-password');
+    if (forgotPasswordLink) {
+        forgotPasswordLink.addEventListener('click', handleForgotPassword);
+    }
 }
 
 export default {

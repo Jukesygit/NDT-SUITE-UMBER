@@ -299,6 +299,211 @@ class SharingManager {
             return { hasAccess: false, permission: null };
         }
     }
+
+    // ========== Asset Access Request Functions ==========
+
+    /**
+     * Request access to an asset from another organization
+     * @param {Object} options - Request options
+     * @param {string} options.ownerOrganizationId - Organization that owns the asset
+     * @param {string} options.assetId - The asset ID
+     * @param {string} options.vesselId - (Optional) Specific vessel ID
+     * @param {string} options.scanId - (Optional) Specific scan ID
+     * @param {string} options.permission - 'view' or 'edit'
+     * @param {string} options.message - Optional message to admin
+     * @returns {Promise<Object>} Result with success/error
+     */
+    async requestAssetAccess({ ownerOrganizationId, assetId, vesselId = null, scanId = null, permission = 'view', message = '' }) {
+        try {
+            const currentUser = authManager.getCurrentUser();
+            const currentOrgId = authManager.getCurrentOrganizationId();
+
+            if (!currentUser || !currentOrgId) {
+                return { success: false, error: 'User not authenticated' };
+            }
+
+            if (currentOrgId === ownerOrganizationId) {
+                return { success: false, error: 'Cannot request access to your own organization assets' };
+            }
+
+            const { data, error } = await supabase
+                .from('asset_access_requests')
+                .insert({
+                    user_id: currentUser.id,
+                    user_organization_id: currentOrgId,
+                    owner_organization_id: ownerOrganizationId,
+                    asset_id: assetId,
+                    vessel_id: vesselId,
+                    scan_id: scanId,
+                    requested_permission: permission,
+                    message: message
+                })
+                .select()
+                .single();
+
+            if (error) {
+                // Handle unique constraint violation (duplicate request)
+                if (error.code === '23505') {
+                    return { success: false, error: 'You already have a pending request for this asset' };
+                }
+                console.error('Error requesting asset access:', error);
+                return { success: false, error: error.message };
+            }
+
+            return { success: true, data };
+        } catch (error) {
+            console.error('Error requesting asset access:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * Get pending asset access requests for current organization (admin/org_admin only)
+     * @returns {Promise<Array>} List of pending requests
+     */
+    async getPendingAccessRequests() {
+        try {
+            const currentOrgId = authManager.getCurrentOrganizationId();
+            if (!currentOrgId) {
+                return [];
+            }
+
+            if (!authManager.isAdmin() && !authManager.isOrgAdmin()) {
+                return [];
+            }
+
+            const { data, error } = await supabase
+                .rpc('get_pending_asset_access_requests_for_org', { org_id: currentOrgId });
+
+            if (error) {
+                console.error('Error getting pending access requests:', error);
+                return [];
+            }
+
+            return data || [];
+        } catch (error) {
+            console.error('Error getting pending access requests:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get user's own asset access requests
+     * @returns {Promise<Array>} List of user's requests
+     */
+    async getUserAccessRequests() {
+        try {
+            const currentUser = authManager.getCurrentUser();
+            if (!currentUser) {
+                return [];
+            }
+
+            const { data, error } = await supabase
+                .rpc('get_user_asset_access_requests', { p_user_id: currentUser.id });
+
+            if (error) {
+                console.error('Error getting user access requests:', error);
+                return [];
+            }
+
+            return data || [];
+        } catch (error) {
+            console.error('Error getting user access requests:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Approve an asset access request (admin/org_admin only)
+     * @param {string} requestId - The request ID to approve
+     * @returns {Promise<Object>} Result with success/error
+     */
+    async approveAccessRequest(requestId) {
+        try {
+            if (!authManager.isAdmin() && !authManager.isOrgAdmin()) {
+                return { success: false, error: 'Only admins can approve access requests' };
+            }
+
+            const { data, error } = await supabase
+                .rpc('approve_asset_access_request', { request_id: requestId });
+
+            if (error) {
+                console.error('Error approving access request:', error);
+                return { success: false, error: error.message };
+            }
+
+            if (!data.success) {
+                return { success: false, error: data.error };
+            }
+
+            return { success: true, message: data.message };
+        } catch (error) {
+            console.error('Error approving access request:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * Reject an asset access request (admin/org_admin only)
+     * @param {string} requestId - The request ID to reject
+     * @param {string} reason - Reason for rejection
+     * @returns {Promise<Object>} Result with success/error
+     */
+    async rejectAccessRequest(requestId, reason = '') {
+        try {
+            if (!authManager.isAdmin() && !authManager.isOrgAdmin()) {
+                return { success: false, error: 'Only admins can reject access requests' };
+            }
+
+            const { data, error } = await supabase
+                .rpc('reject_asset_access_request', { request_id: requestId, reason: reason });
+
+            if (error) {
+                console.error('Error rejecting access request:', error);
+                return { success: false, error: error.message };
+            }
+
+            if (!data.success) {
+                return { success: false, error: data.error };
+            }
+
+            return { success: true, message: data.message };
+        } catch (error) {
+            console.error('Error rejecting access request:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * Cancel own asset access request
+     * @param {string} requestId - The request ID to cancel
+     * @returns {Promise<Object>} Result with success/error
+     */
+    async cancelAccessRequest(requestId) {
+        try {
+            const currentUser = authManager.getCurrentUser();
+            if (!currentUser) {
+                return { success: false, error: 'User not authenticated' };
+            }
+
+            const { error } = await supabase
+                .from('asset_access_requests')
+                .delete()
+                .eq('id', requestId)
+                .eq('user_id', currentUser.id)
+                .eq('status', 'pending');
+
+            if (error) {
+                console.error('Error canceling access request:', error);
+                return { success: false, error: error.message };
+            }
+
+            return { success: true };
+        } catch (error) {
+            console.error('Error canceling access request:', error);
+            return { success: false, error: error.message };
+        }
+    }
 }
 
 // Create singleton instance

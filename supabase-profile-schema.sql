@@ -24,6 +24,11 @@ CREATE INDEX IF NOT EXISTS idx_permission_requests_status ON permission_requests
 -- Enable Row Level Security (RLS)
 ALTER TABLE permission_requests ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view own permission requests" ON permission_requests;
+DROP POLICY IF EXISTS "Authenticated users can create permission requests" ON permission_requests;
+DROP POLICY IF EXISTS "Only admins can update permission requests" ON permission_requests;
+
 -- RLS Policies for permission_requests
 -- Users can view their own permission requests
 CREATE POLICY "Users can view own permission requests"

@@ -1,5 +1,6 @@
 // NII Coverage Calculator Tool Module
 // Matrix Vessel NII Coverage Calculator - MAI-F-NDT-036
+import { createAnimatedHeader } from '../animated-background.js';
 
 let container, dom = {};
 
@@ -37,9 +38,11 @@ let pecTasks = JSON.parse(JSON.stringify(defaultPecTasks));
 let tofdTasks = JSON.parse(JSON.stringify(defaultTofdTasks));
 
 const HTML = `
-<div class="h-full overflow-y-auto bg-slate-100 dark:bg-slate-900">
-    <div class="container mx-auto p-4 md:p-8 max-w-7xl">
-        <header class="mb-8">
+<div class="h-full w-full" style="display: flex; flex-direction: column; overflow: hidden;">
+    <div id="nii-header-container" style="flex-shrink: 0;"></div>
+    <div class="glass-scrollbar" style="flex: 1; overflow-y: auto; padding: 24px;">
+    <div class="container mx-auto max-w-7xl">
+        <header class="mb-8" style="display: none;">
             <h1 class="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">NII Coverage Calculator</h1>
             <p class="text-slate-600 dark:text-slate-400 mt-2">Matrix Vessel NII Coverage Calculator - MAI-F-NDT-036 REV 0</p>
         </header>
@@ -236,12 +239,14 @@ const HTML = `
             </div>
         </div>
     </div>
+    </div>
 </div>
 `;
 
 function cacheDom() {
     const q = (s) => container.querySelector(s);
     dom = {
+        headerContainer: q('#nii-header-container'),
         projectName: q('#projectName'),
         vesselId: q('#vesselId'),
         tanTan: q('#tanTan'),
@@ -276,6 +281,14 @@ function cacheDom() {
 
         summaryTableBody: q('#summaryTableBody')
     };
+
+    // Initialize animated header
+    const header = createAnimatedHeader(
+        'NII Coverage Calculator',
+        'Matrix Vessel NII Coverage Calculator - MAI-F-NDT-036 REV 0',
+        { height: '180px', particleCount: 15, waveIntensity: 0.4 }
+    );
+    dom.headerContainer.appendChild(header);
 }
 
 // Task letter generator
@@ -708,6 +721,15 @@ export default {
     },
 
     destroy: () => {
+        // Destroy animated background
+        const headerContainer = container?.querySelector('#nii-header-container');
+        if (headerContainer) {
+            const animContainer = headerContainer.querySelector('.animated-header-container');
+            if (animContainer && animContainer._animationInstance) {
+                animContainer._animationInstance.destroy();
+            }
+        }
+
         container.innerHTML = '';
     }
 };
