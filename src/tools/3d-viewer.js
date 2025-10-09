@@ -481,30 +481,39 @@ function loadDefaultModel() {
 function setModel(newModel) {
     if (model) scene.remove(model);
     model = newModel;
-    scene.add(model);
-    
+
+    // Calculate bounding box before adding to scene
     const box = new THREE.Box3().setFromObject(model);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
-    
-    decalMaterial.uniforms.uModelSize.value = size;
-    decalMaterial.uniforms.uModelMin.value = box.min;
+
+    // Center the model at origin
     model.position.sub(center);
-    
+
+    // Add to scene AFTER centering
+    scene.add(model);
+
+    // Now calculate the bounding box in world space (centered at origin)
+    const centeredBox = new THREE.Box3().setFromObject(model);
+
+    decalMaterial.uniforms.uModelSize.value = size;
+    decalMaterial.uniforms.uModelMin.value = centeredBox.min;
+
     const maxDim = Math.max(size.x, size.y, size.z);
     const fov = camera.fov * (Math.PI / 180);
-    camera.position.z = center.z + Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.5;
+    camera.position.z = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.5;
     camera.far = camera.position.z + maxDim * 2;
     camera.updateProjectionMatrix();
-    
-    orbitControls.target.copy(center);
+
+    orbitControls.target.set(0, 0, 0);
     orbitControls.update();
-    
+
     layers.forEach(layer => {
         recalculateAspectRatio(layer);
         layer.needsUpdate = true;
     });
     batchUpdateShaderUniforms();
+    decalMaterial.needsUpdate = true;
     requestRender();
 }
 
@@ -1577,11 +1586,18 @@ async function loadModelFromDataURL(dataURL, fileName) {
 
         object.traverse(child => {
             if (child.isMesh) {
-                child.material = decalMaterial;
                 // Ensure geometry has proper attributes
-                if (child.geometry && !child.geometry.attributes.normal) {
-                    child.geometry.computeVertexNormals();
+                if (child.geometry) {
+                    if (!child.geometry.attributes.normal) {
+                        child.geometry.computeVertexNormals();
+                    }
+                    // Make sure geometry is not empty
+                    if (!child.geometry.attributes.position || child.geometry.attributes.position.count === 0) {
+                        console.error('Geometry has no vertices');
+                        return;
+                    }
                 }
+                child.material = decalMaterial;
             }
         });
         setModel(object);
