@@ -357,7 +357,8 @@ class NDTApp {
         const toolMap = {
             'pec': 'pec',
             'cscan': 'cscan',
-            '3dview': '3dview'
+            '3dview': '3dview',
+            '3dviewer': '3dview'
         };
 
         const toolId = toolMap[toolType];

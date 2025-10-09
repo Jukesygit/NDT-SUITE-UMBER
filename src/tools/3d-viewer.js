@@ -23,6 +23,7 @@ const HTML = `
             <label for="model-upload" class="upload-label">Choose an .obj File</label>
             <input type="file" id="model-upload" class="hidden" accept=".obj" aria-label="Upload 3D model file">
             <span id="model-file-name" class="text-sm text-gray-600 mt-1 block">Default Cylinder</span>
+            <button id="export-to-hub-btn" class="action-btn mt-4 w-full">Export to Hub</button>
         </div>
     </div>
     
@@ -313,6 +314,7 @@ function cacheDomElements() {
         layerList: query('#layer-list'),
         addLayerBtn: query('#add-layer-btn'),
         pickScanBtn: query('#pick-scan-btn'),
+        exportToHubBtn: query('#export-to-hub-btn'),
         scanPickerModal: query('#scan-picker-modal'),
         scanPickerContent: query('#scan-picker-content'),
         closePickerBtn: query('#close-picker-btn'),
@@ -696,6 +698,277 @@ function adjustValue(slider, valueInput, delta) {
     throttledSliderUpdate(false);
 }
 
+// Serialize the current 3D viewer state
+async function serializeState() {
+    const state = {
+        modelFileName: domElements.modelFileNameSpan.textContent,
+        modelData: null, // Will be populated if custom model is loaded
+        layers: [],
+        lighting: {
+            intensity: parseFloat(domElements.lightIntensitySlider.value),
+            azimuth: parseFloat(domElements.lightAzimuthSlider.value),
+            elevation: parseFloat(domElements.lightElevationSlider.value),
+            distance: parseFloat(domElements.lightDistanceSlider.value)
+        },
+        camera: {
+            position: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+            target: { x: orbitControls.target.x, y: orbitControls.target.y, z: orbitControls.target.z }
+        }
+    };
+
+    // Serialize each layer
+    for (const layer of layers) {
+        const layerData = {
+            id: layer.id,
+            fileName: layer.fileName,
+            visible: layer.visible,
+            textureDataURL: null,
+            uniforms: {
+                uScale: { x: layer.uniforms.uScale.x, y: layer.uniforms.uScale.y },
+                uOffset: { x: layer.uniforms.uOffset.x, y: layer.uniforms.uOffset.y },
+                uRotation: layer.uniforms.uRotation,
+                uFlip: { x: layer.uniforms.uFlip.x, y: layer.uniforms.uFlip.y },
+                uProjectionAxis: { x: layer.uniforms.uProjectionAxis.x, y: layer.uniforms.uProjectionAxis.y, z: layer.uniforms.uProjectionAxis.z },
+                uClamp: { x: layer.uniforms.uClamp.x, y: layer.uniforms.uClamp.y }
+            },
+            aspectCorrectionFactor: layer.aspectCorrectionFactor
+        };
+
+        // Convert texture to data URL
+        if (layer.texture && layer.texture.image) {
+            const canvas = document.createElement('canvas');
+            canvas.width = layer.texture.image.width;
+            canvas.height = layer.texture.image.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(layer.texture.image, 0, 0);
+            layerData.textureDataURL = canvas.toDataURL('image/png');
+        }
+
+        state.layers.push(layerData);
+    }
+
+    // If using custom model (not default cylinder), serialize it
+    if (domElements.modelFileNameSpan.textContent !== 'Default Cylinder') {
+        // Export the model geometry to OBJ format
+        state.modelData = await exportModelToOBJ();
+    }
+
+    return state;
+}
+
+// Export model to OBJ format
+async function exportModelToOBJ() {
+    if (!model) return null;
+
+    let objContent = '# Exported from NDT Suite 3D Viewer\n';
+
+    model.traverse((child) => {
+        if (child.isMesh && child.geometry) {
+            const geometry = child.geometry;
+            const vertices = geometry.attributes.position;
+            const indices = geometry.index;
+
+            // Export vertices
+            for (let i = 0; i < vertices.count; i++) {
+                const x = vertices.getX(i);
+                const y = vertices.getY(i);
+                const z = vertices.getZ(i);
+                objContent += `v ${x} ${y} ${z}\n`;
+            }
+
+            // Export faces
+            if (indices) {
+                for (let i = 0; i < indices.count; i += 3) {
+                    const a = indices.getX(i) + 1;
+                    const b = indices.getX(i + 1) + 1;
+                    const c = indices.getX(i + 2) + 1;
+                    objContent += `f ${a} ${b} ${c}\n`;
+                }
+            }
+        }
+    });
+
+    // Convert to data URL
+    const blob = new Blob([objContent], { type: 'text/plain' });
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+    });
+}
+
+// Generate thumbnail of current 3D view
+async function generateThumbnail() {
+    if (!renderer) return null;
+
+    // Render a frame
+    renderer.render(scene, camera);
+
+    // Get canvas data as image
+    const dataURL = renderer.domElement.toDataURL('image/png');
+    return dataURL;
+}
+
+// Export to Hub
+async function exportToHub() {
+    if (layers.length === 0 && domElements.modelFileNameSpan.textContent === 'Default Cylinder') {
+        showMessage('Nothing to export. Add some layers first.', 'error');
+        return;
+    }
+
+    showMessage('Preparing export...');
+
+    // Create modal dialog
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h2 class="text-xl font-bold mb-4 dark:text-white">Export 3D Project to Hub</h2>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2 dark:text-gray-200">Project Name</label>
+                <input type="text" id="project-name-input" placeholder="e.g., Tank A Inspection Model"
+                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white">
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2 dark:text-gray-200">Asset</label>
+                <select id="asset-select" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white">
+                    <option value="">-- Select Asset --</option>
+                    ${dataManager.getAssets().map(a => `<option value="${a.id}">${a.name}</option>`).join('')}
+                </select>
+                <button id="new-asset-btn" class="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">+ Create New Asset</button>
+            </div>
+
+            <div class="mb-4" id="vessel-section" style="display:none;">
+                <label class="block text-sm font-medium mb-2 dark:text-gray-200">Vessel</label>
+                <select id="vessel-select" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white">
+                    <option value="">-- Select Vessel --</option>
+                </select>
+                <button id="new-vessel-btn" class="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">+ Create New Vessel</button>
+            </div>
+
+            <div class="flex gap-3 mt-6">
+                <button id="export-confirm-btn" class="flex-1 bg-orange-600 text-white py-2 rounded-lg hover:bg-orange-700 transition-colors">Export</button>
+                <button id="export-cancel-btn" class="flex-1 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const projectNameInput = modal.querySelector('#project-name-input');
+    const assetSelect = modal.querySelector('#asset-select');
+    const vesselSelect = modal.querySelector('#vessel-select');
+    const vesselSection = modal.querySelector('#vessel-section');
+    const newAssetBtn = modal.querySelector('#new-asset-btn');
+    const newVesselBtn = modal.querySelector('#new-vessel-btn');
+    const confirmBtn = modal.querySelector('#export-confirm-btn');
+    const cancelBtn = modal.querySelector('#export-cancel-btn');
+
+    // Set default project name
+    projectNameInput.value = `3D Model - ${new Date().toLocaleDateString()}`;
+
+    // Asset selection handler
+    assetSelect.addEventListener('change', () => {
+        const assetId = assetSelect.value;
+        if (assetId) {
+            const asset = dataManager.getAsset(assetId);
+            vesselSection.style.display = 'block';
+            vesselSelect.innerHTML = '<option value="">-- Select Vessel --</option>' +
+                asset.vessels.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
+        } else {
+            vesselSection.style.display = 'none';
+        }
+    });
+
+    // New asset handler
+    newAssetBtn.addEventListener('click', async () => {
+        const name = prompt('Enter asset name:');
+        if (name) {
+            const asset = await dataManager.createAsset(name);
+            assetSelect.innerHTML += `<option value="${asset.id}" selected>${asset.name}</option>`;
+            assetSelect.value = asset.id;
+            assetSelect.dispatchEvent(new Event('change'));
+        }
+    });
+
+    // New vessel handler
+    newVesselBtn.addEventListener('click', async () => {
+        const assetId = assetSelect.value;
+        if (!assetId) {
+            alert('Please select an asset first');
+            return;
+        }
+        const name = prompt('Enter vessel name:');
+        if (name) {
+            const vessel = await dataManager.createVessel(assetId, name);
+            vesselSelect.innerHTML += `<option value="${vessel.id}" selected>${vessel.name}</option>`;
+            vesselSelect.value = vessel.id;
+        }
+    });
+
+    // Confirm export
+    confirmBtn.addEventListener('click', async () => {
+        const projectName = projectNameInput.value.trim();
+        const assetId = assetSelect.value;
+        const vesselId = vesselSelect.value;
+
+        if (!projectName) {
+            alert('Please enter a project name');
+            return;
+        }
+        if (!assetId) {
+            alert('Please select an asset');
+            return;
+        }
+        if (!vesselId) {
+            alert('Please select a vessel');
+            return;
+        }
+
+        try {
+            // Serialize the state
+            const state = await serializeState();
+
+            // Generate thumbnail
+            const thumbnail = await generateThumbnail();
+
+            const scanData = {
+                name: projectName,
+                toolType: '3dviewer',
+                data: state,
+                thumbnail: thumbnail,
+                heatmapOnly: null
+            };
+
+            const scan = await dataManager.createScan(assetId, vesselId, scanData);
+
+            if (scan) {
+                document.body.removeChild(modal);
+                showMessage('3D project exported to hub successfully!');
+            } else {
+                alert('Failed to export project');
+            }
+        } catch (error) {
+            console.error('Export error:', error);
+            alert('Failed to export: ' + error.message);
+        }
+    });
+
+    // Cancel handler
+    cancelBtn.addEventListener('click', () => {
+        document.body.removeChild(modal);
+    });
+
+    // Click outside to close
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            document.body.removeChild(modal);
+        }
+    });
+}
+
 function addEventListeners() {
     window.addEventListener('resize', onWindowResize);
     orbitControls.addEventListener('change', requestRender);
@@ -703,6 +976,7 @@ function addEventListeners() {
     domElements.textureUploadInput.addEventListener('change', handleTextureUpload);
     domElements.addLayerBtn.addEventListener('click', () => domElements.textureUploadInput.click());
     domElements.pickScanBtn.addEventListener('click', showScanPicker);
+    domElements.exportToHubBtn.addEventListener('click', exportToHub);
     domElements.closePickerBtn.addEventListener('click', closeScanPicker);
     transformControls.addEventListener('objectChange', requestRender);
     transformControls.addEventListener('dragging-changed', (event) => {
@@ -956,6 +1230,136 @@ function animate() {
     }
 }
 
+// Restore state from saved data
+async function restoreState(state) {
+    if (!state) return;
+
+    try {
+        showMessage('Loading saved 3D project...');
+
+        // Clear existing layers
+        layers.forEach(layer => {
+            if (layer.texture) layer.texture.dispose();
+        });
+        layers = [];
+        selectedLayer = null;
+        transformControls.detach();
+        domElements.controlsWrapper.classList.add('hidden');
+
+        // Restore model
+        if (state.modelData) {
+            // Load custom model from data URL
+            domElements.modelFileNameSpan.textContent = state.modelFileName || 'Custom Model';
+            await loadModelFromDataURL(state.modelData, state.modelFileName);
+        } else {
+            // Use default cylinder
+            domElements.modelFileNameSpan.textContent = state.modelFileName || 'Default Cylinder';
+            loadDefaultModel();
+        }
+
+        // Wait a bit for model to load
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Restore layers
+        for (const layerData of state.layers) {
+            if (!layerData.textureDataURL) continue;
+
+            await new Promise((resolve) => {
+                const textureLoader = new THREE.TextureLoader();
+                textureLoader.load(layerData.textureDataURL, (texture) => {
+                    texture.colorSpace = THREE.SRGBColorSpace;
+                    texture.minFilter = THREE.LinearFilter;
+                    texture.magFilter = THREE.LinearFilter;
+                    texture.wrapS = THREE.ClampToEdgeWrapping;
+                    texture.wrapT = THREE.ClampToEdgeWrapping;
+                    texture.generateMipmaps = false;
+
+                    const newLayer = new Layer(texture, layerData.fileName);
+                    newLayer.id = layerData.id;
+                    newLayer.visible = layerData.visible;
+                    newLayer.aspectCorrectionFactor = layerData.aspectCorrectionFactor || 1.0;
+
+                    // Restore uniforms
+                    if (layerData.uniforms) {
+                        newLayer.uniforms.uScale.set(layerData.uniforms.uScale.x, layerData.uniforms.uScale.y);
+                        newLayer.uniforms.uOffset.set(layerData.uniforms.uOffset.x, layerData.uniforms.uOffset.y);
+                        newLayer.uniforms.uRotation = layerData.uniforms.uRotation;
+                        newLayer.uniforms.uFlip.set(layerData.uniforms.uFlip.x, layerData.uniforms.uFlip.y);
+                        newLayer.uniforms.uProjectionAxis.set(
+                            layerData.uniforms.uProjectionAxis.x,
+                            layerData.uniforms.uProjectionAxis.y,
+                            layerData.uniforms.uProjectionAxis.z
+                        );
+                        newLayer.uniforms.uClamp.set(layerData.uniforms.uClamp.x, layerData.uniforms.uClamp.y);
+
+                        // Update transform target position and rotation
+                        newLayer.transformTarget.position.set(
+                            layerData.uniforms.uOffset.x * 100,
+                            layerData.uniforms.uOffset.y * 100,
+                            0
+                        );
+                        newLayer.transformTarget.rotation.z = layerData.uniforms.uRotation;
+                    }
+
+                    newLayer.needsUpdate = true;
+                    layers.push(newLayer);
+                    resolve();
+                });
+            });
+        }
+
+        // Restore lighting settings
+        if (state.lighting) {
+            domElements.lightIntensitySlider.value = state.lighting.intensity || 1.5;
+            domElements.lightAzimuthSlider.value = state.lighting.azimuth || 45;
+            domElements.lightElevationSlider.value = state.lighting.elevation || 45;
+            domElements.lightDistanceSlider.value = state.lighting.distance || 500;
+            updateLighting();
+        }
+
+        // Restore camera position
+        if (state.camera) {
+            camera.position.set(
+                state.camera.position.x,
+                state.camera.position.y,
+                state.camera.position.z
+            );
+            orbitControls.target.set(
+                state.camera.target.x,
+                state.camera.target.y,
+                state.camera.target.z
+            );
+            orbitControls.update();
+        }
+
+        // Select the first layer if available
+        if (layers.length > 0) {
+            selectLayer(layers[0]);
+        }
+
+        // Update UI
+        updateLayerList();
+        batchUpdateShaderUniforms();
+        requestRender();
+
+        showMessage('3D project loaded successfully!');
+    } catch (error) {
+        console.error('Error restoring state:', error);
+        showMessage('Failed to load 3D project: ' + error.message, 'error');
+    }
+}
+
+// Handle load 3D project event from data hub (loadScanData is the generic event)
+function handleLoad3DProjectEvent(event) {
+    const { scanData } = event.detail;
+
+    if (!scanData || scanData.toolType !== '3dviewer') return;
+
+    if (scanData.data) {
+        restoreState(scanData.data);
+    }
+}
+
 export default {
     init: async (toolContainer) => {
         container = toolContainer;
@@ -966,6 +1370,7 @@ export default {
 
         // Listen for 3D model loading events from data hub
         window.addEventListener('load3DModel', handleLoad3DModelEvent);
+        window.addEventListener('loadScanData', handleLoad3DProjectEvent);
 
         // Check if there's pending model data from app
         if (window.ndtApp && window.ndtApp.pending3DModelData) {
@@ -978,6 +1383,7 @@ export default {
         cancelAnimationFrame(animationFrameId);
         window.removeEventListener('resize', onWindowResize);
         window.removeEventListener('load3DModel', handleLoad3DModelEvent);
+        window.removeEventListener('loadScanData', handleLoad3DProjectEvent);
         if (orbitControls) orbitControls.dispose();
         if (transformControls) transformControls.dispose();
         if (scene) {
