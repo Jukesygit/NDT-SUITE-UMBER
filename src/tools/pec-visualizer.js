@@ -583,10 +583,10 @@ function exportToHub() {
     });
 
     // New asset handler
-    newAssetBtn.addEventListener('click', () => {
+    newAssetBtn.addEventListener('click', async () => {
         const name = prompt('Enter asset name:');
         if (name) {
-            const asset = dataManager.createAsset(name);
+            const asset = await dataManager.createAsset(name);
             assetSelect.innerHTML += `<option value="${asset.id}" selected>${asset.name}</option>`;
             assetSelect.value = asset.id;
             assetSelect.dispatchEvent(new Event('change'));
@@ -594,7 +594,7 @@ function exportToHub() {
     });
 
     // New vessel handler
-    newVesselBtn.addEventListener('click', () => {
+    newVesselBtn.addEventListener('click', async () => {
         const assetId = assetSelect.value;
         if (!assetId) {
             alert('Please select an asset first');
@@ -602,7 +602,7 @@ function exportToHub() {
         }
         const name = prompt('Enter vessel name:');
         if (name) {
-            const vessel = dataManager.createVessel(assetId, name);
+            const vessel = await dataManager.createVessel(assetId, name);
             vesselSelect.innerHTML += `<option value="${vessel.id}" selected>${vessel.name}</option>`;
             vesselSelect.value = vessel.id;
         }
