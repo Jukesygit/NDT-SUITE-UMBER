@@ -691,7 +691,15 @@ function exportToHub() {
             data: {
                 heatmapData: heatmapData,
                 customColorRange: customColorRange,
-                stats: stats
+                stats: stats,
+                settings: {
+                    colorscale: dom.colorscaleSelect.value,
+                    smoothing: dom.smoothingSelect.value,
+                    reverseScale: dom.reverseScaleCheckbox.checked,
+                    showGrid: dom.showGridCheckbox.checked,
+                    flipHorizontal: dom.flipHorizontalCheckbox.checked,
+                    flipVertical: dom.flipVerticalCheckbox.checked
+                }
             },
             thumbnail: thumbnails ? thumbnails.full : null,
             heatmapOnly: thumbnails ? thumbnails.heatmapOnly : null
@@ -745,6 +753,17 @@ function loadScanData(event) {
         if (customColorRange.min !== null && customColorRange.max !== null) {
             dom.minValueInput.value = customColorRange.min.toFixed(2);
             dom.maxValueInput.value = customColorRange.max.toFixed(2);
+        }
+
+        // Restore saved UI settings
+        if (scanData.data.settings) {
+            const settings = scanData.data.settings;
+            dom.colorscaleSelect.value = settings.colorscale || 'Jet';
+            dom.smoothingSelect.value = settings.smoothing || 'false';
+            dom.reverseScaleCheckbox.checked = settings.reverseScale !== undefined ? settings.reverseScale : true;
+            dom.showGridCheckbox.checked = settings.showGrid !== undefined ? settings.showGrid : true;
+            dom.flipHorizontalCheckbox.checked = settings.flipHorizontal || false;
+            dom.flipVerticalCheckbox.checked = settings.flipVertical || false;
         }
 
         renderHeatmap();
