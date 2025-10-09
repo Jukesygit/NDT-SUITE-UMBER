@@ -284,45 +284,50 @@ function renderVesselDetailView(assetId) {
                                 </div>
                             </div>
 
-                            <!-- Vessel Images Section -->
-                            <div class="mb-4">
-                                <div class="flex justify-between items-center mb-2">
-                                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Vessel Images</div>
-                                    <button class="upload-image-btn text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
-                                        + Add Images
-                                    </button>
-                                </div>
-                                ${images.length > 0 ? `
-                                    <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                                        ${images.map(img => `
-                                            <div class="vessel-image-card relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-600 hover:border-blue-500 transition-colors aspect-square" data-image-id="${img.id}">
-                                                <img src="${img.dataUrl}" alt="${img.name}" class="w-full h-full object-cover">
-                                                <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center gap-2">
-                                                    <button class="rename-image-btn opacity-0 group-hover:opacity-100 bg-blue-600 text-white p-1.5 rounded-full hover:bg-blue-700 transition-all" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-image-id="${img.id}" aria-label="Rename image" title="Rename">
-                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                                                        </svg>
-                                                    </button>
-                                                    <button class="delete-image-btn opacity-0 group-hover:opacity-100 bg-red-600 text-white p-1.5 rounded-full hover:bg-red-700 transition-all" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-image-id="${img.id}" aria-label="Delete image" title="Delete">
-                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                                <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-white text-xs p-1 truncate opacity-0 group-hover:opacity-100 transition-opacity" title="${img.name}">
-                                                    ${img.name}
-                                                </div>
-                                            </div>
-                                        `).join('')}
+                            <!-- Images and Scans Side by Side -->
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                <!-- Vessel Images Section -->
+                                <div>
+                                    <div class="flex justify-between items-center mb-2">
+                                        <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Vessel Images</div>
+                                        <button class="upload-image-btn text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                            + Add Images
+                                        </button>
                                     </div>
-                                ` : `
-                                    <p class="text-sm text-gray-500 dark:text-gray-400 italic">No images uploaded yet</p>
-                                `}
-                            </div>
-                            ${vessel.scans.length > 0 ? `
-                                <div class="space-y-2">
-                                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Scans</div>
-                                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                                    ${images.length > 0 ? `
+                                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                            ${images.map(img => `
+                                                <div class="vessel-image-card relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-600 hover:border-blue-500 transition-colors aspect-square" data-image-id="${img.id}">
+                                                    <img src="${img.dataUrl}" alt="${img.name}" class="w-full h-full object-cover">
+                                                    <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center gap-2">
+                                                        <button class="rename-image-btn opacity-0 group-hover:opacity-100 bg-blue-600 text-white p-1.5 rounded-full hover:bg-blue-700 transition-all" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-image-id="${img.id}" aria-label="Rename image" title="Rename">
+                                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                                            </svg>
+                                                        </button>
+                                                        <button class="delete-image-btn opacity-0 group-hover:opacity-100 bg-red-600 text-white p-1.5 rounded-full hover:bg-red-700 transition-all" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-image-id="${img.id}" aria-label="Delete image" title="Delete">
+                                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                    <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-white text-xs p-1 truncate opacity-0 group-hover:opacity-100 transition-opacity" title="${img.name}">
+                                                        ${img.name}
+                                                    </div>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    ` : `
+                                        <p class="text-sm text-gray-500 dark:text-gray-400 italic">No images uploaded yet</p>
+                                    `}
+                                </div>
+
+                                <!-- Scans Section -->
+                                <div>
+                                    ${vessel.scans.length > 0 ? `
+                                        <div class="space-y-2">
+                                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Scans</div>
+                                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                         ${vessel.scans.map(scan => `
                                             <div class="scan-card-compact cursor-pointer bg-gray-50 dark:bg-gray-700/50 rounded-lg overflow-hidden hover:ring-2 hover:ring-blue-500 transition-all" data-scan-id="${scan.id}" data-asset-id="${assetId}" data-vessel-id="${vessel.id}">
                                                 ${scan.thumbnail ? `
@@ -346,9 +351,11 @@ function renderVesselDetailView(assetId) {
                                                 </div>
                                             </div>
                                         `).join('')}
-                                    </div>
+                                            </div>
+                                        </div>
+                                    ` : '<p class="text-sm text-gray-500 dark:text-gray-400 italic">No scans yet</p>'}
                                 </div>
-                            ` : '<p class="text-sm text-gray-500 dark:text-gray-400 italic">No scans yet</p>'}
+                            </div>
                         </div>
                     </div>
                 `;
