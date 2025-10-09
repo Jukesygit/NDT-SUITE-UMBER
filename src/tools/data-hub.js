@@ -62,7 +62,7 @@ function cacheDom() {
     const header = createAnimatedHeader(
         'NDT Data Hub',
         'Organize and manage your inspection scans',
-        { height: '180px', particleCount: 15, waveIntensity: 0.4 }
+        { height: '120px', particleCount: 12, waveIntensity: 0.3 }
     );
     dom.headerContainer.appendChild(header);
 }
@@ -297,12 +297,20 @@ function renderVesselDetailView(assetId) {
                                         ${images.map(img => `
                                             <div class="vessel-image-card relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-600 hover:border-blue-500 transition-colors aspect-square" data-image-id="${img.id}">
                                                 <img src="${img.dataUrl}" alt="${img.name}" class="w-full h-full object-cover">
-                                                <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex items-center justify-center">
-                                                    <button class="delete-image-btn opacity-0 group-hover:opacity-100 bg-red-600 text-white p-1.5 rounded-full hover:bg-red-700 transition-all" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-image-id="${img.id}" aria-label="Delete image">
+                                                <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center gap-2">
+                                                    <button class="rename-image-btn opacity-0 group-hover:opacity-100 bg-blue-600 text-white p-1.5 rounded-full hover:bg-blue-700 transition-all" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-image-id="${img.id}" aria-label="Rename image" title="Rename">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                                        </svg>
+                                                    </button>
+                                                    <button class="delete-image-btn opacity-0 group-hover:opacity-100 bg-red-600 text-white p-1.5 rounded-full hover:bg-red-700 transition-all" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-image-id="${img.id}" aria-label="Delete image" title="Delete">
                                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                                                         </svg>
                                                     </button>
+                                                </div>
+                                                <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-white text-xs p-1 truncate opacity-0 group-hover:opacity-100 transition-opacity" title="${img.name}">
+                                                    ${img.name}
                                                 </div>
                                             </div>
                                         `).join('')}
@@ -405,6 +413,23 @@ function renderVesselDetailView(assetId) {
         });
     });
 
+    // Add event listeners for image rename buttons
+    dom.vesselDetailView.querySelectorAll('.rename-image-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const asset = dataManager.getAsset(btn.dataset.assetId);
+            const vessel = dataManager.getVessel(btn.dataset.assetId, btn.dataset.vesselId);
+            const image = vessel?.images?.find(img => img.id === btn.dataset.imageId);
+            if (image) {
+                const newName = prompt('Enter new name for image:', image.name);
+                if (newName && newName.trim()) {
+                    await dataManager.renameVesselImage(btn.dataset.assetId, btn.dataset.vesselId, btn.dataset.imageId, newName.trim());
+                    renderVesselDetailView(assetId);
+                }
+            }
+        });
+    });
+
     // Add event listeners for image delete buttons
     dom.vesselDetailView.querySelectorAll('.delete-image-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
@@ -420,7 +445,7 @@ function renderVesselDetailView(assetId) {
     // Add event listeners for viewing images
     dom.vesselDetailView.querySelectorAll('.vessel-image-card').forEach(card => {
         card.addEventListener('click', (e) => {
-            if (!e.target.closest('.delete-image-btn')) {
+            if (!e.target.closest('.delete-image-btn') && !e.target.closest('.rename-image-btn')) {
                 const imageId = card.dataset.imageId;
                 // Find the vessel by searching through all vessels in the asset
                 const asset = dataManager.getAsset(assetId);
