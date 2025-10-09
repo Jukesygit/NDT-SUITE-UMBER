@@ -220,11 +220,13 @@ class Layer {
 
 const vertexShader = `
 varying vec3 vWorldPosition;
+varying vec3 vLocalPosition;
 varying vec3 vNormal;
 
 void main() {
     vec4 worldPosition = modelMatrix * vec4(position, 1.0);
     vWorldPosition = worldPosition.xyz;
+    vLocalPosition = position;
     vNormal = normalize(normalMatrix * normal);
     gl_Position = projectionMatrix * viewMatrix * worldPosition;
 }
@@ -517,7 +519,13 @@ function handleModelUpload(event) {
         const loader = new OBJLoader();
         const object = loader.parse(e.target.result);
         object.traverse(child => {
-            if (child.isMesh) child.material = decalMaterial;
+            if (child.isMesh) {
+                child.material = decalMaterial;
+                // Ensure geometry has proper attributes
+                if (child.geometry && !child.geometry.attributes.normal) {
+                    child.geometry.computeVertexNormals();
+                }
+            }
         });
         setModel(object);
     };
@@ -1382,9 +1390,6 @@ async function restoreState(state) {
             loadDefaultModel();
         }
 
-        // Wait a bit for model to load
-        await new Promise(resolve => setTimeout(resolve, 100));
-
         // Restore layers
         for (const layerData of state.layers) {
             if (!layerData.textureDataURL) continue;
@@ -1545,27 +1550,40 @@ export default {
     }
 };
 
-function handleLoad3DModelEvent(event) {
+async function handleLoad3DModelEvent(event) {
     const { modelData, fileName } = event.detail;
-    loadModelFromDataURL(modelData, fileName);
+    await loadModelFromDataURL(modelData, fileName);
 }
 
-function loadModelFromDataURL(dataURL, fileName) {
+async function loadModelFromDataURL(dataURL, fileName) {
     domElements.modelFileNameSpan.textContent = fileName || 'Model from Data Hub';
 
-    fetch(dataURL)
-        .then(response => response.text())
-        .then(objText => {
-            const loader = new OBJLoader();
-            const object = loader.parse(objText);
-            object.traverse(child => {
-                if (child.isMesh) child.material = decalMaterial;
-            });
-            setModel(object);
-        })
-        .catch(err => {
-            console.error('Error loading 3D model:', err);
-            showMessage('Failed to load 3D model', 'error');
+    try {
+        const response = await fetch(dataURL);
+        const objText = await response.text();
+        const loader = new OBJLoader();
+        const object = loader.parse(objText);
+
+        // Ensure decalMaterial exists before assigning
+        if (!decalMaterial) {
+            console.error('Decal material not initialized');
+            showMessage('3D viewer not fully initialized', 'error');
+            return;
+        }
+
+        object.traverse(child => {
+            if (child.isMesh) {
+                child.material = decalMaterial;
+                // Ensure geometry has proper attributes
+                if (child.geometry && !child.geometry.attributes.normal) {
+                    child.geometry.computeVertexNormals();
+                }
+            }
         });
+        setModel(object);
+    } catch (err) {
+        console.error('Error loading 3D model:', err);
+        showMessage('Failed to load 3D model', 'error');
+    }
 }
 
