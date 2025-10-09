@@ -257,13 +257,18 @@ const float PI = 3.14159265359;
 
 void main() {
     vec3 normal = normalize(vNormal);
+    // Check if normal is valid
+    if (length(normal) < 0.1) {
+        // Invalid normal - use a default
+        normal = vec3(0.0, 0.0, 1.0);
+    }
     if (!gl_FrontFacing) normal = -normal;
-    
+
     vec3 finalColor = uBaseColor;
-    
+
     for (int i = 0; i < MAX_LAYERS; ++i) {
         if (i >= uLayerCount || uVisibles[i] < 0.5) continue;
-        
+
         float circumferentialAngle, vPos;
         vec3 projAxis = uProjectionAxes[i];
 
@@ -479,6 +484,7 @@ function loadDefaultModel() {
 }
 
 function setModel(newModel) {
+    console.log('setModel() called with:', newModel);
     if (model) scene.remove(model);
     model = newModel;
 
@@ -486,6 +492,13 @@ function setModel(newModel) {
     const box = new THREE.Box3().setFromObject(model);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
+
+    console.log('Model bounds:', {
+        min: box.min,
+        max: box.max,
+        size: size,
+        center: center
+    });
 
     // Center the model at origin
     model.position.sub(center);
@@ -496,14 +509,28 @@ function setModel(newModel) {
     // Now calculate the bounding box in world space (centered at origin)
     const centeredBox = new THREE.Box3().setFromObject(model);
 
+    console.log('Centered model bounds:', {
+        min: centeredBox.min,
+        max: centeredBox.max
+    });
+
     decalMaterial.uniforms.uModelSize.value = size;
     decalMaterial.uniforms.uModelMin.value = centeredBox.min;
+
+    console.log('Material uniforms:', {
+        uBaseColor: decalMaterial.uniforms.uBaseColor.value,
+        uModelSize: decalMaterial.uniforms.uModelSize.value,
+        uModelMin: decalMaterial.uniforms.uModelMin.value,
+        uLayerCount: decalMaterial.uniforms.uLayerCount.value
+    });
 
     const maxDim = Math.max(size.x, size.y, size.z);
     const fov = camera.fov * (Math.PI / 180);
     camera.position.z = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.5;
     camera.far = camera.position.z + maxDim * 2;
     camera.updateProjectionMatrix();
+
+    console.log('Camera position:', camera.position, 'far:', camera.far);
 
     orbitControls.target.set(0, 0, 0);
     orbitControls.update();
@@ -515,6 +542,7 @@ function setModel(newModel) {
     batchUpdateShaderUniforms();
     decalMaterial.needsUpdate = true;
     requestRender();
+    console.log('setModel() complete, render requested');
 }
 
 // 3D Viewer Tool Module - Part 3/3 (Event Handlers and Export)
@@ -1571,11 +1599,14 @@ async function loadModelFromDataURL(dataURL, fileName) {
     domElements.modelFileNameSpan.textContent = fileName || 'Model from Data Hub';
 
     try {
+        console.log('Loading model from data URL...');
         const response = await fetch(dataURL);
         const objText = await response.text();
+        console.log('OBJ text length:', objText.length);
 
         const loader = new OBJLoader();
         const object = loader.parse(objText);
+        console.log('Parsed OBJ object:', object);
 
         // Ensure decalMaterial exists before assigning
         if (!decalMaterial) {
@@ -1584,11 +1615,18 @@ async function loadModelFromDataURL(dataURL, fileName) {
             return;
         }
 
+        let meshCount = 0;
         object.traverse(child => {
             if (child.isMesh) {
+                meshCount++;
+                console.log(`Processing mesh ${meshCount}:`, {
+                    vertexCount: child.geometry?.attributes?.position?.count,
+                    hasNormals: !!child.geometry?.attributes?.normal
+                });
                 // Ensure geometry has proper attributes
                 if (child.geometry) {
                     if (!child.geometry.attributes.normal) {
+                        console.log('Computing normals...');
                         child.geometry.computeVertexNormals();
                     }
                     // Make sure geometry is not empty
@@ -1598,9 +1636,12 @@ async function loadModelFromDataURL(dataURL, fileName) {
                     }
                 }
                 child.material = decalMaterial;
+                console.log('Material assigned, material:', decalMaterial);
             }
         });
+        console.log(`Total meshes processed: ${meshCount}`);
         setModel(object);
+        console.log('setModel() completed');
     } catch (err) {
         console.error('Error loading 3D model:', err);
         showMessage('Failed to load 3D model', 'error');
