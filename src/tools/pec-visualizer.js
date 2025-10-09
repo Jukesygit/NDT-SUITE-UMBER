@@ -267,20 +267,20 @@ function renderHeatmap() {
     const zmax = customColorRange.max !== null ? customColorRange.max : undefined;
 
     // Apply flips to the data
-    let xData = heatmapData.x;
-    let yData = heatmapData.y;
-    let zData = heatmapData.z;
+    let xData = [...heatmapData.x];
+    let yData = [...heatmapData.y];
+    let zData = heatmapData.z.map(row => [...row]);
 
     // Flip horizontal (reverse columns)
     if (flipHorizontal) {
-        xData = [...heatmapData.x].reverse();
-        zData = heatmapData.z.map(row => [...row].reverse());
+        xData = xData.reverse();
+        zData = zData.map(row => [...row].reverse());
     }
 
     // Flip vertical (reverse rows)
     if (flipVertical) {
-        yData = [...(flipHorizontal ? yData : heatmapData.y)].reverse();
-        zData = [...zData].reverse();
+        yData = yData.reverse();
+        zData = zData.reverse();
     }
 
     const trace = {
