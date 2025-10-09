@@ -60,6 +60,12 @@ const HTML = `
                         <input type="checkbox" id="show-grid-pec" checked class="w-5 h-5 cursor-pointer ml-4">
                         <label for="show-grid-pec" class="label">Grid</label>
                     </div>
+                    <div class="flex items-center gap-2 pt-5">
+                        <input type="checkbox" id="flip-horizontal-pec" class="w-5 h-5 cursor-pointer">
+                        <label for="flip-horizontal-pec" class="label">Flip Horizontal</label>
+                        <input type="checkbox" id="flip-vertical-pec" class="w-5 h-5 cursor-pointer ml-4">
+                        <label for="flip-vertical-pec" class="label">Flip Vertical</label>
+                    </div>
                 </div>
                 
                 <div class="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-center">
@@ -108,6 +114,8 @@ function cacheDom() {
         smoothingSelect: q('#smoothing-pec'),
         reverseScaleCheckbox: q('#reverse-scale-pec'),
         showGridCheckbox: q('#show-grid-pec'),
+        flipHorizontalCheckbox: q('#flip-horizontal-pec'),
+        flipVerticalCheckbox: q('#flip-vertical-pec'),
         minValueInput: q('#min-value-pec'),
         maxValueInput: q('#max-value-pec'),
         applyRangeBtn: q('#apply-range-btn'),
@@ -252,14 +260,33 @@ function renderHeatmap() {
     const smoothing = (smoothingValue === 'best' || smoothingValue === 'fast') ? smoothingValue : false;
     const reverseScale = dom.reverseScaleCheckbox.checked;
     const showGrid = dom.showGridCheckbox.checked;
+    const flipHorizontal = dom.flipHorizontalCheckbox.checked;
+    const flipVertical = dom.flipVerticalCheckbox.checked;
 
     const zmin = customColorRange.min !== null ? customColorRange.min : undefined;
     const zmax = customColorRange.max !== null ? customColorRange.max : undefined;
 
+    // Apply flips to the data
+    let xData = heatmapData.x;
+    let yData = heatmapData.y;
+    let zData = heatmapData.z;
+
+    // Flip horizontal (reverse columns)
+    if (flipHorizontal) {
+        xData = [...heatmapData.x].reverse();
+        zData = heatmapData.z.map(row => [...row].reverse());
+    }
+
+    // Flip vertical (reverse rows)
+    if (flipVertical) {
+        yData = [...(flipHorizontal ? yData : heatmapData.y)].reverse();
+        zData = [...zData].reverse();
+    }
+
     const trace = {
-        x: heatmapData.x,
-        y: heatmapData.y,
-        z: heatmapData.z,
+        x: xData,
+        y: yData,
+        z: zData,
         type: 'heatmap',
         colorscale: colorscale,
         reversescale: reverseScale,
@@ -736,6 +763,8 @@ function addEventListeners() {
     dom.smoothingSelect.addEventListener('change', updateVisualization);
     dom.reverseScaleCheckbox.addEventListener('change', updateVisualization);
     dom.showGridCheckbox.addEventListener('change', updateVisualization);
+    dom.flipHorizontalCheckbox.addEventListener('change', updateVisualization);
+    dom.flipVerticalCheckbox.addEventListener('change', updateVisualization);
     dom.applyRangeBtn.addEventListener('click', applyCustomRange);
     dom.resetRangeBtn.addEventListener('click', resetRange);
     dom.resetViewBtn.addEventListener('click', resetView);
