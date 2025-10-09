@@ -318,7 +318,7 @@ function renderHeatmap() {
             title: 'Axial Position (mm)',
             showgrid: showGrid,
             gridcolor: '#e0e0e0',
-            autorange: 'reversed'
+            autorange: flipVertical ? true : 'reversed'
         },
         autosize: true,
         margin: { l: 80, r: 80, t: 60, b: 60 },
