@@ -820,6 +820,7 @@ async function exportModelToOBJ() {
     if (!model) return null;
 
     let objContent = '# Exported from NDT Suite 3D Viewer\n';
+    let vertexOffset = 0;
 
     model.traverse((child) => {
         if (child.isMesh && child.geometry) {
@@ -835,15 +836,17 @@ async function exportModelToOBJ() {
                 objContent += `v ${x} ${y} ${z}\n`;
             }
 
-            // Export faces
+            // Export faces (with corrected vertex offset for multiple meshes)
             if (indices) {
                 for (let i = 0; i < indices.count; i += 3) {
-                    const a = indices.getX(i) + 1;
-                    const b = indices.getX(i + 1) + 1;
-                    const c = indices.getX(i + 2) + 1;
+                    const a = indices.getX(i) + vertexOffset + 1;
+                    const b = indices.getX(i + 1) + vertexOffset + 1;
+                    const c = indices.getX(i + 2) + vertexOffset + 1;
                     objContent += `f ${a} ${b} ${c}\n`;
                 }
             }
+
+            vertexOffset += vertices.count;
         }
     });
 
@@ -1561,6 +1564,7 @@ async function loadModelFromDataURL(dataURL, fileName) {
     try {
         const response = await fetch(dataURL);
         const objText = await response.text();
+
         const loader = new OBJLoader();
         const object = loader.parse(objText);
 
