@@ -329,16 +329,30 @@ function renderVesselDetailView(assetId) {
                                             <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Scans</div>
                                             <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                         ${vessel.scans.map(scan => `
-                                            <div class="scan-card-compact cursor-pointer bg-gray-50 dark:bg-gray-700/50 rounded-lg overflow-hidden hover:ring-2 hover:ring-blue-500 transition-all" data-scan-id="${scan.id}" data-asset-id="${assetId}" data-vessel-id="${vessel.id}">
+                                            <div class="scan-card-compact group relative cursor-pointer bg-gray-50 dark:bg-gray-700/50 rounded-lg overflow-hidden hover:ring-2 hover:ring-blue-500 transition-all" data-scan-id="${scan.id}" data-asset-id="${assetId}" data-vessel-id="${vessel.id}">
                                                 ${scan.thumbnail ? `
-                                                    <div class="aspect-video bg-gray-200 dark:bg-gray-600">
+                                                    <div class="aspect-video bg-gray-200 dark:bg-gray-600 relative">
                                                         <img src="${scan.thumbnail}" alt="${scan.name}" class="w-full h-full object-cover">
+                                                        <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center">
+                                                            <button class="delete-scan-btn opacity-0 group-hover:opacity-100 bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-all" data-scan-id="${scan.id}" data-asset-id="${assetId}" data-vessel-id="${vessel.id}" aria-label="Delete scan" title="Delete scan">
+                                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                                </svg>
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 ` : `
-                                                    <div class="aspect-video bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 flex items-center justify-center">
+                                                    <div class="aspect-video bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 flex items-center justify-center relative">
                                                         <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                                                         </svg>
+                                                        <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center">
+                                                            <button class="delete-scan-btn opacity-0 group-hover:opacity-100 bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-all" data-scan-id="${scan.id}" data-asset-id="${assetId}" data-vessel-id="${vessel.id}" aria-label="Delete scan" title="Delete scan">
+                                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                                </svg>
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 `}
                                                 <div class="p-2">
@@ -385,13 +399,33 @@ function renderVesselDetailView(assetId) {
 
     // Add click handlers for compact scan cards
     dom.vesselDetailView.querySelectorAll('.scan-card-compact').forEach(card => {
-        card.addEventListener('click', () => {
+        card.addEventListener('click', (e) => {
+            // Don't open scan if clicking delete button
+            if (e.target.closest('.delete-scan-btn')) {
+                return;
+            }
             const scanId = card.dataset.scanId;
             const assetId = card.dataset.assetId;
             const vesselId = card.dataset.vesselId;
             const scan = dataManager.getScan(assetId, vesselId, scanId);
             if (scan) {
                 openScanInTool(scan);
+            }
+        });
+    });
+
+    // Add event listeners for delete scan buttons on compact cards
+    dom.vesselDetailView.querySelectorAll('.delete-scan-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const scanId = btn.dataset.scanId;
+            const assetId = btn.dataset.assetId;
+            const vesselId = btn.dataset.vesselId;
+            const scan = dataManager.getScan(assetId, vesselId, scanId);
+            if (scan && confirm(`Delete scan "${scan.name}"?`)) {
+                await dataManager.deleteScan(assetId, vesselId, scanId);
+                renderStats();
+                renderVesselDetailView(assetId);
             }
         });
     });
