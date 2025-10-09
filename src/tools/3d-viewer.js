@@ -59,6 +59,45 @@ const HTML = `
         </div>
         
         <div class="control-panel">
+            <div class="panel-header" data-target="model-rotation-content">
+                <h3 class="font-bold text-lg">Model Rotation</h3>
+                <svg class="arrow-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </div>
+            <div id="model-rotation-content" class="panel-content">
+                <div>
+                    <label for="model-rotate-x">Rotate X (°)</label>
+                    <div class="flex items-center gap-2">
+                        <button data-action="dec-model-rotate-x" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Decrease X rotation">-</button>
+                        <input type="range" id="model-rotate-x" min="-180" max="180" step="1" value="0" class="flex-grow">
+                        <button data-action="inc-model-rotate-x" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Increase X rotation">+</button>
+                        <input type="number" id="model-rotate-x-value" min="-180" max="180" step="1" value="0" class="w-20 px-2 py-1 border rounded">
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <label for="model-rotate-y">Rotate Y (°)</label>
+                    <div class="flex items-center gap-2">
+                        <button data-action="dec-model-rotate-y" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Decrease Y rotation">-</button>
+                        <input type="range" id="model-rotate-y" min="-180" max="180" step="1" value="0" class="flex-grow">
+                        <button data-action="inc-model-rotate-y" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Increase Y rotation">+</button>
+                        <input type="number" id="model-rotate-y-value" min="-180" max="180" step="1" value="0" class="w-20 px-2 py-1 border rounded">
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <label for="model-rotate-z">Rotate Z (°)</label>
+                    <div class="flex items-center gap-2">
+                        <button data-action="dec-model-rotate-z" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Decrease Z rotation">-</button>
+                        <input type="range" id="model-rotate-z" min="-180" max="180" step="1" value="0" class="flex-grow">
+                        <button data-action="inc-model-rotate-z" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Increase Z rotation">+</button>
+                        <input type="number" id="model-rotate-z-value" min="-180" max="180" step="1" value="0" class="w-20 px-2 py-1 border rounded">
+                    </div>
+                </div>
+                <button id="reset-model-rotation-btn" class="w-full mt-4 bg-gray-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors">Reset Rotation</button>
+            </div>
+        </div>
+
+        <div class="control-panel">
             <div class="panel-header" data-target="lighting-content">
                 <h3 class="font-bold text-lg">Lighting Controls</h3>
                 <svg class="arrow-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -72,7 +111,7 @@ const HTML = `
                 <div class="mt-2"><label for="light-distance">Distance</label><input type="range" id="light-distance" min="20" max="500" step="1" value="500"></div>
             </div>
         </div>
-        
+
         <div class="control-panel">
             <div class="panel-header" data-target="texture-content">
                 <h3 class="font-bold text-lg">Texture Controls</h3>
@@ -341,6 +380,13 @@ function cacheDomElements() {
         lightAzimuthSlider: query('#light-azimuth'),
         lightElevationSlider: query('#light-elevation'),
         lightDistanceSlider: query('#light-distance'),
+        modelRotateXSlider: query('#model-rotate-x'),
+        modelRotateYSlider: query('#model-rotate-y'),
+        modelRotateZSlider: query('#model-rotate-z'),
+        modelRotateXValue: query('#model-rotate-x-value'),
+        modelRotateYValue: query('#model-rotate-y-value'),
+        modelRotateZValue: query('#model-rotate-z-value'),
+        resetModelRotationBtn: query('#reset-model-rotation-btn'),
         panelHeaders: container.querySelectorAll('.panel-header')
     };
 }
@@ -703,6 +749,11 @@ async function serializeState() {
     const state = {
         modelFileName: domElements.modelFileNameSpan.textContent,
         modelData: null, // Will be populated if custom model is loaded
+        modelRotation: {
+            x: parseFloat(domElements.modelRotateXSlider.value),
+            y: parseFloat(domElements.modelRotateYSlider.value),
+            z: parseFloat(domElements.modelRotateZSlider.value)
+        },
         layers: [],
         lighting: {
             intensity: parseFloat(domElements.lightIntensitySlider.value),
@@ -1053,6 +1104,29 @@ function addEventListeners() {
         el.addEventListener('mousedown', () => continuousRender = true);
         el.addEventListener('mouseup', () => continuousRender = false);
     });
+
+    // Model rotation controls
+    [domElements.modelRotateXSlider, domElements.modelRotateYSlider, domElements.modelRotateZSlider].forEach(el => {
+        el.addEventListener('input', updateModelRotation);
+        el.addEventListener('mousedown', () => continuousRender = true);
+        el.addEventListener('mouseup', () => continuousRender = false);
+    });
+
+    // Model rotation value inputs
+    domElements.modelRotateXValue.addEventListener('change', () => syncRotationValueToSlider(domElements.modelRotateXSlider, domElements.modelRotateXValue));
+    domElements.modelRotateYValue.addEventListener('change', () => syncRotationValueToSlider(domElements.modelRotateYSlider, domElements.modelRotateYValue));
+    domElements.modelRotateZValue.addEventListener('change', () => syncRotationValueToSlider(domElements.modelRotateZSlider, domElements.modelRotateZValue));
+
+    // Model rotation step buttons
+    container.querySelector('[data-action="dec-model-rotate-x"]').addEventListener('click', () => adjustRotationValue(domElements.modelRotateXSlider, domElements.modelRotateXValue, -5));
+    container.querySelector('[data-action="inc-model-rotate-x"]').addEventListener('click', () => adjustRotationValue(domElements.modelRotateXSlider, domElements.modelRotateXValue, 5));
+    container.querySelector('[data-action="dec-model-rotate-y"]').addEventListener('click', () => adjustRotationValue(domElements.modelRotateYSlider, domElements.modelRotateYValue, -5));
+    container.querySelector('[data-action="inc-model-rotate-y"]').addEventListener('click', () => adjustRotationValue(domElements.modelRotateYSlider, domElements.modelRotateYValue, 5));
+    container.querySelector('[data-action="dec-model-rotate-z"]').addEventListener('click', () => adjustRotationValue(domElements.modelRotateZSlider, domElements.modelRotateZValue, -5));
+    container.querySelector('[data-action="inc-model-rotate-z"]').addEventListener('click', () => adjustRotationValue(domElements.modelRotateZSlider, domElements.modelRotateZValue, 5));
+
+    // Reset model rotation button
+    domElements.resetModelRotationBtn.addEventListener('click', resetModelRotation);
     domElements.resetControlsBtn.addEventListener('click', () => {
         if (!selectedLayer) return;
         selectedLayer.uniforms.uOffset.set(0, 0);
@@ -1082,7 +1156,7 @@ function updateLighting() {
     const azimuth = THREE.MathUtils.degToRad(parseFloat(domElements.lightAzimuthSlider.value));
     const elevation = THREE.MathUtils.degToRad(parseFloat(domElements.lightElevationSlider.value));
     const distance = parseFloat(domElements.lightDistanceSlider.value);
-    
+
     directionalLight.intensity = intensity;
     directionalLight.position.set(
         distance * Math.sin(elevation) * Math.cos(azimuth),
@@ -1091,6 +1165,57 @@ function updateLighting() {
     );
     decalMaterial.uniforms.uLightIntensity.value = intensity;
     decalMaterial.uniforms.uLightPosition.value.copy(directionalLight.position);
+}
+
+// Update model rotation
+function updateModelRotation() {
+    if (!model) return;
+
+    const rotX = THREE.MathUtils.degToRad(parseFloat(domElements.modelRotateXSlider.value));
+    const rotY = THREE.MathUtils.degToRad(parseFloat(domElements.modelRotateYSlider.value));
+    const rotZ = THREE.MathUtils.degToRad(parseFloat(domElements.modelRotateZSlider.value));
+
+    model.rotation.set(rotX, rotY, rotZ);
+
+    // Update value displays
+    domElements.modelRotateXValue.value = parseFloat(domElements.modelRotateXSlider.value);
+    domElements.modelRotateYValue.value = parseFloat(domElements.modelRotateYSlider.value);
+    domElements.modelRotateZValue.value = parseFloat(domElements.modelRotateZSlider.value);
+
+    requestRender();
+}
+
+// Sync rotation value input to slider
+function syncRotationValueToSlider(slider, valueInput) {
+    const val = parseFloat(valueInput.value);
+    const min = parseFloat(valueInput.min);
+    const max = parseFloat(valueInput.max);
+    const clampedVal = Math.max(min, Math.min(max, val));
+    valueInput.value = clampedVal;
+    slider.value = clampedVal;
+    updateModelRotation();
+}
+
+// Adjust rotation value
+function adjustRotationValue(slider, valueInput, delta) {
+    const currentVal = parseFloat(slider.value);
+    const min = parseFloat(slider.min);
+    const max = parseFloat(slider.max);
+    const newVal = Math.max(min, Math.min(max, currentVal + delta));
+    slider.value = newVal;
+    valueInput.value = newVal;
+    updateModelRotation();
+}
+
+// Reset model rotation
+function resetModelRotation() {
+    domElements.modelRotateXSlider.value = 0;
+    domElements.modelRotateYSlider.value = 0;
+    domElements.modelRotateZSlider.value = 0;
+    domElements.modelRotateXValue.value = 0;
+    domElements.modelRotateYValue.value = 0;
+    domElements.modelRotateZValue.value = 0;
+    updateModelRotation();
 }
 
 function onWindowResize() {
@@ -1306,6 +1431,17 @@ async function restoreState(state) {
                     resolve();
                 });
             });
+        }
+
+        // Restore model rotation
+        if (state.modelRotation) {
+            domElements.modelRotateXSlider.value = state.modelRotation.x || 0;
+            domElements.modelRotateYSlider.value = state.modelRotation.y || 0;
+            domElements.modelRotateZSlider.value = state.modelRotation.z || 0;
+            domElements.modelRotateXValue.value = state.modelRotation.x || 0;
+            domElements.modelRotateYValue.value = state.modelRotation.y || 0;
+            domElements.modelRotateZValue.value = state.modelRotation.z || 0;
+            updateModelRotation();
         }
 
         // Restore lighting settings
