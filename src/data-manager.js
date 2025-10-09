@@ -211,7 +211,8 @@ class DataManager {
             id: this.generateId(),
             name: name,
             scans: [],
-            model3d: null // Will store .obj file as data URL
+            model3d: null, // Will store .obj file as data URL
+            images: [] // Array of { id, name, dataUrl, timestamp }
         };
         asset.vessels.push(vessel);
         await this.saveToStorage();
@@ -241,6 +242,40 @@ class DataManager {
         const index = asset.vessels.findIndex(v => v.id === vesselId);
         if (index !== -1) {
             asset.vessels.splice(index, 1);
+            await this.saveToStorage();
+            return true;
+        }
+        return false;
+    }
+
+    // Vessel image operations
+    async addVesselImage(assetId, vesselId, imageData) {
+        const vessel = this.getVessel(assetId, vesselId);
+        if (!vessel) return null;
+
+        // Initialize images array if it doesn't exist (for backward compatibility)
+        if (!vessel.images) {
+            vessel.images = [];
+        }
+
+        const image = {
+            id: this.generateId(),
+            name: imageData.name || 'Untitled Image',
+            dataUrl: imageData.dataUrl,
+            timestamp: Date.now()
+        };
+        vessel.images.push(image);
+        await this.saveToStorage();
+        return image;
+    }
+
+    async deleteVesselImage(assetId, vesselId, imageId) {
+        const vessel = this.getVessel(assetId, vesselId);
+        if (!vessel || !vessel.images) return false;
+
+        const index = vessel.images.findIndex(img => img.id === imageId);
+        if (index !== -1) {
+            vessel.images.splice(index, 1);
             await this.saveToStorage();
             return true;
         }

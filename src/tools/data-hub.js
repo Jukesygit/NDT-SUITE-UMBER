@@ -250,6 +250,8 @@ function renderVesselDetailView(assetId) {
         <div class="space-y-6">
             ${asset.vessels.map(vessel => {
                 const scanCount = vessel.scans.length;
+                const images = vessel.images || [];
+                const imageCount = images.length;
                 return `
                     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
                         <div class="p-6">
@@ -277,8 +279,37 @@ function renderVesselDetailView(assetId) {
                                     </div>
                                     <div class="space-y-1 text-sm text-gray-600 dark:text-gray-400">
                                         <div>Scans: ${scanCount}</div>
+                                        <div>Images: ${imageCount}</div>
                                     </div>
                                 </div>
+                            </div>
+
+                            <!-- Vessel Images Section -->
+                            <div class="mb-4">
+                                <div class="flex justify-between items-center mb-2">
+                                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Vessel Images</div>
+                                    <button class="upload-image-btn text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                        + Add Images
+                                    </button>
+                                </div>
+                                ${images.length > 0 ? `
+                                    <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                                        ${images.map(img => `
+                                            <div class="vessel-image-card relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-600 hover:border-blue-500 transition-colors aspect-square" data-image-id="${img.id}">
+                                                <img src="${img.dataUrl}" alt="${img.name}" class="w-full h-full object-cover">
+                                                <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex items-center justify-center">
+                                                    <button class="delete-image-btn opacity-0 group-hover:opacity-100 bg-red-600 text-white p-1.5 rounded-full hover:bg-red-700 transition-all" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-image-id="${img.id}" aria-label="Delete image">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                ` : `
+                                    <p class="text-sm text-gray-500 dark:text-gray-400 italic">No images uploaded yet</p>
+                                `}
                             </div>
                             ${vessel.scans.length > 0 ? `
                                 <div class="space-y-2">
@@ -362,6 +393,46 @@ function renderVesselDetailView(assetId) {
             const vessel = dataManager.getVessel(assetId, vesselId);
             if (vessel && vessel.model3d) {
                 open3DModel(vessel.model3d, vessel.name);
+            }
+        });
+    });
+
+    // Add event listeners for image upload buttons
+    dom.vesselDetailView.querySelectorAll('.upload-image-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleImageUploadClick(btn.dataset.assetId, btn.dataset.vesselId);
+        });
+    });
+
+    // Add event listeners for image delete buttons
+    dom.vesselDetailView.querySelectorAll('.delete-image-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (confirm('Delete this image?')) {
+                await dataManager.deleteVesselImage(btn.dataset.assetId, btn.dataset.vesselId, btn.dataset.imageId);
+                renderStats();
+                renderVesselDetailView(assetId);
+            }
+        });
+    });
+
+    // Add event listeners for viewing images
+    dom.vesselDetailView.querySelectorAll('.vessel-image-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+            if (!e.target.closest('.delete-image-btn')) {
+                const imageId = card.dataset.imageId;
+                // Find the vessel by searching through all vessels in the asset
+                const asset = dataManager.getAsset(assetId);
+                if (asset) {
+                    for (const vessel of asset.vessels) {
+                        const image = vessel?.images?.find(img => img.id === imageId);
+                        if (image) {
+                            showImageModal(image);
+                            break;
+                        }
+                    }
+                }
             }
         });
     });
@@ -577,6 +648,77 @@ function handleModelUploadClick(assetId, vesselId) {
         reader.readAsDataURL(file);
     });
     input.click();
+}
+
+function handleImageUploadClick(assetId, vesselId) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+    input.addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+
+        // Process each file
+        for (const file of files) {
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                const imageData = {
+                    name: file.name,
+                    dataUrl: event.target.result
+                };
+                await dataManager.addVesselImage(assetId, vesselId, imageData);
+                renderStats();
+                renderVesselDetailView(assetId);
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+    input.click();
+}
+
+function showImageModal(image) {
+    // Create modal overlay
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4';
+    modal.style.zIndex = '9999';
+
+    modal.innerHTML = `
+        <div class="relative max-w-5xl max-h-full">
+            <button class="absolute top-4 right-4 text-white bg-black bg-opacity-50 rounded-full p-2 hover:bg-opacity-75 transition-all z-10" aria-label="Close">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+            <div class="bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-2xl">
+                <div class="p-4 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-bold text-gray-900 dark:text-white">${image.name}</h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">${new Date(image.timestamp).toLocaleString()}</p>
+                </div>
+                <div class="p-4 flex items-center justify-center bg-gray-100 dark:bg-gray-900" style="max-height: 80vh;">
+                    <img src="${image.dataUrl}" alt="${image.name}" class="max-w-full max-h-full object-contain">
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Close on click outside or close button
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal || e.target.closest('button[aria-label="Close"]')) {
+            document.body.removeChild(modal);
+        }
+    });
+
+    // Close on Escape key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape' && document.body.contains(modal)) {
+            document.body.removeChild(modal);
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
 }
 
 async function renderVessel3DPreviews(assetId) {
