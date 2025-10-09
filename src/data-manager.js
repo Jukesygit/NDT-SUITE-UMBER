@@ -282,6 +282,19 @@ class DataManager {
         return false;
     }
 
+    async renameVesselImage(assetId, vesselId, imageId, newName) {
+        const vessel = this.getVessel(assetId, vesselId);
+        if (!vessel || !vessel.images) return false;
+
+        const image = vessel.images.find(img => img.id === imageId);
+        if (image) {
+            image.name = newName;
+            await this.saveToStorage();
+            return true;
+        }
+        return false;
+    }
+
     // Scan operations
     async createScan(assetId, vesselId, scanData) {
         const vessel = this.getVessel(assetId, vesselId);
