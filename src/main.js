@@ -11,6 +11,9 @@ import viewer3D from './tools/3d-viewer.js';
 import dataHub from './tools/data-hub.js';
 import niiCalculator from './tools/nii-coverage-calculator.js';
 import profile from './tools/profile.js';
+import syncService from './sync-service.js';
+import migrationTool from './migration-tool.js';
+import syncStatus from './components/sync-status.js';
 
 // Tool Registry - add new tools here
 const tools = [
@@ -234,13 +237,61 @@ class NDTApp {
 
         // User is logged in, show main app
         this.showMainApp();
+
+        // If already logged in on page load, trigger sync
+        if (authManager.useSupabase) {
+            console.log('User already logged in, starting sync...');
+
+            // Show sync status UI
+            syncStatus.create();
+
+            // Start full sync after a short delay
+            setTimeout(async () => {
+                try {
+                    await syncService.fullSync();
+
+                    // Check if migration is needed
+                    const migrationCheck = await migrationTool.needsMigration();
+                    if (migrationCheck.needsMigration && !migrationTool.hasDismissedPrompt()) {
+                        // Show migration prompt
+                        await migrationTool.showMigrationPrompt();
+                    }
+                } catch (error) {
+                    console.error('Initial sync failed:', error);
+                }
+            }, 1000);
+        }
     }
 
     setupGlobalEventListeners() {
         // Listen for login events
-        window.addEventListener('userLoggedIn', () => {
+        window.addEventListener('userLoggedIn', async () => {
             this.isLoggedIn = true;
             this.showMainApp();
+
+            // Trigger sync after login
+            if (authManager.useSupabase) {
+                console.log('User logged in, starting sync...');
+
+                // Show sync status UI
+                syncStatus.create();
+
+                // Start full sync
+                setTimeout(async () => {
+                    try {
+                        await syncService.fullSync();
+
+                        // Check if migration is needed
+                        const migrationCheck = await migrationTool.needsMigration();
+                        if (migrationCheck.needsMigration && !migrationTool.hasDismissedPrompt()) {
+                            // Show migration prompt
+                            await migrationTool.showMigrationPrompt();
+                        }
+                    } catch (error) {
+                        console.error('Post-login sync failed:', error);
+                    }
+                }, 1000); // Delay to ensure UI is ready
+            }
         });
 
         // Listen for loadScan events from data hub
