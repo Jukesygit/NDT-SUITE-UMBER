@@ -4,3 +4,8 @@ dist
 *.log
 .vercel
 .claude
+
+# Environment variables (contains secrets)
+.env
+.env.local
+.env.*.local

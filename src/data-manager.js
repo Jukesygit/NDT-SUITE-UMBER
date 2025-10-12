@@ -1,6 +1,7 @@
 // Data Manager Module - Handles asset/vessel/scan hierarchy and IndexedDB persistence
 import indexedDB from './indexed-db.js';
 import authManager from './auth-manager.js';
+import syncService from './sync-service.js';
 
 const STORAGE_KEY = 'ndt_suite_data';
 
@@ -165,6 +166,14 @@ class DataManager {
         orgData.assets.push(asset);
         this.setCurrentOrgData(orgData);
         await this.saveToStorage();
+
+        // Sync to Supabase in the background
+        if (authManager.isLoggedIn() && authManager.useSupabase) {
+            syncService.syncAsset(asset.id).catch(err => {
+                console.error('Failed to sync asset:', err);
+            });
+        }
+
         return asset;
     }
 
@@ -183,8 +192,17 @@ class DataManager {
         const asset = (orgData.assets || []).find(a => a.id === assetId);
         if (asset) {
             Object.assign(asset, updates);
+            asset.updatedAt = Date.now();
             this.setCurrentOrgData(orgData);
             await this.saveToStorage();
+
+            // Sync to Supabase in the background
+            if (authManager.isLoggedIn() && authManager.useSupabase) {
+                syncService.syncAsset(assetId).catch(err => {
+                    console.error('Failed to sync asset:', err);
+                });
+            }
+
             return asset;
         }
         return null;
@@ -216,6 +234,14 @@ class DataManager {
         };
         asset.vessels.push(vessel);
         await this.saveToStorage();
+
+        // Sync to Supabase in the background
+        if (authManager.isLoggedIn() && authManager.useSupabase) {
+            syncService.syncAsset(assetId).catch(err => {
+                console.error('Failed to sync vessel:', err);
+            });
+        }
+
         return vessel;
     }
 
@@ -230,6 +256,14 @@ class DataManager {
         if (vessel) {
             Object.assign(vessel, updates);
             await this.saveToStorage();
+
+            // Sync to Supabase in the background
+            if (authManager.isLoggedIn() && authManager.useSupabase) {
+                syncService.syncAsset(assetId).catch(err => {
+                    console.error('Failed to sync vessel update:', err);
+                });
+            }
+
             return vessel;
         }
         return null;
@@ -266,6 +300,14 @@ class DataManager {
         };
         vessel.images.push(image);
         await this.saveToStorage();
+
+        // Sync to Supabase in the background
+        if (authManager.isLoggedIn() && authManager.useSupabase) {
+            syncService.syncAsset(assetId).catch(err => {
+                console.error('Failed to sync vessel image:', err);
+            });
+        }
+
         return image;
     }
 
@@ -311,6 +353,14 @@ class DataManager {
         };
         vessel.scans.push(scan);
         await this.saveToStorage();
+
+        // Sync to Supabase in the background
+        if (authManager.isLoggedIn() && authManager.useSupabase) {
+            syncService.syncAsset(assetId).catch(err => {
+                console.error('Failed to sync scan:', err);
+            });
+        }
+
         return scan;
     }
 
@@ -325,6 +375,14 @@ class DataManager {
         if (scan) {
             Object.assign(scan, updates);
             await this.saveToStorage();
+
+            // Sync to Supabase in the background
+            if (authManager.isLoggedIn() && authManager.useSupabase) {
+                syncService.syncAsset(assetId).catch(err => {
+                    console.error('Failed to sync scan update:', err);
+                });
+            }
+
             return scan;
         }
         return null;
