@@ -1,6 +1,7 @@
 // Data Hub Tool Module - Home page with asset/vessel/scan management
 import dataManager from '../data-manager.js';
 import { createAnimatedHeader } from '../animated-background.js';
+import reportDialog from '../components/report-dialog.js';
 
 let container, dom = {};
 let currentView = 'assets'; // 'assets', 'vessel-detail', 'scan-detail'
@@ -284,6 +285,93 @@ function renderVesselDetailView(assetId) {
                                 </div>
                             </div>
 
+                            <!-- Location and GA Drawings Section -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <!-- Location Drawing -->
+                                <div class="glass-panel p-4">
+                                    <div class="flex justify-between items-center mb-3">
+                                        <div class="text-sm font-semibold text-gray-700 dark:text-gray-300">Location Drawing</div>
+                                        ${vessel.locationDrawing ? `
+                                            <button class="annotate-location-btn text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                ✏️ Annotate
+                                            </button>
+                                        ` : `
+                                            <button class="upload-location-btn text-xs bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                + Upload
+                                            </button>
+                                        `}
+                                    </div>
+                                    ${vessel.locationDrawing ? `
+                                        <div class="location-drawing-preview relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-300 dark:border-gray-600 hover:border-blue-500 transition-colors aspect-video" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                            <img src="${vessel.locationDrawing.imageDataUrl}" alt="Location Drawing" class="w-full h-full object-contain bg-gray-100 dark:bg-gray-800">
+                                            <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center gap-2">
+                                                <button class="remove-location-btn opacity-0 group-hover:opacity-100 bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-all" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" aria-label="Remove Location Drawing" title="Remove">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                            ${vessel.locationDrawing.annotations && vessel.locationDrawing.annotations.length > 0 ? `
+                                                <div class="absolute top-2 right-2 bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-bold">
+                                                    ${vessel.locationDrawing.annotations.length} annotation${vessel.locationDrawing.annotations.length !== 1 ? 's' : ''}
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    ` : `
+                                        <div class="aspect-video bg-gray-100 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center">
+                                            <div class="text-center text-gray-400">
+                                                <svg class="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                                                </svg>
+                                                <p class="text-sm">No drawing uploaded</p>
+                                            </div>
+                                        </div>
+                                    `}
+                                </div>
+
+                                <!-- GA Drawing -->
+                                <div class="glass-panel p-4">
+                                    <div class="flex justify-between items-center mb-3">
+                                        <div class="text-sm font-semibold text-gray-700 dark:text-gray-300">GA Drawing</div>
+                                        ${vessel.gaDrawing ? `
+                                            <button class="annotate-ga-btn text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                ✏️ Annotate
+                                            </button>
+                                        ` : `
+                                            <button class="upload-ga-btn text-xs bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                + Upload
+                                            </button>
+                                        `}
+                                    </div>
+                                    ${vessel.gaDrawing ? `
+                                        <div class="ga-drawing-preview relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-300 dark:border-gray-600 hover:border-blue-500 transition-colors aspect-video" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                            <img src="${vessel.gaDrawing.imageDataUrl}" alt="GA Drawing" class="w-full h-full object-contain bg-gray-100 dark:bg-gray-800">
+                                            <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center gap-2">
+                                                <button class="remove-ga-btn opacity-0 group-hover:opacity-100 bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-all" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" aria-label="Remove GA Drawing" title="Remove">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                            ${vessel.gaDrawing.annotations && vessel.gaDrawing.annotations.length > 0 ? `
+                                                <div class="absolute top-2 right-2 bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-bold">
+                                                    ${vessel.gaDrawing.annotations.length} annotation${vessel.gaDrawing.annotations.length !== 1 ? 's' : ''}
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    ` : `
+                                        <div class="aspect-video bg-gray-100 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center">
+                                            <div class="text-center text-gray-400">
+                                                <svg class="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 0a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path>
+                                                </svg>
+                                                <p class="text-sm">No drawing uploaded</p>
+                                            </div>
+                                        </div>
+                                    `}
+                                </div>
+                            </div>
+
                             <!-- Images and Scans Side by Side -->
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                 <!-- Vessel Images Section -->
@@ -499,6 +587,78 @@ function renderVesselDetailView(assetId) {
                         }
                     }
                 }
+            }
+        });
+    });
+
+    // Add event listeners for Location Drawing upload
+    dom.vesselDetailView.querySelectorAll('.upload-location-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleLocationDrawingUpload(btn.dataset.assetId, btn.dataset.vesselId);
+        });
+    });
+
+    // Add event listeners for Location Drawing annotation
+    dom.vesselDetailView.querySelectorAll('.annotate-location-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openDrawingAnnotator(btn.dataset.assetId, btn.dataset.vesselId, 'location');
+        });
+    });
+
+    // Add event listeners for Location Drawing removal
+    dom.vesselDetailView.querySelectorAll('.remove-location-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (confirm('Remove Location Drawing and all annotations?')) {
+                await dataManager.updateVessel(btn.dataset.assetId, btn.dataset.vesselId, { locationDrawing: null });
+                renderVesselDetailView(assetId);
+            }
+        });
+    });
+
+    // Add event listeners for Location Drawing preview click
+    dom.vesselDetailView.querySelectorAll('.location-drawing-preview').forEach(preview => {
+        preview.addEventListener('click', (e) => {
+            if (!e.target.closest('.remove-location-btn')) {
+                openDrawingAnnotator(preview.dataset.assetId, preview.dataset.vesselId, 'location');
+            }
+        });
+    });
+
+    // Add event listeners for GA Drawing upload
+    dom.vesselDetailView.querySelectorAll('.upload-ga-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleGADrawingUpload(btn.dataset.assetId, btn.dataset.vesselId);
+        });
+    });
+
+    // Add event listeners for GA Drawing annotation
+    dom.vesselDetailView.querySelectorAll('.annotate-ga-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openDrawingAnnotator(btn.dataset.assetId, btn.dataset.vesselId, 'ga');
+        });
+    });
+
+    // Add event listeners for GA Drawing removal
+    dom.vesselDetailView.querySelectorAll('.remove-ga-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (confirm('Remove GA Drawing and all annotations?')) {
+                await dataManager.updateVessel(btn.dataset.assetId, btn.dataset.vesselId, { gaDrawing: null });
+                renderVesselDetailView(assetId);
+            }
+        });
+    });
+
+    // Add event listeners for GA Drawing preview click
+    dom.vesselDetailView.querySelectorAll('.ga-drawing-preview').forEach(preview => {
+        preview.addEventListener('click', (e) => {
+            if (!e.target.closest('.remove-ga-btn')) {
+                openDrawingAnnotator(preview.dataset.assetId, preview.dataset.vesselId, 'ga');
             }
         });
     });
@@ -928,6 +1088,7 @@ function showVesselMenu(event, assetId, vesselId) {
     menu.style.left = event.clientX + 'px';
     menu.style.top = event.clientY + 'px';
     menu.innerHTML = `
+        <button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-blue-600" data-action="generate-report">📄 Generate Report</button>
         ${vessel.model3d ? '<button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm" data-action="change-model">Change 3D Model</button>' : ''}
         ${vessel.model3d ? '<button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm" data-action="remove-model">Remove 3D Model</button>' : ''}
         <button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm" data-action="rename">Rename</button>
@@ -938,7 +1099,10 @@ function showVesselMenu(event, assetId, vesselId) {
 
     menu.addEventListener('click', async (e) => {
         const action = e.target.dataset.action;
-        if (action === 'rename') {
+        if (action === 'generate-report') {
+            const vessel = dataManager.getVessel(assetId, vesselId);
+            reportDialog.show(assetId, vesselId, vessel.name);
+        } else if (action === 'rename') {
             const vessel = dataManager.getVessel(assetId, vesselId);
             const newName = prompt('Enter new name:', vessel.name);
             if (newName && newName.trim()) {
@@ -1017,6 +1181,256 @@ function showScanMenu(event, assetId, vesselId, scanId) {
             }
         }, { once: true });
     }, 0);
+}
+
+function handleLocationDrawingUpload(assetId, vesselId) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const locationDrawing = {
+                imageDataUrl: event.target.result,
+                annotations: []
+            };
+            await dataManager.updateVessel(assetId, vesselId, { locationDrawing });
+            renderVesselDetailView(assetId);
+        };
+        reader.readAsDataURL(file);
+    });
+    input.click();
+}
+
+function handleGADrawingUpload(assetId, vesselId) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const gaDrawing = {
+                imageDataUrl: event.target.result,
+                annotations: []
+            };
+            await dataManager.updateVessel(assetId, vesselId, { gaDrawing });
+            renderVesselDetailView(assetId);
+        };
+        reader.readAsDataURL(file);
+    });
+    input.click();
+}
+
+function openDrawingAnnotator(assetId, vesselId, drawingType) {
+    const vessel = dataManager.getVessel(assetId, vesselId);
+    if (!vessel) return;
+
+    const drawing = drawingType === 'location' ? vessel.locationDrawing : vessel.gaDrawing;
+    if (!drawing) return;
+
+    const title = drawingType === 'location' ? 'Location Drawing' : 'GA Drawing';
+
+    // Create full-screen annotation modal
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-95 flex flex-col z-50';
+    modal.style.zIndex = '10000';
+
+    modal.innerHTML = `
+        <div class="flex-shrink-0 bg-gray-900 border-b border-gray-700 px-6 py-4 flex justify-between items-center">
+            <div>
+                <h2 class="text-xl font-bold text-white">${title} - ${vessel.name}</h2>
+                <p class="text-sm text-gray-400">Click to add annotation markers. Right-click markers to delete.</p>
+            </div>
+            <div class="flex gap-3">
+                <button id="clear-annotations-btn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+                    Clear All
+                </button>
+                <button id="save-annotations-btn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                    Save & Close
+                </button>
+                <button id="close-annotator-btn" class="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors">
+                    Cancel
+                </button>
+            </div>
+        </div>
+        <div class="flex-grow overflow-auto flex items-center justify-center p-6">
+            <div class="relative inline-block">
+                <canvas id="annotation-canvas" class="border-2 border-gray-600 cursor-crosshair" style="max-width: 100%; max-height: calc(100vh - 150px);"></canvas>
+            </div>
+        </div>
+        <div class="flex-shrink-0 bg-gray-900 border-t border-gray-700 px-6 py-3">
+            <div class="flex items-center gap-4 text-sm text-gray-400">
+                <div class="flex items-center gap-2">
+                    <div class="w-4 h-4 bg-red-500 rounded-full border-2 border-white"></div>
+                    <span>Left-click to add marker</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="w-4 h-4 bg-blue-500 rounded-full border-2 border-white"></div>
+                    <span>Right-click marker to delete</span>
+                </div>
+                <div id="annotation-count" class="ml-auto font-semibold text-white">
+                    ${drawing.annotations?.length || 0} annotation(s)
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Setup canvas
+    const canvas = modal.querySelector('#annotation-canvas');
+    const ctx = canvas.getContext('2d');
+    let annotations = drawing.annotations ? [...drawing.annotations] : [];
+    let img = new Image();
+    let isDragging = false;
+    let draggedAnnotationIndex = -1;
+
+    img.onload = () => {
+        // Set canvas size to match image
+        canvas.width = img.width;
+        canvas.height = img.height;
+        renderCanvas();
+    };
+    img.src = drawing.imageDataUrl;
+
+    function renderCanvas() {
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw image
+        ctx.drawImage(img, 0, 0);
+
+        // Draw annotations
+        annotations.forEach((annotation, index) => {
+            // Draw marker circle
+            ctx.beginPath();
+            ctx.arc(annotation.x, annotation.y, 15, 0, 2 * Math.PI);
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.8)';
+            ctx.fill();
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // Draw number
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(index + 1, annotation.x, annotation.y);
+
+            // Draw label if exists
+            if (annotation.label) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(annotation.x + 20, annotation.y - 10, 150, 25);
+                ctx.fillStyle = 'white';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'left';
+                ctx.fillText(annotation.label, annotation.x + 25, annotation.y + 2);
+            }
+        });
+
+        // Update count
+        modal.querySelector('#annotation-count').textContent = `${annotations.length} annotation(s)`;
+    }
+
+    // Get mouse position relative to canvas
+    function getMousePos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        return {
+            x: (e.clientX - rect.left) * scaleX,
+            y: (e.clientY - rect.top) * scaleY
+        };
+    }
+
+    // Find annotation at position
+    function findAnnotationAt(x, y) {
+        for (let i = annotations.length - 1; i >= 0; i--) {
+            const annotation = annotations[i];
+            const distance = Math.sqrt(Math.pow(x - annotation.x, 2) + Math.pow(y - annotation.y, 2));
+            if (distance <= 15) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    // Canvas click handler - add annotation
+    canvas.addEventListener('click', (e) => {
+        const pos = getMousePos(e);
+        const label = prompt('Enter annotation label (optional):');
+        annotations.push({
+            x: pos.x,
+            y: pos.y,
+            label: label || ''
+        });
+        renderCanvas();
+    });
+
+    // Canvas context menu handler - delete annotation
+    canvas.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const pos = getMousePos(e);
+        const index = findAnnotationAt(pos.x, pos.y);
+        if (index !== -1) {
+            if (confirm(`Delete annotation ${index + 1}?`)) {
+                annotations.splice(index, 1);
+                renderCanvas();
+            }
+        }
+    });
+
+    // Clear all button
+    modal.querySelector('#clear-annotations-btn').addEventListener('click', () => {
+        if (annotations.length > 0 && confirm('Clear all annotations?')) {
+            annotations = [];
+            renderCanvas();
+        }
+    });
+
+    // Save button
+    modal.querySelector('#save-annotations-btn').addEventListener('click', async () => {
+        const updatedDrawing = {
+            imageDataUrl: drawing.imageDataUrl,
+            annotations: annotations
+        };
+
+        if (drawingType === 'location') {
+            await dataManager.updateVessel(assetId, vesselId, { locationDrawing: updatedDrawing });
+        } else {
+            await dataManager.updateVessel(assetId, vesselId, { gaDrawing: updatedDrawing });
+        }
+
+        document.body.removeChild(modal);
+        renderVesselDetailView(assetId);
+    });
+
+    // Cancel button
+    modal.querySelector('#close-annotator-btn').addEventListener('click', () => {
+        if (annotations.length !== (drawing.annotations?.length || 0) ||
+            JSON.stringify(annotations) !== JSON.stringify(drawing.annotations || [])) {
+            if (!confirm('You have unsaved changes. Are you sure you want to close?')) {
+                return;
+            }
+        }
+        document.body.removeChild(modal);
+    });
+
+    // Close on Escape key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            modal.querySelector('#close-annotator-btn').click();
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
 }
 
 function exportAllData() {

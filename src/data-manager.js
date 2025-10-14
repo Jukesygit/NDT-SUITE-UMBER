@@ -108,6 +108,12 @@ class DataManager {
     async saveToStorage() {
         try {
             await indexedDB.saveData(this.data);
+
+            // Mark that data has changed and needs sync
+            if (authManager.isLoggedIn()) {
+                syncService.markPendingChanges();
+            }
+
             return true;
         } catch (error) {
             console.error('Error saving data to storage:', error);
@@ -230,7 +236,9 @@ class DataManager {
             name: name,
             scans: [],
             model3d: null, // Will store .obj file as data URL
-            images: [] // Array of { id, name, dataUrl, timestamp }
+            images: [], // Array of { id, name, dataUrl, timestamp }
+            locationDrawing: null, // { imageDataUrl, annotations: [] }
+            gaDrawing: null // { imageDataUrl, annotations: [] }
         };
         asset.vessels.push(vessel);
         await this.saveToStorage();
