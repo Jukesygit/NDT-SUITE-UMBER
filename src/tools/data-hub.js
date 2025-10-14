@@ -1475,6 +1475,10 @@ function openDrawingAnnotator(assetId, vesselId, drawingType) {
     let isDrawing = false;
     let startPos = null;
     let tempBox = null;
+    let isDragging = false;
+    let draggedAnnotationIndex = -1;
+    let dragOffset = { x: 0, y: 0 };
+    let hoveredAnnotationIndex = -1;
 
     // Tool selection buttons
     const toolMarkerBtn = modal.querySelector('#tool-marker');
@@ -1511,14 +1515,16 @@ function openDrawingAnnotator(assetId, vesselId, drawingType) {
 
         // Draw annotations
         annotations.forEach((annotation, index) => {
+            const isHighlighted = index === hoveredAnnotationIndex || index === draggedAnnotationIndex;
+
             if (annotation.type === 'box') {
-                // Draw rectangle box
-                ctx.strokeStyle = 'rgba(34, 197, 94, 1)'; // Green
-                ctx.lineWidth = 3;
+                // Draw rectangle box with highlight if hovered/dragged
+                ctx.strokeStyle = isHighlighted ? 'rgba(34, 197, 94, 1)' : 'rgba(34, 197, 94, 1)';
+                ctx.lineWidth = isHighlighted ? 4 : 3;
                 ctx.strokeRect(annotation.x, annotation.y, annotation.width, annotation.height);
 
-                // Fill with semi-transparent green
-                ctx.fillStyle = 'rgba(34, 197, 94, 0.2)';
+                // Fill with semi-transparent green (brighter if highlighted)
+                ctx.fillStyle = isHighlighted ? 'rgba(34, 197, 94, 0.35)' : 'rgba(34, 197, 94, 0.2)';
                 ctx.fillRect(annotation.x, annotation.y, annotation.width, annotation.height);
 
                 // Draw number badge at top-left corner
@@ -1548,13 +1554,14 @@ function openDrawingAnnotator(assetId, vesselId, drawingType) {
                     ctx.fillText(annotation.label, labelX + 5, labelY + 12);
                 }
             } else {
-                // Draw marker circle (default type)
+                // Draw marker circle (default type) with highlight if hovered/dragged
                 ctx.beginPath();
-                ctx.arc(annotation.x, annotation.y, 15, 0, 2 * Math.PI);
-                ctx.fillStyle = 'rgba(239, 68, 68, 0.8)';
+                const radius = isHighlighted ? 17 : 15;
+                ctx.arc(annotation.x, annotation.y, radius, 0, 2 * Math.PI);
+                ctx.fillStyle = isHighlighted ? 'rgba(239, 68, 68, 1)' : 'rgba(239, 68, 68, 0.8)';
                 ctx.fill();
                 ctx.strokeStyle = 'white';
-                ctx.lineWidth = 3;
+                ctx.lineWidth = isHighlighted ? 4 : 3;
                 ctx.stroke();
 
                 // Draw number
@@ -1629,26 +1636,63 @@ function openDrawingAnnotator(assetId, vesselId, drawingType) {
 
         const pos = getMousePos(e);
 
-        if (currentTool === 'box') {
-            isDrawing = true;
-            startPos = pos;
-            tempBox = { x: pos.x, y: pos.y, width: 0, height: 0 };
-        } else if (currentTool === 'marker') {
-            const label = prompt('Enter annotation label (optional):');
-            annotations.push({
-                type: 'marker',
-                x: pos.x,
-                y: pos.y,
-                label: label || ''
-            });
+        // Check if clicking on existing annotation (for dragging)
+        const clickedIndex = findAnnotationAt(pos.x, pos.y);
+
+        if (clickedIndex !== -1) {
+            // Start dragging the annotation
+            isDragging = true;
+            const annotation = annotations[clickedIndex];
+
+            // Bring annotation to front by moving to end of array
+            annotations.splice(clickedIndex, 1);
+            annotations.push(annotation);
+            draggedAnnotationIndex = annotations.length - 1;
+
+            if (annotation.type === 'box') {
+                dragOffset = {
+                    x: pos.x - annotation.x,
+                    y: pos.y - annotation.y
+                };
+            } else {
+                dragOffset = {
+                    x: pos.x - annotation.x,
+                    y: pos.y - annotation.y
+                };
+            }
+            canvas.style.cursor = 'grabbing';
             renderCanvas();
+        } else {
+            // Create new annotation
+            if (currentTool === 'box') {
+                isDrawing = true;
+                startPos = pos;
+                tempBox = { x: pos.x, y: pos.y, width: 0, height: 0 };
+            } else if (currentTool === 'marker') {
+                const label = prompt('Enter annotation label (optional):');
+                annotations.push({
+                    type: 'marker',
+                    x: pos.x,
+                    y: pos.y,
+                    label: label || ''
+                });
+                renderCanvas();
+            }
         }
     });
 
-    // Canvas mouse move handler
+    // Canvas mouse move handler (for drawing new boxes and dragging)
     canvas.addEventListener('mousemove', (e) => {
-        if (isDrawing && currentTool === 'box' && startPos) {
-            const pos = getMousePos(e);
+        const pos = getMousePos(e);
+
+        if (isDragging && draggedAnnotationIndex !== -1) {
+            // Update annotation position while dragging
+            const annotation = annotations[draggedAnnotationIndex];
+            annotation.x = pos.x - dragOffset.x;
+            annotation.y = pos.y - dragOffset.y;
+            renderCanvas();
+        } else if (isDrawing && currentTool === 'box' && startPos) {
+            // Drawing new box
             tempBox = {
                 x: Math.min(startPos.x, pos.x),
                 y: Math.min(startPos.y, pos.y),
@@ -1656,6 +1700,22 @@ function openDrawingAnnotator(assetId, vesselId, drawingType) {
                 height: Math.abs(pos.y - startPos.y)
             };
             renderCanvas();
+        } else if (!isDrawing && !isDragging) {
+            // Update cursor and highlight based on hover
+            const index = findAnnotationAt(pos.x, pos.y);
+            const previousHoveredIndex = hoveredAnnotationIndex;
+            hoveredAnnotationIndex = index;
+
+            if (index !== -1) {
+                canvas.style.cursor = 'move';
+            } else {
+                canvas.style.cursor = 'crosshair';
+            }
+
+            // Re-render if hover state changed
+            if (previousHoveredIndex !== hoveredAnnotationIndex) {
+                renderCanvas();
+            }
         }
     });
 
@@ -1663,7 +1723,14 @@ function openDrawingAnnotator(assetId, vesselId, drawingType) {
     canvas.addEventListener('mouseup', (e) => {
         if (e.button !== 0) return;
 
-        if (isDrawing && currentTool === 'box' && tempBox) {
+        if (isDragging) {
+            // Finish dragging
+            isDragging = false;
+            draggedAnnotationIndex = -1;
+            dragOffset = { x: 0, y: 0 };
+            canvas.style.cursor = 'move';
+            renderCanvas();
+        } else if (isDrawing && currentTool === 'box' && tempBox) {
             // Only add box if it has reasonable size
             if (tempBox.width > 20 && tempBox.height > 20) {
                 const label = prompt('Enter annotation label (optional):');
