@@ -1039,6 +1039,13 @@ async function rejectAccessRequest(requestId) {
     }
 }
 
+// Helper function to escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 async function renderConfiguration() {
     await adminConfig.ensureInitialized();
     const config = adminConfig.getAllConfig();
@@ -1098,12 +1105,12 @@ async function renderConfiguration() {
                                 <div class="space-y-2">
                                     ${list.map((item, index) => `
                                         <div class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                                            <span class="text-sm text-gray-900 dark:text-white flex-grow">${item}</span>
+                                            <span class="text-sm text-gray-900 dark:text-white flex-grow">${escapeHtml(item)}</span>
                                             <div class="flex gap-2 ml-4">
-                                                <button class="edit-item-btn text-blue-600 hover:text-blue-800 dark:text-blue-400 text-xs" data-list="${listName}" data-item="${item.replace(/"/g, '&quot;')}">
+                                                <button class="edit-item-btn text-blue-600 hover:text-blue-800 dark:text-blue-400 text-xs" data-list="${listName}" data-index="${index}">
                                                     Edit
                                                 </button>
-                                                <button class="delete-item-btn text-red-600 hover:text-red-800 dark:text-red-400 text-xs" data-list="${listName}" data-item="${item.replace(/"/g, '&quot;')}">
+                                                <button class="delete-item-btn text-red-600 hover:text-red-800 dark:text-red-400 text-xs" data-list="${listName}" data-index="${index}">
                                                     Delete
                                                 </button>
                                             </div>
@@ -1146,12 +1153,12 @@ async function renderConfiguration() {
 
     // Edit item buttons
     dom.configurationView.querySelectorAll('.edit-item-btn').forEach(btn => {
-        btn.addEventListener('click', () => editConfigItem(btn.dataset.list, btn.dataset.item));
+        btn.addEventListener('click', () => editConfigItem(btn.dataset.list, parseInt(btn.dataset.index)));
     });
 
     // Delete item buttons
     dom.configurationView.querySelectorAll('.delete-item-btn').forEach(btn => {
-        btn.addEventListener('click', () => deleteConfigItem(btn.dataset.list, btn.dataset.item));
+        btn.addEventListener('click', () => deleteConfigItem(btn.dataset.list, parseInt(btn.dataset.index)));
     });
 }
 
@@ -1170,9 +1177,16 @@ async function addConfigItem(listName) {
     }
 }
 
-async function editConfigItem(listName, oldItem) {
+async function editConfigItem(listName, itemIndex) {
     const metadata = adminConfig.getListMetadata();
     const meta = metadata[listName];
+    const list = adminConfig.getList(listName);
+    const oldItem = list[itemIndex];
+
+    if (!oldItem) {
+        alert('Error: Item not found');
+        return;
+    }
 
     const newItem = prompt(`Edit ${meta.label.toLowerCase()} item:`, oldItem);
     if (newItem && newItem.trim() && newItem !== oldItem) {
@@ -1185,9 +1199,16 @@ async function editConfigItem(listName, oldItem) {
     }
 }
 
-async function deleteConfigItem(listName, item) {
+async function deleteConfigItem(listName, itemIndex) {
     const metadata = adminConfig.getListMetadata();
     const meta = metadata[listName];
+    const list = adminConfig.getList(listName);
+    const item = list[itemIndex];
+
+    if (!item) {
+        alert('Error: Item not found');
+        return;
+    }
 
     if (confirm(`Delete "${item}" from ${meta.label.toLowerCase()}?`)) {
         const result = await adminConfig.removeItem(listName, item);
