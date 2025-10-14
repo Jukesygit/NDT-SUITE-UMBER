@@ -1,0 +1,2033 @@
+{
+  "summary": {
+    "total_reports_analyzed": 12,
+    "reports_analyzed": [
+      "ARM-2025-3189-PAUT-ARM-2023-129-PS.docx",
+      "BLP-2024-4719-PAUT.docx",
+      "BRT-2024-9267-PAUT-V-1401.docx",
+      "BRT-2025-359-PAUT-X-0511.docx",
+      "LOM-2025-4884-PAUT-V-2801-1.docx",
+      "LOM-2025-5193-PAUT-3-HC-37711.docx",
+      "LOM-2025-5194-PAUT-2-DH-37713.docx",
+      "LOM-2025-5306-PAUT-2-HC-37007.docx",
+      "LOM-2025-5307-PAUT-2-HC-37001.docx",
+      "LOM-2025-5308-PAUT-2-HC-37008.docx",
+      "NEV-2025-4974-PAUT-H-1701-1.docx",
+      "NEV-2025-5569-PAUT (V-0320-1).docx"
+    ]
+  },
+  "field_labels": {
+    "Equipment": {
+      "count": 12,
+      "examples": [
+        "Equipment"
+      ]
+    },
+    "Technician": {
+      "count": 12,
+      "examples": [
+        "Technician"
+      ]
+    },
+    "Description": {
+      "count": 11,
+      "examples": [
+        "Description"
+      ]
+    },
+    "Line/Tag Number": {
+      "count": 11,
+      "examples": [
+        "Line/Tag Number"
+      ]
+    },
+    "Material": {
+      "count": 11,
+      "examples": [
+        "Material"
+      ]
+    },
+    "Temperature": {
+      "count": 11,
+      "examples": [
+        "Temperature"
+      ]
+    },
+    "Stress Relief": {
+      "count": 11,
+      "examples": [
+        "Stress Relief"
+      ]
+    },
+    "Procedure No": {
+      "count": 11,
+      "examples": [
+        "Procedure No"
+      ]
+    },
+    "Acceptance Criteria": {
+      "count": 11,
+      "examples": [
+        "Acceptance Criteria"
+      ]
+    },
+    "Equip. Model": {
+      "count": 11,
+      "examples": [
+        "Equip. Model"
+      ]
+    },
+    "Probe": {
+      "count": 11,
+      "examples": [
+        "Probe"
+      ]
+    },
+    "Calibration Blocks": {
+      "count": 11,
+      "examples": [
+        "Calibration Blocks"
+      ]
+    },
+    "Ref Blocks": {
+      "count": 11,
+      "examples": [
+        "Ref Blocks"
+      ]
+    },
+    "Phased Array Beamset Configuration": {
+      "count": 11,
+      "examples": [
+        "Phased Array Beamset Configuration"
+      ]
+    },
+    "Group": {
+      "count": 11,
+      "examples": [
+        "Type"
+      ]
+    },
+    "Inspection Results Summary": {
+      "count": 11,
+      "examples": [
+        "Inspection Results Summary"
+      ]
+    },
+    "Signature": {
+      "count": 11,
+      "examples": [
+        "Signature:"
+      ]
+    },
+    "Component Details & Procedure": {
+      "count": 10,
+      "examples": [
+        "Component Details & Procedure"
+      ]
+    },
+    "Date": {
+      "count": 7,
+      "examples": [
+        "Date:"
+      ]
+    },
+    "Qualification\tPCN L2 PAUT": {
+      "count": 6,
+      "examples": [
+        "Qualification:\tPCN L2 PAUT"
+      ]
+    },
+    "Inspection Results – Condition Photos": {
+      "count": 5,
+      "examples": [
+        "Inspection Results – Condition Photos"
+      ]
+    },
+    "Name\t\tM. Pettett": {
+      "count": 5,
+      "examples": [
+        "Name:\t\tM. Pettett"
+      ]
+    },
+    "Name\t\tFindlay Hart": {
+      "count": 2,
+      "examples": [
+        "Name:\t\tFindlay Hart"
+      ]
+    },
+    "Qualification\tPCN LVL II": {
+      "count": 2,
+      "examples": [
+        "Qualification:\tPCN LVL II"
+      ]
+    },
+    "Date \t\t25/03/2025": {
+      "count": 2,
+      "examples": [
+        "Date: \t\t25/03/2025"
+      ]
+    },
+    "Couplant": {
+      "count": 2,
+      "examples": [
+        "Sonagel"
+      ]
+    },
+    "Name\t\tIain Gunn": {
+      "count": 1,
+      "examples": [
+        "Name:\t\tIain Gunn"
+      ]
+    },
+    "Qualification\tPCN PAUT L2": {
+      "count": 1,
+      "examples": [
+        "Qualification:\tPCN PAUT L2"
+      ]
+    },
+    "Inspection Results - Photograph of test area": {
+      "count": 1,
+      "examples": [
+        "Inspection Results - Photograph of test area"
+      ]
+    },
+    "Name\t\tCalum Gibson": {
+      "count": 1,
+      "examples": [
+        "Name:\t\tCalum Gibson"
+      ]
+    },
+    "Qualification\tPCN L2 (321420)": {
+      "count": 1,
+      "examples": [
+        "Qualification:\tPCN L2 (321420)"
+      ]
+    },
+    "Date \t\t28/03/2025": {
+      "count": 1,
+      "examples": [
+        "Date: \t\t28/03/2025"
+      ]
+    },
+    "Name\t\tM. O’Brien-Pettett": {
+      "count": 1,
+      "examples": [
+        "Name:\t\tM. O’Brien-Pettett"
+      ]
+    },
+    "Photo 1 Stand-off photo of the vessel.": {
+      "count": 1,
+      "examples": [
+        "Photo 2: General condition of the top dome on the vessel. N12 restriction."
+      ]
+    },
+    "Photo 3 General condition of the vessel shell.": {
+      "count": 1,
+      "examples": [
+        "Photo 4: Bottom dome restricted due to CSE and gratings being severely corroded."
+      ]
+    },
+    "0Component Details & Procedure": {
+      "count": 1,
+      "examples": [
+        "0Component Details & Procedure"
+      ]
+    },
+    "Photo 1 Feature BES 1 has been sealed since the previous inspection of 2024": {
+      "count": 1,
+      "examples": [
+        "Photo 2: Features 3-10"
+      ]
+    },
+    "Photo 3 Features 28 - 33": {
+      "count": 1,
+      "examples": [
+        "Photo 4: Overview of area"
+      ]
+    },
+    "Photo 3 Features 11-16. New spools installed.": {
+      "count": 1,
+      "examples": [
+        "Photo 4: Features 8-9. Spools replaced since previous inspection."
+      ]
+    },
+    "Photo 1 Features 22-26. Insulation removed for the inspection.": {
+      "count": 1,
+      "examples": [
+        "Photo 2: Features 17 to 23. Insulation removed for the inspection."
+      ]
+    },
+    "Photo 3 Features 11-13. Insulation removed for the inspection.": {
+      "count": 1,
+      "examples": [
+        "Photo 4: TP10 now restricted by a pipe support."
+      ]
+    },
+    "Photo 3 Features 19-25. Insulation removed for the inspection.": {
+      "count": 1,
+      "examples": [
+        "Photo 4: TP28 to 30 are out of reach from sub-cellar and outboard if approached from above."
+      ]
+    },
+    "Scanning Equipment": {
+      "count": 1,
+      "examples": [
+        "Scanning Equipment"
+      ]
+    },
+    "Probe (A)": {
+      "count": 1,
+      "examples": [
+        "5L16 A10"
+      ]
+    },
+    "Probe (B)": {
+      "count": 1,
+      "examples": [
+        "4L16 DGS"
+      ]
+    },
+    "Probe Type": {
+      "count": 1,
+      "examples": [
+        "Olympus"
+      ]
+    },
+    "Equipment settings": {
+      "count": 1,
+      "examples": [
+        "Equipment settings"
+      ]
+    },
+    "Mode": {
+      "count": 1,
+      "examples": [
+        "Pulse Echo"
+      ]
+    },
+    "Filter": {
+      "count": 1,
+      "examples": [
+        "BP 5MHz"
+      ]
+    },
+    "Gain Offset": {
+      "count": 1,
+      "examples": [
+        "None"
+      ]
+    },
+    "Focus Range": {
+      "count": 1,
+      "examples": [
+        "40mm"
+      ]
+    },
+    "Inspection Summary": {
+      "count": 1,
+      "examples": [
+        "Inspection Summary"
+      ]
+    },
+    "Name\t       B Wilkes": {
+      "count": 1,
+      "examples": [
+        "Name:\t       B Wilkes"
+      ]
+    },
+    "Qualification PAUT PCN L2": {
+      "count": 1,
+      "examples": [
+        "Qualification: PAUT PCN L2"
+      ]
+    },
+    "Signature  B Wilkes": {
+      "count": 1,
+      "examples": [
+        "Signature:  B Wilkes"
+      ]
+    },
+    "Date \t       16/07/2025": {
+      "count": 1,
+      "examples": [
+        "Date: \t       16/07/2025"
+      ]
+    },
+    "Name\t\tMichael McLaren": {
+      "count": 1,
+      "examples": [
+        "Name:\t\tMichael McLaren"
+      ]
+    },
+    "Qualification\tPCN L2 (306313)": {
+      "count": 1,
+      "examples": [
+        "Qualification:\tPCN L2 (306313)"
+      ]
+    },
+    "Date \t\t11/07/2025": {
+      "count": 1,
+      "examples": [
+        "Date: \t\t11/07/2025"
+      ]
+    }
+  },
+  "equipment_information": {
+    "ultrasonic_units": [],
+    "probes": [
+      "PAUT Scan Plans.\n\n\n\nThe above image highlights the Rim scan technique utilising the A10 probe",
+      "Probe (A)",
+      "Probe",
+      "PAUT Scan Plans.\n\n\n\nThe above image highlights the Bolt Face technique utilising the DGS probe",
+      "Probe (B)",
+      "PAUT Scan Plan for Butt Welds. \n\n\t\t\t\n\n\nThe above image highlights the Bolt Face scan technique utilising the DGS probe",
+      "Probe front",
+      "Probe Type"
+    ],
+    "calibration_blocks": [
+      "Cal Block",
+      "Phased Array Calibration Scan Log\n\nAll dimensions & measurements in mm. Calibration Block Velocity: 5890 m/sec ±30m/sec.",
+      "Phased Array Calibration Scan Log\n\n\nAll dimensions & measurements in mm. Calibration Block Velocity: 5920 m/sec ±30m/sec.",
+      "Phased Array Calibration Scan Log\n\nAll dimensions & measurements in mm. Calibration Block Velocity: 5920 m/sec ±30m/sec.",
+      "Calibration Blocks"
+    ],
+    "couplants": [
+      "Couplant"
+    ],
+    "scanner_frames": [
+      "Scanner Frame"
+    ],
+    "wedges": [
+      "Wedge",
+      "0° Curved wedge"
+    ],
+    "cables": [
+      "Applicable Standard"
+    ]
+  },
+  "materials": {
+    "material_mentions": [
+      "Material",
+      "Carbon Steel"
+    ],
+    "coating_mentions": [
+      "Datum TDC. Area 1300 x 1300mm. Areas of coating breakdown noted in vicinity of N12.",
+      "Coating Type",
+      "Painted"
+    ]
+  },
+  "procedures": {
+    "procedure_examples": [
+      "Filename format: LOM-2025-5307-PAUT-2-HC-37001.docx",
+      "Filename format: BRT-2024-9267-PAUT-V-1401.docx",
+      "Filename format: LOM-2025-4884-PAUT-V-2801-1.docx",
+      "Filename format: LOM-2025-5306-PAUT-2-HC-37007.docx",
+      "Filename format: NEV-2025-5569-PAUT (V-0320-1).docx",
+      "Component Details & Procedure",
+      "Filename format: LOM-2025-5308-PAUT-2-HC-37008.docx",
+      "Filename format: BRT-2025-359-PAUT-X-0511.docx",
+      "Filename format: LOM-2025-5194-PAUT-2-DH-37713.docx",
+      "Applicable Standard",
+      "Filename format: LOM-2025-5193-PAUT-3-HC-37711.docx",
+      "Filename format: BLP-2024-4719-PAUT.docx",
+      "Filename format: ARM-2025-3189-PAUT-ARM-2023-129-PS.docx",
+      "Filename format: NEV-2025-4974-PAUT-H-1701-1.docx",
+      "Procedure No",
+      "0Component Details & Procedure"
+    ]
+  },
+  "acceptance_criteria": {
+    "criteria_mentions": [
+      "Applicable Standard",
+      "Reject",
+      "Client Acceptance",
+      "Acceptance Criteria"
+    ]
+  },
+  "clients_and_locations": {
+    "client_mentions": [
+      "Client Acceptance"
+    ],
+    "location_mentions": [
+      "Photo 1: Stand-off photo of the vessel.",
+      "Inspection Results – Plot plan showing test location",
+      "Photo 2: General condition of the top dome on the vessel. N12 restriction.",
+      "Inspection Results – PACMAP Composite Image Top Dome",
+      "Inspection Results – PACMAP Composite Image - Shell",
+      "Couplant",
+      "V-2801-1 TEG Contactor Scrubber – PACMAP of Vessel shell and Dome Ends",
+      "Photo 3: General condition of the vessel shell.",
+      "Inspection Results – Plot Plan showing test location",
+      "Inspection Results- Vessel Shell",
+      "Inspection Results – Plot plan showing test location – Level 2"
+    ]
+  },
+  "scanning_logs": [
+    {
+      "filename": "ARM-2025-3189-PAUT-ARM-2023-129-PS.docx",
+      "table_index": 0,
+      "headers": [
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure"
+      ],
+      "sample_rows": [
+        [
+          "Description",
+          "Description",
+          "Description",
+          "PAUT on anomaly ARM-2023-129-PS",
+          "PAUT on anomaly ARM-2023-129-PS",
+          "PAUT on anomaly ARM-2023-129-PS",
+          "PAUT on anomaly ARM-2023-129-PS",
+          "PAUT on anomaly ARM-2023-129-PS",
+          "PAUT on anomaly ARM-2023-129-PS",
+          "PAUT on anomaly ARM-2023-129-PS",
+          "PAUT on anomaly ARM-2023-129-PS",
+          "PAUT on anomaly ARM-2023-129-PS",
+          "PAUT on anomaly ARM-2023-129-PS",
+          "PAUT on anomaly ARM-2023-129-PS",
+          "PAUT on anomaly ARM-2023-129-PS",
+          "PAUT on anomaly ARM-2023-129-PS",
+          "PAUT on anomaly ARM-2023-129-PS"
+        ],
+        [
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "16.00-NG-83-0301-D05-B",
+          "16.00-NG-83-0301-D05-B",
+          "16.00-NG-83-0301-D05-B",
+          "16.00-NG-83-0301-D05-B",
+          "16.00-NG-83-0301-D05-B",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "BG-ARMA-A1-00-07-83-01-04213",
+          "BG-ARMA-A1-00-07-83-01-04213",
+          "BG-ARMA-A1-00-07-83-01-04213"
+        ]
+      ]
+    },
+    {
+      "filename": "ARM-2025-3189-PAUT-ARM-2023-129-PS.docx",
+      "table_index": 1,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Scan File Name: \t\tARM-2023-129-PS SCAN 1\n\nFeature / Description: \tARM-2023-129-PS\n\n\n\nAnalysis / Interpretation: \n\nCode E internal wall loss from erosion can be found at the 12 o’clock position of the scan.\nThe lowest reading is located at 17mm downstream from the centre point and 1mm circumferentially North from the 12 o’clock position. No coating is present, so the 1st echo has been used.\n\n1st echo reading: 14.06mm\n\nA Velocity Correction Factor of 0.976 was used to calculate the final reading.\n\n14.06 x 0.976 = 13.72mm – Code E\n\nC-scan is on the next page for reference."
+        ]
+      ]
+    },
+    {
+      "filename": "ARM-2025-3189-PAUT-ARM-2023-129-PS.docx",
+      "table_index": 2,
+      "headers": [
+        "Inspection Results – C-Scan"
+      ],
+      "sample_rows": [
+        [
+          "East/Upstream\n\n\n\nWest/Downstream"
+        ]
+      ]
+    },
+    {
+      "filename": "ARM-2025-3189-PAUT-ARM-2023-129-PS.docx",
+      "table_index": 3,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array C-Scan Mapping log"
+        ]
+      ]
+    },
+    {
+      "filename": "ARM-2025-3189-PAUT-ARM-2023-129-PS.docx",
+      "table_index": 4,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array Calibration Scan Log\n\nAll dimensions & measurements in mm. Calibration Block Velocity: 5920 m/sec ±30m/sec."
+        ]
+      ]
+    },
+    {
+      "filename": "BLP-2024-4719-PAUT.docx",
+      "table_index": 0,
+      "headers": [
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure"
+      ],
+      "sample_rows": [
+        [
+          "Description",
+          "Description",
+          "Description",
+          "PAUT Hydroform testing of MEG Flash Separator Recycle Heater A",
+          "PAUT Hydroform testing of MEG Flash Separator Recycle Heater A",
+          "PAUT Hydroform testing of MEG Flash Separator Recycle Heater A",
+          "PAUT Hydroform testing of MEG Flash Separator Recycle Heater A",
+          "PAUT Hydroform testing of MEG Flash Separator Recycle Heater A",
+          "PAUT Hydroform testing of MEG Flash Separator Recycle Heater A",
+          "PAUT Hydroform testing of MEG Flash Separator Recycle Heater A",
+          "PAUT Hydroform testing of MEG Flash Separator Recycle Heater A",
+          "PAUT Hydroform testing of MEG Flash Separator Recycle Heater A",
+          "PAUT Hydroform testing of MEG Flash Separator Recycle Heater A",
+          "PAUT Hydroform testing of MEG Flash Separator Recycle Heater A",
+          "PAUT Hydroform testing of MEG Flash Separator Recycle Heater A",
+          "PAUT Hydroform testing of MEG Flash Separator Recycle Heater A",
+          "PAUT Hydroform testing of MEG Flash Separator Recycle Heater A",
+          "PAUT Hydroform testing of MEG Flash Separator Recycle Heater A"
+        ],
+        [
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "X-2226 A",
+          "X-2226 A",
+          "X-2226 A",
+          "X-2226 A",
+          "X-2226 A",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "22814GENERALDWE",
+          "22814GENERALDWE",
+          "22814GENERALDWE",
+          "22814GENERALDWE"
+        ]
+      ]
+    },
+    {
+      "filename": "BLP-2024-4719-PAUT.docx",
+      "table_index": 2,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array C-Scan Mapping log"
+        ]
+      ]
+    },
+    {
+      "filename": "BLP-2024-4719-PAUT.docx",
+      "table_index": 3,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array C-Scan Mapping log"
+        ],
+        [
+          "Inspection Results"
+        ]
+      ]
+    },
+    {
+      "filename": "BLP-2024-4719-PAUT.docx",
+      "table_index": 4,
+      "headers": [
+        "Inspection Results Phased Array C-Scan Map"
+      ],
+      "sample_rows": [
+        [
+          ""
+        ]
+      ]
+    },
+    {
+      "filename": "BLP-2024-4719-PAUT.docx",
+      "table_index": 5,
+      "headers": [
+        "Inspection Results Phased Array C-Scan Map"
+      ],
+      "sample_rows": [
+        [
+          ""
+        ]
+      ]
+    },
+    {
+      "filename": "BLP-2024-4719-PAUT.docx",
+      "table_index": 6,
+      "headers": [
+        "Inspection Results Phased Array C-Scan Map"
+      ],
+      "sample_rows": [
+        [
+          ""
+        ]
+      ]
+    },
+    {
+      "filename": "BLP-2024-4719-PAUT.docx",
+      "table_index": 7,
+      "headers": [
+        "Inspection Results Phased Array C-Scan Map"
+      ],
+      "sample_rows": [
+        [
+          ""
+        ]
+      ]
+    },
+    {
+      "filename": "BLP-2024-4719-PAUT.docx",
+      "table_index": 8,
+      "headers": [
+        "Inspection Results Phased Array C-Scan Map"
+      ],
+      "sample_rows": [
+        [
+          ""
+        ]
+      ]
+    },
+    {
+      "filename": "BLP-2024-4719-PAUT.docx",
+      "table_index": 9,
+      "headers": [
+        "Inspection Results Phased Array C-Scan Map"
+      ],
+      "sample_rows": [
+        [
+          ""
+        ]
+      ]
+    },
+    {
+      "filename": "BRT-2024-9267-PAUT-V-1401.docx",
+      "table_index": 0,
+      "headers": [
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure"
+      ],
+      "sample_rows": [
+        [
+          "Description",
+          "Description",
+          "Description",
+          "PAUT Hydroform testing of Fuel Gas Scrubber",
+          "PAUT Hydroform testing of Fuel Gas Scrubber",
+          "PAUT Hydroform testing of Fuel Gas Scrubber",
+          "PAUT Hydroform testing of Fuel Gas Scrubber",
+          "PAUT Hydroform testing of Fuel Gas Scrubber",
+          "PAUT Hydroform testing of Fuel Gas Scrubber",
+          "PAUT Hydroform testing of Fuel Gas Scrubber",
+          "PAUT Hydroform testing of Fuel Gas Scrubber",
+          "PAUT Hydroform testing of Fuel Gas Scrubber",
+          "PAUT Hydroform testing of Fuel Gas Scrubber",
+          "PAUT Hydroform testing of Fuel Gas Scrubber",
+          "PAUT Hydroform testing of Fuel Gas Scrubber",
+          "PAUT Hydroform testing of Fuel Gas Scrubber",
+          "PAUT Hydroform testing of Fuel Gas Scrubber",
+          "PAUT Hydroform testing of Fuel Gas Scrubber"
+        ],
+        [
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "V-1401",
+          "V-1401",
+          "V-1401",
+          "V-1401",
+          "V-1401",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "C5117/8001",
+          "C5117/8001",
+          "C5117/8001",
+          "C5117/8001"
+        ]
+      ]
+    },
+    {
+      "filename": "BRT-2024-9267-PAUT-V-1401.docx",
+      "table_index": 3,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array C-Scan Mapping log"
+        ]
+      ]
+    },
+    {
+      "filename": "BRT-2024-9267-PAUT-V-1401.docx",
+      "table_index": 4,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array C-Scan Mapping log"
+        ],
+        [
+          "Inspection Results"
+        ]
+      ]
+    },
+    {
+      "filename": "BRT-2024-9267-PAUT-V-1401.docx",
+      "table_index": 5,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array C-Scan Mapping log"
+        ],
+        [
+          "Inspection Results"
+        ]
+      ]
+    },
+    {
+      "filename": "BRT-2024-9267-PAUT-V-1401.docx",
+      "table_index": 6,
+      "headers": [
+        "Inspection Results Phased Array C-Scan Map"
+      ],
+      "sample_rows": [
+        [
+          ""
+        ]
+      ]
+    },
+    {
+      "filename": "BRT-2024-9267-PAUT-V-1401.docx",
+      "table_index": 7,
+      "headers": [
+        "Inspection Results Phased Array C-Scan Map"
+      ],
+      "sample_rows": [
+        [
+          ""
+        ]
+      ]
+    },
+    {
+      "filename": "BRT-2024-9267-PAUT-V-1401.docx",
+      "table_index": 8,
+      "headers": [
+        "Inspection Results Phased Array C-Scan Map"
+      ],
+      "sample_rows": [
+        [
+          ""
+        ]
+      ]
+    },
+    {
+      "filename": "BRT-2024-9267-PAUT-V-1401.docx",
+      "table_index": 9,
+      "headers": [
+        "Inspection Results Phased Array C-Scan Map"
+      ],
+      "sample_rows": [
+        [
+          ""
+        ]
+      ]
+    },
+    {
+      "filename": "BRT-2024-9267-PAUT-V-1401.docx",
+      "table_index": 10,
+      "headers": [
+        "Inspection Results Phased Array C-Scan Map"
+      ],
+      "sample_rows": [
+        [
+          ""
+        ]
+      ]
+    },
+    {
+      "filename": "BRT-2024-9267-PAUT-V-1401.docx",
+      "table_index": 11,
+      "headers": [
+        "Inspection Results Phased Array C-Scan Map"
+      ],
+      "sample_rows": [
+        [
+          ""
+        ]
+      ]
+    },
+    {
+      "filename": "BRT-2024-9267-PAUT-V-1401.docx",
+      "table_index": 12,
+      "headers": [
+        "Inspection Results Phased Array C-Scan Map"
+      ],
+      "sample_rows": [
+        [
+          ""
+        ]
+      ]
+    },
+    {
+      "filename": "BRT-2024-9267-PAUT-V-1401.docx",
+      "table_index": 13,
+      "headers": [
+        "Inspection Results Phased Array C-Scan Map"
+      ],
+      "sample_rows": [
+        [
+          ""
+        ]
+      ]
+    },
+    {
+      "filename": "BRT-2025-359-PAUT-X-0511.docx",
+      "table_index": 0,
+      "headers": [
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure"
+      ],
+      "sample_rows": [
+        [
+          "Description",
+          "Description",
+          "Description",
+          "PAUT corrosion mapping (PACMAP) of X-0511Booster Cooler",
+          "PAUT corrosion mapping (PACMAP) of X-0511Booster Cooler",
+          "PAUT corrosion mapping (PACMAP) of X-0511Booster Cooler",
+          "PAUT corrosion mapping (PACMAP) of X-0511Booster Cooler",
+          "PAUT corrosion mapping (PACMAP) of X-0511Booster Cooler",
+          "PAUT corrosion mapping (PACMAP) of X-0511Booster Cooler",
+          "PAUT corrosion mapping (PACMAP) of X-0511Booster Cooler",
+          "PAUT corrosion mapping (PACMAP) of X-0511Booster Cooler",
+          "PAUT corrosion mapping (PACMAP) of X-0511Booster Cooler",
+          "PAUT corrosion mapping (PACMAP) of X-0511Booster Cooler",
+          "PAUT corrosion mapping (PACMAP) of X-0511Booster Cooler",
+          "PAUT corrosion mapping (PACMAP) of X-0511Booster Cooler",
+          "PAUT corrosion mapping (PACMAP) of X-0511Booster Cooler",
+          "PAUT corrosion mapping (PACMAP) of X-0511Booster Cooler",
+          "PAUT corrosion mapping (PACMAP) of X-0511Booster Cooler"
+        ],
+        [
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "X-0511",
+          "X-0511",
+          "X-0511",
+          "X-0511",
+          "X-0511",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "BRT1-LC1-FF-OO-00-00005",
+          "BRT1-LC1-FF-OO-00-00005",
+          "BRT1-LC1-FF-OO-00-00005",
+          "BRT1-LC1-FF-OO-00-00005"
+        ]
+      ]
+    },
+    {
+      "filename": "BRT-2025-359-PAUT-X-0511.docx",
+      "table_index": 2,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Vessel Coverage: \nThe overall target coverage of the vessel shell was 50%. >65% coverage achieved. Please note the vessel remained online during inspection and as such the channel side was not inspected due to high operating temperature.\n \nProvision of datum points  \n \nVessel Shell: \nIndex (X): The index datum is CW01, with the positive increment heading Eastwards along the vessel. \n \nScan (Y): The scan datum is the vessel's 12 o'clock position, with the 3 o'clock position at platform South and the 9 o'clock position at platform North. \n \nScan sensitivity \nA minimum scan sensitivity of reference +14dB has been used. \n \nRestrictions \nScan Restrictions included saddles, nozzles, nameplate, and external pipework & instrumentation (see scan log for further details)."
+        ]
+      ]
+    },
+    {
+      "filename": "BRT-2025-359-PAUT-X-0511.docx",
+      "table_index": 3,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Scan File Name: \t\tX-0511 Shell 6\n\nFeature / Description: \tVessel Shell – Code C internal corrosion \n\n\n\n\n\nAnalysis / Interpretation: \n \nMinimum wall thickness 22.78mm (excluding paint thickness)- Code C\n\nMinimum reading location- Index 4859mm, Scan 269mm."
+        ]
+      ]
+    },
+    {
+      "filename": "BRT-2025-359-PAUT-X-0511.docx",
+      "table_index": 4,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Scan File Name: \t\tX-0511 Shell 7\n\nFeature / Description: \tVessel Shell – Code C internal corrosion \n\n\n\n\n\nAnalysis / Interpretation: \n \nMinimum wall thickness 22.66mm (excluding coating)- Code C.\n\nMinimum reading location- Index 4920mm, Scan 1405mm."
+        ]
+      ]
+    },
+    {
+      "filename": "BRT-2025-359-PAUT-X-0511.docx",
+      "table_index": 5,
+      "headers": [
+        "Inspection Results- Vessel Shell"
+      ],
+      "sample_rows": [
+        [
+          ""
+        ],
+        [
+          "Inspection Results- East Dome End"
+        ]
+      ]
+    },
+    {
+      "filename": "BRT-2025-359-PAUT-X-0511.docx",
+      "table_index": 6,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array Calibration Scan Log\n\nAll dimensions & measurements in mm. Calibration Block Velocity: 5920 m/sec ±30m/sec."
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-4884-PAUT-V-2801-1.docx",
+      "table_index": 0,
+      "headers": [
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure"
+      ],
+      "sample_rows": [
+        [
+          "Description",
+          "Description",
+          "Description",
+          "V-2801-1 TEG Contactor Scrubber – PACMAP of Vessel shell and Dome Ends",
+          "V-2801-1 TEG Contactor Scrubber – PACMAP of Vessel shell and Dome Ends",
+          "V-2801-1 TEG Contactor Scrubber – PACMAP of Vessel shell and Dome Ends",
+          "V-2801-1 TEG Contactor Scrubber – PACMAP of Vessel shell and Dome Ends",
+          "V-2801-1 TEG Contactor Scrubber – PACMAP of Vessel shell and Dome Ends",
+          "V-2801-1 TEG Contactor Scrubber – PACMAP of Vessel shell and Dome Ends",
+          "V-2801-1 TEG Contactor Scrubber – PACMAP of Vessel shell and Dome Ends",
+          "V-2801-1 TEG Contactor Scrubber – PACMAP of Vessel shell and Dome Ends",
+          "V-2801-1 TEG Contactor Scrubber – PACMAP of Vessel shell and Dome Ends",
+          "V-2801-1 TEG Contactor Scrubber – PACMAP of Vessel shell and Dome Ends",
+          "V-2801-1 TEG Contactor Scrubber – PACMAP of Vessel shell and Dome Ends",
+          "V-2801-1 TEG Contactor Scrubber – PACMAP of Vessel shell and Dome Ends",
+          "V-2801-1 TEG Contactor Scrubber – PACMAP of Vessel shell and Dome Ends",
+          "V-2801-1 TEG Contactor Scrubber – PACMAP of Vessel shell and Dome Ends",
+          "V-2801-1 TEG Contactor Scrubber – PACMAP of Vessel shell and Dome Ends"
+        ],
+        [
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "V-2801-1",
+          "V-2801-1",
+          "V-2801-1",
+          "V-2801-1",
+          "V-2801-1",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "AC-LT-FE-00201-01\nW9419",
+          "AC-LT-FE-00201-01\nW9419",
+          "AC-LT-FE-00201-01\nW9419",
+          "AC-LT-FE-00201-01\nW9419"
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-4884-PAUT-V-2801-1.docx",
+      "table_index": 1,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Vessel Coverage:\nA total area of 9.05m2 has been scanned with data captured 6.63m2 after scan restrictions due to pipe supports, nozzles and previously inspected areas. Requested was an additional 25% of the previous inspection (6.5 m2), report: LOM-2022-10069-PAUT.\n\nProvision of datum points \n\nVessel Shell:\nIndex (Y): The index datum is CW01, with the positive increment moving vertically up the vessel.\n\nScan (X): The scan datum is platform North, with the positive increment moving in a clockwise direction when looking down. (Towards the east).\n\nScan sensitivity\nA minimum scan sensitivity of reference +6dB has been used.\n\nRestrictions\nScan Restrictions included nozzles, nameplate and external pipework & instrumentation."
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-4884-PAUT-V-2801-1.docx",
+      "table_index": 3,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Scan File Name: \t\tV-2801-1 S-3000-4320 I-900-1650 pit-1\n\nFeature / Description: \tShell Anomaly Code D\n\n\n\nAnalysis / Interpretation:\n\nPitting was on the lower section of the shell. Location (3484mm from North and 945mm from CW1). \n\nThis was previously located in 2022 and was repeated to ascertain any further degradation. \n\nPrevious result was 39.3mm Anomaly code C. \n\nMinimum wall thickness measured: 38.82mm. Anomaly Code D.\n\nAll measurements have coating correction applied.\n\nCircled in yellow are 2 other areas of pitting noted. Anomaly code A."
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-4884-PAUT-V-2801-1.docx",
+      "table_index": 4,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Scan File Name: \t\tV-2801-1 S-4090-5567 I-2950-3350 pit\n\nFeature / Description: \tUpper section anomaly code B.\n\n\n\nAnalysis / Interpretation:\n\nPitting was on the upper section of the shell. Location (5176mm from North Datum and 3109mm from CW1). \n\nMinimum wall thickness measured: 39.83mm. Anomaly Code B.\n\nAll measurements have coating correction applied."
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-4884-PAUT-V-2801-1.docx",
+      "table_index": 7,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array C-Scan Mapping log"
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-4884-PAUT-V-2801-1.docx",
+      "table_index": 8,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array C-Scan Mapping log"
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-4884-PAUT-V-2801-1.docx",
+      "table_index": 9,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array Calibration Scan Log\n\n\nAll dimensions & measurements in mm. Calibration Block Velocity: 5920 m/sec ±30m/sec."
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-4884-PAUT-V-2801-1.docx",
+      "table_index": 10,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array Calibration Scan Log\n\n\nAll dimensions & measurements in mm. Calibration Block Velocity: 5920 m/sec ±30m/sec."
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-5193-PAUT-3-HC-37711.docx",
+      "table_index": 0,
+      "headers": [
+        "0Component Details & Procedure",
+        "0Component Details & Procedure",
+        "0Component Details & Procedure",
+        "0Component Details & Procedure",
+        "0Component Details & Procedure",
+        "0Component Details & Procedure",
+        "0Component Details & Procedure",
+        "0Component Details & Procedure",
+        "0Component Details & Procedure",
+        "0Component Details & Procedure",
+        "0Component Details & Procedure",
+        "0Component Details & Procedure",
+        "0Component Details & Procedure",
+        "0Component Details & Procedure",
+        "0Component Details & Procedure",
+        "0Component Details & Procedure",
+        "0Component Details & Procedure",
+        "0Component Details & Procedure"
+      ],
+      "sample_rows": [
+        [
+          "Description",
+          "Description",
+          "Description",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework"
+        ],
+        [
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "3”-HC-37711-GC4",
+          "3”-HC-37711-GC4",
+          "3”-HC-37711-GC4",
+          "3”-HC-37711-GC4",
+          "3”-HC-37711-GC4",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "AC-LT-FE-01403-01\nLOM-HC-37711-GC4",
+          "AC-LT-FE-01403-01\nLOM-HC-37711-GC4",
+          "AC-LT-FE-01403-01\nLOM-HC-37711-GC4",
+          "AC-LT-FE-01403-01\nLOM-HC-37711-GC4"
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-5193-PAUT-3-HC-37711.docx",
+      "table_index": 2,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array Manual Raster Scan log - 3”-HC-37711-GC4"
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-5193-PAUT-3-HC-37711.docx",
+      "table_index": 3,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array Manual Raster Scan log - 3”-HC-37711-GC4"
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-5193-PAUT-3-HC-37711.docx",
+      "table_index": 4,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array Manual Raster Scan log - 3”-HC-37711-GC4"
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-5193-PAUT-3-HC-37711.docx",
+      "table_index": 5,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array Manual Raster Scan log - 3”-HC-37711-GC4"
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-5194-PAUT-2-DH-37713.docx",
+      "table_index": 0,
+      "headers": [
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure"
+      ],
+      "sample_rows": [
+        [
+          "Description",
+          "Description",
+          "Description",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework"
+        ],
+        [
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "2”-DH-37713-GC4",
+          "2”-DH-37713-GC4",
+          "2”-DH-37713-GC4",
+          "2”-DH-37713-GC4",
+          "2”-DH-37713-GC4",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "AC-LT-FE-01403-01\nLOM-DH-37713-GC4",
+          "AC-LT-FE-01403-01\nLOM-DH-37713-GC4",
+          "AC-LT-FE-01403-01\nLOM-DH-37713-GC4",
+          "AC-LT-FE-01403-01\nLOM-DH-37713-GC4"
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-5194-PAUT-2-DH-37713.docx",
+      "table_index": 2,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array Manual Raster Scan log - 2”-DH-37713-GC4"
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-5194-PAUT-2-DH-37713.docx",
+      "table_index": 3,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array Manual Raster Scan log - 2”-DH-37713-GC4"
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-5194-PAUT-2-DH-37713.docx",
+      "table_index": 4,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array Manual Raster Scan log - 2”-DH-37713-GC4"
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-5306-PAUT-2-HC-37007.docx",
+      "table_index": 0,
+      "headers": [
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure"
+      ],
+      "sample_rows": [
+        [
+          "Description",
+          "Description",
+          "Description",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework"
+        ],
+        [
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "2”-HC-37007-GC4",
+          "2”-HC-37007-GC4",
+          "2”-HC-37007-GC4",
+          "2”-HC-37007-GC4",
+          "2”-HC-37007-GC4",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "AC-LT-FE-01403-01\nAL-HC-37007-GC4",
+          "AC-LT-FE-01403-01\nAL-HC-37007-GC4",
+          "AC-LT-FE-01403-01\nAL-HC-37007-GC4",
+          "AC-LT-FE-01403-01\nAL-HC-37007-GC4"
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-5306-PAUT-2-HC-37007.docx",
+      "table_index": 2,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array Manual Raster Scan log - 2”-HC-37007-GC4"
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-5307-PAUT-2-HC-37001.docx",
+      "table_index": 0,
+      "headers": [
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure"
+      ],
+      "sample_rows": [
+        [
+          "Description",
+          "Description",
+          "Description",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework"
+        ],
+        [
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "2”-HC-37001-GC4",
+          "2”-HC-37001-GC4",
+          "2”-HC-37001-GC4",
+          "2”-HC-37001-GC4",
+          "2”-HC-37001-GC4",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "AC-LT-FE-01403-01\nAL-HC-37001-GC4",
+          "AC-LT-FE-01403-01\nAL-HC-37001-GC4",
+          "AC-LT-FE-01403-01\nAL-HC-37001-GC4",
+          "AC-LT-FE-01403-01\nAL-HC-37001-GC4"
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-5307-PAUT-2-HC-37001.docx",
+      "table_index": 2,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array Manual Raster Scan log - 2”-HC-37001-GC4"
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-5307-PAUT-2-HC-37001.docx",
+      "table_index": 3,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array Manual Raster Scan log - 2”-HC-37001-GC4"
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-5308-PAUT-2-HC-37008.docx",
+      "table_index": 0,
+      "headers": [
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure"
+      ],
+      "sample_rows": [
+        [
+          "Description",
+          "Description",
+          "Description",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework",
+          "Closed Drains Pipework"
+        ],
+        [
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "2”-HC-37008-GC4",
+          "2”-HC-37008-GC4",
+          "2”-HC-37008-GC4",
+          "2”-HC-37008-GC4",
+          "2”-HC-37008-GC4",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "AC-LT-FE-01403-01\nAL-HC-37008-GC4",
+          "AC-LT-FE-01403-01\nAL-HC-37008-GC4",
+          "AC-LT-FE-01403-01\nAL-HC-37008-GC4",
+          "AC-LT-FE-01403-01\nAL-HC-37008-GC4"
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-5308-PAUT-2-HC-37008.docx",
+      "table_index": 2,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array Manual Raster Scan log - 2”-HC-37008-GC4"
+        ]
+      ]
+    },
+    {
+      "filename": "LOM-2025-5308-PAUT-2-HC-37008.docx",
+      "table_index": 3,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array Manual Raster Scan log - 2”-HC-37008-GC4"
+        ]
+      ]
+    },
+    {
+      "filename": "NEV-2025-4974-PAUT-H-1701-1.docx",
+      "table_index": 0,
+      "headers": [
+        "Equipment",
+        "Equipment",
+        "Equipment",
+        "Equipment",
+        "Equipment",
+        "Equipment",
+        "Equipment",
+        "Equipment",
+        "Equipment",
+        "Equipment",
+        "Equipment"
+      ],
+      "sample_rows": [
+        [
+          "Scanning Equipment",
+          "Scanning Equipment",
+          "Omniscan X4",
+          "Omniscan X4",
+          "Omniscan X4",
+          "Serial No",
+          "Serial No",
+          "QC-0096426",
+          "QC-0096426",
+          "QC-0096426",
+          "QC-0096426"
+        ],
+        [
+          "Probe (A)",
+          "5L16 A10",
+          "Shoe",
+          "N/A",
+          "Position",
+          "N/A",
+          "N/A",
+          "SN: W4708",
+          "SN: W4708",
+          "SN: W4708",
+          "SN: W4708"
+        ]
+      ]
+    },
+    {
+      "filename": "NEV-2025-4974-PAUT-H-1701-1.docx",
+      "table_index": 1,
+      "headers": [
+        "Inspection Summary",
+        "Inspection Summary",
+        "Inspection Summary",
+        "Inspection Summary",
+        "Inspection Summary"
+      ],
+      "sample_rows": [
+        [
+          "Summary\nAs part of a vessel NII on H-1701-1 in accordance with work pack NEV-2025-2651-WP-INSP, flange face PAUT inspection was requested on selected nozzle flanges. This inspection was to detect any corrosion/ erosion around the internal flange face and internal bore. Please see below for requested work scope areas and results\n\nThis inspection was conducted in accordance with MAI-P-NDT-008-PAFF-R1 flange face procedure and Technique sheet- MAI-NDT-020-PAUT\n\nResults\nNo significant internal corrosion or indications were found on the flanges inspected\n\nRestrictions\nDue to the size and geometry of the flanges and attached flange bolts, Taper scans could not be conducted on any of the selected nozzles, only Rim and bolt face scans were conducted. N1 & N2 Restricted for PAUT.",
+          "Summary\nAs part of a vessel NII on H-1701-1 in accordance with work pack NEV-2025-2651-WP-INSP, flange face PAUT inspection was requested on selected nozzle flanges. This inspection was to detect any corrosion/ erosion around the internal flange face and internal bore. Please see below for requested work scope areas and results\n\nThis inspection was conducted in accordance with MAI-P-NDT-008-PAFF-R1 flange face procedure and Technique sheet- MAI-NDT-020-PAUT\n\nResults\nNo significant internal corrosion or indications were found on the flanges inspected\n\nRestrictions\nDue to the size and geometry of the flanges and attached flange bolts, Taper scans could not be conducted on any of the selected nozzles, only Rim and bolt face scans were conducted. N1 & N2 Restricted for PAUT.",
+          "Summary\nAs part of a vessel NII on H-1701-1 in accordance with work pack NEV-2025-2651-WP-INSP, flange face PAUT inspection was requested on selected nozzle flanges. This inspection was to detect any corrosion/ erosion around the internal flange face and internal bore. Please see below for requested work scope areas and results\n\nThis inspection was conducted in accordance with MAI-P-NDT-008-PAFF-R1 flange face procedure and Technique sheet- MAI-NDT-020-PAUT\n\nResults\nNo significant internal corrosion or indications were found on the flanges inspected\n\nRestrictions\nDue to the size and geometry of the flanges and attached flange bolts, Taper scans could not be conducted on any of the selected nozzles, only Rim and bolt face scans were conducted. N1 & N2 Restricted for PAUT.",
+          "Summary\nAs part of a vessel NII on H-1701-1 in accordance with work pack NEV-2025-2651-WP-INSP, flange face PAUT inspection was requested on selected nozzle flanges. This inspection was to detect any corrosion/ erosion around the internal flange face and internal bore. Please see below for requested work scope areas and results\n\nThis inspection was conducted in accordance with MAI-P-NDT-008-PAFF-R1 flange face procedure and Technique sheet- MAI-NDT-020-PAUT\n\nResults\nNo significant internal corrosion or indications were found on the flanges inspected\n\nRestrictions\nDue to the size and geometry of the flanges and attached flange bolts, Taper scans could not be conducted on any of the selected nozzles, only Rim and bolt face scans were conducted. N1 & N2 Restricted for PAUT.",
+          "Summary\nAs part of a vessel NII on H-1701-1 in accordance with work pack NEV-2025-2651-WP-INSP, flange face PAUT inspection was requested on selected nozzle flanges. This inspection was to detect any corrosion/ erosion around the internal flange face and internal bore. Please see below for requested work scope areas and results\n\nThis inspection was conducted in accordance with MAI-P-NDT-008-PAFF-R1 flange face procedure and Technique sheet- MAI-NDT-020-PAUT\n\nResults\nNo significant internal corrosion or indications were found on the flanges inspected\n\nRestrictions\nDue to the size and geometry of the flanges and attached flange bolts, Taper scans could not be conducted on any of the selected nozzles, only Rim and bolt face scans were conducted. N1 & N2 Restricted for PAUT."
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ]
+    },
+    {
+      "filename": "NEV-2025-4974-PAUT-H-1701-1.docx",
+      "table_index": 2,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "PAUT Scan Plans.\n\n\n\nThe above image highlights the Bolt Face technique utilising the DGS probe"
+        ]
+      ]
+    },
+    {
+      "filename": "NEV-2025-4974-PAUT-H-1701-1.docx",
+      "table_index": 3,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "PAUT Scan Plans.\n\n\n\nThe above image highlights the Rim scan technique utilising the A10 probe"
+        ]
+      ]
+    },
+    {
+      "filename": "NEV-2025-4974-PAUT-H-1701-1.docx",
+      "table_index": 4,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "PAUT Scan Plan for Butt Welds. \n\n\t\t\t\n\n\nThe above image highlights the Bolt Face scan technique utilising the DGS probe"
+        ]
+      ]
+    },
+    {
+      "filename": "NEV-2025-4974-PAUT-H-1701-1.docx",
+      "table_index": 7,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Data analysis\n\n\nNozzle N3 Rim scan (Timed scan) No evidence of corrosion"
+        ]
+      ]
+    },
+    {
+      "filename": "NEV-2025-4974-PAUT-H-1701-1.docx",
+      "table_index": 8,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Data analysis\n\n\nNozzle N3 bolt face scan (Timed scan) No evidence of corrosion"
+        ]
+      ]
+    },
+    {
+      "filename": "NEV-2025-4974-PAUT-H-1701-1.docx",
+      "table_index": 9,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Data analysis\n\n\nNozzle N4 Rim scan (Timed scan) No evidence of corrosion"
+        ]
+      ]
+    },
+    {
+      "filename": "NEV-2025-4974-PAUT-H-1701-1.docx",
+      "table_index": 10,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Data analysis\n\n\nNozzle N4 bolt face scan (Timed scan) No evidence of corrosion"
+        ]
+      ]
+    },
+    {
+      "filename": "NEV-2025-4974-PAUT-H-1701-1.docx",
+      "table_index": 11,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Data analysis\n\n\nNozzle N5 Rim scan (Timed scan) No evidence of corrosion"
+        ]
+      ]
+    },
+    {
+      "filename": "NEV-2025-4974-PAUT-H-1701-1.docx",
+      "table_index": 12,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Data analysis\n\n\nNozzle N5 bolt face scan (Timed scan) No evidence of corrosion"
+        ]
+      ]
+    },
+    {
+      "filename": "NEV-2025-4974-PAUT-H-1701-1.docx",
+      "table_index": 13,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Data analysis\n\n\nNozzle N6 Rim scan (Timed scan) No evidence of corrosion"
+        ]
+      ]
+    },
+    {
+      "filename": "NEV-2025-4974-PAUT-H-1701-1.docx",
+      "table_index": 14,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Data analysis\n\n\nNozzle N6 bolt face scan (Timed scan) No evidence of corrosion"
+        ]
+      ]
+    },
+    {
+      "filename": "NEV-2025-5569-PAUT (V-0320-1).docx",
+      "table_index": 0,
+      "headers": [
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure",
+        "Component Details & Procedure"
+      ],
+      "sample_rows": [
+        [
+          "Description",
+          "Description",
+          "Description",
+          "PAUT corrosion mapping (PACMAP) of V-0320-1 MLC Suction Scrubber Train 1",
+          "PAUT corrosion mapping (PACMAP) of V-0320-1 MLC Suction Scrubber Train 1",
+          "PAUT corrosion mapping (PACMAP) of V-0320-1 MLC Suction Scrubber Train 1",
+          "PAUT corrosion mapping (PACMAP) of V-0320-1 MLC Suction Scrubber Train 1",
+          "PAUT corrosion mapping (PACMAP) of V-0320-1 MLC Suction Scrubber Train 1",
+          "PAUT corrosion mapping (PACMAP) of V-0320-1 MLC Suction Scrubber Train 1",
+          "PAUT corrosion mapping (PACMAP) of V-0320-1 MLC Suction Scrubber Train 1",
+          "PAUT corrosion mapping (PACMAP) of V-0320-1 MLC Suction Scrubber Train 1",
+          "PAUT corrosion mapping (PACMAP) of V-0320-1 MLC Suction Scrubber Train 1",
+          "PAUT corrosion mapping (PACMAP) of V-0320-1 MLC Suction Scrubber Train 1",
+          "PAUT corrosion mapping (PACMAP) of V-0320-1 MLC Suction Scrubber Train 1",
+          "PAUT corrosion mapping (PACMAP) of V-0320-1 MLC Suction Scrubber Train 1",
+          "PAUT corrosion mapping (PACMAP) of V-0320-1 MLC Suction Scrubber Train 1",
+          "PAUT corrosion mapping (PACMAP) of V-0320-1 MLC Suction Scrubber Train 1"
+        ],
+        [
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "Line/Tag Number",
+          "V-0320-1",
+          "V-0320-1",
+          "V-0320-1",
+          "V-0320-1",
+          "V-0320-1",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "Drawing Number",
+          "02813-NEV-V-0320-1",
+          "02813-NEV-V-0320-1",
+          "02813-NEV-V-0320-1",
+          "02813-NEV-V-0320-1"
+        ]
+      ]
+    },
+    {
+      "filename": "NEV-2025-5569-PAUT (V-0320-1).docx",
+      "table_index": 2,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Vessel Coverage: \nThe overall target coverage of the vessel shell was 15%. 18% coverage achieved. \n \nProvision of datum points  \n \nVessel Shell: \nIndex (X): The index datum is CW01, with the positive increment heading vertically up the vessel. \n \nScan (Y): The scan datum is the Platform North position, with the 3 o'clock position at platform West and the 9 o'clock position at platform East. \n \nScan sensitivity \nA minimum scan sensitivity of reference +9dB has been used throughout the inspection. \n \nRestrictions \nScan Restrictions included manway, nozzles, nameplate, and external pipework & instrumentation (see scan log for further details)."
+        ]
+      ]
+    },
+    {
+      "filename": "NEV-2025-5569-PAUT (V-0320-1).docx",
+      "table_index": 3,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Scan File Name: \t\tNEV V-0320-1 Strake 2 Scan 1\n\nFeature / Description: \tVessel Shell – Inclusions\n\n\n\n\n\n\nAnalysis / Interpretation: \n \nAreas of red on this scan show where inclusions are present. Located at 10.84 depth from the outside surface. The view above is a zoomed in image to show the worst affected area but they are located throughout the entire scan area."
+        ]
+      ]
+    },
+    {
+      "filename": "NEV-2025-5569-PAUT (V-0320-1).docx",
+      "table_index": 4,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Scan File Name: \t\tNEV V-0320-1 Strake1 Scan 1\n\nFeature / Description: \tVessel Shell – Code A \n\n\n\nAnalysis / Interpretation: \n\n \n\nMinimum wall thickness 26.98mm - Code A\n\nShows typical condition throughout majority of vessel, also shows presence of internal weld.\n\nRestriction - Manway"
+        ]
+      ]
+    },
+    {
+      "filename": "NEV-2025-5569-PAUT (V-0320-1).docx",
+      "table_index": 5,
+      "headers": [
+        "Inspection Results- Vessel Shell"
+      ],
+      "sample_rows": [
+        [
+          ""
+        ],
+        [
+          "Inspection Results- Bottom Dome End"
+        ]
+      ]
+    },
+    {
+      "filename": "NEV-2025-5569-PAUT (V-0320-1).docx",
+      "table_index": 6,
+      "headers": [
+        "Inspection Results"
+      ],
+      "sample_rows": [
+        [
+          "Phased Array Calibration Scan Log\n\nAll dimensions & measurements in mm. Calibration Block Velocity: 5890 m/sec ±30m/sec."
+        ]
+      ]
+    }
+  ],
+  "comments_and_annotations": {
+    "comment_mentions": []
+  }
+}

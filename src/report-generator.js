@@ -484,6 +484,12 @@ class ReportGenerator {
                                 </ul>
                             </div>
                         ` : ''}
+                        ${vessel.locationDrawing.comment ? `
+                            <div class="image-caption" style="margin-top: 10px; padding: 10px; background: #f3f4f6; border-left: 4px solid #8b5cf6; border-radius: 4px;">
+                                <strong style="color: #7c3aed;">Comment:</strong>
+                                <p style="margin: 5px 0 0 0; color: #374151;">${vessel.locationDrawing.comment}</p>
+                            </div>
+                        ` : ''}
                     </div>
                 ` : ''}
                 ${vessel.gaDrawing ? `
@@ -498,6 +504,12 @@ class ReportGenerator {
                                         <li><strong>${i + 1}.</strong> ${ann.label || ann.type === 'box' ? 'Marked area' : 'Test Point'}</li>
                                     `).join('')}
                                 </ul>
+                            </div>
+                        ` : ''}
+                        ${vessel.gaDrawing.comment ? `
+                            <div class="image-caption" style="margin-top: 10px; padding: 10px; background: #f3f4f6; border-left: 4px solid #8b5cf6; border-radius: 4px;">
+                                <strong style="color: #7c3aed;">Comment:</strong>
+                                <p style="margin: 5px 0 0 0; color: #374151;">${vessel.gaDrawing.comment}</p>
                             </div>
                         ` : ''}
                     </div>
@@ -573,6 +585,49 @@ class ReportGenerator {
         <div class="section">
             <h2 class="section-title">Recommendations</h2>
             <p>${metadata.recommendations}</p>
+        </div>
+        ` : ''}
+
+        ${metadata.scanningLog && metadata.scanningLog.length > 0 ? `
+        <div class="section">
+            <h2 class="section-title">Scanning Log</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date & Time</th>
+                        <th>Operator</th>
+                        <th>Equipment</th>
+                        <th>Settings</th>
+                        <th>Temp (°C)</th>
+                        <th>Humidity (%)</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${metadata.scanningLog.map(entry => {
+                        // Format the datetime
+                        let formattedDateTime = 'N/A';
+                        if (entry.dateTime) {
+                            try {
+                                const date = new Date(entry.dateTime);
+                                formattedDateTime = date.toLocaleString();
+                            } catch (e) {
+                                formattedDateTime = entry.dateTime;
+                            }
+                        }
+                        return `
+                        <tr>
+                            <td>${formattedDateTime}</td>
+                            <td>${val(entry.operator)}</td>
+                            <td>${val(entry.equipment)}</td>
+                            <td>${val(entry.settings)}</td>
+                            <td>${val(entry.temperature)}</td>
+                            <td>${val(entry.humidity)}</td>
+                            <td>${val(entry.notes)}</td>
+                        </tr>
+                    `}).join('')}
+                </tbody>
+            </table>
         </div>
         ` : ''}
 
@@ -876,6 +931,88 @@ class ReportGenerator {
                 doc.text(line, margin, yPos);
                 yPos += 5;
             });
+            yPos += 5;
+        }
+
+        // Scanning Log
+        if (metadata.scanningLog && metadata.scanningLog.length > 0) {
+            checkPageBreak(20);
+            doc.setFontSize(14);
+            doc.setFont(undefined, 'bold');
+            doc.text('Scanning Log', margin, yPos);
+            yPos += 10;
+
+            doc.setFontSize(9);
+
+            for (const entry of metadata.scanningLog) {
+                checkPageBreak(40);
+
+                // Format datetime
+                let formattedDateTime = 'N/A';
+                if (entry.dateTime) {
+                    try {
+                        const date = new Date(entry.dateTime);
+                        formattedDateTime = date.toLocaleString();
+                    } catch (e) {
+                        formattedDateTime = entry.dateTime;
+                    }
+                }
+
+                // Draw a box for each entry
+                doc.setDrawColor(200, 200, 200);
+                doc.rect(margin, yPos, contentWidth, 35);
+
+                yPos += 5;
+
+                // Left column
+                doc.setFont(undefined, 'bold');
+                doc.text('Date & Time:', margin + 2, yPos);
+                doc.setFont(undefined, 'normal');
+                doc.text(formattedDateTime, margin + 35, yPos);
+
+                doc.setFont(undefined, 'bold');
+                doc.text('Operator:', margin + 2, yPos + 5);
+                doc.setFont(undefined, 'normal');
+                doc.text(entry.operator || 'N/A', margin + 35, yPos + 5);
+
+                doc.setFont(undefined, 'bold');
+                doc.text('Equipment:', margin + 2, yPos + 10);
+                doc.setFont(undefined, 'normal');
+                const equipmentText = doc.splitTextToSize(entry.equipment || 'N/A', 50);
+                doc.text(equipmentText, margin + 35, yPos + 10);
+
+                // Right column
+                const rightColX = margin + contentWidth / 2;
+
+                doc.setFont(undefined, 'bold');
+                doc.text('Settings:', rightColX, yPos);
+                doc.setFont(undefined, 'normal');
+                const settingsText = doc.splitTextToSize(entry.settings || 'N/A', 50);
+                doc.text(settingsText, rightColX + 25, yPos);
+
+                doc.setFont(undefined, 'bold');
+                doc.text('Temp:', rightColX, yPos + 5);
+                doc.setFont(undefined, 'normal');
+                doc.text(entry.temperature ? `${entry.temperature}°C` : 'N/A', rightColX + 25, yPos + 5);
+
+                doc.setFont(undefined, 'bold');
+                doc.text('Humidity:', rightColX, yPos + 10);
+                doc.setFont(undefined, 'normal');
+                doc.text(entry.humidity ? `${entry.humidity}%` : 'N/A', rightColX + 25, yPos + 10);
+
+                // Notes (full width)
+                if (entry.notes) {
+                    doc.setFont(undefined, 'bold');
+                    doc.text('Notes:', margin + 2, yPos + 15);
+                    doc.setFont(undefined, 'normal');
+                    const notesText = doc.splitTextToSize(entry.notes, contentWidth - 20);
+                    doc.text(notesText, margin + 2, yPos + 20);
+                }
+
+                yPos += 40;
+            }
+
+            yPos += 5;
         }
 
         // Footer
@@ -1259,6 +1396,66 @@ class ReportGenerator {
                 new Paragraph({
                     text: metadata.recommendations,
                     spacing: { after: 200 }
+                })
+            );
+        }
+
+        // Scanning Log
+        if (metadata.scanningLog && metadata.scanningLog.length > 0) {
+            children.push(
+                new Paragraph({
+                    text: 'Scanning Log',
+                    heading: HeadingLevel.HEADING_2,
+                    spacing: { before: 300, after: 200 }
+                })
+            );
+
+            // Create table for scanning log
+            const scanningLogRows = [
+                new TableRow({
+                    children: [
+                        new TableCell({ children: [new Paragraph({ text: 'Date & Time', bold: true })] }),
+                        new TableCell({ children: [new Paragraph({ text: 'Operator', bold: true })] }),
+                        new TableCell({ children: [new Paragraph({ text: 'Equipment', bold: true })] }),
+                        new TableCell({ children: [new Paragraph({ text: 'Settings', bold: true })] }),
+                        new TableCell({ children: [new Paragraph({ text: 'Temp (°C)', bold: true })] }),
+                        new TableCell({ children: [new Paragraph({ text: 'Humidity (%)', bold: true })] }),
+                        new TableCell({ children: [new Paragraph({ text: 'Notes', bold: true })] })
+                    ]
+                })
+            ];
+
+            for (const entry of metadata.scanningLog) {
+                // Format datetime
+                let formattedDateTime = 'N/A';
+                if (entry.dateTime) {
+                    try {
+                        const date = new Date(entry.dateTime);
+                        formattedDateTime = date.toLocaleString();
+                    } catch (e) {
+                        formattedDateTime = entry.dateTime;
+                    }
+                }
+
+                scanningLogRows.push(
+                    new TableRow({
+                        children: [
+                            new TableCell({ children: [new Paragraph(formattedDateTime)] }),
+                            new TableCell({ children: [new Paragraph(entry.operator || 'N/A')] }),
+                            new TableCell({ children: [new Paragraph(entry.equipment || 'N/A')] }),
+                            new TableCell({ children: [new Paragraph(entry.settings || 'N/A')] }),
+                            new TableCell({ children: [new Paragraph(entry.temperature || 'N/A')] }),
+                            new TableCell({ children: [new Paragraph(entry.humidity || 'N/A')] }),
+                            new TableCell({ children: [new Paragraph(entry.notes || 'N/A')] })
+                        ]
+                    })
+                );
+            }
+
+            children.push(
+                new Table({
+                    width: { size: 100, type: WidthType.PERCENTAGE },
+                    rows: scanningLogRows
                 })
             );
         }

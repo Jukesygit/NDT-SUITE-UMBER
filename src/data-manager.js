@@ -319,6 +319,126 @@ class DataManager {
         return image;
     }
 
+    // Scanning log operations
+    async addScanningLogEntry(assetId, vesselId, logEntry) {
+        const vessel = this.getVessel(assetId, vesselId);
+        if (!vessel) return null;
+
+        // Initialize scanningLog array if it doesn't exist
+        if (!vessel.scanningLog) {
+            vessel.scanningLog = [];
+        }
+
+        const entry = {
+            id: this.generateId(),
+            dateTime: logEntry.dateTime || new Date().toISOString(),
+            operator: logEntry.operator || '',
+            equipment: logEntry.equipment || '',
+            settings: logEntry.settings || '',
+            temperature: logEntry.temperature || '',
+            humidity: logEntry.humidity || '',
+            notes: logEntry.notes || '',
+            timestamp: Date.now()
+        };
+        vessel.scanningLog.push(entry);
+        await this.saveToStorage();
+
+        // Sync to Supabase in the background
+        if (authManager.isLoggedIn() && authManager.useSupabase) {
+            syncService.syncAsset(assetId).catch(err => {
+                console.error('Failed to sync scanning log:', err);
+            });
+        }
+
+        return entry;
+    }
+
+    async updateScanningLogEntry(assetId, vesselId, logEntryId, updates) {
+        const vessel = this.getVessel(assetId, vesselId);
+        if (!vessel || !vessel.scanningLog) return null;
+
+        const entry = vessel.scanningLog.find(e => e.id === logEntryId);
+        if (entry) {
+            Object.assign(entry, updates);
+            await this.saveToStorage();
+
+            // Sync to Supabase in the background
+            if (authManager.isLoggedIn() && authManager.useSupabase) {
+                syncService.syncAsset(assetId).catch(err => {
+                    console.error('Failed to sync scanning log update:', err);
+                });
+            }
+
+            return entry;
+        }
+        return null;
+    }
+
+    async deleteScanningLogEntry(assetId, vesselId, logEntryId) {
+        const vessel = this.getVessel(assetId, vesselId);
+        if (!vessel || !vessel.scanningLog) return false;
+
+        const index = vessel.scanningLog.findIndex(e => e.id === logEntryId);
+        if (index !== -1) {
+            vessel.scanningLog.splice(index, 1);
+            await this.saveToStorage();
+
+            // Sync to Supabase in the background
+            if (authManager.isLoggedIn() && authManager.useSupabase) {
+                syncService.syncAsset(assetId).catch(err => {
+                    console.error('Failed to sync scanning log deletion:', err);
+                });
+            }
+
+            return true;
+        }
+        return false;
+    }
+
+    // Vessel report operations
+    async addVesselReport(assetId, vesselId, reportData) {
+        const vessel = this.getVessel(assetId, vesselId);
+        if (!vessel) return null;
+
+        // Initialize reports array if it doesn't exist
+        if (!vessel.reports) {
+            vessel.reports = [];
+        }
+
+        const report = {
+            id: this.generateId(),
+            reportNumber: reportData.reportNumber || 'Untitled Report',
+            metadata: reportData.metadata || {},
+            formats: reportData.formats || [],
+            timestamp: Date.now(),
+            generatedBy: authManager.getCurrentUser()?.email || 'Unknown'
+        };
+        vessel.reports.push(report);
+        await this.saveToStorage();
+
+        // Sync to Supabase in the background
+        if (authManager.isLoggedIn() && authManager.useSupabase) {
+            syncService.syncAsset(assetId).catch(err => {
+                console.error('Failed to sync vessel report:', err);
+            });
+        }
+
+        return report;
+    }
+
+    async deleteVesselReport(assetId, vesselId, reportId) {
+        const vessel = this.getVessel(assetId, vesselId);
+        if (!vessel || !vessel.reports) return false;
+
+        const index = vessel.reports.findIndex(rep => rep.id === reportId);
+        if (index !== -1) {
+            vessel.reports.splice(index, 1);
+            await this.saveToStorage();
+            return true;
+        }
+        return false;
+    }
+
     async deleteVesselImage(assetId, vesselId, imageId) {
         const vessel = this.getVessel(assetId, vesselId);
         if (!vessel || !vessel.images) return false;

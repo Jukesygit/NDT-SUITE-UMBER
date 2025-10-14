@@ -4,9 +4,10 @@ import dataManager from '../data-manager.js';
 import sharingManager from '../sharing-manager.js';
 import supabase from '../supabase-client.js';
 import { createAnimatedHeader } from '../animated-background.js';
+import adminConfig from '../admin-config.js';
 
 let container, dom = {};
-let currentView = 'overview'; // 'overview', 'organizations', 'users', 'requests', 'sharing'
+let currentView = 'overview'; // 'overview', 'organizations', 'users', 'requests', 'sharing', 'configuration'
 
 const HTML = `
 <div class="h-full flex flex-col overflow-hidden">
@@ -32,6 +33,9 @@ const HTML = `
             <button data-view="sharing" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:text-white" style="color: rgba(255, 255, 255, 0.6);">
                 Asset Sharing
             </button>
+            <button data-view="configuration" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:text-white" style="color: rgba(255, 255, 255, 0.6);">
+                Configuration
+            </button>
         </div>
     </div>
 
@@ -42,6 +46,7 @@ const HTML = `
         <div id="users-view" class="hidden"></div>
         <div id="requests-view" class="hidden"></div>
         <div id="sharing-view" class="hidden"></div>
+        <div id="configuration-view" class="hidden"></div>
     </div>
 </div>
 `;
@@ -56,6 +61,7 @@ function cacheDom() {
         usersView: q('#users-view'),
         requestsView: q('#requests-view'),
         sharingView: q('#sharing-view'),
+        configurationView: q('#configuration-view'),
         tabBtns: container.querySelectorAll('.tab-btn')
     };
 
@@ -88,6 +94,7 @@ async function switchView(view) {
     dom.usersView.classList.toggle('hidden', view !== 'users');
     dom.requestsView.classList.toggle('hidden', view !== 'requests');
     dom.sharingView.classList.toggle('hidden', view !== 'sharing');
+    dom.configurationView.classList.toggle('hidden', view !== 'configuration');
 
     // Render view
     if (view === 'overview') await renderOverview();
@@ -95,6 +102,7 @@ async function switchView(view) {
     else if (view === 'users') await renderUsers();
     else if (view === 'requests') await renderRequests();
     else if (view === 'sharing') await renderSharing();
+    else if (view === 'configuration') await renderConfiguration();
 }
 
 async function renderOverview() {
@@ -1031,6 +1039,235 @@ async function rejectAccessRequest(requestId) {
     }
 }
 
+async function renderConfiguration() {
+    await adminConfig.ensureInitialized();
+    const config = adminConfig.getAllConfig();
+    const metadata = adminConfig.getListMetadata();
+
+    dom.configurationView.innerHTML = `
+        <div class="mb-6 flex justify-between items-center">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Report Field Configuration</h2>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Manage suggested values for report fields across the system
+                </p>
+            </div>
+            <div class="flex gap-2">
+                <button id="export-config-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm">
+                    Export Config
+                </button>
+                <button id="import-config-btn" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm">
+                    Import Config
+                </button>
+                <button id="reset-all-config-btn" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm">
+                    Reset All
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            ${Object.keys(metadata).map(listName => {
+                const list = config[listName] || [];
+                const meta = metadata[listName];
+                return `
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+                            <div class="flex justify-between items-center">
+                                <h3 class="text-lg font-bold text-gray-900 dark:text-white">
+                                    ${meta.icon} ${meta.label}
+                                </h3>
+                                <div class="flex gap-2">
+                                    <button class="add-item-btn text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-sm font-medium" data-list="${listName}">
+                                        + Add
+                                    </button>
+                                    <button class="reset-list-btn text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-300 text-sm font-medium" data-list="${listName}">
+                                        Reset
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                ${list.length} item${list.length !== 1 ? 's' : ''}
+                            </div>
+                        </div>
+                        <div class="p-4 max-h-80 overflow-y-auto">
+                            ${list.length === 0 ? `
+                                <div class="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">
+                                    No items configured
+                                </div>
+                            ` : `
+                                <div class="space-y-2">
+                                    ${list.map((item, index) => `
+                                        <div class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                            <span class="text-sm text-gray-900 dark:text-white flex-grow">${item}</span>
+                                            <div class="flex gap-2 ml-4">
+                                                <button class="edit-item-btn text-blue-600 hover:text-blue-800 dark:text-blue-400 text-xs" data-list="${listName}" data-item="${item.replace(/"/g, '&quot;')}">
+                                                    Edit
+                                                </button>
+                                                <button class="delete-item-btn text-red-600 hover:text-red-800 dark:text-red-400 text-xs" data-list="${listName}" data-item="${item.replace(/"/g, '&quot;')}">
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+
+    // Event listeners
+    const exportBtn = dom.configurationView.querySelector('#export-config-btn');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', exportConfiguration);
+    }
+
+    const importBtn = dom.configurationView.querySelector('#import-config-btn');
+    if (importBtn) {
+        importBtn.addEventListener('click', importConfiguration);
+    }
+
+    const resetAllBtn = dom.configurationView.querySelector('#reset-all-config-btn');
+    if (resetAllBtn) {
+        resetAllBtn.addEventListener('click', resetAllConfiguration);
+    }
+
+    // Add item buttons
+    dom.configurationView.querySelectorAll('.add-item-btn').forEach(btn => {
+        btn.addEventListener('click', () => addConfigItem(btn.dataset.list));
+    });
+
+    // Reset list buttons
+    dom.configurationView.querySelectorAll('.reset-list-btn').forEach(btn => {
+        btn.addEventListener('click', () => resetConfigList(btn.dataset.list));
+    });
+
+    // Edit item buttons
+    dom.configurationView.querySelectorAll('.edit-item-btn').forEach(btn => {
+        btn.addEventListener('click', () => editConfigItem(btn.dataset.list, btn.dataset.item));
+    });
+
+    // Delete item buttons
+    dom.configurationView.querySelectorAll('.delete-item-btn').forEach(btn => {
+        btn.addEventListener('click', () => deleteConfigItem(btn.dataset.list, btn.dataset.item));
+    });
+}
+
+async function addConfigItem(listName) {
+    const metadata = adminConfig.getListMetadata();
+    const meta = metadata[listName];
+
+    const newItem = prompt(`Add new ${meta.label.toLowerCase()} item:`);
+    if (newItem && newItem.trim()) {
+        const result = await adminConfig.addItem(listName, newItem);
+        if (result.success) {
+            await renderConfiguration();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    }
+}
+
+async function editConfigItem(listName, oldItem) {
+    const metadata = adminConfig.getListMetadata();
+    const meta = metadata[listName];
+
+    const newItem = prompt(`Edit ${meta.label.toLowerCase()} item:`, oldItem);
+    if (newItem && newItem.trim() && newItem !== oldItem) {
+        const result = await adminConfig.updateItem(listName, oldItem, newItem);
+        if (result.success) {
+            await renderConfiguration();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    }
+}
+
+async function deleteConfigItem(listName, item) {
+    const metadata = adminConfig.getListMetadata();
+    const meta = metadata[listName];
+
+    if (confirm(`Delete "${item}" from ${meta.label.toLowerCase()}?`)) {
+        const result = await adminConfig.removeItem(listName, item);
+        if (result.success) {
+            await renderConfiguration();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    }
+}
+
+async function resetConfigList(listName) {
+    const metadata = adminConfig.getListMetadata();
+    const meta = metadata[listName];
+
+    if (confirm(`Reset ${meta.label} to default values? This will overwrite all custom items.`)) {
+        const result = await adminConfig.resetList(listName);
+        if (result.success) {
+            await renderConfiguration();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    }
+}
+
+async function exportConfiguration() {
+    try {
+        const config = adminConfig.exportConfig();
+        const blob = new Blob([config], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ndt-suite-config-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        alert('Error exporting configuration: ' + error.message);
+    }
+}
+
+async function importConfiguration() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        try {
+            const text = await file.text();
+            const result = await adminConfig.importConfig(text);
+            if (result.success) {
+                alert('Configuration imported successfully!');
+                await renderConfiguration();
+            } else {
+                alert('Error importing configuration: ' + result.error);
+            }
+        } catch (error) {
+            alert('Error reading file: ' + error.message);
+        }
+    };
+
+    input.click();
+}
+
+async function resetAllConfiguration() {
+    if (confirm('Reset ALL configuration lists to defaults? This will overwrite all custom values across all lists.')) {
+        const result = await adminConfig.resetAllToDefaults();
+        if (result.success) {
+            alert('All configuration lists reset to defaults');
+            await renderConfiguration();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    }
+}
+
 function addEventListeners() {
     dom.tabBtns.forEach(btn => {
         btn.addEventListener('click', () => switchView(btn.dataset.view));
@@ -1046,6 +1283,7 @@ export default {
         await authManager.ensureInitialized();
         await dataManager.ensureInitialized();
         await sharingManager.ensureInitialized();
+        await adminConfig.ensureInitialized();
 
         addEventListeners();
         await updatePendingBadges();
