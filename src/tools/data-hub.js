@@ -577,8 +577,8 @@ function renderVesselDetailView(assetId) {
                                                                             </button>
                                                                         </div>
                                                                         <div class="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                                                                            <div>Target: ${strake.totalArea.toFixed(1)} cm² (${strake.requiredCoverage}% required)</div>
-                                                                            <div>Scanned: ${coverage.totalScannedArea.toFixed(1)} cm² (${coverage.scanCount} scan${coverage.scanCount !== 1 ? 's' : ''})</div>
+                                                                            <div>Target: ${strake.totalArea.toFixed(1)} m² (${strake.requiredCoverage}% required)</div>
+                                                                            <div>Scanned: ${coverage.totalScannedArea.toFixed(1)} m² (${coverage.scanCount} scan${coverage.scanCount !== 1 ? 's' : ''})</div>
                                                                         </div>
                                                                         <div class="mt-2">
                                                                             <div class="flex items-center gap-2 mb-1">
@@ -1137,7 +1137,7 @@ function showStrakeManagementDialog(assetId, vesselId) {
                                 <div class="flex-1">
                                     <h3 class="font-semibold dark:text-white">${strake.name}</h3>
                                     <p class="text-sm text-gray-600 dark:text-gray-400">
-                                        Total Area: ${strake.totalArea.toFixed(1)} cm² |
+                                        Total Area: ${strake.totalArea.toFixed(1)} m² |
                                         Required: ${strake.requiredCoverage}% |
                                         Coverage: ${coverage.coveragePercentage.toFixed(1)}%
                                     </p>
@@ -1178,7 +1178,7 @@ function showStrakeManagementDialog(assetId, vesselId) {
         const name = prompt('Enter strake name:');
         if (!name || !name.trim()) return;
 
-        const totalAreaStr = prompt('Enter total area (cm²):');
+        const totalAreaStr = prompt('Enter total area (m²):');
         const totalArea = parseFloat(totalAreaStr);
         if (isNaN(totalArea) || totalArea <= 0) {
             alert('Please enter a valid area');
@@ -1248,7 +1248,7 @@ function showEditStrakeDialog(assetId, vesselId, strakeId) {
     const name = prompt('Enter strake name:', strake.name);
     if (!name || !name.trim()) return;
 
-    const totalAreaStr = prompt('Enter total area (cm²):', strake.totalArea.toString());
+    const totalAreaStr = prompt('Enter total area (m²):', strake.totalArea.toString());
     const totalArea = parseFloat(totalAreaStr);
     if (isNaN(totalArea) || totalArea <= 0) {
         alert('Please enter a valid area');

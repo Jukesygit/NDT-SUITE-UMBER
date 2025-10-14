@@ -776,7 +776,7 @@ class DataManager {
         const strake = {
             id: this.generateId(),
             name: strakeData.name || 'Untitled Strake',
-            totalArea: strakeData.totalArea || 0, // in cm²
+            totalArea: strakeData.totalArea || 0, // in m²
             requiredCoverage: strakeData.requiredCoverage || 100, // percentage
             scans: [] // Array of scan IDs assigned to this strake
         };
@@ -959,7 +959,8 @@ class DataManager {
         // TODO: Implement spatial overlap detection for accurate coverage
         scans.forEach(scan => {
             if (scan.data && scan.data.stats && scan.data.stats.validArea) {
-                totalScannedArea += scan.data.stats.validArea;
+                // validArea is in mm², convert to m² (1 m² = 1,000,000 mm²)
+                totalScannedArea += scan.data.stats.validArea / 1000000;
             }
         });
 
