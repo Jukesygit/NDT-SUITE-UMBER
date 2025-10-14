@@ -329,6 +329,7 @@ class DataManager {
             id: this.generateId(),
             name: name,
             scans: [],
+            strakes: [], // Array of { id, name, totalArea, requiredCoverage, scans: [] }
             model3d: null, // Will store .obj file as data URL
             images: [], // Array of { id, name, dataUrl, timestamp }
             locationDrawing: null, // { imageDataUrl, annotations: [] }
@@ -756,6 +757,222 @@ class DataManager {
         await this.saveToStorage();
 
         return true;
+    }
+
+    // Strake operations
+    async createStrake(assetId, vesselId, strakeData) {
+        const orgId = authManager.getCurrentOrganizationId();
+        const userId = authManager.getCurrentUser()?.id;
+        const asset = this.getAsset(assetId);
+        const vessel = this.getVessel(assetId, vesselId);
+
+        if (!vessel) return null;
+
+        // Initialize strakes array if it doesn't exist (for backward compatibility)
+        if (!vessel.strakes) {
+            vessel.strakes = [];
+        }
+
+        const strake = {
+            id: this.generateId(),
+            name: strakeData.name || 'Untitled Strake',
+            totalArea: strakeData.totalArea || 0, // in cm²
+            requiredCoverage: strakeData.requiredCoverage || 100, // percentage
+            scans: [] // Array of scan IDs assigned to this strake
+        };
+
+        vessel.strakes.push(strake);
+
+        // CLOUD-FIRST: Save to Supabase immediately
+        if (authManager.useSupabase) {
+            console.log('[DATA-MANAGER] Creating strake in Supabase:', strake.name);
+            const result = await syncService.uploadAsset(asset, orgId, userId);
+
+            if (!result.success) {
+                console.error('[DATA-MANAGER] Failed to create strake in Supabase:', result.error);
+                // Rollback local change
+                vessel.strakes.pop();
+                throw new Error(`Failed to save strake to cloud: ${result.error}`);
+            }
+
+            console.log('[DATA-MANAGER] Strake created in Supabase successfully');
+        }
+
+        // Update local cache
+        await this.saveToStorage();
+
+        return strake;
+    }
+
+    getStrake(assetId, vesselId, strakeId) {
+        const vessel = this.getVessel(assetId, vesselId);
+        if (!vessel || !vessel.strakes) return null;
+        return vessel.strakes.find(s => s.id === strakeId);
+    }
+
+    async updateStrake(assetId, vesselId, strakeId, updates) {
+        const orgId = authManager.getCurrentOrganizationId();
+        const userId = authManager.getCurrentUser()?.id;
+        const asset = this.getAsset(assetId);
+        const vessel = this.getVessel(assetId, vesselId);
+        const strake = this.getStrake(assetId, vesselId, strakeId);
+
+        if (!strake) return null;
+
+        Object.assign(strake, updates);
+
+        // CLOUD-FIRST: Save to Supabase immediately
+        if (authManager.useSupabase) {
+            console.log('[DATA-MANAGER] Updating strake in Supabase:', strake.name);
+            const result = await syncService.uploadAsset(asset, orgId, userId);
+
+            if (!result.success) {
+                console.error('[DATA-MANAGER] Failed to update strake in Supabase:', result.error);
+                throw new Error(`Failed to update strake in cloud: ${result.error}`);
+            }
+
+            console.log('[DATA-MANAGER] Strake updated in Supabase successfully');
+        }
+
+        // Update local cache
+        await this.saveToStorage();
+
+        return strake;
+    }
+
+    async deleteStrake(assetId, vesselId, strakeId) {
+        const orgId = authManager.getCurrentOrganizationId();
+        const userId = authManager.getCurrentUser()?.id;
+        const asset = this.getAsset(assetId);
+        const vessel = this.getVessel(assetId, vesselId);
+
+        if (!vessel || !vessel.strakes) return false;
+
+        const index = vessel.strakes.findIndex(s => s.id === strakeId);
+
+        if (index === -1) return false;
+
+        const deletedStrake = vessel.strakes[index];
+
+        // Remove strake reference from all scans
+        vessel.scans.forEach(scan => {
+            if (scan.strakeId === strakeId) {
+                delete scan.strakeId;
+            }
+        });
+
+        vessel.strakes.splice(index, 1);
+
+        // CLOUD-FIRST: Save to Supabase immediately
+        if (authManager.useSupabase) {
+            console.log('[DATA-MANAGER] Deleting strake from Supabase:', deletedStrake.name);
+            const result = await syncService.uploadAsset(asset, orgId, userId);
+
+            if (!result.success) {
+                console.error('[DATA-MANAGER] Failed to delete strake from Supabase:', result.error);
+                // Rollback local change
+                vessel.strakes.splice(index, 0, deletedStrake);
+                throw new Error(`Failed to delete strake from cloud: ${result.error}`);
+            }
+
+            console.log('[DATA-MANAGER] Strake deleted from Supabase successfully');
+        }
+
+        // Update local cache
+        await this.saveToStorage();
+
+        return true;
+    }
+
+    async assignScanToStrake(assetId, vesselId, scanId, strakeId) {
+        const orgId = authManager.getCurrentOrganizationId();
+        const userId = authManager.getCurrentUser()?.id;
+        const asset = this.getAsset(assetId);
+        const scan = this.getScan(assetId, vesselId, scanId);
+
+        if (!scan) return false;
+
+        // Remove from old strake if exists
+        if (scan.strakeId) {
+            await this.removeScanFromStrake(assetId, vesselId, scanId, scan.strakeId);
+        }
+
+        // Assign to new strake (null means unassigned)
+        scan.strakeId = strakeId || null;
+
+        // CLOUD-FIRST: Save to Supabase immediately
+        if (authManager.useSupabase) {
+            console.log('[DATA-MANAGER] Assigning scan to strake in Supabase');
+            const result = await syncService.uploadAsset(asset, orgId, userId);
+
+            if (!result.success) {
+                console.error('[DATA-MANAGER] Failed to assign scan to strake in Supabase:', result.error);
+                throw new Error(`Failed to assign scan to strake in cloud: ${result.error}`);
+            }
+
+            console.log('[DATA-MANAGER] Scan assigned to strake in Supabase successfully');
+        }
+
+        // Update local cache
+        await this.saveToStorage();
+
+        return true;
+    }
+
+    async removeScanFromStrake(assetId, vesselId, scanId, strakeId) {
+        const scan = this.getScan(assetId, vesselId, scanId);
+
+        if (!scan) return false;
+
+        if (scan.strakeId === strakeId) {
+            delete scan.strakeId;
+        }
+
+        return true;
+    }
+
+    getStrakeScans(assetId, vesselId, strakeId) {
+        const vessel = this.getVessel(assetId, vesselId);
+        if (!vessel) return [];
+
+        return vessel.scans.filter(scan => scan.strakeId === strakeId);
+    }
+
+    // Calculate strake coverage considering overlaps
+    calculateStrakeCoverage(assetId, vesselId, strakeId) {
+        const scans = this.getStrakeScans(assetId, vesselId, strakeId);
+        const strake = this.getStrake(assetId, vesselId, strakeId);
+
+        if (!strake || scans.length === 0) {
+            return {
+                totalScannedArea: 0,
+                targetArea: strake ? (strake.totalArea * strake.requiredCoverage / 100) : 0,
+                coveragePercentage: 0,
+                isComplete: false
+            };
+        }
+
+        // Extract all scan areas and calculate union (accounting for overlaps)
+        let totalScannedArea = 0;
+
+        // Simple approach: sum all valid areas (overlap detection will be added later)
+        // TODO: Implement spatial overlap detection for accurate coverage
+        scans.forEach(scan => {
+            if (scan.data && scan.data.stats && scan.data.stats.validArea) {
+                totalScannedArea += scan.data.stats.validArea;
+            }
+        });
+
+        const targetArea = strake.totalArea * (strake.requiredCoverage / 100);
+        const coveragePercentage = strake.totalArea > 0 ? (totalScannedArea / targetArea) * 100 : 0;
+
+        return {
+            totalScannedArea,
+            targetArea,
+            coveragePercentage: Math.min(coveragePercentage, 100), // Cap at 100%
+            isComplete: coveragePercentage >= 100,
+            scanCount: scans.length
+        };
     }
 
     // Scan operations
