@@ -338,7 +338,17 @@ class SyncService {
                     if (remoteScan.data_url) {
                         const largeData = await this.downloadFile(remoteScan.data_url);
                         if (largeData) {
-                            scanData.data = JSON.parse(largeData);
+                            // Convert data URL to text before parsing
+                            const textData = this.dataURLToText(largeData);
+                            if (textData) {
+                                try {
+                                    scanData.data = JSON.parse(textData);
+                                } catch (parseError) {
+                                    console.error('Error parsing scan data JSON:', parseError);
+                                    console.error('First 100 chars of data:', textData.substring(0, 100));
+                                    scanData.data = null;
+                                }
+                            }
                         }
                     }
 
@@ -409,6 +419,31 @@ class SyncService {
             reader.onerror = reject;
             reader.readAsDataURL(blob);
         });
+    }
+
+    /**
+     * Decode data URL to text content
+     */
+    dataURLToText(dataUrl) {
+        try {
+            // Extract the base64 data from data URL
+            const base64Index = dataUrl.indexOf('base64,');
+            if (base64Index === -1) {
+                // Not base64 encoded, try to extract directly
+                const commaIndex = dataUrl.indexOf(',');
+                if (commaIndex !== -1) {
+                    return decodeURIComponent(dataUrl.substring(commaIndex + 1));
+                }
+                return dataUrl;
+            }
+
+            // Decode base64 to text
+            const base64Data = dataUrl.substring(base64Index + 7);
+            return atob(base64Data);
+        } catch (error) {
+            console.error('Error decoding data URL:', error);
+            return null;
+        }
     }
 
     /**
