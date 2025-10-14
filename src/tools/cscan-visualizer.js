@@ -2,7 +2,7 @@
 import dataManager from '../data-manager.js';
 import { createAnimatedHeader } from '../animated-background.js';
 
-let container, dom = {}, processedScans = [], currentScanData = null, compositeWorker = null, isShowingComposite = false, customColorRange = { min: null, max: null };
+let container, dom = {}, processedScans = [], currentScanData = null, compositeWorker = null, isShowingComposite = false, customColorRange = { min: null, max: null }, currentHoverPosition = { x: null, y: null };
 
 const HTML = `
 <div class="h-full w-full" style="display: flex; flex-direction: column; overflow: hidden;">
@@ -83,6 +83,8 @@ const HTML = `
                         <label for="reverse-scale-cscan" class="text-sm font-medium text-gray-700 dark:text-gray-300">Reverse</label>
                         <input type="checkbox" id="show-grid-cscan" checked class="w-5 h-5 cursor-pointer ml-4">
                         <label for="show-grid-cscan" class="text-sm font-medium text-gray-700 dark:text-gray-300">Grid</label>
+                        <input type="checkbox" id="show-profiles-cscan" checked class="w-5 h-5 cursor-pointer ml-4">
+                        <label for="show-profiles-cscan" class="text-sm font-medium text-gray-700 dark:text-gray-300">Profiles</label>
                     </div>
                 </div>
             </div>
@@ -106,7 +108,16 @@ const HTML = `
         </div>
         
         <div id="visualization-section" class="hidden mt-8 w-full flex-grow">
-            <div id="plot-container" class="w-full h-full"></div>
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 w-full h-full" style="min-height: 700px;">
+                <!-- Main heatmap (spans 3 columns) -->
+                <div class="lg:col-span-3 flex flex-col gap-4">
+                    <div id="plot-container" class="w-full bg-white dark:bg-gray-800 rounded-lg shadow-md" style="height: calc(100% - 220px); min-height: 450px;"></div>
+                    <!-- Bottom profile (Index/Y-axis) -->
+                    <div id="profile-bottom" class="w-full bg-white dark:bg-gray-800 rounded-lg shadow-md" style="height: 200px;"></div>
+                </div>
+                <!-- Right profile (Scan/X-axis) -->
+                <div id="profile-right" class="lg:col-span-1 w-full bg-white dark:bg-gray-800 rounded-lg shadow-md" style="height: calc(100% - 220px); min-height: 450px;"></div>
+            </div>
         </div>
         
         <div id="metadata-section" class="hidden mt-8 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-inner">
@@ -128,6 +139,8 @@ function cacheDom() {
         statusMessage: q('#status-message'),
         visualizationSection: q('#visualization-section'),
         plotContainer: q('#plot-container'),
+        profileBottom: q('#profile-bottom'),
+        profileRight: q('#profile-right'),
         metadataSection: q('#metadata-section'),
         metadataContent: q('#metadata-content'),
         controlsSection: q('#controls-section'),
@@ -147,6 +160,7 @@ function cacheDom() {
         smoothingSelect: q('#smoothing-cscan'),
         reverseScaleCheckbox: q('#reverse-scale-cscan'),
         showGridCheckbox: q('#show-grid-cscan'),
+        showProfilesCheckbox: q('#show-profiles-cscan'),
         statsContainer: q('#stats-cscan')
     };
 
@@ -377,6 +391,124 @@ function renderPlot(data, isComposite = false) {
     updatePlot();
 }
 
+function extractAxisProfiles(matrix, xCoords, yCoords, xIndex = null, yIndex = null) {
+    // Extract scan axis profile (vertical slice at given X position) - for right graph
+    let scanAxisProfile = { coords: [], values: [] };
+
+    // If xIndex is provided, extract vertical slice; otherwise use middle
+    const xSliceIndex = xIndex !== null ? xIndex : Math.floor(xCoords.length / 2);
+
+    if (xSliceIndex >= 0 && xSliceIndex < xCoords.length) {
+        yCoords.forEach((yCoord, i) => {
+            const value = matrix[i][xSliceIndex];
+            if (value !== null && !isNaN(value)) {
+                scanAxisProfile.coords.push(yCoord);
+                scanAxisProfile.values.push(value);
+            }
+        });
+    }
+
+    // Extract index axis profile (horizontal slice at given Y position) - for bottom graph
+    let indexAxisProfile = { coords: [], values: [] };
+
+    // If yIndex is provided, extract horizontal slice; otherwise use middle
+    const ySliceIndex = yIndex !== null ? yIndex : Math.floor(yCoords.length / 2);
+
+    if (ySliceIndex >= 0 && ySliceIndex < yCoords.length) {
+        xCoords.forEach((xCoord, j) => {
+            const value = matrix[ySliceIndex][j];
+            if (value !== null && !isNaN(value)) {
+                indexAxisProfile.coords.push(xCoord);
+                indexAxisProfile.values.push(value);
+            }
+        });
+    }
+
+    return {
+        scanAxis: scanAxisProfile,      // Vertical profile (Y-axis values at specific X)
+        indexAxis: indexAxisProfile,    // Horizontal profile (X-axis values at specific Y)
+        slicePositions: {
+            x: xCoords[xSliceIndex],
+            y: yCoords[ySliceIndex]
+        }
+    };
+}
+
+function renderProfileGraphs(profiles, isDarkMode) {
+    if (!profiles) return;
+
+    const { scanAxis, indexAxis, slicePositions } = profiles;
+
+    // Common layout settings
+    const commonLayout = {
+        margin: { l: 50, r: 20, t: 30, b: 40 },
+        showlegend: false,
+        hovermode: 'closest'
+    };
+
+    if (isDarkMode) {
+        commonLayout.template = 'plotly_dark';
+        commonLayout.paper_bgcolor = 'rgb(31, 41, 55)';
+        commonLayout.plot_bgcolor = 'rgb(31, 41, 55)';
+    }
+
+    // Right profile (Scan Axis / Y-axis) - rotated 90 degrees
+    if (scanAxis.coords.length > 0) {
+        const rightData = [{
+            y: scanAxis.coords,
+            x: scanAxis.values,
+            type: 'scatter',
+            mode: 'lines',
+            line: { color: '#ef4444', width: 2 },
+            fill: 'tozerox',
+            fillcolor: 'rgba(239, 68, 68, 0.2)',
+            hovertemplate: 'Index Axis: %{y:.2f} mm<br>Thickness: %{x:.2f} mm<extra></extra>'
+        }];
+
+        const rightLayout = {
+            ...commonLayout,
+            title: { text: `Scan Axis Profile<br>(at ${slicePositions.x?.toFixed(1)} mm)`, font: { size: 12 } },
+            xaxis: {
+                title: 'Thickness (mm)',
+                autorange: 'reversed'
+            },
+            yaxis: {
+                title: 'Index Axis (mm)',
+                autorange: 'reversed'
+            }
+        };
+
+        Plotly.react(dom.profileRight, rightData, rightLayout, { displayModeBar: false, responsive: true });
+    }
+
+    // Bottom profile (Index Axis / X-axis)
+    if (indexAxis.coords.length > 0) {
+        const bottomData = [{
+            x: indexAxis.coords,
+            y: indexAxis.values,
+            type: 'scatter',
+            mode: 'lines',
+            line: { color: '#3b82f6', width: 2 },
+            fill: 'tozeroy',
+            fillcolor: 'rgba(59, 130, 246, 0.2)',
+            hovertemplate: 'Scan Axis: %{x:.2f} mm<br>Thickness: %{y:.2f} mm<extra></extra>'
+        }];
+
+        const bottomLayout = {
+            ...commonLayout,
+            title: { text: `Index Axis Profile (at ${slicePositions.y?.toFixed(1)} mm)`, font: { size: 12 } },
+            xaxis: {
+                title: 'Scan Axis (mm)'
+            },
+            yaxis: {
+                title: 'Thickness (mm)'
+            }
+        };
+
+        Plotly.react(dom.profileBottom, bottomData, bottomLayout, { displayModeBar: false, responsive: true });
+    }
+}
+
 function updatePlot() {
     if (!currentScanData) return;
     let matrix, xCoords, yCoords;
@@ -453,9 +585,67 @@ function updatePlot() {
         displayModeBar: true,
         modeBarButtonsToRemove: ['select2d', 'lasso2d']
     };
-    Plotly.react(dom.plotContainer, plotData, layout, config);
+    Plotly.react(dom.plotContainer, plotData, layout, config).then(() => {
+        // Add hover event listener for interactive profile updates
+        dom.plotContainer.on('plotly_hover', (data) => {
+            if (data.points && data.points[0]) {
+                const point = data.points[0];
+                const xValue = point.x;
+                const yValue = point.y;
+
+                // Find the closest indices
+                const xIndex = xCoords.findIndex(x => Math.abs(x - xValue) < 0.01) ||
+                              xCoords.reduce((prev, curr, idx) =>
+                                  Math.abs(curr - xValue) < Math.abs(xCoords[prev] - xValue) ? idx : prev, 0);
+                const yIndex = yCoords.findIndex(y => Math.abs(y - yValue) < 0.01) ||
+                              yCoords.reduce((prev, curr, idx) =>
+                                  Math.abs(curr - yValue) < Math.abs(yCoords[prev] - yValue) ? idx : prev, 0);
+
+                // Update profiles based on hover position
+                const profiles = extractAxisProfiles(matrix, xCoords, yCoords, xIndex, yIndex);
+                const isDarkMode = document.documentElement.classList.contains('dark');
+                renderProfileGraphs(profiles, isDarkMode);
+
+                currentHoverPosition = { x: xIndex, y: yIndex };
+            }
+        });
+
+        // Initialize with center profiles
+        if (dom.showProfilesCheckbox.checked) {
+            const profiles = extractAxisProfiles(matrix, xCoords, yCoords);
+            const isDarkMode = document.documentElement.classList.contains('dark');
+            renderProfileGraphs(profiles, isDarkMode);
+        }
+    });
+
+    // Show/hide profile containers based on checkbox
+    updateProfileVisibility();
+
     dom.visualizationSection.classList.remove('hidden');
     [dom.exportButton, dom.exportCleanButton, dom.exportToHubBtn].forEach(b => b.classList.remove('hidden'));
+}
+
+function updateProfileVisibility() {
+    const showProfiles = dom.showProfilesCheckbox?.checked;
+    if (showProfiles) {
+        dom.profileBottom?.classList.remove('hidden');
+        dom.profileRight?.classList.remove('hidden');
+        // Update layout to grid with profiles
+        const vizGrid = dom.visualizationSection.querySelector('.grid');
+        if (vizGrid) {
+            vizGrid.className = 'grid grid-cols-1 lg:grid-cols-4 gap-4 w-full h-full';
+            vizGrid.style.minHeight = '700px';
+        }
+    } else {
+        dom.profileBottom?.classList.add('hidden');
+        dom.profileRight?.classList.add('hidden');
+        // Update layout to single column without profiles
+        const vizGrid = dom.visualizationSection.querySelector('.grid');
+        if (vizGrid) {
+            vizGrid.className = 'grid grid-cols-1 gap-4 w-full h-full';
+            vizGrid.style.minHeight = '600px';
+        }
+    }
 }
 
 // C-Scan Visualizer Tool Module - Complete (Part 2 - continues from part 1)
@@ -1011,6 +1201,13 @@ function addEventListeners() {
     dom.smoothingSelect.addEventListener('change', updatePlot);
     dom.reverseScaleCheckbox.addEventListener('change', updatePlot);
     dom.showGridCheckbox.addEventListener('change', updatePlot);
+    dom.showProfilesCheckbox.addEventListener('change', () => {
+        updateProfileVisibility();
+        if (dom.showProfilesCheckbox.checked && currentScanData) {
+            // Re-render profiles when enabled
+            updatePlot();
+        }
+    });
     document.addEventListener('themeChanged', updatePlot);
     window.addEventListener('loadScanData', loadScanData);
 }
@@ -1041,6 +1238,8 @@ export default {
 
         if (compositeWorker) compositeWorker.terminate();
         if (dom && dom.plotContainer) Plotly.purge(dom.plotContainer);
+        if (dom && dom.profileBottom) Plotly.purge(dom.profileBottom);
+        if (dom && dom.profileRight) Plotly.purge(dom.profileRight);
         removeEventListeners();
         container.innerHTML = '';
         container.classList.remove('bg-gray-100', 'dark:bg-gray-900');
@@ -1048,5 +1247,6 @@ export default {
         currentScanData = null;
         customColorRange = { min: null, max: null };
         isShowingComposite = false;
+        currentHoverPosition = { x: null, y: null };
     }
 };
