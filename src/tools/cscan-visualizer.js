@@ -104,7 +104,7 @@ const HTML = `
                 </div>
             </div>
 
-            <div id="stats-cscan" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 text-center"></div>
+            <div id="stats-cscan" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-center"></div>
         </div>
         
         <div id="visualization-section" class="hidden mt-8 w-full flex-grow">
@@ -315,9 +315,15 @@ function calculateStats(data) {
     if (!data) return null;
 
     const flatData = [];
+    let ndCount = 0;
+    let totalPoints = 0;
+
     for (const val of data.thickness_values_flat) {
+        totalPoints++;
         if (!isNaN(val) && isFinite(val)) {
             flatData.push(val);
+        } else {
+            ndCount++;
         }
     }
 
@@ -328,6 +334,17 @@ function calculateStats(data) {
     const mean = sum / flatData.length;
     const variance = flatData.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / flatData.length;
 
+    // Calculate area metrics
+    // Get spacing between points
+    const xSpacing = data.x_coords.length > 1 ? Math.abs(data.x_coords[1] - data.x_coords[0]) : 1.0;
+    const ySpacing = data.y_coords.length > 1 ? Math.abs(data.y_coords[1] - data.y_coords[0]) : 1.0;
+    const pointArea = xSpacing * ySpacing; // Area per data point in mm²
+
+    const totalArea = totalPoints * pointArea; // Total scanned area in mm²
+    const ndArea = ndCount * pointArea; // ND area in mm²
+    const validArea = totalArea - ndArea; // Valid area after ND deduction in mm²
+    const ndPercentage = (ndCount / totalPoints) * 100; // ND percentage
+
     return {
         min: sorted[0],
         max: sorted[sorted.length - 1],
@@ -336,12 +353,23 @@ function calculateStats(data) {
         stdDev: Math.sqrt(variance),
         count: flatData.length,
         rows: data.rows,
-        cols: data.cols
+        cols: data.cols,
+        // Area statistics
+        totalArea: totalArea,
+        ndArea: ndArea,
+        validArea: validArea,
+        ndPercentage: ndPercentage,
+        totalPoints: totalPoints,
+        ndCount: ndCount
     };
 }
 
 function renderStats(stats) {
     if (!stats) return;
+
+    // Convert mm² to cm² for better readability (1 cm² = 100 mm²)
+    const totalAreaCm2 = stats.totalArea / 100;
+    const validAreaCm2 = stats.validArea / 100;
 
     const statsHTML = [
         { label: 'Min', value: stats.min.toFixed(2), unit: 'mm' },
@@ -349,7 +377,10 @@ function renderStats(stats) {
         { label: 'Mean', value: stats.mean.toFixed(2), unit: 'mm' },
         { label: 'Median', value: stats.median.toFixed(2), unit: 'mm' },
         { label: 'Std Dev', value: stats.stdDev.toFixed(2), unit: 'mm' },
-        { label: 'Points', value: stats.count, unit: '' }
+        { label: 'Total Area', value: totalAreaCm2.toFixed(1), unit: 'cm²' },
+        { label: 'ND %', value: stats.ndPercentage.toFixed(1), unit: '%' },
+        { label: 'Valid Area', value: validAreaCm2.toFixed(1), unit: 'cm²' },
+        { label: 'Valid Points', value: stats.count, unit: '' }
     ].map(({ label, value, unit }) => `
         <div class="p-3 bg-white dark:bg-gray-700 rounded-lg shadow-sm">
             <div class="text-xs text-gray-500 dark:text-gray-400">${label}</div>
