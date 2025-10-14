@@ -886,12 +886,15 @@ class AuthManager {
                 return { success: false, error: 'Request not found' };
             }
 
-            // Create user with signUp and auto-generated password
-            // User will receive confirmation email to set their password
+            // Create user account
+            // The user will receive an email based on Supabase auth settings:
+            // - If "Enable email confirmations" is ON: User gets confirmation email
+            // - If "Enable email confirmations" is OFF: User is auto-confirmed, we send password reset email
+
+            const redirectUrl = `${window.location.origin}/#/reset-password`;
             const tempPassword = crypto.randomUUID();
 
-            // Construct the proper redirect URL for password reset
-            const redirectUrl = `${window.location.origin}/#/reset-password`;
+            console.log('Creating user account for:', request.email);
 
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email: request.email,
@@ -907,20 +910,37 @@ class AuthManager {
             });
 
             if (authError) {
+                console.error('SignUp error:', authError);
                 return { success: false, error: authError.message };
             }
 
-            // Trigger password reset email so user can set their own password
-            // Note: User needs to wait a moment after signup before reset email can be sent
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            console.log('User created:', authData?.user?.id, 'Email confirmed:', authData?.user?.email_confirmed_at);
 
-            const { error: resetError } = await supabase.auth.resetPasswordForEmail(request.email, {
-                redirectTo: redirectUrl
-            });
+            // Check if email confirmation is required
+            const needsConfirmation = !authData?.user?.email_confirmed_at;
 
-            if (resetError) {
-                console.warn('Password reset email failed:', resetError.message);
-                // Don't fail the whole operation - user can use forgot password link
+            if (needsConfirmation) {
+                // User will receive a confirmation email from Supabase
+                // They need to click that link first, then use "Forgot Password" to set their password
+                console.log('Email confirmation required. Confirmation email sent automatically by Supabase.');
+            } else {
+                // Email confirmation is disabled, user is auto-confirmed
+                // Send password reset email so they can set their password
+                console.log('Email auto-confirmed. Sending password reset email...');
+
+                // Wait a moment for the database trigger to complete
+                await new Promise(resolve => setTimeout(resolve, 1500));
+
+                const { error: resetError } = await supabase.auth.resetPasswordForEmail(request.email, {
+                    redirectTo: redirectUrl
+                });
+
+                if (resetError) {
+                    console.error('Password reset email failed:', resetError);
+                    // Don't fail - user can use "Forgot Password" link
+                } else {
+                    console.log('Password reset email sent successfully');
+                }
             }
 
             // Update request status
@@ -937,7 +957,11 @@ class AuthManager {
                 return { success: false, error: updateError.message };
             }
 
-            return { success: true, message: 'User account created. Confirmation email sent.' };
+            const message = needsConfirmation
+                ? 'Account created. User will receive an email to confirm their address and set a password.'
+                : 'Account created. User will receive an email to set their password.';
+
+            return { success: true, message };
         } else {
             const request = this.authData.accountRequests.find(r => r.id === requestId);
             if (!request) {
