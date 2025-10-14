@@ -418,30 +418,60 @@ class SyncService {
         }
 
         try {
+            console.log('[UPLOAD] Starting upload process...');
+
             // Load local data
             const localData = await indexedDB.loadData();
             const orgData = localData[orgId];
 
             if (!orgData || !orgData.assets || orgData.assets.length === 0) {
-                console.log('No local data to upload');
+                console.log('[UPLOAD] No local data to upload');
                 return { success: true, count: 0 };
             }
 
+            console.log(`[UPLOAD] Found ${orgData.assets.length} assets to upload`);
             let uploadCount = 0;
+            let errors = [];
 
             // Upload each asset
-            for (const asset of orgData.assets) {
-                const result = await this.uploadAsset(asset, orgId, user.id);
-                if (result.success) {
-                    uploadCount += result.count;
+            for (let i = 0; i < orgData.assets.length; i++) {
+                const asset = orgData.assets[i];
+                console.log(`[UPLOAD] Uploading asset ${i + 1}/${orgData.assets.length}: ${asset.name}`);
+
+                try {
+                    const result = await this.uploadAsset(asset, orgId, user.id);
+                    if (result.success) {
+                        uploadCount += result.count;
+                        console.log(`[UPLOAD] Asset ${asset.name} uploaded successfully (${result.count} items)`);
+                    } else {
+                        const errorMsg = `Failed to upload asset ${asset.name}: ${result.error}`;
+                        console.error(`[UPLOAD] ${errorMsg}`);
+                        errors.push(errorMsg);
+                    }
+                } catch (error) {
+                    const errorMsg = `Error uploading asset ${asset.name}: ${error.message}`;
+                    console.error(`[UPLOAD] ${errorMsg}`);
+                    errors.push(errorMsg);
                 }
             }
 
-            console.log(`Uploaded ${uploadCount} items`);
+            console.log(`[UPLOAD] Upload process completed. Total items uploaded: ${uploadCount}`);
+
+            if (errors.length > 0) {
+                console.warn(`[UPLOAD] Some uploads failed (${errors.length} errors)`);
+                // Still consider it a success if at least some items were uploaded
+                return {
+                    success: uploadCount > 0,
+                    count: uploadCount,
+                    partialSuccess: true,
+                    errors: errors
+                };
+            }
+
             return { success: true, count: uploadCount };
 
         } catch (error) {
-            console.error('Upload failed:', error);
+            console.error('[UPLOAD] Upload failed:', error);
             return { success: false, error: error.message };
         }
     }
@@ -451,17 +481,25 @@ class SyncService {
      */
     async uploadAsset(asset, orgId, userId) {
         try {
+            console.log(`[UPLOAD_ASSET] Starting upload for asset: ${asset.name} (ID: ${asset.id})`);
             let count = 0;
 
             // Check if asset exists in Supabase
-            const { data: existingAsset } = await supabase
+            console.log(`[UPLOAD_ASSET] Checking if asset exists in Supabase...`);
+            const { data: existingAsset, error: checkError } = await supabase
                 .from('assets')
                 .select('id, updated_at')
                 .eq('id', asset.id)
                 .single();
 
+            if (checkError && checkError.code !== 'PGRST116') {
+                console.error(`[UPLOAD_ASSET] Error checking asset existence:`, checkError);
+                throw checkError;
+            }
+
             if (!existingAsset) {
                 // Upload new asset
+                console.log(`[UPLOAD_ASSET] Creating new asset in Supabase...`);
                 const { error } = await supabase
                     .from('assets')
                     .insert({
@@ -474,22 +512,33 @@ class SyncService {
 
                 if (error) throw error;
                 count++;
+                console.log(`[UPLOAD_ASSET] Asset created successfully`);
+            } else {
+                console.log(`[UPLOAD_ASSET] Asset already exists, skipping creation`);
             }
 
             // Upload vessels
             if (asset.vessels && asset.vessels.length > 0) {
-                for (const vessel of asset.vessels) {
+                console.log(`[UPLOAD_ASSET] Uploading ${asset.vessels.length} vessels...`);
+                for (let i = 0; i < asset.vessels.length; i++) {
+                    const vessel = asset.vessels[i];
+                    console.log(`[UPLOAD_ASSET] Uploading vessel ${i + 1}/${asset.vessels.length}: ${vessel.name}`);
                     const vesselResult = await this.uploadVessel(vessel, asset.id, orgId);
                     if (vesselResult.success) {
                         count += vesselResult.count;
+                    } else {
+                        console.warn(`[UPLOAD_ASSET] Failed to upload vessel ${vessel.name}:`, vesselResult.error);
                     }
                 }
+            } else {
+                console.log(`[UPLOAD_ASSET] No vessels to upload`);
             }
 
+            console.log(`[UPLOAD_ASSET] Asset upload complete. Total items: ${count}`);
             return { success: true, count };
 
         } catch (error) {
-            console.error('Error uploading asset:', error);
+            console.error(`[UPLOAD_ASSET] Error uploading asset ${asset.name}:`, error);
             return { success: false, error: error.message, count: 0 };
         }
     }
@@ -499,29 +548,48 @@ class SyncService {
      */
     async uploadVessel(vessel, assetId, orgId) {
         try {
+            console.log(`[UPLOAD_VESSEL] Starting upload for vessel: ${vessel.name} (ID: ${vessel.id})`);
             let count = 0;
 
             // Check if vessel exists
-            const { data: existingVessel } = await supabase
+            console.log(`[UPLOAD_VESSEL] Checking if vessel exists...`);
+            const { data: existingVessel, error: checkError } = await supabase
                 .from('vessels')
                 .select('id')
                 .eq('id', vessel.id)
                 .single();
 
+            if (checkError && checkError.code !== 'PGRST116') {
+                console.error(`[UPLOAD_VESSEL] Error checking vessel existence:`, checkError);
+                throw checkError;
+            }
+
             let model3dUrl = null;
 
             // Upload 3D model if exists
             if (vessel.model3d) {
-                model3dUrl = await this.uploadFile(
-                    vessel.model3d,
-                    '3d-models',
-                    `${orgId}/${assetId}/${vessel.id}/model.obj`,
-                    'model/obj'
-                );
+                console.log(`[UPLOAD_VESSEL] Uploading 3D model...`);
+                try {
+                    model3dUrl = await this.uploadFile(
+                        vessel.model3d,
+                        '3d-models',
+                        `${orgId}/${assetId}/${vessel.id}/model.obj`,
+                        'model/obj'
+                    );
+                    if (model3dUrl) {
+                        console.log(`[UPLOAD_VESSEL] 3D model uploaded successfully`);
+                    } else {
+                        console.warn(`[UPLOAD_VESSEL] 3D model upload failed (returned null)`);
+                    }
+                } catch (error) {
+                    console.error(`[UPLOAD_VESSEL] 3D model upload error:`, error);
+                    // Continue even if 3D model fails
+                }
             }
 
             if (!existingVessel) {
                 // Insert new vessel
+                console.log(`[UPLOAD_VESSEL] Creating new vessel in Supabase...`);
                 const { error } = await supabase
                     .from('vessels')
                     .insert({
@@ -535,39 +603,69 @@ class SyncService {
 
                 if (error) throw error;
                 count++;
-            } else if (model3dUrl) {
-                // Update vessel with 3D model URL
-                const { error } = await supabase
-                    .from('vessels')
-                    .update({
-                        model_3d_url: model3dUrl,
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', vessel.id);
+                console.log(`[UPLOAD_VESSEL] Vessel created successfully`);
+            } else {
+                console.log(`[UPLOAD_VESSEL] Vessel already exists`);
+                if (model3dUrl) {
+                    // Update vessel with 3D model URL
+                    console.log(`[UPLOAD_VESSEL] Updating vessel with 3D model URL...`);
+                    const { error } = await supabase
+                        .from('vessels')
+                        .update({
+                            model_3d_url: model3dUrl,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', vessel.id);
 
-                if (error) throw error;
+                    if (error) throw error;
+                }
             }
 
             // Upload vessel images
             if (vessel.images && vessel.images.length > 0) {
-                for (const image of vessel.images) {
-                    const imageResult = await this.uploadVesselImage(image, vessel.id, assetId, orgId);
-                    if (imageResult.success) count++;
+                console.log(`[UPLOAD_VESSEL] Uploading ${vessel.images.length} images...`);
+                for (let i = 0; i < vessel.images.length; i++) {
+                    const image = vessel.images[i];
+                    console.log(`[UPLOAD_VESSEL] Uploading image ${i + 1}/${vessel.images.length}: ${image.name}`);
+                    try {
+                        const imageResult = await this.uploadVesselImage(image, vessel.id, assetId, orgId);
+                        if (imageResult.success) {
+                            count++;
+                            console.log(`[UPLOAD_VESSEL] Image uploaded successfully`);
+                        } else {
+                            console.warn(`[UPLOAD_VESSEL] Image upload failed:`, imageResult.error);
+                        }
+                    } catch (error) {
+                        console.error(`[UPLOAD_VESSEL] Image upload error:`, error);
+                    }
                 }
             }
 
             // Upload scans
             if (vessel.scans && vessel.scans.length > 0) {
-                for (const scan of vessel.scans) {
-                    const scanResult = await this.uploadScan(scan, vessel.id, assetId, orgId);
-                    if (scanResult.success) count++;
+                console.log(`[UPLOAD_VESSEL] Uploading ${vessel.scans.length} scans...`);
+                for (let i = 0; i < vessel.scans.length; i++) {
+                    const scan = vessel.scans[i];
+                    console.log(`[UPLOAD_VESSEL] Uploading scan ${i + 1}/${vessel.scans.length}: ${scan.name}`);
+                    try {
+                        const scanResult = await this.uploadScan(scan, vessel.id, assetId, orgId);
+                        if (scanResult.success) {
+                            count++;
+                            console.log(`[UPLOAD_VESSEL] Scan uploaded successfully`);
+                        } else {
+                            console.warn(`[UPLOAD_VESSEL] Scan upload failed:`, scanResult.error);
+                        }
+                    } catch (error) {
+                        console.error(`[UPLOAD_VESSEL] Scan upload error:`, error);
+                    }
                 }
             }
 
+            console.log(`[UPLOAD_VESSEL] Vessel upload complete. Total items: ${count}`);
             return { success: true, count };
 
         } catch (error) {
-            console.error('Error uploading vessel:', error);
+            console.error(`[UPLOAD_VESSEL] Error uploading vessel ${vessel.name}:`, error);
             return { success: false, error: error.message, count: 0 };
         }
     }
@@ -716,28 +814,53 @@ class SyncService {
      */
     async uploadFile(dataUrl, bucket, path, mimeType) {
         try {
-            // Convert data URL to blob
-            const blob = await this.dataURLToBlob(dataUrl);
+            console.log(`[UPLOAD_FILE] Starting upload to bucket: ${bucket}, path: ${path}`);
 
-            // Upload to Supabase Storage
-            const { data, error } = await supabase.storage
+            // Convert data URL to blob
+            console.log(`[UPLOAD_FILE] Converting data URL to blob...`);
+            const blob = await this.dataURLToBlob(dataUrl);
+            console.log(`[UPLOAD_FILE] Blob created, size: ${blob.size} bytes`);
+
+            // Check if file is too large
+            const maxSize = 50 * 1024 * 1024; // 50MB
+            if (blob.size > maxSize) {
+                console.warn(`[UPLOAD_FILE] File too large: ${blob.size} bytes (max: ${maxSize})`);
+                return null;
+            }
+
+            // Upload to Supabase Storage with timeout
+            console.log(`[UPLOAD_FILE] Uploading to Supabase Storage...`);
+            const uploadPromise = supabase.storage
                 .from(bucket)
                 .upload(path, blob, {
                     contentType: mimeType,
                     upsert: true
                 });
 
-            if (error) throw error;
+            // Add timeout of 60 seconds
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Upload timeout after 60 seconds')), 60000)
+            );
+
+            const { data, error } = await Promise.race([uploadPromise, timeoutPromise]);
+
+            if (error) {
+                console.error(`[UPLOAD_FILE] Upload error:`, error);
+                throw error;
+            }
+
+            console.log(`[UPLOAD_FILE] File uploaded successfully`);
 
             // Get public URL
             const { data: urlData } = supabase.storage
                 .from(bucket)
                 .getPublicUrl(path);
 
+            console.log(`[UPLOAD_FILE] Public URL generated: ${urlData.publicUrl}`);
             return urlData.publicUrl;
 
         } catch (error) {
-            console.error('Error uploading file:', error);
+            console.error(`[UPLOAD_FILE] Error uploading file to ${bucket}/${path}:`, error);
             return null;
         }
     }
