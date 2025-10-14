@@ -274,15 +274,47 @@ class DataManager {
     }
 
     async deleteAsset(assetId) {
+        const orgId = authManager.getCurrentOrganizationId();
+        const userId = authManager.getCurrentUser()?.id;
         const orgData = this.getCurrentOrgData();
         const index = (orgData.assets || []).findIndex(a => a.id === assetId);
-        if (index !== -1) {
-            orgData.assets.splice(index, 1);
-            this.setCurrentOrgData(orgData);
-            await this.saveToStorage();
-            return true;
+
+        if (index === -1) {
+            return false;
         }
-        return false;
+
+        const deletedAsset = orgData.assets[index];
+        orgData.assets.splice(index, 1);
+
+        // CLOUD-FIRST: Delete from Supabase immediately
+        if (authManager.useSupabase) {
+            console.log('[DATA-MANAGER] Deleting asset from Supabase:', deletedAsset.name);
+
+            // Import supabase client
+            const { supabase } = await import('./supabase-client.js');
+
+            // Delete from Supabase database
+            const { error } = await supabase
+                .from('assets')
+                .delete()
+                .eq('id', assetId);
+
+            if (error) {
+                console.error('[DATA-MANAGER] Failed to delete asset from Supabase:', error);
+                // Rollback local change
+                orgData.assets.splice(index, 0, deletedAsset);
+                this.setCurrentOrgData(orgData);
+                throw new Error(`Failed to delete asset from cloud: ${error.message}`);
+            }
+
+            console.log('[DATA-MANAGER] Asset deleted from Supabase successfully');
+        }
+
+        // Update local cache
+        this.setCurrentOrgData(orgData);
+        await this.saveToStorage();
+
+        return true;
     }
 
     // Vessel operations
@@ -364,16 +396,40 @@ class DataManager {
     }
 
     async deleteVessel(assetId, vesselId) {
+        const orgId = authManager.getCurrentOrganizationId();
+        const userId = authManager.getCurrentUser()?.id;
         const asset = this.getAsset(assetId);
+
         if (!asset) return false;
 
         const index = asset.vessels.findIndex(v => v.id === vesselId);
-        if (index !== -1) {
-            asset.vessels.splice(index, 1);
-            await this.saveToStorage();
-            return true;
+
+        if (index === -1) {
+            return false;
         }
-        return false;
+
+        const deletedVessel = asset.vessels[index];
+        asset.vessels.splice(index, 1);
+
+        // CLOUD-FIRST: Save to Supabase immediately
+        if (authManager.useSupabase) {
+            console.log('[DATA-MANAGER] Deleting vessel from Supabase:', deletedVessel.name);
+            const result = await syncService.uploadAsset(asset, orgId, userId);
+
+            if (!result.success) {
+                console.error('[DATA-MANAGER] Failed to delete vessel from Supabase:', result.error);
+                // Rollback local change
+                asset.vessels.splice(index, 0, deletedVessel);
+                throw new Error(`Failed to delete vessel from cloud: ${result.error}`);
+            }
+
+            console.log('[DATA-MANAGER] Vessel deleted from Supabase successfully');
+        }
+
+        // Update local cache
+        await this.saveToStorage();
+
+        return true;
     }
 
     // Vessel image operations
@@ -422,7 +478,11 @@ class DataManager {
 
     // Scanning log operations
     async addScanningLogEntry(assetId, vesselId, logEntry) {
+        const orgId = authManager.getCurrentOrganizationId();
+        const userId = authManager.getCurrentUser()?.id;
+        const asset = this.getAsset(assetId);
         const vessel = this.getVessel(assetId, vesselId);
+
         if (!vessel) return null;
 
         // Initialize scanningLog array if it doesn't exist
@@ -441,64 +501,110 @@ class DataManager {
             notes: logEntry.notes || '',
             timestamp: Date.now()
         };
-        vessel.scanningLog.push(entry);
-        await this.saveToStorage();
 
-        // Sync to Supabase in the background
-        if (authManager.isLoggedIn() && authManager.useSupabase) {
-            syncService.syncAsset(assetId).catch(err => {
-                console.error('Failed to sync scanning log:', err);
-            });
+        vessel.scanningLog.push(entry);
+
+        // CLOUD-FIRST: Save to Supabase immediately
+        if (authManager.useSupabase) {
+            console.log('[DATA-MANAGER] Adding scanning log entry to Supabase');
+            const result = await syncService.uploadAsset(asset, orgId, userId);
+
+            if (!result.success) {
+                console.error('[DATA-MANAGER] Failed to add scanning log entry to Supabase:', result.error);
+                // Rollback local change
+                vessel.scanningLog.pop();
+                throw new Error(`Failed to save scanning log to cloud: ${result.error}`);
+            }
+
+            console.log('[DATA-MANAGER] Scanning log entry added to Supabase successfully');
         }
+
+        // Update local cache
+        await this.saveToStorage();
 
         return entry;
     }
 
     async updateScanningLogEntry(assetId, vesselId, logEntryId, updates) {
+        const orgId = authManager.getCurrentOrganizationId();
+        const userId = authManager.getCurrentUser()?.id;
+        const asset = this.getAsset(assetId);
         const vessel = this.getVessel(assetId, vesselId);
+
         if (!vessel || !vessel.scanningLog) return null;
 
         const entry = vessel.scanningLog.find(e => e.id === logEntryId);
-        if (entry) {
-            Object.assign(entry, updates);
-            await this.saveToStorage();
 
-            // Sync to Supabase in the background
-            if (authManager.isLoggedIn() && authManager.useSupabase) {
-                syncService.syncAsset(assetId).catch(err => {
-                    console.error('Failed to sync scanning log update:', err);
-                });
+        if (!entry) {
+            return null;
+        }
+
+        Object.assign(entry, updates);
+
+        // CLOUD-FIRST: Save to Supabase immediately
+        if (authManager.useSupabase) {
+            console.log('[DATA-MANAGER] Updating scanning log entry in Supabase');
+            const result = await syncService.uploadAsset(asset, orgId, userId);
+
+            if (!result.success) {
+                console.error('[DATA-MANAGER] Failed to update scanning log entry in Supabase:', result.error);
+                throw new Error(`Failed to update scanning log in cloud: ${result.error}`);
             }
 
-            return entry;
+            console.log('[DATA-MANAGER] Scanning log entry updated in Supabase successfully');
         }
-        return null;
+
+        // Update local cache
+        await this.saveToStorage();
+
+        return entry;
     }
 
     async deleteScanningLogEntry(assetId, vesselId, logEntryId) {
+        const orgId = authManager.getCurrentOrganizationId();
+        const userId = authManager.getCurrentUser()?.id;
+        const asset = this.getAsset(assetId);
         const vessel = this.getVessel(assetId, vesselId);
+
         if (!vessel || !vessel.scanningLog) return false;
 
         const index = vessel.scanningLog.findIndex(e => e.id === logEntryId);
-        if (index !== -1) {
-            vessel.scanningLog.splice(index, 1);
-            await this.saveToStorage();
 
-            // Sync to Supabase in the background
-            if (authManager.isLoggedIn() && authManager.useSupabase) {
-                syncService.syncAsset(assetId).catch(err => {
-                    console.error('Failed to sync scanning log deletion:', err);
-                });
+        if (index === -1) {
+            return false;
+        }
+
+        const deletedEntry = vessel.scanningLog[index];
+        vessel.scanningLog.splice(index, 1);
+
+        // CLOUD-FIRST: Save to Supabase immediately
+        if (authManager.useSupabase) {
+            console.log('[DATA-MANAGER] Deleting scanning log entry from Supabase');
+            const result = await syncService.uploadAsset(asset, orgId, userId);
+
+            if (!result.success) {
+                console.error('[DATA-MANAGER] Failed to delete scanning log entry from Supabase:', result.error);
+                // Rollback local change
+                vessel.scanningLog.splice(index, 0, deletedEntry);
+                throw new Error(`Failed to delete scanning log from cloud: ${result.error}`);
             }
 
-            return true;
+            console.log('[DATA-MANAGER] Scanning log entry deleted from Supabase successfully');
         }
-        return false;
+
+        // Update local cache
+        await this.saveToStorage();
+
+        return true;
     }
 
     // Vessel report operations
     async addVesselReport(assetId, vesselId, reportData) {
+        const orgId = authManager.getCurrentOrganizationId();
+        const userId = authManager.getCurrentUser()?.id;
+        const asset = this.getAsset(assetId);
         const vessel = this.getVessel(assetId, vesselId);
+
         if (!vessel) return null;
 
         // Initialize reports array if it doesn't exist
@@ -514,56 +620,142 @@ class DataManager {
             timestamp: Date.now(),
             generatedBy: authManager.getCurrentUser()?.email || 'Unknown'
         };
-        vessel.reports.push(report);
-        await this.saveToStorage();
 
-        // Sync to Supabase in the background
-        if (authManager.isLoggedIn() && authManager.useSupabase) {
-            syncService.syncAsset(assetId).catch(err => {
-                console.error('Failed to sync vessel report:', err);
-            });
+        vessel.reports.push(report);
+
+        // CLOUD-FIRST: Save to Supabase immediately
+        if (authManager.useSupabase) {
+            console.log('[DATA-MANAGER] Adding vessel report to Supabase:', report.reportNumber);
+            const result = await syncService.uploadAsset(asset, orgId, userId);
+
+            if (!result.success) {
+                console.error('[DATA-MANAGER] Failed to add vessel report to Supabase:', result.error);
+                // Rollback local change
+                vessel.reports.pop();
+                throw new Error(`Failed to save vessel report to cloud: ${result.error}`);
+            }
+
+            console.log('[DATA-MANAGER] Vessel report added to Supabase successfully');
         }
+
+        // Update local cache
+        await this.saveToStorage();
 
         return report;
     }
 
     async deleteVesselReport(assetId, vesselId, reportId) {
+        const orgId = authManager.getCurrentOrganizationId();
+        const userId = authManager.getCurrentUser()?.id;
+        const asset = this.getAsset(assetId);
         const vessel = this.getVessel(assetId, vesselId);
+
         if (!vessel || !vessel.reports) return false;
 
         const index = vessel.reports.findIndex(rep => rep.id === reportId);
-        if (index !== -1) {
-            vessel.reports.splice(index, 1);
-            await this.saveToStorage();
-            return true;
+
+        if (index === -1) {
+            return false;
         }
-        return false;
+
+        const deletedReport = vessel.reports[index];
+        vessel.reports.splice(index, 1);
+
+        // CLOUD-FIRST: Save to Supabase immediately
+        if (authManager.useSupabase) {
+            console.log('[DATA-MANAGER] Deleting vessel report from Supabase');
+            const result = await syncService.uploadAsset(asset, orgId, userId);
+
+            if (!result.success) {
+                console.error('[DATA-MANAGER] Failed to delete vessel report from Supabase:', result.error);
+                // Rollback local change
+                vessel.reports.splice(index, 0, deletedReport);
+                throw new Error(`Failed to delete vessel report from cloud: ${result.error}`);
+            }
+
+            console.log('[DATA-MANAGER] Vessel report deleted from Supabase successfully');
+        }
+
+        // Update local cache
+        await this.saveToStorage();
+
+        return true;
     }
 
     async deleteVesselImage(assetId, vesselId, imageId) {
+        const orgId = authManager.getCurrentOrganizationId();
+        const userId = authManager.getCurrentUser()?.id;
+        const asset = this.getAsset(assetId);
         const vessel = this.getVessel(assetId, vesselId);
+
         if (!vessel || !vessel.images) return false;
 
         const index = vessel.images.findIndex(img => img.id === imageId);
-        if (index !== -1) {
-            vessel.images.splice(index, 1);
-            await this.saveToStorage();
-            return true;
+
+        if (index === -1) {
+            return false;
         }
-        return false;
+
+        const deletedImage = vessel.images[index];
+        vessel.images.splice(index, 1);
+
+        // CLOUD-FIRST: Save to Supabase immediately
+        if (authManager.useSupabase) {
+            console.log('[DATA-MANAGER] Deleting vessel image from Supabase');
+            const result = await syncService.uploadAsset(asset, orgId, userId);
+
+            if (!result.success) {
+                console.error('[DATA-MANAGER] Failed to delete vessel image from Supabase:', result.error);
+                // Rollback local change
+                vessel.images.splice(index, 0, deletedImage);
+                throw new Error(`Failed to delete vessel image from cloud: ${result.error}`);
+            }
+
+            console.log('[DATA-MANAGER] Vessel image deleted from Supabase successfully');
+        }
+
+        // Update local cache
+        await this.saveToStorage();
+
+        return true;
     }
 
     async renameVesselImage(assetId, vesselId, imageId, newName) {
+        const orgId = authManager.getCurrentOrganizationId();
+        const userId = authManager.getCurrentUser()?.id;
+        const asset = this.getAsset(assetId);
         const vessel = this.getVessel(assetId, vesselId);
+
         if (!vessel || !vessel.images) return false;
 
         const image = vessel.images.find(img => img.id === imageId);
-        if (image) {
-            image.name = newName;
-            await this.saveToStorage();
-            return true;
+
+        if (!image) {
+            return false;
         }
-        return false;
+
+        const oldName = image.name;
+        image.name = newName;
+
+        // CLOUD-FIRST: Save to Supabase immediately
+        if (authManager.useSupabase) {
+            console.log('[DATA-MANAGER] Renaming vessel image in Supabase:', newName);
+            const result = await syncService.uploadAsset(asset, orgId, userId);
+
+            if (!result.success) {
+                console.error('[DATA-MANAGER] Failed to rename vessel image in Supabase:', result.error);
+                // Rollback local change
+                image.name = oldName;
+                throw new Error(`Failed to rename vessel image in cloud: ${result.error}`);
+            }
+
+            console.log('[DATA-MANAGER] Vessel image renamed in Supabase successfully');
+        }
+
+        // Update local cache
+        await this.saveToStorage();
+
+        return true;
     }
 
     // Scan operations
@@ -646,16 +838,41 @@ class DataManager {
     }
 
     async deleteScan(assetId, vesselId, scanId) {
+        const orgId = authManager.getCurrentOrganizationId();
+        const userId = authManager.getCurrentUser()?.id;
+        const asset = this.getAsset(assetId);
         const vessel = this.getVessel(assetId, vesselId);
+
         if (!vessel) return false;
 
         const index = vessel.scans.findIndex(s => s.id === scanId);
-        if (index !== -1) {
-            vessel.scans.splice(index, 1);
-            await this.saveToStorage();
-            return true;
+
+        if (index === -1) {
+            return false;
         }
-        return false;
+
+        const deletedScan = vessel.scans[index];
+        vessel.scans.splice(index, 1);
+
+        // CLOUD-FIRST: Save to Supabase immediately
+        if (authManager.useSupabase) {
+            console.log('[DATA-MANAGER] Deleting scan from Supabase:', deletedScan.name);
+            const result = await syncService.uploadAsset(asset, orgId, userId);
+
+            if (!result.success) {
+                console.error('[DATA-MANAGER] Failed to delete scan from Supabase:', result.error);
+                // Rollback local change
+                vessel.scans.splice(index, 0, deletedScan);
+                throw new Error(`Failed to delete scan from cloud: ${result.error}`);
+            }
+
+            console.log('[DATA-MANAGER] Scan deleted from Supabase successfully');
+        }
+
+        // Update local cache
+        await this.saveToStorage();
+
+        return true;
     }
 
     // Search and filter operations
