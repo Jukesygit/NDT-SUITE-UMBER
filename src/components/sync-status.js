@@ -18,6 +18,11 @@ class SyncStatus {
      * Create and inject sync status UI
      */
     create() {
+        // If container already exists, don't create a duplicate
+        if (this.container && document.body.contains(this.container)) {
+            return this.container;
+        }
+
         // Create container
         this.container = document.createElement('div');
         this.container.className = 'sync-status';
