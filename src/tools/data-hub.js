@@ -289,7 +289,20 @@ function renderVesselDetailView(assetId) {
                                     <div class="space-y-1 text-sm text-gray-600 dark:text-gray-400">
                                         <div>Scans: ${scanCount}</div>
                                         <div>Images: ${imageCount}</div>
+                                        ${vessel.strakes && vessel.strakes.length > 0 ? `<div>Strakes: ${vessel.strakes.length}</div>` : ''}
                                     </div>
+                                    ${vessel.strakes && vessel.strakes.length > 0 ? `
+                                        <div class="mt-2 flex flex-wrap gap-2">
+                                            ${vessel.strakes.map(strake => {
+                                                const coverage = dataManager.calculateStrakeCoverage(assetId, vessel.id, strake.id);
+                                                return `
+                                                    <div class="px-2 py-1 bg-blue-100 dark:bg-blue-900 rounded text-xs font-medium text-blue-800 dark:text-blue-200">
+                                                        ${strake.name}: ${coverage.coveragePercentage.toFixed(0)}%
+                                                    </div>
+                                                `;
+                                            }).join('')}
+                                        </div>
+                                    ` : ''}
                                 </div>
                             </div>
 
@@ -470,18 +483,28 @@ function renderVesselDetailView(assetId) {
                                     `}
                                 </div>
 
-                                <!-- Scans Section -->
+                                <!-- Scans Section with Strake Grouping -->
                                 <div>
-                                    ${vessel.scans.length > 0 ? `
-                                        <div class="space-y-2">
-                                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Scans</div>
-                                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                        ${vessel.scans.map(scan => `
+                                    <div class="flex justify-between items-center mb-3">
+                                        <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Scans${vessel.strakes && vessel.strakes.length > 0 ? ' by Strake' : ''}</div>
+                                        ${vessel.strakes && vessel.strakes.length > 0 ? '' : `
+                                            <button class="manage-strakes-btn text-xs bg-purple-600 text-white px-3 py-1.5 rounded hover:bg-purple-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                + Add Strake
+                                            </button>
+                                        `}
+                                    </div>
+                                    ${(() => {
+                                        const renderScanCard = (scan) => `
                                             <div class="scan-card-compact group relative cursor-pointer bg-gray-50 dark:bg-gray-700/50 rounded-lg overflow-hidden hover:ring-2 hover:ring-blue-500 transition-all" data-scan-id="${scan.id}" data-asset-id="${assetId}" data-vessel-id="${vessel.id}">
                                                 ${scan.thumbnail ? `
                                                     <div class="aspect-video bg-gray-200 dark:bg-gray-600 relative">
                                                         <img src="${scan.thumbnail}" alt="${scan.name}" class="w-full h-full object-cover">
-                                                        <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center">
+                                                        <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center gap-2">
+                                                            <button class="reassign-scan-btn opacity-0 group-hover:opacity-100 bg-purple-600 text-white p-2 rounded-full hover:bg-purple-700 transition-all" data-scan-id="${scan.id}" data-asset-id="${assetId}" data-vessel-id="${vessel.id}" aria-label="Reassign to strake" title="Reassign to strake">
+                                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path>
+                                                                </svg>
+                                                            </button>
                                                             <button class="delete-scan-btn opacity-0 group-hover:opacity-100 bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-all" data-scan-id="${scan.id}" data-asset-id="${assetId}" data-vessel-id="${vessel.id}" aria-label="Delete scan" title="Delete scan">
                                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -494,7 +517,12 @@ function renderVesselDetailView(assetId) {
                                                         <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                                                         </svg>
-                                                        <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center">
+                                                        <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center gap-2">
+                                                            <button class="reassign-scan-btn opacity-0 group-hover:opacity-100 bg-purple-600 text-white p-2 rounded-full hover:bg-purple-700 transition-all" data-scan-id="${scan.id}" data-asset-id="${assetId}" data-vessel-id="${vessel.id}" aria-label="Reassign to strake" title="Reassign to strake">
+                                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path>
+                                                                </svg>
+                                                            </button>
                                                             <button class="delete-scan-btn opacity-0 group-hover:opacity-100 bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-all" data-scan-id="${scan.id}" data-asset-id="${assetId}" data-vessel-id="${vessel.id}" aria-label="Delete scan" title="Delete scan">
                                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -512,10 +540,79 @@ function renderVesselDetailView(assetId) {
                                                     }">${scan.toolType.toUpperCase()}</span>
                                                 </div>
                                             </div>
-                                        `).join('')}
-                                            </div>
-                                        </div>
-                                    ` : '<p class="text-sm text-gray-500 dark:text-gray-400 italic">No scans yet</p>'}
+                                        `;
+
+                                        if (!vessel.strakes || vessel.strakes.length === 0) {
+                                            // No strakes - show all scans in flat list
+                                            return vessel.scans.length > 0 ? `
+                                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                                    ${vessel.scans.map(renderScanCard).join('')}
+                                                </div>
+                                            ` : '<p class="text-sm text-gray-500 dark:text-gray-400 italic">No scans yet</p>';
+                                        } else {
+                                            // Group scans by strake
+                                            const unassignedScans = vessel.scans.filter(s => !s.strakeId);
+
+                                            return `
+                                                <div class="space-y-4">
+                                                    <div class="flex justify-end">
+                                                        <button class="manage-strakes-btn text-xs bg-purple-600 text-white px-3 py-1.5 rounded hover:bg-purple-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                            Manage Strakes
+                                                        </button>
+                                                    </div>
+                                                    ${vessel.strakes.map(strake => {
+                                                        const strakeScans = vessel.scans.filter(s => s.strakeId === strake.id);
+                                                        const coverage = dataManager.calculateStrakeCoverage(assetId, vessel.id, strake.id);
+
+                                                        return `
+                                                            <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4 bg-white dark:bg-gray-800">
+                                                                <div class="flex justify-between items-start mb-3">
+                                                                    <div class="flex-1">
+                                                                        <div class="flex items-center gap-2 mb-2">
+                                                                            <h4 class="font-semibold text-gray-900 dark:text-white">${strake.name}</h4>
+                                                                            <button class="edit-strake-btn text-gray-500 hover:text-blue-600 dark:hover:text-blue-400" data-strake-id="${strake.id}" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" title="Edit strake">
+                                                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                                                                </svg>
+                                                                            </button>
+                                                                        </div>
+                                                                        <div class="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                                                                            <div>Target: ${strake.totalArea.toFixed(1)} cm² (${strake.requiredCoverage}% required)</div>
+                                                                            <div>Scanned: ${coverage.totalScannedArea.toFixed(1)} cm² (${coverage.scanCount} scan${coverage.scanCount !== 1 ? 's' : ''})</div>
+                                                                        </div>
+                                                                        <div class="mt-2">
+                                                                            <div class="flex items-center gap-2 mb-1">
+                                                                                <div class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                                                                    <div class="h-full ${coverage.isComplete ? 'bg-green-500' : 'bg-blue-500'} transition-all duration-500" style="width: ${Math.min(coverage.coveragePercentage, 100)}%"></div>
+                                                                                </div>
+                                                                                <span class="text-xs font-semibold ${coverage.isComplete ? 'text-green-600 dark:text-green-400' : 'text-blue-600 dark:text-blue-400'}">${coverage.coveragePercentage.toFixed(1)}%</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                ${strakeScans.length > 0 ? `
+                                                                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
+                                                                        ${strakeScans.map(renderScanCard).join('')}
+                                                                    </div>
+                                                                ` : `
+                                                                    <p class="text-xs text-gray-500 dark:text-gray-400 italic mt-2">No scans assigned to this strake</p>
+                                                                `}
+                                                            </div>
+                                                        `;
+                                                    }).join('')}
+
+                                                    ${unassignedScans.length > 0 ? `
+                                                        <div class="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-800/50">
+                                                            <h4 class="font-semibold text-gray-700 dark:text-gray-300 mb-3">Unassigned Scans</h4>
+                                                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                                                ${unassignedScans.map(renderScanCard).join('')}
+                                                            </div>
+                                                        </div>
+                                                    ` : ''}
+                                                </div>
+                                            `;
+                                        }
+                                    })()}
                                 </div>
                             </div>
                         </div>
@@ -585,6 +682,30 @@ function renderVesselDetailView(assetId) {
                 renderStats();
                 renderVesselDetailView(assetId);
             }
+        });
+    });
+
+    // Add strake management button listeners
+    dom.vesselDetailView.querySelectorAll('.manage-strakes-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showStrakeManagementDialog(btn.dataset.assetId, btn.dataset.vesselId);
+        });
+    });
+
+    // Add edit strake button listeners
+    dom.vesselDetailView.querySelectorAll('.edit-strake-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showEditStrakeDialog(btn.dataset.assetId, btn.dataset.vesselId, btn.dataset.strakeId);
+        });
+    });
+
+    // Add reassign scan button listeners
+    dom.vesselDetailView.querySelectorAll('.reassign-scan-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showReassignScanDialog(btn.dataset.assetId, btn.dataset.vesselId, btn.dataset.scanId);
         });
     });
 
@@ -988,6 +1109,223 @@ async function createNewVessel(assetId) {
         renderStats();
         renderVesselDetailView(assetId);
     }
+}
+
+// Strake Management Functions
+function showStrakeManagementDialog(assetId, vesselId) {
+    const vessel = dataManager.getVessel(assetId, vesselId);
+    if (!vessel) return;
+
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <h2 class="text-xl font-bold mb-4 dark:text-white">Manage Strakes - ${vessel.name}</h2>
+
+            <div class="mb-4">
+                <button id="add-strake-btn" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors">
+                    + Add Strake
+                </button>
+            </div>
+
+            <div id="strakes-list" class="space-y-3">
+                ${(vessel.strakes || []).length > 0 ? vessel.strakes.map(strake => {
+                    const coverage = dataManager.calculateStrakeCoverage(assetId, vesselId, strake.id);
+                    return `
+                        <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                            <div class="flex justify-between items-start mb-2">
+                                <div class="flex-1">
+                                    <h3 class="font-semibold dark:text-white">${strake.name}</h3>
+                                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                                        Total Area: ${strake.totalArea.toFixed(1)} cm² |
+                                        Required: ${strake.requiredCoverage}% |
+                                        Coverage: ${coverage.coveragePercentage.toFixed(1)}%
+                                    </p>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button class="edit-strake-inline-btn text-blue-600 hover:text-blue-700 dark:text-blue-400" data-strake-id="${strake.id}">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                        </svg>
+                                    </button>
+                                    <button class="delete-strake-btn text-red-600 hover:text-red-700 dark:text-red-400" data-strake-id="${strake.id}">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                    <div class="h-full ${coverage.isComplete ? 'bg-green-500' : 'bg-blue-500'}" style="width: ${Math.min(coverage.coveragePercentage, 100)}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('') : '<p class="text-gray-500 dark:text-gray-400 italic">No strakes yet. Add a strake to get started.</p>'}
+            </div>
+
+            <div class="flex gap-3 mt-6">
+                <button id="close-strake-dialog-btn" class="flex-1 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600 transition-colors">Close</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Add strake button
+    modal.querySelector('#add-strake-btn').addEventListener('click', async () => {
+        const name = prompt('Enter strake name:');
+        if (!name || !name.trim()) return;
+
+        const totalAreaStr = prompt('Enter total area (cm²):');
+        const totalArea = parseFloat(totalAreaStr);
+        if (isNaN(totalArea) || totalArea <= 0) {
+            alert('Please enter a valid area');
+            return;
+        }
+
+        const requiredCoverageStr = prompt('Enter required coverage (%):', '100');
+        const requiredCoverage = parseFloat(requiredCoverageStr);
+        if (isNaN(requiredCoverage) || requiredCoverage <= 0 || requiredCoverage > 100) {
+            alert('Please enter a valid percentage between 1 and 100');
+            return;
+        }
+
+        await dataManager.createStrake(assetId, vesselId, {
+            name: name.trim(),
+            totalArea,
+            requiredCoverage
+        });
+
+        document.body.removeChild(modal);
+        renderVesselDetailView(assetId);
+        showStrakeManagementDialog(assetId, vesselId);
+    });
+
+    // Edit strake buttons
+    modal.querySelectorAll('.edit-strake-inline-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const strakeId = btn.dataset.strakeId;
+            document.body.removeChild(modal);
+            showEditStrakeDialog(assetId, vesselId, strakeId);
+        });
+    });
+
+    // Delete strake buttons
+    modal.querySelectorAll('.delete-strake-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const strakeId = btn.dataset.strakeId;
+            const strake = dataManager.getStrake(assetId, vesselId, strakeId);
+            if (strake && confirm(`Delete strake "${strake.name}"?`)) {
+                await dataManager.deleteStrake(assetId, vesselId, strakeId);
+                document.body.removeChild(modal);
+                renderVesselDetailView(assetId);
+                showStrakeManagementDialog(assetId, vesselId);
+            }
+        });
+    });
+
+    // Close button
+    modal.querySelector('#close-strake-dialog-btn').addEventListener('click', () => {
+        document.body.removeChild(modal);
+        renderVesselDetailView(assetId);
+    });
+
+    // Click outside to close
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            document.body.removeChild(modal);
+            renderVesselDetailView(assetId);
+        }
+    });
+}
+
+function showEditStrakeDialog(assetId, vesselId, strakeId) {
+    const strake = dataManager.getStrake(assetId, vesselId, strakeId);
+    if (!strake) return;
+
+    const name = prompt('Enter strake name:', strake.name);
+    if (!name || !name.trim()) return;
+
+    const totalAreaStr = prompt('Enter total area (cm²):', strake.totalArea.toString());
+    const totalArea = parseFloat(totalAreaStr);
+    if (isNaN(totalArea) || totalArea <= 0) {
+        alert('Please enter a valid area');
+        return;
+    }
+
+    const requiredCoverageStr = prompt('Enter required coverage (%):', strake.requiredCoverage.toString());
+    const requiredCoverage = parseFloat(requiredCoverageStr);
+    if (isNaN(requiredCoverage) || requiredCoverage <= 0 || requiredCoverage > 100) {
+        alert('Please enter a valid percentage between 1 and 100');
+        return;
+    }
+
+    dataManager.updateStrake(assetId, vesselId, strakeId, {
+        name: name.trim(),
+        totalArea,
+        requiredCoverage
+    }).then(() => {
+        renderVesselDetailView(assetId);
+    });
+}
+
+function showReassignScanDialog(assetId, vesselId, scanId) {
+    const vessel = dataManager.getVessel(assetId, vesselId);
+    const scan = dataManager.getScan(assetId, vesselId, scanId);
+    if (!vessel || !scan) return;
+
+    if (!vessel.strakes || vessel.strakes.length === 0) {
+        alert('No strakes available. Please create strakes first.');
+        return;
+    }
+
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h2 class="text-xl font-bold mb-4 dark:text-white">Assign Scan to Strake</h2>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Scan: ${scan.name}</p>
+
+            <div class="space-y-2 mb-6">
+                <label class="block">
+                    <input type="radio" name="strake" value="" ${!scan.strakeId ? 'checked' : ''} class="mr-2">
+                    <span class="dark:text-gray-300">Unassigned</span>
+                </label>
+                ${vessel.strakes.map(strake => `
+                    <label class="block">
+                        <input type="radio" name="strake" value="${strake.id}" ${scan.strakeId === strake.id ? 'checked' : ''} class="mr-2">
+                        <span class="dark:text-gray-300">${strake.name}</span>
+                    </label>
+                `).join('')}
+            </div>
+
+            <div class="flex gap-3">
+                <button id="assign-scan-btn" class="flex-1 bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 transition-colors">Assign</button>
+                <button id="cancel-assign-btn" class="flex-1 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    modal.querySelector('#assign-scan-btn').addEventListener('click', async () => {
+        const selectedStrakeId = modal.querySelector('input[name="strake"]:checked')?.value || null;
+        await dataManager.assignScanToStrake(assetId, vesselId, scanId, selectedStrakeId);
+        document.body.removeChild(modal);
+        renderVesselDetailView(assetId);
+    });
+
+    modal.querySelector('#cancel-assign-btn').addEventListener('click', () => {
+        document.body.removeChild(modal);
+    });
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            document.body.removeChild(modal);
+        }
+    });
 }
 
 function showAssetMenu(event, assetId) {
