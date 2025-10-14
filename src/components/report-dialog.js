@@ -932,3 +932,4 @@ class ReportDialog {
 const reportDialog = new ReportDialog();
 
 export default reportDialog;
+
