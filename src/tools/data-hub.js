@@ -319,11 +319,21 @@ function renderVesselDetailView(assetId) {
                                                     </svg>
                                                 </button>
                                             </div>
-                                            ${vessel.locationDrawing.annotations && vessel.locationDrawing.annotations.length > 0 ? `
-                                                <div class="absolute top-2 right-2 bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-bold">
-                                                    ${vessel.locationDrawing.annotations.length} annotation${vessel.locationDrawing.annotations.length !== 1 ? 's' : ''}
-                                                </div>
-                                            ` : ''}
+                                            <div class="absolute top-2 right-2 flex flex-col gap-1">
+                                                ${vessel.locationDrawing.annotations && vessel.locationDrawing.annotations.length > 0 ? `
+                                                    <div class="bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-bold">
+                                                        ${vessel.locationDrawing.annotations.length} annotation${vessel.locationDrawing.annotations.length !== 1 ? 's' : ''}
+                                                    </div>
+                                                ` : ''}
+                                                ${vessel.locationDrawing.comment ? `
+                                                    <div class="bg-purple-600 text-white px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+                                                        </svg>
+                                                        Comment
+                                                    </div>
+                                                ` : ''}
+                                            </div>
                                         </div>
                                     ` : `
                                         <div class="aspect-video bg-gray-100 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center">
@@ -361,11 +371,21 @@ function renderVesselDetailView(assetId) {
                                                     </svg>
                                                 </button>
                                             </div>
-                                            ${vessel.gaDrawing.annotations && vessel.gaDrawing.annotations.length > 0 ? `
-                                                <div class="absolute top-2 right-2 bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-bold">
-                                                    ${vessel.gaDrawing.annotations.length} annotation${vessel.gaDrawing.annotations.length !== 1 ? 's' : ''}
-                                                </div>
-                                            ` : ''}
+                                            <div class="absolute top-2 right-2 flex flex-col gap-1">
+                                                ${vessel.gaDrawing.annotations && vessel.gaDrawing.annotations.length > 0 ? `
+                                                    <div class="bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-bold">
+                                                        ${vessel.gaDrawing.annotations.length} annotation${vessel.gaDrawing.annotations.length !== 1 ? 's' : ''}
+                                                    </div>
+                                                ` : ''}
+                                                ${vessel.gaDrawing.comment ? `
+                                                    <div class="bg-purple-600 text-white px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+                                                        </svg>
+                                                        Comment
+                                                    </div>
+                                                ` : ''}
+                                            </div>
                                         </div>
                                     ` : `
                                         <div class="aspect-video bg-gray-100 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center">
@@ -379,6 +399,38 @@ function renderVesselDetailView(assetId) {
                                     `}
                                 </div>
                             </div>
+
+                            <!-- Generated Reports Section -->
+                            ${vessel.reports && vessel.reports.length > 0 ? `
+                                <div class="glass-panel p-4 mb-4">
+                                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-3">Generated Reports</div>
+                                    <div class="space-y-2">
+                                        ${vessel.reports.map(report => `
+                                            <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 flex justify-between items-center">
+                                                <div class="flex-grow">
+                                                    <div class="font-semibold text-sm text-gray-900 dark:text-white">${report.reportNumber || 'Untitled Report'}</div>
+                                                    <div class="text-xs text-gray-600 dark:text-gray-400">
+                                                        Generated: ${new Date(report.timestamp).toLocaleDateString()} by ${report.generatedBy}
+                                                    </div>
+                                                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                        Formats: ${report.formats.join(', ').toUpperCase()}
+                                                    </div>
+                                                </div>
+                                                <button class="delete-report-btn bg-red-600 text-white p-2 rounded hover:bg-red-700 transition-colors"
+                                                        data-report-id="${report.id}"
+                                                        data-vessel-id="${vessel.id}"
+                                                        data-asset-id="${assetId}"
+                                                        aria-label="Delete report"
+                                                        title="Delete report">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
 
                             <!-- Images and Scans Side by Side -->
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -583,6 +635,21 @@ function renderVesselDetailView(assetId) {
             e.stopPropagation();
             if (confirm('Delete this image?')) {
                 await dataManager.deleteVesselImage(btn.dataset.assetId, btn.dataset.vesselId, btn.dataset.imageId);
+                renderStats();
+                renderVesselDetailView(assetId);
+            }
+        });
+    });
+
+    // Add event listeners for report delete buttons
+    dom.vesselDetailView.querySelectorAll('.delete-report-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const reportId = btn.dataset.reportId;
+            const vesselId = btn.dataset.vesselId;
+            const assetId = btn.dataset.assetId;
+            if (confirm('Delete this report record from the hub? (This will not delete the downloaded files)')) {
+                await dataManager.deleteVesselReport(assetId, vesselId, reportId);
                 renderStats();
                 renderVesselDetailView(assetId);
             }
@@ -1380,7 +1447,8 @@ function handleLocationDrawingUpload(assetId, vesselId) {
         reader.onload = async (event) => {
             const locationDrawing = {
                 imageDataUrl: event.target.result,
-                annotations: []
+                annotations: [],
+                comment: ''
             };
             await dataManager.updateVessel(assetId, vesselId, { locationDrawing });
             renderVesselDetailView(assetId);
@@ -1402,7 +1470,8 @@ function handleGADrawingUpload(assetId, vesselId) {
         reader.onload = async (event) => {
             const gaDrawing = {
                 imageDataUrl: event.target.result,
-                annotations: []
+                annotations: [],
+                comment: ''
             };
             await dataManager.updateVessel(assetId, vesselId, { gaDrawing });
             renderVesselDetailView(assetId);
@@ -1430,9 +1499,21 @@ function openDrawingAnnotator(assetId, vesselId, drawingType) {
         <div class="flex-shrink-0 bg-gray-900 border-b border-gray-700 px-6 py-4 flex justify-between items-center">
             <div class="flex-grow">
                 <h2 class="text-xl font-bold text-white">${title} - ${vessel.name}</h2>
-                <p class="text-sm text-gray-400">Select a tool, then click or drag on the drawing to annotate. Right-click annotations to delete.</p>
+                <p class="text-sm text-gray-400">Select a tool, then click or drag on the drawing to annotate. Click annotations to edit, right-click to delete.</p>
             </div>
             <div class="flex gap-3">
+                <button id="show-annotations-list-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                    List
+                </button>
+                <button id="edit-comment-btn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+                    </svg>
+                    Comment
+                </button>
                 <button id="clear-annotations-btn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
                     Clear All
                 </button>
@@ -1444,9 +1525,24 @@ function openDrawingAnnotator(assetId, vesselId, drawingType) {
                 </button>
             </div>
         </div>
-        <div class="flex-grow overflow-auto flex items-center justify-center p-6">
-            <div class="relative inline-block">
-                <canvas id="annotation-canvas" class="border-2 border-gray-600 cursor-crosshair" style="max-width: 100%; max-height: calc(100vh - 200px);"></canvas>
+        <div class="flex-grow overflow-hidden flex">
+            <div class="flex-grow overflow-auto flex items-center justify-center p-6">
+                <div class="relative inline-block">
+                    <canvas id="annotation-canvas" class="border-2 border-gray-600 cursor-crosshair" style="max-width: 100%; max-height: calc(100vh - 200px);"></canvas>
+                </div>
+            </div>
+            <div id="annotations-sidebar" class="hidden w-80 bg-gray-800 border-l border-gray-700 flex flex-col overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-700 flex justify-between items-center">
+                    <h3 class="text-lg font-bold text-white">Annotations</h3>
+                    <button id="close-sidebar-btn" class="text-gray-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div id="annotations-list" class="flex-grow overflow-y-auto p-4 space-y-2">
+                    <!-- Will be populated dynamically -->
+                </div>
             </div>
         </div>
         <div class="flex-shrink-0 bg-gray-900 border-t border-gray-700 px-6 py-3">
@@ -1469,7 +1565,7 @@ function openDrawingAnnotator(assetId, vesselId, drawingType) {
                     <span>Box = Click & Drag</span>
                 </div>
                 <div class="flex items-center gap-2 text-gray-400">
-                    <span>Right-click = Delete</span>
+                    <span>Double-click = Edit | Right-click = Delete</span>
                 </div>
                 <div id="annotation-count" class="ml-auto font-semibold text-white">
                     ${drawing.annotations?.length || 0} annotation(s)
@@ -1484,6 +1580,7 @@ function openDrawingAnnotator(assetId, vesselId, drawingType) {
     const canvas = modal.querySelector('#annotation-canvas');
     const ctx = canvas.getContext('2d');
     let annotations = drawing.annotations ? [...drawing.annotations] : [];
+    let drawingComment = drawing.comment || '';
     let img = new Image();
     let currentTool = 'marker'; // 'marker' or 'box'
     let isDrawing = false;
@@ -1497,6 +1594,115 @@ function openDrawingAnnotator(assetId, vesselId, drawingType) {
     // Tool selection buttons
     const toolMarkerBtn = modal.querySelector('#tool-marker');
     const toolBoxBtn = modal.querySelector('#tool-box');
+    const annotationsSidebar = modal.querySelector('#annotations-sidebar');
+    const annotationsList = modal.querySelector('#annotations-list');
+
+    // Function to update annotations list sidebar
+    function updateAnnotationsList() {
+        if (annotations.length === 0) {
+            annotationsList.innerHTML = '<p class="text-gray-400 text-sm italic">No annotations yet</p>';
+            return;
+        }
+
+        annotationsList.innerHTML = annotations.map((ann, index) => `
+            <div class="annotation-list-item bg-gray-700 p-3 rounded-lg cursor-pointer hover:bg-gray-600 transition-colors" data-index="${index}">
+                <div class="flex items-start justify-between">
+                    <div class="flex-grow">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${ann.type === 'box' ? 'bg-green-600' : 'bg-red-600'} text-white">
+                                ${index + 1}
+                            </span>
+                            <span class="text-xs font-semibold ${ann.type === 'box' ? 'text-green-400' : 'text-red-400'}">
+                                ${ann.type === 'box' ? 'Box' : 'Marker'}
+                            </span>
+                        </div>
+                        <div class="text-sm text-white ${!ann.label ? 'italic text-gray-400' : ''}">
+                            ${ann.label || 'No label'}
+                        </div>
+                    </div>
+                    <div class="flex gap-1">
+                        <button class="edit-annotation-btn p-1 text-blue-400 hover:text-blue-300" data-index="${index}" title="Edit">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                            </svg>
+                        </button>
+                        <button class="delete-annotation-btn p-1 text-red-400 hover:text-red-300" data-index="${index}" title="Delete">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        // Add click handlers for list items
+        annotationsList.querySelectorAll('.annotation-list-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                if (!e.target.closest('.edit-annotation-btn') && !e.target.closest('.delete-annotation-btn')) {
+                    const index = parseInt(item.dataset.index);
+                    hoveredAnnotationIndex = index;
+                    renderCanvas();
+                    // Scroll annotation into view on canvas if needed
+                    canvas.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
+        });
+
+        // Add click handlers for edit buttons
+        annotationsList.querySelectorAll('.edit-annotation-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const index = parseInt(btn.dataset.index);
+                editAnnotationLabel(index);
+            });
+        });
+
+        // Add click handlers for delete buttons
+        annotationsList.querySelectorAll('.delete-annotation-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const index = parseInt(btn.dataset.index);
+                if (confirm(`Delete annotation ${index + 1}?`)) {
+                    annotations.splice(index, 1);
+                    updateAnnotationsList();
+                    renderCanvas();
+                }
+            });
+        });
+    }
+
+    // Function to edit annotation label
+    function editAnnotationLabel(index) {
+        const annotation = annotations[index];
+        const newLabel = prompt(`Edit label for annotation ${index + 1}:`, annotation.label || '');
+        if (newLabel !== null) {
+            annotation.label = newLabel;
+            updateAnnotationsList();
+            renderCanvas();
+        }
+    }
+
+    // Show/hide annotations list
+    modal.querySelector('#show-annotations-list-btn').addEventListener('click', () => {
+        annotationsSidebar.classList.toggle('hidden');
+        updateAnnotationsList();
+    });
+
+    modal.querySelector('#close-sidebar-btn').addEventListener('click', () => {
+        annotationsSidebar.classList.add('hidden');
+    });
+
+    // Edit comment button
+    modal.querySelector('#edit-comment-btn').addEventListener('click', () => {
+        const newComment = prompt('Enter general comment for this drawing:', drawingComment);
+        if (newComment !== null) {
+            drawingComment = newComment;
+            if (drawingComment) {
+                alert('Comment saved! It will be included when you save & close.');
+            }
+        }
+    });
 
     toolMarkerBtn.addEventListener('click', () => {
         currentTool = 'marker';
@@ -1764,6 +1970,15 @@ function openDrawingAnnotator(assetId, vesselId, drawingType) {
         }
     });
 
+    // Canvas double-click handler - edit annotation
+    canvas.addEventListener('dblclick', (e) => {
+        const pos = getMousePos(e);
+        const index = findAnnotationAt(pos.x, pos.y);
+        if (index !== -1) {
+            editAnnotationLabel(index);
+        }
+    });
+
     // Canvas context menu handler - delete annotation
     canvas.addEventListener('contextmenu', (e) => {
         e.preventDefault();
@@ -1772,6 +1987,7 @@ function openDrawingAnnotator(assetId, vesselId, drawingType) {
         if (index !== -1) {
             if (confirm(`Delete annotation ${index + 1}?`)) {
                 annotations.splice(index, 1);
+                updateAnnotationsList();
                 renderCanvas();
             }
         }
@@ -1781,6 +1997,7 @@ function openDrawingAnnotator(assetId, vesselId, drawingType) {
     modal.querySelector('#clear-annotations-btn').addEventListener('click', () => {
         if (annotations.length > 0 && confirm('Clear all annotations?')) {
             annotations = [];
+            updateAnnotationsList();
             renderCanvas();
         }
     });
@@ -1789,7 +2006,8 @@ function openDrawingAnnotator(assetId, vesselId, drawingType) {
     modal.querySelector('#save-annotations-btn').addEventListener('click', async () => {
         const updatedDrawing = {
             imageDataUrl: drawing.imageDataUrl,
-            annotations: annotations
+            annotations: annotations,
+            comment: drawingComment
         };
 
         if (drawingType === 'location') {

@@ -1,5 +1,6 @@
 // Report Dialog Component - UI for generating vessel inspection reports
 import reportGenerator from '../report-generator.js';
+import dataManager from '../data-manager.js';
 
 class ReportDialog {
     constructor() {
@@ -213,6 +214,24 @@ class ReportDialog {
                         </div>
 
                         <div class="form-section">
+                            <h3>Scanning Log (Optional)</h3>
+                            <label class="format-option" style="margin-bottom: 15px;">
+                                <input type="checkbox" id="includeScanningLog" name="includeScanningLog">
+                                <span class="format-label">
+                                    <strong>Include Scanning Log in Report</strong>
+                                    <small>Document detailed scan session information</small>
+                                </span>
+                            </label>
+
+                            <div id="scanningLogContainer" style="display: none;">
+                                <div id="scanningLogEntries"></div>
+                                <button type="button" class="btn btn-secondary" id="addLogEntryBtn" style="margin-top: 10px;">
+                                    + Add Log Entry
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="form-section">
                             <h3>Output Format</h3>
                             <div class="format-options">
                                 <label class="format-option">
@@ -239,6 +258,17 @@ class ReportDialog {
                                     </span>
                                 </label>
                             </div>
+                        </div>
+
+                        <div class="form-section">
+                            <h3>Save to Hub</h3>
+                            <label class="format-option">
+                                <input type="checkbox" id="saveToHub" name="saveToHub" checked>
+                                <span class="format-label">
+                                    <strong>Save Report to Data Hub</strong>
+                                    <small>Store a copy of this report with the vessel for future reference</small>
+                                </span>
+                            </label>
                         </div>
                     </form>
                 </div>
@@ -547,6 +577,84 @@ class ReportDialog {
                 text-align: center;
                 margin: 0;
             }
+
+            .scanning-log-entry {
+                background: #0f172a;
+                border: 1px solid #334155;
+                border-radius: 8px;
+                padding: 16px;
+                margin-bottom: 12px;
+                position: relative;
+            }
+
+            .scanning-log-entry-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 12px;
+            }
+
+            .scanning-log-entry-number {
+                font-weight: bold;
+                color: #3b82f6;
+                font-size: 14px;
+            }
+
+            .scanning-log-entry-delete {
+                background: #dc2626;
+                color: white;
+                border: none;
+                padding: 4px 12px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 12px;
+                transition: all 0.2s;
+            }
+
+            .scanning-log-entry-delete:hover {
+                background: #b91c1c;
+            }
+
+            .scanning-log-grid {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 12px;
+            }
+
+            .scanning-log-grid .form-group {
+                margin-bottom: 0;
+            }
+
+            .scanning-log-grid input,
+            .scanning-log-grid textarea {
+                width: 100%;
+                padding: 8px;
+                background: #1e293b;
+                border: 1px solid #475569;
+                border-radius: 4px;
+                color: #f1f5f9;
+                font-size: 13px;
+                font-family: inherit;
+            }
+
+            .scanning-log-grid input[type="datetime-local"],
+            .scanning-log-grid input[type="number"] {
+                width: 100%;
+            }
+
+            .scanning-log-grid textarea {
+                resize: vertical;
+                min-height: 60px;
+                grid-column: span 2;
+            }
+
+            .scanning-log-grid label {
+                display: block;
+                color: #cbd5e1;
+                font-size: 12px;
+                margin-bottom: 4px;
+                font-weight: 500;
+            }
         `;
 
         document.head.appendChild(style);
@@ -565,12 +673,121 @@ class ReportDialog {
         cancelBtn.addEventListener('click', () => this.hide());
         generateBtn.addEventListener('click', () => this.handleGenerate());
 
+        // Scanning log toggle
+        const includeScanningLogCheckbox = this.dialog.querySelector('#includeScanningLog');
+        const scanningLogContainer = this.dialog.querySelector('#scanningLogContainer');
+
+        includeScanningLogCheckbox.addEventListener('change', (e) => {
+            scanningLogContainer.style.display = e.target.checked ? 'block' : 'none';
+            if (e.target.checked && this.getScanningLogEntries().length === 0) {
+                // Auto-add first entry when enabled
+                this.addScanningLogEntry();
+            }
+        });
+
+        // Add log entry button
+        const addLogEntryBtn = this.dialog.querySelector('#addLogEntryBtn');
+        addLogEntryBtn.addEventListener('click', () => this.addScanningLogEntry());
+
         // Close on overlay click
         this.dialog.addEventListener('click', (e) => {
             if (e.target === this.dialog) {
                 this.hide();
             }
         });
+    }
+
+    addScanningLogEntry() {
+        const container = this.dialog.querySelector('#scanningLogEntries');
+        const entryCount = container.children.length + 1;
+
+        // Get current date/time in local format for datetime-local input
+        const now = new Date();
+        const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+            .toISOString()
+            .slice(0, 16);
+
+        const entryDiv = document.createElement('div');
+        entryDiv.className = 'scanning-log-entry';
+        entryDiv.innerHTML = `
+            <div class="scanning-log-entry-header">
+                <div class="scanning-log-entry-number">Log Entry #${entryCount}</div>
+                <button type="button" class="scanning-log-entry-delete">Delete</button>
+            </div>
+            <div class="scanning-log-grid">
+                <div class="form-group">
+                    <label>Date & Time</label>
+                    <input type="datetime-local" class="log-datetime" value="${localDateTime}">
+                </div>
+                <div class="form-group">
+                    <label>Operator Name</label>
+                    <input type="text" class="log-operator" placeholder="Enter operator name">
+                </div>
+                <div class="form-group">
+                    <label>Equipment Used</label>
+                    <input type="text" class="log-equipment" placeholder="e.g., PAUT Scanner Model XYZ">
+                </div>
+                <div class="form-group">
+                    <label>Settings/Parameters</label>
+                    <input type="text" class="log-settings" placeholder="e.g., Frequency 5MHz, Range 50mm">
+                </div>
+                <div class="form-group">
+                    <label>Temperature (°C)</label>
+                    <input type="text" class="log-temperature" placeholder="e.g., 22">
+                </div>
+                <div class="form-group">
+                    <label>Humidity (%)</label>
+                    <input type="text" class="log-humidity" placeholder="e.g., 45">
+                </div>
+                <div class="form-group">
+                    <label>Notes / Observations</label>
+                    <textarea class="log-notes" placeholder="Any additional observations during scanning..."></textarea>
+                </div>
+            </div>
+        `;
+
+        container.appendChild(entryDiv);
+
+        // Attach delete handler
+        const deleteBtn = entryDiv.querySelector('.scanning-log-entry-delete');
+        deleteBtn.addEventListener('click', () => {
+            entryDiv.remove();
+            this.renumberLogEntries();
+        });
+    }
+
+    renumberLogEntries() {
+        const container = this.dialog.querySelector('#scanningLogEntries');
+        const entries = container.querySelectorAll('.scanning-log-entry');
+        entries.forEach((entry, index) => {
+            const numberDiv = entry.querySelector('.scanning-log-entry-number');
+            numberDiv.textContent = `Log Entry #${index + 1}`;
+        });
+    }
+
+    getScanningLogEntries() {
+        const includeScanningLog = this.dialog.querySelector('#includeScanningLog').checked;
+        if (!includeScanningLog) {
+            return [];
+        }
+
+        const container = this.dialog.querySelector('#scanningLogEntries');
+        const entries = container.querySelectorAll('.scanning-log-entry');
+        const logEntries = [];
+
+        entries.forEach(entry => {
+            logEntries.push({
+                dateTime: entry.querySelector('.log-datetime').value,
+                operator: entry.querySelector('.log-operator').value,
+                equipment: entry.querySelector('.log-equipment').value,
+                settings: entry.querySelector('.log-settings').value,
+                temperature: entry.querySelector('.log-temperature').value,
+                humidity: entry.querySelector('.log-humidity').value,
+                notes: entry.querySelector('.log-notes').value
+            });
+        });
+
+        return logEntries;
     }
 
     async handleGenerate() {
@@ -589,6 +806,9 @@ class ReportDialog {
             alert('Please select at least one output format.');
             return;
         }
+
+        // Check if user wants to save to hub
+        const saveToHub = formData.get('saveToHub') === 'on';
 
         // Collect metadata - ALL fields including PAUT-specific details
         const metadata = {
@@ -622,7 +842,10 @@ class ReportDialog {
             // Additional Details
             description: formData.get('description'),
             findings: formData.get('findings'),
-            recommendations: formData.get('recommendations')
+            recommendations: formData.get('recommendations'),
+
+            // Scanning Log
+            scanningLog: this.getScanningLogEntries()
         };
 
         // Show progress
@@ -666,6 +889,17 @@ class ReportDialog {
 
             progressText.textContent = 'Reports generated successfully!';
             progressFill.style.width = '100%';
+
+            // Save report metadata to hub if requested
+            if (saveToHub) {
+                progressText.textContent = 'Saving report to hub...';
+                await dataManager.addVesselReport(this.assetId, this.vesselId, {
+                    reportNumber: metadata.reportNumber,
+                    metadata: metadata,
+                    formats: selectedFormats
+                });
+                progressText.textContent = 'Reports generated and saved to hub!';
+            }
 
             // Close dialog after brief delay
             setTimeout(() => {

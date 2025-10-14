@@ -1,0 +1,638 @@
+{
+  "analysis_overview": {
+    "total_reports_analyzed": 12,
+    "report_files": [
+      "ARM-2025-3189-PAUT-ARM-2023-129-PS.docx",
+      "BLP-2024-4719-PAUT.docx",
+      "BRT-2024-9267-PAUT-V-1401.docx",
+      "BRT-2025-359-PAUT-X-0511.docx",
+      "LOM-2025-4884-PAUT-V-2801-1.docx",
+      "LOM-2025-5193-PAUT-3-HC-37711.docx",
+      "LOM-2025-5194-PAUT-2-DH-37713.docx",
+      "LOM-2025-5306-PAUT-2-HC-37007.docx",
+      "LOM-2025-5307-PAUT-2-HC-37001.docx",
+      "LOM-2025-5308-PAUT-2-HC-37008.docx",
+      "NEV-2025-4974-PAUT-H-1701-1.docx",
+      "NEV-2025-5569-PAUT (V-0320-1).docx"
+    ]
+  },
+  "CRITICAL_FIELDS_FOUND_IN_REPORTS": {
+    "description": "These are the essential fields that appear in most/all reports",
+    "fields": [
+      {
+        "field_name": "Description",
+        "frequency": "11/12 reports",
+        "examples": [
+          "PAUT on anomaly ARM-2023-129-PS",
+          "PAUT Hydroform testing of MEG Flash Separator Recycle Heater A",
+          "PAUT corrosion mapping (PACMAP) of X-0511 Booster Cooler",
+          "V-2801-1 TEG Contactor Scrubber – PACMAP of Vessel shell and Dome Ends",
+          "Closed Drains Pipework"
+        ],
+        "current_status": "MISSING - needs to be added"
+      },
+      {
+        "field_name": "Line/Tag Number",
+        "frequency": "11/12 reports",
+        "examples": [
+          "16.00-NG-83-0301-D05-B",
+          "X-2226 A",
+          "V-1401",
+          "X-0511",
+          "V-2801-1",
+          "3\"-HC-37711-GC4",
+          "2\"-DH-37713-GC4",
+          "2\"-HC-37007-GC4",
+          "2\"-HC-37001-GC4",
+          "2\"-HC-37008-GC4"
+        ],
+        "current_status": "MISSING - needs to be added"
+      },
+      {
+        "field_name": "Drawing Number",
+        "frequency": "11/12 reports",
+        "examples": [
+          "BG-ARMA-A1-00-07-83-01-04213",
+          "22814GENERALDWE",
+          "C5117/8001",
+          "BRT1-LC1-FF-OO-00-00005",
+          "AC-LT-FE-00201-01\\nW9419",
+          "02813-NEV-V-0320-1"
+        ],
+        "current_status": "MISSING - needs to be added"
+      },
+      {
+        "field_name": "Material",
+        "frequency": "11/12 reports",
+        "standardized_options": [
+          "Carbon Steel",
+          "Duplex",
+          "Duplex/Super Duplex"
+        ],
+        "current_status": "PARTIALLY IMPLEMENTED - needs dropdown with standard options"
+      },
+      {
+        "field_name": "Coating Type",
+        "frequency": "11/12 reports",
+        "standardized_options": [
+          "Painted",
+          "Uncoated",
+          "Coated"
+        ],
+        "current_status": "MISSING - needs dropdown"
+      },
+      {
+        "field_name": "Temperature",
+        "frequency": "11/12 reports",
+        "standardized_options": [
+          "Ambient",
+          "Ambient (Isolated)",
+          "60°C"
+        ],
+        "current_status": "MISSING - needs dropdown or text field"
+      },
+      {
+        "field_name": "Stress Relief",
+        "frequency": "11/12 reports",
+        "standardized_options": [
+          "N/A",
+          "Yes",
+          "No"
+        ],
+        "current_status": "MISSING - needs dropdown"
+      },
+      {
+        "field_name": "Nominal Thickness",
+        "frequency": "11/12 reports",
+        "examples": [
+          "25mm"
+        ],
+        "current_status": "MISSING - needs numeric field with unit"
+      },
+      {
+        "field_name": "Corrosion Allowance",
+        "frequency": "11/12 reports",
+        "examples": [
+          "0mm",
+          "3.0mm"
+        ],
+        "current_status": "MISSING - needs numeric field with unit"
+      },
+      {
+        "field_name": "Procedure No",
+        "frequency": "11/12 reports",
+        "standardized_options": [
+          "MAI-P-NDT-009-PAUT-R03",
+          "MAI-P-NDT-009-PAUT R03",
+          "MAI-P-NDT-009-PAUT R3"
+        ],
+        "current_status": "EXISTS - Review field location and format"
+      },
+      {
+        "field_name": "Technique Nos",
+        "frequency": "11/12 reports",
+        "standardized_options": [
+          "MAI-T-NDT-015-PAUT R01",
+          "Corrosion Mapping",
+          "N/A"
+        ],
+        "current_status": "MISSING - needs dropdown or text field"
+      },
+      {
+        "field_name": "Acceptance Criteria",
+        "frequency": "11/12 reports",
+        "standardized_options": [
+          "HBR-GBR-TAS-PRC-0011",
+          "BS EN ISO 16809:2019",
+          "BS EN ISO 13588"
+        ],
+        "current_status": "EXISTS - Review field location"
+      },
+      {
+        "field_name": "Applicable Standard",
+        "frequency": "11/12 reports",
+        "standardized_options": [
+          "BS EN ISO 16809:2019",
+          "BS EN ISO 13588",
+          "HBR-GBR-TAS-PRC-0011"
+        ],
+        "current_status": "MISSING - needs dropdown"
+      },
+      {
+        "field_name": "Technician",
+        "frequency": "12/12 reports",
+        "current_status": "EXISTS - Review format"
+      },
+      {
+        "field_name": "Equipment/Equip. Model",
+        "frequency": "12/12 reports",
+        "current_status": "EXISTS - Review completeness"
+      }
+    ]
+  },
+  "EQUIPMENT_FIELDS": {
+    "description": "Equipment-related fields found in reports",
+    "fields": [
+      {
+        "field_name": "Equip. Model / Equipment Model",
+        "frequency": "11/12 reports",
+        "standardized_options": [
+          "Eddyfi Gekko",
+          "Gekko 1239",
+          "Omniscan X4"
+        ],
+        "current_status": "EXISTS - needs standardized dropdown"
+      },
+      {
+        "field_name": "Serial No",
+        "frequency": "Multiple reports",
+        "examples": [
+          "Gekko 1239",
+          "QC-0096426"
+        ],
+        "current_status": "MISSING - needs text field"
+      },
+      {
+        "field_name": "Probe",
+        "frequency": "11/12 reports",
+        "standardized_options": [
+          "7.5DL32-32X5-REX1 Z6037",
+          "5L16 A10",
+          "4L16 DGS",
+          "Olympus"
+        ],
+        "current_status": "EXISTS - needs standardized options"
+      },
+      {
+        "field_name": "Probe Type",
+        "frequency": "Some reports",
+        "examples": [
+          "Olympus"
+        ],
+        "current_status": "MISSING - consider adding"
+      },
+      {
+        "field_name": "Wedge",
+        "frequency": "11/12 reports",
+        "standardized_options": [
+          "0° Curved wedge",
+          "10mm Curved 20/38/18"
+        ],
+        "current_status": "MISSING - needs dropdown or text field"
+      },
+      {
+        "field_name": "Scanner Frame",
+        "frequency": "Multiple reports",
+        "examples": [
+          "10mm Curved 20/38/18"
+        ],
+        "current_status": "MISSING - needs text field"
+      },
+      {
+        "field_name": "Calibration Blocks / Cal Block",
+        "frequency": "11/12 reports",
+        "examples": [
+          "V1/3mm"
+        ],
+        "current_status": "EXISTS - review field"
+      },
+      {
+        "field_name": "Ref Blocks",
+        "frequency": "11/12 reports",
+        "current_status": "MISSING - needs text field"
+      },
+      {
+        "field_name": "Couplant",
+        "frequency": "11/12 reports",
+        "standardized_options": [
+          "Sonagel",
+          "Water"
+        ],
+        "current_status": "MISSING - needs dropdown"
+      }
+    ]
+  },
+  "PHASED_ARRAY_CONFIGURATION_FIELDS": {
+    "description": "Phased Array Beamset Configuration fields",
+    "fields": [
+      {
+        "field_name": "Phased Array Beamset Configuration",
+        "frequency": "11/12 reports",
+        "sub_fields": [
+          {
+            "name": "Group/Type",
+            "examples": [
+              "Type",
+              "Active Elements"
+            ]
+          },
+          {
+            "name": "Angle",
+            "examples": [
+              "0°",
+              "Linear at 0°"
+            ]
+          },
+          {
+            "name": "Skew",
+            "examples": [
+              "0°"
+            ]
+          },
+          {
+            "name": "Active Elements",
+            "examples": [
+              "1-64",
+              "Tx: 1-63\\nRx: 2-64"
+            ]
+          },
+          {
+            "name": "Mode",
+            "examples": [
+              "Pulse Echo"
+            ]
+          },
+          {
+            "name": "Filter",
+            "examples": [
+              "BP 5MHz"
+            ]
+          },
+          {
+            "name": "Gain Offset",
+            "examples": [
+              "None"
+            ]
+          },
+          {
+            "name": "Focus Range",
+            "examples": [
+              "40mm"
+            ]
+          },
+          {
+            "name": "PRF",
+            "examples": [
+              "PRF values"
+            ]
+          }
+        ],
+        "current_status": "PARTIALLY IMPLEMENTED - needs detailed configuration table"
+      }
+    ]
+  },
+  "PERSONNEL_AND_SIGNATURE_FIELDS": {
+    "description": "Personnel information and signatures",
+    "fields": [
+      {
+        "field_name": "Technician Name",
+        "frequency": "12/12 reports",
+        "examples": [
+          "B Wilkes",
+          "M. Pettett",
+          "M. O'Brien-Pettett",
+          "Findlay Hart",
+          "Iain Gunn",
+          "Calum Gibson",
+          "Michael McLaren"
+        ],
+        "current_status": "EXISTS - verify format"
+      },
+      {
+        "field_name": "Qualification",
+        "frequency": "12/12 reports",
+        "standardized_options": [
+          "PCN L2 PAUT",
+          "PCN LVL II",
+          "PCN PAUT L2",
+          "PCN L2 (321420)",
+          "PCN L2 (306313)",
+          "PAUT PCN L2"
+        ],
+        "current_status": "EXISTS - needs standardized format"
+      },
+      {
+        "field_name": "Date",
+        "frequency": "12/12 reports",
+        "examples": [
+          "25/03/2025",
+          "28/03/2025",
+          "16/07/2025",
+          "11/07/2025",
+          "06/05/25"
+        ],
+        "current_status": "EXISTS - verify date format consistency"
+      },
+      {
+        "field_name": "Signature",
+        "frequency": "11/12 reports",
+        "current_status": "EXISTS - verify implementation"
+      },
+      {
+        "field_name": "Reviewed / Client Acceptance",
+        "frequency": "11/12 reports",
+        "current_status": "MISSING - needs reviewer section"
+      }
+    ]
+  },
+  "INSPECTION_RESULTS_FIELDS": {
+    "description": "Fields related to inspection results and scanning",
+    "fields": [
+      {
+        "field_name": "Inspection Results Summary",
+        "frequency": "11/12 reports",
+        "current_status": "EXISTS - verify format"
+      },
+      {
+        "field_name": "Scan File Name",
+        "frequency": "Most reports",
+        "examples": [
+          "ARM-2023-129-PS SCAN 1",
+          "X-0511 Shell 6",
+          "V-2801-1 S-3000-4320 I-900-1650 pit-1",
+          "NEV V-0320-1 Strake 2 Scan 1"
+        ],
+        "current_status": "PARTIALLY IMPLEMENTED - verify in scanning log"
+      },
+      {
+        "field_name": "Feature / Description",
+        "frequency": "Most reports",
+        "examples": [
+          "Vessel Shell – Code C internal corrosion",
+          "Shell Anomaly Code D",
+          "Vessel Shell – Inclusions"
+        ],
+        "current_status": "MISSING - needs to be added to scan results"
+      },
+      {
+        "field_name": "Analysis / Interpretation",
+        "frequency": "Most reports",
+        "description": "Detailed interpretation of scan results",
+        "current_status": "MISSING - needs large text area for each scan"
+      },
+      {
+        "field_name": "Vessel Coverage",
+        "frequency": "Multiple reports",
+        "examples": [
+          "The overall target coverage of the vessel shell was 50%. >65% coverage achieved.",
+          "A total area of 9.05m2 has been scanned"
+        ],
+        "current_status": "MISSING - needs text field"
+      },
+      {
+        "field_name": "Provision of datum points",
+        "frequency": "Multiple reports",
+        "description": "Index and Scan datum information",
+        "current_status": "MISSING - needs structured fields"
+      },
+      {
+        "field_name": "Scan sensitivity",
+        "frequency": "Multiple reports",
+        "examples": [
+          "A minimum scan sensitivity of reference +14dB has been used",
+          "A minimum scan sensitivity of reference +9dB has been used"
+        ],
+        "current_status": "MISSING - needs text field"
+      },
+      {
+        "field_name": "Restrictions",
+        "frequency": "Multiple reports",
+        "examples": [
+          "Scan Restrictions included saddles, nozzles, nameplate, and external pipework & instrumentation"
+        ],
+        "current_status": "MISSING - needs text area"
+      }
+    ]
+  },
+  "CALIBRATION_LOG_FIELDS": {
+    "description": "Phased Array Calibration Scan Log information",
+    "fields": [
+      {
+        "field_name": "Calibration Block Velocity",
+        "frequency": "Most reports",
+        "examples": [
+          "5890 m/sec ±30m/sec",
+          "5920 m/sec ±30m/sec"
+        ],
+        "current_status": "MISSING - needs numeric field with tolerance"
+      },
+      {
+        "field_name": "Calibration measurements note",
+        "frequency": "Most reports",
+        "standard_text": "All dimensions & measurements in mm",
+        "current_status": "MISSING - could be auto-added"
+      }
+    ]
+  },
+  "PHOTO_AND_DOCUMENTATION_FIELDS": {
+    "description": "Photo captions and condition documentation",
+    "fields": [
+      {
+        "field_name": "Inspection Results – Condition Photos",
+        "frequency": "5/12 reports",
+        "current_status": "MISSING - needs photo section with captions"
+      },
+      {
+        "field_name": "Photo captions",
+        "frequency": "Multiple reports",
+        "examples": [
+          "Photo 1: Stand-off photo of the vessel",
+          "Photo 2: General condition of the top dome on the vessel",
+          "Photo 3: General condition of the vessel shell"
+        ],
+        "current_status": "MISSING - needs caption fields for each photo"
+      },
+      {
+        "field_name": "Inspection Results – Plot plan showing test location",
+        "frequency": "Multiple reports",
+        "current_status": "MISSING - needs image insertion capability"
+      },
+      {
+        "field_name": "Inspection Results – C-Scan",
+        "frequency": "Most reports",
+        "current_status": "PARTIALLY IMPLEMENTED - verify in annotations"
+      },
+      {
+        "field_name": "Inspection Results – PACMAP Composite Image",
+        "frequency": "Multiple reports",
+        "current_status": "MISSING - needs image section"
+      }
+    ]
+  },
+  "SCANNING_LOG_TABLE_STRUCTURE": {
+    "description": "Common table structures found in scanning logs",
+    "tables": [
+      {
+        "table_name": "Phased Array C-Scan Mapping log",
+        "frequency": "Most reports",
+        "typical_columns": [
+          "Scan File Name",
+          "Feature/Description",
+          "Location",
+          "Reading",
+          "Code",
+          "Comments"
+        ],
+        "current_status": "PARTIALLY IMPLEMENTED - verify columns match"
+      },
+      {
+        "table_name": "Phased Array Manual Raster Scan log",
+        "frequency": "Some reports",
+        "current_status": "MISSING - needs separate table type"
+      },
+      {
+        "table_name": "Equipment Checks",
+        "frequency": "Most reports",
+        "standard_text": "Equipment Checks in accordance with MAI-F-NDT-019 PAUT Equipment Checks completed",
+        "current_status": "MISSING - needs checkbox or text field"
+      }
+    ]
+  },
+  "MISSING_FIELDS_SUMMARY": {
+    "critical_missing_fields": [
+      "Description (inspection description)",
+      "Line/Tag Number",
+      "Drawing Number",
+      "Coating Type (dropdown)",
+      "Temperature (dropdown/text)",
+      "Stress Relief (dropdown)",
+      "Nominal Thickness",
+      "Corrosion Allowance",
+      "Technique Nos",
+      "Applicable Standard (dropdown)",
+      "Wedge",
+      "Scanner Frame",
+      "Ref Blocks",
+      "Couplant (dropdown)",
+      "Serial No (for equipment)",
+      "Vessel Coverage",
+      "Datum points (Index/Scan)",
+      "Scan sensitivity",
+      "Restrictions",
+      "Calibration Block Velocity",
+      "Feature/Description (per scan)",
+      "Analysis/Interpretation (per scan)",
+      "Photo captions",
+      "Equipment Checks checkbox",
+      "Reviewer/Client Acceptance section"
+    ],
+    "recommended_dropdowns": [
+      {
+        "field": "Material",
+        "options": [
+          "Carbon Steel",
+          "Duplex",
+          "Duplex/Super Duplex",
+          "Stainless Steel",
+          "Other"
+        ]
+      },
+      {
+        "field": "Coating Type",
+        "options": [
+          "Painted",
+          "Uncoated",
+          "Coated",
+          "N/A"
+        ]
+      },
+      {
+        "field": "Temperature",
+        "options": [
+          "Ambient",
+          "Ambient (Isolated)",
+          "Hot (specify)",
+          "Cold"
+        ]
+      },
+      {
+        "field": "Stress Relief",
+        "options": [
+          "N/A",
+          "Yes",
+          "No",
+          "Unknown"
+        ]
+      },
+      {
+        "field": "Couplant",
+        "options": [
+          "Sonagel",
+          "Water",
+          "Gel",
+          "Other"
+        ]
+      },
+      {
+        "field": "Equipment Model",
+        "options": [
+          "Eddyfi Gekko",
+          "Omniscan X4",
+          "Other"
+        ]
+      },
+      {
+        "field": "Applicable Standard",
+        "options": [
+          "BS EN ISO 16809:2019",
+          "BS EN ISO 13588",
+          "HBR-GBR-TAS-PRC-0011",
+          "Other"
+        ]
+      }
+    ]
+  },
+  "STANDARDIZED_TEXT_SNIPPETS": {
+    "description": "Common text that appears across reports",
+    "snippets": [
+      {
+        "location": "Calibration section",
+        "text": "All dimensions & measurements in mm. Calibration Block Velocity: 5920 m/sec ±30m/sec."
+      },
+      {
+        "location": "Equipment checks",
+        "text": "Equipment Checks in accordance with MAI-F-NDT-019 PAUT Equipment Checks completed"
+      }
+    ]
+  }
+}
