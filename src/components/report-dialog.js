@@ -1,6 +1,7 @@
 // Report Dialog Component - UI for generating vessel inspection reports
 import reportGenerator from '../report-generator.js';
 import dataManager from '../data-manager.js';
+import adminConfig from '../admin-config.js';
 
 class ReportDialog {
     constructor() {
@@ -16,11 +17,11 @@ class ReportDialog {
      * @param {string} vesselId - Vessel ID
      * @param {string} vesselName - Vessel name for display
      */
-    show(assetId, vesselId, vesselName) {
+    async show(assetId, vesselId, vesselName) {
         this.assetId = assetId;
         this.vesselId = vesselId;
         this.vesselName = vesselName;
-        this.createDialog();
+        await this.createDialog();
         this.dialog.style.display = 'flex';
     }
 
@@ -30,11 +31,14 @@ class ReportDialog {
         }
     }
 
-    createDialog() {
+    async createDialog() {
         // Remove existing dialog if present
         if (this.dialog) {
             this.dialog.remove();
         }
+
+        // Ensure adminConfig is initialized
+        await adminConfig.ensureInitialized();
 
         this.dialog = document.createElement('div');
         this.dialog.className = 'report-dialog-overlay';
@@ -76,13 +80,17 @@ class ReportDialog {
                             <div class="form-group">
                                 <label for="clientName">Client Name *</label>
                                 <input type="text" id="clientName" name="clientName" required
+                                       list="clientsList"
                                        placeholder="Enter client/company name">
+                                <small>Start typing to see suggestions from configuration</small>
                             </div>
 
                             <div class="form-group">
                                 <label for="location">Location *</label>
                                 <input type="text" id="location" name="location" required
+                                       list="locationsList"
                                        placeholder="e.g., Site, City, Country">
+                                <small>Start typing to see suggestions from configuration</small>
                             </div>
                         </div>
 
@@ -104,7 +112,9 @@ class ReportDialog {
                             <div class="form-group">
                                 <label for="material">Material</label>
                                 <input type="text" id="material" name="material"
+                                       list="materialsList"
                                        placeholder="e.g., Carbon Steel, Stainless Steel 316L">
+                                <small>Start typing to see suggestions from configuration</small>
                             </div>
 
                             <div class="form-group">
@@ -126,13 +136,17 @@ class ReportDialog {
                             <div class="form-group">
                                 <label for="procedureNumber">Procedure Number</label>
                                 <input type="text" id="procedureNumber" name="procedureNumber"
+                                       list="procedureNumbersList"
                                        placeholder="e.g., MAI-P-NDT-009-PAUT-R03">
+                                <small>Start typing to see suggestions from configuration</small>
                             </div>
 
                             <div class="form-group">
                                 <label for="applicableStandard">Applicable Standard</label>
                                 <input type="text" id="applicableStandard" name="applicableStandard"
+                                       list="acceptanceCriteriaList"
                                        placeholder="e.g., BS EN ISO 16809:2019">
+                                <small>Start typing to see suggestions from configuration</small>
                             </div>
 
                             <div class="form-group">
@@ -287,6 +301,13 @@ class ReportDialog {
                     </div>
                     <p class="progress-text" id="progressText">Generating report...</p>
                 </div>
+
+                <!-- Datalists for autocomplete suggestions -->
+                <datalist id="clientsList"></datalist>
+                <datalist id="locationsList"></datalist>
+                <datalist id="materialsList"></datalist>
+                <datalist id="procedureNumbersList"></datalist>
+                <datalist id="acceptanceCriteriaList"></datalist>
             </div>
         `;
 
@@ -660,8 +681,50 @@ class ReportDialog {
         document.head.appendChild(style);
         document.body.appendChild(this.dialog);
 
+        // Populate datalists with config values
+        this.populateDataLists();
+
         // Attach event listeners
         this.attachEventListeners();
+    }
+
+    populateDataLists() {
+        // Get configuration values
+        const clients = adminConfig.getList('clients');
+        const locations = adminConfig.getList('locations');
+        const materials = adminConfig.getList('materials');
+        const procedureNumbers = adminConfig.getList('procedureNumbers');
+        const acceptanceCriteria = adminConfig.getList('acceptanceCriteria');
+
+        // Populate clients list
+        const clientsList = this.dialog.querySelector('#clientsList');
+        clientsList.innerHTML = clients.map(client =>
+            `<option value="${client}">`
+        ).join('');
+
+        // Populate locations list
+        const locationsList = this.dialog.querySelector('#locationsList');
+        locationsList.innerHTML = locations.map(location =>
+            `<option value="${location}">`
+        ).join('');
+
+        // Populate materials list
+        const materialsList = this.dialog.querySelector('#materialsList');
+        materialsList.innerHTML = materials.map(material =>
+            `<option value="${material}">`
+        ).join('');
+
+        // Populate procedure numbers list
+        const procedureNumbersList = this.dialog.querySelector('#procedureNumbersList');
+        procedureNumbersList.innerHTML = procedureNumbers.map(proc =>
+            `<option value="${proc}">`
+        ).join('');
+
+        // Populate acceptance criteria list
+        const acceptanceCriteriaList = this.dialog.querySelector('#acceptanceCriteriaList');
+        acceptanceCriteriaList.innerHTML = acceptanceCriteria.map(criteria =>
+            `<option value="${criteria}">`
+        ).join('');
     }
 
     attachEventListeners() {
