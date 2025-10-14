@@ -12,17 +12,17 @@ const HTML = `
 <div class="h-full flex flex-col overflow-hidden">
     <div id="datahub-header-container" style="flex-shrink: 0;"></div>
 
-    <div class="glass-panel" style="padding: 16px 24px; flex-shrink: 0; border-radius: 0;">
-        <div class="flex justify-between items-center mb-4">
-            <div id="stats-bar" class="grid grid-cols-2 md:grid-cols-4 gap-4 flex-grow mr-4"></div>
+    <div class="glass-panel" style="padding: 8px 16px; flex-shrink: 0; border-radius: 0;">
+        <div class="flex justify-between items-center">
+            <div id="stats-bar" class="flex gap-4 items-center flex-grow"></div>
             <div class="flex gap-2">
-                <button id="import-btn" class="btn-secondary text-sm px-3 py-2">
+                <button id="import-btn" class="btn-secondary text-xs px-2 py-1">
                     Import Data
                 </button>
-                <button id="export-all-btn" class="btn-secondary text-sm px-3 py-2">
+                <button id="export-all-btn" class="btn-secondary text-xs px-2 py-1">
                     Export All
                 </button>
-                <button id="new-asset-btn" class="btn-primary text-sm px-3 py-2">
+                <button id="new-asset-btn" class="btn-primary text-xs px-2 py-1">
                     + New Asset
                 </button>
             </div>
@@ -63,7 +63,7 @@ function cacheDom() {
     const header = createAnimatedHeader(
         'NDT Data Hub',
         'Organize and manage your inspection scans',
-        { height: '120px', particleCount: 12, waveIntensity: 0.3 }
+        { height: '60px', particleCount: 8, waveIntensity: 0.2 }
     );
     dom.headerContainer.appendChild(header);
 }
@@ -71,23 +71,23 @@ function cacheDom() {
 function renderStats() {
     const stats = dataManager.getStats();
     dom.statsBar.innerHTML = `
-        <div class="glass-panel" style="padding: 12px; text-align: center;">
-            <div class="text-xs" style="color: rgba(255, 255, 255, 0.6);">Assets</div>
-            <div class="text-2xl font-bold text-white">${stats.totalAssets}</div>
+        <div class="flex items-center gap-1 text-xs">
+            <span style="color: rgba(255, 255, 255, 0.5);">Assets:</span>
+            <span class="font-semibold text-white">${stats.totalAssets}</span>
         </div>
-        <div class="glass-panel" style="padding: 12px; text-align: center;">
-            <div class="text-xs" style="color: rgba(255, 255, 255, 0.6);">Vessels</div>
-            <div class="text-2xl font-bold text-white">${stats.totalVessels}</div>
+        <div class="flex items-center gap-1 text-xs">
+            <span style="color: rgba(255, 255, 255, 0.5);">Vessels:</span>
+            <span class="font-semibold text-white">${stats.totalVessels}</span>
         </div>
-        <div class="glass-panel" style="padding: 12px; text-align: center;">
-            <div class="text-xs" style="color: rgba(255, 255, 255, 0.6);">Total Scans</div>
-            <div class="text-2xl font-bold text-white">${stats.totalScans}</div>
+        <div class="flex items-center gap-1 text-xs">
+            <span style="color: rgba(255, 255, 255, 0.5);">Scans:</span>
+            <span class="font-semibold text-white">${stats.totalScans}</span>
         </div>
-        <div class="glass-panel" style="padding: 12px; text-align: center;">
-            <div class="text-xs" style="color: rgba(255, 255, 255, 0.6);">PEC / C-Scan / 3D</div>
-            <div class="text-lg font-bold text-white">
-                ${stats.scansByType.pec || 0} / ${stats.scansByType.cscan || 0} / ${stats.scansByType['3dview'] || 0}
-            </div>
+        <div class="flex items-center gap-1 text-xs">
+            <span style="color: rgba(255, 255, 255, 0.5);">PEC/C-Scan/3D:</span>
+            <span class="font-semibold text-white">
+                ${stats.scansByType.pec || 0}/${stats.scansByType.cscan || 0}/${stats.scansByType['3dview'] || 0}
+            </span>
         </div>
     `;
 }
