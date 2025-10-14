@@ -588,14 +588,18 @@ async function handleForgotPassword(e) {
     }
 
     const { supabase } = await import('../supabase-client.js');
+
+    // Construct the proper redirect URL for password reset
+    const redirectUrl = `${window.location.origin}/#/reset-password`;
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin
+        redirectTo: redirectUrl
     });
 
     if (error) {
         alert('Error: ' + error.message);
     } else {
-        alert('Password reset link sent! Please check your email.');
+        alert('Password reset link sent! Please check your email. The link will expire in 1 hour.');
     }
 }
 
