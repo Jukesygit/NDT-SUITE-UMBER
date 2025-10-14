@@ -35,38 +35,6 @@ class DataManager {
     // Initialize and load data
     async initialize() {
         try {
-            console.log('[DATA-MANAGER] Initializing...');
-
-            // Ensure auth is ready first
-            await authManager.ensureInitialized();
-
-            // CLOUD-FIRST: Try to load from Supabase if configured and logged in
-            if (authManager.useSupabase && authManager.isLoggedIn()) {
-                console.log('[DATA-MANAGER] Loading data from Supabase...');
-                try {
-                    const downloadResult = await syncService.downloadAllData();
-
-                    if (downloadResult.success) {
-                        console.log(`[DATA-MANAGER] Loaded ${downloadResult.count} items from Supabase`);
-
-                        // Load the freshly downloaded data from IndexedDB
-                        const loadedData = await indexedDB.loadData();
-                        this.data = loadedData;
-
-                        console.log('[DATA-MANAGER] Data loaded from cloud successfully');
-                        return;
-                    } else {
-                        console.warn('[DATA-MANAGER] Failed to load from Supabase, falling back to local cache:', downloadResult.error);
-                    }
-                } catch (error) {
-                    console.error('[DATA-MANAGER] Error loading from Supabase:', error);
-                    console.log('[DATA-MANAGER] Falling back to local cache');
-                }
-            }
-
-            // FALLBACK: Load from local IndexedDB cache
-            console.log('[DATA-MANAGER] Loading from local cache...');
-
             // Try to migrate from localStorage if it exists
             await indexedDB.migrateFromLocalStorage(STORAGE_KEY);
 
@@ -75,7 +43,8 @@ class DataManager {
 
             // Migrate old format { assets: [] } to new format { orgId: { assets: [] } }
             if (loadedData.assets && Array.isArray(loadedData.assets)) {
-                console.log('[DATA-MANAGER] Migrating data to organization-based format');
+                console.log('Migrating data to organization-based format');
+                await authManager.ensureInitialized();
                 const currentOrgId = authManager.getCurrentOrganizationId();
 
                 // Preserve the old data under the current organization
@@ -85,7 +54,7 @@ class DataManager {
                     };
                     // Save migrated data
                     await this.saveToStorage();
-                    console.log('[DATA-MANAGER] Data migration completed');
+                    console.log('Data migration completed');
                 } else {
                     // No user logged in, preserve old format for now
                     this.data = loadedData;
@@ -94,9 +63,9 @@ class DataManager {
                 this.data = loadedData;
             }
 
-            console.log('[DATA-MANAGER] Initialization complete (using local cache)');
+            console.log('Data loaded from IndexedDB');
         } catch (error) {
-            console.error('[DATA-MANAGER] Error initializing data manager:', error);
+            console.error('Error initializing data manager:', error);
             this.data = {};
         }
     }
@@ -189,42 +158,27 @@ class DataManager {
 
     // Asset operations
     async createAsset(name) {
-        const orgId = authManager.getCurrentOrganizationId();
-        const userId = authManager.getCurrentUser()?.id;
-
-        if (!orgId || !userId) {
-            throw new Error('Must be logged in to create assets');
-        }
+        const orgData = this.getCurrentOrgData();
 
         const asset = {
             id: this.generateId(),
             name: name,
             vessels: [],
-            organizationId: orgId,
-            createdBy: userId,
+            organizationId: authManager.getCurrentOrganizationId(),
+            createdBy: authManager.getCurrentUser()?.id,
             createdAt: Date.now()
         };
 
-        // CLOUD-FIRST: Save to Supabase immediately
-        if (authManager.useSupabase) {
-            console.log('[DATA-MANAGER] Creating asset in Supabase:', asset.name);
-            const result = await syncService.uploadAsset(asset, orgId, userId);
-
-            if (!result.success) {
-                console.error('[DATA-MANAGER] Failed to create asset in Supabase:', result.error);
-                throw new Error(`Failed to save asset to cloud: ${result.error}`);
-            }
-
-            console.log('[DATA-MANAGER] Asset created in Supabase successfully');
-        } else {
-            throw new Error('Cloud storage not configured');
-        }
-
-        // Update local cache
-        const orgData = this.getCurrentOrgData();
         orgData.assets.push(asset);
         this.setCurrentOrgData(orgData);
         await this.saveToStorage();
+
+        // Sync to Supabase in the background
+        if (authManager.isLoggedIn() && authManager.useSupabase) {
+            syncService.syncAsset(asset.id).catch(err => {
+                console.error('Failed to sync asset:', err);
+            });
+        }
 
         return asset;
     }
@@ -240,37 +194,24 @@ class DataManager {
     }
 
     async updateAsset(assetId, updates) {
-        const orgId = authManager.getCurrentOrganizationId();
-        const userId = authManager.getCurrentUser()?.id;
-
         const orgData = this.getCurrentOrgData();
         const asset = (orgData.assets || []).find(a => a.id === assetId);
+        if (asset) {
+            Object.assign(asset, updates);
+            asset.updatedAt = Date.now();
+            this.setCurrentOrgData(orgData);
+            await this.saveToStorage();
 
-        if (!asset) {
-            return null;
-        }
-
-        Object.assign(asset, updates);
-        asset.updatedAt = Date.now();
-
-        // CLOUD-FIRST: Save to Supabase immediately
-        if (authManager.useSupabase) {
-            console.log('[DATA-MANAGER] Updating asset in Supabase:', asset.name);
-            const result = await syncService.uploadAsset(asset, orgId, userId);
-
-            if (!result.success) {
-                console.error('[DATA-MANAGER] Failed to update asset in Supabase:', result.error);
-                throw new Error(`Failed to update asset in cloud: ${result.error}`);
+            // Sync to Supabase in the background
+            if (authManager.isLoggedIn() && authManager.useSupabase) {
+                syncService.syncAsset(assetId).catch(err => {
+                    console.error('Failed to sync asset:', err);
+                });
             }
 
-            console.log('[DATA-MANAGER] Asset updated in Supabase successfully');
+            return asset;
         }
-
-        // Update local cache
-        this.setCurrentOrgData(orgData);
-        await this.saveToStorage();
-
-        return asset;
+        return null;
     }
 
     async deleteAsset(assetId) {
@@ -287,10 +228,7 @@ class DataManager {
 
     // Vessel operations
     async createVessel(assetId, name) {
-        const orgId = authManager.getCurrentOrganizationId();
-        const userId = authManager.getCurrentUser()?.id;
         const asset = this.getAsset(assetId);
-
         if (!asset) return null;
 
         const vessel = {
@@ -302,26 +240,15 @@ class DataManager {
             locationDrawing: null, // { imageDataUrl, annotations: [] }
             gaDrawing: null // { imageDataUrl, annotations: [] }
         };
-
         asset.vessels.push(vessel);
-
-        // CLOUD-FIRST: Save to Supabase immediately
-        if (authManager.useSupabase) {
-            console.log('[DATA-MANAGER] Creating vessel in Supabase:', vessel.name);
-            const result = await syncService.uploadAsset(asset, orgId, userId);
-
-            if (!result.success) {
-                console.error('[DATA-MANAGER] Failed to create vessel in Supabase:', result.error);
-                // Rollback local change
-                asset.vessels.pop();
-                throw new Error(`Failed to save vessel to cloud: ${result.error}`);
-            }
-
-            console.log('[DATA-MANAGER] Vessel created in Supabase successfully');
-        }
-
-        // Update local cache
         await this.saveToStorage();
+
+        // Sync to Supabase in the background
+        if (authManager.isLoggedIn() && authManager.useSupabase) {
+            syncService.syncAsset(assetId).catch(err => {
+                console.error('Failed to sync vessel:', err);
+            });
+        }
 
         return vessel;
     }
@@ -333,34 +260,21 @@ class DataManager {
     }
 
     async updateVessel(assetId, vesselId, updates) {
-        const orgId = authManager.getCurrentOrganizationId();
-        const userId = authManager.getCurrentUser()?.id;
-        const asset = this.getAsset(assetId);
         const vessel = this.getVessel(assetId, vesselId);
+        if (vessel) {
+            Object.assign(vessel, updates);
+            await this.saveToStorage();
 
-        if (!vessel) {
-            return null;
-        }
-
-        Object.assign(vessel, updates);
-
-        // CLOUD-FIRST: Save to Supabase immediately
-        if (authManager.useSupabase) {
-            console.log('[DATA-MANAGER] Updating vessel in Supabase:', vessel.name);
-            const result = await syncService.uploadAsset(asset, orgId, userId);
-
-            if (!result.success) {
-                console.error('[DATA-MANAGER] Failed to update vessel in Supabase:', result.error);
-                throw new Error(`Failed to update vessel in cloud: ${result.error}`);
+            // Sync to Supabase in the background
+            if (authManager.isLoggedIn() && authManager.useSupabase) {
+                syncService.syncAsset(assetId).catch(err => {
+                    console.error('Failed to sync vessel update:', err);
+                });
             }
 
-            console.log('[DATA-MANAGER] Vessel updated in Supabase successfully');
+            return vessel;
         }
-
-        // Update local cache
-        await this.saveToStorage();
-
-        return vessel;
+        return null;
     }
 
     async deleteVessel(assetId, vesselId) {
@@ -378,11 +292,7 @@ class DataManager {
 
     // Vessel image operations
     async addVesselImage(assetId, vesselId, imageData) {
-        const orgId = authManager.getCurrentOrganizationId();
-        const userId = authManager.getCurrentUser()?.id;
-        const asset = this.getAsset(assetId);
         const vessel = this.getVessel(assetId, vesselId);
-
         if (!vessel) return null;
 
         // Initialize images array if it doesn't exist (for backward compatibility)
@@ -396,26 +306,15 @@ class DataManager {
             dataUrl: imageData.dataUrl,
             timestamp: Date.now()
         };
-
         vessel.images.push(image);
-
-        // CLOUD-FIRST: Save to Supabase immediately
-        if (authManager.useSupabase) {
-            console.log('[DATA-MANAGER] Adding vessel image to Supabase:', image.name);
-            const result = await syncService.uploadAsset(asset, orgId, userId);
-
-            if (!result.success) {
-                console.error('[DATA-MANAGER] Failed to add vessel image to Supabase:', result.error);
-                // Rollback local change
-                vessel.images.pop();
-                throw new Error(`Failed to save vessel image to cloud: ${result.error}`);
-            }
-
-            console.log('[DATA-MANAGER] Vessel image added to Supabase successfully');
-        }
-
-        // Update local cache
         await this.saveToStorage();
+
+        // Sync to Supabase in the background
+        if (authManager.isLoggedIn() && authManager.useSupabase) {
+            syncService.syncAsset(assetId).catch(err => {
+                console.error('Failed to sync vessel image:', err);
+            });
+        }
 
         return image;
     }
@@ -568,11 +467,7 @@ class DataManager {
 
     // Scan operations
     async createScan(assetId, vesselId, scanData) {
-        const orgId = authManager.getCurrentOrganizationId();
-        const userId = authManager.getCurrentUser()?.id;
-        const asset = this.getAsset(assetId);
         const vessel = this.getVessel(assetId, vesselId);
-
         if (!vessel) return null;
 
         const scan = {
@@ -584,26 +479,15 @@ class DataManager {
             thumbnail: scanData.thumbnail || null,
             heatmapOnly: scanData.heatmapOnly || null
         };
-
         vessel.scans.push(scan);
-
-        // CLOUD-FIRST: Save to Supabase immediately
-        if (authManager.useSupabase) {
-            console.log('[DATA-MANAGER] Creating scan in Supabase:', scan.name);
-            const result = await syncService.uploadAsset(asset, orgId, userId);
-
-            if (!result.success) {
-                console.error('[DATA-MANAGER] Failed to create scan in Supabase:', result.error);
-                // Rollback local change
-                vessel.scans.pop();
-                throw new Error(`Failed to save scan to cloud: ${result.error}`);
-            }
-
-            console.log('[DATA-MANAGER] Scan created in Supabase successfully');
-        }
-
-        // Update local cache
         await this.saveToStorage();
+
+        // Sync to Supabase in the background
+        if (authManager.isLoggedIn() && authManager.useSupabase) {
+            syncService.syncAsset(assetId).catch(err => {
+                console.error('Failed to sync scan:', err);
+            });
+        }
 
         return scan;
     }
@@ -615,34 +499,21 @@ class DataManager {
     }
 
     async updateScan(assetId, vesselId, scanId, updates) {
-        const orgId = authManager.getCurrentOrganizationId();
-        const userId = authManager.getCurrentUser()?.id;
-        const asset = this.getAsset(assetId);
         const scan = this.getScan(assetId, vesselId, scanId);
+        if (scan) {
+            Object.assign(scan, updates);
+            await this.saveToStorage();
 
-        if (!scan) {
-            return null;
-        }
-
-        Object.assign(scan, updates);
-
-        // CLOUD-FIRST: Save to Supabase immediately
-        if (authManager.useSupabase) {
-            console.log('[DATA-MANAGER] Updating scan in Supabase:', scan.name);
-            const result = await syncService.uploadAsset(asset, orgId, userId);
-
-            if (!result.success) {
-                console.error('[DATA-MANAGER] Failed to update scan in Supabase:', result.error);
-                throw new Error(`Failed to update scan in cloud: ${result.error}`);
+            // Sync to Supabase in the background
+            if (authManager.isLoggedIn() && authManager.useSupabase) {
+                syncService.syncAsset(assetId).catch(err => {
+                    console.error('Failed to sync scan update:', err);
+                });
             }
 
-            console.log('[DATA-MANAGER] Scan updated in Supabase successfully');
+            return scan;
         }
-
-        // Update local cache
-        await this.saveToStorage();
-
-        return scan;
+        return null;
     }
 
     async deleteScan(assetId, vesselId, scanId) {
