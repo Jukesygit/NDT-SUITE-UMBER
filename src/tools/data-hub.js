@@ -62,8 +62,8 @@ function cacheDom() {
     // Initialize animated header
     const header = createAnimatedHeader(
         'NDT Data Hub',
-        '',
-        { height: '40px', particleCount: 6, waveIntensity: 0.15 }
+        'Organize and manage your inspection scans',
+        { height: '80px', particleCount: 10, waveIntensity: 0.25 }
     );
     dom.headerContainer.appendChild(header);
 }
