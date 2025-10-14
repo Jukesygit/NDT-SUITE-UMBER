@@ -1310,11 +1310,46 @@ function showReassignScanDialog(assetId, vesselId, scanId) {
 
     document.body.appendChild(modal);
 
-    modal.querySelector('#assign-scan-btn').addEventListener('click', async () => {
-        const selectedStrakeId = modal.querySelector('input[name="strake"]:checked')?.value || null;
-        await dataManager.assignScanToStrake(assetId, vesselId, scanId, selectedStrakeId);
-        document.body.removeChild(modal);
-        renderVesselDetailView(assetId);
+    const assignBtn = modal.querySelector('#assign-scan-btn');
+    const cancelBtn = modal.querySelector('#cancel-assign-btn');
+
+    assignBtn.addEventListener('click', async () => {
+        // Prevent multiple clicks
+        if (assignBtn.disabled) return;
+
+        try {
+            // Disable buttons and show loading state
+            assignBtn.disabled = true;
+            cancelBtn.disabled = true;
+            assignBtn.innerHTML = '<span class="inline-block animate-spin mr-2">⏳</span> Assigning...';
+
+            const selectedStrakeId = modal.querySelector('input[name="strake"]:checked')?.value || null;
+            await dataManager.assignScanToStrake(assetId, vesselId, scanId, selectedStrakeId);
+
+            // Success - close modal and refresh
+            document.body.removeChild(modal);
+            renderVesselDetailView(assetId);
+        } catch (error) {
+            console.error('Error assigning scan to strake:', error);
+
+            // Re-enable buttons and show error
+            assignBtn.disabled = false;
+            cancelBtn.disabled = false;
+            assignBtn.innerHTML = 'Assign';
+
+            // Show error message
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'mt-3 p-3 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded-lg text-sm';
+            errorDiv.textContent = `Failed to assign scan: ${error.message}`;
+            assignBtn.parentElement.parentElement.insertBefore(errorDiv, assignBtn.parentElement);
+
+            // Remove error message after 5 seconds
+            setTimeout(() => {
+                if (errorDiv.parentElement) {
+                    errorDiv.parentElement.removeChild(errorDiv);
+                }
+            }, 5000);
+        }
     });
 
     modal.querySelector('#cancel-assign-btn').addEventListener('click', () => {
