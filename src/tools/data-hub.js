@@ -302,8 +302,8 @@ function renderVesselDetailView(assetId) {
                                         `}
                                     </div>
                                     ${vessel.locationDrawing ? `
-                                        <div class="location-drawing-preview relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-300 dark:border-gray-600 hover:border-blue-500 transition-colors aspect-video" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
-                                            <img src="${vessel.locationDrawing.imageDataUrl}" alt="Location Drawing" class="w-full h-full object-contain bg-gray-100 dark:bg-gray-800">
+                                        <div class="location-drawing-preview relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-300 dark:border-gray-600 hover:border-blue-500 transition-colors aspect-video" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-drawing-type="location">
+                                            <canvas class="drawing-thumbnail-canvas w-full h-full object-contain bg-gray-100 dark:bg-gray-800" data-vessel-id="${vessel.id}" data-drawing-type="location"></canvas>
                                             <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center gap-2">
                                                 <button class="remove-location-btn opacity-0 group-hover:opacity-100 bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-all" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" aria-label="Remove Location Drawing" title="Remove">
                                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -344,8 +344,8 @@ function renderVesselDetailView(assetId) {
                                         `}
                                     </div>
                                     ${vessel.gaDrawing ? `
-                                        <div class="ga-drawing-preview relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-300 dark:border-gray-600 hover:border-blue-500 transition-colors aspect-video" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
-                                            <img src="${vessel.gaDrawing.imageDataUrl}" alt="GA Drawing" class="w-full h-full object-contain bg-gray-100 dark:bg-gray-800">
+                                        <div class="ga-drawing-preview relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-300 dark:border-gray-600 hover:border-blue-500 transition-colors aspect-video" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-drawing-type="ga">
+                                            <canvas class="drawing-thumbnail-canvas w-full h-full object-contain bg-gray-100 dark:bg-gray-800" data-vessel-id="${vessel.id}" data-drawing-type="ga"></canvas>
                                             <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center gap-2">
                                                 <button class="remove-ga-btn opacity-0 group-hover:opacity-100 bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-all" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" aria-label="Remove GA Drawing" title="Remove">
                                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -661,6 +661,96 @@ function renderVesselDetailView(assetId) {
                 openDrawingAnnotator(preview.dataset.assetId, preview.dataset.vesselId, 'ga');
             }
         });
+    });
+
+    // Render drawing thumbnails with annotations
+    dom.vesselDetailView.querySelectorAll('.drawing-thumbnail-canvas').forEach(async (canvas) => {
+        const vesselId = canvas.dataset.vesselId;
+        const drawingType = canvas.dataset.drawingType;
+        const vessel = dataManager.getVessel(assetId, vesselId);
+
+        if (!vessel) return;
+
+        const drawing = drawingType === 'location' ? vessel.locationDrawing : vessel.gaDrawing;
+        if (!drawing) return;
+
+        // Load and draw the image with annotations
+        const img = new Image();
+        img.onload = () => {
+            const container = canvas.parentElement;
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
+
+            // Calculate dimensions maintaining aspect ratio
+            let width = img.width;
+            let height = img.height;
+            const ratio = Math.min(containerWidth / width, containerHeight / height);
+            width = width * ratio;
+            height = height * ratio;
+
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext('2d');
+
+            // Draw image
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Draw annotations scaled
+            if (drawing.annotations && drawing.annotations.length > 0) {
+                const scaleX = width / img.width;
+                const scaleY = height / img.height;
+
+                drawing.annotations.forEach((annotation, index) => {
+                    if (annotation.type === 'box') {
+                        const x = annotation.x * scaleX;
+                        const y = annotation.y * scaleY;
+                        const w = annotation.width * scaleX;
+                        const h = annotation.height * scaleY;
+
+                        // Draw box
+                        ctx.strokeStyle = 'rgba(34, 197, 94, 1)';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(x, y, w, h);
+                        ctx.fillStyle = 'rgba(34, 197, 94, 0.25)';
+                        ctx.fillRect(x, y, w, h);
+
+                        // Draw number badge
+                        const badgeSize = 20;
+                        ctx.fillStyle = 'rgba(34, 197, 94, 0.95)';
+                        ctx.fillRect(x, y - badgeSize, badgeSize, badgeSize);
+                        ctx.strokeStyle = 'white';
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(x, y - badgeSize, badgeSize, badgeSize);
+                        ctx.fillStyle = 'white';
+                        ctx.font = 'bold 12px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(index + 1, x + badgeSize / 2, y - badgeSize / 2);
+                    } else {
+                        // Draw marker
+                        const x = annotation.x * scaleX;
+                        const y = annotation.y * scaleY;
+                        const radius = 10;
+
+                        ctx.beginPath();
+                        ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                        ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
+                        ctx.fill();
+                        ctx.strokeStyle = 'white';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+
+                        ctx.fillStyle = 'white';
+                        ctx.font = 'bold 10px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(index + 1, x, y);
+                    }
+                });
+            }
+        };
+        img.src = drawing.imageDataUrl;
     });
 }
 
@@ -1183,6 +1273,87 @@ function showScanMenu(event, assetId, vesselId, scanId) {
     }, 0);
 }
 
+// Helper function to create annotated thumbnail from drawing
+function createAnnotatedThumbnail(drawing, maxWidth = 400, maxHeight = 300) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            // Calculate scaled dimensions
+            let width = img.width;
+            let height = img.height;
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = width * ratio;
+            height = height * ratio;
+
+            // Create canvas
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+
+            // Draw image
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Draw annotations scaled
+            if (drawing.annotations && drawing.annotations.length > 0) {
+                const scaleX = width / img.width;
+                const scaleY = height / img.height;
+
+                drawing.annotations.forEach((annotation, index) => {
+                    if (annotation.type === 'box') {
+                        const x = annotation.x * scaleX;
+                        const y = annotation.y * scaleY;
+                        const w = annotation.width * scaleX;
+                        const h = annotation.height * scaleY;
+
+                        // Draw box
+                        ctx.strokeStyle = 'rgba(34, 197, 94, 1)';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(x, y, w, h);
+                        ctx.fillStyle = 'rgba(34, 197, 94, 0.2)';
+                        ctx.fillRect(x, y, w, h);
+
+                        // Draw number badge
+                        const badgeSize = 20;
+                        ctx.fillStyle = 'rgba(34, 197, 94, 0.9)';
+                        ctx.fillRect(x, y - badgeSize, badgeSize, badgeSize);
+                        ctx.strokeStyle = 'white';
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(x, y - badgeSize, badgeSize, badgeSize);
+                        ctx.fillStyle = 'white';
+                        ctx.font = 'bold 12px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(index + 1, x + badgeSize / 2, y - badgeSize / 2);
+                    } else {
+                        // Draw marker
+                        const x = annotation.x * scaleX;
+                        const y = annotation.y * scaleY;
+                        const radius = 10;
+
+                        ctx.beginPath();
+                        ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                        ctx.fillStyle = 'rgba(239, 68, 68, 0.8)';
+                        ctx.fill();
+                        ctx.strokeStyle = 'white';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+
+                        ctx.fillStyle = 'white';
+                        ctx.font = 'bold 10px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(index + 1, x, y);
+                    }
+                });
+            }
+
+            resolve(canvas.toDataURL());
+        };
+        img.src = drawing.imageDataUrl;
+    });
+}
+
 function handleLocationDrawingUpload(assetId, vesselId) {
     const input = document.createElement('input');
     input.type = 'file';
@@ -1243,9 +1414,9 @@ function openDrawingAnnotator(assetId, vesselId, drawingType) {
 
     modal.innerHTML = `
         <div class="flex-shrink-0 bg-gray-900 border-b border-gray-700 px-6 py-4 flex justify-between items-center">
-            <div>
+            <div class="flex-grow">
                 <h2 class="text-xl font-bold text-white">${title} - ${vessel.name}</h2>
-                <p class="text-sm text-gray-400">Click to add annotation markers. Right-click markers to delete.</p>
+                <p class="text-sm text-gray-400">Select a tool, then click or drag on the drawing to annotate. Right-click annotations to delete.</p>
             </div>
             <div class="flex gap-3">
                 <button id="clear-annotations-btn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
@@ -1261,18 +1432,30 @@ function openDrawingAnnotator(assetId, vesselId, drawingType) {
         </div>
         <div class="flex-grow overflow-auto flex items-center justify-center p-6">
             <div class="relative inline-block">
-                <canvas id="annotation-canvas" class="border-2 border-gray-600 cursor-crosshair" style="max-width: 100%; max-height: calc(100vh - 150px);"></canvas>
+                <canvas id="annotation-canvas" class="border-2 border-gray-600 cursor-crosshair" style="max-width: 100%; max-height: calc(100vh - 200px);"></canvas>
             </div>
         </div>
         <div class="flex-shrink-0 bg-gray-900 border-t border-gray-700 px-6 py-3">
-            <div class="flex items-center gap-4 text-sm text-gray-400">
-                <div class="flex items-center gap-2">
-                    <div class="w-4 h-4 bg-red-500 rounded-full border-2 border-white"></div>
-                    <span>Left-click to add marker</span>
+            <div class="flex items-center gap-4 text-sm">
+                <div class="flex items-center gap-2 px-3 py-2 bg-gray-800 rounded-lg">
+                    <span class="text-gray-300 font-semibold">Tool:</span>
+                    <button id="tool-marker" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors font-medium">
+                        📍 Marker
+                    </button>
+                    <button id="tool-box" class="px-3 py-1 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 transition-colors font-medium">
+                        ⬜ Box
+                    </button>
                 </div>
-                <div class="flex items-center gap-2">
-                    <div class="w-4 h-4 bg-blue-500 rounded-full border-2 border-white"></div>
-                    <span>Right-click marker to delete</span>
+                <div class="flex items-center gap-2 text-gray-400">
+                    <div class="w-4 h-4 bg-red-500 rounded-full border-2 border-white"></div>
+                    <span>Marker = Click</span>
+                </div>
+                <div class="flex items-center gap-2 text-gray-400">
+                    <div class="w-4 h-4 bg-green-500 border-2 border-white"></div>
+                    <span>Box = Click & Drag</span>
+                </div>
+                <div class="flex items-center gap-2 text-gray-400">
+                    <span>Right-click = Delete</span>
                 </div>
                 <div id="annotation-count" class="ml-auto font-semibold text-white">
                     ${drawing.annotations?.length || 0} annotation(s)
@@ -1288,8 +1471,28 @@ function openDrawingAnnotator(assetId, vesselId, drawingType) {
     const ctx = canvas.getContext('2d');
     let annotations = drawing.annotations ? [...drawing.annotations] : [];
     let img = new Image();
-    let isDragging = false;
-    let draggedAnnotationIndex = -1;
+    let currentTool = 'marker'; // 'marker' or 'box'
+    let isDrawing = false;
+    let startPos = null;
+    let tempBox = null;
+
+    // Tool selection buttons
+    const toolMarkerBtn = modal.querySelector('#tool-marker');
+    const toolBoxBtn = modal.querySelector('#tool-box');
+
+    toolMarkerBtn.addEventListener('click', () => {
+        currentTool = 'marker';
+        toolMarkerBtn.className = 'px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors font-medium';
+        toolBoxBtn.className = 'px-3 py-1 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 transition-colors font-medium';
+        canvas.style.cursor = 'crosshair';
+    });
+
+    toolBoxBtn.addEventListener('click', () => {
+        currentTool = 'box';
+        toolBoxBtn.className = 'px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors font-medium';
+        toolMarkerBtn.className = 'px-3 py-1 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 transition-colors font-medium';
+        canvas.style.cursor = 'crosshair';
+    });
 
     img.onload = () => {
         // Set canvas size to match image
@@ -1308,32 +1511,81 @@ function openDrawingAnnotator(assetId, vesselId, drawingType) {
 
         // Draw annotations
         annotations.forEach((annotation, index) => {
-            // Draw marker circle
-            ctx.beginPath();
-            ctx.arc(annotation.x, annotation.y, 15, 0, 2 * Math.PI);
-            ctx.fillStyle = 'rgba(239, 68, 68, 0.8)';
-            ctx.fill();
-            ctx.strokeStyle = 'white';
-            ctx.lineWidth = 3;
-            ctx.stroke();
+            if (annotation.type === 'box') {
+                // Draw rectangle box
+                ctx.strokeStyle = 'rgba(34, 197, 94, 1)'; // Green
+                ctx.lineWidth = 3;
+                ctx.strokeRect(annotation.x, annotation.y, annotation.width, annotation.height);
 
-            // Draw number
-            ctx.fillStyle = 'white';
-            ctx.font = 'bold 14px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(index + 1, annotation.x, annotation.y);
+                // Fill with semi-transparent green
+                ctx.fillStyle = 'rgba(34, 197, 94, 0.2)';
+                ctx.fillRect(annotation.x, annotation.y, annotation.width, annotation.height);
 
-            // Draw label if exists
-            if (annotation.label) {
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-                ctx.fillRect(annotation.x + 20, annotation.y - 10, 150, 25);
+                // Draw number badge at top-left corner
+                const badgeX = annotation.x;
+                const badgeY = annotation.y - 25;
+                ctx.fillStyle = 'rgba(34, 197, 94, 0.9)';
+                ctx.fillRect(badgeX, badgeY, 30, 25);
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(badgeX, badgeY, 30, 25);
+
                 ctx.fillStyle = 'white';
-                ctx.font = '12px Arial';
-                ctx.textAlign = 'left';
-                ctx.fillText(annotation.label, annotation.x + 25, annotation.y + 2);
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(index + 1, badgeX + 15, badgeY + 12);
+
+                // Draw label if exists
+                if (annotation.label) {
+                    const labelX = annotation.x + annotation.width + 10;
+                    const labelY = annotation.y;
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                    ctx.fillRect(labelX, labelY, 150, 25);
+                    ctx.fillStyle = 'white';
+                    ctx.font = '12px Arial';
+                    ctx.textAlign = 'left';
+                    ctx.fillText(annotation.label, labelX + 5, labelY + 12);
+                }
+            } else {
+                // Draw marker circle (default type)
+                ctx.beginPath();
+                ctx.arc(annotation.x, annotation.y, 15, 0, 2 * Math.PI);
+                ctx.fillStyle = 'rgba(239, 68, 68, 0.8)';
+                ctx.fill();
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                // Draw number
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(index + 1, annotation.x, annotation.y);
+
+                // Draw label if exists
+                if (annotation.label) {
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                    ctx.fillRect(annotation.x + 20, annotation.y - 10, 150, 25);
+                    ctx.fillStyle = 'white';
+                    ctx.font = '12px Arial';
+                    ctx.textAlign = 'left';
+                    ctx.fillText(annotation.label, annotation.x + 25, annotation.y + 2);
+                }
             }
         });
+
+        // Draw temporary box while dragging
+        if (tempBox) {
+            ctx.strokeStyle = 'rgba(34, 197, 94, 1)';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([5, 5]);
+            ctx.strokeRect(tempBox.x, tempBox.y, tempBox.width, tempBox.height);
+            ctx.fillStyle = 'rgba(34, 197, 94, 0.2)';
+            ctx.fillRect(tempBox.x, tempBox.y, tempBox.width, tempBox.height);
+            ctx.setLineDash([]);
+        }
 
         // Update count
         modal.querySelector('#annotation-count').textContent = `${annotations.length} annotation(s)`;
@@ -1354,24 +1606,81 @@ function openDrawingAnnotator(assetId, vesselId, drawingType) {
     function findAnnotationAt(x, y) {
         for (let i = annotations.length - 1; i >= 0; i--) {
             const annotation = annotations[i];
-            const distance = Math.sqrt(Math.pow(x - annotation.x, 2) + Math.pow(y - annotation.y, 2));
-            if (distance <= 15) {
-                return i;
+            if (annotation.type === 'box') {
+                // Check if point is inside box
+                if (x >= annotation.x && x <= annotation.x + annotation.width &&
+                    y >= annotation.y && y <= annotation.y + annotation.height) {
+                    return i;
+                }
+            } else {
+                // Check if point is inside marker circle
+                const distance = Math.sqrt(Math.pow(x - annotation.x, 2) + Math.pow(y - annotation.y, 2));
+                if (distance <= 15) {
+                    return i;
+                }
             }
         }
         return -1;
     }
 
-    // Canvas click handler - add annotation
-    canvas.addEventListener('click', (e) => {
+    // Canvas mouse down handler
+    canvas.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return; // Only left button
+
         const pos = getMousePos(e);
-        const label = prompt('Enter annotation label (optional):');
-        annotations.push({
-            x: pos.x,
-            y: pos.y,
-            label: label || ''
-        });
-        renderCanvas();
+
+        if (currentTool === 'box') {
+            isDrawing = true;
+            startPos = pos;
+            tempBox = { x: pos.x, y: pos.y, width: 0, height: 0 };
+        } else if (currentTool === 'marker') {
+            const label = prompt('Enter annotation label (optional):');
+            annotations.push({
+                type: 'marker',
+                x: pos.x,
+                y: pos.y,
+                label: label || ''
+            });
+            renderCanvas();
+        }
+    });
+
+    // Canvas mouse move handler
+    canvas.addEventListener('mousemove', (e) => {
+        if (isDrawing && currentTool === 'box' && startPos) {
+            const pos = getMousePos(e);
+            tempBox = {
+                x: Math.min(startPos.x, pos.x),
+                y: Math.min(startPos.y, pos.y),
+                width: Math.abs(pos.x - startPos.x),
+                height: Math.abs(pos.y - startPos.y)
+            };
+            renderCanvas();
+        }
+    });
+
+    // Canvas mouse up handler
+    canvas.addEventListener('mouseup', (e) => {
+        if (e.button !== 0) return;
+
+        if (isDrawing && currentTool === 'box' && tempBox) {
+            // Only add box if it has reasonable size
+            if (tempBox.width > 20 && tempBox.height > 20) {
+                const label = prompt('Enter annotation label (optional):');
+                annotations.push({
+                    type: 'box',
+                    x: tempBox.x,
+                    y: tempBox.y,
+                    width: tempBox.width,
+                    height: tempBox.height,
+                    label: label || ''
+                });
+            }
+            isDrawing = false;
+            startPos = null;
+            tempBox = null;
+            renderCanvas();
+        }
     });
 
     // Canvas context menu handler - delete annotation
