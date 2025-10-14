@@ -889,11 +889,15 @@ class AuthManager {
             // Create user with signUp and auto-generated password
             // User will receive confirmation email to set their password
             const tempPassword = crypto.randomUUID();
+
+            // Construct the proper redirect URL for password reset
+            const redirectUrl = `${window.location.origin}/#/reset-password`;
+
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email: request.email,
                 password: tempPassword,
                 options: {
-                    emailRedirectTo: window.location.origin,
+                    emailRedirectTo: redirectUrl,
                     data: {
                         username: request.username,
                         role: request.requested_role,
@@ -907,9 +911,17 @@ class AuthManager {
             }
 
             // Trigger password reset email so user can set their own password
-            await supabase.auth.resetPasswordForEmail(request.email, {
-                redirectTo: window.location.origin
+            // Note: User needs to wait a moment after signup before reset email can be sent
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            const { error: resetError } = await supabase.auth.resetPasswordForEmail(request.email, {
+                redirectTo: redirectUrl
             });
+
+            if (resetError) {
+                console.warn('Password reset email failed:', resetError.message);
+                // Don't fail the whole operation - user can use forgot password link
+            }
 
             // Update request status
             const { error: updateError } = await supabase
