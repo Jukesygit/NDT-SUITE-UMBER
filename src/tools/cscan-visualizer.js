@@ -367,9 +367,9 @@ function calculateStats(data) {
 function renderStats(stats) {
     if (!stats) return;
 
-    // Convert mm² to cm² for better readability (1 cm² = 100 mm²)
-    const totalAreaCm2 = stats.totalArea / 100;
-    const validAreaCm2 = stats.validArea / 100;
+    // Convert mm² to m² (1 m² = 1,000,000 mm²)
+    const totalAreaM2 = stats.totalArea / 1000000;
+    const validAreaM2 = stats.validArea / 1000000;
 
     const statsHTML = [
         { label: 'Min', value: stats.min.toFixed(2), unit: 'mm' },
@@ -377,9 +377,9 @@ function renderStats(stats) {
         { label: 'Mean', value: stats.mean.toFixed(2), unit: 'mm' },
         { label: 'Median', value: stats.median.toFixed(2), unit: 'mm' },
         { label: 'Std Dev', value: stats.stdDev.toFixed(2), unit: 'mm' },
-        { label: 'Total Area', value: totalAreaCm2.toFixed(1), unit: 'cm²' },
+        { label: 'Total Area', value: totalAreaM2.toFixed(4), unit: 'm²' },
         { label: 'ND %', value: stats.ndPercentage.toFixed(1), unit: '%' },
-        { label: 'Valid Area', value: validAreaCm2.toFixed(1), unit: 'cm²' },
+        { label: 'Valid Area', value: validAreaM2.toFixed(4), unit: 'm²' },
         { label: 'Valid Points', value: stats.count, unit: '' }
     ].map(({ label, value, unit }) => `
         <div class="p-3 bg-white dark:bg-gray-700 rounded-lg shadow-sm">
