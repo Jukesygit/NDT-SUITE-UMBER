@@ -10,6 +10,111 @@ class ReportGenerator {
     }
 
     /**
+     * Render annotations onto an image and return a data URL
+     * @param {Object} drawing - Drawing object with imageDataUrl and annotations
+     * @returns {Promise<string>} Data URL of image with annotations rendered
+     */
+    async renderAnnotationsOnImage(drawing) {
+        if (!drawing || !drawing.imageDataUrl) {
+            return null;
+        }
+
+        // If no annotations, return original image
+        if (!drawing.annotations || drawing.annotations.length === 0) {
+            return drawing.imageDataUrl;
+        }
+
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                // Create canvas
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+
+                // Draw original image
+                ctx.drawImage(img, 0, 0);
+
+                // Draw each annotation
+                drawing.annotations.forEach((annotation, index) => {
+                    if (annotation.type === 'box') {
+                        // Draw rectangle box
+                        ctx.strokeStyle = 'rgba(34, 197, 94, 1)';
+                        ctx.lineWidth = 3;
+                        ctx.strokeRect(annotation.x, annotation.y, annotation.width, annotation.height);
+
+                        // Fill with semi-transparent green
+                        ctx.fillStyle = 'rgba(34, 197, 94, 0.2)';
+                        ctx.fillRect(annotation.x, annotation.y, annotation.width, annotation.height);
+
+                        // Draw number badge at top-left corner
+                        const badgeX = annotation.x;
+                        const badgeY = annotation.y - 25;
+                        ctx.fillStyle = 'rgba(34, 197, 94, 0.9)';
+                        ctx.fillRect(badgeX, badgeY, 30, 25);
+                        ctx.strokeStyle = 'white';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(badgeX, badgeY, 30, 25);
+
+                        ctx.fillStyle = 'white';
+                        ctx.font = 'bold 14px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(index + 1, badgeX + 15, badgeY + 12);
+
+                        // Draw label if exists
+                        if (annotation.label) {
+                            const labelX = annotation.x + annotation.width + 10;
+                            const labelY = annotation.y;
+                            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                            ctx.fillRect(labelX, labelY, 150, 25);
+                            ctx.fillStyle = 'white';
+                            ctx.font = '12px Arial';
+                            ctx.textAlign = 'left';
+                            ctx.fillText(annotation.label, labelX + 5, labelY + 12);
+                        }
+                    } else {
+                        // Draw marker circle (default type)
+                        ctx.beginPath();
+                        const radius = 15;
+                        ctx.arc(annotation.x, annotation.y, radius, 0, 2 * Math.PI);
+                        ctx.fillStyle = 'rgba(239, 68, 68, 0.4)';
+                        ctx.fill();
+                        ctx.strokeStyle = 'rgba(239, 68, 68, 1)';
+                        ctx.lineWidth = 3;
+                        ctx.stroke();
+
+                        // Draw number in center
+                        ctx.fillStyle = 'white';
+                        ctx.font = 'bold 14px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(index + 1, annotation.x, annotation.y);
+
+                        // Draw label if exists
+                        if (annotation.label) {
+                            const labelX = annotation.x + radius + 10;
+                            const labelY = annotation.y - 10;
+                            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                            ctx.fillRect(labelX, labelY, 150, 25);
+                            ctx.fillStyle = 'white';
+                            ctx.font = '12px Arial';
+                            ctx.textAlign = 'left';
+                            ctx.fillText(annotation.label, labelX + 5, labelY + 12);
+                        }
+                    }
+                });
+
+                // Convert canvas to data URL
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = reject;
+            img.src = drawing.imageDataUrl;
+        });
+    }
+
+    /**
      * Generate a report for a specific vessel
      * @param {string} assetId - Asset ID
      * @param {string} vesselId - Vessel ID
@@ -24,6 +129,28 @@ class ReportGenerator {
 
         if (!asset || !vessel) {
             throw new Error('Asset or vessel not found');
+        }
+
+        // Render annotations on drawings before generating report
+        let locationDrawingWithAnnotations = vessel.locationDrawing;
+        let gaDrawingWithAnnotations = vessel.gaDrawing;
+
+        if (vessel.locationDrawing) {
+            const annotatedImageUrl = await this.renderAnnotationsOnImage(vessel.locationDrawing);
+            locationDrawingWithAnnotations = {
+                ...vessel.locationDrawing,
+                imageDataUrl: annotatedImageUrl,
+                originalImageDataUrl: vessel.locationDrawing.imageDataUrl
+            };
+        }
+
+        if (vessel.gaDrawing) {
+            const annotatedImageUrl = await this.renderAnnotationsOnImage(vessel.gaDrawing);
+            gaDrawingWithAnnotations = {
+                ...vessel.gaDrawing,
+                imageDataUrl: annotatedImageUrl,
+                originalImageDataUrl: vessel.gaDrawing.imageDataUrl
+            };
         }
 
         // Prepare report data
@@ -46,8 +173,8 @@ class ReportGenerator {
                 images: vessel.images || [],
                 model3d: vessel.model3d,
                 scans: vessel.scans || [],
-                locationDrawing: vessel.locationDrawing || null,
-                gaDrawing: vessel.gaDrawing || null
+                locationDrawing: locationDrawingWithAnnotations,
+                gaDrawing: gaDrawingWithAnnotations
             },
             generatedAt: new Date().toISOString()
         };
@@ -348,11 +475,11 @@ class ReportGenerator {
                         <h3 style="font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #1f2937;">Location Drawing</h3>
                         <img src="${vessel.locationDrawing.imageDataUrl}" alt="Location Drawing">
                         ${vessel.locationDrawing.annotations && vessel.locationDrawing.annotations.length > 0 ? `
-                            <div class="image-caption" style="margin-top: 10px; text-align: left;">
-                                <strong>Annotations (${vessel.locationDrawing.annotations.length}):</strong>
-                                <ul style="margin: 5px 0; padding-left: 20px;">
+                            <div class="image-caption" style="margin-top: 10px; text-align: left; font-size: 13px; color: #6b7280;">
+                                <strong style="color: #374151;">Annotations (${vessel.locationDrawing.annotations.length}):</strong>
+                                <ul style="margin: 5px 0; padding-left: 20px; line-height: 1.6;">
                                     ${vessel.locationDrawing.annotations.map((ann, i) => `
-                                        <li>${i + 1}. ${ann.label || 'Marked area'}</li>
+                                        <li><strong>${i + 1}.</strong> ${ann.label || ann.type === 'box' ? 'Marked area' : 'Test Point'}</li>
                                     `).join('')}
                                 </ul>
                             </div>
@@ -364,11 +491,11 @@ class ReportGenerator {
                         <h3 style="font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #1f2937;">GA Drawing</h3>
                         <img src="${vessel.gaDrawing.imageDataUrl}" alt="GA Drawing">
                         ${vessel.gaDrawing.annotations && vessel.gaDrawing.annotations.length > 0 ? `
-                            <div class="image-caption" style="margin-top: 10px; text-align: left;">
-                                <strong>Annotations (${vessel.gaDrawing.annotations.length}):</strong>
-                                <ul style="margin: 5px 0; padding-left: 20px;">
+                            <div class="image-caption" style="margin-top: 10px; text-align: left; font-size: 13px; color: #6b7280;">
+                                <strong style="color: #374151;">Annotations (${vessel.gaDrawing.annotations.length}):</strong>
+                                <ul style="margin: 5px 0; padding-left: 20px; line-height: 1.6;">
                                     ${vessel.gaDrawing.annotations.map((ann, i) => `
-                                        <li>${i + 1}. ${ann.label || 'Marked area'}</li>
+                                        <li><strong>${i + 1}.</strong> ${ann.label || ann.type === 'box' ? 'Marked area' : 'Test Point'}</li>
                                     `).join('')}
                                 </ul>
                             </div>
