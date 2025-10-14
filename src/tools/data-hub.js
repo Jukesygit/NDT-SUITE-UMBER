@@ -272,11 +272,19 @@ function renderVesselDetailView(assetId) {
                                 <div class="flex-grow min-w-0">
                                     <div class="flex justify-between items-start mb-2">
                                         <h3 class="text-xl font-bold text-gray-900 dark:text-white truncate">${vessel.name}</h3>
-                                        <button class="vessel-menu-btn text-gray-500 hover:text-gray-700 dark:hover:text-gray-300" data-vessel-id="${vessel.id}" aria-label="Menu for ${vessel.name}">
-                                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                                                <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
-                                            </svg>
-                                        </button>
+                                        <div class="flex items-center gap-2">
+                                            <button class="generate-report-btn bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-vessel-name="${vessel.name}">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                                </svg>
+                                                Generate Report
+                                            </button>
+                                            <button class="vessel-menu-btn text-gray-500 hover:text-gray-700 dark:hover:text-gray-300" data-vessel-id="${vessel.id}" aria-label="Menu for ${vessel.name}">
+                                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                                    <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
+                                                </svg>
+                                            </button>
+                                        </div>
                                     </div>
                                     <div class="space-y-1 text-sm text-gray-600 dark:text-gray-400">
                                         <div>Scans: ${scanCount}</div>
@@ -475,6 +483,16 @@ function renderVesselDetailView(assetId) {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             showVesselMenu(e, assetId, btn.dataset.vesselId);
+        });
+    });
+
+    dom.vesselDetailView.querySelectorAll('.generate-report-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const vesselId = btn.dataset.vesselId;
+            const assetId = btn.dataset.assetId;
+            const vesselName = btn.dataset.vesselName;
+            reportDialog.show(assetId, vesselId, vesselName);
         });
     });
 
@@ -1178,7 +1196,6 @@ function showVesselMenu(event, assetId, vesselId) {
     menu.style.left = event.clientX + 'px';
     menu.style.top = event.clientY + 'px';
     menu.innerHTML = `
-        <button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-blue-600" data-action="generate-report">📄 Generate Report</button>
         ${vessel.model3d ? '<button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm" data-action="change-model">Change 3D Model</button>' : ''}
         ${vessel.model3d ? '<button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm" data-action="remove-model">Remove 3D Model</button>' : ''}
         <button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm" data-action="rename">Rename</button>
@@ -1189,10 +1206,7 @@ function showVesselMenu(event, assetId, vesselId) {
 
     menu.addEventListener('click', async (e) => {
         const action = e.target.dataset.action;
-        if (action === 'generate-report') {
-            const vessel = dataManager.getVessel(assetId, vesselId);
-            reportDialog.show(assetId, vesselId, vessel.name);
-        } else if (action === 'rename') {
+        if (action === 'rename') {
             const vessel = dataManager.getVessel(assetId, vesselId);
             const newName = prompt('Enter new name:', vessel.name);
             if (newName && newName.trim()) {
