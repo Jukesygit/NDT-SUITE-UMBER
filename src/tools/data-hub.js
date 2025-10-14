@@ -12,24 +12,24 @@ const HTML = `
 <div class="h-full flex flex-col overflow-hidden">
     <div id="datahub-header-container" style="flex-shrink: 0;"></div>
 
-    <div class="glass-panel" style="padding: 8px 16px; flex-shrink: 0; border-radius: 0;">
+    <div class="glass-panel" style="padding: 6px 12px; flex-shrink: 0; border-radius: 0;">
         <div class="flex justify-between items-center">
-            <div id="stats-bar" class="flex gap-4 items-center flex-grow"></div>
-            <div class="flex gap-2">
+            <div id="stats-bar" class="flex gap-3 items-center flex-grow text-xs"></div>
+            <div class="flex gap-1.5">
                 <button id="import-btn" class="btn-secondary text-xs px-2 py-1">
-                    Import Data
+                    Import
                 </button>
                 <button id="export-all-btn" class="btn-secondary text-xs px-2 py-1">
-                    Export All
+                    Export
                 </button>
                 <button id="new-asset-btn" class="btn-primary text-xs px-2 py-1">
-                    + New Asset
+                    + Asset
                 </button>
             </div>
         </div>
     </div>
 
-    <div id="breadcrumb" class="px-6 py-3 flex items-center gap-2 text-sm flex-shrink-0" style="background: rgba(255, 255, 255, 0.03); border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+    <div id="breadcrumb" class="px-4 py-1.5 flex items-center gap-2 text-xs flex-shrink-0" style="background: rgba(255, 255, 255, 0.03); border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
         <button id="breadcrumb-home" class="text-blue-400 hover:underline">Home</button>
     </div>
 
@@ -62,8 +62,8 @@ function cacheDom() {
     // Initialize animated header
     const header = createAnimatedHeader(
         'NDT Data Hub',
-        'Organize and manage your inspection scans',
-        { height: '60px', particleCount: 8, waveIntensity: 0.2 }
+        '',
+        { height: '40px', particleCount: 6, waveIntensity: 0.15 }
     );
     dom.headerContainer.appendChild(header);
 }
