@@ -73,12 +73,18 @@ class SyncStatus {
             this.showError(e.detail.error);
         });
 
+        window.addEventListener('syncPending', () => {
+            this.showPending();
+        });
+
         // Listen for auth changes
         window.addEventListener('userLoggedIn', () => {
             this.updateStatus();
         });
 
         window.addEventListener('userLoggedOut', () => {
+            // Stop auto-sync
+            syncService.stopAutoSync();
             this.updateStatus();
         });
     }
@@ -233,6 +239,20 @@ class SyncStatus {
     }
 
     /**
+     * Show pending state (waiting to auto-sync)
+     */
+    showPending() {
+        if (!this.container) return;
+
+        this.container.classList.remove('error', 'syncing', 'offline', 'success');
+        this.container.classList.add('pending');
+        this.statusIcon.classList.remove('spinning');
+        this.progressBar.style.display = 'none';
+        this.statusText.textContent = 'Auto-syncing...';
+        this.container.title = 'Changes will sync automatically';
+    }
+
+    /**
      * Show temporary message
      */
     showMessage(message) {
@@ -332,6 +352,10 @@ style.textContent = `
 
     .sync-status.needs-sync .sync-icon-svg {
         color: #ff9800;
+    }
+
+    .sync-status.pending .sync-icon-svg {
+        color: #2196f3;
     }
 
     @keyframes spin {
