@@ -12,6 +12,10 @@
     "vite": "^5.0.0"
   },
   "dependencies": {
+    "docx": "^9.5.1",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^3.0.3",
+    "pdfmake": "^0.2.20",
     "three": "^0.164.1"
   }
 }

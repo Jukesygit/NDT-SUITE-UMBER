@@ -245,6 +245,9 @@ class NDTApp {
             // Show sync status UI
             syncStatus.create();
 
+            // Start auto-sync
+            syncService.startAutoSync();
+
             // Start full sync after a short delay
             setTimeout(async () => {
                 try {
@@ -275,6 +278,9 @@ class NDTApp {
 
                 // Show sync status UI
                 syncStatus.create();
+
+                // Start auto-sync
+                syncService.startAutoSync();
 
                 // Start full sync
                 setTimeout(async () => {

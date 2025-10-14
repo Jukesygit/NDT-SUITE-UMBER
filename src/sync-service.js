@@ -18,6 +18,10 @@ class SyncService {
         this.lastSyncTime = null;
         this.syncQueue = [];
         this.deviceId = this.getOrCreateDeviceId();
+        this.autoSyncEnabled = true;
+        this.autoSyncInterval = 5 * 60 * 1000; // 5 minutes default
+        this.autoSyncTimer = null;
+        this.pendingChanges = false;
     }
 
     /**
@@ -72,6 +76,7 @@ class SyncService {
             }
 
             this.lastSyncTime = new Date();
+            this.pendingChanges = false; // Clear pending changes after successful sync
             console.log('Full sync completed successfully');
 
             // Dispatch event for UI updates
@@ -914,8 +919,90 @@ class SyncService {
         return {
             inProgress: this.syncInProgress,
             lastSync: this.lastSyncTime,
-            queueSize: this.syncQueue.length
+            queueSize: this.syncQueue.length,
+            autoSyncEnabled: this.autoSyncEnabled,
+            pendingChanges: this.pendingChanges
         };
+    }
+
+    /**
+     * Start automatic sync
+     */
+    startAutoSync() {
+        if (!authManager.isLoggedIn()) {
+            console.log('Cannot start auto-sync: user not logged in');
+            return;
+        }
+
+        if (this.autoSyncTimer) {
+            console.log('Auto-sync already running');
+            return;
+        }
+
+        console.log(`Starting auto-sync with ${this.autoSyncInterval / 1000}s interval`);
+        this.autoSyncEnabled = true;
+
+        // Start periodic sync
+        this.autoSyncTimer = setInterval(async () => {
+            if (!this.syncInProgress && this.pendingChanges && authManager.isLoggedIn()) {
+                console.log('Auto-sync triggered');
+                await this.fullSync();
+            }
+        }, this.autoSyncInterval);
+
+        // Dispatch event
+        window.dispatchEvent(new CustomEvent('autoSyncStarted'));
+    }
+
+    /**
+     * Stop automatic sync
+     */
+    stopAutoSync() {
+        if (this.autoSyncTimer) {
+            clearInterval(this.autoSyncTimer);
+            this.autoSyncTimer = null;
+            this.autoSyncEnabled = false;
+            console.log('Auto-sync stopped');
+
+            // Dispatch event
+            window.dispatchEvent(new CustomEvent('autoSyncStopped'));
+        }
+    }
+
+    /**
+     * Mark that local data has changed and needs sync
+     */
+    markPendingChanges() {
+        this.pendingChanges = true;
+
+        // Dispatch event for UI updates
+        window.dispatchEvent(new CustomEvent('syncPending'));
+
+        // If auto-sync is enabled, trigger immediate sync for responsiveness
+        if (this.autoSyncEnabled && !this.syncInProgress && authManager.isLoggedIn()) {
+            // Debounce: wait 3 seconds before syncing to batch rapid changes
+            if (this.pendingSyncTimeout) {
+                clearTimeout(this.pendingSyncTimeout);
+            }
+
+            this.pendingSyncTimeout = setTimeout(async () => {
+                console.log('Auto-sync triggered by data change');
+                await this.fullSync();
+            }, 3000);
+        }
+    }
+
+    /**
+     * Set auto-sync interval
+     */
+    setAutoSyncInterval(milliseconds) {
+        this.autoSyncInterval = milliseconds;
+
+        // Restart timer if running
+        if (this.autoSyncTimer) {
+            this.stopAutoSync();
+            this.startAutoSync();
+        }
     }
 }
 
