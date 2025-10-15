@@ -9,14 +9,25 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     console.error('Missing Supabase credentials. Please check your .env file.');
     console.error('Required variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY');
+} else {
+    console.log('Supabase URL configured:', SUPABASE_URL);
+    console.log('Supabase anon key length:', SUPABASE_ANON_KEY?.length);
 }
 
-// Create Supabase client
+// Create Supabase client with options to support anonymous requests
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
         autoRefreshToken: true,
-        persistSession: true,
+        persistSession: false,  // Don't persist session for anonymous requests
         detectSessionInUrl: true
+    },
+    global: {
+        headers: {
+            'x-client-info': 'supabase-js-web'
+        }
+    },
+    db: {
+        schema: 'public'
     }
 });
 
