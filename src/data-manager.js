@@ -3,6 +3,7 @@ import indexedDB from './indexed-db.js';
 import authManager from './auth-manager.js';
 import syncService from './sync-service.js';
 import syncQueue from './sync-queue.js';
+import supabase from './supabase-client.js';
 
 const STORAGE_KEY = 'ndt_suite_data';
 
@@ -392,24 +393,48 @@ class DataManager {
         }
         targetOrgData.assets.push(transferredAsset);
 
+        // Sync to Supabase using Edge Function (bypasses RLS)
+        if (authManager.useSupabase) {
+            try {
+                const { data, error } = await supabase.functions.invoke('transfer-asset', {
+                    body: {
+                        asset_id: assetId,
+                        target_organization_id: targetOrganizationId,
+                        user_id: authManager.getCurrentUser()?.id
+                    }
+                });
+
+                if (error) {
+                    console.error('[DATA-MANAGER] Supabase transfer failed:', error);
+                    // Rollback local changes
+                    targetOrgData.assets = targetOrgData.assets.filter(a => a.id !== assetId);
+                    transferredAsset.organizationId = sourceOrgId;
+                    sourceOrgData.assets.push(transferredAsset);
+                    await this.saveToStorage();
+                    throw new Error(`Transfer failed: ${error.message}`);
+                }
+
+                if (data?.error) {
+                    console.error('[DATA-MANAGER] Edge function returned error:', data.error);
+                    // Rollback local changes
+                    targetOrgData.assets = targetOrgData.assets.filter(a => a.id !== assetId);
+                    transferredAsset.organizationId = sourceOrgId;
+                    sourceOrgData.assets.push(transferredAsset);
+                    await this.saveToStorage();
+                    throw new Error(data.error);
+                }
+
+                console.log('[DATA-MANAGER] Asset transferred successfully via Edge Function');
+            } catch (err) {
+                console.error('[DATA-MANAGER] Transfer error:', err);
+                throw err;
+            }
+        }
+
         // Save changes locally
         await this.saveToStorage();
 
         console.log('[DATA-MANAGER] Asset transferred from org', sourceOrgId, 'to org', targetOrganizationId);
-
-        // Queue background sync to Supabase (non-blocking)
-        if (authManager.useSupabase) {
-            syncQueue.add({
-                type: 'update',
-                table: 'assets',
-                id: assetId,
-                data: {
-                    organization_id: targetOrganizationId,
-                    updated_at: new Date(transferredAsset.updatedAt).toISOString()
-                }
-            });
-            console.log('[DATA-MANAGER] Queued asset transfer for background sync');
-        }
 
         return transferredAsset;
     }
