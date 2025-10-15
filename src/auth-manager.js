@@ -296,6 +296,9 @@ class AuthManager {
 
         this.currentUser = null;
         this.currentProfile = null;
+
+        // Dispatch logout event for components to clean up
+        window.dispatchEvent(new CustomEvent('userLoggedOut'));
     }
 
     showPasswordResetForm() {

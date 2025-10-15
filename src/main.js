@@ -347,6 +347,15 @@ class NDTApp {
             this.dom.mainContent.appendChild(container);
         }
 
+        // Hide any active tools
+        if (this.currentTool && this.tools[this.currentTool]) {
+            const toolContainer = document.getElementById(`tool-${this.currentTool}`);
+            if (toolContainer) {
+                toolContainer.classList.add('hidden');
+            }
+        }
+        this.currentTool = null;
+
         // Hide main UI
         this.dom.appContainer.classList.remove('tool-active');
         document.body.style.overflow = 'auto';
