@@ -110,7 +110,7 @@ destroy: () => {
 
 ## Resources
 
-- 📘 Full Guide: [GLASSMORPHIC_THEME_GUIDE.md](GLASSMORPHIC_THEME_GUIDE.md)
+- 📘 Full Guide: [./GLASSMORPHIC_THEME_GUIDE.md](./GLASSMORPHIC_THEME_GUIDE.md)
 - 🎨 Theme Styles: [src/styles/glassmorphic.css](src/styles/glassmorphic.css)
 - 🌊 Animation Component: [src/animated-background.js](src/animated-background.js)
 - 🛠️ Helper Functions: [src/tool-layout.js](src/tool-layout.js)

@@ -13,7 +13,7 @@ This integration adds cloud storage and synchronization for all your inspection 
 
 ## Prerequisites
 
-- Complete the basic Supabase setup (see `SUPABASE_SETUP.md`)
+- Complete the basic Supabase setup (see `./SUPABASE_SETUP.md`)
 - Supabase project with authentication working
 - At least one user created and able to login
 
@@ -27,7 +27,7 @@ This creates the database tables for storing your inspection data.
 
 1. Go to Supabase Dashboard → **SQL Editor**
 2. Click **New Query**
-3. Copy the entire contents of `supabase-assets-schema.sql`
+3. Copy the entire contents of `../database/supabase-assets-schema.sql`
 4. Paste and click **Run**
 5. Wait for "Success" message
 
@@ -59,7 +59,7 @@ This creates secure storage for large files like 3D models and images.
 ### 2.1 Execute Storage Setup
 
 1. Go to **SQL Editor** → **New Query**
-2. Copy the entire contents of `supabase-storage-setup.sql`
+2. Copy the entire contents of `../database/supabase-storage-setup.sql`
 3. Paste and click **Run**
 4. Wait for "Success" message
 

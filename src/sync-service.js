@@ -245,6 +245,10 @@ class SyncService {
                 const imagesResult = await this.downloadVesselImages(remoteVessel.id, localVessel);
                 count += imagesResult.count;
 
+                // Download strakes
+                const strakesResult = await this.downloadStrakes(remoteVessel.id, localVessel);
+                count += strakesResult.count;
+
                 // Download scans
                 const scansResult = await this.downloadScans(remoteVessel.id, localVessel);
                 count += scansResult.count;
@@ -299,6 +303,67 @@ class SyncService {
     }
 
     /**
+     * Download strakes for a vessel
+     */
+    async downloadStrakes(vesselId, localVessel) {
+        try {
+            const { data: strakes, error } = await supabase
+                .from('strakes')
+                .select('*')
+                .eq('vessel_id', vesselId);
+
+            if (error) throw error;
+
+            // Initialize strakes array if it doesn't exist
+            if (!localVessel.strakes) {
+                localVessel.strakes = [];
+            }
+
+            let count = 0;
+
+            for (const remoteStrake of strakes) {
+                const existingStrake = localVessel.strakes.find(s => s.id === remoteStrake.id);
+
+                if (!existingStrake) {
+                    // Add new strake
+                    localVessel.strakes.push({
+                        id: remoteStrake.id,
+                        name: remoteStrake.name,
+                        totalArea: remoteStrake.total_area,
+                        requiredCoverage: remoteStrake.required_coverage,
+                        scans: [] // Will be populated when scans are downloaded
+                    });
+                    count++;
+                } else {
+                    // Update existing strake if data changed
+                    let updated = false;
+                    if (existingStrake.name !== remoteStrake.name) {
+                        existingStrake.name = remoteStrake.name;
+                        updated = true;
+                    }
+                    if (existingStrake.totalArea !== remoteStrake.total_area) {
+                        existingStrake.totalArea = remoteStrake.total_area;
+                        updated = true;
+                    }
+                    if (existingStrake.requiredCoverage !== remoteStrake.required_coverage) {
+                        existingStrake.requiredCoverage = remoteStrake.required_coverage;
+                        updated = true;
+                    }
+                    if (updated) {
+                        count++;
+                    }
+                }
+            }
+
+            return { success: true, count };
+
+        } catch (error) {
+            console.error('Error downloading strakes:', error);
+            return { success: false, error: error.message, count: 0 };
+        }
+    }
+
+    /**
      * Download scans for a vessel
      */
     async downloadScans(vesselId, localVessel) {
@@ -321,7 +386,8 @@ class SyncService {
                         name: remoteScan.name,
                         toolType: remoteScan.tool_type,
                         timestamp: new Date(remoteScan.created_at).getTime(),
-                        data: remoteScan.data || null
+                        data: remoteScan.data || null,
+                        strakeId: remoteScan.strake_id || null // Include strake assignment
                     };
 
                     // Download thumbnail if exists
@@ -681,6 +747,26 @@ class SyncService {
                 }
             }
 
+            // Upload strakes
+            if (vessel.strakes && vessel.strakes.length > 0) {
+                console.log(`[UPLOAD_VESSEL] Uploading ${vessel.strakes.length} strakes...`);
+                for (let i = 0; i < vessel.strakes.length; i++) {
+                    const strake = vessel.strakes[i];
+                    console.log(`[UPLOAD_VESSEL] Uploading strake ${i + 1}/${vessel.strakes.length}: ${strake.name}`);
+                    try {
+                        const strakeResult = await this.uploadStrake(strake, vessel.id);
+                        if (strakeResult.success) {
+                            count++;
+                            console.log(`[UPLOAD_VESSEL] Strake uploaded successfully`);
+                        } else {
+                            console.warn(`[UPLOAD_VESSEL] Strake upload failed:`, strakeResult.error);
+                        }
+                    } catch (error) {
+                        console.error(`[UPLOAD_VESSEL] Strake upload error:`, error);
+                    }
+                }
+            }
+
             // Upload scans
             if (vessel.scans && vessel.scans.length > 0) {
                 console.log(`[UPLOAD_VESSEL] Uploading ${vessel.scans.length} scans...`);
@@ -764,6 +850,59 @@ class SyncService {
     }
 
     /**
+     * Upload a strake
+     */
+    async uploadStrake(strake, vesselId) {
+        try {
+            // Check if strake already exists
+            const { data: existing, error: checkError } = await supabase
+                .from('strakes')
+                .select('id, updated_at')
+                .eq('id', strake.id)
+                .single();
+
+            if (checkError && checkError.code !== 'PGRST116') {
+                throw checkError;
+            }
+
+            if (!existing) {
+                // Insert new strake
+                const { error } = await supabase
+                    .from('strakes')
+                    .insert({
+                        id: strake.id,
+                        vessel_id: vesselId,
+                        name: strake.name,
+                        total_area: strake.totalArea,
+                        required_coverage: strake.requiredCoverage,
+                        created_at: new Date().toISOString()
+                    });
+
+                if (error) throw error;
+            } else {
+                // Update existing strake
+                const { error } = await supabase
+                    .from('strakes')
+                    .update({
+                        name: strake.name,
+                        total_area: strake.totalArea,
+                        required_coverage: strake.requiredCoverage,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', strake.id);
+
+                if (error) throw error;
+            }
+
+            return { success: true };
+
+        } catch (error) {
+            console.error('Error uploading strake:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
      * Upload a scan
      */
     async uploadScan(scan, vesselId, assetId, orgId) {
@@ -832,6 +971,7 @@ class SyncService {
                     vessel_id: vesselId,
                     name: scan.name,
                     tool_type: scan.toolType,
+                    strake_id: scan.strakeId || null, // Include strake assignment
                     data: scanDataInline,
                     data_url: dataUrl,
                     thumbnail_url: thumbnailUrl,

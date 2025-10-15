@@ -186,7 +186,7 @@ If you have data in local IndexedDB that was never synced to Supabase:
 
 1. **Login to the app** with your account
 2. **Open browser console** (F12)
-3. **Run diagnostic script:** Paste [DIAGNOSTIC_SCRIPT.js](DIAGNOSTIC_SCRIPT.js) into console
+3. **Run diagnostic script:** Paste diagnostic script into console (if available)
 4. **Check what data you have locally**
 5. **Run `exportAllData()`** to download a backup JSON file
 6. **Contact admin** to import your data to Supabase
@@ -316,9 +316,9 @@ To test cloud-first behavior:
 
 ## Questions?
 
-- Check the [DIAGNOSTIC_SCRIPT.js](DIAGNOSTIC_SCRIPT.js) for debugging tools
-- Review [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) for deployment guides
-- See [SUPABASE_SETUP.md](SUPABASE_SETUP.md) for Supabase configuration
+- Check diagnostic script for debugging tools (if available)
+- Review [./DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md) for deployment guides
+- See [./SUPABASE_SETUP.md](./SUPABASE_SETUP.md) for Supabase configuration
 
 ---
 

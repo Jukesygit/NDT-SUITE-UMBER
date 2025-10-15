@@ -5,7 +5,7 @@ This feature allows users to request access to specific assets from other organi
 
 ## What Was Implemented
 
-### 1. Database Schema (`supabase-asset-access-requests-schema.sql`)
+### 1. Database Schema (`../database/supabase-asset-access-requests-schema.sql`)
 New table and functions for managing asset access requests:
 
 #### asset_access_requests Table
@@ -55,7 +55,7 @@ New standalone tool for regular users:
 ### Step 1: Run Database Migration
 1. Open your Supabase dashboard
 2. Go to SQL Editor
-3. Run the contents of `supabase-asset-access-requests-schema.sql`
+3. Run the contents of `../database/supabase-asset-access-requests-schema.sql`
 4. Verify the `asset_access_requests` table was created
 
 ### Step 2: Register the New Tool
