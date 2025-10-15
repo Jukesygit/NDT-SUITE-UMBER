@@ -1,5 +1,5 @@
-// Edge Function to approve account requests and send confirmation emails
-// This uses the service role to create users and send password reset emails
+// Edge Function to handle account request approvals
+// Uses admin auth to create user accounts
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -22,12 +22,12 @@ serve(async (req) => {
     // Validate required fields
     if (!request_id || !approved_by_user_id) {
       return new Response(
-        JSON.stringify({ error: 'Missing required fields: request_id and approved_by_user_id' }),
+        JSON.stringify({ error: 'Missing required fields' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Create Supabase admin client with service role (bypasses RLS)
+    // Create Supabase client with service role
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -39,7 +39,7 @@ serve(async (req) => {
       }
     )
 
-    // Get the account request
+    // Fetch the account request
     const { data: request, error: fetchError } = await supabaseAdmin
       .from('account_requests')
       .select('*')
@@ -47,31 +47,20 @@ serve(async (req) => {
       .single()
 
     if (fetchError || !request) {
-      console.error('Request fetch error:', fetchError)
       return new Response(
         JSON.stringify({ error: 'Request not found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Check if already approved
-    if (request.status === 'approved') {
-      return new Response(
-        JSON.stringify({ error: 'Request already approved' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Create user account
-    const redirectUrl = `${req.headers.get('origin') || 'http://localhost:5173'}/#/reset-password`
+    // Generate temporary password
     const tempPassword = crypto.randomUUID()
 
-    console.log('Creating user account for:', request.email)
-
+    // Create user account using admin auth
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: request.email,
       password: tempPassword,
-      email_confirm: true, // Auto-confirm email since it's admin-created
+      email_confirm: true,
       user_metadata: {
         username: request.username,
         role: request.requested_role,
@@ -80,36 +69,14 @@ serve(async (req) => {
     })
 
     if (authError) {
-      console.error('User creation error:', authError)
       return new Response(
-        JSON.stringify({ error: `Failed to create user: ${authError.message}` }),
+        JSON.stringify({ error: authError.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    console.log('User created successfully:', authData.user.id)
-
-    // Send password reset email using admin API
-    console.log('Sending password reset email...')
-
-    const { error: resetError } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'recovery',
-      email: request.email,
-      options: {
-        redirectTo: redirectUrl
-      }
-    })
-
-    if (resetError) {
-      console.error('Password reset email error:', resetError)
-      // Don't fail the whole operation - user can use "Forgot Password"
-      console.warn('User account created but password reset email failed. User can use Forgot Password link.')
-    } else {
-      console.log('Password reset email sent successfully')
-    }
-
     // Update request status
-    const { error: updateError } = await supabaseAdmin
+    await supabaseAdmin
       .from('account_requests')
       .update({
         status: 'approved',
@@ -117,14 +84,6 @@ serve(async (req) => {
         approved_at: new Date().toISOString()
       })
       .eq('id', request_id)
-
-    if (updateError) {
-      console.error('Request update error:', updateError)
-      return new Response(
-        JSON.stringify({ error: `User created but failed to update request status: ${updateError.message}` }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
 
     return new Response(
       JSON.stringify({
@@ -136,9 +95,8 @@ serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('Unexpected error:', error)
     return new Response(
-      JSON.stringify({ error: error.message || 'An unexpected error occurred' }),
+      JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
