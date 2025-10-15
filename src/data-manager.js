@@ -372,28 +372,8 @@ class DataManager {
         }
 
         const sourceOrgId = asset.organizationId;
-        const sourceOrgData = this.getOrgData(sourceOrgId);
-        const targetOrgData = this.getOrgData(targetOrganizationId);
 
-        // Remove from source organization
-        const assetIndex = (sourceOrgData.assets || []).findIndex(a => a.id === assetId);
-        if (assetIndex === -1) {
-            throw new Error('Asset not found in source organization');
-        }
-
-        const [transferredAsset] = sourceOrgData.assets.splice(assetIndex, 1);
-
-        // Update the asset's organization ID
-        transferredAsset.organizationId = targetOrganizationId;
-        transferredAsset.updatedAt = Date.now();
-
-        // Add to target organization
-        if (!targetOrgData.assets) {
-            targetOrgData.assets = [];
-        }
-        targetOrgData.assets.push(transferredAsset);
-
-        // Sync to Supabase using Edge Function (bypasses RLS)
+        // Sync to Supabase FIRST using Edge Function (bypasses RLS)
         if (authManager.useSupabase) {
             try {
                 const { data, error } = await supabase.functions.invoke('transfer-asset', {
@@ -406,37 +386,47 @@ class DataManager {
 
                 if (error) {
                     console.error('[DATA-MANAGER] Supabase transfer failed:', error);
-                    // Rollback local changes
-                    targetOrgData.assets = targetOrgData.assets.filter(a => a.id !== assetId);
-                    transferredAsset.organizationId = sourceOrgId;
-                    sourceOrgData.assets.push(transferredAsset);
-                    await this.saveToStorage();
                     throw new Error(`Transfer failed: ${error.message}`);
                 }
 
                 if (data?.error) {
                     console.error('[DATA-MANAGER] Edge function returned error:', data.error);
-                    // Rollback local changes
-                    targetOrgData.assets = targetOrgData.assets.filter(a => a.id !== assetId);
-                    transferredAsset.organizationId = sourceOrgId;
-                    sourceOrgData.assets.push(transferredAsset);
-                    await this.saveToStorage();
                     throw new Error(data.error);
                 }
 
-                console.log('[DATA-MANAGER] Asset transferred successfully via Edge Function');
+                console.log('[DATA-MANAGER] Asset transferred successfully in Supabase via Edge Function');
             } catch (err) {
                 console.error('[DATA-MANAGER] Transfer error:', err);
                 throw err;
             }
         }
 
+        // Now update local cache to match Supabase state
+        const sourceOrgData = this.getOrgData(sourceOrgId);
+        const targetOrgData = this.getOrgData(targetOrganizationId);
+
+        // Remove from source organization
+        const assetIndex = (sourceOrgData.assets || []).findIndex(a => a.id === assetId);
+        if (assetIndex !== -1) {
+            const [transferredAsset] = sourceOrgData.assets.splice(assetIndex, 1);
+
+            // Update the asset's organization ID
+            transferredAsset.organizationId = targetOrganizationId;
+            transferredAsset.updatedAt = Date.now();
+
+            // Add to target organization
+            if (!targetOrgData.assets) {
+                targetOrgData.assets = [];
+            }
+            targetOrgData.assets.push(transferredAsset);
+        }
+
         // Save changes locally
         await this.saveToStorage();
 
-        console.log('[DATA-MANAGER] Asset transferred from org', sourceOrgId, 'to org', targetOrganizationId);
+        console.log('[DATA-MANAGER] Local cache updated: Asset transferred from org', sourceOrgId, 'to org', targetOrganizationId);
 
-        return transferredAsset;
+        return asset;
     }
 
     async bulkTransferAssets(assetIds, targetOrganizationId) {
