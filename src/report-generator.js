@@ -479,7 +479,7 @@ class ReportGenerator {
                                 <strong style="color: #374151;">Annotations (${vessel.locationDrawing.annotations.length}):</strong>
                                 <ul style="margin: 5px 0; padding-left: 20px; line-height: 1.6;">
                                     ${vessel.locationDrawing.annotations.map((ann, i) => `
-                                        <li><strong>${i + 1}.</strong> ${ann.label || ann.type === 'box' ? 'Marked area' : 'Test Point'}</li>
+                                        <li><strong>${i + 1}.</strong> ${ann.label || (ann.type === 'box' ? 'Marked area' : 'Test Point')}</li>
                                     `).join('')}
                                 </ul>
                             </div>
@@ -501,7 +501,7 @@ class ReportGenerator {
                                 <strong style="color: #374151;">Annotations (${vessel.gaDrawing.annotations.length}):</strong>
                                 <ul style="margin: 5px 0; padding-left: 20px; line-height: 1.6;">
                                     ${vessel.gaDrawing.annotations.map((ann, i) => `
-                                        <li><strong>${i + 1}.</strong> ${ann.label || ann.type === 'box' ? 'Marked area' : 'Test Point'}</li>
+                                        <li><strong>${i + 1}.</strong> ${ann.label || (ann.type === 'box' ? 'Marked area' : 'Test Point')}</li>
                                     `).join('')}
                                 </ul>
                             </div>
@@ -795,7 +795,7 @@ class ReportGenerator {
                         doc.setFont(undefined, 'normal');
                         vessel.locationDrawing.annotations.forEach((ann, i) => {
                             checkPageBreak(5);
-                            doc.text(`${i + 1}. ${ann.label || 'Marked area'}`, margin + 5, yPos);
+                            doc.text(`${i + 1}. ${ann.label || (ann.type === 'box' ? 'Marked area' : 'Test Point')}`, margin + 5, yPos);
                             yPos += 5;
                         });
                         yPos += 3;
@@ -833,7 +833,7 @@ class ReportGenerator {
                         doc.setFont(undefined, 'normal');
                         vessel.gaDrawing.annotations.forEach((ann, i) => {
                             checkPageBreak(5);
-                            doc.text(`${i + 1}. ${ann.label || 'Marked area'}`, margin + 5, yPos);
+                            doc.text(`${i + 1}. ${ann.label || (ann.type === 'box' ? 'Marked area' : 'Test Point')}`, margin + 5, yPos);
                             yPos += 5;
                         });
                         yPos += 3;
@@ -1180,7 +1180,7 @@ class ReportGenerator {
                         vessel.locationDrawing.annotations.forEach((ann, i) => {
                             children.push(
                                 new Paragraph({
-                                    text: `${i + 1}. ${ann.label || 'Marked area'}`,
+                                    text: `${i + 1}. ${ann.label || (ann.type === 'box' ? 'Marked area' : 'Test Point')}`,
                                     spacing: { after: 50 }
                                 })
                             );
@@ -1243,7 +1243,7 @@ class ReportGenerator {
                         vessel.gaDrawing.annotations.forEach((ann, i) => {
                             children.push(
                                 new Paragraph({
-                                    text: `${i + 1}. ${ann.label || 'Marked area'}`,
+                                    text: `${i + 1}. ${ann.label || (ann.type === 'box' ? 'Marked area' : 'Test Point')}`,
                                     spacing: { after: 50 }
                                 })
                             );

@@ -18,7 +18,7 @@ Administrators can:
 Execute the SQL schema in your Supabase SQL Editor:
 
 ```bash
-# File: supabase-profile-schema.sql
+# File: ../database/supabase-profile-schema.sql
 ```
 
 This will create:
@@ -31,7 +31,7 @@ This will create:
 The following files have been created/modified:
 
 **New Files:**
-- `supabase-profile-schema.sql` - Database schema for permission requests
+- `../database/supabase-profile-schema.sql` - Database schema for permission requests
 - `src/tools/profile.js` - Profile management component
 
 **Modified Files:**

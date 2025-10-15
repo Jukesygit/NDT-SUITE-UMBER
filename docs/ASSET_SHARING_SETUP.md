@@ -5,7 +5,7 @@ This feature allows admins to share assets (and their corresponding subfolders/s
 
 ## What Was Implemented
 
-### 1. Database Schema (`supabase-sharing-schema.sql`)
+### 1. Database Schema (`../database/supabase-sharing-schema.sql`)
 - **shared_assets table**: Tracks sharing relationships between organizations
 - **Columns**:
   - `owner_organization_id`: Organization that owns the asset
@@ -44,7 +44,7 @@ Added new "Asset Sharing" tab with:
 ### Step 1: Run Database Migration
 1. Open your Supabase dashboard
 2. Go to SQL Editor
-3. Run the contents of `supabase-sharing-schema.sql`
+3. Run the contents of `../database/supabase-sharing-schema.sql`
 4. Verify the `shared_assets` table was created
 
 ### Step 2: Verify File Structure
@@ -154,7 +154,7 @@ Consider adding:
 ## Troubleshooting
 
 ### Issue: "shared_assets table not found"
-**Solution**: Run `supabase-sharing-schema.sql` in Supabase SQL Editor
+**Solution**: Run `../database/supabase-sharing-schema.sql` in Supabase SQL Editor
 
 ### Issue: "Permission denied on shared_assets"
 **Solution**: Verify RLS policies are created and user is logged in as admin

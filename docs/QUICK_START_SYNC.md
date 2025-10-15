@@ -14,12 +14,12 @@ Get your vessels and assets syncing across devices in 5 minutes.
 
 1. Open [your Supabase dashboard](https://app.supabase.com)
 2. Go to **SQL Editor** → **New Query**
-3. **Copy and paste this entire file:** `supabase-assets-schema.sql`
+3. **Copy and paste this entire file:** `../database/supabase-assets-schema.sql`
 4. Click **Run** ▶️
 5. Wait for "Success. No rows returned"
 
 6. Click **New Query** again
-7. **Copy and paste:** `supabase-storage-setup.sql`
+7. **Copy and paste:** `../database/supabase-storage-setup.sql`
 8. Click **Run** ▶️
 9. Done! Tables and storage buckets are created.
 
@@ -100,7 +100,7 @@ Your data now syncs automatically:
 
 ### Need Help?
 
-See detailed guide: `SUPABASE_SYNC_SETUP.md`
+See detailed guide: `./SUPABASE_SYNC_SETUP.md`
 
 ---
 

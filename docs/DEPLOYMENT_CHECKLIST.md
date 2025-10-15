@@ -9,12 +9,12 @@ Use this checklist to ensure proper deployment of the cross-device sync feature.
 ### Database Setup
 
 - [ ] **Supabase project created**
-- [ ] **`supabase-schema.sql` executed** (organizations, profiles, account_requests)
-- [ ] **`supabase-assets-schema.sql` executed** (assets, vessels, scans, etc.)
-- [ ] **`supabase-sharing-schema.sql` executed** (shared_assets)
-- [ ] **`supabase-asset-access-requests-schema.sql` executed**
-- [ ] **`supabase-profile-schema.sql` executed** (permission_requests)
-- [ ] **`supabase-storage-setup.sql` executed** (storage buckets)
+- [ ] **`../database/supabase-schema.sql` executed** (organizations, profiles, account_requests)
+- [ ] **`../database/supabase-assets-schema.sql` executed** (assets, vessels, scans, etc.)
+- [ ] **`../database/supabase-sharing-schema.sql` executed** (shared_assets)
+- [ ] **`../database/supabase-asset-access-requests-schema.sql` executed**
+- [ ] **`../database/supabase-profile-schema.sql` executed** (permission_requests)
+- [ ] **`../database/supabase-storage-setup.sql` executed** (storage buckets)
 
 **Verify:**
 ```sql
@@ -239,7 +239,7 @@ npm run build
 
 - [ ] **Notify users of new sync feature**
 - [ ] **Provide migration instructions**
-- [ ] **Share `QUICK_START_SYNC.md` with users**
+- [ ] **Share `./QUICK_START_SYNC.md` with users**
 
 ### Documentation
 
@@ -329,7 +329,7 @@ Deployment is successful when:
 **Application Support:**
 - Check browser console logs
 - Check Supabase logs (Logs section in dashboard)
-- Review `SUPABASE_SYNC_SETUP.md` troubleshooting section
+- Review `./SUPABASE_SYNC_SETUP.md` troubleshooting section
 
 ---
 

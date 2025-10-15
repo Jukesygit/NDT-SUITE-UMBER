@@ -41,7 +41,7 @@ const SUPABASE_ANON_KEY = 'your-anon-key-here'; // Your anon/public key
 
 1. In your Supabase dashboard, go to **SQL Editor**
 2. Click "New Query"
-3. Open the `supabase-schema.sql` file from the project root
+3. Open the `../database/supabase-schema.sql` file from the database folder
 4. Copy the entire contents and paste it into the SQL Editor
 5. Click "Run" to execute the schema creation
 6. You should see "Success. No rows returned" message
@@ -196,4 +196,4 @@ For Supabase-specific issues:
 
 For NDT Suite issues:
 - Check the application logs in browser console
-- Verify your database schema matches `supabase-schema.sql`
+- Verify your database schema matches `../database/supabase-schema.sql`
