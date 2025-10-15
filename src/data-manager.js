@@ -351,6 +351,94 @@ class DataManager {
         return true;
     }
 
+    async transferAsset(assetId, targetOrganizationId) {
+        // Only SYSTEM org users can transfer assets between organizations
+        const isSystemOrg = authManager.currentProfile?.organizations?.name === 'SYSTEM';
+
+        if (!isSystemOrg) {
+            throw new Error('Only SYSTEM organization users can transfer assets');
+        }
+
+        const asset = this.getAsset(assetId);
+
+        if (!asset) {
+            throw new Error('Asset not found');
+        }
+
+        // Don't allow transferring to the same organization
+        if (asset.organizationId === targetOrganizationId) {
+            throw new Error('Asset is already in this organization');
+        }
+
+        const sourceOrgId = asset.organizationId;
+        const sourceOrgData = this.getOrgData(sourceOrgId);
+        const targetOrgData = this.getOrgData(targetOrganizationId);
+
+        // Remove from source organization
+        const assetIndex = (sourceOrgData.assets || []).findIndex(a => a.id === assetId);
+        if (assetIndex === -1) {
+            throw new Error('Asset not found in source organization');
+        }
+
+        const [transferredAsset] = sourceOrgData.assets.splice(assetIndex, 1);
+
+        // Update the asset's organization ID
+        transferredAsset.organizationId = targetOrganizationId;
+        transferredAsset.updatedAt = Date.now();
+
+        // Add to target organization
+        if (!targetOrgData.assets) {
+            targetOrgData.assets = [];
+        }
+        targetOrgData.assets.push(transferredAsset);
+
+        // Save changes locally
+        await this.saveToStorage();
+
+        console.log('[DATA-MANAGER] Asset transferred from org', sourceOrgId, 'to org', targetOrganizationId);
+
+        // Queue background sync to Supabase (non-blocking)
+        if (authManager.useSupabase) {
+            syncQueue.add({
+                type: 'update',
+                table: 'assets',
+                id: assetId,
+                data: {
+                    organization_id: targetOrganizationId,
+                    updated_at: new Date(transferredAsset.updatedAt).toISOString()
+                }
+            });
+            console.log('[DATA-MANAGER] Queued asset transfer for background sync');
+        }
+
+        return transferredAsset;
+    }
+
+    async bulkTransferAssets(assetIds, targetOrganizationId) {
+        // Only SYSTEM org users can transfer assets between organizations
+        const isSystemOrg = authManager.currentProfile?.organizations?.name === 'SYSTEM';
+
+        if (!isSystemOrg) {
+            throw new Error('Only SYSTEM organization users can transfer assets');
+        }
+
+        const results = {
+            success: [],
+            failed: []
+        };
+
+        for (const assetId of assetIds) {
+            try {
+                const asset = await this.transferAsset(assetId, targetOrganizationId);
+                results.success.push({ assetId, asset });
+            } catch (error) {
+                results.failed.push({ assetId, error: error.message });
+            }
+        }
+
+        return results;
+    }
+
     // Vessel operations
     async createVessel(assetId, name) {
         const orgId = authManager.getCurrentOrganizationId();
