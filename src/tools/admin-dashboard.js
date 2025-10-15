@@ -1520,6 +1520,89 @@ async function resetAllConfiguration() {
     }
 }
 
+function showTransferModal(assetId, assetName, organizations, onConfirm) {
+    // Create modal overlay
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white">Transfer Asset</h3>
+            </div>
+            <div class="p-6">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Asset: <span class="font-semibold">${assetName}</span>
+                    </label>
+                </div>
+                <div class="mb-4">
+                    <label for="target-org-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Transfer to Organization:
+                    </label>
+                    <select id="target-org-select" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option value="">Select an organization...</option>
+                        ${organizations.map(org => `
+                            <option value="${org.id}">${org.name}</option>
+                        `).join('')}
+                    </select>
+                </div>
+                <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 mb-4">
+                    <p class="text-sm text-yellow-800 dark:text-yellow-200">
+                        ⚠️ This will move the asset and all its vessels, scans, and data to the selected organization.
+                    </p>
+                </div>
+            </div>
+            <div class="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                <button id="cancel-transfer-btn" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                    Cancel
+                </button>
+                <button id="confirm-transfer-btn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    Transfer Asset
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const select = modal.querySelector('#target-org-select');
+    const confirmBtn = modal.querySelector('#confirm-transfer-btn');
+    const cancelBtn = modal.querySelector('#cancel-transfer-btn');
+
+    // Enable/disable confirm button based on selection
+    select.addEventListener('change', () => {
+        confirmBtn.disabled = !select.value;
+    });
+
+    // Initially disable confirm button
+    confirmBtn.disabled = true;
+
+    // Close modal function
+    const closeModal = () => {
+        document.body.removeChild(modal);
+    };
+
+    // Cancel button
+    cancelBtn.addEventListener('click', closeModal);
+
+    // Click outside to close
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeModal();
+        }
+    });
+
+    // Confirm button
+    confirmBtn.addEventListener('click', () => {
+        const targetOrgId = select.value;
+        if (targetOrgId) {
+            const targetOrg = organizations.find(org => org.id === targetOrgId);
+            closeModal();
+            onConfirm(targetOrgId, targetOrg.name);
+        }
+    });
+}
+
 async function transferSingleAsset(assetId) {
     const asset = dataManager.getAsset(assetId);
     if (!asset) {
@@ -1537,30 +1620,98 @@ async function transferSingleAsset(assetId) {
         return;
     }
 
-    const orgList = organizations.map((o, i) => `${i + 1}. ${o.name}`).join('\n');
-    const orgChoice = prompt(`Transfer "${asset.name}" to:\n\n${orgList}\n\nEnter number:`);
+    showTransferModal(assetId, asset.name, organizations, async (targetOrgId, targetOrgName) => {
+        try {
+            await dataManager.transferAsset(assetId, targetOrgId);
+            alert(`✓ Asset "${asset.name}" successfully transferred to ${targetOrgName}`);
+            await renderAssets();
+        } catch (error) {
+            alert('✗ Transfer failed: ' + error.message);
+        }
+    });
+}
 
-    if (!orgChoice) return;
+function showBulkTransferModal(assetCount, organizations, onConfirm) {
+    // Create modal overlay
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white">Bulk Transfer Assets</h3>
+            </div>
+            <div class="p-6">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Selected Assets: <span class="font-semibold text-blue-600 dark:text-blue-400">${assetCount}</span>
+                    </label>
+                </div>
+                <div class="mb-4">
+                    <label for="bulk-target-org-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Transfer all to Organization:
+                    </label>
+                    <select id="bulk-target-org-select" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option value="">Select an organization...</option>
+                        ${organizations.map(org => `
+                            <option value="${org.id}">${org.name}</option>
+                        `).join('')}
+                    </select>
+                </div>
+                <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 mb-4">
+                    <p class="text-sm text-yellow-800 dark:text-yellow-200">
+                        ⚠️ This will move all ${assetCount} selected asset(s) and their associated data to the selected organization.
+                    </p>
+                </div>
+            </div>
+            <div class="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                <button id="cancel-bulk-transfer-btn" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                    Cancel
+                </button>
+                <button id="confirm-bulk-transfer-btn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    Transfer ${assetCount} Asset${assetCount !== 1 ? 's' : ''}
+                </button>
+            </div>
+        </div>
+    `;
 
-    const orgIndex = parseInt(orgChoice) - 1;
-    if (orgIndex < 0 || orgIndex >= organizations.length) {
-        alert('Invalid organization selection');
-        return;
-    }
+    document.body.appendChild(modal);
 
-    const targetOrg = organizations[orgIndex];
+    const select = modal.querySelector('#bulk-target-org-select');
+    const confirmBtn = modal.querySelector('#confirm-bulk-transfer-btn');
+    const cancelBtn = modal.querySelector('#cancel-bulk-transfer-btn');
 
-    if (!confirm(`Transfer "${asset.name}" to ${targetOrg.name}?\n\nThis will move the asset and all its vessels, scans, and data.`)) {
-        return;
-    }
+    // Enable/disable confirm button based on selection
+    select.addEventListener('change', () => {
+        confirmBtn.disabled = !select.value;
+    });
 
-    try {
-        await dataManager.transferAsset(assetId, targetOrg.id);
-        alert(`Asset "${asset.name}" successfully transferred to ${targetOrg.name}`);
-        await renderAssets();
-    } catch (error) {
-        alert('Transfer failed: ' + error.message);
-    }
+    // Initially disable confirm button
+    confirmBtn.disabled = true;
+
+    // Close modal function
+    const closeModal = () => {
+        document.body.removeChild(modal);
+    };
+
+    // Cancel button
+    cancelBtn.addEventListener('click', closeModal);
+
+    // Click outside to close
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeModal();
+        }
+    });
+
+    // Confirm button
+    confirmBtn.addEventListener('click', () => {
+        const targetOrgId = select.value;
+        if (targetOrgId) {
+            const targetOrg = organizations.find(org => org.id === targetOrgId);
+            closeModal();
+            onConfirm(targetOrgId, targetOrg.name);
+        }
+    });
 }
 
 async function bulkTransferAssets() {
@@ -1579,42 +1730,29 @@ async function bulkTransferAssets() {
         return;
     }
 
-    const orgList = organizations.map((o, i) => `${i + 1}. ${o.name}`).join('\n');
-    const orgChoice = prompt(`Transfer ${selectedAssetIds.length} selected asset(s) to:\n\n${orgList}\n\nEnter number:`);
+    showBulkTransferModal(selectedAssetIds.length, organizations, async (targetOrgId, targetOrgName) => {
+        try {
+            const results = await dataManager.bulkTransferAssets(selectedAssetIds, targetOrgId);
 
-    if (!orgChoice) return;
+            let message = '';
+            if (results.success.length > 0) {
+                message += `✓ Successfully transferred ${results.success.length} asset(s) to ${targetOrgName}\n`;
+            }
+            if (results.failed.length > 0) {
+                message += `\n✗ Failed to transfer ${results.failed.length} asset(s):\n`;
+                results.failed.forEach(f => {
+                    const asset = dataManager.getAsset(f.assetId);
+                    const assetName = asset?.name || f.assetId;
+                    message += `  - ${assetName}: ${f.error}\n`;
+                });
+            }
 
-    const orgIndex = parseInt(orgChoice) - 1;
-    if (orgIndex < 0 || orgIndex >= organizations.length) {
-        alert('Invalid organization selection');
-        return;
-    }
-
-    const targetOrg = organizations[orgIndex];
-
-    if (!confirm(`Transfer ${selectedAssetIds.length} selected asset(s) to ${targetOrg.name}?\n\nThis will move all assets and their data.`)) {
-        return;
-    }
-
-    try {
-        const results = await dataManager.bulkTransferAssets(selectedAssetIds, targetOrg.id);
-
-        let message = '';
-        if (results.success.length > 0) {
-            message += `✓ Successfully transferred ${results.success.length} asset(s)\n`;
+            alert(message);
+            await renderAssets();
+        } catch (error) {
+            alert('✗ Bulk transfer failed: ' + error.message);
         }
-        if (results.failed.length > 0) {
-            message += `\n✗ Failed to transfer ${results.failed.length} asset(s):\n`;
-            results.failed.forEach(f => {
-                message += `  - ${f.assetId}: ${f.error}\n`;
-            });
-        }
-
-        alert(message);
-        await renderAssets();
-    } catch (error) {
-        alert('Bulk transfer failed: ' + error.message);
-    }
+    });
 }
 
 async function viewAssetDetails(assetId) {
