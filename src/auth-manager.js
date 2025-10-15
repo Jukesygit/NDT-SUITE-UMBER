@@ -889,92 +889,37 @@ class AuthManager {
 
     async approveAccountRequest(requestId) {
         if (this.useSupabase) {
-            const { data: request, error: fetchError } = await supabase
-                .from('account_requests')
-                .select('*')
-                .eq('id', requestId)
-                .single();
+            try {
+                // Use Edge Function to handle approval with service role permissions
+                console.log('Approving account request:', requestId);
 
-            if (fetchError || !request) {
-                return { success: false, error: 'Request not found' };
-            }
-
-            // Create user account
-            // The user will receive an email based on Supabase auth settings:
-            // - If "Enable email confirmations" is ON: User gets confirmation email
-            // - If "Enable email confirmations" is OFF: User is auto-confirmed, we send password reset email
-
-            const redirectUrl = `${window.location.origin}/#/reset-password`;
-            const tempPassword = crypto.randomUUID();
-
-            console.log('Creating user account for:', request.email);
-
-            const { data: authData, error: authError } = await supabase.auth.signUp({
-                email: request.email,
-                password: tempPassword,
-                options: {
-                    emailRedirectTo: redirectUrl,
-                    data: {
-                        username: request.username,
-                        role: request.requested_role,
-                        organization_id: request.organization_id
+                const { data, error } = await supabase.functions.invoke('approve-account-request', {
+                    body: {
+                        request_id: requestId,
+                        approved_by_user_id: this.currentUser.id
                     }
-                }
-            });
-
-            if (authError) {
-                console.error('SignUp error:', authError);
-                return { success: false, error: authError.message };
-            }
-
-            console.log('User created:', authData?.user?.id, 'Email confirmed:', authData?.user?.email_confirmed_at);
-
-            // Check if email confirmation is required
-            const needsConfirmation = !authData?.user?.email_confirmed_at;
-
-            if (needsConfirmation) {
-                // User will receive a confirmation email from Supabase
-                // They need to click that link first, then use "Forgot Password" to set their password
-                console.log('Email confirmation required. Confirmation email sent automatically by Supabase.');
-            } else {
-                // Email confirmation is disabled, user is auto-confirmed
-                // Send password reset email so they can set their password
-                console.log('Email auto-confirmed. Sending password reset email...');
-
-                // Wait a moment for the database trigger to complete
-                await new Promise(resolve => setTimeout(resolve, 1500));
-
-                const { error: resetError } = await supabase.auth.resetPasswordForEmail(request.email, {
-                    redirectTo: redirectUrl
                 });
 
-                if (resetError) {
-                    console.error('Password reset email failed:', resetError);
-                    // Don't fail - user can use "Forgot Password" link
-                } else {
-                    console.log('Password reset email sent successfully');
+                if (error) {
+                    console.error('Account approval error:', error);
+                    return { success: false, error: error.message };
                 }
+
+                if (data?.error) {
+                    console.error('Edge function returned error:', data.error);
+                    return { success: false, error: data.error };
+                }
+
+                console.log('Account approved successfully:', data);
+
+                return {
+                    success: true,
+                    message: data?.message || 'Account created successfully. User will receive an email to set their password.'
+                };
+            } catch (err) {
+                console.error('Failed to approve account request:', err);
+                return { success: false, error: err.message || 'Failed to approve request' };
             }
-
-            // Update request status
-            const { error: updateError } = await supabase
-                .from('account_requests')
-                .update({
-                    status: 'approved',
-                    approved_by: this.currentUser.id,
-                    approved_at: new Date().toISOString()
-                })
-                .eq('id', requestId);
-
-            if (updateError) {
-                return { success: false, error: updateError.message };
-            }
-
-            const message = needsConfirmation
-                ? 'Account created. User will receive an email to confirm their address and set a password.'
-                : 'Account created. User will receive an email to set their password.';
-
-            return { success: true, message };
         } else {
             const request = this.authData.accountRequests.find(r => r.id === requestId);
             if (!request) {
