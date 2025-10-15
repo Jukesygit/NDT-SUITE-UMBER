@@ -384,7 +384,8 @@ class NDTApp {
         const userInfoContainer = document.getElementById('user-info-container');
         if (!userInfoContainer) return;
 
-        userInfoContainer.className = 'p-3 flex flex-col items-center gap-2 w-full';
+        // Remove hidden class and set proper styling
+        userInfoContainer.className = 'mt-auto p-3 flex flex-col items-center gap-2 w-full';
         userInfoContainer.style.borderTop = '1px solid rgba(255, 255, 255, 0.1)';
 
         const badgeClass = user.role === 'admin' ? 'badge-purple' :
@@ -396,13 +397,15 @@ class NDTApp {
                 <div class="font-medium text-white mb-1">${user.username}</div>
                 <span class="glass-badge ${badgeClass}">${user.role}</span>
             </div>
-            <button id="logout-btn" class="btn-secondary w-full text-xs py-2 px-3" aria-label="Logout from account">
+            <button id="logout-btn" class="btn-secondary text-xs" style="width: 100%; padding: 8px 12px;" aria-label="Logout from account">
                 Logout
             </button>
         `;
 
         const logoutBtn = userInfoContainer.querySelector('#logout-btn');
-        logoutBtn.addEventListener('click', async () => {
+        logoutBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             await authManager.logout();
             this.isLoggedIn = false;
             this.showLoginScreen();
