@@ -175,9 +175,14 @@ class DataManager {
         this.data[orgId] = orgData;
     }
 
-    // Get data for specific organization (ADMIN only)
+    // Get data for specific organization (ADMIN and SYSTEM org users)
     getOrgData(organizationId) {
-        if (!authManager.isAdmin() && organizationId !== authManager.getCurrentOrganizationId()) {
+        const isSystemOrg = authManager.currentProfile?.organizations?.name === 'SYSTEM';
+
+        // SYSTEM org can access any organization's data
+        // Regular admins can access any organization's data
+        // Regular users can only access their own org
+        if (!authManager.isAdmin() && !isSystemOrg && organizationId !== authManager.getCurrentOrganizationId()) {
             return { assets: [] };
         }
 
@@ -234,19 +239,47 @@ class DataManager {
     }
 
     getAssets() {
+        // Check if user is in SYSTEM org
+        const isSystemOrg = authManager.currentProfile?.organizations?.name === 'SYSTEM';
+
+        if (isSystemOrg) {
+            // SYSTEM org sees ALL assets from ALL organizations
+            const allAssets = [];
+            for (const orgId in this.data) {
+                if (this.data[orgId].assets) {
+                    allAssets.push(...this.data[orgId].assets);
+                }
+            }
+            return allAssets;
+        }
+
+        // Regular orgs see only their own assets
         const orgData = this.getCurrentOrgData();
         return orgData.assets || [];
     }
 
     getAsset(assetId) {
+        // Check if user is in SYSTEM org
+        const isSystemOrg = authManager.currentProfile?.organizations?.name === 'SYSTEM';
+
+        if (isSystemOrg) {
+            // SYSTEM org can access any asset from any organization
+            for (const orgId in this.data) {
+                if (this.data[orgId].assets) {
+                    const asset = this.data[orgId].assets.find(a => a.id === assetId);
+                    if (asset) return asset;
+                }
+            }
+            return null;
+        }
+
+        // Regular orgs can only access their own assets
         const orgData = this.getCurrentOrgData();
         return (orgData.assets || []).find(a => a.id === assetId);
     }
 
     async updateAsset(assetId, updates) {
-        const orgId = authManager.getCurrentOrganizationId();
-        const orgData = this.getCurrentOrgData();
-        const asset = (orgData.assets || []).find(a => a.id === assetId);
+        const asset = this.getAsset(assetId);
 
         if (!asset) {
             return null;
@@ -256,7 +289,10 @@ class DataManager {
         Object.assign(asset, updates);
         asset.updatedAt = Date.now();
 
-        this.setCurrentOrgData(orgData);
+        // Get the organization ID from the asset itself (not current user)
+        const assetOrgId = asset.organizationId;
+        const orgData = this.getOrgData(assetOrgId);
+
         await this.saveToStorage();
 
         console.log('[DATA-MANAGER] Asset updated locally:', asset.name);
@@ -279,8 +315,15 @@ class DataManager {
     }
 
     async deleteAsset(assetId) {
-        const orgId = authManager.getCurrentOrganizationId();
-        const orgData = this.getCurrentOrgData();
+        const asset = this.getAsset(assetId);
+
+        if (!asset) {
+            return false;
+        }
+
+        // Get the organization ID from the asset itself (not current user)
+        const assetOrgId = asset.organizationId;
+        const orgData = this.getOrgData(assetOrgId);
         const index = (orgData.assets || []).findIndex(a => a.id === assetId);
 
         if (index === -1) {
@@ -291,7 +334,6 @@ class DataManager {
 
         // WRITE-THROUGH CACHE: Update local immediately
         orgData.assets.splice(index, 1);
-        this.setCurrentOrgData(orgData);
         await this.saveToStorage();
 
         console.log('[DATA-MANAGER] Asset deleted locally:', deletedAsset.name);
