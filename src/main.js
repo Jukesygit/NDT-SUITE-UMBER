@@ -397,7 +397,7 @@ class NDTApp {
                 <div class="font-medium text-white mb-1">${user.username}</div>
                 <span class="glass-badge ${badgeClass}">${user.role}</span>
             </div>
-            <button id="logout-btn" class="btn-secondary text-xs" style="width: 100%; padding: 8px 12px; display: flex; align-items: center; justify-content: center; line-height: 1;" aria-label="Logout from account">
+            <button id="logout-btn" class="btn-secondary" style="width: 100%; padding: 10px 12px !important; display: flex; align-items: center; justify-content: center; line-height: 1; box-sizing: border-box; font-size: 13px;" aria-label="Logout from account">
                 Logout
             </button>
         `;
