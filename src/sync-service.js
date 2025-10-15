@@ -1146,6 +1146,8 @@ class SyncService {
 
     /**
      * Mark that local data has changed and needs sync
+     * NOTE: This is now primarily for UI feedback. Individual operations
+     * are queued via syncQueue for background processing.
      */
     markPendingChanges() {
         this.pendingChanges = true;
@@ -1153,18 +1155,8 @@ class SyncService {
         // Dispatch event for UI updates
         window.dispatchEvent(new CustomEvent('syncPending'));
 
-        // If auto-sync is enabled, trigger immediate sync for responsiveness
-        if (this.autoSyncEnabled && !this.syncInProgress && authManager.isLoggedIn()) {
-            // Debounce: wait 3 seconds before syncing to batch rapid changes
-            if (this.pendingSyncTimeout) {
-                clearTimeout(this.pendingSyncTimeout);
-            }
-
-            this.pendingSyncTimeout = setTimeout(async () => {
-                console.log('Auto-sync triggered by data change');
-                await this.fullSync();
-            }, 3000);
-        }
+        // Removed auto-sync trigger - operations are now queued individually
+        // via syncQueue for better performance (write-through cache pattern)
     }
 
     /**

@@ -3,6 +3,7 @@
  */
 
 import syncService from '../sync-service.js';
+import syncQueue from '../sync-queue.js';
 import authManager from '../auth-manager.js';
 
 class SyncStatus {
@@ -77,6 +78,25 @@ class SyncStatus {
             this.showPending();
         });
 
+        // Listen for sync queue events
+        window.addEventListener('syncQueueChanged', (e) => {
+            this.updateQueueStatus(e.detail);
+        });
+
+        window.addEventListener('syncQueueEmpty', () => {
+            this.showQueueEmpty();
+        });
+
+        window.addEventListener('syncOperationSuccess', () => {
+            this.updateStatus();
+        });
+
+        window.addEventListener('syncOperationFailed', (e) => {
+            if (e.detail.permanent) {
+                this.showError(`Operation failed: ${e.detail.error}`);
+            }
+        });
+
         // Listen for auth changes
         window.addEventListener('userLoggedIn', () => {
             this.updateStatus();
@@ -131,15 +151,56 @@ class SyncStatus {
             return;
         }
 
-        const status = syncService.getSyncStatus();
+        const queueStatus = syncQueue.getStatus();
+        const syncStatus = syncService.getSyncStatus();
 
-        if (status.inProgress) {
+        // Show queue status if there are pending operations
+        if (queueStatus.queueSize > 0) {
+            this.showQueueProcessing(queueStatus.queueSize);
+        } else if (syncStatus.inProgress) {
             this.showSyncing();
-        } else if (status.lastSync) {
-            this.showSynced(status.lastSync);
         } else {
-            this.showNeedsSync();
+            this.showSynced();
         }
+    }
+
+    /**
+     * Update queue status
+     */
+    updateQueueStatus(detail) {
+        if (detail.queueSize > 0) {
+            this.showQueueProcessing(detail.queueSize);
+        } else {
+            this.showQueueEmpty();
+        }
+    }
+
+    /**
+     * Show queue processing state
+     */
+    showQueueProcessing(queueSize) {
+        if (!this.container) return;
+
+        this.container.classList.remove('error', 'success', 'offline', 'needs-sync');
+        this.container.classList.add('syncing');
+        this.statusText.textContent = `Syncing (${queueSize})`;
+        this.statusIcon.classList.add('spinning');
+        this.progressBar.style.display = 'none';
+        this.container.title = `${queueSize} operation${queueSize === 1 ? '' : 's'} pending`;
+    }
+
+    /**
+     * Show queue empty state
+     */
+    showQueueEmpty() {
+        if (!this.container) return;
+
+        this.container.classList.remove('error', 'syncing', 'offline', 'needs-sync');
+        this.container.classList.add('success');
+        this.statusIcon.classList.remove('spinning');
+        this.progressBar.style.display = 'none';
+        this.statusText.textContent = 'Synced';
+        this.container.title = 'All changes synced';
     }
 
     /**
