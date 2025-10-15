@@ -806,27 +806,34 @@ class AuthManager {
     // Account requests - No authentication required for submitting requests
     async requestAccount(requestData) {
         if (this.useSupabase) {
-            // Insert account request without authentication
-            // This works because RLS policies allow public INSERT on account_requests table
-            const { data, error } = await supabase
-                .from('account_requests')
-                .insert({
-                    username: requestData.username,
-                    email: requestData.email,
-                    requested_role: requestData.requestedRole || ROLES.VIEWER,
-                    organization_id: requestData.organizationId,
-                    message: requestData.message || ''
-                })
-                .select()
-                .single();
+            try {
+                // Use Edge Function to bypass RLS restrictions
+                const { data, error } = await supabase.functions.invoke('submit-account-request', {
+                    body: {
+                        username: requestData.username,
+                        email: requestData.email,
+                        organization_id: requestData.organizationId,
+                        requested_role: requestData.requestedRole || ROLES.VIEWER,
+                        message: requestData.message || ''
+                    }
+                });
 
-            if (error) {
-                console.error('Account request submission error:', error);
-                return { success: false, error: error.message };
+                if (error) {
+                    console.error('Account request submission error:', error);
+                    return { success: false, error: error.message };
+                }
+
+                if (data?.error) {
+                    console.error('Edge function returned error:', data.error);
+                    return { success: false, error: data.error };
+                }
+
+                return { success: true, request: data?.request };
+            } catch (err) {
+                console.error('Failed to submit account request:', err);
+                return { success: false, error: err.message || 'Failed to submit request' };
             }
-
-            return { success: true, request: data };
-        } else {
+        } else{
             const request = {
                 id: this.generateId(),
                 username: requestData.username,
