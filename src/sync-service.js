@@ -121,11 +121,18 @@ class SyncService {
         }
 
         try {
-            // Fetch all assets for the user's organization
-            const { data: assets, error: assetsError } = await supabase
-                .from('assets')
-                .select('*')
-                .eq('organization_id', orgId);
+            // Check if user is in SYSTEM organization
+            const isSystemOrg = authManager.currentProfile?.organizations?.name === 'SYSTEM';
+
+            // Fetch assets based on organization
+            let query = supabase.from('assets').select('*');
+
+            // SYSTEM org sees all assets, others see only their own + shared
+            if (!isSystemOrg) {
+                query = query.eq('organization_id', orgId);
+            }
+
+            const { data: assets, error: assetsError } = await query;
 
             if (assetsError) throw assetsError;
 
@@ -138,16 +145,22 @@ class SyncService {
 
             // Load current local data
             const localData = await indexedDB.loadData();
-            if (!localData[orgId]) {
-                localData[orgId] = { assets: [] };
-            }
 
             let downloadCount = 0;
 
             // Process each asset
             for (const remoteAsset of assets) {
+                // For SYSTEM org, organize assets by their actual organization
+                // For regular orgs, use current org
+                const targetOrgId = isSystemOrg ? remoteAsset.organization_id : orgId;
+
+                // Ensure org data structure exists
+                if (!localData[targetOrgId]) {
+                    localData[targetOrgId] = { assets: [] };
+                }
+
                 // Check if asset exists locally
-                let localAsset = localData[orgId].assets.find(a => a.id === remoteAsset.id);
+                let localAsset = localData[targetOrgId].assets.find(a => a.id === remoteAsset.id);
 
                 if (!localAsset) {
                     // New asset, create it
@@ -159,7 +172,7 @@ class SyncService {
                         createdAt: new Date(remoteAsset.created_at).getTime(),
                         vessels: []
                     };
-                    localData[orgId].assets.push(localAsset);
+                    localData[targetOrgId].assets.push(localAsset);
                     downloadCount++;
                 } else {
                     // Update existing asset if remote is newer

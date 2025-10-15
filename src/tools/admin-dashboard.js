@@ -106,11 +106,14 @@ async function switchView(view) {
 }
 
 async function renderOverview() {
-    const orgStats = await dataManager.getAllOrganizationStats();
-    const users = await authManager.getUsers();
-    const pendingRequests = await authManager.getPendingAccountRequests();
+    try {
+        const orgStats = await dataManager.getAllOrganizationStats();
+        const users = await authManager.getUsers();
+        const pendingRequests = await authManager.getPendingAccountRequests();
 
-    dom.overviewView.innerHTML = `
+        console.log('Overview data:', { orgStats, users: users.length, pendingRequests: pendingRequests.length });
+
+        dom.overviewView.innerHTML = `
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
                 <div class="text-sm text-gray-500 dark:text-gray-400">Organizations</div>
@@ -181,14 +184,26 @@ async function renderOverview() {
             </div>
         </div>
     `;
+    } catch (error) {
+        console.error('Error rendering overview:', error);
+        dom.overviewView.innerHTML = `
+            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-red-900 dark:text-red-200 mb-2">Error Loading Overview</h3>
+                <p class="text-red-700 dark:text-red-300">${error.message || 'Unknown error occurred'}</p>
+            </div>
+        `;
+    }
 }
 
 async function renderOrganizations() {
-    const organizations = (await authManager.getOrganizations()).filter(org => org.name !== 'SYSTEM');
-    const orgStats = await dataManager.getAllOrganizationStats();
-    const allUsers = await authManager.getUsers();
+    try {
+        const organizations = (await authManager.getOrganizations()).filter(org => org.name !== 'SYSTEM');
+        const orgStats = await dataManager.getAllOrganizationStats();
+        const allUsers = await authManager.getUsers();
 
-    dom.organizationsView.innerHTML = `
+        console.log('Organizations data:', { orgs: organizations.length, stats: orgStats.length, users: allUsers.length });
+
+        dom.organizationsView.innerHTML = `
         <div class="mb-6 flex justify-between items-center">
             <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Organizations</h2>
             <button id="new-org-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
@@ -238,12 +253,24 @@ async function renderOrganizations() {
     dom.organizationsView.querySelectorAll('.org-menu-btn').forEach(btn => {
         btn.addEventListener('click', (e) => showOrgMenu(e, btn.dataset.orgId));
     });
+    } catch (error) {
+        console.error('Error rendering organizations:', error);
+        dom.organizationsView.innerHTML = `
+            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-red-900 dark:text-red-200 mb-2">Error Loading Organizations</h3>
+                <p class="text-red-700 dark:text-red-300">${error.message || 'Unknown error occurred'}</p>
+            </div>
+        `;
+    }
 }
 
 async function renderUsers() {
-    const users = await authManager.getUsers();
+    try {
+        const users = await authManager.getUsers();
 
-    dom.usersView.innerHTML = `
+        console.log('Users data:', { users: users.length });
+
+        dom.usersView.innerHTML = `
         <div class="mb-6 flex justify-between items-center">
             <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Users</h2>
             <button id="new-user-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
@@ -324,27 +351,39 @@ async function renderUsers() {
     dom.usersView.querySelectorAll('.user-delete-btn').forEach(btn => {
         btn.addEventListener('click', () => deleteUser(btn.dataset.userId));
     });
+    } catch (error) {
+        console.error('Error rendering users:', error);
+        dom.usersView.innerHTML = `
+            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-red-900 dark:text-red-200 mb-2">Error Loading Users</h3>
+                <p class="text-red-700 dark:text-red-300">${error.message || 'Unknown error occurred'}</p>
+            </div>
+        `;
+    }
 }
 
 async function renderRequests() {
-    const accountRequests = await authManager.getPendingAccountRequests();
-    const allOrganizations = await authManager.getOrganizations();
+    try {
+        const accountRequests = await authManager.getPendingAccountRequests();
+        const allOrganizations = await authManager.getOrganizations();
 
-    // Get permission requests if using Supabase
-    let permissionRequests = [];
-    if (authManager.isUsingSupabase()) {
-        const { data, error } = await supabase
-            .from('permission_requests')
-            .select('*, profiles!permission_requests_user_id_fkey(username, email, organizations(name))')
-            .eq('status', 'pending')
-            .order('created_at', { ascending: false });
+        // Get permission requests if using Supabase
+        let permissionRequests = [];
+        if (authManager.isUsingSupabase()) {
+            const { data, error } = await supabase
+                .from('permission_requests')
+                .select('*, profiles!permission_requests_user_id_fkey(username, email, organizations(name))')
+                .eq('status', 'pending')
+                .order('created_at', { ascending: false });
 
-        if (!error) {
-            permissionRequests = data || [];
+            if (!error) {
+                permissionRequests = data || [];
+            }
         }
-    }
 
-    dom.requestsView.innerHTML = `
+        console.log('Requests data:', { accountRequests: accountRequests.length, permissionRequests: permissionRequests.length });
+
+        dom.requestsView.innerHTML = `
         <!-- Permission Requests Section -->
         ${permissionRequests.length > 0 ? `
             <div class="mb-8">
@@ -453,6 +492,15 @@ async function renderRequests() {
     dom.requestsView.querySelectorAll('.reject-permission-btn').forEach(btn => {
         btn.addEventListener('click', () => rejectPermissionRequest(btn.dataset.requestId));
     });
+    } catch (error) {
+        console.error('Error rendering requests:', error);
+        dom.requestsView.innerHTML = `
+            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-red-900 dark:text-red-200 mb-2">Error Loading Requests</h3>
+                <p class="text-red-700 dark:text-red-300">${error.message || 'Unknown error occurred'}</p>
+            </div>
+        `;
+    }
 }
 
 async function updatePendingBadges() {
@@ -513,7 +561,9 @@ function showOrgMenu(event, orgId) {
                 }
             }
         }
-        document.body.removeChild(menu);
+        if (document.body.contains(menu)) {
+            document.body.removeChild(menu);
+        }
     });
 
     setTimeout(() => {
@@ -673,12 +723,15 @@ async function rejectPermissionRequest(requestId) {
 }
 
 async function renderSharing() {
-    const assets = dataManager.getAssets();
-    const shares = await sharingManager.getAllShares();
-    const accessRequests = await sharingManager.getPendingAccessRequests();
-    const organizations = (await authManager.getOrganizations()).filter(org => org.name !== 'SYSTEM');
+    try {
+        const assets = dataManager.getAssets();
+        const shares = await sharingManager.getAllShares();
+        const accessRequests = await sharingManager.getPendingAccessRequests();
+        const organizations = (await authManager.getOrganizations()).filter(org => org.name !== 'SYSTEM');
 
-    dom.sharingView.innerHTML = `
+        console.log('Sharing data:', { assets: assets.length, shares: shares.length, accessRequests: accessRequests.length, orgs: organizations.length });
+
+        dom.sharingView.innerHTML = `
         <div class="mb-6 flex justify-between items-center">
             <div>
                 <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Asset Sharing</h2>
@@ -859,6 +912,15 @@ async function renderSharing() {
     dom.sharingView.querySelectorAll('.reject-access-request-btn').forEach(btn => {
         btn.addEventListener('click', () => rejectAccessRequest(btn.dataset.requestId));
     });
+    } catch (error) {
+        console.error('Error rendering sharing:', error);
+        dom.sharingView.innerHTML = `
+            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-red-900 dark:text-red-200 mb-2">Error Loading Sharing</h3>
+                <p class="text-red-700 dark:text-red-300">${error.message || 'Unknown error occurred'}</p>
+            </div>
+        `;
+    }
 }
 
 async function createShare() {
@@ -1047,11 +1109,14 @@ function escapeHtml(text) {
 }
 
 async function renderConfiguration() {
-    await adminConfig.ensureInitialized();
-    const config = adminConfig.getAllConfig();
-    const metadata = adminConfig.getListMetadata();
+    try {
+        await adminConfig.ensureInitialized();
+        const config = adminConfig.getAllConfig();
+        const metadata = adminConfig.getListMetadata();
 
-    dom.configurationView.innerHTML = `
+        console.log('Configuration data:', { config, metadata });
+
+        dom.configurationView.innerHTML = `
         <div class="mb-6 flex justify-between items-center">
             <div>
                 <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Report Field Configuration</h2>
@@ -1160,6 +1225,15 @@ async function renderConfiguration() {
     dom.configurationView.querySelectorAll('.delete-item-btn').forEach(btn => {
         btn.addEventListener('click', () => deleteConfigItem(btn.dataset.list, parseInt(btn.dataset.index)));
     });
+    } catch (error) {
+        console.error('Error rendering configuration:', error);
+        dom.configurationView.innerHTML = `
+            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-red-900 dark:text-red-200 mb-2">Error Loading Configuration</h3>
+                <p class="text-red-700 dark:text-red-300">${error.message || 'Unknown error occurred'}</p>
+            </div>
+        `;
+    }
 }
 
 async function addConfigItem(listName) {

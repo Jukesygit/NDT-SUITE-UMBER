@@ -40,9 +40,8 @@ const HTML = `
 
         <!-- Request Permission Upgrade Card -->
         <div id="permission-request-card" class="glass-card" style="padding: 24px; margin-bottom: 24px;">
-            <h2 style="font-size: 18px; font-weight: 600; color
-            
-            
+            <h2 style="font-size: 18px; font-weight: 600; color: #ffffff; margin: 0 0 20px 0; padding-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Request Permission Upgrade</h2>
+
             <form id="permission-request-form" class="space-y-4">
                 <div>
                     <label for="requested-role" style="display: block; font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, 0.7); margin-bottom: 8px;">
