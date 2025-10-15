@@ -7,7 +7,7 @@ import { createAnimatedHeader } from '../animated-background.js';
 import adminConfig from '../admin-config.js';
 
 let container, dom = {};
-let currentView = 'overview'; // 'overview', 'organizations', 'users', 'requests', 'sharing', 'configuration'
+let currentView = 'overview'; // 'overview', 'organizations', 'users', 'assets', 'requests', 'sharing', 'configuration'
 
 const HTML = `
 <div class="h-full flex flex-col overflow-hidden">
@@ -25,6 +25,9 @@ const HTML = `
             </button>
             <button data-view="users" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:text-white" style="color: rgba(255, 255, 255, 0.6);">
                 Users
+            </button>
+            <button data-view="assets" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:text-white" style="color: rgba(255, 255, 255, 0.6);">
+                Assets
             </button>
             <button data-view="requests" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:text-white" style="color: rgba(255, 255, 255, 0.6);">
                 Account Requests
@@ -44,6 +47,7 @@ const HTML = `
         <div id="overview-view"></div>
         <div id="organizations-view" class="hidden"></div>
         <div id="users-view" class="hidden"></div>
+        <div id="assets-view" class="hidden"></div>
         <div id="requests-view" class="hidden"></div>
         <div id="sharing-view" class="hidden"></div>
         <div id="configuration-view" class="hidden"></div>
@@ -59,6 +63,7 @@ function cacheDom() {
         overviewView: q('#overview-view'),
         organizationsView: q('#organizations-view'),
         usersView: q('#users-view'),
+        assetsView: q('#assets-view'),
         requestsView: q('#requests-view'),
         sharingView: q('#sharing-view'),
         configurationView: q('#configuration-view'),
@@ -92,6 +97,7 @@ async function switchView(view) {
     dom.overviewView.classList.toggle('hidden', view !== 'overview');
     dom.organizationsView.classList.toggle('hidden', view !== 'organizations');
     dom.usersView.classList.toggle('hidden', view !== 'users');
+    dom.assetsView.classList.toggle('hidden', view !== 'assets');
     dom.requestsView.classList.toggle('hidden', view !== 'requests');
     dom.sharingView.classList.toggle('hidden', view !== 'sharing');
     dom.configurationView.classList.toggle('hidden', view !== 'configuration');
@@ -100,6 +106,7 @@ async function switchView(view) {
     if (view === 'overview') await renderOverview();
     else if (view === 'organizations') await renderOrganizations();
     else if (view === 'users') await renderUsers();
+    else if (view === 'assets') await renderAssets();
     else if (view === 'requests') await renderRequests();
     else if (view === 'sharing') await renderSharing();
     else if (view === 'configuration') await renderConfiguration();
@@ -356,6 +363,156 @@ async function renderUsers() {
         dom.usersView.innerHTML = `
             <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
                 <h3 class="text-lg font-semibold text-red-900 dark:text-red-200 mb-2">Error Loading Users</h3>
+                <p class="text-red-700 dark:text-red-300">${error.message || 'Unknown error occurred'}</p>
+            </div>
+        `;
+    }
+}
+
+async function renderAssets() {
+    try {
+        const allAssets = dataManager.getAssets();
+        const organizations = await authManager.getOrganizations();
+        const isSystemOrg = authManager.currentProfile?.organizations?.name === 'SYSTEM';
+
+        if (!isSystemOrg) {
+            dom.assetsView.innerHTML = `
+                <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6">
+                    <h3 class="text-lg font-semibold text-yellow-900 dark:text-yellow-200 mb-2">Restricted Access</h3>
+                    <p class="text-yellow-700 dark:text-yellow-300">Asset management is only available to SYSTEM organization users.</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Group assets by organization
+        const assetsByOrg = {};
+        allAssets.forEach(asset => {
+            const orgId = asset.organizationId || asset.organization_id;
+            if (!assetsByOrg[orgId]) {
+                assetsByOrg[orgId] = [];
+            }
+            assetsByOrg[orgId].push(asset);
+        });
+
+        dom.assetsView.innerHTML = `
+            <div class="mb-6 flex justify-between items-center">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Asset Management</h2>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        Manage assets across all organizations (${allAssets.length} total assets)
+                    </p>
+                </div>
+                <button id="bulk-transfer-btn" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors">
+                    Bulk Transfer
+                </button>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                            <th class="px-6 py-3 text-left">
+                                <input type="checkbox" id="select-all-assets" class="rounded border-gray-300 dark:border-gray-600" aria-label="Select all assets">
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Asset Name</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Organization</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Vessels</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Created</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        ${allAssets.length === 0 ? `
+                            <tr>
+                                <td colspan="6" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                                    No assets found in the system
+                                </td>
+                            </tr>
+                        ` : allAssets.map(asset => {
+                            const orgId = asset.organizationId || asset.organization_id;
+                            const org = organizations.find(o => o.id === orgId);
+                            const vesselCount = asset.vessels?.length || 0;
+                            const createdDate = new Date(asset.createdAt || asset.created_at).toLocaleDateString();
+
+                            return `
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <input type="checkbox" class="asset-checkbox rounded border-gray-300 dark:border-gray-600" data-asset-id="${asset.id}" aria-label="Select asset ${asset.name}">
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="font-semibold text-gray-900 dark:text-white">${asset.name}</div>
+                                        <div class="text-xs text-gray-500 dark:text-gray-400">${asset.id}</div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                            ${org?.name || 'Unknown'}
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                        ${vesselCount} vessel${vesselCount !== 1 ? 's' : ''}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                        ${createdDate}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                        <button class="transfer-asset-btn text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300 mr-3" data-asset-id="${asset.id}">
+                                            Transfer
+                                        </button>
+                                        <button class="view-asset-btn text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300" data-asset-id="${asset.id}">
+                                            View
+                                        </button>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Organization Summary -->
+            <div class="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                ${organizations.filter(org => org.name !== 'SYSTEM').map(org => {
+                    const orgAssets = assetsByOrg[org.id] || [];
+                    return `
+                        <div class="glass-panel p-4">
+                            <div class="font-semibold text-gray-900 dark:text-white mb-2">${org.name}</div>
+                            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">${orgAssets.length}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">asset${orgAssets.length !== 1 ? 's' : ''}</div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+
+        // Event listeners
+        const selectAllCheckbox = dom.assetsView.querySelector('#select-all-assets');
+        if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('change', (e) => {
+                dom.assetsView.querySelectorAll('.asset-checkbox').forEach(cb => {
+                    cb.checked = e.target.checked;
+                });
+            });
+        }
+
+        dom.assetsView.querySelectorAll('.transfer-asset-btn').forEach(btn => {
+            btn.addEventListener('click', () => transferSingleAsset(btn.dataset.assetId));
+        });
+
+        dom.assetsView.querySelectorAll('.view-asset-btn').forEach(btn => {
+            btn.addEventListener('click', () => viewAssetDetails(btn.dataset.assetId));
+        });
+
+        const bulkTransferBtn = dom.assetsView.querySelector('#bulk-transfer-btn');
+        if (bulkTransferBtn) {
+            bulkTransferBtn.addEventListener('click', bulkTransferAssets);
+        }
+
+    } catch (error) {
+        console.error('Error rendering assets:', error);
+        dom.assetsView.innerHTML = `
+            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-red-900 dark:text-red-200 mb-2">Error Loading Assets</h3>
                 <p class="text-red-700 dark:text-red-300">${error.message || 'Unknown error occurred'}</p>
             </div>
         `;
@@ -1361,6 +1518,114 @@ async function resetAllConfiguration() {
             alert('Error: ' + result.error);
         }
     }
+}
+
+async function transferSingleAsset(assetId) {
+    const asset = dataManager.getAsset(assetId);
+    if (!asset) {
+        alert('Asset not found');
+        return;
+    }
+
+    const organizations = (await authManager.getOrganizations()).filter(org => {
+        const orgId = asset.organizationId || asset.organization_id;
+        return org.name !== 'SYSTEM' && org.id !== orgId;
+    });
+
+    if (organizations.length === 0) {
+        alert('No other organizations available for transfer');
+        return;
+    }
+
+    const orgList = organizations.map((o, i) => `${i + 1}. ${o.name}`).join('\n');
+    const orgChoice = prompt(`Transfer "${asset.name}" to:\n\n${orgList}\n\nEnter number:`);
+
+    if (!orgChoice) return;
+
+    const orgIndex = parseInt(orgChoice) - 1;
+    if (orgIndex < 0 || orgIndex >= organizations.length) {
+        alert('Invalid organization selection');
+        return;
+    }
+
+    const targetOrg = organizations[orgIndex];
+
+    if (!confirm(`Transfer "${asset.name}" to ${targetOrg.name}?\n\nThis will move the asset and all its vessels, scans, and data.`)) {
+        return;
+    }
+
+    try {
+        await dataManager.transferAsset(assetId, targetOrg.id);
+        alert(`Asset "${asset.name}" successfully transferred to ${targetOrg.name}`);
+        await renderAssets();
+    } catch (error) {
+        alert('Transfer failed: ' + error.message);
+    }
+}
+
+async function bulkTransferAssets() {
+    const selectedCheckboxes = dom.assetsView.querySelectorAll('.asset-checkbox:checked');
+    const selectedAssetIds = Array.from(selectedCheckboxes).map(cb => cb.dataset.assetId);
+
+    if (selectedAssetIds.length === 0) {
+        alert('Please select at least one asset to transfer');
+        return;
+    }
+
+    const organizations = (await authManager.getOrganizations()).filter(org => org.name !== 'SYSTEM');
+
+    if (organizations.length === 0) {
+        alert('No organizations available for transfer');
+        return;
+    }
+
+    const orgList = organizations.map((o, i) => `${i + 1}. ${o.name}`).join('\n');
+    const orgChoice = prompt(`Transfer ${selectedAssetIds.length} selected asset(s) to:\n\n${orgList}\n\nEnter number:`);
+
+    if (!orgChoice) return;
+
+    const orgIndex = parseInt(orgChoice) - 1;
+    if (orgIndex < 0 || orgIndex >= organizations.length) {
+        alert('Invalid organization selection');
+        return;
+    }
+
+    const targetOrg = organizations[orgIndex];
+
+    if (!confirm(`Transfer ${selectedAssetIds.length} selected asset(s) to ${targetOrg.name}?\n\nThis will move all assets and their data.`)) {
+        return;
+    }
+
+    try {
+        const results = await dataManager.bulkTransferAssets(selectedAssetIds, targetOrg.id);
+
+        let message = '';
+        if (results.success.length > 0) {
+            message += `✓ Successfully transferred ${results.success.length} asset(s)\n`;
+        }
+        if (results.failed.length > 0) {
+            message += `\n✗ Failed to transfer ${results.failed.length} asset(s):\n`;
+            results.failed.forEach(f => {
+                message += `  - ${f.assetId}: ${f.error}\n`;
+            });
+        }
+
+        alert(message);
+        await renderAssets();
+    } catch (error) {
+        alert('Bulk transfer failed: ' + error.message);
+    }
+}
+
+async function viewAssetDetails(assetId) {
+    // Switch to Data Hub and navigate to the asset
+    const event = new CustomEvent('navigate-to-tool', {
+        detail: {
+            toolName: 'data-hub',
+            assetId: assetId
+        }
+    });
+    window.dispatchEvent(event);
 }
 
 function addEventListeners() {
