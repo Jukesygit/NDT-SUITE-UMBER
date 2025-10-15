@@ -70,13 +70,19 @@ function createLoginHTML() {
                     </div>
 
                     <!-- Password Input -->
-                    <div style="margin-bottom: 32px; position: relative">
+                    <div style="margin-bottom: 20px; position: relative">
                         <input type="password" id="password" autocomplete="current-password" required style="width: 100%; padding: 16px 16px 16px 48px; font-size: 15px; color: #fff; background-color: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; outline: none; box-sizing: border-box; transition: all 0.3s">
                         <label id="password-label" style="position: absolute; left: 48px; top: 50%; transform: translateY(-50%); font-size: 15px; color: rgba(255,255,255,0.5); transition: all 0.3s; pointer-events: none; font-weight: 500">Password</label>
                         <svg id="password-icon" width="20" height="20" viewBox="0 0 20 20" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); opacity: 0.5; transition: opacity 0.3s">
                             <rect x="4" y="8" width="12" height="9" rx="1" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/>
                             <path d="M7 8V6a3 3 0 016 0v2" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/>
                         </svg>
+                    </div>
+
+                    <!-- Remember Me Checkbox -->
+                    <div style="margin-bottom: 32px; display: flex; align-items: center">
+                        <input type="checkbox" id="remember-me" style="width: 18px; height: 18px; cursor: pointer; accent-color: rgba(100,150,255,0.9); margin-right: 10px">
+                        <label for="remember-me" style="font-size: 14px; color: rgba(255,255,255,0.7); cursor: pointer; user-select: none; font-weight: 500">Remember me</label>
                     </div>
 
                     <!-- Error Message -->
@@ -171,6 +177,7 @@ function cacheDom() {
         requestForm: q('#request-form'),
         username: q('#username'),
         password: q('#password'),
+        rememberMe: q('#remember-me'),
         usernameLabel: q('#username-label'),
         passwordLabel: q('#password-label'),
         usernameIcon: q('#username-icon'),
@@ -467,6 +474,7 @@ async function handleLogin(e) {
 
     const username = dom.username.value.trim();
     const password = dom.password.value.trim();
+    const rememberMe = dom.rememberMe.checked;
 
     if (!username || !password) {
         showError('Please enter both username and password');
@@ -478,7 +486,7 @@ async function handleLogin(e) {
     dom.submitText.style.display = 'none';
     dom.submitSpinner.style.display = 'block';
 
-    const result = await authManager.login(username, password, false);
+    const result = await authManager.login(username, password, rememberMe);
 
     // Hide loading state
     dom.submitBtn.disabled = false;
@@ -627,6 +635,17 @@ export default {
         initCanvasAnimation();
         addInputAnimations();
         addEventListeners();
+
+        // Load remembered username if exists
+        const rememberedUsername = localStorage.getItem('rememberedUsername');
+        if (rememberedUsername) {
+            dom.username.value = rememberedUsername;
+            dom.rememberMe.checked = true;
+            // Trigger label animation
+            dom.usernameLabel.style.top = '6px';
+            dom.usernameLabel.style.transform = 'translateY(0)';
+            dom.usernameLabel.style.fontSize = '11px';
+        }
     },
 
     destroy: () => {
