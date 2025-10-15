@@ -806,6 +806,18 @@ class AuthManager {
     // Account requests
     async requestAccount(requestData) {
         if (this.useSupabase) {
+            // Check if user is already authenticated
+            const { data: { session } } = await supabase.auth.getSession();
+
+            // If not authenticated, sign in anonymously
+            if (!session) {
+                const { error: anonError } = await supabase.auth.signInAnonymously();
+                if (anonError) {
+                    console.error('Anonymous sign-in failed:', anonError);
+                    return { success: false, error: 'Could not authenticate request: ' + anonError.message };
+                }
+            }
+
             const { data, error } = await supabase
                 .from('account_requests')
                 .insert({
