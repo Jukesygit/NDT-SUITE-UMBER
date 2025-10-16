@@ -902,12 +902,14 @@ class AuthManager {
 
                 if (error) {
                     console.error('Account approval error:', error);
-                    return { success: false, error: error.message };
+                    return { success: false, error: error.message || JSON.stringify(error) };
                 }
 
                 if (data?.error) {
-                    console.error('Edge function returned error:', data.error);
-                    return { success: false, error: data.error };
+                    console.error('Edge function returned error:', data);
+                    const errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+                    const details = data.details ? ` Details: ${JSON.stringify(data.details)}` : '';
+                    return { success: false, error: errorMsg + details };
                 }
 
                 console.log('Account approved successfully:', data);
