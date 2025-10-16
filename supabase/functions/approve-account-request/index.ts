@@ -59,48 +59,84 @@ serve(async (req) => {
       )
     }
 
-    // Generate temporary password
-    const tempPassword = crypto.randomUUID()
+    // Check if user already exists
+    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
+    const existingUser = existingUsers?.users?.find(u => u.email === request.email)
 
-    console.log('Creating user with data:', {
-      email: request.email,
-      username: request.username,
-      role: request.requested_role,
-      organization_id: request.organization_id
-    })
+    let userId: string
 
-    // Create user account using admin auth
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: request.email,
-      password: tempPassword,
-      email_confirm: true,
-      user_metadata: {
+    if (existingUser) {
+      console.log('User already exists, updating metadata:', existingUser.id)
+      userId = existingUser.id
+
+      // Update user metadata
+      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+        userId,
+        {
+          user_metadata: {
+            username: request.username,
+            role: request.requested_role,
+            organization_id: request.organization_id
+          }
+        }
+      )
+
+      if (updateError) {
+        console.error('Error updating user metadata:', updateError)
+        return new Response(
+          JSON.stringify({
+            error: `Failed to update existing user: ${updateError.message}`,
+            details: updateError
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    } else {
+      // Generate temporary password
+      const tempPassword = crypto.randomUUID()
+
+      console.log('Creating user with data:', {
+        email: request.email,
         username: request.username,
         role: request.requested_role,
         organization_id: request.organization_id
+      })
+
+      // Create user account using admin auth
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email: request.email,
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: {
+          username: request.username,
+          role: request.requested_role,
+          organization_id: request.organization_id
+        }
+      })
+
+      console.log('User creation result:', { authData: authData?.user?.id, authError })
+
+      if (authError) {
+        console.error('Auth error:', authError)
+        return new Response(
+          JSON.stringify({
+            error: `Failed to create user: ${authError.message}`,
+            details: authError,
+            code: authError.code || authError.status
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
       }
-    })
 
-    console.log('User creation result:', { authData: authData?.user?.id, authError })
+      if (!authData?.user) {
+        console.error('No user data returned from auth.admin.createUser')
+        return new Response(
+          JSON.stringify({ error: 'Failed to create user: No user data returned' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
 
-    if (authError) {
-      console.error('Auth error:', authError)
-      return new Response(
-        JSON.stringify({
-          error: `Failed to create user: ${authError.message}`,
-          details: authError,
-          code: authError.code || authError.status
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    if (!authData?.user) {
-      console.error('No user data returned from auth.admin.createUser')
-      return new Response(
-        JSON.stringify({ error: 'Failed to create user: No user data returned' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      userId = authData.user.id
     }
 
     // Update request status
@@ -122,8 +158,10 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Account created successfully. User will receive an email to set their password.',
-        user_id: authData.user.id
+        message: existingUser
+          ? 'Account approved successfully. User profile has been updated.'
+          : 'Account created successfully. User will receive an email to set their password.',
+        user_id: userId
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
