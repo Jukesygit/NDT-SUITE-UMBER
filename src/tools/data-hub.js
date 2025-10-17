@@ -7,6 +7,8 @@ let container, dom = {};
 let currentView = 'assets'; // 'assets', 'vessel-detail', 'scan-detail'
 let currentAssetId = null;
 let currentVesselId = null;
+let currentExpandedScan = null;
+let expandedVisualizerModule = null;
 
 const HTML = `
 <div class="h-full flex flex-col overflow-hidden">
@@ -42,9 +44,99 @@ const HTML = `
         <div id="vessel-detail-view" class="hidden"></div>
         <div id="scan-detail-view" class="hidden"></div>
     </div>
+
+    <!-- Expandable Visualizer Container -->
+    <div id="expandable-visualizer" class="hidden fixed inset-0 z-50 bg-black bg-opacity-75 flex items-center justify-center" style="animation: fadeIn 0.2s ease-out;">
+        <div id="visualizer-container" class="bg-white dark:bg-gray-900 rounded-lg shadow-2xl overflow-hidden" style="
+            width: 90vw;
+            height: 90vh;
+            max-width: 1800px;
+            max-height: 1200px;
+            animation: expandIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        ">
+            <!-- Header -->
+            <div class="glass-panel" style="padding: 12px 20px; border-radius: 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <h2 id="visualizer-title" class="text-lg font-bold text-white">Scan Visualizer</h2>
+                        <span id="visualizer-type-badge" class="px-3 py-1 rounded-full text-xs font-medium bg-white bg-opacity-10 text-white border border-white border-opacity-20"></span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="visualizer-open-in-tool-btn" class="bg-white bg-opacity-10 hover:bg-opacity-20 text-white px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center gap-2 border border-white border-opacity-20" title="Open in dedicated tool">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                        </svg>
+                        Open in Tool
+                    </button>
+                        <button id="visualizer-minimize-btn" class="bg-white bg-opacity-10 hover:bg-opacity-20 text-white p-2 rounded-lg transition-colors border border-white border-opacity-20" title="Minimize">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                        <button id="visualizer-close-btn" class="bg-white bg-opacity-10 hover:bg-opacity-20 text-white p-2 rounded-lg transition-colors border border-white border-opacity-20" title="Close">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <!-- Content -->
+            <div id="visualizer-content" class="h-full overflow-auto" style="height: calc(100% - 52px);"></div>
+        </div>
+    </div>
+
+    <!-- Minimized Visualizer -->
+    <div id="minimized-visualizer" class="hidden fixed bottom-6 right-6 z-40 glass-panel rounded-lg shadow-2xl cursor-pointer hover:shadow-3xl transition-all" style="animation: slideInUp 0.3s ease-out;">
+        <div class="px-4 py-3 flex items-center gap-3">
+            <div class="flex-grow">
+                <div id="minimized-title" class="text-white font-semibold text-sm"></div>
+                <div id="minimized-type" class="text-white text-opacity-70 text-xs"></div>
+            </div>
+            <button id="minimized-restore-btn" class="bg-white bg-opacity-10 hover:bg-opacity-20 text-white p-2 rounded transition-colors border border-white border-opacity-20">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
+                </svg>
+            </button>
+            <button id="minimized-close-btn" class="bg-white bg-opacity-10 hover:bg-opacity-20 text-white p-2 rounded transition-colors border border-white border-opacity-20">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
 </div>
 
 <input type="file" id="import-file-input" accept=".json" class="hidden">
+
+<style>
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes expandIn {
+    from {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes slideInUp {
+    from {
+        transform: translateY(100px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+</style>
 `;
 
 function cacheDom() {
@@ -61,7 +153,20 @@ function cacheDom() {
         newAssetBtn: q('#new-asset-btn'),
         exportAllBtn: q('#export-all-btn'),
         importBtn: q('#import-btn'),
-        importFileInput: q('#import-file-input')
+        importFileInput: q('#import-file-input'),
+        expandableVisualizer: q('#expandable-visualizer'),
+        visualizerContainer: q('#visualizer-container'),
+        visualizerTitle: q('#visualizer-title'),
+        visualizerTypeBadge: q('#visualizer-type-badge'),
+        visualizerContent: q('#visualizer-content'),
+        visualizerCloseBtn: q('#visualizer-close-btn'),
+        visualizerMinimizeBtn: q('#visualizer-minimize-btn'),
+        visualizerOpenInToolBtn: q('#visualizer-open-in-tool-btn'),
+        minimizedVisualizer: q('#minimized-visualizer'),
+        minimizedTitle: q('#minimized-title'),
+        minimizedType: q('#minimized-type'),
+        minimizedRestoreBtn: q('#minimized-restore-btn'),
+        minimizedCloseBtn: q('#minimized-close-btn')
     };
 
     // Initialize animated header
@@ -1149,18 +1254,103 @@ function renderScanDetailView(assetId, vesselId) {
     });
 }
 
-function openScanInTool(scan) {
-    console.log('[DATA-HUB] Opening scan in tool:', scan.name, 'Type:', scan.toolType);
+async function openScanInTool(scan) {
+    console.log('[DATA-HUB] Opening scan in expandable visualizer:', scan.name, 'Type:', scan.toolType);
+
+    currentExpandedScan = scan;
+
+    // Update visualizer header
+    dom.visualizerTitle.textContent = scan.name;
+    dom.visualizerTypeBadge.textContent = scan.toolType.toUpperCase();
+
+    // Show the expandable visualizer
+    dom.expandableVisualizer.classList.remove('hidden');
+    dom.minimizedVisualizer.classList.add('hidden');
+
+    // Load the appropriate visualizer module dynamically
+    try {
+        if (expandedVisualizerModule) {
+            expandedVisualizerModule.destroy?.();
+            expandedVisualizerModule = null;
+        }
+
+        dom.visualizerContent.innerHTML = '<div class="flex items-center justify-center h-full"><div class="text-gray-600 dark:text-gray-400">Loading visualizer...</div></div>';
+
+        let module;
+        if (scan.toolType === 'pec') {
+            module = await import('../tools/pec-visualizer.js');
+        } else if (scan.toolType === 'cscan') {
+            module = await import('../tools/cscan-visualizer.js');
+        } else {
+            dom.visualizerContent.innerHTML = '<div class="flex items-center justify-center h-full"><div class="text-red-600">Unsupported scan type</div></div>';
+            return;
+        }
+
+        expandedVisualizerModule = module.default;
+
+        // Clear content and initialize the visualizer
+        dom.visualizerContent.innerHTML = '';
+        expandedVisualizerModule.init(dom.visualizerContent);
+
+        // Dispatch the load scan data event to the visualizer
+        setTimeout(() => {
+            const event = new CustomEvent('loadScanData', {
+                detail: {
+                    scanData: scan
+                }
+            });
+            window.dispatchEvent(event);
+        }, 100);
+
+    } catch (error) {
+        console.error('[DATA-HUB] Error loading visualizer:', error);
+        dom.visualizerContent.innerHTML = `<div class="flex items-center justify-center h-full"><div class="text-red-600">Error loading visualizer: ${error.message}</div></div>`;
+    }
+}
+
+function closeExpandableVisualizer() {
+    if (expandedVisualizerModule) {
+        expandedVisualizerModule.destroy?.();
+        expandedVisualizerModule = null;
+    }
+    dom.expandableVisualizer.classList.add('hidden');
+    dom.minimizedVisualizer.classList.add('hidden');
+    dom.visualizerContent.innerHTML = '';
+    currentExpandedScan = null;
+}
+
+function minimizeVisualizer() {
+    if (!currentExpandedScan) return;
+
+    dom.expandableVisualizer.classList.add('hidden');
+    dom.minimizedVisualizer.classList.remove('hidden');
+
+    dom.minimizedTitle.textContent = currentExpandedScan.name;
+    dom.minimizedType.textContent = currentExpandedScan.toolType.toUpperCase();
+}
+
+function restoreVisualizer() {
+    if (!currentExpandedScan) return;
+
+    dom.expandableVisualizer.classList.remove('hidden');
+    dom.minimizedVisualizer.classList.add('hidden');
+}
+
+function openScanInDedicatedTool() {
+    if (!currentExpandedScan) return;
 
     // Dispatch custom event to switch to the appropriate tool and load the scan
     const event = new CustomEvent('loadScan', {
         detail: {
-            toolType: scan.toolType,
-            scanData: scan
+            toolType: currentExpandedScan.toolType,
+            scanData: currentExpandedScan
         }
     });
     window.dispatchEvent(event);
-    console.log('[DATA-HUB] Dispatched loadScan event');
+    console.log('[DATA-HUB] Dispatched loadScan event to open in dedicated tool');
+
+    // Close the expandable visualizer
+    closeExpandableVisualizer();
 }
 
 async function createNewAsset() {
@@ -1638,83 +1828,85 @@ async function renderVessel3DPreviews(assetId) {
         // Load the model
         const loader = new OBJLoader();
 
-        // Convert data URL to text
-        fetch(modelData)
-            .then(response => response.text())
-            .then(objText => {
-                console.log('OBJ text loaded, length:', objText.length);
-                const object = loader.parse(objText);
-                console.log('OBJ parsed successfully');
+        // Decode data URL to text (without using fetch to avoid CSP issues)
+        try {
+            // Data URL format: data:application/octet-stream;base64,<base64data>
+            const base64Data = modelData.split(',')[1];
+            const decodedData = atob(base64Data);
+            const objText = decodedData;
 
-                // Apply visible material
-                object.traverse(child => {
-                    if (child.isMesh) {
-                        child.material = new THREE.MeshPhongMaterial({
-                            color: 0x6b7280,
-                            shininess: 30,
-                            flatShading: false
-                        });
-                        console.log('Mesh found and material applied');
-                    }
-                });
+            console.log('OBJ text loaded, length:', objText.length);
+            const object = loader.parse(objText);
+            console.log('OBJ parsed successfully');
 
-                // Center the model at origin
-                const box = new THREE.Box3().setFromObject(object);
-                const center = box.getCenter(new THREE.Vector3());
-                const size = box.getSize(new THREE.Vector3());
-
-                object.position.sub(center);
-
-                // Calculate proper camera distance to fit entire model
-                const maxDim = Math.max(size.x, size.y, size.z);
-                const fov = camera.fov * (Math.PI / 180);
-                const cameraDistance = Math.abs(maxDim / Math.sin(fov / 2)) * 0.7;
-
-                // Position camera at 45-degree angle for good view
-                const distance = cameraDistance;
-                camera.position.set(
-                    distance * 0.7,  // X - to the side
-                    distance * 0.5,  // Y - slightly above
-                    distance * 0.7   // Z - back
-                );
-                camera.lookAt(0, 0, 0);
-
-                // Update camera near/far planes
-                camera.near = cameraDistance * 0.1;
-                camera.far = cameraDistance * 10;
-                camera.updateProjectionMatrix();
-
-                console.log('Model size:', size, 'Max dim:', maxDim, 'Camera distance:', cameraDistance);
-
-                scene.add(object);
-
-                // Initial render
-                renderer.render(scene, camera);
-                console.log('Initial render complete');
-
-                // Render with slow rotation
-                let rotation = 0;
-                let animationId;
-                function animate() {
-                    rotation += 0.008;
-                    object.rotation.y = rotation;
-                    renderer.render(scene, camera);
-                    animationId = requestAnimationFrame(animate);
+            // Apply visible material
+            object.traverse(child => {
+                if (child.isMesh) {
+                    child.material = new THREE.MeshPhongMaterial({
+                        color: 0x6b7280,
+                        shininess: 30,
+                        flatShading: false
+                    });
+                    console.log('Mesh found and material applied');
                 }
-                animate();
-
-                // Store animation ID for cleanup
-                canvas.dataset.animationId = animationId;
-            })
-            .catch(err => {
-                console.error('Error loading 3D model preview:', err);
-                // Show error state
-                const ctx = canvas.getContext('2d');
-                ctx.fillStyle = '#ef4444';
-                ctx.font = '12px sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText('Load Error', width / 2, height / 2);
             });
+
+            // Center the model at origin
+            const box = new THREE.Box3().setFromObject(object);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+
+            object.position.sub(center);
+
+            // Calculate proper camera distance to fit entire model
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const fov = camera.fov * (Math.PI / 180);
+            const cameraDistance = Math.abs(maxDim / Math.sin(fov / 2)) * 0.7;
+
+            // Position camera at 45-degree angle for good view
+            const distance = cameraDistance;
+            camera.position.set(
+                distance * 0.7,  // X - to the side
+                distance * 0.5,  // Y - slightly above
+                distance * 0.7   // Z - back
+            );
+            camera.lookAt(0, 0, 0);
+
+            // Update camera near/far planes
+            camera.near = cameraDistance * 0.1;
+            camera.far = cameraDistance * 10;
+            camera.updateProjectionMatrix();
+
+            console.log('Model size:', size, 'Max dim:', maxDim, 'Camera distance:', cameraDistance);
+
+            scene.add(object);
+
+            // Initial render
+            renderer.render(scene, camera);
+            console.log('Initial render complete');
+
+            // Render with slow rotation
+            let rotation = 0;
+            let animationId;
+            function animate() {
+                rotation += 0.008;
+                object.rotation.y = rotation;
+                renderer.render(scene, camera);
+                animationId = requestAnimationFrame(animate);
+            }
+            animate();
+
+            // Store animation ID for cleanup
+            canvas.dataset.animationId = animationId;
+        } catch (err) {
+            console.error('Error loading 3D model preview:', err);
+            // Show error state
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ef4444';
+            ctx.font = '12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Load Error', width / 2, height / 2);
+        }
     });
 }
 
@@ -2800,6 +2992,30 @@ function addEventListeners() {
     dom.importBtn.addEventListener('click', importData);
     dom.importFileInput.addEventListener('change', handleImportFile);
 
+    // Expandable visualizer controls
+    dom.visualizerCloseBtn.addEventListener('click', closeExpandableVisualizer);
+    dom.visualizerMinimizeBtn.addEventListener('click', minimizeVisualizer);
+    dom.visualizerOpenInToolBtn.addEventListener('click', openScanInDedicatedTool);
+
+    // Minimized visualizer controls
+    dom.minimizedRestoreBtn.addEventListener('click', restoreVisualizer);
+    dom.minimizedCloseBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeExpandableVisualizer();
+    });
+    dom.minimizedVisualizer.addEventListener('click', (e) => {
+        if (e.target === dom.minimizedVisualizer || e.target.closest('#minimized-title, #minimized-type')) {
+            restoreVisualizer();
+        }
+    });
+
+    // Close visualizer when clicking outside
+    dom.expandableVisualizer.addEventListener('click', (e) => {
+        if (e.target === dom.expandableVisualizer) {
+            closeExpandableVisualizer();
+        }
+    });
+
     // Listen for sync events to show/hide loading indicator
     window.addEventListener('syncStarted', () => {
         if (dom.loadingIndicator) {
@@ -2808,11 +3024,13 @@ function addEventListeners() {
         }
     });
 
-    window.addEventListener('syncCompleted', () => {
+    window.addEventListener('syncCompleted', async () => {
         if (dom.loadingIndicator) {
             dom.loadingIndicator.classList.add('hidden');
             dom.loadingIndicator.classList.remove('flex');
         }
+        // Reload data from IndexedDB after sync
+        await dataManager.loadFromStorage();
         renderStats();
         if (currentView === 'assets') {
             renderAssetsView();
@@ -2844,9 +3062,17 @@ export default {
             }
         }
 
+        // Clean up expandable visualizer
+        if (expandedVisualizerModule) {
+            expandedVisualizerModule.destroy?.();
+            expandedVisualizerModule = null;
+        }
+
         if (container) {
             container.innerHTML = '';
         }
+
+        currentExpandedScan = null;
     },
 
     refresh: () => {
