@@ -1,5 +1,5 @@
 // Supabase Client Configuration
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from '@supabase/supabase-js';
 
 // Load Supabase credentials from environment variables
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;

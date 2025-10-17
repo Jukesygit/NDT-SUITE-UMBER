@@ -164,7 +164,9 @@ html.dark #tool-tofd .loader {
     position: relative;
 }
 
-#tool-3dview #ui-container {
+/* Support both old #tool-3dview and new .tool-container for 3D viewer */
+#tool-3dview #ui-container,
+.tool-container #ui-container {
     position: absolute;
     top: 20px;
     left: 20px;
@@ -176,7 +178,8 @@ html.dark #tool-tofd .loader {
     overflow-y: auto;
 }
 
-#tool-3dview .control-panel {
+#tool-3dview .control-panel,
+.tool-container .control-panel {
     background-color: rgba(255, 255, 255, 0.8);
     -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
@@ -187,14 +190,16 @@ html.dark #tool-tofd .loader {
     color: #1f2937;
 }
 
-#tool-3dview .panel-header {
+#tool-3dview .panel-header,
+.tool-container .panel-header {
     cursor: pointer;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
-#tool-3dview .panel-content {
+#tool-3dview .panel-content,
+.tool-container .panel-content {
     margin-top: 1rem;
     transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out;
     max-height: 1000px;
@@ -202,22 +207,27 @@ html.dark #tool-tofd .loader {
     overflow: hidden;
 }
 
-#tool-3dview .panel-content.collapsed {
+#tool-3dview .panel-content.collapsed,
+.tool-container .panel-content.collapsed {
     max-height: 0;
     opacity: 0;
     margin-top: 0;
 }
 
-#tool-3dview .arrow-icon {
+#tool-3dview .arrow-icon,
+.tool-container .arrow-icon {
     transition: transform 0.3s ease-in-out;
 }
 
-#tool-3dview .arrow-icon.collapsed {
+#tool-3dview .arrow-icon.collapsed,
+.tool-container .arrow-icon.collapsed {
     transform: rotate(-90deg);
 }
 
 #tool-3dview .upload-label,
-#tool-3dview .action-btn {
+#tool-3dview .action-btn,
+.tool-container .upload-label,
+.tool-container .action-btn {
     cursor: pointer;
     padding: 0.5rem 1rem;
     background-color: #4f46e5;
@@ -231,11 +241,14 @@ html.dark #tool-tofd .loader {
 }
 
 #tool-3dview .upload-label:hover,
-#tool-3dview .action-btn:hover {
+#tool-3dview .action-btn:hover,
+.tool-container .upload-label:hover,
+.tool-container .action-btn:hover {
     background-color: #4338ca;
 }
 
-#tool-3dview .mode-btn {
+#tool-3dview .mode-btn,
+.tool-container .mode-btn {
     padding: 0.5rem 1rem;
     border-radius: 0.5rem;
     border: 1px solid #d1d5db;
@@ -243,13 +256,15 @@ html.dark #tool-tofd .loader {
     transition: background-color 0.2s, color 0.2s;
 }
 
-#tool-3dview .mode-btn.active {
+#tool-3dview .mode-btn.active,
+.tool-container .mode-btn.active {
     background-color: #3b82f6;
     color: white;
     border-color: #3b82f6;
 }
 
-#tool-3dview .layer-item {
+#tool-3dview .layer-item,
+.tool-container .layer-item {
     display: flex;
     align-items: center;
     padding: 0.5rem;
@@ -259,11 +274,13 @@ html.dark #tool-tofd .loader {
     transition: background-color 0.2s, border-color 0.2s;
 }
 
-#tool-3dview .layer-item:hover {
+#tool-3dview .layer-item:hover,
+.tool-container .layer-item:hover {
     background-color: rgba(0,0,0,0.05);
 }
 
-#tool-3dview .layer-item.selected {
+#tool-3dview .layer-item.selected,
+.tool-container .layer-item.selected {
     border-color: #3b82f6;
     background-color: rgba(59, 130, 246, 0.1);
 }

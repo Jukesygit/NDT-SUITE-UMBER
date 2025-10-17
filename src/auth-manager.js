@@ -280,6 +280,11 @@ class AuthManager {
                     localStorage.removeItem('rememberedUsername');
                 }
 
+                // Dispatch auth state change event for local mode
+                window.dispatchEvent(new CustomEvent('authStateChange', {
+                    detail: { session: { user } }
+                }));
+
                 return { success: true, user };
             }
 
@@ -292,6 +297,10 @@ class AuthManager {
             await supabase.auth.signOut();
         } else {
             sessionStorage.removeItem('currentUser');
+            // Dispatch auth state change event for local mode
+            window.dispatchEvent(new CustomEvent('authStateChange', {
+                detail: { session: null }
+            }));
         }
 
         this.currentUser = null;
@@ -1013,6 +1022,34 @@ class AuthManager {
     // Check if using Supabase backend
     isUsingSupabase() {
         return this.useSupabase;
+    }
+
+    // Get current session
+    async getSession() {
+        if (this.useSupabase) {
+            const { data: { session } } = await supabase.auth.getSession();
+            return session;
+        } else {
+            // For local mode, return a mock session if user is logged in
+            return this.currentUser ? { user: this.currentUser } : null;
+        }
+    }
+
+    // Subscribe to auth state changes
+    onAuthStateChange(callback) {
+        if (this.useSupabase) {
+            const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+                callback(session);
+            });
+            return () => subscription.unsubscribe();
+        } else {
+            // For local mode, listen to custom events
+            const handler = (event) => {
+                callback(event.detail.session || (this.currentUser ? { user: this.currentUser } : null));
+            };
+            window.addEventListener('authStateChange', handler);
+            return () => window.removeEventListener('authStateChange', handler);
+        }
     }
 }
 
