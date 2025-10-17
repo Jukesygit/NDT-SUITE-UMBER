@@ -529,11 +529,13 @@ async function renderRequests() {
         if (authManager.isUsingSupabase()) {
             const { data, error } = await supabase
                 .from('permission_requests')
-                .select('*, profiles!permission_requests_user_id_fkey(username, email, organizations(name))')
+                .select('*, profiles!user_id(username, email, organizations(name))')
                 .eq('status', 'pending')
                 .order('created_at', { ascending: false });
 
-            if (!error) {
+            if (error) {
+                console.error('Error fetching permission requests:', error);
+            } else {
                 permissionRequests = data || [];
             }
         }

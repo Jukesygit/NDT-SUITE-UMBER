@@ -160,7 +160,7 @@ serve(async (req) => {
         success: true,
         message: existingUser
           ? 'Account approved successfully. User profile has been updated.'
-          : 'Account created successfully. User will receive an email to set their password.',
+          : 'Account created successfully. You can now send the user a password reset link via the Supabase dashboard or have them use "Forgot Password" on the login page.',
         user_id: userId
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
