@@ -131,8 +131,13 @@ class NDTApp {
     }
 
     switchTool(toolId) {
+        console.log('[MAIN] switchTool called with toolId:', toolId);
         const toolToActivate = tools.find(t => t.id === toolId);
-        if (!toolToActivate || !toolToActivate.active) return;
+        console.log('[MAIN] toolToActivate:', toolToActivate);
+        if (!toolToActivate || !toolToActivate.active) {
+            console.warn('[MAIN] Tool not found or not active:', toolId);
+            return;
+        }
 
         // Cleanup previous tool
         if (this.activeTool && this.activeTool.module && this.activeTool.module.destroy) {
@@ -302,6 +307,7 @@ class NDTApp {
 
         // Listen for loadScan events from data hub
         window.addEventListener('loadScan', (e) => {
+            console.log('[MAIN] Received loadScan event:', e.detail);
             const { toolType, scanData } = e.detail;
             this.loadScanInTool(toolType, scanData);
         });
@@ -422,6 +428,8 @@ class NDTApp {
     }
 
     loadScanInTool(toolType, scanData) {
+        console.log('[MAIN] loadScanInTool called with type:', toolType, 'scan:', scanData.name);
+
         // Map tool types to tool IDs
         const toolMap = {
             'pec': 'pec',
@@ -432,20 +440,23 @@ class NDTApp {
 
         const toolId = toolMap[toolType];
         if (!toolId) {
-            console.error('Unknown tool type:', toolType);
+            console.error('[MAIN] Unknown tool type:', toolType);
             return;
         }
 
+        console.log('[MAIN] Switching to tool:', toolId);
         // Switch to the appropriate tool
         this.switchTool(toolId);
 
         // Dispatch event to load the scan data in the tool
+        // The tool will retry if not ready yet
         setTimeout(() => {
+            console.log('[MAIN] Dispatching loadScanData event');
             const event = new CustomEvent('loadScanData', {
                 detail: { scanData }
             });
             window.dispatchEvent(event);
-        }, 100); // Small delay to ensure tool is initialized
+        }, 150);
     }
 }
 

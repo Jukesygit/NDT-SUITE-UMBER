@@ -667,13 +667,17 @@ async function updatePendingBadges() {
     const count = pending.length;
 
     if (count > 0) {
-        dom.pendingBadge.classList.remove('hidden');
-        dom.pendingCount.textContent = count;
-        dom.requestsBadge.classList.remove('hidden');
-        dom.requestsBadge.textContent = count;
+        if (dom.pendingBadge) {
+            dom.pendingBadge.classList.remove('hidden');
+            if (dom.pendingCount) dom.pendingCount.textContent = count;
+        }
+        if (dom.requestsBadge) {
+            dom.requestsBadge.classList.remove('hidden');
+            dom.requestsBadge.textContent = count;
+        }
     } else {
-        dom.pendingBadge.classList.add('hidden');
-        dom.requestsBadge.classList.add('hidden');
+        if (dom.pendingBadge) dom.pendingBadge.classList.add('hidden');
+        if (dom.requestsBadge) dom.requestsBadge.classList.add('hidden');
     }
 }
 

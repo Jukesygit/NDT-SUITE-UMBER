@@ -511,11 +511,17 @@ function loadNewData() {
     customColorRange = { min: null, max: null };
 }
 
-function exportToHub() {
+async function exportToHub() {
     if (!heatmapData) {
         showMessage('No data to export', true);
         return;
     }
+
+    // Ensure data manager is initialized
+    await dataManager.ensureInitialized();
+
+    // Get assets
+    const assets = dataManager.getAssets();
 
     // Create modal dialog
     const modal = document.createElement('div');
@@ -534,7 +540,7 @@ function exportToHub() {
                 <label class="block text-sm font-medium mb-2 dark:text-gray-200">Asset</label>
                 <select id="asset-select" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white">
                     <option value="">-- Select Asset --</option>
-                    ${dataManager.getAssets().map(a => `<option value="${a.id}">${a.name}</option>`).join('')}
+                    ${assets.map(a => `<option value="${a.id}">${a.name}</option>`).join('')}
                 </select>
                 <button id="new-asset-btn" class="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">+ Create New Asset</button>
             </div>
@@ -733,9 +739,20 @@ function updateVisualization() {
 }
 
 function loadScanData(event) {
+    console.log('[PEC] loadScanData called with event:', event.detail);
     const { scanData } = event.detail;
 
-    if (!scanData || scanData.toolType !== 'pec') return;
+    if (!scanData || scanData.toolType !== 'pec') {
+        console.log('[PEC] Ignoring scan - toolType:', scanData?.toolType);
+        return;
+    }
+
+    // Ensure DOM elements are initialized
+    if (!dom || !dom.minValueInput) {
+        console.warn('[PEC] DOM not ready, retrying in 200ms...');
+        setTimeout(() => loadScanData(event), 200);
+        return;
+    }
 
     // Load the saved scan data
     if (scanData.data && scanData.data.heatmapData) {

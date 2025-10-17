@@ -99,20 +99,16 @@ function Layout() {
     }, []);
 
     useEffect(() => {
-        // Initialize sync status component
-        const statusContainer = document.getElementById('sync-status-container');
-        if (statusContainer && !syncStatusElement) {
-            const element = syncStatus.create();
-            statusContainer.appendChild(element);
-            setSyncStatusElement(element);
-        }
+        // Initialize sync status component (it appends itself to document.body)
+        console.log('Layout: Creating sync status component');
+        const element = syncStatus.create();
+        setSyncStatusElement(element);
 
         return () => {
-            if (syncStatusElement && syncStatusElement.parentElement) {
-                syncStatusElement.parentElement.removeChild(syncStatusElement);
-            }
+            console.log('Layout: Cleaning up sync status component');
+            syncStatus.remove();
         };
-    }, [syncStatusElement]);
+    }, []); // Empty dependency array - only run once on mount
 
     const availableTools = tools.filter(tool => {
         if (tool.adminOnly) {
@@ -172,7 +168,6 @@ function Layout() {
                             })}
                         </nav>
                     </div>
-                    <div id="sync-status-container" className="w-full"></div>
                 </div>
             </aside>
 

@@ -146,6 +146,16 @@ html.dark #tool-tofd .loader {
     100% { transform: rotate(360deg); }
 }
 
+/* Loading Spinner */
+.loading-spinner {
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-top: 2px solid #60a5fa;
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    animation: spin 1s linear infinite;
+}
+
 /* C-Scan Visualizer Styles */
 .file-input-button {
     transition: background-color 0.2s, box-shadow 0.2s;

@@ -369,8 +369,9 @@ style.textContent = `
         font-size: 14px;
         cursor: pointer;
         transition: all 0.3s ease;
-        z-index: 10000;
+        z-index: 999999;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        pointer-events: auto;
     }
 
     .sync-status:hover {
