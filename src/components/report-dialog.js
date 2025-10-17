@@ -79,18 +79,22 @@ class ReportDialog {
 
                             <div class="form-group">
                                 <label for="clientName">Client Name *</label>
-                                <input type="text" id="clientName" name="clientName" required
-                                       list="clientsList"
-                                       placeholder="Enter client/company name">
-                                <small>Start typing to see suggestions from configuration</small>
+                                <select id="clientName" name="clientName" required>
+                                    <option value="">Select client...</option>
+                                </select>
+                                <input type="text" id="clientNameOther" name="clientNameOther"
+                                       style="display: none; margin-top: 8px;"
+                                       placeholder="Enter client name">
                             </div>
 
                             <div class="form-group">
                                 <label for="location">Location *</label>
-                                <input type="text" id="location" name="location" required
-                                       list="locationsList"
-                                       placeholder="e.g., Site, City, Country">
-                                <small>Start typing to see suggestions from configuration</small>
+                                <select id="location" name="location" required>
+                                    <option value="">Select location...</option>
+                                </select>
+                                <input type="text" id="locationOther" name="locationOther"
+                                       style="display: none; margin-top: 8px;"
+                                       placeholder="Enter location">
                             </div>
                         </div>
 
@@ -111,10 +115,12 @@ class ReportDialog {
 
                             <div class="form-group">
                                 <label for="material">Material</label>
-                                <input type="text" id="material" name="material"
-                                       list="materialsList"
-                                       placeholder="e.g., Carbon Steel, Stainless Steel 316L">
-                                <small>Start typing to see suggestions from configuration</small>
+                                <select id="material" name="material">
+                                    <option value="">Select material...</option>
+                                </select>
+                                <input type="text" id="materialOther" name="materialOther"
+                                       style="display: none; margin-top: 8px;"
+                                       placeholder="Enter material">
                             </div>
 
                             <div class="form-group">
@@ -135,18 +141,22 @@ class ReportDialog {
 
                             <div class="form-group">
                                 <label for="procedureNumber">Procedure Number</label>
-                                <input type="text" id="procedureNumber" name="procedureNumber"
-                                       list="procedureNumbersList"
-                                       placeholder="e.g., MAI-P-NDT-009-PAUT-R03">
-                                <small>Start typing to see suggestions from configuration</small>
+                                <select id="procedureNumber" name="procedureNumber">
+                                    <option value="">Select procedure...</option>
+                                </select>
+                                <input type="text" id="procedureNumberOther" name="procedureNumberOther"
+                                       style="display: none; margin-top: 8px;"
+                                       placeholder="Enter procedure number">
                             </div>
 
                             <div class="form-group">
                                 <label for="applicableStandard">Applicable Standard</label>
-                                <input type="text" id="applicableStandard" name="applicableStandard"
-                                       list="acceptanceCriteriaList"
-                                       placeholder="e.g., BS EN ISO 16809:2019">
-                                <small>Start typing to see suggestions from configuration</small>
+                                <select id="applicableStandard" name="applicableStandard">
+                                    <option value="">Select standard...</option>
+                                </select>
+                                <input type="text" id="applicableStandardOther" name="applicableStandardOther"
+                                       style="display: none; margin-top: 8px;"
+                                       placeholder="Enter standard">
                             </div>
 
                             <div class="form-group">
@@ -301,13 +311,6 @@ class ReportDialog {
                     </div>
                     <p class="progress-text" id="progressText">Generating report...</p>
                 </div>
-
-                <!-- Datalists for autocomplete suggestions -->
-                <datalist id="clientsList"></datalist>
-                <datalist id="locationsList"></datalist>
-                <datalist id="materialsList"></datalist>
-                <datalist id="procedureNumbersList"></datalist>
-                <datalist id="acceptanceCriteriaList"></datalist>
             </div>
         `;
 
@@ -696,35 +699,58 @@ class ReportDialog {
         const procedureNumbers = adminConfig.getList('procedureNumbers');
         const acceptanceCriteria = adminConfig.getList('acceptanceCriteria');
 
-        // Populate clients list
-        const clientsList = this.dialog.querySelector('#clientsList');
-        clientsList.innerHTML = clients.map(client =>
-            `<option value="${client}">`
-        ).join('');
+        // Helper function to populate a select dropdown with "Other" option
+        const populateSelect = (selectId, items) => {
+            const select = this.dialog.querySelector(`#${selectId}`);
+            const currentHTML = select.innerHTML;
 
-        // Populate locations list
-        const locationsList = this.dialog.querySelector('#locationsList');
-        locationsList.innerHTML = locations.map(location =>
-            `<option value="${location}">`
-        ).join('');
+            select.innerHTML = currentHTML + items.map(item =>
+                `<option value="${this.escapeHtml(item)}">${this.escapeHtml(item)}</option>`
+            ).join('') + '<option value="__OTHER__">Other (Enter Custom)</option>';
+        };
 
-        // Populate materials list
-        const materialsList = this.dialog.querySelector('#materialsList');
-        materialsList.innerHTML = materials.map(material =>
-            `<option value="${material}">`
-        ).join('');
+        // Populate all dropdowns
+        populateSelect('clientName', clients);
+        populateSelect('location', locations);
+        populateSelect('material', materials);
+        populateSelect('procedureNumber', procedureNumbers);
+        populateSelect('applicableStandard', acceptanceCriteria);
 
-        // Populate procedure numbers list
-        const procedureNumbersList = this.dialog.querySelector('#procedureNumbersList');
-        procedureNumbersList.innerHTML = procedureNumbers.map(proc =>
-            `<option value="${proc}">`
-        ).join('');
+        // Add change listeners for "Other" option handling
+        this.setupOtherFieldHandlers();
+    }
 
-        // Populate acceptance criteria list
-        const acceptanceCriteriaList = this.dialog.querySelector('#acceptanceCriteriaList');
-        acceptanceCriteriaList.innerHTML = acceptanceCriteria.map(criteria =>
-            `<option value="${criteria}">`
-        ).join('');
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    setupOtherFieldHandlers() {
+        const fields = [
+            { selectId: 'clientName', inputId: 'clientNameOther' },
+            { selectId: 'location', inputId: 'locationOther' },
+            { selectId: 'material', inputId: 'materialOther' },
+            { selectId: 'procedureNumber', inputId: 'procedureNumberOther' },
+            { selectId: 'applicableStandard', inputId: 'applicableStandardOther' }
+        ];
+
+        fields.forEach(({ selectId, inputId }) => {
+            const select = this.dialog.querySelector(`#${selectId}`);
+            const input = this.dialog.querySelector(`#${inputId}`);
+
+            select.addEventListener('change', () => {
+                if (select.value === '__OTHER__') {
+                    input.style.display = 'block';
+                    input.required = select.required;
+                    select.required = false;
+                } else {
+                    input.style.display = 'none';
+                    input.required = false;
+                    select.required = true;
+                }
+            });
+        });
     }
 
     attachEventListeners() {
@@ -853,6 +879,16 @@ class ReportDialog {
         return logEntries;
     }
 
+    getFieldValue(selectId, otherInputId) {
+        const select = this.dialog.querySelector(`#${selectId}`);
+        const otherInput = this.dialog.querySelector(`#${otherInputId}`);
+
+        if (select.value === '__OTHER__' && otherInput) {
+            return otherInput.value;
+        }
+        return select.value;
+    }
+
     async handleGenerate() {
         const form = this.dialog.querySelector('#reportForm');
         const formData = new FormData(form);
@@ -879,19 +915,19 @@ class ReportDialog {
             reportNumber: formData.get('reportNumber'),
             inspector: formData.get('inspector'),
             inspectorQualification: formData.get('inspectorQualification'),
-            clientName: formData.get('clientName'),
-            location: formData.get('location'),
+            clientName: this.getFieldValue('clientName', 'clientNameOther'),
+            location: this.getFieldValue('location', 'locationOther'),
 
             // Component Details
             lineTagNumber: formData.get('lineTagNumber'),
             componentDescription: formData.get('componentDescription'),
-            material: formData.get('material'),
+            material: this.getFieldValue('material', 'materialOther'),
             nominalThickness: formData.get('nominalThickness'),
             corrosionAllowance: formData.get('corrosionAllowance'),
 
             // Inspection Details
-            procedureNumber: formData.get('procedureNumber'),
-            applicableStandard: formData.get('applicableStandard'),
+            procedureNumber: this.getFieldValue('procedureNumber', 'procedureNumberOther'),
+            applicableStandard: this.getFieldValue('applicableStandard', 'applicableStandardOther'),
             mwt: formData.get('mwt'),
             mwtLocation: formData.get('mwtLocation'),
             anomalyCode: formData.get('anomalyCode'),
