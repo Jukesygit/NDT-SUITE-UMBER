@@ -34,11 +34,20 @@ class SyncQueue {
         try {
             const saved = localStorage.getItem('ndt_sync_queue');
             if (saved) {
-                this.queue = JSON.parse(saved);
-                console.log(`[SYNC-QUEUE] Loaded ${this.queue.length} pending operations`);
+                const loadedQueue = JSON.parse(saved);
+                // Filter out scan operations (they use cloud-first now, not queue)
+                this.queue = loadedQueue.filter(item => item.operation.table !== 'scans');
+                console.log(`[SYNC-QUEUE] Loaded ${this.queue.length} pending operations (filtered out scans)`);
             }
         } catch (error) {
             console.error('[SYNC-QUEUE] Error loading queue:', error);
+            // Clear corrupted queue
+            try {
+                localStorage.removeItem('ndt_sync_queue');
+                console.warn('[SYNC-QUEUE] Cleared corrupted queue');
+            } catch (e) {
+                // Ignore
+            }
             this.queue = [];
         }
     }
@@ -48,9 +57,19 @@ class SyncQueue {
      */
     saveQueue() {
         try {
-            localStorage.setItem('ndt_sync_queue', JSON.stringify(this.queue));
+            // Don't save large scan data to localStorage to avoid quota errors
+            // Scans are handled by syncService separately
+            const queueToSave = this.queue.filter(item => item.operation.table !== 'scans');
+            localStorage.setItem('ndt_sync_queue', JSON.stringify(queueToSave));
         } catch (error) {
             console.error('[SYNC-QUEUE] Error saving queue:', error);
+            // If still fails, clear the queue to prevent app from breaking
+            try {
+                localStorage.removeItem('ndt_sync_queue');
+                console.warn('[SYNC-QUEUE] Cleared queue due to storage quota');
+            } catch (e) {
+                // Ignore
+            }
         }
     }
 

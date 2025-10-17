@@ -917,6 +917,12 @@ async function exportToHub() {
 
     showMessage('Preparing export...');
 
+    // Ensure data manager is initialized
+    await dataManager.ensureInitialized();
+
+    // Get assets
+    const assets = dataManager.getAssets();
+
     // Create modal dialog
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
@@ -934,7 +940,7 @@ async function exportToHub() {
                 <label class="block text-sm font-medium mb-2 dark:text-gray-200">Asset</label>
                 <select id="asset-select" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white">
                     <option value="">-- Select Asset --</option>
-                    ${dataManager.getAssets().map(a => `<option value="${a.id}">${a.name}</option>`).join('')}
+                    ${assets.map(a => `<option value="${a.id}">${a.name}</option>`).join('')}
                 </select>
                 <button id="new-asset-btn" class="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">+ Create New Asset</button>
             </div>

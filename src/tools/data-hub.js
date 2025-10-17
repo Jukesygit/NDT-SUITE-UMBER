@@ -15,6 +15,10 @@ const HTML = `
     <div class="glass-panel" style="padding: 6px 12px; flex-shrink: 0; border-radius: 0;">
         <div class="flex justify-between items-center">
             <div id="stats-bar" class="flex gap-3 items-center flex-grow text-xs"></div>
+            <div id="loading-indicator" class="hidden items-center gap-2 mr-3">
+                <div class="loading-spinner"></div>
+                <span class="text-xs" style="color: rgba(255, 255, 255, 0.7);">Loading data...</span>
+            </div>
             <div class="flex gap-1.5">
                 <button id="import-btn" class="btn-secondary text-xs px-2 py-1">
                     Import
@@ -48,6 +52,7 @@ function cacheDom() {
     dom = {
         headerContainer: q('#datahub-header-container'),
         statsBar: q('#stats-bar'),
+        loadingIndicator: q('#loading-indicator'),
         breadcrumb: q('#breadcrumb'),
         breadcrumbHome: q('#breadcrumb-home'),
         assetsView: q('#assets-view'),
@@ -295,9 +300,25 @@ function renderVesselDetailView(assetId) {
                                         <div class="mt-2 flex flex-wrap gap-2">
                                             ${vessel.strakes.map(strake => {
                                                 const coverage = dataManager.calculateStrakeCoverage(assetId, vessel.id, strake.id);
+                                                const percentage = coverage.coveragePercentage;
+                                                // Dynamic colors: red (0-33%), yellow (34-66%), orange (67-99%), green (100%+)
+                                                let bgColor, textColor;
+                                                if (percentage >= 100) {
+                                                    bgColor = 'bg-green-100 dark:bg-green-900';
+                                                    textColor = 'text-green-800 dark:text-green-200';
+                                                } else if (percentage >= 67) {
+                                                    bgColor = 'bg-orange-100 dark:bg-orange-900';
+                                                    textColor = 'text-orange-800 dark:text-orange-200';
+                                                } else if (percentage >= 34) {
+                                                    bgColor = 'bg-yellow-100 dark:bg-yellow-900';
+                                                    textColor = 'text-yellow-800 dark:text-yellow-200';
+                                                } else {
+                                                    bgColor = 'bg-red-100 dark:bg-red-900';
+                                                    textColor = 'text-red-800 dark:text-red-200';
+                                                }
                                                 return `
-                                                    <div class="px-2 py-1 bg-blue-100 dark:bg-blue-900 rounded text-xs font-medium text-blue-800 dark:text-blue-200">
-                                                        ${strake.name}: ${coverage.coveragePercentage.toFixed(0)}%
+                                                    <div class="px-2 py-1 ${bgColor} rounded text-xs font-medium ${textColor}">
+                                                        ${strake.name}: ${percentage.toFixed(0)}%
                                                     </div>
                                                 `;
                                             }).join('')}
@@ -306,204 +327,10 @@ function renderVesselDetailView(assetId) {
                                 </div>
                             </div>
 
-                            <!-- Location and GA Drawings Section -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                <!-- Location Drawing -->
-                                <div class="glass-panel p-4">
-                                    <div class="flex justify-between items-center mb-3">
-                                        <div class="text-sm font-semibold text-gray-700 dark:text-gray-300">Location Drawing</div>
-                                        ${vessel.locationDrawing ? `
-                                            <button class="annotate-location-btn text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
-                                                ✏️ Annotate
-                                            </button>
-                                        ` : `
-                                            <button class="upload-location-btn text-xs bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
-                                                + Upload
-                                            </button>
-                                        `}
-                                    </div>
-                                    ${vessel.locationDrawing ? `
-                                        <div class="location-drawing-preview relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-300 dark:border-gray-600 hover:border-blue-500 transition-colors aspect-video" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-drawing-type="location">
-                                            <canvas class="drawing-thumbnail-canvas w-full h-full object-contain bg-gray-100 dark:bg-gray-800" data-vessel-id="${vessel.id}" data-drawing-type="location"></canvas>
-                                            <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center gap-2">
-                                                <button class="remove-location-btn opacity-0 group-hover:opacity-100 bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-all" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" aria-label="Remove Location Drawing" title="Remove">
-                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                                    </svg>
-                                                </button>
-                                            </div>
-                                            <div class="absolute top-2 right-2 flex flex-col gap-1">
-                                                ${vessel.locationDrawing.annotations && vessel.locationDrawing.annotations.length > 0 ? `
-                                                    <div class="bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-bold">
-                                                        ${vessel.locationDrawing.annotations.length} annotation${vessel.locationDrawing.annotations.length !== 1 ? 's' : ''}
-                                                    </div>
-                                                ` : ''}
-                                                ${vessel.locationDrawing.comment ? `
-                                                    <div class="bg-purple-600 text-white px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1">
-                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
-                                                        </svg>
-                                                        Comment
-                                                    </div>
-                                                ` : ''}
-                                            </div>
-                                        </div>
-                                    ` : `
-                                        <div class="aspect-video bg-gray-100 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center">
-                                            <div class="text-center text-gray-400">
-                                                <svg class="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
-                                                </svg>
-                                                <p class="text-sm">No drawing uploaded</p>
-                                            </div>
-                                        </div>
-                                    `}
-                                </div>
-
-                                <!-- GA Drawing -->
-                                <div class="glass-panel p-4">
-                                    <div class="flex justify-between items-center mb-3">
-                                        <div class="text-sm font-semibold text-gray-700 dark:text-gray-300">GA Drawing</div>
-                                        ${vessel.gaDrawing ? `
-                                            <button class="annotate-ga-btn text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
-                                                ✏️ Annotate
-                                            </button>
-                                        ` : `
-                                            <button class="upload-ga-btn text-xs bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
-                                                + Upload
-                                            </button>
-                                        `}
-                                    </div>
-                                    ${vessel.gaDrawing ? `
-                                        <div class="ga-drawing-preview relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-300 dark:border-gray-600 hover:border-blue-500 transition-colors aspect-video" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-drawing-type="ga">
-                                            <canvas class="drawing-thumbnail-canvas w-full h-full object-contain bg-gray-100 dark:bg-gray-800" data-vessel-id="${vessel.id}" data-drawing-type="ga"></canvas>
-                                            <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center gap-2">
-                                                <button class="remove-ga-btn opacity-0 group-hover:opacity-100 bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-all" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" aria-label="Remove GA Drawing" title="Remove">
-                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                                    </svg>
-                                                </button>
-                                            </div>
-                                            <div class="absolute top-2 right-2 flex flex-col gap-1">
-                                                ${vessel.gaDrawing.annotations && vessel.gaDrawing.annotations.length > 0 ? `
-                                                    <div class="bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-bold">
-                                                        ${vessel.gaDrawing.annotations.length} annotation${vessel.gaDrawing.annotations.length !== 1 ? 's' : ''}
-                                                    </div>
-                                                ` : ''}
-                                                ${vessel.gaDrawing.comment ? `
-                                                    <div class="bg-purple-600 text-white px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1">
-                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
-                                                        </svg>
-                                                        Comment
-                                                    </div>
-                                                ` : ''}
-                                            </div>
-                                        </div>
-                                    ` : `
-                                        <div class="aspect-video bg-gray-100 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center">
-                                            <div class="text-center text-gray-400">
-                                                <svg class="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 0a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path>
-                                                </svg>
-                                                <p class="text-sm">No drawing uploaded</p>
-                                            </div>
-                                        </div>
-                                    `}
-                                </div>
-                            </div>
-
-                            <!-- Generated Reports Section -->
-                            ${vessel.reports && vessel.reports.length > 0 ? `
-                                <div class="glass-panel p-4 mb-4">
-                                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-3">Generated Reports (${vessel.reports.length})</div>
-                                    <div class="space-y-2">
-                                        ${vessel.reports.map(report => `
-                                            <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 flex justify-between items-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                                                <div class="flex-grow">
-                                                    <div class="font-semibold text-sm text-gray-900 dark:text-white">${report.reportNumber || 'Untitled Report'}</div>
-                                                    <div class="text-xs text-gray-600 dark:text-gray-400">
-                                                        Generated: ${new Date(report.timestamp).toLocaleDateString()} by ${report.generatedBy}
-                                                    </div>
-                                                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                        Formats: ${report.formats.join(', ').toUpperCase()}
-                                                    </div>
-                                                </div>
-                                                <div class="flex gap-2">
-                                                    <button class="view-report-btn bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors text-xs font-medium"
-                                                            data-report-id="${report.id}"
-                                                            data-vessel-id="${vessel.id}"
-                                                            data-asset-id="${assetId}"
-                                                            aria-label="View report details"
-                                                            title="View report details">
-                                                        👁️ View
-                                                    </button>
-                                                    <button class="regenerate-report-btn bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 transition-colors text-xs font-medium"
-                                                            data-report-id="${report.id}"
-                                                            data-vessel-id="${vessel.id}"
-                                                            data-asset-id="${assetId}"
-                                                            data-vessel-name="${vessel.name}"
-                                                            aria-label="Regenerate report"
-                                                            title="Regenerate and download report">
-                                                        🔄 Regenerate
-                                                    </button>
-                                                    <button class="delete-report-btn bg-red-600 text-white p-1.5 rounded hover:bg-red-700 transition-colors"
-                                                            data-report-id="${report.id}"
-                                                            data-vessel-id="${vessel.id}"
-                                                            data-asset-id="${assetId}"
-                                                            aria-label="Delete report"
-                                                            title="Delete report">
-                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        `).join('')}
-                                    </div>
-                                </div>
-                            ` : ''}
-
-                            <!-- Images and Scans Side by Side -->
-                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                <!-- Vessel Images Section -->
-                                <div>
-                                    <div class="flex justify-between items-center mb-2">
-                                        <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Vessel Images</div>
-                                        <button class="upload-image-btn text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
-                                            + Add Images
-                                        </button>
-                                    </div>
-                                    ${images.length > 0 ? `
-                                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                            ${images.map(img => `
-                                                <div class="vessel-image-card relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-600 hover:border-blue-500 transition-colors aspect-square" data-image-id="${img.id}">
-                                                    <img src="${img.dataUrl}" alt="${img.name}" class="w-full h-full object-cover">
-                                                    <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center gap-2">
-                                                        <button class="rename-image-btn opacity-0 group-hover:opacity-100 bg-blue-600 text-white p-1.5 rounded-full hover:bg-blue-700 transition-all" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-image-id="${img.id}" aria-label="Rename image" title="Rename">
-                                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                                                            </svg>
-                                                        </button>
-                                                        <button class="delete-image-btn opacity-0 group-hover:opacity-100 bg-red-600 text-white p-1.5 rounded-full hover:bg-red-700 transition-all" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-image-id="${img.id}" aria-label="Delete image" title="Delete">
-                                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                                            </svg>
-                                                        </button>
-                                                    </div>
-                                                    <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-white text-xs p-1 truncate opacity-0 group-hover:opacity-100 transition-opacity" title="${img.name}">
-                                                        ${img.name}
-                                                    </div>
-                                                </div>
-                                            `).join('')}
-                                        </div>
-                                    ` : `
-                                        <p class="text-sm text-gray-500 dark:text-gray-400 italic">No images uploaded yet</p>
-                                    `}
-                                </div>
-
-                                <!-- Scans Section with Strake Grouping -->
-                                <div>
+                            <!-- Main Content Grid: Scans/Strakes on Left, Drawings/Images/Reports on Right -->
+                            <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                                <!-- LEFT COLUMN: Scans Section with Strake Grouping (order-2 on mobile, order-1 on lg) -->
+                                <div class="lg:col-span-2 order-2 lg:order-1">
                                     <div class="flex justify-between items-center mb-3">
                                         <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Scans${vessel.strakes && vessel.strakes.length > 0 ? ' by Strake' : ''}</div>
                                         ${vessel.strakes && vessel.strakes.length > 0 ? '' : `
@@ -596,13 +423,14 @@ function renderVesselDetailView(assetId) {
                                                                             </button>
                                                                         </div>
                                                                         <div class="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                                                                            <div>Target: ${strake.totalArea.toFixed(1)} m² (${strake.requiredCoverage}% required)</div>
+                                                                            <div>Strake Area: ${strake.totalArea.toFixed(1)} m²</div>
+                                                                            <div>Required (${strake.requiredCoverage}%): ${coverage.targetArea.toFixed(1)} m²</div>
                                                                             <div>Scanned: ${coverage.totalScannedArea.toFixed(1)} m² (${coverage.scanCount} scan${coverage.scanCount !== 1 ? 's' : ''})</div>
                                                                         </div>
                                                                         <div class="mt-2">
                                                                             <div class="flex items-center gap-2 mb-1">
                                                                                 <div class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                                                                    <div class="h-full ${coverage.isComplete ? 'bg-green-500' : 'bg-blue-500'} transition-all duration-500" style="width: ${Math.min(coverage.coveragePercentage, 100)}%"></div>
+                                                                                    <div class="h-full ${coverage.isComplete ? 'bg-green-500' : 'bg-blue-500'} transition-all duration-500" style="width: ${coverage.coveragePercentage}%"></div>
                                                                                 </div>
                                                                                 <span class="text-xs font-semibold ${coverage.isComplete ? 'text-green-600 dark:text-green-400' : 'text-blue-600 dark:text-blue-400'}">${coverage.coveragePercentage.toFixed(1)}%</span>
                                                                             </div>
@@ -632,6 +460,203 @@ function renderVesselDetailView(assetId) {
                                             `;
                                         }
                                     })()}
+                                </div>
+
+                                <!-- RIGHT COLUMN: Location/GA Drawings, Reports, and Images (order-1 on mobile, order-2 on lg) -->
+                                <div class="lg:col-span-3 space-y-4 order-1 lg:order-2">
+                                    <!-- Location and GA Drawings Section -->
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <!-- Location Drawing -->
+                                        <div class="glass-panel p-4">
+                                            <div class="flex justify-between items-center mb-3">
+                                                <div class="text-sm font-semibold text-gray-700 dark:text-gray-300">Location Drawing</div>
+                                                ${vessel.locationDrawing ? `
+                                                    <button class="annotate-location-btn text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                        ✏️ Annotate
+                                                    </button>
+                                                ` : `
+                                                    <button class="upload-location-btn text-xs bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                        + Upload
+                                                    </button>
+                                                `}
+                                            </div>
+                                            ${vessel.locationDrawing ? `
+                                                <div class="location-drawing-preview relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-300 dark:border-gray-600 hover:border-blue-500 transition-colors aspect-video" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-drawing-type="location">
+                                                    <canvas class="drawing-thumbnail-canvas w-full h-full object-contain bg-gray-100 dark:bg-gray-800" data-vessel-id="${vessel.id}" data-drawing-type="location"></canvas>
+                                                    <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center gap-2">
+                                                        <button class="remove-location-btn opacity-0 group-hover:opacity-100 bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-all" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" aria-label="Remove Location Drawing" title="Remove">
+                                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                    <div class="absolute top-2 right-2 flex flex-col gap-1">
+                                                        ${vessel.locationDrawing.annotations && vessel.locationDrawing.annotations.length > 0 ? `
+                                                            <div class="bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-bold">
+                                                                ${vessel.locationDrawing.annotations.length} annotation${vessel.locationDrawing.annotations.length !== 1 ? 's' : ''}
+                                                            </div>
+                                                        ` : ''}
+                                                        ${vessel.locationDrawing.comment ? `
+                                                            <div class="bg-purple-600 text-white px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+                                                                </svg>
+                                                                Comment
+                                                            </div>
+                                                        ` : ''}
+                                                    </div>
+                                                </div>
+                                            ` : `
+                                                <div class="aspect-video bg-gray-100 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center">
+                                                    <div class="text-center text-gray-400">
+                                                        <svg class="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                                                        </svg>
+                                                        <p class="text-sm">No drawing uploaded</p>
+                                                    </div>
+                                                </div>
+                                            `}
+                                        </div>
+
+                                        <!-- GA Drawing -->
+                                        <div class="glass-panel p-4">
+                                            <div class="flex justify-between items-center mb-3">
+                                                <div class="text-sm font-semibold text-gray-700 dark:text-gray-300">GA Drawing</div>
+                                                ${vessel.gaDrawing ? `
+                                                    <button class="annotate-ga-btn text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                        ✏️ Annotate
+                                                    </button>
+                                                ` : `
+                                                    <button class="upload-ga-btn text-xs bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                        + Upload
+                                                    </button>
+                                                `}
+                                            </div>
+                                            ${vessel.gaDrawing ? `
+                                                <div class="ga-drawing-preview relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-300 dark:border-gray-600 hover:border-blue-500 transition-colors aspect-video" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-drawing-type="ga">
+                                                    <canvas class="drawing-thumbnail-canvas w-full h-full object-contain bg-gray-100 dark:bg-gray-800" data-vessel-id="${vessel.id}" data-drawing-type="ga"></canvas>
+                                                    <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center gap-2">
+                                                        <button class="remove-ga-btn opacity-0 group-hover:opacity-100 bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-all" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" aria-label="Remove GA Drawing" title="Remove">
+                                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                    <div class="absolute top-2 right-2 flex flex-col gap-1">
+                                                        ${vessel.gaDrawing.annotations && vessel.gaDrawing.annotations.length > 0 ? `
+                                                            <div class="bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-bold">
+                                                                ${vessel.gaDrawing.annotations.length} annotation${vessel.gaDrawing.annotations.length !== 1 ? 's' : ''}
+                                                            </div>
+                                                        ` : ''}
+                                                        ${vessel.gaDrawing.comment ? `
+                                                            <div class="bg-purple-600 text-white px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+                                                                </svg>
+                                                                Comment
+                                                            </div>
+                                                        ` : ''}
+                                                    </div>
+                                                </div>
+                                            ` : `
+                                                <div class="aspect-video bg-gray-100 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center">
+                                                    <div class="text-center text-gray-400">
+                                                        <svg class="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 0a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path>
+                                                        </svg>
+                                                        <p class="text-sm">No drawing uploaded</p>
+                                                    </div>
+                                                </div>
+                                            `}
+                                        </div>
+                                    </div>
+
+                                    <!-- Generated Reports Section -->
+                                    ${vessel.reports && vessel.reports.length > 0 ? `
+                                        <div class="glass-panel p-4">
+                                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-3">Generated Reports (${vessel.reports.length})</div>
+                                            <div class="space-y-2">
+                                                ${vessel.reports.map(report => `
+                                                    <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 flex justify-between items-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                                        <div class="flex-grow">
+                                                            <div class="font-semibold text-sm text-gray-900 dark:text-white">${report.reportNumber || 'Untitled Report'}</div>
+                                                            <div class="text-xs text-gray-600 dark:text-gray-400">
+                                                                Generated: ${new Date(report.timestamp).toLocaleDateString()} by ${report.generatedBy}
+                                                            </div>
+                                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                                Formats: ${report.formats.join(', ').toUpperCase()}
+                                                            </div>
+                                                        </div>
+                                                        <div class="flex gap-2">
+                                                            <button class="view-report-btn bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors text-xs font-medium"
+                                                                    data-report-id="${report.id}"
+                                                                    data-vessel-id="${vessel.id}"
+                                                                    data-asset-id="${assetId}"
+                                                                    aria-label="View report details"
+                                                                    title="View report details">
+                                                                👁️ View
+                                                            </button>
+                                                            <button class="regenerate-report-btn bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 transition-colors text-xs font-medium"
+                                                                    data-report-id="${report.id}"
+                                                                    data-vessel-id="${vessel.id}"
+                                                                    data-asset-id="${assetId}"
+                                                                    data-vessel-name="${vessel.name}"
+                                                                    aria-label="Regenerate report"
+                                                                    title="Regenerate and download report">
+                                                                🔄 Regenerate
+                                                            </button>
+                                                            <button class="delete-report-btn bg-red-600 text-white p-1.5 rounded hover:bg-red-700 transition-colors"
+                                                                    data-report-id="${report.id}"
+                                                                    data-vessel-id="${vessel.id}"
+                                                                    data-asset-id="${assetId}"
+                                                                    aria-label="Delete report"
+                                                                    title="Delete report">
+                                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                                </svg>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    ` : ''}
+
+                                    <!-- Vessel Images Section -->
+                                    <div class="glass-panel p-4">
+                                        <div class="flex justify-between items-center mb-3">
+                                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Vessel Images</div>
+                                            <button class="upload-image-btn text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                + Add Images
+                                            </button>
+                                        </div>
+                                        ${images.length > 0 ? `
+                                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                                                ${images.map(img => `
+                                                    <div class="vessel-image-card relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-600 hover:border-blue-500 transition-colors aspect-square" data-image-id="${img.id}">
+                                                        <img src="${img.dataUrl}" alt="${img.name}" class="w-full h-full object-cover">
+                                                        <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center gap-2">
+                                                            <button class="rename-image-btn opacity-0 group-hover:opacity-100 bg-blue-600 text-white p-1.5 rounded-full hover:bg-blue-700 transition-all" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-image-id="${img.id}" aria-label="Rename image" title="Rename">
+                                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                                                </svg>
+                                                            </button>
+                                                            <button class="delete-image-btn opacity-0 group-hover:opacity-100 bg-red-600 text-white p-1.5 rounded-full hover:bg-red-700 transition-all" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-image-id="${img.id}" aria-label="Delete image" title="Delete">
+                                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                                                </svg>
+                                                            </button>
+                                                        </div>
+                                                        <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-white text-xs p-1 truncate opacity-0 group-hover:opacity-100 transition-opacity" title="${img.name}">
+                                                            ${img.name}
+                                                        </div>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        ` : `
+                                            <p class="text-sm text-gray-500 dark:text-gray-400 italic">No images uploaded yet</p>
+                                        `}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1125,6 +1150,8 @@ function renderScanDetailView(assetId, vesselId) {
 }
 
 function openScanInTool(scan) {
+    console.log('[DATA-HUB] Opening scan in tool:', scan.name, 'Type:', scan.toolType);
+
     // Dispatch custom event to switch to the appropriate tool and load the scan
     const event = new CustomEvent('loadScan', {
         detail: {
@@ -1133,6 +1160,7 @@ function openScanInTool(scan) {
         }
     });
     window.dispatchEvent(event);
+    console.log('[DATA-HUB] Dispatched loadScan event');
 }
 
 async function createNewAsset() {
@@ -1160,6 +1188,46 @@ function showStrakeManagementDialog(assetId, vesselId) {
 
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+
+    // Helper function to render the strakes list
+    const renderStrakesList = () => {
+        const updatedVessel = dataManager.getVessel(assetId, vesselId);
+        return (updatedVessel.strakes || []).length > 0 ? updatedVessel.strakes.map(strake => {
+            const coverage = dataManager.calculateStrakeCoverage(assetId, vesselId, strake.id);
+            return `
+                <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex-1">
+                            <h3 class="font-semibold dark:text-white">${strake.name}</h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">
+                                Total Area: ${strake.totalArea.toFixed(1)} m² |
+                                Required: ${strake.requiredCoverage}% |
+                                Coverage: ${coverage.coveragePercentage.toFixed(1)}%
+                            </p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button class="edit-strake-inline-btn text-blue-600 hover:text-blue-700 dark:text-blue-400" data-strake-id="${strake.id}">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                </svg>
+                            </button>
+                            <button class="delete-strake-btn text-red-600 hover:text-red-700 dark:text-red-400" data-strake-id="${strake.id}">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                            <div class="h-full ${coverage.isComplete ? 'bg-green-500' : 'bg-blue-500'}" style="width: ${coverage.coveragePercentage}%"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('') : '<p class="text-gray-500 dark:text-gray-400 italic">No strakes yet. Add a strake to get started.</p>';
+    };
+
     modal.innerHTML = `
         <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
             <h2 class="text-xl font-bold mb-4 dark:text-white">Manage Strakes - ${vessel.name}</h2>
@@ -1171,40 +1239,7 @@ function showStrakeManagementDialog(assetId, vesselId) {
             </div>
 
             <div id="strakes-list" class="space-y-3">
-                ${(vessel.strakes || []).length > 0 ? vessel.strakes.map(strake => {
-                    const coverage = dataManager.calculateStrakeCoverage(assetId, vesselId, strake.id);
-                    return `
-                        <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-                            <div class="flex justify-between items-start mb-2">
-                                <div class="flex-1">
-                                    <h3 class="font-semibold dark:text-white">${strake.name}</h3>
-                                    <p class="text-sm text-gray-600 dark:text-gray-400">
-                                        Total Area: ${strake.totalArea.toFixed(1)} m² |
-                                        Required: ${strake.requiredCoverage}% |
-                                        Coverage: ${coverage.coveragePercentage.toFixed(1)}%
-                                    </p>
-                                </div>
-                                <div class="flex gap-2">
-                                    <button class="edit-strake-inline-btn text-blue-600 hover:text-blue-700 dark:text-blue-400" data-strake-id="${strake.id}">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                                        </svg>
-                                    </button>
-                                    <button class="delete-strake-btn text-red-600 hover:text-red-700 dark:text-red-400" data-strake-id="${strake.id}">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                        </svg>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <div class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                    <div class="h-full ${coverage.isComplete ? 'bg-green-500' : 'bg-blue-500'}" style="width: ${Math.min(coverage.coveragePercentage, 100)}%"></div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                }).join('') : '<p class="text-gray-500 dark:text-gray-400 italic">No strakes yet. Add a strake to get started.</p>'}
+                ${renderStrakesList()}
             </div>
 
             <div class="flex gap-3 mt-6">
@@ -1214,6 +1249,33 @@ function showStrakeManagementDialog(assetId, vesselId) {
     `;
 
     document.body.appendChild(modal);
+
+    // Helper function to update the strakes list and reattach event listeners
+    const updateStrakesList = () => {
+        const strakesListContainer = modal.querySelector('#strakes-list');
+        strakesListContainer.innerHTML = renderStrakesList();
+
+        // Reattach event listeners for edit and delete buttons
+        modal.querySelectorAll('.edit-strake-inline-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const strakeId = btn.dataset.strakeId;
+                document.body.removeChild(modal);
+                showEditStrakeDialog(assetId, vesselId, strakeId);
+            });
+        });
+
+        modal.querySelectorAll('.delete-strake-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const strakeId = btn.dataset.strakeId;
+                const strake = dataManager.getStrake(assetId, vesselId, strakeId);
+                if (strake && confirm(`Delete strake "${strake.name}"?`)) {
+                    await dataManager.deleteStrake(assetId, vesselId, strakeId);
+                    renderVesselDetailView(assetId);
+                    updateStrakesList();
+                }
+            });
+        });
+    };
 
     // Add strake button
     modal.querySelector('#add-strake-btn').addEventListener('click', async () => {
@@ -1240,33 +1302,12 @@ function showStrakeManagementDialog(assetId, vesselId) {
             requiredCoverage
         });
 
-        document.body.removeChild(modal);
         renderVesselDetailView(assetId);
-        showStrakeManagementDialog(assetId, vesselId);
+        updateStrakesList();
     });
 
-    // Edit strake buttons
-    modal.querySelectorAll('.edit-strake-inline-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const strakeId = btn.dataset.strakeId;
-            document.body.removeChild(modal);
-            showEditStrakeDialog(assetId, vesselId, strakeId);
-        });
-    });
-
-    // Delete strake buttons
-    modal.querySelectorAll('.delete-strake-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const strakeId = btn.dataset.strakeId;
-            const strake = dataManager.getStrake(assetId, vesselId, strakeId);
-            if (strake && confirm(`Delete strake "${strake.name}"?`)) {
-                await dataManager.deleteStrake(assetId, vesselId, strakeId);
-                document.body.removeChild(modal);
-                renderVesselDetailView(assetId);
-                showStrakeManagementDialog(assetId, vesselId);
-            }
-        });
-    });
+    // Initialize event listeners for existing strakes
+    updateStrakesList();
 
     // Close button
     modal.querySelector('#close-strake-dialog-btn').addEventListener('click', () => {
@@ -1288,12 +1329,16 @@ function showEditStrakeDialog(assetId, vesselId, strakeId) {
     if (!strake) return;
 
     const name = prompt('Enter strake name:', strake.name);
-    if (!name || !name.trim()) return;
+    if (!name || !name.trim()) {
+        showStrakeManagementDialog(assetId, vesselId);
+        return;
+    }
 
     const totalAreaStr = prompt('Enter total area (m²):', strake.totalArea.toString());
     const totalArea = parseFloat(totalAreaStr);
     if (isNaN(totalArea) || totalArea <= 0) {
         alert('Please enter a valid area');
+        showStrakeManagementDialog(assetId, vesselId);
         return;
     }
 
@@ -1301,6 +1346,7 @@ function showEditStrakeDialog(assetId, vesselId, strakeId) {
     const requiredCoverage = parseFloat(requiredCoverageStr);
     if (isNaN(requiredCoverage) || requiredCoverage <= 0 || requiredCoverage > 100) {
         alert('Please enter a valid percentage between 1 and 100');
+        showStrakeManagementDialog(assetId, vesselId);
         return;
     }
 
@@ -1310,6 +1356,7 @@ function showEditStrakeDialog(assetId, vesselId, strakeId) {
         requiredCoverage
     }).then(() => {
         renderVesselDetailView(assetId);
+        showStrakeManagementDialog(assetId, vesselId);
     });
 }
 
@@ -2752,6 +2799,25 @@ function addEventListeners() {
     dom.exportAllBtn.addEventListener('click', exportAllData);
     dom.importBtn.addEventListener('click', importData);
     dom.importFileInput.addEventListener('change', handleImportFile);
+
+    // Listen for sync events to show/hide loading indicator
+    window.addEventListener('syncStarted', () => {
+        if (dom.loadingIndicator) {
+            dom.loadingIndicator.classList.remove('hidden');
+            dom.loadingIndicator.classList.add('flex');
+        }
+    });
+
+    window.addEventListener('syncCompleted', () => {
+        if (dom.loadingIndicator) {
+            dom.loadingIndicator.classList.add('hidden');
+            dom.loadingIndicator.classList.remove('flex');
+        }
+        renderStats();
+        if (currentView === 'assets') {
+            renderAssetsView();
+        }
+    });
 }
 
 export default {

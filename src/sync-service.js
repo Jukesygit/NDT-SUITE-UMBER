@@ -16,12 +16,16 @@ class SyncService {
     constructor() {
         this.syncInProgress = false;
         this.lastSyncTime = null;
+        this.lastSyncAttempt = null;
+        this.syncCooldown = 30000; // 30 seconds cooldown between sync attempts
         this.syncQueue = [];
         this.deviceId = this.getOrCreateDeviceId();
         this.autoSyncEnabled = true;
         this.autoSyncInterval = 5 * 60 * 1000; // 5 minutes default
         this.autoSyncTimer = null;
         this.pendingChanges = false;
+        this.consecutiveFailures = 0;
+        this.maxConsecutiveFailures = 3;
     }
 
     /**
@@ -120,28 +124,54 @@ class SyncService {
             return { success: false, error: 'No user or organization' };
         }
 
+        // Check cooldown period to prevent rapid retries
+        if (this.lastSyncAttempt && (Date.now() - this.lastSyncAttempt < this.syncCooldown)) {
+            const remaining = Math.ceil((this.syncCooldown - (Date.now() - this.lastSyncAttempt)) / 1000);
+            console.log(`[SYNC-SERVICE] Cooldown active, ${remaining}s remaining`);
+            return { success: true, count: 0, cooldown: true };
+        }
+
+        // Check consecutive failures
+        if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
+            console.warn(`[SYNC-SERVICE] Max consecutive failures (${this.maxConsecutiveFailures}) reached, backing off`);
+            return { success: true, count: 0, backoff: true };
+        }
+
+        this.lastSyncAttempt = Date.now();
+
+        // Dispatch sync started event
+        window.dispatchEvent(new CustomEvent('syncStarted'));
+
         try {
             // Check if user is in SYSTEM organization
             const isSystemOrg = authManager.currentProfile?.organizations?.name === 'SYSTEM';
 
-            // Fetch assets based on organization
-            let query = supabase.from('assets').select('*');
+            // Fetch assets based on organization with timeout
+            let query = supabase.from('assets').select('*').abortSignal(AbortSignal.timeout(30000)); // Increased to 30s
 
             // SYSTEM org sees all assets, others see only their own + shared
             if (!isSystemOrg) {
                 query = query.eq('organization_id', orgId);
             }
 
+            console.log('[SYNC-SERVICE] Fetching assets from Supabase...');
             const { data: assets, error: assetsError } = await query;
 
-            if (assetsError) throw assetsError;
+            if (assetsError) {
+                // If timeout or statement cancellation, return success with 0 count to avoid infinite retries
+                if (assetsError.code === '57014' || assetsError.message?.includes('timeout') || assetsError.message?.includes('aborted')) {
+                    console.warn('[SYNC-SERVICE] Assets query timeout, skipping download to avoid infinite retries');
+                    return { success: true, count: 0, skipped: true };
+                }
+                throw assetsError;
+            }
 
             if (!assets || assets.length === 0) {
-                console.log('No remote assets found');
+                console.log('[SYNC-SERVICE] No remote assets found');
                 return { success: true, count: 0 };
             }
 
-            console.log(`Found ${assets.length} remote assets`);
+            console.log(`[SYNC-SERVICE] Found ${assets.length} remote assets, starting download...`);
 
             // Load current local data
             const localData = await indexedDB.loadData();
@@ -149,7 +179,9 @@ class SyncService {
             let downloadCount = 0;
 
             // Process each asset
-            for (const remoteAsset of assets) {
+            for (let assetIndex = 0; assetIndex < assets.length; assetIndex++) {
+                const remoteAsset = assets[assetIndex];
+                console.log(`[SYNC-SERVICE] Processing asset ${assetIndex + 1}/${assets.length}: ${remoteAsset.name}`);
                 // For SYSTEM org, organize assets by their actual organization
                 // For regular orgs, use current org
                 const targetOrgId = isSystemOrg ? remoteAsset.organization_id : orgId;
@@ -186,34 +218,59 @@ class SyncService {
                     }
                 }
 
-                // Download vessels for this asset
-                const vesselsResult = await this.downloadVessels(remoteAsset.id, localAsset);
+                // Download vessels for this asset (metadata only, skip scan data)
+                console.log(`[SYNC-SERVICE] Downloading vessels for asset: ${remoteAsset.name}`);
+                const vesselsResult = await this.downloadVessels(remoteAsset.id, localAsset, true); // Pass skipScans=true
                 downloadCount += vesselsResult.count;
+                console.log(`[SYNC-SERVICE] Asset ${remoteAsset.name} complete. Total items so far: ${downloadCount}`);
             }
 
             // Save updated data to IndexedDB
+            console.log('[SYNC-SERVICE] Saving downloaded data to IndexedDB...');
             await indexedDB.saveData(localData);
-            console.log(`Downloaded ${downloadCount} items`);
+            console.log(`[SYNC-SERVICE] Download complete! Total items downloaded: ${downloadCount}`);
 
+            // Success - reset failure counter
+            this.consecutiveFailures = 0;
             return { success: true, count: downloadCount };
 
         } catch (error) {
             console.error('Download failed:', error);
+            this.consecutiveFailures++;
             return { success: false, error: error.message };
         }
     }
 
     /**
      * Download vessels for a specific asset
+     * @param {string} assetId - The asset ID
+     * @param {object} localAsset - The local asset object
+     * @param {boolean} skipScans - If true, skip downloading scan data to speed up initial sync
      */
-    async downloadVessels(assetId, localAsset) {
+    async downloadVessels(assetId, localAsset, skipScans = false) {
         try {
+            console.log(`[SYNC-SERVICE] Fetching vessels for asset ${assetId}...`);
             const { data: vessels, error } = await supabase
                 .from('vessels')
                 .select('*')
-                .eq('asset_id', assetId);
+                .eq('asset_id', assetId)
+                .abortSignal(AbortSignal.timeout(30000)); // Increased to 30s
 
-            if (error) throw error;
+            if (error) {
+                // If timeout, return 0 to avoid breaking the entire sync
+                if (error.code === '57014' || error.message?.includes('timeout') || error.message?.includes('aborted')) {
+                    console.warn(`[SYNC-SERVICE] Vessels query timeout for asset ${assetId}, skipping`);
+                    return { count: 0, skipped: true };
+                }
+                throw error;
+            }
+
+            if (!vessels || vessels.length === 0) {
+                console.log(`[SYNC-SERVICE] No vessels found for asset ${assetId}`);
+                return { success: true, count: 0 };
+            }
+
+            console.log(`[SYNC-SERVICE] Found ${vessels.length} vessels for asset ${assetId}`);
 
             let count = 0;
 
@@ -262,9 +319,13 @@ class SyncService {
                 const strakesResult = await this.downloadStrakes(remoteVessel.id, localVessel);
                 count += strakesResult.count;
 
-                // Download scans
-                const scansResult = await this.downloadScans(remoteVessel.id, localVessel);
-                count += scansResult.count;
+                // Download scans (skip if requested for faster initial sync)
+                if (!skipScans) {
+                    const scansResult = await this.downloadScans(remoteVessel.id, localVessel);
+                    count += scansResult.count;
+                } else {
+                    console.log(`[SYNC-SERVICE] Skipping scan data download for vessel ${remoteVessel.id} (fast sync mode)`);
+                }
             }
 
             return { success: true, count };
@@ -323,9 +384,17 @@ class SyncService {
             const { data: strakes, error } = await supabase
                 .from('strakes')
                 .select('*')
-                .eq('vessel_id', vesselId);
+                .eq('vessel_id', vesselId)
+                .abortSignal(AbortSignal.timeout(10000));
 
-            if (error) throw error;
+            if (error) {
+                // If timeout, return 0 to avoid breaking the entire sync
+                if (error.code === '57014' || error.message?.includes('timeout') || error.message?.includes('aborted')) {
+                    console.warn(`[SYNC-SERVICE] Strakes query timeout for vessel ${vesselId}, skipping`);
+                    return { success: true, count: 0, skipped: true };
+                }
+                throw error;
+            }
 
             // Initialize strakes array if it doesn't exist
             if (!localVessel.strakes) {
@@ -368,32 +437,82 @@ class SyncService {
                 }
             }
 
+            // Success - reset failure counter
+            this.consecutiveFailures = 0;
             return { success: true, count };
 
         } catch (error) {
             console.error('Error downloading strakes:', error);
+            this.consecutiveFailures++;
             return { success: false, error: error.message, count: 0 };
         }
     }
 
     /**
-     * Download scans for a vessel
+     * Download scans for a vessel (with pagination and retry)
      */
     async downloadScans(vesselId, localVessel) {
         try {
-            const { data: scans, error } = await supabase
-                .from('scans')
-                .select('*')
-                .eq('vessel_id', vesselId);
+            // Use pagination to avoid timeout on large result sets
+            const PAGE_SIZE = 10; // Download 10 scans at a time
+            let allScans = [];
+            let page = 0;
+            let hasMore = true;
 
-            if (error) throw error;
+            console.log(`[SYNC-SERVICE] Fetching scans for vessel ${vesselId} (paginated)...`);
 
+            while (hasMore) {
+                const { data: scans, error, count: totalCount } = await supabase
+                    .from('scans')
+                    .select('*', { count: 'exact' })
+                    .eq('vessel_id', vesselId)
+                    .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
+                    .abortSignal(AbortSignal.timeout(60000)); // 60s timeout per page
+
+                if (error) {
+                    // If timeout or server error, try to continue with what we have
+                    if (error.code === '57014' || error.message?.includes('timeout') || error.message?.includes('aborted') || error.message?.includes('500')) {
+                        console.warn(`[SYNC-SERVICE] Scans query error on page ${page} for vessel ${vesselId}: ${error.message}`);
+                        if (allScans.length === 0) {
+                            // No scans fetched yet, return failure
+                            return { success: true, count: 0, skipped: true };
+                        }
+                        // Stop pagination but use what we have
+                        break;
+                    }
+                    throw error;
+                }
+
+                if (!scans || scans.length === 0) {
+                    hasMore = false;
+                    break;
+                }
+
+                allScans = allScans.concat(scans);
+                console.log(`[SYNC-SERVICE] Fetched page ${page + 1}, got ${scans.length} scans (total so far: ${allScans.length})`);
+
+                // Check if there are more pages
+                if (scans.length < PAGE_SIZE || (totalCount && allScans.length >= totalCount)) {
+                    hasMore = false;
+                }
+                page++;
+            }
+
+            if (allScans.length === 0) {
+                console.log(`[SYNC-SERVICE] No scans found for vessel ${vesselId}`);
+                return { success: true, count: 0 };
+            }
+
+            console.log(`[SYNC-SERVICE] Found ${allScans.length} total scans for vessel ${vesselId}, starting download...`);
             let count = 0;
 
-            for (const remoteScan of scans) {
+            for (let i = 0; i < allScans.length; i++) {
+                const remoteScan = allScans[i];
                 const existingScan = localVessel.scans.find(s => s.id === remoteScan.id);
 
                 if (!existingScan) {
+                    console.log(`[SYNC-SERVICE] Downloading scan ${i + 1}/${allScans.length}: ${remoteScan.name}`);
+
                     const scanData = {
                         id: remoteScan.id,
                         name: remoteScan.name,
@@ -403,36 +522,85 @@ class SyncService {
                         strakeId: remoteScan.strake_id || null // Include strake assignment
                     };
 
-                    // Download thumbnail if exists
-                    if (remoteScan.thumbnail_url) {
-                        scanData.thumbnail = await this.downloadFile(remoteScan.thumbnail_url);
-                    }
+                    // Download files in parallel with timeout handling
+                    try {
+                        console.log(`[SYNC-SERVICE] Downloading files for ${remoteScan.name}...`);
 
-                    // Download heatmap if exists
-                    if (remoteScan.heatmap_url) {
-                        scanData.heatmapOnly = await this.downloadFile(remoteScan.heatmap_url);
-                    }
+                        const downloadPromises = [];
 
-                    // Download large data file if exists
-                    if (remoteScan.data_url) {
-                        const largeData = await this.downloadFile(remoteScan.data_url);
-                        if (largeData) {
-                            // Convert data URL to text before parsing
-                            const textData = this.dataURLToText(largeData);
-                            if (textData) {
-                                try {
-                                    scanData.data = JSON.parse(textData);
-                                } catch (parseError) {
-                                    console.error('Error parsing scan data JSON:', parseError);
-                                    console.error('First 100 chars of data:', textData.substring(0, 100));
-                                    scanData.data = null;
+                        // Download thumbnail if exists
+                        if (remoteScan.thumbnail_url) {
+                            downloadPromises.push(
+                                Promise.race([
+                                    this.downloadFile(remoteScan.thumbnail_url),
+                                    new Promise((_, reject) => setTimeout(() => reject(new Error('Thumbnail download timeout')), 30000))
+                                ]).then(data => ({ type: 'thumbnail', data }))
+                                .catch(err => {
+                                    console.warn(`[SYNC-SERVICE] Failed to download thumbnail: ${err.message}`);
+                                    return { type: 'thumbnail', data: null };
+                                })
+                            );
+                        }
+
+                        // Download heatmap if exists
+                        if (remoteScan.heatmap_url) {
+                            downloadPromises.push(
+                                Promise.race([
+                                    this.downloadFile(remoteScan.heatmap_url),
+                                    new Promise((_, reject) => setTimeout(() => reject(new Error('Heatmap download timeout')), 30000))
+                                ]).then(data => ({ type: 'heatmap', data }))
+                                .catch(err => {
+                                    console.warn(`[SYNC-SERVICE] Failed to download heatmap: ${err.message}`);
+                                    return { type: 'heatmap', data: null };
+                                })
+                            );
+                        }
+
+                        // Download large data file if exists
+                        if (remoteScan.data_url) {
+                            downloadPromises.push(
+                                Promise.race([
+                                    this.downloadFile(remoteScan.data_url),
+                                    new Promise((_, reject) => setTimeout(() => reject(new Error('Data file download timeout')), 30000))
+                                ]).then(data => ({ type: 'data', data }))
+                                .catch(err => {
+                                    console.warn(`[SYNC-SERVICE] Failed to download data file: ${err.message}`);
+                                    return { type: 'data', data: null };
+                                })
+                            );
+                        }
+
+                        // Wait for all downloads to complete in parallel
+                        const results = await Promise.all(downloadPromises);
+
+                        // Process results
+                        for (const result of results) {
+                            if (result.type === 'thumbnail') {
+                                scanData.thumbnail = result.data;
+                            } else if (result.type === 'heatmap') {
+                                scanData.heatmapOnly = result.data;
+                            } else if (result.type === 'data' && result.data) {
+                                // Convert data URL to text before parsing
+                                const textData = this.dataURLToText(result.data);
+                                if (textData) {
+                                    try {
+                                        scanData.data = JSON.parse(textData);
+                                    } catch (parseError) {
+                                        console.error('Error parsing scan data JSON:', parseError);
+                                        console.error('First 100 chars of data:', textData.substring(0, 100));
+                                        scanData.data = null;
+                                    }
                                 }
                             }
                         }
+                    } catch (fileError) {
+                        console.error(`[SYNC-SERVICE] Error downloading scan files: ${fileError.message}`);
+                        // Continue with scan metadata even if files fail
                     }
 
                     localVessel.scans.push(scanData);
                     count++;
+                    console.log(`[SYNC-SERVICE] Scan ${remoteScan.name} downloaded (${count}/${allScans.length} completed)`);
                 }
             }
 
@@ -916,16 +1084,138 @@ class SyncService {
     }
 
     /**
-     * Upload a scan
+     * Upload a single scan directly (optimized for createScan operation)
+     * This is much faster than uploadAsset() as it only uploads the new scan
      */
-    async uploadScan(scan, vesselId, assetId, orgId) {
+    async uploadSingleScan(scan, vesselId, assetId, orgId) {
         try {
-            // Check if scan already exists
-            const { data: existing } = await supabase
+            console.log(`[UPLOAD_SCAN] Starting upload for scan: ${scan.name}`);
+
+            // Check if scan already exists with timeout
+            const { data: existing, error: checkError } = await supabase
                 .from('scans')
                 .select('id')
                 .eq('id', scan.id)
+                .abortSignal(AbortSignal.timeout(10000))
                 .single();
+
+            if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = not found (expected)
+                // If timeout, skip this scan
+                if (checkError.code === '57014' || checkError.message?.includes('timeout') || checkError.message?.includes('aborted')) {
+                    console.warn(`[UPLOAD_SCAN] Scan check timeout for ${scan.id}, skipping upload`);
+                    return { success: true, skipped: true };
+                }
+                // Other errors should be thrown
+                throw checkError;
+            }
+
+            if (existing) {
+                console.log(`[UPLOAD_SCAN] Scan already exists, skipping upload`);
+                return { success: true }; // Already uploaded
+            }
+
+            let thumbnailUrl = null;
+            let heatmapUrl = null;
+            let dataUrl = null;
+
+            // Upload thumbnail with progress logging
+            if (scan.thumbnail) {
+                console.log(`[UPLOAD_SCAN] Uploading thumbnail...`);
+                const ext = this.getImageExtension(scan.thumbnail);
+                thumbnailUrl = await this.uploadFile(
+                    scan.thumbnail,
+                    'scan-images',
+                    `${orgId}/${assetId}/${vesselId}/${scan.id}_thumbnail.${ext}`,
+                    `image/${ext}`
+                );
+                console.log(`[UPLOAD_SCAN] Thumbnail uploaded: ${thumbnailUrl ? 'success' : 'failed'}`);
+            }
+
+            // Upload heatmap with progress logging
+            if (scan.heatmapOnly) {
+                console.log(`[UPLOAD_SCAN] Uploading heatmap...`);
+                const ext = this.getImageExtension(scan.heatmapOnly);
+                heatmapUrl = await this.uploadFile(
+                    scan.heatmapOnly,
+                    'scan-images',
+                    `${orgId}/${assetId}/${vesselId}/${scan.id}_heatmap.${ext}`,
+                    `image/${ext}`
+                );
+                console.log(`[UPLOAD_SCAN] Heatmap uploaded: ${heatmapUrl ? 'success' : 'failed'}`);
+            }
+
+            // Determine if scan data should be inline or uploaded
+            const scanDataSize = JSON.stringify(scan.data || {}).length;
+            let scanDataInline = null;
+
+            console.log(`[UPLOAD_SCAN] Scan data size: ${(scanDataSize / 1024).toFixed(2)} KB`);
+
+            if (scanDataSize < 100000) { // Less than 100KB, store inline
+                console.log(`[UPLOAD_SCAN] Storing scan data inline (< 100KB)`);
+                scanDataInline = scan.data;
+            } else {
+                // Upload large scan data
+                console.log(`[UPLOAD_SCAN] Uploading large scan data file...`);
+                const dataBlob = new Blob([JSON.stringify(scan.data)], { type: 'application/json' });
+                const dataDataUrl = await this.blobToDataURL(dataBlob);
+
+                dataUrl = await this.uploadFile(
+                    dataDataUrl,
+                    'scan-data',
+                    `${orgId}/${assetId}/${vesselId}/${scan.id}_data.json`,
+                    'application/json'
+                );
+                console.log(`[UPLOAD_SCAN] Scan data file uploaded: ${dataUrl ? 'success' : 'failed'}`);
+            }
+
+            // Insert scan record
+            console.log(`[UPLOAD_SCAN] Inserting scan record into database...`);
+            const { error } = await supabase
+                .from('scans')
+                .insert({
+                    id: scan.id,
+                    vessel_id: vesselId,
+                    name: scan.name,
+                    tool_type: scan.toolType,
+                    strake_id: scan.strakeId || null, // Include strake assignment
+                    data: scanDataInline,
+                    data_url: dataUrl,
+                    thumbnail_url: thumbnailUrl,
+                    heatmap_url: heatmapUrl,
+                    created_at: new Date(scan.timestamp).toISOString()
+                });
+
+            if (error) throw error;
+
+            console.log(`[UPLOAD_SCAN] Scan uploaded successfully: ${scan.name}`);
+            return { success: true };
+
+        } catch (error) {
+            console.error('[UPLOAD_SCAN] Error uploading scan:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * Upload a scan (used during full asset upload)
+     */
+    async uploadScan(scan, vesselId, assetId, orgId) {
+        try {
+            // Check if scan already exists with timeout
+            const { data: existing, error: checkError } = await supabase
+                .from('scans')
+                .select('id')
+                .eq('id', scan.id)
+                .abortSignal(AbortSignal.timeout(10000))
+                .single();
+
+            if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = not found (expected)
+                // If timeout, skip this scan
+                if (checkError.code === '57014' || checkError.message?.includes('timeout') || checkError.message?.includes('aborted')) {
+                    console.warn(`[SYNC-SERVICE] Scan check timeout for ${scan.id}, skipping upload`);
+                    return { success: true, skipped: true };
+                }
+            }
 
             if (existing) {
                 return { success: true }; // Already uploaded
@@ -1059,11 +1349,56 @@ class SyncService {
     }
 
     /**
-     * Convert data URL to Blob
+     * Delete a scan from Supabase
+     */
+    async deleteScanFromSupabase(scanId) {
+        try {
+            console.log(`[DELETE_SCAN] Deleting scan from Supabase: ${scanId}`);
+
+            // Delete scan record from database
+            const { error: dbError } = await supabase
+                .from('scans')
+                .delete()
+                .eq('id', scanId);
+
+            if (dbError) {
+                console.error('[DELETE_SCAN] Error deleting scan from database:', dbError);
+                return { success: false, error: dbError.message };
+            }
+
+            console.log('[DELETE_SCAN] Scan deleted successfully from database');
+
+            // Note: We're not deleting the storage files (thumbnail, heatmap, data.json)
+            // as they might be referenced elsewhere or useful for audit trails.
+            // If you want to delete them, you can add storage.from().remove() calls here.
+
+            return { success: true };
+
+        } catch (error) {
+            console.error('[DELETE_SCAN] Error:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * Convert data URL to Blob (without using fetch to avoid CSP issues)
      */
     async dataURLToBlob(dataUrl) {
-        const response = await fetch(dataUrl);
-        return await response.blob();
+        // Split the data URL to get the content type and base64 data
+        const parts = dataUrl.split(',');
+        const contentType = parts[0].match(/:(.*?);/)[1];
+        const base64Data = parts[1];
+
+        // Convert base64 to binary
+        const binaryString = atob(base64Data);
+        const bytes = new Uint8Array(binaryString.length);
+
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+
+        // Create and return blob
+        return new Blob([bytes], { type: contentType });
     }
 
     /**
@@ -1107,10 +1442,22 @@ class SyncService {
         return {
             inProgress: this.syncInProgress,
             lastSync: this.lastSyncTime,
+            lastAttempt: this.lastSyncAttempt,
             queueSize: this.syncQueue.length,
             autoSyncEnabled: this.autoSyncEnabled,
-            pendingChanges: this.pendingChanges
+            pendingChanges: this.pendingChanges,
+            consecutiveFailures: this.consecutiveFailures,
+            backedOff: this.consecutiveFailures >= this.maxConsecutiveFailures
         };
+    }
+
+    /**
+     * Reset backoff and cooldown (for manual retry)
+     */
+    resetBackoff() {
+        console.log('[SYNC-SERVICE] Resetting backoff and cooldown');
+        this.consecutiveFailures = 0;
+        this.lastSyncAttempt = null;
     }
 
     /**

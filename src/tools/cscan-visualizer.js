@@ -2,7 +2,7 @@
 import dataManager from '../data-manager.js';
 import { createAnimatedHeader } from '../animated-background.js';
 
-let container, dom = {}, processedScans = [], currentScanData = null, compositeWorker = null, isShowingComposite = false, customColorRange = { min: null, max: null }, currentHoverPosition = { x: null, y: null };
+let container, dom = {}, processedScans = [], currentScanData = null, compositeWorker = null, isShowingComposite = false, customColorRange = { min: null, max: null }, currentHoverPosition = { x: null, y: null }, selectedScans = new Set();
 
 const HTML = `
 <div class="h-full w-full" style="display: flex; flex-direction: column; overflow: hidden;">
@@ -36,7 +36,7 @@ const HTML = `
         <div id="file-management-section" class="hidden mt-8 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-inner">
             <div class="flex flex-wrap justify-between items-center border-b border-gray-200 dark:border-gray-600 pb-2 mb-4">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Processed Files</h3>
-                <div class="flex gap-2 mt-2 md:mt-0">
+                <div class="flex gap-2 mt-2 md:mt-0 flex-wrap">
                     <button id="composite-button" class="file-input-button bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
                         Generate Composite
                     </button>
@@ -49,7 +49,17 @@ const HTML = `
                     <button id="export-to-hub-btn" class="file-input-button bg-orange-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-orange-700 hidden transition-colors">
                         Export to Hub
                     </button>
+                    <button id="batch-export-to-hub-btn" class="file-input-button bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 hidden transition-colors">
+                        Batch Export (<span id="selected-count">0</span>)
+                    </button>
+                    <button id="batch-assign-strake-btn" class="file-input-button bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 hidden transition-colors">
+                        Assign to Strake
+                    </button>
                 </div>
+            </div>
+            <div class="mb-3 flex items-center gap-2">
+                <input type="checkbox" id="select-all-checkbox" class="w-4 h-4 cursor-pointer">
+                <label for="select-all-checkbox" class="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">Select All</label>
             </div>
             <div id="file-list" class="text-sm text-gray-700 dark:text-gray-300"></div>
         </div>
@@ -154,6 +164,10 @@ function cacheDom() {
         exportButton: q('#export-button'),
         exportCleanButton: q('#export-clean-button'),
         exportToHubBtn: q('#export-to-hub-btn'),
+        batchExportToHubBtn: q('#batch-export-to-hub-btn'),
+        batchAssignStrakeBtn: q('#batch-assign-strake-btn'),
+        selectAllCheckbox: q('#select-all-checkbox'),
+        selectedCountSpan: q('#selected-count'),
         progressContainer: q('#progress-container'),
         progressBar: q('#progress-bar'),
         colorscaleSelect: q('#colorscale-cscan'),
@@ -681,24 +695,88 @@ function updateProfileVisibility() {
 
 // C-Scan Visualizer Tool Module - Complete (Part 2 - continues from part 1)
 
+function updateBatchButtons() {
+    const selectedCount = selectedScans.size;
+    dom.selectedCountSpan.textContent = selectedCount;
+
+    if (selectedCount > 0) {
+        dom.batchExportToHubBtn.classList.remove('hidden');
+        dom.batchAssignStrakeBtn.classList.remove('hidden');
+    } else {
+        dom.batchExportToHubBtn.classList.add('hidden');
+        dom.batchAssignStrakeBtn.classList.add('hidden');
+    }
+
+    // Update select all checkbox state
+    if (selectedCount === 0) {
+        dom.selectAllCheckbox.checked = false;
+        dom.selectAllCheckbox.indeterminate = false;
+    } else if (selectedCount === processedScans.length) {
+        dom.selectAllCheckbox.checked = true;
+        dom.selectAllCheckbox.indeterminate = false;
+    } else {
+        dom.selectAllCheckbox.checked = false;
+        dom.selectAllCheckbox.indeterminate = true;
+    }
+}
+
+function toggleSelectAll() {
+    if (selectedScans.size === processedScans.length) {
+        // Deselect all
+        selectedScans.clear();
+    } else {
+        // Select all
+        selectedScans.clear();
+        processedScans.forEach((_, index) => selectedScans.add(index));
+    }
+    renderFileList();
+}
+
 function renderFileList() {
     dom.fileListContainer.innerHTML = '';
-    processedScans.forEach((scan) => {
-        const el = document.createElement('div');
-        el.className = 'p-2 mt-2 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors';
+    processedScans.forEach((scan, index) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'flex items-center gap-2 p-2 mt-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors';
         if (!isShowingComposite && scan === currentScanData) {
-            el.classList.add('bg-blue-100', 'dark:bg-blue-900/50', 'font-semibold');
+            wrapper.classList.add('bg-blue-100', 'dark:bg-blue-900/50');
         }
-        el.textContent = scan.fileName;
-        el.onclick = () => {
+
+        // Checkbox for batch selection
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'w-4 h-4 cursor-pointer';
+        checkbox.checked = selectedScans.has(index);
+        checkbox.onclick = (e) => {
+            e.stopPropagation();
+            if (checkbox.checked) {
+                selectedScans.add(index);
+            } else {
+                selectedScans.delete(index);
+            }
+            updateBatchButtons();
+        };
+
+        // File name label
+        const label = document.createElement('div');
+        label.className = 'flex-1 cursor-pointer';
+        if (!isShowingComposite && scan === currentScanData) {
+            label.classList.add('font-semibold');
+        }
+        label.textContent = scan.fileName;
+        label.onclick = () => {
             currentScanData = scan;
             isShowingComposite = false;
             renderPlot(currentScanData);
             renderMetadata(currentScanData.metadata);
             renderFileList();
         };
-        dom.fileListContainer.appendChild(el);
+
+        wrapper.appendChild(checkbox);
+        wrapper.appendChild(label);
+        dom.fileListContainer.appendChild(wrapper);
     });
+
+    updateBatchButtons();
 }
 
 function getCompositeWorker() {
@@ -947,11 +1025,17 @@ function applyCustomRange() {
     showStatus('Custom range applied');
 }
 
-function exportToHub() {
+async function exportToHub() {
     if (!currentScanData) {
         showStatus('No data to export', true);
         return;
     }
+
+    // Ensure data manager is initialized
+    await dataManager.ensureInitialized();
+
+    // Get assets
+    const assets = dataManager.getAssets();
 
     // Create modal dialog
     const modal = document.createElement('div');
@@ -970,7 +1054,7 @@ function exportToHub() {
                 <label class="block text-sm font-medium mb-2 dark:text-gray-200">Asset</label>
                 <select id="asset-select" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white">
                     <option value="">-- Select Asset --</option>
-                    ${dataManager.getAssets().map(a => `<option value="${a.id}">${a.name}</option>`).join('')}
+                    ${assets.map(a => `<option value="${a.id}">${a.name}</option>`).join('')}
                 </select>
                 <button id="new-asset-btn" class="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">+ Create New Asset</button>
             </div>
@@ -1165,6 +1249,553 @@ function exportToHub() {
     });
 }
 
+async function batchExportToHub() {
+    if (selectedScans.size === 0) {
+        showStatus('No scans selected', true);
+        return;
+    }
+
+    // Ensure data manager is initialized
+    await dataManager.ensureInitialized();
+
+    // Get assets
+    const assets = dataManager.getAssets();
+
+    const selectedScansList = Array.from(selectedScans).map(index => processedScans[index]);
+
+    // Create modal dialog
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h2 class="text-xl font-bold mb-4 dark:text-white">Batch Export ${selectedScansList.length} Scans to Hub</h2>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2 dark:text-gray-200">Asset</label>
+                <select id="batch-asset-select" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white">
+                    <option value="">-- Select Asset --</option>
+                    ${assets.map(a => `<option value="${a.id}">${a.name}</option>`).join('')}
+                </select>
+                <button id="batch-new-asset-btn" class="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">+ Create New Asset</button>
+            </div>
+
+            <div class="mb-4" id="batch-vessel-section" style="display:none;">
+                <label class="block text-sm font-medium mb-2 dark:text-gray-200">Vessel</label>
+                <select id="batch-vessel-select" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white">
+                    <option value="">-- Select Vessel --</option>
+                </select>
+                <button id="batch-new-vessel-btn" class="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">+ Create New Vessel</button>
+            </div>
+
+            <div class="mb-4" id="batch-strake-section" style="display:none;">
+                <label class="block text-sm font-medium mb-2 dark:text-gray-200">Strake (Optional)</label>
+                <select id="batch-strake-select" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white">
+                    <option value="">-- None (Don't assign to strake) --</option>
+                </select>
+                <button id="batch-new-strake-btn" class="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">+ Create New Strake</button>
+            </div>
+
+            <div class="mb-4 max-h-48 overflow-y-auto bg-gray-50 dark:bg-gray-700/50 p-3 rounded">
+                <p class="text-sm font-medium mb-2 dark:text-gray-300">Files to export:</p>
+                ${selectedScansList.map(scan => `<div class="text-sm dark:text-gray-400">• ${scan.fileName}</div>`).join('')}
+            </div>
+
+            <div class="mb-4">
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="batch-use-filename-checkbox" class="w-4 h-4 cursor-pointer" checked>
+                    <label for="batch-use-filename-checkbox" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer">Use file names as scan names</label>
+                </div>
+            </div>
+
+            <div id="batch-progress-section" class="hidden mb-4">
+                <div class="text-sm dark:text-gray-300 mb-2">Exporting: <span id="batch-progress-text">0/${selectedScansList.length}</span></div>
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div id="batch-progress-bar-inner" class="bg-blue-600 h-2 rounded-full transition-all" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div class="flex gap-3 mt-6">
+                <button id="batch-export-confirm-btn" class="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors">Export All</button>
+                <button id="batch-export-cancel-btn" class="flex-1 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const assetSelect = modal.querySelector('#batch-asset-select');
+    const vesselSelect = modal.querySelector('#batch-vessel-select');
+    const strakeSelect = modal.querySelector('#batch-strake-select');
+    const vesselSection = modal.querySelector('#batch-vessel-section');
+    const strakeSection = modal.querySelector('#batch-strake-section');
+    const newAssetBtn = modal.querySelector('#batch-new-asset-btn');
+    const newVesselBtn = modal.querySelector('#batch-new-vessel-btn');
+    const newStrakeBtn = modal.querySelector('#batch-new-strake-btn');
+    const confirmBtn = modal.querySelector('#batch-export-confirm-btn');
+    const cancelBtn = modal.querySelector('#batch-export-cancel-btn');
+    const useFilenameCheckbox = modal.querySelector('#batch-use-filename-checkbox');
+    const progressSection = modal.querySelector('#batch-progress-section');
+    const progressText = modal.querySelector('#batch-progress-text');
+    const progressBar = modal.querySelector('#batch-progress-bar-inner');
+
+    // Asset selection handler
+    assetSelect.addEventListener('change', () => {
+        const assetId = assetSelect.value;
+        if (assetId) {
+            const asset = dataManager.getAsset(assetId);
+            vesselSection.style.display = 'block';
+            vesselSelect.innerHTML = '<option value="">-- Select Vessel --</option>' +
+                asset.vessels.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
+            strakeSection.style.display = 'none';
+        } else {
+            vesselSection.style.display = 'none';
+            strakeSection.style.display = 'none';
+        }
+    });
+
+    // Vessel selection handler
+    vesselSelect.addEventListener('change', () => {
+        const assetId = assetSelect.value;
+        const vesselId = vesselSelect.value;
+        if (assetId && vesselId) {
+            const vessel = dataManager.getVessel(assetId, vesselId);
+            strakeSection.style.display = 'block';
+            const strakes = vessel.strakes || [];
+            strakeSelect.innerHTML = '<option value="">-- None (Don\'t assign to strake) --</option>' +
+                strakes.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+        } else {
+            strakeSection.style.display = 'none';
+        }
+    });
+
+    // New asset handler
+    newAssetBtn.addEventListener('click', async () => {
+        const name = prompt('Enter asset name:');
+        if (name) {
+            const asset = await dataManager.createAsset(name);
+            assetSelect.innerHTML += `<option value="${asset.id}" selected>${asset.name}</option>`;
+            assetSelect.value = asset.id;
+            assetSelect.dispatchEvent(new Event('change'));
+        }
+    });
+
+    // New vessel handler
+    newVesselBtn.addEventListener('click', async () => {
+        const assetId = assetSelect.value;
+        if (!assetId) {
+            alert('Please select an asset first');
+            return;
+        }
+        const name = prompt('Enter vessel name:');
+        if (name) {
+            const vessel = await dataManager.createVessel(assetId, name);
+            vesselSelect.innerHTML += `<option value="${vessel.id}" selected>${vessel.name}</option>`;
+            vesselSelect.value = vessel.id;
+            vesselSelect.dispatchEvent(new Event('change'));
+        }
+    });
+
+    // New strake handler
+    newStrakeBtn.addEventListener('click', async () => {
+        const assetId = assetSelect.value;
+        const vesselId = vesselSelect.value;
+        if (!assetId || !vesselId) {
+            alert('Please select an asset and vessel first');
+            return;
+        }
+        const name = prompt('Enter strake name:');
+        if (name) {
+            const totalArea = parseFloat(prompt('Enter total area (m²):', '0') || '0');
+            const requiredCoverage = parseFloat(prompt('Enter required coverage (%):', '100') || '100');
+
+            const strake = await dataManager.createStrake(assetId, vesselId, {
+                name: name,
+                totalArea: totalArea,
+                requiredCoverage: requiredCoverage
+            });
+
+            if (strake) {
+                strakeSelect.innerHTML += `<option value="${strake.id}" selected>${strake.name}</option>`;
+                strakeSelect.value = strake.id;
+            }
+        }
+    });
+
+    // Generate thumbnails for a single scan
+    const generateThumbnailsForScan = async (scanData) => {
+        try {
+            // Temporarily set this scan as current to generate its plot
+            const previousScan = currentScanData;
+            const previousComposite = isShowingComposite;
+
+            currentScanData = scanData;
+            isShowingComposite = false;
+
+            // Render the plot (hidden)
+            await renderPlot(scanData);
+
+            // Generate full thumbnail
+            const fullThumbnail = await Plotly.toImage(dom.plotContainer, {
+                format: 'png',
+                width: 800,
+                height: 600,
+                scale: 2
+            });
+
+            // Generate clean heatmap
+            const tempDiv = document.createElement('div');
+            tempDiv.style.position = 'absolute';
+            tempDiv.style.left = '-9999px';
+            tempDiv.style.width = '1920px';
+            tempDiv.style.height = '1080px';
+            document.body.appendChild(tempDiv);
+
+            const cleanData = JSON.parse(JSON.stringify(dom.plotContainer.data));
+            if (cleanData[0]) cleanData[0].showscale = false;
+
+            const cleanLayout = {
+                xaxis: { visible: false, scaleanchor: "y", scaleratio: 1.0 },
+                yaxis: { visible: false },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                margin: { l: 0, r: 0, t: 0, b: 0 },
+                showlegend: false
+            };
+
+            await Plotly.newPlot(tempDiv, cleanData, cleanLayout, { displayModeBar: false });
+
+            const heatmapOnly = await Plotly.toImage(tempDiv, {
+                format: 'png',
+                width: 1920,
+                height: 1080,
+                scale: 2
+            });
+
+            Plotly.purge(tempDiv);
+            document.body.removeChild(tempDiv);
+
+            // Restore previous scan
+            currentScanData = previousScan;
+            isShowingComposite = previousComposite;
+
+            return {
+                full: fullThumbnail,
+                heatmapOnly: heatmapOnly
+            };
+        } catch (error) {
+            console.error('Error generating thumbnails for scan:', error);
+            return null;
+        }
+    };
+
+    // Confirm batch export
+    confirmBtn.addEventListener('click', async () => {
+        const assetId = assetSelect.value;
+        const vesselId = vesselSelect.value;
+        const strakeId = strakeSelect.value;
+        const useFilename = useFilenameCheckbox.checked;
+
+        if (!assetId) {
+            alert('Please select an asset');
+            return;
+        }
+        if (!vesselId) {
+            alert('Please select a vessel');
+            return;
+        }
+
+        // Disable buttons and show progress
+        confirmBtn.disabled = true;
+        cancelBtn.disabled = true;
+        progressSection.classList.remove('hidden');
+
+        let successCount = 0;
+        let failCount = 0;
+        const createdScanIds = [];
+
+        for (let i = 0; i < selectedScansList.length; i++) {
+            const scan = selectedScansList[i];
+
+            try {
+                progressText.textContent = `${i + 1}/${selectedScansList.length}`;
+                progressBar.style.width = `${((i + 1) / selectedScansList.length) * 100}%`;
+
+                const thumbnails = await generateThumbnailsForScan(scan);
+                const stats = calculateStats(scan);
+
+                const scanName = useFilename
+                    ? scan.fileName?.replace(/\.(txt|csv)$/i, '') || `C-Scan ${i + 1}`
+                    : `C-Scan ${new Date().toLocaleDateString()} - ${i + 1}`;
+
+                const scanData = {
+                    name: scanName,
+                    toolType: 'cscan',
+                    data: {
+                        scanData: scan,
+                        isComposite: false,
+                        customColorRange: { min: null, max: null },
+                        stats: stats,
+                        fileName: scan.fileName
+                    },
+                    thumbnail: thumbnails ? thumbnails.full : null,
+                    heatmapOnly: thumbnails ? thumbnails.heatmapOnly : null
+                };
+
+                const createdScan = await dataManager.createScan(assetId, vesselId, scanData);
+
+                if (createdScan) {
+                    successCount++;
+                    createdScanIds.push(createdScan.id);
+                } else {
+                    failCount++;
+                }
+            } catch (error) {
+                console.error(`Error exporting scan ${scan.fileName}:`, error);
+                failCount++;
+            }
+        }
+
+        // Assign all created scans to strake if one was selected
+        if (strakeId && createdScanIds.length > 0) {
+            try {
+                for (const scanId of createdScanIds) {
+                    await dataManager.assignScanToStrake(assetId, vesselId, scanId, strakeId);
+                }
+            } catch (error) {
+                console.error('Error assigning scans to strake:', error);
+            }
+        }
+
+        document.body.removeChild(modal);
+
+        if (failCount === 0) {
+            const strakeMsg = strakeId ? ' and assigned to strake' : '';
+            showStatus(`Successfully exported ${successCount} scans to hub${strakeMsg}!`);
+        } else {
+            showStatus(`Exported ${successCount} scans. ${failCount} failed.`, failCount > 0);
+        }
+
+        // Clear selection
+        selectedScans.clear();
+        renderFileList();
+    });
+
+    // Cancel handler
+    cancelBtn.addEventListener('click', () => {
+        document.body.removeChild(modal);
+    });
+
+    // Click outside to close
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            document.body.removeChild(modal);
+        }
+    });
+}
+
+async function batchAssignToStrake() {
+    if (selectedScans.size === 0) {
+        showStatus('No scans selected', true);
+        return;
+    }
+
+    // Ensure data manager is initialized
+    await dataManager.ensureInitialized();
+
+    // Get assets
+    const assets = dataManager.getAssets();
+
+    const selectedScansList = Array.from(selectedScans).map(index => processedScans[index]);
+
+    // Create modal dialog
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h2 class="text-xl font-bold mb-4 dark:text-white">Assign ${selectedScansList.length} Scans to Strake</h2>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2 dark:text-gray-200">Asset</label>
+                <select id="strake-asset-select" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white">
+                    <option value="">-- Select Asset --</option>
+                    ${assets.map(a => `<option value="${a.id}">${a.name}</option>`).join('')}
+                </select>
+            </div>
+
+            <div class="mb-4" id="strake-vessel-section" style="display:none;">
+                <label class="block text-sm font-medium mb-2 dark:text-gray-200">Vessel</label>
+                <select id="strake-vessel-select" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white">
+                    <option value="">-- Select Vessel --</option>
+                </select>
+            </div>
+
+            <div class="mb-4" id="strake-select-section" style="display:none;">
+                <label class="block text-sm font-medium mb-2 dark:text-gray-200">Strake</label>
+                <select id="strake-select" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white">
+                    <option value="">-- Select Strake --</option>
+                </select>
+                <button id="new-strake-btn" class="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">+ Create New Strake</button>
+            </div>
+
+            <div class="mb-4 max-h-48 overflow-y-auto bg-gray-50 dark:bg-gray-700/50 p-3 rounded">
+                <p class="text-sm font-medium mb-2 dark:text-gray-300">Selected scans:</p>
+                ${selectedScansList.map(scan => `<div class="text-sm dark:text-gray-400">• ${scan.fileName}</div>`).join('')}
+            </div>
+
+            <div class="flex gap-3 mt-6">
+                <button id="strake-assign-confirm-btn" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition-colors">Assign</button>
+                <button id="strake-assign-cancel-btn" class="flex-1 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const assetSelect = modal.querySelector('#strake-asset-select');
+    const vesselSelect = modal.querySelector('#strake-vessel-select');
+    const strakeSelect = modal.querySelector('#strake-select');
+    const vesselSection = modal.querySelector('#strake-vessel-section');
+    const strakeSection = modal.querySelector('#strake-select-section');
+    const newStrakeBtn = modal.querySelector('#new-strake-btn');
+    const confirmBtn = modal.querySelector('#strake-assign-confirm-btn');
+    const cancelBtn = modal.querySelector('#strake-assign-cancel-btn');
+
+    // Asset selection handler
+    assetSelect.addEventListener('change', () => {
+        const assetId = assetSelect.value;
+        if (assetId) {
+            const asset = dataManager.getAsset(assetId);
+            vesselSection.style.display = 'block';
+            vesselSelect.innerHTML = '<option value="">-- Select Vessel --</option>' +
+                asset.vessels.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
+            strakeSection.style.display = 'none';
+        } else {
+            vesselSection.style.display = 'none';
+            strakeSection.style.display = 'none';
+        }
+    });
+
+    // Vessel selection handler
+    vesselSelect.addEventListener('change', () => {
+        const assetId = assetSelect.value;
+        const vesselId = vesselSelect.value;
+        if (assetId && vesselId) {
+            const vessel = dataManager.getVessel(assetId, vesselId);
+            strakeSection.style.display = 'block';
+            const strakes = vessel.strakes || [];
+            strakeSelect.innerHTML = '<option value="">-- Select Strake --</option>' +
+                strakes.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+        } else {
+            strakeSection.style.display = 'none';
+        }
+    });
+
+    // New strake handler
+    newStrakeBtn.addEventListener('click', async () => {
+        const assetId = assetSelect.value;
+        const vesselId = vesselSelect.value;
+        if (!assetId || !vesselId) {
+            alert('Please select an asset and vessel first');
+            return;
+        }
+        const name = prompt('Enter strake name:');
+        if (name) {
+            const totalArea = parseFloat(prompt('Enter total area (m²):', '0') || '0');
+            const requiredCoverage = parseFloat(prompt('Enter required coverage (%):', '100') || '100');
+
+            const strake = await dataManager.createStrake(assetId, vesselId, {
+                name: name,
+                totalArea: totalArea,
+                requiredCoverage: requiredCoverage
+            });
+
+            if (strake) {
+                strakeSelect.innerHTML += `<option value="${strake.id}" selected>${strake.name}</option>`;
+                strakeSelect.value = strake.id;
+            }
+        }
+    });
+
+    // Confirm assignment
+    confirmBtn.addEventListener('click', async () => {
+        const assetId = assetSelect.value;
+        const vesselId = vesselSelect.value;
+        const strakeId = strakeSelect.value;
+
+        if (!assetId) {
+            alert('Please select an asset');
+            return;
+        }
+        if (!vesselId) {
+            alert('Please select a vessel');
+            return;
+        }
+        if (!strakeId) {
+            alert('Please select a strake');
+            return;
+        }
+
+        // Find the scans in the hub that match the selected files by filename
+        const vessel = dataManager.getVessel(assetId, vesselId);
+        if (!vessel) {
+            alert('Vessel not found');
+            return;
+        }
+
+        let assignedCount = 0;
+        let notFoundCount = 0;
+
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Assigning...';
+
+        for (const scan of selectedScansList) {
+            // Try to find the scan in the hub by comparing filenames
+            const scanFileName = scan.fileName?.replace(/\.(txt|csv)$/i, '');
+            const hubScan = vessel.scans.find(s => {
+                // Match by filename stored in the scan data
+                const hubFileName = s.data?.fileName?.replace(/\.(txt|csv)$/i, '');
+                return hubFileName === scan.fileName || s.name.includes(scanFileName);
+            });
+
+            if (hubScan) {
+                try {
+                    await dataManager.assignScanToStrake(assetId, vesselId, hubScan.id, strakeId);
+                    assignedCount++;
+                } catch (error) {
+                    console.error(`Error assigning scan ${scan.fileName}:`, error);
+                }
+            } else {
+                notFoundCount++;
+                console.warn(`Scan not found in hub: ${scan.fileName}`);
+            }
+        }
+
+        document.body.removeChild(modal);
+
+        if (notFoundCount === 0) {
+            showStatus(`Successfully assigned ${assignedCount} scans to strake!`);
+        } else {
+            showStatus(`Assigned ${assignedCount} scans. ${notFoundCount} not found in hub (export them first).`, notFoundCount > 0);
+        }
+
+        // Clear selection
+        selectedScans.clear();
+        renderFileList();
+    });
+
+    // Cancel handler
+    cancelBtn.addEventListener('click', () => {
+        document.body.removeChild(modal);
+    });
+
+    // Click outside to close
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            document.body.removeChild(modal);
+        }
+    });
+}
+
 function renderMetadata(metadata) {
     dom.metadataContent.innerHTML = '';
     for (const key in metadata) {
@@ -1181,9 +1812,24 @@ function fileInputHandler(event) {
 }
 
 function loadScanData(event) {
+    console.log('[C-SCAN] loadScanData called:', event.detail);
     const { scanData } = event.detail;
 
-    if (!scanData || scanData.toolType !== 'cscan') return;
+    if (!scanData || scanData.toolType !== 'cscan') {
+        console.log('[C-SCAN] Ignoring event - not a cscan:', scanData?.toolType);
+        return;
+    }
+
+    console.log('[C-SCAN] Loading scan:', scanData.name);
+
+    // Ensure DOM elements are initialized
+    if (!dom || !dom.minThicknessInput) {
+        console.warn('[C-SCAN] DOM not ready, retrying in 200ms...');
+        setTimeout(() => loadScanData(event), 200);
+        return;
+    }
+
+    console.log('[C-SCAN] DOM is ready, processing scan data');
 
     // Load the saved scan data
     if (scanData.data && scanData.data.scanData) {
@@ -1228,6 +1874,9 @@ function addEventListeners() {
     dom.exportButton.addEventListener('click', exportImage);
     dom.exportCleanButton.addEventListener('click', exportCleanImageAsPNG);
     dom.exportToHubBtn.addEventListener('click', exportToHub);
+    dom.batchExportToHubBtn.addEventListener('click', batchExportToHub);
+    dom.batchAssignStrakeBtn.addEventListener('click', batchAssignToStrake);
+    dom.selectAllCheckbox.addEventListener('change', toggleSelectAll);
     dom.colorscaleSelect.addEventListener('change', updatePlot);
     dom.smoothingSelect.addEventListener('change', updatePlot);
     dom.reverseScaleCheckbox.addEventListener('change', updatePlot);
@@ -1279,5 +1928,6 @@ export default {
         customColorRange = { min: null, max: null };
         isShowingComposite = false;
         currentHoverPosition = { x: null, y: null };
+        selectedScans.clear();
     }
 };

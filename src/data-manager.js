@@ -49,7 +49,7 @@ class DataManager {
                     const downloadResult = await syncService.downloadAllData();
 
                     if (downloadResult.success) {
-                        console.log(`[DATA-MANAGER] Loaded ${downloadResult.count} items from Supabase`);
+                        console.log(`[DATA-MANAGER] Loaded ${downloadResult.count || 0} items from Supabase`);
 
                         // Load the freshly downloaded data from IndexedDB
                         const loadedData = await indexedDB.loadData();
@@ -1016,9 +1016,6 @@ class DataManager {
     }
 
     async assignScanToStrake(assetId, vesselId, scanId, strakeId) {
-        const orgId = authManager.getCurrentOrganizationId();
-        const userId = authManager.getCurrentUser()?.id;
-        const asset = this.getAsset(assetId);
         const scan = this.getScan(assetId, vesselId, scanId);
 
         if (!scan) return false;
@@ -1031,21 +1028,24 @@ class DataManager {
         // Assign to new strake (null means unassigned)
         scan.strakeId = strakeId || null;
 
-        // CLOUD-FIRST: Save to Supabase immediately
-        if (authManager.useSupabase) {
-            console.log('[DATA-MANAGER] Assigning scan to strake in Supabase');
-            const result = await syncService.uploadAsset(asset, orgId, userId);
-
-            if (!result.success) {
-                console.error('[DATA-MANAGER] Failed to assign scan to strake in Supabase:', result.error);
-                throw new Error(`Failed to assign scan to strake in cloud: ${result.error}`);
-            }
-
-            console.log('[DATA-MANAGER] Scan assigned to strake in Supabase successfully');
-        }
-
-        // Update local cache
+        // WRITE-THROUGH CACHE: Save locally first (instant response)
         await this.saveToStorage();
+
+        console.log('[DATA-MANAGER] Scan assigned to strake locally');
+
+        // Queue background sync to Supabase (non-blocking)
+        if (authManager.useSupabase) {
+            syncQueue.add({
+                type: 'update',
+                table: 'scans',
+                id: scanId,
+                data: {
+                    strake_id: strakeId || null,
+                    updated_at: new Date().toISOString()
+                }
+            });
+            console.log('[DATA-MANAGER] Queued scan strake assignment for background sync');
+        }
 
         return true;
     }
@@ -1089,9 +1089,42 @@ class DataManager {
         // Simple approach: sum all valid areas (overlap detection will be added later)
         // TODO: Implement spatial overlap detection for accurate coverage
         scans.forEach(scan => {
+            let validArea = 0;
+
+            // Try to get validArea from pre-calculated stats
             if (scan.data && scan.data.stats && scan.data.stats.validArea) {
+                validArea = scan.data.stats.validArea;
+            }
+            // Fallback: Calculate validArea from raw scan data if stats are missing
+            else if (scan.data && scan.data.scanData) {
+                const scanData = scan.data.scanData;
+
+                // Calculate area for C-Scan data
+                if (scanData.thickness_data && scanData.x_coords && scanData.y_coords) {
+                    const totalPoints = scanData.thickness_data.length;
+                    let ndCount = 0;
+
+                    // Count ND (No Data) points
+                    for (let i = 0; i < scanData.thickness_data.length; i++) {
+                        if (scanData.thickness_data[i] === null || scanData.thickness_data[i] === undefined || scanData.thickness_data[i] === -999) {
+                            ndCount++;
+                        }
+                    }
+
+                    // Calculate spacing between points
+                    const xSpacing = scanData.x_coords.length > 1 ? Math.abs(scanData.x_coords[1] - scanData.x_coords[0]) : 1.0;
+                    const ySpacing = scanData.y_coords.length > 1 ? Math.abs(scanData.y_coords[1] - scanData.y_coords[0]) : 1.0;
+                    const pointArea = xSpacing * ySpacing; // Area per data point in mm²
+
+                    const totalArea = totalPoints * pointArea;
+                    const ndArea = ndCount * pointArea;
+                    validArea = totalArea - ndArea; // Valid area in mm²
+                }
+            }
+
+            if (validArea > 0) {
                 // validArea is in mm², convert to m² (1 m² = 1,000,000 mm²)
-                totalScannedArea += scan.data.stats.validArea / 1000000;
+                totalScannedArea += validArea / 1000000;
             }
         });
 
@@ -1101,7 +1134,7 @@ class DataManager {
         return {
             totalScannedArea,
             targetArea,
-            coveragePercentage: Math.min(coveragePercentage, 100), // Cap at 100%
+            coveragePercentage: coveragePercentage, // Allow values over 100%
             isComplete: coveragePercentage >= 100,
             scanCount: scans.length
         };
@@ -1109,6 +1142,9 @@ class DataManager {
 
     // Scan operations
     async createScan(assetId, vesselId, scanData) {
+        const orgId = authManager.getCurrentOrganizationId();
+        const userId = authManager.getCurrentUser()?.id;
+        const asset = this.getAsset(assetId);
         const vessel = this.getVessel(assetId, vesselId);
 
         if (!vessel) return null;
@@ -1123,29 +1159,28 @@ class DataManager {
             heatmapOnly: scanData.heatmapOnly || null
         };
 
-        // WRITE-THROUGH CACHE: Save locally first (instant response)
+        // Add scan locally first
         vessel.scans.push(scan);
+
+        // CLOUD-FIRST: Upload ONLY the new scan to Supabase (much faster than uploading entire asset)
+        if (authManager.useSupabase) {
+            console.log('[DATA-MANAGER] Adding scan to Supabase:', scan.name);
+            const result = await syncService.uploadSingleScan(scan, vesselId, assetId, orgId);
+
+            if (!result.success) {
+                console.error('[DATA-MANAGER] Failed to add scan to Supabase:', result.error);
+                // Rollback local change
+                vessel.scans.pop();
+                throw new Error(`Failed to save scan to cloud: ${result.error}`);
+            }
+
+            console.log('[DATA-MANAGER] Scan added to Supabase successfully');
+        }
+
+        // Update local cache
         await this.saveToStorage();
 
         console.log('[DATA-MANAGER] Scan created locally:', scan.name);
-
-        // Queue background sync to Supabase (non-blocking)
-        if (authManager.useSupabase) {
-            syncQueue.add({
-                type: 'insert',
-                table: 'scans',
-                data: {
-                    id: scan.id,
-                    vessel_id: vesselId,
-                    name: scan.name,
-                    tool_type: scan.toolType,
-                    strake_id: scan.strakeId || null,
-                    data: scan.data,
-                    created_at: new Date(scan.timestamp).toISOString()
-                }
-            });
-            console.log('[DATA-MANAGER] Queued scan creation for background sync');
-        }
 
         return scan;
     }
@@ -1157,37 +1192,48 @@ class DataManager {
     }
 
     async updateScan(assetId, vesselId, scanId, updates) {
+        const orgId = authManager.getCurrentOrganizationId();
+        const userId = authManager.getCurrentUser()?.id;
+        const asset = this.getAsset(assetId);
         const scan = this.getScan(assetId, vesselId, scanId);
 
         if (!scan) {
             return null;
         }
 
-        // WRITE-THROUGH CACHE: Update locally first (instant response)
+        // Save old values for rollback
+        const oldValues = { ...scan };
+
+        // Update locally
         Object.assign(scan, updates);
+
+        // CLOUD-FIRST: Save to Supabase immediately
+        if (authManager.useSupabase) {
+            console.log('[DATA-MANAGER] Updating scan in Supabase:', scan.name);
+            const result = await syncService.uploadAsset(asset, orgId, userId);
+
+            if (!result.success) {
+                console.error('[DATA-MANAGER] Failed to update scan in Supabase:', result.error);
+                // Rollback local change
+                Object.assign(scan, oldValues);
+                throw new Error(`Failed to update scan in cloud: ${result.error}`);
+            }
+
+            console.log('[DATA-MANAGER] Scan updated in Supabase successfully');
+        }
+
+        // Update local cache
         await this.saveToStorage();
 
         console.log('[DATA-MANAGER] Scan updated locally:', scan.name);
-
-        // Queue background sync to Supabase (non-blocking)
-        if (authManager.useSupabase) {
-            syncQueue.add({
-                type: 'update',
-                table: 'scans',
-                id: scanId,
-                data: {
-                    name: scan.name,
-                    strake_id: scan.strakeId || null,
-                    updated_at: new Date().toISOString()
-                }
-            });
-            console.log('[DATA-MANAGER] Queued scan update for background sync');
-        }
 
         return scan;
     }
 
     async deleteScan(assetId, vesselId, scanId) {
+        const orgId = authManager.getCurrentOrganizationId();
+        const userId = authManager.getCurrentUser()?.id;
+        const asset = this.getAsset(assetId);
         const vessel = this.getVessel(assetId, vesselId);
 
         if (!vessel) return false;
@@ -1200,21 +1246,26 @@ class DataManager {
 
         const deletedScan = vessel.scans[index];
 
-        // WRITE-THROUGH CACHE: Delete locally first (instant response)
+        // CLOUD-FIRST: Delete from Supabase first
+        if (authManager.useSupabase) {
+            console.log('[DATA-MANAGER] Deleting scan from Supabase:', deletedScan.name);
+            const result = await syncService.deleteScanFromSupabase(scanId);
+
+            if (!result.success) {
+                console.error('[DATA-MANAGER] Failed to delete scan from Supabase:', result.error);
+                throw new Error(`Failed to delete scan from cloud: ${result.error}`);
+            }
+
+            console.log('[DATA-MANAGER] Scan deleted from Supabase successfully');
+        }
+
+        // Remove from local after successful cloud deletion
         vessel.scans.splice(index, 1);
+
+        // Update local cache
         await this.saveToStorage();
 
         console.log('[DATA-MANAGER] Scan deleted locally:', deletedScan.name);
-
-        // Queue background sync to Supabase (non-blocking)
-        if (authManager.useSupabase) {
-            syncQueue.add({
-                type: 'delete',
-                table: 'scans',
-                id: scanId
-            });
-            console.log('[DATA-MANAGER] Queued scan deletion for background sync');
-        }
 
         return true;
     }
