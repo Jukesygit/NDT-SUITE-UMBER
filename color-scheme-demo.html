@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NDT Data Hub - Color Scheme Options</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0a0a0a;
+            color: #ffffff;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 48px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #60a5fa, #34d399);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #94a3b8;
+            font-size: 18px;
+            margin-bottom: 60px;
+        }
+
+        .scheme-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 40px;
+            margin-bottom: 60px;
+        }
+
+        .scheme {
+            border-radius: 20px;
+            overflow: hidden;
+            border: 2px solid rgba(255,255,255,0.1);
+            transition: all 0.3s;
+        }
+
+        .scheme:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+
+        .scheme-header {
+            padding: 30px;
+            text-align: center;
+        }
+
+        .scheme-name {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .scheme-vibe {
+            font-size: 14px;
+            opacity: 0.7;
+        }
+
+        .scheme-preview {
+            padding: 30px;
+            min-height: 400px;
+        }
+
+        .demo-card {
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+
+        .demo-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            letter-spacing: -0.02em;
+            color: #ffffff;
+        }
+
+        .demo-stats {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .demo-badge {
+            flex: 1;
+            backdrop-filter: blur(8px);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .demo-badge-number {
+            font-size: 32px;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+
+        .demo-badge-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            opacity: 0.7;
+        }
+
+        .demo-button {
+            width: 100%;
+            padding: 14px 20px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            border: none;
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.3s;
+        }
+
+        .demo-button:hover {
+            transform: translateX(4px);
+        }
+
+        /* Scheme 1: Cyber Teal */
+        .scheme-1 .scheme-header { background: linear-gradient(135deg, #0a1628 0%, #164e63 100%); }
+        .scheme-1 .scheme-preview { background: linear-gradient(135deg, #0a0e1a 0%, #111827 50%, #1e293b 100%); }
+        .scheme-1 .demo-card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.08)), rgba(30, 41, 59, 0.85);
+            border: 2px solid rgba(6, 182, 212, 0.3);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(6, 182, 212, 0.1) inset;
+        }
+        .scheme-1 .demo-title { color: #ffffff; }
+        .scheme-1 .demo-badge {
+            background: rgba(6, 182, 212, 0.15);
+            border: 1.5px solid rgba(6, 182, 212, 0.3);
+        }
+        .scheme-1 .demo-badge-number { color: rgba(34, 211, 238, 1); }
+        .scheme-1 .demo-button {
+            background: rgba(6, 182, 212, 0.2);
+            border: 1.5px solid rgba(6, 182, 212, 0.4);
+            color: rgba(34, 211, 238, 1);
+        }
+
+        /* Scheme 2: Arctic Blue */
+        .scheme-2 .scheme-header { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
+        .scheme-2 .scheme-preview { background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%); }
+        .scheme-2 .demo-card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.08)), rgba(51, 65, 85, 0.9);
+            border: 2px solid rgba(148, 163, 184, 0.3);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(148, 163, 184, 0.1) inset;
+        }
+        .scheme-2 .demo-title { color: #ffffff; }
+        .scheme-2 .demo-badge {
+            background: rgba(59, 130, 246, 0.15);
+            border: 1.5px solid rgba(59, 130, 246, 0.3);
+        }
+        .scheme-2 .demo-badge-number { color: rgba(96, 165, 250, 1); }
+        .scheme-2 .demo-button {
+            background: rgba(59, 130, 246, 0.2);
+            border: 1.5px solid rgba(59, 130, 246, 0.4);
+            color: rgba(96, 165, 250, 1);
+        }
+
+        /* Scheme 3: Deep Ocean */
+        .scheme-3 .scheme-header { background: linear-gradient(135deg, #020617 0%, #0c1e3a 100%); }
+        .scheme-3 .scheme-preview { background: linear-gradient(135deg, #020617 0%, #0c1e3a 50%, #1e3a5f 100%); }
+        .scheme-3 .demo-card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.08)), rgba(30, 58, 95, 0.9);
+            border: 2px solid rgba(56, 189, 248, 0.4);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(56, 189, 248, 0.1) inset;
+        }
+        .scheme-3 .demo-title { color: #ffffff; }
+        .scheme-3 .demo-badge {
+            background: rgba(56, 189, 248, 0.15);
+            border: 1.5px solid rgba(56, 189, 248, 0.3);
+        }
+        .scheme-3 .demo-badge-number { color: rgba(125, 211, 252, 1); }
+        .scheme-3 .demo-button {
+            background: rgba(56, 189, 248, 0.2);
+            border: 1.5px solid rgba(56, 189, 248, 0.4);
+            color: rgba(125, 211, 252, 1);
+        }
+
+        /* Scheme 4: Emerald Tech */
+        .scheme-4 .scheme-header { background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%); }
+        .scheme-4 .scheme-preview { background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #2a2a2a 100%); }
+        .scheme-4 .demo-card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.08)), rgba(42, 42, 42, 0.95);
+            border: 2px solid rgba(16, 185, 129, 0.35);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(16, 185, 129, 0.1) inset;
+        }
+        .scheme-4 .demo-title { color: #ffffff; }
+        .scheme-4 .demo-badge {
+            background: rgba(16, 185, 129, 0.15);
+            border: 1.5px solid rgba(16, 185, 129, 0.3);
+        }
+        .scheme-4 .demo-badge-number { color: rgba(52, 211, 153, 1); }
+        .scheme-4 .demo-button {
+            background: rgba(16, 185, 129, 0.2);
+            border: 1.5px solid rgba(16, 185, 129, 0.4);
+            color: rgba(52, 211, 153, 1);
+        }
+
+        /* Scheme 5: Slate Amber */
+        .scheme-5 .scheme-header { background: linear-gradient(135deg, #1a1612 0%, #2d2416 100%); }
+        .scheme-5 .scheme-preview { background: linear-gradient(135deg, #1a1612 0%, #2d2416 50%, #3d3426 100%); }
+        .scheme-5 .demo-card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.08)), rgba(61, 52, 38, 0.9);
+            border: 2px solid rgba(245, 158, 11, 0.3);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(245, 158, 11, 0.1) inset;
+        }
+        .scheme-5 .demo-title { color: #ffffff; }
+        .scheme-5 .demo-badge {
+            background: rgba(245, 158, 11, 0.15);
+            border: 1.5px solid rgba(245, 158, 11, 0.3);
+        }
+        .scheme-5 .demo-badge-number { color: rgba(251, 191, 36, 1); }
+        .scheme-5 .demo-button {
+            background: rgba(245, 158, 11, 0.2);
+            border: 1.5px solid rgba(245, 158, 11, 0.4);
+            color: rgba(251, 191, 36, 1);
+        }
+
+        /* Scheme 6: Subdued */
+        .scheme-6 .scheme-header { background: linear-gradient(135deg, #1a1d29 0%, #232838 100%); }
+        .scheme-6 .scheme-preview { background: linear-gradient(135deg, #1a1d29 0%, #232838 50%, #2d3548 100%); }
+        .scheme-6 .demo-card {
+            background: rgba(45, 53, 72, 0.7);
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        .scheme-6 .demo-title { color: #ffffff; }
+        .scheme-6 .demo-badge {
+            background: rgba(96, 165, 250, 0.1);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+        .scheme-6 .demo-badge-number { color: rgba(147, 197, 253, 1); }
+        .scheme-6 .demo-button {
+            background: rgba(96, 165, 250, 0.15);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            color: rgba(147, 197, 253, 1);
+        }
+
+        .arrow {
+            width: 20px;
+            height: 20px;
+        }
+
+        .note {
+            text-align: center;
+            color: #64748b;
+            font-size: 14px;
+            margin-top: 40px;
+            padding: 20px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>NDT Data Hub - Color Scheme Options</h1>
+        <p class="subtitle">Hover over each card to see the scheme in action. Click to select.</p>
+
+        <div class="scheme-grid">
+            <!-- Scheme 1: Cyber Teal -->
+            <div class="scheme scheme-1">
+                <div class="scheme-header">
+                    <div class="scheme-name">Option 1: Cyber Teal</div>
+                    <div class="scheme-vibe">High-Tech Industrial • Modern • Energetic</div>
+                </div>
+                <div class="scheme-preview">
+                    <div class="demo-card">
+                        <div class="demo-title">Matrix HQ</div>
+                        <div class="demo-stats">
+                            <div class="demo-badge">
+                                <div class="demo-badge-number">3</div>
+                                <div class="demo-badge-label">Vessels</div>
+                            </div>
+                            <div class="demo-badge">
+                                <div class="demo-badge-number">12</div>
+                                <div class="demo-badge-label">Scans</div>
+                            </div>
+                        </div>
+                        <button class="demo-button">
+                            <span>View Details</span>
+                            <svg class="arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scheme 2: Arctic Blue -->
+            <div class="scheme scheme-2">
+                <div class="scheme-header">
+                    <div class="scheme-name">Option 2: Arctic Blue</div>
+                    <div class="scheme-vibe">Corporate • Trustworthy • Professional</div>
+                </div>
+                <div class="scheme-preview">
+                    <div class="demo-card">
+                        <div class="demo-title">Matrix HQ</div>
+                        <div class="demo-stats">
+                            <div class="demo-badge">
+                                <div class="demo-badge-number">3</div>
+                                <div class="demo-badge-label">Vessels</div>
+                            </div>
+                            <div class="demo-badge">
+                                <div class="demo-badge-number">12</div>
+                                <div class="demo-badge-label">Scans</div>
+                            </div>
+                        </div>
+                        <button class="demo-button">
+                            <span>View Details</span>
+                            <svg class="arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scheme 3: Deep Ocean -->
+            <div class="scheme scheme-3">
+                <div class="scheme-header">
+                    <div class="scheme-name">Option 3: Deep Ocean</div>
+                    <div class="scheme-vibe">Premium • Sophisticated • Elegant</div>
+                </div>
+                <div class="scheme-preview">
+                    <div class="demo-card">
+                        <div class="demo-title">Matrix HQ</div>
+                        <div class="demo-stats">
+                            <div class="demo-badge">
+                                <div class="demo-badge-number">3</div>
+                                <div class="demo-badge-label">Vessels</div>
+                            </div>
+                            <div class="demo-badge">
+                                <div class="demo-badge-number">12</div>
+                                <div class="demo-badge-label">Scans</div>
+                            </div>
+                        </div>
+                        <button class="demo-button">
+                            <span>View Details</span>
+                            <svg class="arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scheme 4: Emerald Tech -->
+            <div class="scheme scheme-4">
+                <div class="scheme-header">
+                    <div class="scheme-name">Option 4: Emerald Tech</div>
+                    <div class="scheme-vibe">Fresh • Energetic • Growth-Oriented</div>
+                </div>
+                <div class="scheme-preview">
+                    <div class="demo-card">
+                        <div class="demo-title">Matrix HQ</div>
+                        <div class="demo-stats">
+                            <div class="demo-badge">
+                                <div class="demo-badge-number">3</div>
+                                <div class="demo-badge-label">Vessels</div>
+                            </div>
+                            <div class="demo-badge">
+                                <div class="demo-badge-number">12</div>
+                                <div class="demo-badge-label">Scans</div>
+                            </div>
+                        </div>
+                        <button class="demo-button">
+                            <span>View Details</span>
+                            <svg class="arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scheme 5: Slate Amber -->
+            <div class="scheme scheme-5">
+                <div class="scheme-header">
+                    <div class="scheme-name">Option 5: Slate Amber</div>
+                    <div class="scheme-vibe">Warm • Welcoming • Unique</div>
+                </div>
+                <div class="scheme-preview">
+                    <div class="demo-card">
+                        <div class="demo-title">Matrix HQ</div>
+                        <div class="demo-stats">
+                            <div class="demo-badge">
+                                <div class="demo-badge-number">3</div>
+                                <div class="demo-badge-label">Vessels</div>
+                            </div>
+                            <div class="demo-badge">
+                                <div class="demo-badge-number">12</div>
+                                <div class="demo-badge-label">Scans</div>
+                            </div>
+                        </div>
+                        <button class="demo-button">
+                            <span>View Details</span>
+                            <svg class="arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scheme 6: Subdued -->
+            <div class="scheme scheme-6">
+                <div class="scheme-header">
+                    <div class="scheme-name">Option 6: Subdued</div>
+                    <div class="scheme-vibe">Minimal • Understated • Professional</div>
+                </div>
+                <div class="scheme-preview">
+                    <div class="demo-card">
+                        <div class="demo-title">Matrix HQ</div>
+                        <div class="demo-stats">
+                            <div class="demo-badge">
+                                <div class="demo-badge-number">3</div>
+                                <div class="demo-badge-label">Vessels</div>
+                            </div>
+                            <div class="demo-badge">
+                                <div class="demo-badge-number">12</div>
+                                <div class="demo-badge-label">Scans</div>
+                            </div>
+                        </div>
+                        <button class="demo-button">
+                            <span>View Details</span>
+                            <svg class="arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="note">
+            <strong>Note:</strong> Each scheme includes full color tokens for success, warning, and danger states.
+            All avoid pink/purple as requested. Hover over cards to see interactive states.
+        </div>
+    </div>
+</body>
+</html>
