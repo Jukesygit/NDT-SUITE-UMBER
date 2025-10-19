@@ -1,13 +1,19 @@
 // C-Scan Visualizer Tool Module - Complete with all features (Part 1)
 import dataManager from '../data-manager.js';
-import { createAnimatedHeader } from '../animated-background.js';
 
 let container, dom = {}, processedScans = [], currentScanData = null, compositeWorker = null, isShowingComposite = false, customColorRange = { min: null, max: null }, currentHoverPosition = { x: null, y: null }, selectedScans = new Set();
 
 const HTML = `
 <div class="h-full w-full" style="display: flex; flex-direction: column; overflow: hidden;">
-    <div id="cscan-header-container" style="flex-shrink: 0;"></div>
-    <div class="glass-scrollbar" style="flex: 1; overflow-y: auto; padding: 24px;">
+    <div class="glass-panel" style="padding: 8px 16px; flex-shrink: 0; border-radius: 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="text-lg font-bold text-white">Phased Array C-Scan Visualizer</h1>
+                <p class="text-xs text-white text-opacity-70">Upload C-Scan data files to generate interactive corrosion heatmaps</p>
+            </div>
+        </div>
+    </div>
+    <div class="glass-scrollbar" style="flex: 1; overflow-y: auto; padding: 12px;">
     <header class="bg-white dark:bg-gray-800 shadow-md rounded-xl p-6 mb-8 flex justify-between items-center flex-shrink-0" style="display: none;">
         <div>
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Phased Array C-Scan Visualizer</h1>
@@ -15,7 +21,7 @@ const HTML = `
         </div>
     </header>
     
-    <main class="bg-white dark:bg-gray-800 shadow-md rounded-xl p-6 flex-grow flex flex-col overflow-y-auto">
+    <main class="bg-white dark:bg-gray-800 shadow-md rounded-xl p-4 flex-grow flex flex-col overflow-y-auto">
         <div id="upload-section" class="text-center border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 md:p-12">
             <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
                 <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -33,27 +39,27 @@ const HTML = `
             <div id="progress-bar" class="progress-bar-inner bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
         </div>
         
-        <div id="file-management-section" class="hidden mt-8 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-inner">
-            <div class="flex flex-wrap justify-between items-center border-b border-gray-200 dark:border-gray-600 pb-2 mb-4">
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Processed Files</h3>
-                <div class="flex gap-2 mt-2 md:mt-0 flex-wrap">
-                    <button id="composite-button" class="file-input-button bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
+        <div id="file-management-section" class="hidden mt-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-inner">
+            <div class="flex flex-wrap justify-between items-center border-b border-gray-200 dark:border-gray-600 pb-2 mb-2">
+                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Processed Files</h3>
+                <div class="flex gap-1.5 mt-2 md:mt-0 flex-wrap">
+                    <button id="composite-button" class="file-input-button bg-green-600 text-white font-semibold py-1.5 px-3 text-sm rounded-lg hover:bg-green-700 transition-colors">
                         Generate Composite
                     </button>
-                    <button id="export-button" class="file-input-button bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-purple-700 hidden transition-colors">
+                    <button id="export-button" class="file-input-button bg-purple-600 text-white font-semibold py-1.5 px-3 text-sm rounded-lg hover:bg-purple-700 hidden transition-colors">
                         Export Image
                     </button>
-                    <button id="export-clean-button" class="file-input-button bg-teal-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-teal-700 hidden transition-colors">
-                        Export Heatmap Only
+                    <button id="export-clean-button" class="file-input-button bg-teal-600 text-white font-semibold py-1.5 px-3 text-sm rounded-lg hover:bg-teal-700 hidden transition-colors">
+                        Export Heatmap
                     </button>
-                    <button id="export-to-hub-btn" class="file-input-button bg-orange-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-orange-700 hidden transition-colors">
-                        Export to Hub
+                    <button id="export-to-hub-btn" class="file-input-button bg-orange-600 text-white font-semibold py-1.5 px-3 text-sm rounded-lg hover:bg-orange-700 hidden transition-colors">
+                        To Hub
                     </button>
-                    <button id="batch-export-to-hub-btn" class="file-input-button bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 hidden transition-colors">
-                        Batch Export (<span id="selected-count">0</span>)
+                    <button id="batch-export-to-hub-btn" class="file-input-button bg-blue-600 text-white font-semibold py-1.5 px-3 text-sm rounded-lg hover:bg-blue-700 hidden transition-colors">
+                        Batch (<span id="selected-count">0</span>)
                     </button>
-                    <button id="batch-assign-strake-btn" class="file-input-button bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 hidden transition-colors">
-                        Assign to Strake
+                    <button id="batch-assign-strake-btn" class="file-input-button bg-indigo-600 text-white font-semibold py-1.5 px-3 text-sm rounded-lg hover:bg-indigo-700 hidden transition-colors">
+                        Assign
                     </button>
                 </div>
             </div>
@@ -64,9 +70,15 @@ const HTML = `
             <div id="file-list" class="text-sm text-gray-700 dark:text-gray-300"></div>
         </div>
         
-        <div id="controls-section" class="hidden mt-8 space-y-4">
-            <div class="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-inner">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div id="controls-section" class="hidden mt-3 space-y-2">
+            <div class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-inner">
+                <button id="toggle-controls-btn" class="w-full flex justify-between items-center text-left font-semibold text-gray-900 dark:text-white mb-2">
+                    <span class="text-base">Display Controls</span>
+                    <svg id="controls-chevron" class="w-5 h-5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </button>
+                <div id="controls-content" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                     <div class="control-group">
                         <label for="colorscale-cscan" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Color Scale:</label>
                         <select id="colorscale-cscan" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm sm:text-sm dark:bg-gray-700 dark:text-white px-3 py-2">
@@ -99,7 +111,7 @@ const HTML = `
                 </div>
             </div>
 
-            <div class="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-inner grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-center">
+            <div class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-inner grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 items-center">
                 <div>
                     <label for="min-thickness" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Min (mm):</label>
                     <input type="number" id="min-thickness" step="0.1" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm sm:text-sm dark:bg-gray-700 dark:text-white px-3 py-2">
@@ -109,30 +121,38 @@ const HTML = `
                     <input type="number" id="max-thickness" step="0.1" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm sm:text-sm dark:bg-gray-700 dark:text-white px-3 py-2">
                 </div>
                 <div class="flex gap-2 pt-5">
-                    <button id="update-button" class="file-input-button bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">Apply</button>
-                    <button id="reset-range-btn" class="file-input-button bg-gray-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors">Auto</button>
+                    <button id="update-button" class="file-input-button bg-blue-600 text-white font-semibold py-1.5 px-3 text-sm rounded-lg hover:bg-blue-700 transition-colors">Apply</button>
+                    <button id="reset-range-btn" class="file-input-button bg-gray-500 text-white font-semibold py-1.5 px-3 text-sm rounded-lg hover:bg-gray-600 transition-colors">Auto</button>
                 </div>
             </div>
+        </div>
 
-            <div id="stats-cscan" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-center"></div>
-        </div>
-        
-        <div id="visualization-section" class="hidden mt-8 w-full flex-grow">
-            <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 w-full h-full" style="min-height: 700px;">
+        <div id="visualization-section" class="hidden mt-3 w-full flex-grow">
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-3 w-full h-full" style="min-height: 600px;">
                 <!-- Main heatmap (spans 3 columns) -->
-                <div class="lg:col-span-3 flex flex-col gap-4">
-                    <div id="plot-container" class="w-full bg-white dark:bg-gray-800 rounded-lg shadow-md" style="height: calc(100% - 220px); min-height: 450px;"></div>
+                <div class="lg:col-span-3 flex flex-col gap-2">
+                    <div id="plot-container" class="w-full bg-white dark:bg-gray-800 rounded-lg shadow-md" style="height: calc(100% - 180px); min-height: 400px;"></div>
                     <!-- Bottom profile (Index/Y-axis) -->
-                    <div id="profile-bottom" class="w-full bg-white dark:bg-gray-800 rounded-lg shadow-md" style="height: 200px;"></div>
+                    <div id="profile-bottom" class="w-full bg-white dark:bg-gray-800 rounded-lg shadow-md" style="height: 160px;"></div>
                 </div>
-                <!-- Right profile (Scan/X-axis) -->
-                <div id="profile-right" class="lg:col-span-1 w-full bg-white dark:bg-gray-800 rounded-lg shadow-md" style="height: calc(100% - 220px); min-height: 450px;"></div>
+                <!-- Right column with profile and stats -->
+                <div class="lg:col-span-1 flex flex-col gap-2">
+                    <!-- Right profile (Scan/X-axis) -->
+                    <div id="profile-right" class="w-full bg-white dark:bg-gray-800 rounded-lg shadow-md" style="flex: 1 1 auto; min-height: 300px;"></div>
+                    <!-- Stats display -->
+                    <div id="stats-cscan" class="grid grid-cols-1 gap-1 p-1.5 bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-inner"></div>
+                </div>
             </div>
         </div>
         
-        <div id="metadata-section" class="hidden mt-8 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-inner">
-            <h3 class="text-lg font-semibold border-b dark:border-gray-600 pb-2 mb-4 dark:text-white">Scan Metadata</h3>
-            <div id="metadata-content" class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm"></div>
+        <div id="metadata-section" class="hidden mt-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-inner">
+            <button id="toggle-metadata-btn" class="w-full flex justify-between items-center text-left font-semibold text-gray-900 dark:text-white mb-2">
+                <span class="text-base">Scan Metadata</span>
+                <svg id="metadata-chevron" class="w-5 h-5 transition-transform rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </button>
+            <div id="metadata-content" class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm hidden"></div>
         </div>
     </main>
     </div>
@@ -142,7 +162,6 @@ const HTML = `
 function cacheDom() {
     const q = (s) => container.querySelector(s);
     dom = {
-        headerContainer: q('#cscan-header-container'),
         uploadButton: q('#upload-button'),
         fileInput: q('#file-input'),
         uploadSection: q('#upload-section'),
@@ -175,16 +194,13 @@ function cacheDom() {
         reverseScaleCheckbox: q('#reverse-scale-cscan'),
         showGridCheckbox: q('#show-grid-cscan'),
         showProfilesCheckbox: q('#show-profiles-cscan'),
-        statsContainer: q('#stats-cscan')
+        statsContainer: q('#stats-cscan'),
+        toggleControlsBtn: q('#toggle-controls-btn'),
+        controlsContent: q('#controls-content'),
+        controlsChevron: q('#controls-chevron'),
+        toggleMetadataBtn: q('#toggle-metadata-btn'),
+        metadataChevron: q('#metadata-chevron')
     };
-
-    // Initialize animated header
-    const header = createAnimatedHeader(
-        'Phased Array C-Scan Visualizer',
-        'Upload C-Scan data files to generate interactive corrosion heatmaps',
-        { height: '180px', particleCount: 15, waveIntensity: 0.4 }
-    );
-    dom.headerContainer.appendChild(header);
 }
 
 function preventDefaults(e) {
@@ -386,19 +402,19 @@ function renderStats(stats) {
     const validAreaM2 = stats.validArea / 1000000;
 
     const statsHTML = [
-        { label: 'Min', value: stats.min.toFixed(2), unit: 'mm' },
-        { label: 'Max', value: stats.max.toFixed(2), unit: 'mm' },
-        { label: 'Mean', value: stats.mean.toFixed(2), unit: 'mm' },
-        { label: 'Median', value: stats.median.toFixed(2), unit: 'mm' },
-        { label: 'Std Dev', value: stats.stdDev.toFixed(2), unit: 'mm' },
-        { label: 'Total Area', value: totalAreaM2.toFixed(4), unit: 'm²' },
-        { label: 'ND %', value: stats.ndPercentage.toFixed(1), unit: '%' },
-        { label: 'Valid Area', value: validAreaM2.toFixed(4), unit: 'm²' },
-        { label: 'Valid Points', value: stats.count, unit: '' }
-    ].map(({ label, value, unit }) => `
-        <div class="p-3 bg-white dark:bg-gray-700 rounded-lg shadow-sm">
-            <div class="text-xs text-gray-500 dark:text-gray-400">${label}</div>
-            <div class="text-lg font-semibold text-gray-900 dark:text-white">${value} ${unit}</div>
+        { label: 'Min', value: stats.min.toFixed(2), unit: 'mm', highlight: false },
+        { label: 'Max', value: stats.max.toFixed(2), unit: 'mm', highlight: false },
+        { label: 'Mean', value: stats.mean.toFixed(2), unit: 'mm', highlight: false },
+        { label: 'Median', value: stats.median.toFixed(2), unit: 'mm', highlight: false },
+        { label: 'Std Dev', value: stats.stdDev.toFixed(2), unit: 'mm', highlight: false },
+        { label: 'Total Area', value: totalAreaM2.toFixed(4), unit: 'm²', highlight: false },
+        { label: 'ND %', value: stats.ndPercentage.toFixed(1), unit: '%', highlight: false },
+        { label: 'Valid Area', value: validAreaM2.toFixed(4), unit: 'm²', highlight: true },
+        { label: 'Valid Points', value: stats.count, unit: '', highlight: false }
+    ].map(({ label, value, unit, highlight }) => `
+        <div class="flex justify-between items-center px-2 py-1 ${highlight ? 'bg-blue-500/20 border border-blue-500/40' : 'bg-white dark:bg-gray-700'} rounded shadow-sm">
+            <span class="text-xs ${highlight ? 'text-blue-300 font-medium' : 'text-gray-500 dark:text-gray-400'}">${label}</span>
+            <span class="text-xs font-semibold ${highlight ? 'text-blue-200' : 'text-gray-900 dark:text-white'}">${value} ${unit}</span>
         </div>
     `).join('');
 
@@ -486,7 +502,7 @@ function renderProfileGraphs(profiles, isDarkMode) {
 
     // Common layout settings
     const commonLayout = {
-        margin: { l: 50, r: 20, t: 30, b: 40 },
+        margin: { l: 40, r: 10, t: 20, b: 30 },
         showlegend: false,
         hovermode: 'closest'
     };
@@ -512,18 +528,20 @@ function renderProfileGraphs(profiles, isDarkMode) {
 
         const rightLayout = {
             ...commonLayout,
-            title: { text: `Scan Axis Profile<br>(at ${slicePositions.x?.toFixed(1)} mm)`, font: { size: 12 } },
+            title: { text: `Scan Axis Profile<br>(at ${slicePositions.x?.toFixed(1)} mm)`, font: { size: 10 } },
             xaxis: {
-                title: 'Thickness (mm)',
+                title: { text: 'Thickness (mm)', font: { size: 10 } },
                 autorange: 'reversed'
             },
             yaxis: {
-                title: 'Index Axis (mm)',
+                title: { text: 'Index Axis (mm)', font: { size: 10 } },
                 autorange: 'reversed'
             }
         };
 
-        Plotly.react(dom.profileRight, rightData, rightLayout, { displayModeBar: false, responsive: true });
+        Plotly.react(dom.profileRight, rightData, rightLayout, { displayModeBar: false, responsive: true }).then(() => {
+            setTimeout(() => Plotly.Plots.resize(dom.profileRight), 100);
+        });
     }
 
     // Bottom profile (Index Axis / X-axis)
@@ -541,16 +559,18 @@ function renderProfileGraphs(profiles, isDarkMode) {
 
         const bottomLayout = {
             ...commonLayout,
-            title: { text: `Index Axis Profile (at ${slicePositions.y?.toFixed(1)} mm)`, font: { size: 12 } },
+            title: { text: `Index Axis Profile (at ${slicePositions.y?.toFixed(1)} mm)`, font: { size: 10 } },
             xaxis: {
-                title: 'Scan Axis (mm)'
+                title: { text: 'Scan Axis (mm)', font: { size: 10 } }
             },
             yaxis: {
-                title: 'Thickness (mm)'
+                title: { text: 'Thickness (mm)', font: { size: 10 } }
             }
         };
 
-        Plotly.react(dom.profileBottom, bottomData, bottomLayout, { displayModeBar: false, responsive: true });
+        Plotly.react(dom.profileBottom, bottomData, bottomLayout, { displayModeBar: false, responsive: true }).then(() => {
+            setTimeout(() => Plotly.Plots.resize(dom.profileBottom), 100);
+        });
     }
 }
 
@@ -588,27 +608,33 @@ function updatePlot() {
         connectgaps: false,
         zmin,
         zmax,
-        colorbar: { title: 'Thickness<br>(mm)', titleside: 'right', thickness: 20 },
+        colorbar: {
+            title: 'Thickness<br>(mm)',
+            titleside: 'right',
+            thickness: 15,
+            len: 0.9,
+            x: 1.01
+        },
         hovertemplate: 'Scan Axis: %{x:.2f} mm<br>Index Axis: %{y:.2f} mm<br>Thickness: %{z:.2f} mm<extra></extra>'
     }];
 
     const title = isShowingComposite ? 'Composite C-Scan Corrosion Map' : 'C-Scan Corrosion Heatmap';
     const layout = {
-        title: { text: title, font: { size: 20 } },
+        title: { text: title, font: { size: 14 }, y: 0.98 },
         xaxis: {
-            title: 'Scan Axis (mm)',
+            title: { text: 'Scan Axis (mm)', font: { size: 12 } },
             scaleanchor: "y",
             scaleratio: 1.0,
             showgrid: showGrid,
             gridcolor: '#e0e0e0'
         },
         yaxis: {
-            title: 'Index Axis (mm)',
+            title: { text: 'Index Axis (mm)', font: { size: 12 } },
             showgrid: showGrid,
             gridcolor: '#e0e0e0'
         },
         autosize: true,
-        margin: { l: 80, r: 80, t: 60, b: 60 },
+        margin: { l: 50, r: 10, t: 30, b: 40 },
         hoverlabel: {
             bgcolor: 'white',
             bordercolor: '#333',
@@ -631,6 +657,11 @@ function updatePlot() {
         modeBarButtonsToRemove: ['select2d', 'lasso2d']
     };
     Plotly.react(dom.plotContainer, plotData, layout, config).then(() => {
+        // Force resize to fill container
+        setTimeout(() => {
+            Plotly.Plots.resize(dom.plotContainer);
+        }, 100);
+
         // Add hover event listener for interactive profile updates
         dom.plotContainer.on('plotly_hover', (data) => {
             if (data.points && data.points[0]) {
@@ -672,23 +703,43 @@ function updatePlot() {
 
 function updateProfileVisibility() {
     const showProfiles = dom.showProfilesCheckbox?.checked;
+    const rightColumn = dom.profileRight?.parentElement;
+
     if (showProfiles) {
         dom.profileBottom?.classList.remove('hidden');
         dom.profileRight?.classList.remove('hidden');
+        dom.statsContainer?.classList.remove('hidden');
+
         // Update layout to grid with profiles
         const vizGrid = dom.visualizationSection.querySelector('.grid');
         if (vizGrid) {
-            vizGrid.className = 'grid grid-cols-1 lg:grid-cols-4 gap-4 w-full h-full';
-            vizGrid.style.minHeight = '700px';
+            vizGrid.className = 'grid grid-cols-1 lg:grid-cols-4 gap-3 w-full h-full';
+            vizGrid.style.minHeight = '600px';
+        }
+
+        // Show right column with both profile and stats
+        if (rightColumn) {
+            rightColumn.style.display = 'flex';
         }
     } else {
         dom.profileBottom?.classList.add('hidden');
         dom.profileRight?.classList.add('hidden');
-        // Update layout to single column without profiles
+
+        // Keep stats visible but move them to fill the right column area
+        dom.statsContainer?.classList.remove('hidden');
+
+        // Update layout - stats stay in right column
         const vizGrid = dom.visualizationSection.querySelector('.grid');
         if (vizGrid) {
-            vizGrid.className = 'grid grid-cols-1 gap-4 w-full h-full';
-            vizGrid.style.minHeight = '600px';
+            vizGrid.className = 'grid grid-cols-1 lg:grid-cols-4 gap-3 w-full h-full';
+            vizGrid.style.minHeight = '500px';
+        }
+
+        // Make plot container take more vertical space when no bottom profile
+        const mainCol = dom.plotContainer.parentElement;
+        if (mainCol) {
+            dom.plotContainer.style.height = '100%';
+            dom.plotContainer.style.minHeight = '500px';
         }
     }
 }
@@ -1804,6 +1855,9 @@ function renderMetadata(metadata) {
         div.innerHTML = `<span class="font-semibold text-gray-600 dark:text-gray-400">${key}:</span> <span class="text-gray-800 dark:text-gray-200">${metadata[key]}</span>`;
         dom.metadataContent.appendChild(div);
     }
+    // Keep metadata collapsed by default
+    dom.metadataContent.classList.add('hidden');
+    dom.metadataChevron.style.transform = 'rotate(0deg)';
     dom.metadataSection.classList.remove('hidden');
 }
 
@@ -1888,6 +1942,31 @@ function addEventListeners() {
             updatePlot();
         }
     });
+
+    // Collapsible controls toggle
+    dom.toggleControlsBtn.addEventListener('click', () => {
+        const isHidden = dom.controlsContent.classList.contains('hidden');
+        if (isHidden) {
+            dom.controlsContent.classList.remove('hidden');
+            dom.controlsChevron.style.transform = 'rotate(180deg)';
+        } else {
+            dom.controlsContent.classList.add('hidden');
+            dom.controlsChevron.style.transform = 'rotate(0deg)';
+        }
+    });
+
+    // Collapsible metadata toggle
+    dom.toggleMetadataBtn.addEventListener('click', () => {
+        const isHidden = dom.metadataContent.classList.contains('hidden');
+        if (isHidden) {
+            dom.metadataContent.classList.remove('hidden');
+            dom.metadataChevron.style.transform = 'rotate(180deg)';
+        } else {
+            dom.metadataContent.classList.add('hidden');
+            dom.metadataChevron.style.transform = 'rotate(0deg)';
+        }
+    });
+
     document.addEventListener('themeChanged', updatePlot);
     window.addEventListener('loadScanData', loadScanData);
 }
@@ -1907,15 +1986,6 @@ export default {
     },
     
     destroy: () => {
-        // Destroy animated background
-        const headerContainer = container?.querySelector('#cscan-header-container');
-        if (headerContainer) {
-            const animContainer = headerContainer.querySelector('.animated-header-container');
-            if (animContainer && animContainer._animationInstance) {
-                animContainer._animationInstance.destroy();
-            }
-        }
-
         if (compositeWorker) compositeWorker.terminate();
         if (dom && dom.plotContainer) Plotly.purge(dom.plotContainer);
         if (dom && dom.profileBottom) Plotly.purge(dom.profileBottom);

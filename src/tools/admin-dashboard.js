@@ -3,7 +3,7 @@ import authManager, { ROLES, PERMISSIONS } from '../auth-manager.js';
 import dataManager from '../data-manager.js';
 import sharingManager from '../sharing-manager.js';
 import supabase from '../supabase-client.js';
-import { createAnimatedHeader } from '../animated-background.js';
+import { createModernHeader } from '../components/modern-header.js';
 import adminConfig from '../admin-config.js';
 
 let container, dom = {};
@@ -17,7 +17,7 @@ const HTML = `
     <!-- Navigation Tabs -->
     <div class="glass-panel" style="border-bottom: 1px solid rgba(255, 255, 255, 0.1); border-radius: 0; flex-shrink: 0; padding: 0;">
         <div class="flex px-6">
-            <button data-view="overview" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-blue-600 text-blue-600">
+            <button data-view="overview" class="tab-btn px-4 py-3 text-sm font-medium border-b-2" style="border-color: var(--accent-primary); color: var(--accent-primary);">
                 Overview
             </button>
             <button data-view="organizations" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:text-white" style="color: rgba(255, 255, 255, 0.6);">
@@ -70,11 +70,16 @@ function cacheDom() {
         tabBtns: container.querySelectorAll('.tab-btn')
     };
 
-    // Initialize animated header
-    const header = createAnimatedHeader(
+    // Initialize modern header
+    const header = createModernHeader(
         'Admin Dashboard',
-        'Manage users, organizations, and permissions',
-        { height: '180px', particleCount: 15, waveIntensity: 0.4 }
+        'Manage users, organizations, and permissions across the platform',
+        {
+            showParticles: true,
+            particleCount: 30,
+            gradientColors: ['#a78bfa', '#60a5fa'], // Purple to blue
+            height: '180px'
+        }
     );
     dom.headerContainer.appendChild(header);
 }
@@ -85,12 +90,13 @@ async function switchView(view) {
     // Update tabs
     dom.tabBtns.forEach(btn => {
         const isActive = btn.dataset.view === view;
-        btn.classList.toggle('border-blue-600', isActive);
-        btn.classList.toggle('text-blue-600', isActive);
-        btn.classList.toggle('dark:text-blue-400', isActive);
-        btn.classList.toggle('border-transparent', !isActive);
-        btn.classList.toggle('text-gray-600', !isActive);
-        btn.classList.toggle('dark:text-gray-400', !isActive);
+        if (isActive) {
+            btn.style.borderColor = 'var(--accent-primary)';
+            btn.style.color = 'var(--accent-primary)';
+        } else {
+            btn.style.borderColor = 'transparent';
+            btn.style.color = 'rgba(255, 255, 255, 0.6)';
+        }
     });
 
     // Show/hide views
@@ -177,9 +183,9 @@ async function renderOverview() {
                                         <div class="font-semibold text-gray-900 dark:text-white">${user.username}</div>
                                         <div class="text-sm text-gray-600 dark:text-gray-400">${orgName} - ${user.role}</div>
                                     </div>
-                                    <span class="px-2 py-1 rounded text-xs font-medium ${
-                                        isActive ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                                        'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+                                    <span class="px-2 py-1 rounded text-xs font-medium" style="${
+                                        isActive ? 'background: rgba(var(--success), 0.15); color: var(--success-light);' :
+                                        'background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.5);'
                                     }">
                                         ${isActive ? 'Active' : 'Inactive'}
                                     </span>
@@ -213,7 +219,7 @@ async function renderOrganizations() {
         dom.organizationsView.innerHTML = `
         <div class="mb-6 flex justify-between items-center">
             <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Organizations</h2>
-            <button id="new-org-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
+            <button id="new-org-btn" class="text-white px-4 py-2 rounded-lg transition-colors" style="background: var(--success);">
                 + New Organization
             </button>
         </div>
@@ -280,7 +286,7 @@ async function renderUsers() {
         dom.usersView.innerHTML = `
         <div class="mb-6 flex justify-between items-center">
             <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Users</h2>
-            <button id="new-user-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
+            <button id="new-user-btn" class="text-white px-4 py-2 rounded-lg transition-colors" style="background: var(--success);">
                 + New User
             </button>
         </div>
@@ -312,28 +318,28 @@ async function renderUsers() {
                                     ${orgName}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="px-2 py-1 rounded text-xs font-medium ${
-                                        user.role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' :
-                                        user.role === 'org_admin' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
-                                        user.role === 'editor' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                                        'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+                                    <span class="px-2 py-1 rounded text-xs font-medium" style="${
+                                        user.role === 'admin' ? 'background: rgba(var(--accent-secondary-raw), 0.15); color: var(--accent-secondary);' :
+                                        user.role === 'org_admin' ? 'background: rgba(var(--accent-primary-raw), 0.15); color: var(--accent-primary-light);' :
+                                        user.role === 'editor' ? 'background: rgba(var(--success), 0.15); color: var(--success-light);' :
+                                        'background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.7);'
                                     }">
                                         ${user.role}
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="px-2 py-1 rounded text-xs font-medium ${
-                                        (user.is_active ?? user.isActive) ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                                        'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+                                    <span class="px-2 py-1 rounded text-xs font-medium" style="${
+                                        (user.is_active ?? user.isActive) ? 'background: rgba(var(--success), 0.15); color: var(--success-light);' :
+                                        'background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.5);'
                                     }">
                                         ${(user.is_active ?? user.isActive) ? 'Active' : 'Inactive'}
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                    <button class="user-edit-btn text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 mr-3" data-user-id="${user.id}">
+                                    <button class="user-edit-btn mr-3" style="color: var(--accent-primary);" data-user-id="${user.id}">
                                         Edit
                                     </button>
-                                    <button class="user-delete-btn text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300" data-user-id="${user.id}">
+                                    <button class="user-delete-btn" style="color: var(--danger);" data-user-id="${user.id}">
                                         Delete
                                     </button>
                                 </td>
@@ -403,7 +409,7 @@ async function renderAssets() {
                         Manage assets across all organizations (${allAssets.length} total assets)
                     </p>
                 </div>
-                <button id="bulk-transfer-btn" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors">
+                <button id="bulk-transfer-btn" class="text-white px-4 py-2 rounded-lg transition-colors" style="background: var(--accent-secondary);">
                     Bulk Transfer
                 </button>
             </div>
@@ -445,7 +451,7 @@ async function renderAssets() {
                                         <div class="text-xs text-gray-500 dark:text-gray-400">${asset.id}</div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        <span class="px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                        <span class="px-2 py-1 rounded text-xs font-medium" style="background: rgba(var(--accent-primary-raw), 0.15); color: var(--accent-primary-light);">
                                             ${org?.name || 'Unknown'}
                                         </span>
                                     </td>
@@ -456,10 +462,10 @@ async function renderAssets() {
                                         ${createdDate}
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                        <button class="transfer-asset-btn text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300 mr-3" data-asset-id="${asset.id}">
+                                        <button class="transfer-asset-btn mr-3" style="color: var(--accent-secondary);" data-asset-id="${asset.id}">
                                             Transfer
                                         </button>
-                                        <button class="view-asset-btn text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300" data-asset-id="${asset.id}">
+                                        <button class="view-asset-btn" style="color: var(--accent-primary);" data-asset-id="${asset.id}">
                                             View
                                         </button>
                                     </td>
@@ -477,7 +483,7 @@ async function renderAssets() {
                     return `
                         <div class="glass-panel p-4">
                             <div class="font-semibold text-gray-900 dark:text-white mb-2">${org.name}</div>
-                            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">${orgAssets.length}</div>
+                            <div class="text-2xl font-bold" style="color: var(--accent-primary);">${orgAssets.length}</div>
                             <div class="text-xs text-gray-500 dark:text-gray-400">asset${orgAssets.length !== 1 ? 's' : ''}</div>
                         </div>
                     `;
@@ -554,7 +560,7 @@ async function renderRequests() {
                                 <div class="flex-grow">
                                     <div class="flex items-center gap-3 mb-2">
                                         <h3 class="text-lg font-bold text-gray-900 dark:text-white">${request.profiles?.username || 'Unknown'}</h3>
-                                        <span class="px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                        <span class="px-2 py-1 rounded text-xs font-medium" style="background: rgba(var(--accent-primary-raw), 0.15); color: var(--accent-primary-light);">
                                             ${request.user_current_role} → ${request.requested_role}
                                         </span>
                                     </div>
@@ -566,10 +572,10 @@ async function renderRequests() {
                                     </div>
                                 </div>
                                 <div class="flex gap-2 ml-4">
-                                    <button class="approve-permission-btn bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm" data-request-id="${request.id}">
+                                    <button class="approve-permission-btn text-white px-4 py-2 rounded-lg transition-colors text-sm" style="background: var(--success);" data-request-id="${request.id}">
                                         Approve
                                     </button>
-                                    <button class="reject-permission-btn bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm" data-request-id="${request.id}">
+                                    <button class="reject-permission-btn text-white px-4 py-2 rounded-lg transition-colors text-sm" style="background: var(--danger);" data-request-id="${request.id}">
                                         Reject
                                     </button>
                                 </div>
@@ -607,7 +613,7 @@ async function renderRequests() {
                                 <div class="flex-grow">
                                     <div class="flex items-center gap-3 mb-2">
                                         <h3 class="text-lg font-bold text-gray-900 dark:text-white">${request.username}</h3>
-                                        <span class="px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                                        <span class="px-2 py-1 rounded text-xs font-medium" style="background: rgba(var(--warning), 0.15); color: var(--warning-light);">
                                             ${request.requested_role || request.requestedRole}
                                         </span>
                                     </div>
@@ -619,10 +625,10 @@ async function renderRequests() {
                                     </div>
                                 </div>
                                 <div class="flex gap-2 ml-4">
-                                    <button class="approve-request-btn bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm" data-request-id="${request.id}">
+                                    <button class="approve-request-btn text-white px-4 py-2 rounded-lg transition-colors text-sm" style="background: var(--success);" data-request-id="${request.id}">
                                         Approve
                                     </button>
-                                    <button class="reject-request-btn bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm" data-request-id="${request.id}">
+                                    <button class="reject-request-btn text-white px-4 py-2 rounded-lg transition-colors text-sm" style="background: var(--danger);" data-request-id="${request.id}">
                                         Reject
                                     </button>
                                 </div>
@@ -904,7 +910,7 @@ async function renderSharing() {
                     </p>
                 ` : ''}
             </div>
-            <button id="new-share-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
+            <button id="new-share-btn" class="text-white px-4 py-2 rounded-lg transition-colors" style="background: var(--success);">
                 + Share Asset
             </button>
         </div>
@@ -929,12 +935,12 @@ async function renderSharing() {
                                     <div class="flex-grow">
                                         <div class="flex items-center gap-3 mb-2">
                                             <h4 class="text-lg font-bold text-gray-900 dark:text-white">${request.username}</h4>
-                                            <span class="px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                            <span class="px-2 py-1 rounded text-xs font-medium" style="background: rgba(var(--accent-primary-raw), 0.15); color: var(--accent-primary-light);">
                                                 ${request.user_org_name}
                                             </span>
-                                            <span class="px-2 py-1 rounded text-xs font-medium ${
-                                                request.requested_permission === 'edit' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' :
-                                                'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+                                            <span class="px-2 py-1 rounded text-xs font-medium" style="${
+                                                request.requested_permission === 'edit' ? 'background: rgba(var(--warning), 0.15); color: var(--warning-light);' :
+                                                'background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.7);'
                                             }">
                                                 ${request.requested_permission}
                                             </span>
@@ -949,10 +955,10 @@ async function renderSharing() {
                                         </div>
                                     </div>
                                     <div class="flex gap-2 ml-4">
-                                        <button class="approve-access-request-btn bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm" data-request-id="${request.request_id}">
+                                        <button class="approve-access-request-btn text-white px-4 py-2 rounded-lg transition-colors text-sm" style="background: var(--success);" data-request-id="${request.request_id}">
                                             Approve
                                         </button>
-                                        <button class="reject-access-request-btn bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm" data-request-id="${request.request_id}">
+                                        <button class="reject-access-request-btn text-white px-4 py-2 rounded-lg transition-colors text-sm" style="background: var(--danger);" data-request-id="${request.request_id}">
                                             Reject
                                         </button>
                                     </div>
@@ -975,7 +981,7 @@ async function renderSharing() {
                         <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
                             <div class="flex justify-between items-start mb-2">
                                 <h4 class="font-semibold text-gray-900 dark:text-white">${asset.name}</h4>
-                                <button class="share-asset-btn text-blue-600 hover:text-blue-800 dark:text-blue-400 text-sm" data-asset-id="${asset.id}">
+                                <button class="share-asset-btn text-sm" style="color: var(--accent-primary);" data-asset-id="${asset.id}">
                                     Share
                                 </button>
                             </div>
@@ -1011,16 +1017,16 @@ async function renderSharing() {
                                     <div class="flex-grow">
                                         <div class="flex items-center gap-3 mb-2">
                                             <h4 class="text-lg font-bold text-gray-900 dark:text-white">${assetId}</h4>
-                                            <span class="px-2 py-1 rounded text-xs font-medium ${
-                                                shareType === 'asset' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
-                                                shareType === 'vessel' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                                                'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+                                            <span class="px-2 py-1 rounded text-xs font-medium" style="${
+                                                shareType === 'asset' ? 'background: rgba(var(--accent-primary-raw), 0.15); color: var(--accent-primary-light);' :
+                                                shareType === 'vessel' ? 'background: rgba(var(--success), 0.15); color: var(--success-light);' :
+                                                'background: rgba(var(--accent-secondary-raw), 0.15); color: var(--accent-secondary);'
                                             }">
                                                 ${shareType}
                                             </span>
-                                            <span class="px-2 py-1 rounded text-xs font-medium ${
-                                                permission === 'edit' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' :
-                                                'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+                                            <span class="px-2 py-1 rounded text-xs font-medium" style="${
+                                                permission === 'edit' ? 'background: rgba(var(--warning), 0.15); color: var(--warning-light);' :
+                                                'background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.7);'
                                             }">
                                                 ${permission}
                                             </span>
@@ -1034,10 +1040,10 @@ async function renderSharing() {
                                         </div>
                                     </div>
                                     <div class="flex gap-2 ml-4">
-                                        <button class="edit-share-btn text-blue-600 hover:text-blue-800 dark:text-blue-400 text-sm" data-share-id="${share.id}">
+                                        <button class="edit-share-btn text-sm" style="color: var(--accent-primary);" data-share-id="${share.id}">
                                             Edit
                                         </button>
-                                        <button class="remove-share-btn text-red-600 hover:text-red-800 dark:text-red-400 text-sm" data-share-id="${share.id}">
+                                        <button class="remove-share-btn text-sm" style="color: var(--danger);" data-share-id="${share.id}">
                                             Remove
                                         </button>
                                     </div>
@@ -1288,13 +1294,13 @@ async function renderConfiguration() {
                 </p>
             </div>
             <div class="flex gap-2">
-                <button id="export-config-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm">
+                <button id="export-config-btn" class="text-white px-4 py-2 rounded-lg transition-colors text-sm" style="background: var(--accent-primary);">
                     Export Config
                 </button>
-                <button id="import-config-btn" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm">
+                <button id="import-config-btn" class="text-white px-4 py-2 rounded-lg transition-colors text-sm" style="background: var(--accent-secondary);">
                     Import Config
                 </button>
-                <button id="reset-all-config-btn" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm">
+                <button id="reset-all-config-btn" class="text-white px-4 py-2 rounded-lg transition-colors text-sm" style="background: var(--danger);">
                     Reset All
                 </button>
             </div>
@@ -1312,10 +1318,10 @@ async function renderConfiguration() {
                                     ${meta.icon} ${meta.label}
                                 </h3>
                                 <div class="flex gap-2">
-                                    <button class="add-item-btn text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-sm font-medium" data-list="${listName}">
+                                    <button class="add-item-btn text-sm font-medium" style="color: var(--success);" data-list="${listName}">
                                         + Add
                                     </button>
-                                    <button class="reset-list-btn text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-300 text-sm font-medium" data-list="${listName}">
+                                    <button class="reset-list-btn text-sm font-medium" style="color: var(--warning);" data-list="${listName}">
                                         Reset
                                     </button>
                                 </div>
@@ -1335,10 +1341,10 @@ async function renderConfiguration() {
                                         <div class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                                             <span class="text-sm text-gray-900 dark:text-white flex-grow">${escapeHtml(item)}</span>
                                             <div class="flex gap-2 ml-4">
-                                                <button class="edit-item-btn text-blue-600 hover:text-blue-800 dark:text-blue-400 text-xs" data-list="${listName}" data-index="${index}">
+                                                <button class="edit-item-btn text-xs" style="color: var(--accent-primary);" data-list="${listName}" data-index="${index}">
                                                     Edit
                                                 </button>
-                                                <button class="delete-item-btn text-red-600 hover:text-red-800 dark:text-red-400 text-xs" data-list="${listName}" data-index="${index}">
+                                                <button class="delete-item-btn text-xs" style="color: var(--danger);" data-list="${listName}" data-index="${index}">
                                                     Delete
                                                 </button>
                                             </div>
@@ -1545,7 +1551,7 @@ function showTransferModal(assetId, assetName, organizations, onConfirm) {
                     <label for="target-org-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Transfer to Organization:
                     </label>
-                    <select id="target-org-select" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <select id="target-org-select" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:border-transparent" style="--tw-ring-color: var(--accent-primary);">
                         <option value="">Select an organization...</option>
                         ${organizations.map(org => `
                             <option value="${org.id}">${org.name}</option>
@@ -1562,7 +1568,7 @@ function showTransferModal(assetId, assetName, organizations, onConfirm) {
                 <button id="cancel-transfer-btn" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                     Cancel
                 </button>
-                <button id="confirm-transfer-btn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                <button id="confirm-transfer-btn" class="px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" style="background: var(--accent-secondary);">
                     Transfer Asset
                 </button>
             </div>
@@ -1656,7 +1662,7 @@ function showBulkTransferModal(assetCount, organizations, onConfirm) {
                     <label for="bulk-target-org-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Transfer all to Organization:
                     </label>
-                    <select id="bulk-target-org-select" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <select id="bulk-target-org-select" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:border-transparent" style="--tw-ring-color: var(--accent-primary);">
                         <option value="">Select an organization...</option>
                         ${organizations.map(org => `
                             <option value="${org.id}">${org.name}</option>
@@ -1673,7 +1679,7 @@ function showBulkTransferModal(assetCount, organizations, onConfirm) {
                 <button id="cancel-bulk-transfer-btn" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                     Cancel
                 </button>
-                <button id="confirm-bulk-transfer-btn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                <button id="confirm-bulk-transfer-btn" class="px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" style="background: var(--accent-secondary);">
                     Transfer ${assetCount} Asset${assetCount !== 1 ? 's' : ''}
                 </button>
             </div>

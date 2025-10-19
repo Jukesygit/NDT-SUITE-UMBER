@@ -1,7 +1,8 @@
 // Profile Management Module
 import authManager, { ROLES } from '../auth-manager.js';
 import supabase, { isSupabaseConfigured } from '../supabase-client.js';
-import { createAnimatedHeader } from '../animated-background.js';
+import { createModernHeader } from '../components/modern-header.js';
+import { themes, saveTheme, getCurrentTheme } from '../themes.js';
 
 let container, dom = {};
 
@@ -10,6 +11,19 @@ const HTML = `
     <div id="profile-header-container" style="flex-shrink: 0;"></div>
     <div class="glass-scrollbar" style="flex: 1; overflow-y: auto; padding: 24px;">
         <div class="max-w-4xl mx-auto" style="padding-bottom: 40px;">
+
+        <!-- Theme Settings Card -->
+        <div class="glass-card" style="padding: 24px; margin-bottom: 24px;">
+            <h2 style="font-size: 18px; font-weight: 600; color: #ffffff; margin: 0 0 20px 0; padding-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Theme Settings</h2>
+
+            <p style="color: rgba(255, 255, 255, 0.6); font-size: 14px; margin-bottom: 20px;">
+                Choose your preferred color scheme
+            </p>
+
+            <div id="theme-selector" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px;">
+                <!-- Theme options will be populated here -->
+            </div>
+        </div>
 
         <!-- Profile Information Card -->
         <div class="glass-card" style="padding: 24px; margin-bottom: 24px;">
@@ -107,6 +121,7 @@ function cacheDom() {
     const q = (s) => container.querySelector(s);
     dom = {
         headerContainer: q('#profile-header-container'),
+        themeSelector: q('#theme-selector'),
         profileUsername: q('#profile-username'),
         profileEmail: q('#profile-email'),
         profileOrganization: q('#profile-organization'),
@@ -121,13 +136,76 @@ function cacheDom() {
         noRequests: q('#no-requests')
     };
 
-    // Initialize animated header
-    const header = createAnimatedHeader(
+    // Initialize modern header
+    const header = createModernHeader(
         'Profile Settings',
-        'Manage your profile and permissions',
-        { height: '180px', particleCount: 15, waveIntensity: 0.4 }
+        'Manage your profile, theme preferences, and permission requests',
+        {
+            showParticles: true,
+            particleCount: 20,
+            gradientColors: ['#34d399', '#60a5fa'], // Emerald to blue
+            height: '180px'
+        }
     );
     dom.headerContainer.appendChild(header);
+}
+
+function renderThemeSelector() {
+    const currentTheme = getCurrentTheme();
+
+    dom.themeSelector.innerHTML = Object.entries(themes).map(([themeId, theme]) => {
+        const isActive = themeId === currentTheme;
+        const primaryColor = theme.colors['accent-primary'];
+
+        return `
+            <button
+                class="theme-option ${isActive ? 'active' : ''}"
+                data-theme-id="${themeId}"
+                style="
+                    position: relative;
+                    padding: 16px;
+                    border-radius: var(--radius-md);
+                    border: 2px solid ${isActive ? primaryColor : 'rgba(255, 255, 255, 0.15)'};
+                    background: ${isActive ? `linear-gradient(135deg, ${theme.colors['bg-dark-2']} 0%, ${theme.colors['bg-dark-3']} 100%)` : 'rgba(255, 255, 255, 0.05)'};
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    text-align: left;
+                    ${isActive ? `box-shadow: 0 0 20px ${theme.colors['accent-primary-glow']}, 0 4px 12px rgba(0,0,0,0.3);` : ''}
+                "
+                onmouseover="this.style.transform='translateY(-2px)'; this.style.borderColor='${primaryColor}';"
+                onmouseout="this.style.transform='translateY(0)'; this.style.borderColor='${isActive ? primaryColor : 'rgba(255, 255, 255, 0.15)'}';"
+            >
+                ${isActive ? `
+                    <div style="position: absolute; top: 8px; right: 8px; width: 20px; height: 20px; border-radius: 50%; background: ${primaryColor}; display: flex; align-items: center; justify-content: center;">
+                        <svg style="width: 12px; height: 12px; color: white;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </div>
+                ` : ''}
+
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                    <div style="
+                        width: 24px;
+                        height: 24px;
+                        border-radius: 6px;
+                        background: ${primaryColor};
+                        box-shadow: 0 0 12px ${theme.colors['accent-primary-glow']};
+                    "></div>
+                    <div style="
+                        font-size: 15px;
+                        font-weight: 600;
+                        color: ${isActive ? primaryColor : '#ffffff'};
+                    ">${theme.name}</div>
+                </div>
+
+                <div style="display: flex; gap: 4px;">
+                    <div style="flex: 1; height: 4px; border-radius: 2px; background: ${theme.colors['accent-primary']};"></div>
+                    <div style="flex: 1; height: 4px; border-radius: 2px; background: ${theme.colors['accent-secondary']};"></div>
+                    <div style="flex: 1; height: 4px; border-radius: 2px; background: ${theme.colors['accent-tertiary']};"></div>
+                </div>
+            </button>
+        `;
+    }).join('');
 }
 
 async function loadProfileData() {
@@ -355,8 +433,33 @@ function showSuccess(message) {
     dom.requestError.classList.add('hidden');
 }
 
+function handleThemeChange(e) {
+    const themeButton = e.target.closest('.theme-option');
+    if (!themeButton) return;
+
+    const themeId = themeButton.dataset.themeId;
+    if (!themeId) return;
+
+    // Save and apply the new theme
+    saveTheme(themeId);
+
+    // Re-render the theme selector to update active states
+    renderThemeSelector();
+
+    // Re-attach event listeners after re-render
+    attachThemeListeners();
+}
+
+function attachThemeListeners() {
+    const themeButtons = dom.themeSelector.querySelectorAll('.theme-option');
+    themeButtons.forEach(button => {
+        button.addEventListener('click', handleThemeChange);
+    });
+}
+
 function addEventListeners() {
     dom.permissionRequestForm.addEventListener('submit', handlePermissionRequest);
+    attachThemeListeners();
 }
 
 export default {
@@ -364,6 +467,7 @@ export default {
         container = toolContainer;
         container.innerHTML = HTML;
         cacheDom();
+        renderThemeSelector();
         addEventListeners();
         await loadProfileData();
     },

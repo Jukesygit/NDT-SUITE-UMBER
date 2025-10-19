@@ -1,7 +1,8 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import './styles/main.css';
 import { initTheme } from './theme.js';
+import { initializeTheme } from './themes.js';
 import authManager from './auth-manager.js';
 import syncService from './sync-service.js';
 import { AnimatedBackground } from './animated-background.js';
@@ -19,31 +20,53 @@ import PecVisualizerPage from './pages/PecVisualizerPage.jsx';
 import Viewer3DPage from './pages/Viewer3DPage.jsx';
 import NiiCalculatorPage from './pages/NiiCalculatorPage.jsx';
 
+// Background manager component
+function BackgroundManager() {
+    const location = useLocation();
+
+    useEffect(() => {
+        // Only show animated background on login page
+        if (location.pathname === '/login') {
+            const canvas = document.createElement('canvas');
+            canvas.id = 'app-background-canvas';
+            canvas.style.position = 'fixed';
+            canvas.style.top = '0';
+            canvas.style.left = '0';
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+            canvas.style.zIndex = '0';
+            canvas.style.pointerEvents = 'none';
+            document.body.appendChild(canvas);
+
+            const bg = new AnimatedBackground(canvas, {
+                particleCount: 30,
+                waveIntensity: 0.3,
+                vertexDensity: 40
+            });
+            bg.start();
+
+            return () => {
+                bg.stop();
+                if (canvas.parentElement) {
+                    canvas.parentElement.removeChild(canvas);
+                }
+            };
+        }
+    }, [location.pathname]);
+
+    return null;
+}
+
 function App() {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        // Initialize theme
+        // Initialize old theme system
         initTheme();
 
-        // Initialize animated background
-        const canvas = document.createElement('canvas');
-        canvas.style.position = 'fixed';
-        canvas.style.top = '0';
-        canvas.style.left = '0';
-        canvas.style.width = '100%';
-        canvas.style.height = '100%';
-        canvas.style.zIndex = '0';
-        canvas.style.pointerEvents = 'none';
-        document.body.appendChild(canvas);
-
-        const bg = new AnimatedBackground(canvas, {
-            particleCount: 30,
-            waveIntensity: 0.3,
-            vertexDensity: 40
-        });
-        bg.start();
+        // Initialize new color theme system (defaults to Cyber Teal)
+        initializeTheme();
 
         // Check authentication status
         const checkAuth = async () => {
@@ -70,10 +93,6 @@ function App() {
 
         return () => {
             if (unsubscribe) unsubscribe();
-            if (bg) bg.stop();
-            if (canvas && canvas.parentElement) {
-                canvas.parentElement.removeChild(canvas);
-            }
         };
     }, []);
 
@@ -87,6 +106,7 @@ function App() {
 
     return (
         <BrowserRouter>
+            <BackgroundManager />
             <Routes>
                 {/* Public route */}
                 <Route path="/login" element={

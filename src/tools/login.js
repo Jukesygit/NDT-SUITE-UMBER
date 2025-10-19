@@ -40,22 +40,22 @@ function createLoginHTML() {
     contentDiv.innerHTML = `
         <div style="width: 100%; max-width: 420px; position: relative">
             <!-- Animated border glow -->
-            <div style="position: absolute; inset: -2px; border-radius: 18px; background: linear-gradient(45deg, rgba(80,140,255,0.5), rgba(100,160,255,0.5), rgba(100,180,255,0.5), rgba(80,140,255,0.5)); background-size: 300% 300%; animation: gradientRotate 4s ease infinite; filter: blur(4px); opacity: 0.6"></div>
+            <div style="position: absolute; inset: -2px; border-radius: 18px; background: linear-gradient(45deg, var(--accent-primary-dim), var(--accent-primary), var(--accent-primary-light), var(--accent-primary-dim)); background-size: 300% 300%; animation: gradientRotate 4s ease infinite; filter: blur(4px); opacity: 0.6"></div>
 
             <!-- Login Card -->
             <div id="login-card" style="position: relative; backdrop-filter: blur(12px); background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0) 100%), rgba(15,15,20,0.25); border: 1px solid rgba(255,255,255,0.18); border-top: 1px solid rgba(255,255,255,0.25); border-radius: 16px; padding: 48px 40px; box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.1) inset">
                 <!-- Logo and Title -->
                 <div style="text-align: center; margin-bottom: 40px">
-                    <div style="width: 64px; height: 64px; margin: 0 auto 20px; background: linear-gradient(135deg, rgba(100,150,255,0.2), rgba(120,170,255,0.2)); border-radius: 16px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(100,150,255,0.3); box-shadow: 0 0 30px rgba(100,150,255,0.3)">
+                    <div style="width: 64px; height: 64px; margin: 0 auto 20px; background: linear-gradient(135deg, var(--accent-primary-subtle), var(--accent-primary-subtle)); border-radius: 16px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--accent-primary); box-shadow: 0 0 30px var(--accent-primary-glow);">
                         <svg width="32" height="32" viewBox="0 0 32 32">
-                            <rect x="6" y="8" width="20" height="16" rx="2" fill="none" stroke="rgba(100,150,255,0.8)" stroke-width="2"/>
-                            <path d="M6 12h20M12 8v16M20 8v16" stroke="rgba(100,150,255,0.6)" stroke-width="1.5"/>
-                            <circle id="logo-pulse-1" cx="16" cy="16" r="3" fill="rgba(150,200,255,0.6)"></circle>
-                            <circle id="logo-pulse-2" cx="16" cy="16" r="5" fill="none" stroke="rgba(150,200,255,0.4)" stroke-width="1" style="animation: pulse 2s infinite"></circle>
+                            <rect x="6" y="8" width="20" height="16" rx="2" fill="none" stroke="var(--accent-primary)" stroke-width="2"/>
+                            <path d="M6 12h20M12 8v16M20 8v16" stroke="var(--accent-primary-dim)" stroke-width="1.5"/>
+                            <circle id="logo-pulse-1" cx="16" cy="16" r="3" fill="var(--accent-primary-light)"></circle>
+                            <circle id="logo-pulse-2" cx="16" cy="16" r="5" fill="none" stroke="var(--accent-primary-light)" stroke-width="1" style="animation: pulse 2s infinite"></circle>
                         </svg>
                     </div>
                     <h1 style="font-size: 28px; font-weight: 700; color: #ffffff; margin: 0 0 8px 0; letter-spacing: -0.5px">NDT Data Hub</h1>
-                    <p style="font-size: 14px; color: rgba(150,180,255,0.7); margin: 0; font-weight: 500">Secure Authentication Portal</p>
+                    <p style="font-size: 14px; color: var(--accent-primary-light); margin: 0; font-weight: 500">Secure Authentication Portal</p>
                 </div>
 
                 <!-- Login Form -->
@@ -81,7 +81,7 @@ function createLoginHTML() {
 
                     <!-- Remember Me Checkbox -->
                     <div style="margin-bottom: 32px; display: flex; align-items: center">
-                        <input type="checkbox" id="remember-me" style="width: 18px; height: 18px; cursor: pointer; accent-color: rgba(100,150,255,0.9); margin-right: 10px">
+                        <input type="checkbox" id="remember-me" style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent-primary); margin-right: 10px">
                         <label for="remember-me" style="font-size: 14px; color: rgba(255,255,255,0.7); cursor: pointer; user-select: none; font-weight: 500">Remember me</label>
                     </div>
 
@@ -89,7 +89,7 @@ function createLoginHTML() {
                     <div id="error-message" style="display: none; color: #ff6b6b; font-size: 14px; margin-bottom: 16px; text-align: center"></div>
 
                     <!-- Submit Button -->
-                    <button type="submit" id="submit-btn" style="width: 100%; padding: 16px; font-size: 15px; font-weight: 600; color: #fff; background: linear-gradient(135deg, rgba(90,150,255,0.9), rgba(110,170,255,0.9)); border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s; margin-bottom: 20px; position: relative; box-shadow: 0 4px 20px rgba(100,150,255,0.3); display: flex; align-items: center; justify-content: center">
+                    <button type="submit" id="submit-btn" style="width: 100%; padding: 16px; font-size: 15px; font-weight: 600; color: #fff; background: linear-gradient(135deg, var(--accent-primary), var(--accent-primary-light)); border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s; margin-bottom: 20px; position: relative; box-shadow: 0 4px 20px var(--accent-primary-glow); display: flex; align-items: center; justify-content: center">
                         <span id="submit-text">Sign In</span>
                         <div id="submit-spinner" style="display: none; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.3); border-top: 2px solid #fff; border-radius: 50%; animation: spin 0.8s linear infinite"></div>
                     </button>
@@ -109,7 +109,7 @@ function createLoginHTML() {
                 <!-- Sign Up Link -->
                 <div style="text-align: center">
                     <span style="font-size: 14px; color: rgba(255,255,255,0.5)">Don't have an account? </span>
-                    <a href="#" id="request-account-btn" style="font-size: 14px; color: rgba(120,160,220,0.9); text-decoration: none; font-weight: 500">Sign up</a>
+                    <a href="#" id="request-account-btn" style="font-size: 14px; color: var(--accent-primary-light); text-decoration: none; font-weight: 500">Sign up</a>
                 </div>
             </div>
 
@@ -117,7 +117,7 @@ function createLoginHTML() {
             <div id="request-card" style="display: none; position: relative; backdrop-filter: blur(12px); background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0) 100%), rgba(15,15,20,0.25); border: 1px solid rgba(255,255,255,0.18); border-top: 1px solid rgba(255,255,255,0.25); border-radius: 16px; padding: 48px 40px; box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.1) inset">
                 <div style="text-align: center; margin-bottom: 32px">
                     <h1 style="font-size: 28px; font-weight: 700; color: #ffffff; margin: 0 0 8px 0; letter-spacing: -0.5px">Request Account</h1>
-                    <p style="font-size: 14px; color: rgba(150,180,255,0.7); margin: 0; font-weight: 500">Submit a request to join an organization</p>
+                    <p style="font-size: 14px; color: var(--accent-primary-light); margin: 0; font-weight: 500">Submit a request to join an organization</p>
                 </div>
 
                 <form id="request-form">
@@ -157,7 +157,7 @@ function createLoginHTML() {
 
                     <div style="display: flex; gap: 12px">
                         <button type="button" id="back-to-login-btn" style="flex: 1; padding: 12px; font-size: 14px; font-weight: 600; color: #fff; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; cursor: pointer">Back</button>
-                        <button type="submit" style="flex: 1; padding: 12px; font-size: 14px; font-weight: 600; color: #fff; background: linear-gradient(135deg, rgba(90,150,255,0.9), rgba(110,170,255,0.9)); border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 20px rgba(100,150,255,0.3)">Submit Request</button>
+                        <button type="submit" style="flex: 1; padding: 12px; font-size: 14px; font-weight: 600; color: #fff; background: linear-gradient(135deg, var(--accent-primary), var(--accent-primary-light)); border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 20px var(--accent-primary-glow)">Submit Request</button>
                     </div>
                 </form>
             </div>
@@ -413,7 +413,7 @@ function addInputAnimations() {
             label.style.top = '6px';
             label.style.transform = 'translateY(0)';
             label.style.fontSize = '11px';
-            label.style.color = isFocused ? 'rgba(100,150,255,0.9)' : 'rgba(255,255,255,0.5)';
+            label.style.color = isFocused ? 'var(--accent-primary)' : 'rgba(255,255,255,0.5)';
         } else {
             label.style.top = '50%';
             label.style.transform = 'translateY(-50%)';
@@ -423,8 +423,8 @@ function addInputAnimations() {
 
         // Update input border and shadow
         if (isFocused) {
-            input.style.border = '1px solid rgba(100,150,255,0.5)';
-            input.style.boxShadow = '0 0 0 3px rgba(100,150,255,0.1), 0 0 20px rgba(100,150,255,0.2)';
+            input.style.border = '1px solid var(--accent-primary)';
+            input.style.boxShadow = `0 0 0 3px var(--accent-primary-subtle), 0 0 20px var(--accent-primary-glow)`;
         } else {
             input.style.border = '1px solid rgba(255,255,255,0.1)';
             input.style.boxShadow = 'none';
@@ -437,7 +437,8 @@ function addInputAnimations() {
     // Username input animations
     dom.username.addEventListener('focus', () => {
         updateLabelState(dom.username, dom.usernameLabel, dom.usernameIcon, true);
-        dom.usernameIcon.querySelector('path').setAttribute('stroke', 'rgba(100,150,255,0.9)');
+        const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--accent-primary');
+        dom.usernameIcon.querySelector('path').setAttribute('stroke', primaryColor);
     });
 
     dom.username.addEventListener('blur', () => {
@@ -452,8 +453,9 @@ function addInputAnimations() {
     // Password input animations
     dom.password.addEventListener('focus', () => {
         updateLabelState(dom.password, dom.passwordLabel, dom.passwordIcon, true);
+        const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--accent-primary');
         dom.passwordIcon.querySelectorAll('rect, path').forEach(el => {
-            el.setAttribute('stroke', 'rgba(100,150,255,0.9)');
+            el.setAttribute('stroke', primaryColor);
         });
     });
 
