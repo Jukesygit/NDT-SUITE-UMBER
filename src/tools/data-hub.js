@@ -1,7 +1,7 @@
 // Data Hub Tool Module - Home page with asset/vessel/scan management
 import dataManager from '../data-manager.js';
-import { createAnimatedHeader } from '../animated-background.js';
 import reportDialog from '../components/report-dialog.js';
+import { createModernHeader } from '../components/modern-header.js';
 
 let container, dom = {};
 let currentView = 'assets'; // 'assets', 'vessel-detail', 'scan-detail'
@@ -12,9 +12,10 @@ let expandedVisualizerModule = null;
 
 const HTML = `
 <div class="h-full flex flex-col overflow-hidden">
-    <div id="datahub-header-container" style="flex-shrink: 0;"></div>
+    <!-- Modern Header -->
+    <div id="data-hub-header-container"></div>
 
-    <div class="glass-panel" style="padding: 6px 12px; flex-shrink: 0; border-radius: 0;">
+    <div class="glass-panel" style="padding: var(--spacing-md) var(--spacing-lg); flex-shrink: 0; border-radius: 0;">
         <div class="flex justify-between items-center">
             <div id="stats-bar" class="flex gap-3 items-center flex-grow text-xs"></div>
             <div id="loading-indicator" class="hidden items-center gap-2 mr-3">
@@ -36,7 +37,7 @@ const HTML = `
     </div>
 
     <div id="breadcrumb" class="px-4 py-1.5 flex items-center gap-2 text-xs flex-shrink-0" style="background: rgba(255, 255, 255, 0.03); border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
-        <button id="breadcrumb-home" class="text-blue-400 hover:underline">Home</button>
+        <button id="breadcrumb-home" style="color: var(--accent-primary-bright);" class="hover:underline">Home</button>
     </div>
 
     <div class="flex-grow overflow-y-auto glass-scrollbar p-6">
@@ -142,7 +143,7 @@ const HTML = `
 function cacheDom() {
     const q = (s) => container.querySelector(s);
     dom = {
-        headerContainer: q('#datahub-header-container'),
+        headerContainer: q('#data-hub-header-container'),
         statsBar: q('#stats-bar'),
         loadingIndicator: q('#loading-indicator'),
         breadcrumb: q('#breadcrumb'),
@@ -169,11 +170,16 @@ function cacheDom() {
         minimizedCloseBtn: q('#minimized-close-btn')
     };
 
-    // Initialize animated header
-    const header = createAnimatedHeader(
+    // Initialize modern header
+    const header = createModernHeader(
         'NDT Data Hub',
-        'Organize and manage your inspection scans',
-        { height: '80px', particleCount: 10, waveIntensity: 0.25 }
+        'Organize and manage your inspection scans by asset and vessel',
+        {
+            showParticles: true,
+            particleCount: 25,
+            gradientColors: ['#60a5fa', '#34d399'],
+            height: '160px'
+        }
     );
     dom.headerContainer.appendChild(header);
 }
@@ -181,41 +187,54 @@ function cacheDom() {
 function renderStats() {
     const stats = dataManager.getStats();
     dom.statsBar.innerHTML = `
-        <div class="flex items-center gap-1 text-xs">
-            <span style="color: rgba(255, 255, 255, 0.5);">Assets:</span>
-            <span class="font-semibold text-white">${stats.totalAssets}</span>
+        <div class="stat-badge tooltip" data-tooltip="Total number of assets in the system">
+            <svg class="w-4 h-4" style="opacity: 0.6;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+            </svg>
+            <span class="stat-badge-label">Assets:</span>
+            <span class="stat-badge-value">${stats.totalAssets}</span>
         </div>
-        <div class="flex items-center gap-1 text-xs">
-            <span style="color: rgba(255, 255, 255, 0.5);">Vessels:</span>
-            <span class="font-semibold text-white">${stats.totalVessels}</span>
+        <div class="stat-badge tooltip" data-tooltip="Total number of vessels across all assets">
+            <svg class="w-4 h-4" style="opacity: 0.6;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+            </svg>
+            <span class="stat-badge-label">Vessels:</span>
+            <span class="stat-badge-value">${stats.totalVessels}</span>
         </div>
-        <div class="flex items-center gap-1 text-xs">
-            <span style="color: rgba(255, 255, 255, 0.5);">Scans:</span>
-            <span class="font-semibold text-white">${stats.totalScans}</span>
+        <div class="stat-badge tooltip" data-tooltip="Total number of inspection scans stored">
+            <svg class="w-4 h-4" style="opacity: 0.6;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            <span class="stat-badge-label">Scans:</span>
+            <span class="stat-badge-value">${stats.totalScans}</span>
         </div>
-        <div class="flex items-center gap-1 text-xs">
-            <span style="color: rgba(255, 255, 255, 0.5);">PEC/C-Scan/3D:</span>
-            <span class="font-semibold text-white">
-                ${stats.scansByType.pec || 0}/${stats.scansByType.cscan || 0}/${stats.scansByType['3dview'] || 0}
-            </span>
+        <div class="stat-badge tooltip" data-tooltip="Scan breakdown: PEC (Pulsed Eddy Current) / C-Scan (Ultrasonic) / 3D Models">
+            <span class="stat-badge-label">PEC:</span>
+            <span class="stat-badge-value">${stats.scansByType.pec || 0}</span>
+            <span style="color: var(--text-dim); margin: 0 4px;">/</span>
+            <span class="stat-badge-label">C-Scan:</span>
+            <span class="stat-badge-value">${stats.scansByType.cscan || 0}</span>
+            <span style="color: var(--text-dim); margin: 0 4px;">/</span>
+            <span class="stat-badge-label">3D:</span>
+            <span class="stat-badge-value">${stats.scansByType['3dview'] || 0}</span>
         </div>
     `;
 }
 
 function updateBreadcrumb() {
-    let breadcrumbHTML = '<button id="breadcrumb-home" class="text-blue-600 dark:text-blue-400 hover:underline">Home</button>';
+    let breadcrumbHTML = '<button id="breadcrumb-home" style="color: var(--accent-primary-bright);" class="hover:underline">Home</button>';
 
     if (currentAssetId) {
         const asset = dataManager.getAsset(currentAssetId);
         if (asset) {
-            breadcrumbHTML += ` <span class="text-gray-400">/</span> <button id="breadcrumb-asset" class="text-blue-600 dark:text-blue-400 hover:underline">${asset.name}</button>`;
+            breadcrumbHTML += ` <span style="color: var(--text-tertiary);">/</span> <button id="breadcrumb-asset" style="color: var(--accent-primary-bright);" class="hover:underline">${asset.name}</button>`;
         }
     }
 
     if (currentVesselId && currentAssetId) {
         const vessel = dataManager.getVessel(currentAssetId, currentVesselId);
         if (vessel) {
-            breadcrumbHTML += ` <span class="text-gray-400">/</span> <span class="text-gray-600 dark:text-gray-300">${vessel.name}</span>`;
+            breadcrumbHTML += ` <span style="color: var(--text-tertiary);">/</span> <span style="color: var(--text-secondary);">${vessel.name}</span>`;
         }
     }
 
@@ -265,29 +284,70 @@ function renderAssetsView() {
     }
 
     dom.assetsView.innerHTML = `
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            ${assets.map(asset => {
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            ${assets.map((asset, index) => {
                 const vesselCount = asset.vessels.length;
                 const scanCount = asset.vessels.reduce((sum, v) => sum + v.scans.length, 0);
                 return `
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer overflow-hidden" data-asset-id="${asset.id}">
-                        <div class="p-6">
-                            <div class="flex justify-between items-start mb-2">
-                                <h3 class="text-xl font-bold text-gray-900 dark:text-white">${asset.name}</h3>
-                                <button class="asset-menu-btn text-gray-500 hover:text-gray-700 dark:hover:text-gray-300" data-asset-id="${asset.id}" aria-label="Menu for ${asset.name}">
+                    <div class="glass-card" data-asset-id="${asset.id}"
+                         style="padding: 0; opacity: 0; animation: slideUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) ${index * 100}ms forwards;">
+                        <div style="padding: var(--spacing-xl);">
+                            <div class="flex justify-between items-start" style="margin-bottom: var(--spacing-lg);">
+                                <h3 style="color: var(--accent-primary-light); font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; margin: 0;">${asset.name}</h3>
+                                <button class="asset-menu-btn" data-asset-id="${asset.id}" aria-label="Menu for ${asset.name}"
+                                        style="color: var(--text-tertiary); padding: var(--spacing-sm); border-radius: var(--radius-md); transition: all var(--transition-base); background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);"
+                                        onmouseover="this.style.background='rgba(255,255,255,0.12)'; this.style.borderColor='rgba(255,255,255,0.2)'; this.style.color='var(--text-primary)';"
+                                        onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.borderColor='rgba(255,255,255,0.1)'; this.style.color='var(--text-tertiary)';">
                                     <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                         <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
                                     </svg>
                                 </button>
                             </div>
-                            <div class="space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                                <div>Vessels: ${vesselCount}</div>
-                                <div>Scans: ${scanCount}</div>
+                            <div class="flex gap-3" style="margin-bottom: var(--spacing-lg);">
+                                <div class="tooltip" data-tooltip="${vesselCount} vessel${vesselCount !== 1 ? 's' : ''} in this asset"
+                                     style="flex: 1;
+                                            display: flex;
+                                            flex-direction: column;
+                                            align-items: center;
+                                            justify-content: center;
+                                            padding: 16px;
+                                            background: rgba(var(--accent-primary-raw), 0.15);
+                                            border: 1.5px solid rgba(var(--accent-primary-raw), 0.3);
+                                            border-radius: 12px;
+                                            backdrop-filter: blur(8px);
+                                            gap: 4px;">
+                                    <span style="font-size: 32px; font-weight: 700; line-height: 1; color: var(--accent-primary-light);">${vesselCount}</span>
+                                    <span style="font-size: 11px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.5px; color: #ffffff; font-weight: 400;">Vessels</span>
+                                </div>
+                                <div class="tooltip" data-tooltip="${scanCount} inspection scan${scanCount !== 1 ? 's' : ''} total"
+                                     style="flex: 1;
+                                            display: flex;
+                                            flex-direction: column;
+                                            align-items: center;
+                                            justify-content: center;
+                                            padding: 16px;
+                                            background: rgba(var(--accent-primary-raw), 0.15);
+                                            border: 1.5px solid rgba(var(--accent-primary-raw), 0.3);
+                                            border-radius: 12px;
+                                            backdrop-filter: blur(8px);
+                                            gap: 4px;">
+                                    <span style="font-size: 32px; font-weight: 700; line-height: 1; color: var(--accent-primary-light);">${scanCount}</span>
+                                    <span style="font-size: 11px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.5px; color: #ffffff; font-weight: 400;">Scans</span>
+                                </div>
                             </div>
                         </div>
-                        <div class="bg-gray-50 dark:bg-gray-700/50 px-6 py-3">
-                            <button class="text-blue-600 dark:text-blue-400 hover:underline text-sm font-medium view-asset-btn" data-asset-id="${asset.id}">
-                                View Details →
+                        <div style="padding: var(--spacing-lg) var(--spacing-xl); background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)); border-top: 1.5px solid rgba(255,255,255,0.15); backdrop-filter: blur(8px);">
+                            <button class="view-asset-btn" data-asset-id="${asset.id}"
+                                    style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 14px 20px;
+                                           background: rgba(var(--accent-primary-raw), 0.2); border: 1.5px solid rgba(var(--accent-primary-raw), 0.4); border-radius: 12px;
+                                           color: var(--accent-primary-light); font-size: 15px; font-weight: 600;
+                                           transition: all 0.3s; cursor: pointer; backdrop-filter: blur(8px);"
+                                    onmouseover="this.style.background='rgba(var(--accent-primary-raw), 0.3)'; this.style.transform='translateX(4px)';"
+                                    onmouseout="this.style.background='rgba(var(--accent-primary-raw), 0.2)'; this.style.transform='translateX(0)';">
+                                <span>View Details</span>
+                                <svg style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path>
+                                </svg>
                             </button>
                         </div>
                     </div>
@@ -335,12 +395,12 @@ function renderVesselDetailView(assetId) {
     if (asset.vessels.length === 0) {
         dom.vesselDetailView.innerHTML = `
             <div class="text-center py-12">
-                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="mx-auto h-12 w-12" style="color: var(--text-dim);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
                 </svg>
-                <h3 class="mt-2 text-lg font-medium text-gray-900 dark:text-white">No vessels in this asset</h3>
-                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Add a vessel to start organizing scans.</p>
-                <button id="empty-new-vessel-btn" class="mt-4 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
+                <h3 class="mt-2 text-lg font-medium" style="color: var(--text-primary);">No vessels in this asset</h3>
+                <p class="mt-1 text-sm" style="color: var(--text-secondary);">Add a vessel to start organizing scans.</p>
+                <button id="empty-new-vessel-btn" class="mt-4 btn-success px-4 py-2">
                     Create First Vessel
                 </button>
             </div>
@@ -353,8 +413,8 @@ function renderVesselDetailView(assetId) {
 
     dom.vesselDetailView.innerHTML = `
         <div class="mb-4 flex justify-between items-center">
-            <h2 class="text-2xl font-bold text-gray-900 dark:text-white">${asset.name} - Vessels</h2>
-            <button id="new-vessel-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm">
+            <h2 class="text-2xl font-bold" style="color: var(--accent-primary-light); letter-spacing: -0.02em;">${asset.name} - Vessels</h2>
+            <button id="new-vessel-btn" class="btn-success px-4 py-2 text-sm">
                 + New Vessel
             </button>
         </div>
@@ -364,10 +424,10 @@ function renderVesselDetailView(assetId) {
                 const images = vessel.images || [];
                 const imageCount = images.length;
                 return `
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+                    <div class="glass-card">
                         <div class="p-6">
                             <div class="flex gap-4 items-start mb-4">
-                                <div class="flex-shrink-0 w-24 h-24 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center relative overflow-hidden border-2 border-gray-200 dark:border-gray-600 ${vessel.model3d ? 'cursor-pointer hover:border-blue-500 transition-colors' : ''}">
+                                <div class="flex-shrink-0 w-24 h-24 rounded-lg flex items-center justify-center relative overflow-hidden ${vessel.model3d ? 'cursor-pointer' : ''}" style="background: var(--accent-primary-subtle); border: 1.5px solid var(--card-border); transition: all var(--transition-base);" onmouseover="this.style.borderColor='var(--accent-primary-glow)'" onmouseout="this.style.borderColor='var(--card-border)'"">
                                     ${vessel.model3d ? `
                                         <canvas class="vessel-3d-preview" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" style="width: 96px; height: 96px; display: block;"></canvas>
                                     ` : `
@@ -381,9 +441,9 @@ function renderVesselDetailView(assetId) {
                                 </div>
                                 <div class="flex-grow min-w-0">
                                     <div class="flex justify-between items-start mb-2">
-                                        <h3 class="text-xl font-bold text-gray-900 dark:text-white truncate">${vessel.name}</h3>
+                                        <h3 class="text-xl font-bold truncate" style="color: var(--accent-primary-light); letter-spacing: -0.02em;">${vessel.name}</h3>
                                         <div class="flex items-center gap-2">
-                                            <button class="generate-report-btn bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-vessel-name="${vessel.name}">
+                                            <button class="generate-report-btn btn-primary text-sm px-3 py-1.5 flex items-center gap-1.5" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-vessel-name="${vessel.name}">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                                                 </svg>
@@ -396,10 +456,10 @@ function renderVesselDetailView(assetId) {
                                             </button>
                                         </div>
                                     </div>
-                                    <div class="space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                                        <div>Scans: ${scanCount}</div>
-                                        <div>Images: ${imageCount}</div>
-                                        ${vessel.strakes && vessel.strakes.length > 0 ? `<div>Strakes: ${vessel.strakes.length}</div>` : ''}
+                                    <div class="space-y-1 text-sm" style="color: var(--text-secondary);">
+                                        <div>Scans: <span class="font-semibold" style="color: var(--text-primary);">${scanCount}</span></div>
+                                        <div>Images: <span class="font-semibold" style="color: var(--text-primary);">${imageCount}</span></div>
+                                        ${vessel.strakes && vessel.strakes.length > 0 ? `<div>Strakes: <span class="font-semibold" style="color: var(--text-primary);">${vessel.strakes.length}</span></div>` : ''}
                                     </div>
                                     ${vessel.strakes && vessel.strakes.length > 0 ? `
                                         <div class="mt-2 flex flex-wrap gap-2">
@@ -407,22 +467,22 @@ function renderVesselDetailView(assetId) {
                                                 const coverage = dataManager.calculateStrakeCoverage(assetId, vessel.id, strake.id);
                                                 const percentage = coverage.coveragePercentage;
                                                 // Dynamic colors: red (0-33%), yellow (34-66%), orange (67-99%), green (100%+)
-                                                let bgColor, textColor;
+                                                let badgeClass, badgeStyle;
                                                 if (percentage >= 100) {
-                                                    bgColor = 'bg-green-100 dark:bg-green-900';
-                                                    textColor = 'text-green-800 dark:text-green-200';
+                                                    badgeClass = 'badge-green';
+                                                    badgeStyle = '';
                                                 } else if (percentage >= 67) {
-                                                    bgColor = 'bg-orange-100 dark:bg-orange-900';
-                                                    textColor = 'text-orange-800 dark:text-orange-200';
+                                                    badgeClass = 'glass-badge';
+                                                    badgeStyle = 'background: rgba(245, 158, 11, 0.15); color: rgba(251, 191, 36, 1); border-color: rgba(245, 158, 11, 0.4);';
                                                 } else if (percentage >= 34) {
-                                                    bgColor = 'bg-yellow-100 dark:bg-yellow-900';
-                                                    textColor = 'text-yellow-800 dark:text-yellow-200';
+                                                    badgeClass = 'badge-yellow';
+                                                    badgeStyle = '';
                                                 } else {
-                                                    bgColor = 'bg-red-100 dark:bg-red-900';
-                                                    textColor = 'text-red-800 dark:text-red-200';
+                                                    badgeClass = 'badge-red';
+                                                    badgeStyle = '';
                                                 }
                                                 return `
-                                                    <div class="px-2 py-1 ${bgColor} rounded text-xs font-medium ${textColor}">
+                                                    <div class="glass-badge ${badgeClass}" style="${badgeStyle}">
                                                         ${strake.name}: ${percentage.toFixed(0)}%
                                                     </div>
                                                 `;
@@ -437,16 +497,16 @@ function renderVesselDetailView(assetId) {
                                 <!-- LEFT COLUMN: Scans Section with Strake Grouping (order-2 on mobile, order-1 on lg) -->
                                 <div class="lg:col-span-2 order-2 lg:order-1">
                                     <div class="flex justify-between items-center mb-3">
-                                        <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Scans${vessel.strakes && vessel.strakes.length > 0 ? ' by Strake' : ''}</div>
+                                        <div class="text-xs font-semibold uppercase" style="color: var(--text-secondary);">Scans${vessel.strakes && vessel.strakes.length > 0 ? ' by Strake' : ''}</div>
                                         ${vessel.strakes && vessel.strakes.length > 0 ? '' : `
-                                            <button class="manage-strakes-btn text-xs bg-purple-600 text-white px-3 py-1.5 rounded hover:bg-purple-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                            <button class="manage-strakes-btn btn-secondary text-xs px-3 py-1.5" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
                                                 + Add Strake
                                             </button>
                                         `}
                                     </div>
                                     ${(() => {
                                         const renderScanCard = (scan) => `
-                                            <div class="scan-card-compact group relative cursor-pointer bg-gray-50 dark:bg-gray-700/50 rounded-lg overflow-hidden hover:ring-2 hover:ring-blue-500 transition-all" data-scan-id="${scan.id}" data-asset-id="${assetId}" data-vessel-id="${vessel.id}">
+                                            <div class="scan-card-compact group relative cursor-pointer rounded-lg overflow-hidden transition-all" style="background: var(--accent-primary-subtle); border: 1.5px solid var(--card-border); backdrop-filter: blur(8px);" data-scan-id="${scan.id}" data-asset-id="${assetId}" data-vessel-id="${vessel.id}" onmouseover="this.style.borderColor='var(--accent-primary-glow)'; this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--card-border)'; this.style.transform='translateY(0)'"">
                                                 ${scan.thumbnail ? `
                                                     <div class="aspect-video bg-gray-200 dark:bg-gray-600 relative">
                                                         <img src="${scan.thumbnail}" alt="${scan.name}" class="w-full h-full object-cover">
@@ -483,12 +543,12 @@ function renderVesselDetailView(assetId) {
                                                     </div>
                                                 `}
                                                 <div class="p-2">
-                                                    <div class="text-xs font-semibold text-gray-900 dark:text-white truncate mb-1" title="${scan.name}">${scan.name}</div>
-                                                    <span class="px-1.5 py-0.5 rounded text-xs font-medium ${
-                                                        scan.toolType === 'pec' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' :
-                                                        scan.toolType === 'cscan' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
-                                                        'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
-                                                    }">${scan.toolType.toUpperCase()}</span>
+                                                    <div class="text-xs font-semibold truncate mb-1" style="color: var(--text-primary);" title="${scan.name}">${scan.name}</div>
+                                                    <span class="glass-badge ${
+                                                        scan.toolType === 'pec' ? 'badge-yellow' :
+                                                        scan.toolType === 'cscan' ? 'badge-blue' :
+                                                        'badge-purple'
+                                                    }" style="padding: 2px 6px; font-size: 10px;">${scan.toolType.toUpperCase()}</span>
                                                 </div>
                                             </div>
                                         `;
@@ -506,8 +566,14 @@ function renderVesselDetailView(assetId) {
 
                                             return `
                                                 <div class="space-y-4">
-                                                    <div class="flex justify-end">
-                                                        <button class="manage-strakes-btn text-xs bg-purple-600 text-white px-3 py-1.5 rounded hover:bg-purple-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                    <div class="flex justify-end gap-2">
+                                                        <button class="add-scans-to-strake-btn btn-primary text-xs px-3 py-1.5" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                            <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                                            </svg>
+                                                            Add Scans
+                                                        </button>
+                                                        <button class="manage-strakes-btn btn-secondary text-xs px-3 py-1.5" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
                                                             Manage Strakes
                                                         </button>
                                                     </div>
@@ -516,28 +582,28 @@ function renderVesselDetailView(assetId) {
                                                         const coverage = dataManager.calculateStrakeCoverage(assetId, vessel.id, strake.id);
 
                                                         return `
-                                                            <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4 bg-white dark:bg-gray-800">
+                                                            <div class="glass-panel p-4" style="background: var(--glass-bg-tertiary); border: 1.5px solid var(--glass-border);">
                                                                 <div class="flex justify-between items-start mb-3">
                                                                     <div class="flex-1">
                                                                         <div class="flex items-center gap-2 mb-2">
-                                                                            <h4 class="font-semibold text-gray-900 dark:text-white">${strake.name}</h4>
+                                                                            <h4 class="font-semibold" style="color: var(--text-primary);">${strake.name}</h4>
                                                                             <button class="edit-strake-btn text-gray-500 hover:text-blue-600 dark:hover:text-blue-400" data-strake-id="${strake.id}" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" title="Edit strake">
                                                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                                                                                 </svg>
                                                                             </button>
                                                                         </div>
-                                                                        <div class="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                                                                        <div class="text-xs space-y-1" style="color: var(--text-secondary);">
                                                                             <div>Strake Area: ${strake.totalArea.toFixed(1)} m²</div>
                                                                             <div>Required (${strake.requiredCoverage}%): ${coverage.targetArea.toFixed(1)} m²</div>
                                                                             <div>Scanned: ${coverage.totalScannedArea.toFixed(1)} m² (${coverage.scanCount} scan${coverage.scanCount !== 1 ? 's' : ''})</div>
                                                                         </div>
                                                                         <div class="mt-2">
                                                                             <div class="flex items-center gap-2 mb-1">
-                                                                                <div class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                                                                    <div class="h-full ${coverage.isComplete ? 'bg-green-500' : 'bg-blue-500'} transition-all duration-500" style="width: ${coverage.coveragePercentage}%"></div>
+                                                                                <div class="flex-1 h-2 rounded-full overflow-hidden" style="background: rgba(255, 255, 255, 0.1);">
+                                                                                    <div class="h-full transition-all duration-500" style="width: ${coverage.coveragePercentage}%; background: ${coverage.isComplete ? 'var(--success)' : 'var(--info)'};"></div>
                                                                                 </div>
-                                                                                <span class="text-xs font-semibold ${coverage.isComplete ? 'text-green-600 dark:text-green-400' : 'text-blue-600 dark:text-blue-400'}">${coverage.coveragePercentage.toFixed(1)}%</span>
+                                                                                <span class="text-xs font-semibold" style="color: ${coverage.isComplete ? 'var(--success-light)' : 'var(--info-light)'};">${coverage.coveragePercentage.toFixed(1)}%</span>
                                                                             </div>
                                                                         </div>
                                                                     </div>
@@ -554,8 +620,8 @@ function renderVesselDetailView(assetId) {
                                                     }).join('')}
 
                                                     ${unassignedScans.length > 0 ? `
-                                                        <div class="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-800/50">
-                                                            <h4 class="font-semibold text-gray-700 dark:text-gray-300 mb-3">Unassigned Scans</h4>
+                                                        <div class="glass-panel p-4" style="background: var(--glass-bg-secondary); border: 1.5px dashed var(--glass-border);">
+                                                            <h4 class="font-semibold mb-3" style="color: var(--text-secondary);">Unassigned Scans</h4>
                                                             <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                                                 ${unassignedScans.map(renderScanCard).join('')}
                                                             </div>
@@ -574,13 +640,13 @@ function renderVesselDetailView(assetId) {
                                         <!-- Location Drawing -->
                                         <div class="glass-panel p-4">
                                             <div class="flex justify-between items-center mb-3">
-                                                <div class="text-sm font-semibold text-gray-700 dark:text-gray-300">Location Drawing</div>
+                                                <div class="text-sm font-semibold" style="color: var(--text-primary);">Location Drawing</div>
                                                 ${vessel.locationDrawing ? `
-                                                    <button class="annotate-location-btn text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                    <button class="annotate-location-btn btn-primary text-xs px-3 py-1.5" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
                                                         ✏️ Annotate
                                                     </button>
                                                 ` : `
-                                                    <button class="upload-location-btn text-xs bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                    <button class="upload-location-btn btn-success text-xs px-3 py-1.5" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
                                                         + Upload
                                                     </button>
                                                 `}
@@ -626,13 +692,13 @@ function renderVesselDetailView(assetId) {
                                         <!-- GA Drawing -->
                                         <div class="glass-panel p-4">
                                             <div class="flex justify-between items-center mb-3">
-                                                <div class="text-sm font-semibold text-gray-700 dark:text-gray-300">GA Drawing</div>
+                                                <div class="text-sm font-semibold" style="color: var(--text-primary);">GA Drawing</div>
                                                 ${vessel.gaDrawing ? `
-                                                    <button class="annotate-ga-btn text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                    <button class="annotate-ga-btn btn-primary text-xs px-3 py-1.5" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
                                                         ✏️ Annotate
                                                     </button>
                                                 ` : `
-                                                    <button class="upload-ga-btn text-xs bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                    <button class="upload-ga-btn btn-success text-xs px-3 py-1.5" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
                                                         + Upload
                                                     </button>
                                                 `}
@@ -679,21 +745,21 @@ function renderVesselDetailView(assetId) {
                                     <!-- Generated Reports Section -->
                                     ${vessel.reports && vessel.reports.length > 0 ? `
                                         <div class="glass-panel p-4">
-                                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-3">Generated Reports (${vessel.reports.length})</div>
+                                            <div class="text-xs font-semibold uppercase mb-3" style="color: var(--text-secondary);">Generated Reports (${vessel.reports.length})</div>
                                             <div class="space-y-2">
                                                 ${vessel.reports.map(report => `
-                                                    <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 flex justify-between items-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                                    <div class="rounded-lg p-3 flex justify-between items-center transition-colors" style="background: var(--accent-primary-subtle); border: 1px solid var(--glass-border);" onmouseover="this.style.background='var(--glass-bg-tertiary)'" onmouseout="this.style.background='var(--accent-primary-subtle)'"">
                                                         <div class="flex-grow">
-                                                            <div class="font-semibold text-sm text-gray-900 dark:text-white">${report.reportNumber || 'Untitled Report'}</div>
-                                                            <div class="text-xs text-gray-600 dark:text-gray-400">
+                                                            <div class="font-semibold text-sm" style="color: var(--text-primary);">${report.reportNumber || 'Untitled Report'}</div>
+                                                            <div class="text-xs" style="color: var(--text-tertiary);">
                                                                 Generated: ${new Date(report.timestamp).toLocaleDateString()} by ${report.generatedBy}
                                                             </div>
-                                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                            <div class="text-xs mt-1" style="color: var(--text-dim);">
                                                                 Formats: ${report.formats.join(', ').toUpperCase()}
                                                             </div>
                                                         </div>
                                                         <div class="flex gap-2">
-                                                            <button class="view-report-btn bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors text-xs font-medium"
+                                                            <button class="view-report-btn btn-primary text-xs px-3 py-1.5"
                                                                     data-report-id="${report.id}"
                                                                     data-vessel-id="${vessel.id}"
                                                                     data-asset-id="${assetId}"
@@ -701,7 +767,7 @@ function renderVesselDetailView(assetId) {
                                                                     title="View report details">
                                                                 👁️ View
                                                             </button>
-                                                            <button class="regenerate-report-btn bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 transition-colors text-xs font-medium"
+                                                            <button class="regenerate-report-btn btn-success text-xs px-3 py-1.5"
                                                                     data-report-id="${report.id}"
                                                                     data-vessel-id="${vessel.id}"
                                                                     data-asset-id="${assetId}"
@@ -710,7 +776,7 @@ function renderVesselDetailView(assetId) {
                                                                     title="Regenerate and download report">
                                                                 🔄 Regenerate
                                                             </button>
-                                                            <button class="delete-report-btn bg-red-600 text-white p-1.5 rounded hover:bg-red-700 transition-colors"
+                                                            <button class="delete-report-btn btn-danger p-1.5"
                                                                     data-report-id="${report.id}"
                                                                     data-vessel-id="${vessel.id}"
                                                                     data-asset-id="${assetId}"
@@ -730,8 +796,8 @@ function renderVesselDetailView(assetId) {
                                     <!-- Vessel Images Section -->
                                     <div class="glass-panel p-4">
                                         <div class="flex justify-between items-center mb-3">
-                                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Vessel Images</div>
-                                            <button class="upload-image-btn text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                            <div class="text-xs font-semibold uppercase" style="color: var(--text-secondary);">Vessel Images</div>
+                                            <button class="upload-image-btn btn-primary text-xs px-3 py-1.5" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
                                                 + Add Images
                                             </button>
                                         </div>
@@ -839,6 +905,49 @@ function renderVesselDetailView(assetId) {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             showStrakeManagementDialog(btn.dataset.assetId, btn.dataset.vesselId);
+        });
+    });
+
+    // Add "Add Scans to Strake" button listeners
+    dom.vesselDetailView.querySelectorAll('.add-scans-to-strake-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const assetId = btn.dataset.assetId;
+            const vesselId = btn.dataset.vesselId;
+            const vessel = dataManager.getVessel(assetId, vesselId);
+
+            if (!vessel.strakes || vessel.strakes.length === 0) {
+                alert('Please create at least one strake before adding scans. Use the "Manage Strakes" button to create strakes.');
+                return;
+            }
+
+            // Create file input
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.multiple = true;
+            fileInput.accept = '.csv,.txt';
+
+            fileInput.addEventListener('change', async (e) => {
+                if (e.target.files.length > 0) {
+                    const files = Array.from(e.target.files).filter(f =>
+                        f.name.toLowerCase().endsWith('.csv') || f.name.toLowerCase().endsWith('.txt')
+                    );
+
+                    if (files.length === 0) {
+                        alert('Please select CSV or TXT files');
+                        return;
+                    }
+
+                    // Ask user to select strake
+                    const strakeId = await selectStrakeForFiles(assetId, vesselId, files.length);
+                    if (!strakeId) return;
+
+                    // Process files
+                    await processStrakeFiles(assetId, vesselId, strakeId, files);
+                }
+            });
+
+            fileInput.click();
         });
     });
 
@@ -1372,6 +1481,417 @@ async function createNewVessel(assetId) {
 }
 
 // Strake Management Functions
+// Helper function to select strake for file uploads (standalone version)
+async function selectStrakeForFiles(assetId, vesselId, fileCount) {
+    const vessel = dataManager.getVessel(assetId, vesselId);
+    if (!vessel.strakes || vessel.strakes.length === 0) {
+        alert('No strakes available. Please create a strake first.');
+        return null;
+    }
+
+    return new Promise((resolve) => {
+        const selectionModal = document.createElement('div');
+        selectionModal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]';
+        selectionModal.innerHTML = `
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+                <h2 class="text-xl font-bold mb-4 dark:text-white">Select Strake</h2>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Assign ${fileCount} scan(s) to:</p>
+                <div class="space-y-2 mb-6 max-h-64 overflow-y-auto">
+                    ${vessel.strakes.map(strake => `
+                        <label class="block p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                            <input type="radio" name="strake-select" value="${strake.id}" class="mr-2">
+                            <span class="dark:text-gray-300">${strake.name}</span>
+                            <span class="text-sm text-gray-500 dark:text-gray-400 ml-2">(${strake.totalArea.toFixed(1)} m²)</span>
+                        </label>
+                    `).join('')}
+                </div>
+                <div class="flex gap-3">
+                    <button id="cancel-strake-select-standalone" class="flex-1 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+                    <button id="confirm-strake-select-standalone" class="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors">Assign</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(selectionModal);
+
+        selectionModal.querySelector('#cancel-strake-select-standalone').addEventListener('click', () => {
+            document.body.removeChild(selectionModal);
+            resolve(null);
+        });
+
+        selectionModal.querySelector('#confirm-strake-select-standalone').addEventListener('click', () => {
+            const selected = selectionModal.querySelector('input[name="strake-select"]:checked');
+            if (!selected) {
+                alert('Please select a strake');
+                return;
+            }
+            const strakeId = selected.value;
+            document.body.removeChild(selectionModal);
+            resolve(strakeId);
+        });
+    });
+}
+
+// Helper function to process strake files (standalone version)
+async function processStrakeFiles(assetId, vesselId, strakeId, files) {
+    // Create a temporary status modal
+    const statusModal = document.createElement('div');
+    statusModal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]';
+    statusModal.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h2 class="text-xl font-bold mb-4 dark:text-white">Processing Scans</h2>
+            <p id="process-status" class="text-sm text-gray-600 dark:text-gray-400 mb-4">Starting...</p>
+            <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                <div id="process-progress" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(statusModal);
+
+    const statusText = statusModal.querySelector('#process-status');
+    const progressBar = statusModal.querySelector('#process-progress');
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        try {
+            statusText.textContent = `Processing ${file.name} (${i + 1}/${files.length})...`;
+            progressBar.style.width = `${((i) / files.length) * 100}%`;
+
+            const content = await file.text();
+            const parsedData = parseCScanFile(content, file.name);
+
+            statusText.textContent = `Generating preview for ${file.name}...`;
+            const thumbnails = await generateThumbnailsFromData(parsedData);
+
+            const scanData = {
+                name: file.name.replace(/\.(csv|txt)$/i, ''),
+                toolType: 'cscan',
+                data: {
+                    scanData: {
+                        metadata: parsedData.metadata,
+                        x_coords: parsedData.x_coords,
+                        y_coords: parsedData.y_coords,
+                        thickness_values_flat: parsedData.thickness_values_flat,
+                        rows: parsedData.rows,
+                        cols: parsedData.cols,
+                        fileName: parsedData.fileName
+                    },
+                    isComposite: false,
+                    customColorRange: { min: null, max: null },
+                    stats: null,
+                    fileName: file.name
+                },
+                thumbnail: thumbnails ? thumbnails.full : null,
+                heatmapOnly: thumbnails ? thumbnails.heatmapOnly : null
+            };
+
+            const scan = await dataManager.createScan(assetId, vesselId, scanData);
+
+            if (scan) {
+                await dataManager.assignScanToStrake(assetId, vesselId, scan.id, strakeId);
+                successCount++;
+            } else {
+                errorCount++;
+            }
+        } catch (error) {
+            console.error(`Error processing ${file.name}:`, error);
+            errorCount++;
+        }
+
+        progressBar.style.width = `${((i + 1) / files.length) * 100}%`;
+    }
+
+    // Show final result
+    statusText.textContent = errorCount === 0
+        ? `Successfully imported ${successCount} scan(s)!`
+        : `Imported ${successCount} scan(s), ${errorCount} failed`;
+
+    setTimeout(() => {
+        document.body.removeChild(statusModal);
+        renderVesselDetailView(assetId);
+    }, 2000);
+}
+
+// Helper function to parse CSV scan file (standalone version)
+function parseCScanFile(content, fileName) {
+    const lines = content.split(/\r?\n/);
+    const metadata = {};
+    let dataStartIndex = -1;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith('mm')) {
+            dataStartIndex = i;
+            break;
+        }
+        const parts = line.split('=').map(p => p.trim());
+        if (parts.length === 2) {
+            metadata[parts[0]] = isNaN(parseFloat(parts[1])) ? parts[1] : parseFloat(parts[1]);
+        }
+    }
+
+    if (dataStartIndex === -1) throw new Error('Could not find data matrix header.');
+
+    const xCoords = lines[dataStartIndex].split(/[\t,]/).slice(1).map(parseFloat);
+    const yCoords = [];
+    const tempThicknessValues = [];
+
+    for (let i = dataStartIndex + 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        const rowValues = line.split(/[\t,]/);
+        const yValue = parseFloat(rowValues[0]);
+        if (isNaN(yValue)) continue;
+        yCoords.push(yValue);
+        tempThicknessValues.push(rowValues.slice(1).map(val => (val === 'ND' || val.trim() === '') ? NaN : parseFloat(val)));
+    }
+
+    if (xCoords.length === 0 || yCoords.length === 0 || tempThicknessValues.length === 0) {
+        throw new Error('Failed to parse data matrix.');
+    }
+
+    const flatThicknessValues = new Float32Array(tempThicknessValues.length * xCoords.length);
+    tempThicknessValues.forEach((row, i) => flatThicknessValues.set(row, i * xCoords.length));
+
+    return {
+        metadata,
+        x_coords: xCoords,
+        y_coords: yCoords,
+        thickness_values_flat: flatThicknessValues,
+        rows: yCoords.length,
+        cols: xCoords.length,
+        fileName
+    };
+}
+
+// Helper function to generate thumbnails from parsed scan data (standalone version)
+async function generateThumbnailsFromData(parsedData) {
+    try {
+        const tempDiv = document.createElement('div');
+        tempDiv.style.position = 'absolute';
+        tempDiv.style.left = '-9999px';
+        tempDiv.style.width = '800px';
+        tempDiv.style.height = '600px';
+        document.body.appendChild(tempDiv);
+
+        // Reconstruct matrix from flat array - IMPORTANT: match cscan-visualizer logic
+        const matrix = [];
+        let zmin = Infinity;
+        let zmax = -Infinity;
+
+        for (let i = 0; i < parsedData.rows; i++) {
+            const row = new Array(parsedData.cols);
+            for (let j = 0; j < parsedData.cols; j++) {
+                const val = parsedData.thickness_values_flat[i * parsedData.cols + j];
+                row[j] = isNaN(val) ? null : val;
+
+                // Track min/max for colorscale range
+                if (!isNaN(val) && val !== null) {
+                    if (val < zmin) zmin = val;
+                    if (val > zmax) zmax = val;
+                }
+            }
+            matrix.push(row);
+        }
+
+        // If no valid values found, use defaults
+        if (zmin === Infinity) zmin = 0;
+        if (zmax === -Infinity) zmax = 100;
+
+        const plotData = [{
+            x: parsedData.x_coords,
+            y: parsedData.y_coords,
+            z: matrix,
+            type: 'heatmap',
+            colorscale: 'Jet',
+            reversescale: false,
+            showscale: true,
+            connectgaps: false,
+            hoverongaps: false,
+            zsmooth: false,
+            zmin: zmin,
+            zmax: zmax,
+            colorbar: {
+                title: 'Thickness<br>(mm)',
+                titleside: 'right',
+                thickness: 15,
+                len: 0.9,
+                x: 1.01
+            }
+        }];
+
+        const layout = {
+            xaxis: {
+                title: { text: 'Scan Axis (mm)', font: { size: 12 } },
+                scaleanchor: 'y',
+                scaleratio: 1,
+                showgrid: true,
+                gridcolor: '#4b5563'
+            },
+            yaxis: {
+                title: { text: 'Index Axis (mm)', font: { size: 12 } },
+                showgrid: true,
+                gridcolor: '#4b5563'
+            },
+            margin: { l: 50, r: 10, t: 30, b: 40 },
+            autosize: true,
+            template: 'plotly_dark',
+            paper_bgcolor: 'rgb(31, 41, 55)',
+            plot_bgcolor: 'rgb(31, 41, 55)'
+        };
+
+        await Plotly.newPlot(tempDiv, plotData, layout, { displayModeBar: false });
+
+        const fullThumbnail = await Plotly.toImage(tempDiv, {
+            format: 'png',
+            width: 800,
+            height: 600,
+            scale: 2
+        });
+
+        const cleanData = JSON.parse(JSON.stringify(plotData));
+        if (cleanData[0]) cleanData[0].showscale = false;
+
+        const cleanLayout = {
+            xaxis: { visible: false, scaleanchor: 'y', scaleratio: 1.0 },
+            yaxis: { visible: false },
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            margin: { l: 0, r: 0, t: 0, b: 0 },
+            showlegend: false
+        };
+
+        await Plotly.newPlot(tempDiv, cleanData, cleanLayout, { displayModeBar: false });
+
+        const heatmapOnly = await Plotly.toImage(tempDiv, {
+            format: 'png',
+            width: 1920,
+            height: 1080,
+            scale: 2
+        });
+
+        Plotly.purge(tempDiv);
+        document.body.removeChild(tempDiv);
+
+        return {
+            full: fullThumbnail,
+            heatmapOnly: heatmapOnly
+        };
+    } catch (error) {
+        console.error('Error generating thumbnails:', error);
+        return null;
+    }
+}
+
+// Function to regenerate all thumbnails for a vessel's cscans
+async function regenerateAllScanThumbnails(assetId, vesselId) {
+    const vessel = dataManager.getVessel(assetId, vesselId);
+    if (!vessel) return;
+
+    const cscanScans = vessel.scans.filter(s => s.toolType === 'cscan');
+    if (cscanScans.length === 0) {
+        alert('No C-scan type scans found in this vessel.');
+        return;
+    }
+
+    if (!confirm(`Regenerate thumbnails for ${cscanScans.length} C-scan(s)? This may take a moment.`)) {
+        return;
+    }
+
+    // Create progress modal
+    const progressModal = document.createElement('div');
+    progressModal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]';
+    progressModal.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h2 class="text-xl font-bold mb-4 dark:text-white">Regenerating Thumbnails</h2>
+            <p id="regen-status" class="text-sm text-gray-600 dark:text-gray-400 mb-4">Starting...</p>
+            <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                <div id="regen-progress" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(progressModal);
+
+    const statusText = progressModal.querySelector('#regen-status');
+    const progressBar = progressModal.querySelector('#regen-progress');
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < cscanScans.length; i++) {
+        const scan = cscanScans[i];
+        statusText.textContent = `Processing ${scan.name} (${i + 1}/${cscanScans.length})...`;
+        progressBar.style.width = `${(i / cscanScans.length) * 100}%`;
+
+        const success = await regenerateScanThumbnail(assetId, vesselId, scan.id);
+        if (success) {
+            successCount++;
+        } else {
+            failCount++;
+        }
+
+        progressBar.style.width = `${((i + 1) / cscanScans.length) * 100}%`;
+    }
+
+    statusText.textContent = failCount === 0
+        ? `Successfully regenerated ${successCount} thumbnail(s)!`
+        : `Regenerated ${successCount} thumbnail(s), ${failCount} failed`;
+
+    setTimeout(() => {
+        document.body.removeChild(progressModal);
+        renderVesselDetailView(assetId);
+    }, 2000);
+}
+
+// Function to regenerate thumbnail for an existing cscan
+async function regenerateScanThumbnail(assetId, vesselId, scanId) {
+    try {
+        const scan = dataManager.getScan(assetId, vesselId, scanId);
+        if (!scan || scan.toolType !== 'cscan') {
+            console.error('Scan not found or not a cscan type');
+            return false;
+        }
+
+        // Extract the scan data
+        const scanData = scan.data?.scanData;
+        if (!scanData || !scanData.thickness_values_flat) {
+            console.error('Invalid scan data structure');
+            return false;
+        }
+
+        const parsedData = {
+            x_coords: scanData.x_coords,
+            y_coords: scanData.y_coords,
+            thickness_values_flat: scanData.thickness_values_flat,
+            rows: scanData.rows,
+            cols: scanData.cols,
+            metadata: scanData.metadata,
+            fileName: scanData.fileName
+        };
+
+        console.log('Regenerating thumbnail for scan:', scan.name);
+        const thumbnails = await generateThumbnailsFromData(parsedData);
+
+        if (thumbnails) {
+            // Update the scan with new thumbnails
+            await dataManager.updateScan(assetId, vesselId, scanId, {
+                thumbnail: thumbnails.full,
+                heatmapOnly: thumbnails.heatmapOnly
+            });
+
+            console.log('Thumbnail regenerated successfully');
+            return true;
+        }
+
+        return false;
+    } catch (error) {
+        console.error('Error regenerating thumbnail:', error);
+        return false;
+    }
+}
+
 function showStrakeManagementDialog(assetId, vesselId) {
     const vessel = dataManager.getVessel(assetId, vesselId);
     if (!vessel) return;
@@ -1428,8 +1948,21 @@ function showStrakeManagementDialog(assetId, vesselId) {
                 </button>
             </div>
 
-            <div id="strakes-list" class="space-y-3">
+            <div id="strakes-list" class="space-y-3 mb-6">
                 ${renderStrakesList()}
+            </div>
+
+            <div id="upload-section-strake" class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center transition-colors mb-4">
+                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                </svg>
+                <h3 class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">Add Scans to Strake</h3>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Drag and drop CSV or TXT files or click to select</p>
+                <input type="file" id="strake-file-input" multiple accept=".csv,.txt" class="hidden">
+                <button id="strake-upload-btn" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                    Select Files
+                </button>
+                <div id="strake-upload-status" class="mt-3 text-sm hidden"></div>
             </div>
 
             <div class="flex gap-3 mt-6">
@@ -1498,6 +2031,366 @@ function showStrakeManagementDialog(assetId, vesselId) {
 
     // Initialize event listeners for existing strakes
     updateStrakesList();
+
+    // Upload section elements
+    const uploadSection = modal.querySelector('#upload-section-strake');
+    const fileInput = modal.querySelector('#strake-file-input');
+    const uploadBtn = modal.querySelector('#strake-upload-btn');
+    const uploadStatus = modal.querySelector('#strake-upload-status');
+
+    // Helper function to show upload status
+    const showUploadStatus = (message, isError = false) => {
+        uploadStatus.textContent = message;
+        uploadStatus.className = `mt-3 text-sm ${isError ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`;
+        uploadStatus.classList.remove('hidden');
+    };
+
+    // Helper function to parse CSV scan file
+    const parseCScanFile = (content, fileName) => {
+        const lines = content.split(/\r?\n/);
+        const metadata = {};
+        let dataStartIndex = -1;
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (line.startsWith('mm')) {
+                dataStartIndex = i;
+                break;
+            }
+            const parts = line.split('=').map(p => p.trim());
+            if (parts.length === 2) {
+                metadata[parts[0]] = isNaN(parseFloat(parts[1])) ? parts[1] : parseFloat(parts[1]);
+            }
+        }
+
+        if (dataStartIndex === -1) throw new Error('Could not find data matrix header.');
+
+        const xCoords = lines[dataStartIndex].split(/[\t,]/).slice(1).map(parseFloat);
+        const yCoords = [];
+        const tempThicknessValues = [];
+
+        for (let i = dataStartIndex + 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            const rowValues = line.split(/[\t,]/);
+            const yValue = parseFloat(rowValues[0]);
+            if (isNaN(yValue)) continue;
+            yCoords.push(yValue);
+            tempThicknessValues.push(rowValues.slice(1).map(val => (val === 'ND' || val.trim() === '') ? NaN : parseFloat(val)));
+        }
+
+        if (xCoords.length === 0 || yCoords.length === 0 || tempThicknessValues.length === 0) {
+            throw new Error('Failed to parse data matrix.');
+        }
+
+        const flatThicknessValues = new Float32Array(tempThicknessValues.length * xCoords.length);
+        tempThicknessValues.forEach((row, i) => flatThicknessValues.set(row, i * xCoords.length));
+
+        return {
+            metadata,
+            x_coords: xCoords,
+            y_coords: yCoords,
+            thickness_values_flat: flatThicknessValues,
+            rows: yCoords.length,
+            cols: xCoords.length,
+            fileName
+        };
+    };
+
+    // Helper function to generate thumbnails from parsed scan data
+    const generateThumbnailsFromData = async (parsedData) => {
+        try {
+            // Create temporary container for rendering
+            const tempDiv = document.createElement('div');
+            tempDiv.style.position = 'absolute';
+            tempDiv.style.left = '-9999px';
+            tempDiv.style.width = '800px';
+            tempDiv.style.height = '600px';
+            document.body.appendChild(tempDiv);
+
+            // Reconstruct matrix from flat array - IMPORTANT: match cscan-visualizer logic
+            const matrix = [];
+            let zmin = Infinity;
+            let zmax = -Infinity;
+
+            for (let i = 0; i < parsedData.rows; i++) {
+                const row = new Array(parsedData.cols);
+                for (let j = 0; j < parsedData.cols; j++) {
+                    const val = parsedData.thickness_values_flat[i * parsedData.cols + j];
+                    row[j] = isNaN(val) ? null : val;
+
+                    // Track min/max for colorscale range
+                    if (!isNaN(val) && val !== null) {
+                        if (val < zmin) zmin = val;
+                        if (val > zmax) zmax = val;
+                    }
+                }
+                matrix.push(row);
+            }
+
+            // If no valid values found, use defaults
+            if (zmin === Infinity) zmin = 0;
+            if (zmax === -Infinity) zmax = 100;
+
+            const plotData = [{
+                x: parsedData.x_coords,
+                y: parsedData.y_coords,
+                z: matrix,
+                type: 'heatmap',
+                colorscale: 'Jet',
+                reversescale: false,
+                showscale: true,
+                connectgaps: false,
+                hoverongaps: false,
+                zsmooth: false,
+                zmin: zmin,
+                zmax: zmax,
+                colorbar: {
+                    title: 'Thickness<br>(mm)',
+                    titleside: 'right',
+                    thickness: 15,
+                    len: 0.9,
+                    x: 1.01
+                }
+            }];
+
+            const layout = {
+                xaxis: {
+                    title: { text: 'Scan Axis (mm)', font: { size: 12 } },
+                    scaleanchor: 'y',
+                    scaleratio: 1,
+                    showgrid: true,
+                    gridcolor: '#4b5563'
+                },
+                yaxis: {
+                    title: { text: 'Index Axis (mm)', font: { size: 12 } },
+                    showgrid: true,
+                    gridcolor: '#4b5563'
+                },
+                margin: { l: 50, r: 10, t: 30, b: 40 },
+                autosize: true,
+                template: 'plotly_dark',
+                paper_bgcolor: 'rgb(31, 41, 55)',
+                plot_bgcolor: 'rgb(31, 41, 55)'
+            };
+
+            await Plotly.newPlot(tempDiv, plotData, layout, { displayModeBar: false });
+
+            // Generate full thumbnail
+            const fullThumbnail = await Plotly.toImage(tempDiv, {
+                format: 'png',
+                width: 800,
+                height: 600,
+                scale: 2
+            });
+
+            // Generate heatmap-only version
+            const cleanData = JSON.parse(JSON.stringify(plotData));
+            if (cleanData[0]) cleanData[0].showscale = false;
+
+            const cleanLayout = {
+                xaxis: { visible: false, scaleanchor: 'y', scaleratio: 1.0 },
+                yaxis: { visible: false },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                margin: { l: 0, r: 0, t: 0, b: 0 },
+                showlegend: false
+            };
+
+            await Plotly.newPlot(tempDiv, cleanData, cleanLayout, { displayModeBar: false });
+
+            const heatmapOnly = await Plotly.toImage(tempDiv, {
+                format: 'png',
+                width: 1920,
+                height: 1080,
+                scale: 2
+            });
+
+            // Cleanup
+            Plotly.purge(tempDiv);
+            document.body.removeChild(tempDiv);
+
+            return {
+                full: fullThumbnail,
+                heatmapOnly: heatmapOnly
+            };
+        } catch (error) {
+            console.error('Error generating thumbnails:', error);
+            return null;
+        }
+    };
+
+    // Helper function to prompt for strake selection
+    const selectStrakeForScans = async (scanCount) => {
+        const updatedVessel = dataManager.getVessel(assetId, vesselId);
+        if (!updatedVessel.strakes || updatedVessel.strakes.length === 0) {
+            alert('No strakes available. Please create a strake first.');
+            return null;
+        }
+
+        return new Promise((resolve) => {
+            const selectionModal = document.createElement('div');
+            selectionModal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]';
+            selectionModal.innerHTML = `
+                <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+                    <h2 class="text-xl font-bold mb-4 dark:text-white">Select Strake</h2>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Assign ${scanCount} scan(s) to:</p>
+                    <div class="space-y-2 mb-6 max-h-64 overflow-y-auto">
+                        ${updatedVessel.strakes.map(strake => `
+                            <label class="block p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                                <input type="radio" name="strake-select" value="${strake.id}" class="mr-2">
+                                <span class="dark:text-gray-300">${strake.name}</span>
+                                <span class="text-sm text-gray-500 dark:text-gray-400 ml-2">(${strake.totalArea.toFixed(1)} m²)</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                    <div class="flex gap-3">
+                        <button id="cancel-strake-select" class="flex-1 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+                        <button id="confirm-strake-select" class="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors">Assign</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(selectionModal);
+
+            selectionModal.querySelector('#cancel-strake-select').addEventListener('click', () => {
+                document.body.removeChild(selectionModal);
+                resolve(null);
+            });
+
+            selectionModal.querySelector('#confirm-strake-select').addEventListener('click', () => {
+                const selected = selectionModal.querySelector('input[name="strake-select"]:checked');
+                if (!selected) {
+                    alert('Please select a strake');
+                    return;
+                }
+                const strakeId = selected.value;
+                document.body.removeChild(selectionModal);
+                resolve(strakeId);
+            });
+        });
+    };
+
+    // Handle file processing
+    const handleStrakeFiles = async (files) => {
+        const csvFiles = Array.from(files).filter(f =>
+            f.name.toLowerCase().endsWith('.csv') || f.name.toLowerCase().endsWith('.txt')
+        );
+
+        if (csvFiles.length === 0) {
+            showUploadStatus('Please select CSV or TXT files', true);
+            return;
+        }
+
+        showUploadStatus(`Processing ${csvFiles.length} file(s)...`);
+
+        // Ask user to select strake
+        const strakeId = await selectStrakeForScans(csvFiles.length);
+        if (!strakeId) {
+            showUploadStatus('Import cancelled', true);
+            return;
+        }
+
+        let successCount = 0;
+        let errorCount = 0;
+
+        for (const file of csvFiles) {
+            try {
+                const content = await file.text();
+                const parsedData = parseCScanFile(content, file.name);
+
+                // Generate thumbnails
+                showUploadStatus(`Processing ${file.name} - generating preview...`);
+                const thumbnails = await generateThumbnailsFromData(parsedData);
+
+                // Create scan data object for cscan type
+                const scanData = {
+                    name: file.name.replace(/\.(csv|txt)$/i, ''),
+                    toolType: 'cscan',
+                    data: {
+                        scanData: {
+                            metadata: parsedData.metadata,
+                            x_coords: parsedData.x_coords,
+                            y_coords: parsedData.y_coords,
+                            thickness_values_flat: parsedData.thickness_values_flat,
+                            rows: parsedData.rows,
+                            cols: parsedData.cols,
+                            fileName: parsedData.fileName
+                        },
+                        isComposite: false,
+                        customColorRange: { min: null, max: null },
+                        stats: null,
+                        fileName: file.name
+                    },
+                    thumbnail: thumbnails ? thumbnails.full : null,
+                    heatmapOnly: thumbnails ? thumbnails.heatmapOnly : null
+                };
+
+                // Create the scan using dataManager
+                const scan = await dataManager.createScan(assetId, vesselId, scanData);
+
+                if (scan) {
+                    // Assign to strake
+                    await dataManager.assignScanToStrake(assetId, vesselId, scan.id, strakeId);
+                    successCount++;
+                } else {
+                    errorCount++;
+                }
+            } catch (error) {
+                console.error(`Error processing ${file.name}:`, error);
+                errorCount++;
+            }
+        }
+
+        if (errorCount === 0) {
+            showUploadStatus(`Successfully imported ${successCount} scan(s)!`);
+        } else {
+            showUploadStatus(`Imported ${successCount} scan(s), ${errorCount} failed`, true);
+        }
+
+        // Refresh the strake list
+        updateStrakesList();
+        renderVesselDetailView(assetId);
+    };
+
+    // Prevent default drag behaviors
+    const preventDefaults = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        uploadSection.addEventListener(eventName, preventDefaults, false);
+    });
+
+    // Highlight on drag
+    ['dragenter', 'dragover'].forEach(eventName => {
+        uploadSection.addEventListener(eventName, () => {
+            uploadSection.classList.add('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        uploadSection.addEventListener(eventName, () => {
+            uploadSection.classList.remove('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
+        }, false);
+    });
+
+    // Handle drop
+    uploadSection.addEventListener('drop', (e) => {
+        const files = e.dataTransfer.files;
+        handleStrakeFiles(files);
+    }, false);
+
+    // Handle click to upload
+    uploadBtn.addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            handleStrakeFiles(e.target.files);
+        }
+    });
 
     // Close button
     modal.querySelector('#close-strake-dialog-btn').addEventListener('click', () => {
@@ -1919,11 +2812,33 @@ function showVesselMenu(event, assetId, vesselId) {
     menu.innerHTML = `
         ${vessel.model3d ? '<button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm" data-action="change-model">Change 3D Model</button>' : ''}
         ${vessel.model3d ? '<button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm" data-action="remove-model">Remove 3D Model</button>' : ''}
+        <button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm" data-action="regenerate-thumbnails">Regenerate Scan Thumbnails</button>
         <button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm" data-action="rename">Rename</button>
         <button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-red-600" data-action="delete">Delete</button>
     `;
 
     document.body.appendChild(menu);
+
+    // Adjust position to keep menu on screen
+    const rect = menu.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let left = event.clientX;
+    let top = event.clientY;
+
+    // If menu goes off right edge, align to left of click
+    if (left + rect.width > viewportWidth) {
+        left = Math.max(10, event.clientX - rect.width);
+    }
+
+    // If menu goes off bottom edge, align above click
+    if (top + rect.height > viewportHeight) {
+        top = Math.max(10, event.clientY - rect.height);
+    }
+
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
 
     menu.addEventListener('click', async (e) => {
         const action = e.target.dataset.action;
@@ -1949,6 +2864,10 @@ function showVesselMenu(event, assetId, vesselId) {
                 renderStats();
                 renderVesselDetailView(assetId);
             }
+        } else if (action === 'regenerate-thumbnails') {
+            document.body.removeChild(menu);
+            await regenerateAllScanThumbnails(assetId, vesselId);
+            return;
         }
         document.body.removeChild(menu);
     });
