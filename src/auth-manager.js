@@ -378,10 +378,11 @@ class AuthManager {
                 errorDiv.textContent = 'Error updating password: ' + error.message;
                 errorDiv.style.display = 'block';
             } else {
-                alert('Password updated successfully! Please log in with your new password.');
+                // Password updated successfully - user is automatically signed in
                 document.body.removeChild(modal);
-                await supabase.auth.signOut();
-                window.location.reload();
+
+                // Redirect to main app - the USER_UPDATED event will handle loading the profile
+                window.location.href = window.location.origin + '/#/';
             }
         });
     }
