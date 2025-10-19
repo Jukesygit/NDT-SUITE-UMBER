@@ -66,11 +66,11 @@ select option,
 }
 
 #app-container.tool-active #toolbar {
-    width: 80px;
+    width: 90px;
     height: 100vh;
     padding: 0;
     border-bottom: none;
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    border-right: 1.5px solid rgba(255, 255, 255, 0.2);
 }
 
 #app-container.tool-active #toolbar-content {
