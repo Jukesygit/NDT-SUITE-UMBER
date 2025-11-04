@@ -132,7 +132,7 @@ function cacheDom() {
     const header = createAnimatedHeader(
         'PEC Data Visualizer',
         'Paste Pulsed Eddy Current data to generate a wall thickness heatmap',
-        { height: '180px', particleCount: 15, waveIntensity: 0.4 }
+        { height: '100px', particleCount: 15, waveIntensity: 0.4 }
     );
     dom.headerContainer.appendChild(header);
 }

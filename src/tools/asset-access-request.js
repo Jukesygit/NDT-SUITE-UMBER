@@ -49,7 +49,7 @@ function cacheDom() {
     const header = createAnimatedHeader(
         'Asset Access Requests',
         'Request access to assets from other organizations',
-        { height: '180px', particleCount: 15, waveIntensity: 0.4 }
+        { height: '100px', particleCount: 15, waveIntensity: 0.4 }
     );
     dom.headerContainer.appendChild(header);
 }

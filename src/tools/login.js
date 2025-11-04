@@ -2,11 +2,21 @@
 import authManager from '../auth-manager.js';
 
 let container, dom = {};
-let canvasRef, mouseRef, verticesRef, impactPointsRef, particlesRef, animationFrameId;
 
 function createLoginHTML() {
     const div = document.createElement('div');
-    div.style.cssText = 'position: relative; width: 100%; height: 100vh; overflow: hidden; font-family: system-ui, sans-serif';
+    div.style.cssText = `
+        position: relative;
+        width: 100%;
+        height: 100vh;
+        overflow: hidden;
+        font-family: system-ui, sans-serif;
+        background: linear-gradient(135deg,
+            rgba(15, 23, 42, 0.95) 0%,
+            rgba(30, 41, 59, 0.9) 50%,
+            rgba(51, 65, 85, 0.85) 100%
+        );
+    `;
 
     // Add keyframe animations
     const style = document.createElement('style');
@@ -14,6 +24,22 @@ function createLoginHTML() {
         @keyframes gradientRotate {
             0%, 100% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
+        }
+        @keyframes floatUp {
+            0% {
+                transform: translateY(0) translateX(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.3;
+            }
+            90% {
+                opacity: 0.3;
+            }
+            100% {
+                transform: translateY(-100vh) translateX(${Math.random() * 100 - 50}px);
+                opacity: 0;
+            }
         }
         @keyframes float {
             0%, 100% { transform: translateY(0); }
@@ -29,10 +55,62 @@ function createLoginHTML() {
     `;
     div.appendChild(style);
 
-    // Canvas for background animation
-    const canvas = document.createElement('canvas');
-    canvas.style.cssText = 'position: absolute; top: 0; left: 0; width: 100%; height: 100vh';
-    div.appendChild(canvas);
+    // Animated gradient background overlay
+    const gradientOverlay = document.createElement('div');
+    gradientOverlay.className = 'header-gradient-overlay';
+    gradientOverlay.style.cssText = `
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg,
+            #60a5fa15 0%,
+            #34d39910 50%,
+            #60a5fa05 100%
+        );
+        background-size: 200% 200%;
+        animation: gradientRotate 8s ease infinite;
+        opacity: 0.6;
+        z-index: 0;
+    `;
+    div.appendChild(gradientOverlay);
+
+    // Particle system
+    const particlesContainer = document.createElement('div');
+    particlesContainer.className = 'login-particles';
+    particlesContainer.style.cssText = `
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        overflow: hidden;
+        pointer-events: none;
+    `;
+
+    const gradientColors = ['#60a5fa', '#34d399'];
+    const particleCount = 30;
+
+    for (let i = 0; i < particleCount; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'login-particle';
+        const size = Math.random() * 4 + 2;
+        const left = Math.random() * 100;
+        const duration = Math.random() * 10 + 15;
+        const delay = Math.random() * 5;
+        const opacity = Math.random() * 0.3 + 0.1;
+
+        particle.style.cssText = `
+            position: absolute;
+            width: ${size}px;
+            height: ${size}px;
+            background: ${gradientColors[Math.floor(Math.random() * gradientColors.length)]};
+            border-radius: 50%;
+            left: ${left}%;
+            bottom: -10px;
+            opacity: ${opacity};
+            animation: floatUp ${duration}s linear ${delay}s infinite;
+            box-shadow: 0 0 ${size * 2}px ${gradientColors[0]};
+        `;
+        particlesContainer.appendChild(particle);
+    }
+    div.appendChild(particlesContainer);
 
     // Container for login form
     const contentDiv = document.createElement('div');
@@ -196,212 +274,8 @@ function cacheDom() {
         requestErrorMessage: q('#request-error-message'),
         requestSuccessMessage: q('#request-success-message')
     };
-
-    canvasRef = container.querySelector('canvas');
 }
 
-function initCanvasAnimation() {
-    const ctx = canvasRef.getContext('2d');
-    mouseRef = { x: 0, y: 0, prevX: 0, prevY: 0 };
-    verticesRef = [];
-    impactPointsRef = [];
-    particlesRef = [];
-
-    const resizeCanvas = () => {
-        canvasRef.width = window.innerWidth;
-        canvasRef.height = window.innerHeight;
-        initVertices();
-        initParticles();
-    };
-
-    const initVertices = () => {
-        const cols = 50;
-        const rows = 35;
-        const spacing = Math.max(canvasRef.width / cols, canvasRef.height / rows);
-        verticesRef = [];
-        for (let y = -2; y <= rows + 2; y++) {
-            for (let x = -2; x <= cols + 2; x++) {
-                verticesRef.push({
-                    x: x * spacing, y: y * spacing, ox: x * spacing, oy: y * spacing,
-                    vx: 0, vy: 0, phase: Math.random() * Math.PI * 2
-                });
-            }
-        }
-    };
-
-    const initParticles = () => {
-        particlesRef = [];
-        for (let i = 0; i < 40; i++) {
-            particlesRef.push({
-                x: Math.random() * canvasRef.width, y: Math.random() * canvasRef.height,
-                vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3,
-                size: Math.random() * 2 + 0.5, opacity: Math.random() * 0.5 + 0.2,
-                hue: Math.random() * 60 + 180
-            });
-        }
-    };
-
-    const handleMouseMove = (e) => {
-        const prevX = mouseRef.x;
-        const prevY = mouseRef.y;
-        const newX = e.clientX;
-        const newY = e.clientY;
-        const dx = newX - prevX;
-        const dy = newY - prevY;
-        const velocity = Math.sqrt(dx * dx + dy * dy);
-
-        if (velocity > 2) {
-            impactPointsRef.push({
-                x: newX, y: newY, radius: 0, maxRadius: 150,
-                strength: Math.min(velocity * 0.06, 6), life: 1.0
-            });
-        }
-        mouseRef = { x: newX, y: newY, prevX, prevY };
-    };
-
-    const animate = () => {
-        const gradient = ctx.createLinearGradient(0, 0, canvasRef.width, canvasRef.height);
-        gradient.addColorStop(0, '#2a2a35');
-        gradient.addColorStop(0.5, '#35353f');
-        gradient.addColorStop(1, '#2d2d38');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, canvasRef.width, canvasRef.height);
-
-        const time = Date.now() * 0.001;
-
-        particlesRef.forEach(p => {
-            p.x += p.vx;
-            p.y += p.vy;
-            if (p.x < 0) p.x = canvasRef.width;
-            if (p.x > canvasRef.width) p.x = 0;
-            if (p.y < 0) p.y = canvasRef.height;
-            if (p.y > canvasRef.height) p.y = 0;
-
-            const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 3);
-            grad.addColorStop(0, `hsla(${p.hue}, 70%, 60%, ${p.opacity})`);
-            grad.addColorStop(1, `hsla(${p.hue}, 70%, 60%, 0)`);
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2);
-            ctx.fill();
-        });
-
-        impactPointsRef = impactPointsRef.filter(impact => {
-            impact.radius += 3;
-            impact.life -= 0.008;
-            if (impact.life <= 0) return false;
-
-            verticesRef.forEach(vertex => {
-                const dx = vertex.ox - impact.x;
-                const dy = vertex.oy - impact.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                const influence = Math.exp(-Math.pow((distance - impact.radius) / 15, 2));
-
-                if (influence > 0.01) {
-                    const force = influence * impact.strength * impact.life;
-                    const angle = Math.atan2(dy, dx);
-                    const variation = Math.sin(angle * 3 + time * 2) * 0.1;
-                    const finalForce = force * (1 + variation);
-                    vertex.vx += Math.cos(angle) * finalForce * 0.08;
-                    vertex.vy += Math.sin(angle) * finalForce * 0.08;
-                }
-            });
-            return true;
-        });
-
-        verticesRef.forEach((vertex) => {
-            const waveDirection = time * 1.2;
-            const distanceFromEdge = Math.sqrt(
-                Math.pow((vertex.ox - canvasRef.width / 2) / canvasRef.width, 2) +
-                Math.pow((vertex.oy - canvasRef.height / 2) / canvasRef.height, 2)
-            );
-            const waveBend1 = Math.sin(vertex.ox * 0.004 + time * 0.3) * 40;
-            const waveBend2 = Math.cos(vertex.ox * 0.007 - time * 0.2) * 30;
-            const freqVariation = 1 + Math.sin(vertex.ox * 0.003) * 0.8;
-            const wave1 = Math.sin((vertex.oy + waveBend1) * 0.005 * freqVariation + waveDirection) * 13.5;
-            const wave2 = Math.sin((vertex.oy + waveBend2) * 0.009 * freqVariation + waveDirection * 1.5 + Math.PI / 3) * 9;
-            const wave3 = Math.cos((vertex.ox + waveBend1 * 0.5) * 0.004 + waveDirection * 0.9) * 6.75;
-            const randomFactor = Math.sin(vertex.phase + time * 2.0) * 0.3 + 1;
-            const waveX = (wave1 * 0.3 + wave3) * (0.7 + distanceFromEdge * 0.3) * randomFactor;
-            const waveY = (wave1 + wave2 * 0.5) * (0.8 + distanceFromEdge * 0.2) * randomFactor;
-
-            vertex.vx += (vertex.ox + waveX - vertex.x) * 0.03;
-            vertex.vy += (vertex.oy + waveY - vertex.y) * 0.03;
-            vertex.vx *= 0.95;
-            vertex.vy *= 0.95;
-
-            const dx = vertex.x - vertex.ox;
-            const dy = vertex.y - vertex.oy;
-            const displacement = Math.sqrt(dx * dx + dy * dy);
-            if (displacement > 40) {
-                const factor = 40 / displacement;
-                vertex.x = vertex.ox + dx * factor;
-                vertex.y = vertex.oy + dy * factor;
-                vertex.vx *= 0.5;
-                vertex.vy *= 0.5;
-            }
-            vertex.x += vertex.vx;
-            vertex.y += vertex.vy;
-        });
-
-        const cols = 50, rows = 35, totalCols = cols + 5;
-        for (let y = 0; y < rows + 3; y++) {
-            for (let x = 0; x < cols + 3; x++) {
-                const i = y * totalCols + x;
-                const vertices = verticesRef;
-                if (vertices[i] && vertices[i + 1] && vertices[i + totalCols]) {
-                    drawTriangle(ctx, vertices[i], vertices[i + 1], vertices[i + totalCols]);
-                }
-                if (vertices[i + 1] && vertices[i + totalCols] && vertices[i + totalCols + 1]) {
-                    drawTriangle(ctx, vertices[i + 1], vertices[i + totalCols + 1], vertices[i + totalCols]);
-                }
-            }
-        }
-
-        ctx.fillStyle = 'rgba(100, 150, 200, 0.02)';
-        ctx.fillRect(0, (time * 100) % canvasRef.height, canvasRef.width, 2);
-        animationFrameId = requestAnimationFrame(animate);
-    };
-
-    const drawTriangle = (ctx, v1, v2, v3) => {
-        const area = Math.abs((v2.x - v1.x) * (v3.y - v1.y) - (v3.x - v1.x) * (v2.y - v1.y)) / 2;
-        if (area < 5) return;
-
-        const normalZ = (v2.x - v1.x) * (v3.y - v1.y) - (v3.x - v1.x) * (v2.y - v1.y);
-        const normalizedZ = normalZ / (Math.abs(normalZ) + 1000);
-        const lightDotNormal = normalizedZ * 0.6 + 0.5;
-        const shadeFactor = 0.4 + lightDotNormal * 0.6;
-        const specular = Math.pow(Math.max(lightDotNormal, 0), 5) * 0.4;
-
-        const distortion = (
-            Math.sqrt(Math.pow(v1.x - v1.ox, 2) + Math.pow(v1.y - v1.oy, 2)) +
-            Math.sqrt(Math.pow(v2.x - v2.ox, 2) + Math.pow(v2.y - v2.oy, 2)) +
-            Math.sqrt(Math.pow(v3.x - v3.ox, 2) + Math.pow(v3.y - v3.oy, 2))
-        ) / 3;
-
-        const normalizedDistortion = Math.min(distortion / 40, 1);
-        const colorIntensity = Math.pow(normalizedDistortion, 2.5);
-        const greyValue = 15 + 65 * colorIntensity;
-        const accentBlend = Math.pow(colorIntensity, 3) * 0.3;
-
-        const r = Math.floor((greyValue * (1 - accentBlend) + 45 * accentBlend + specular * 50) * shadeFactor);
-        const g = Math.floor((greyValue * (1 - accentBlend) + 50 * accentBlend + specular * 50) * shadeFactor);
-        const b = Math.floor((greyValue * (1 - accentBlend) + 65 * accentBlend + specular * 50) * shadeFactor);
-
-        ctx.beginPath();
-        ctx.moveTo(v1.x, v1.y);
-        ctx.lineTo(v2.x, v2.y);
-        ctx.lineTo(v3.x, v3.y);
-        ctx.closePath();
-        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.85)`;
-        ctx.fill();
-    };
-
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-    window.addEventListener('mousemove', handleMouseMove);
-    animate();
-}
 
 function addInputAnimations() {
     // Function to update label position and style
@@ -634,7 +508,6 @@ export default {
         const loginDiv = createLoginHTML();
         container.appendChild(loginDiv);
         cacheDom();
-        initCanvasAnimation();
         addInputAnimations();
         addEventListeners();
 
@@ -651,11 +524,6 @@ export default {
     },
 
     destroy: () => {
-        if (animationFrameId) {
-            cancelAnimationFrame(animationFrameId);
-        }
-        window.removeEventListener('resize', () => {});
-        window.removeEventListener('mousemove', () => {});
         if (container) {
             container.innerHTML = '';
         }

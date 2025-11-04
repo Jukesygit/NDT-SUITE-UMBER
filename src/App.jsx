@@ -19,6 +19,7 @@ import CscanVisualizerPage from './pages/CscanVisualizerPage.jsx';
 import PecVisualizerPage from './pages/PecVisualizerPage.jsx';
 import Viewer3DPage from './pages/Viewer3DPage.jsx';
 import NiiCalculatorPage from './pages/NiiCalculatorPage.jsx';
+import PersonnelManagementPage from './pages/PersonnelManagementPage.jsx';
 
 // Background manager component
 function BackgroundManager() {
@@ -87,6 +88,7 @@ function App() {
 
         // Listen for auth state changes
         const unsubscribe = authManager.onAuthStateChange((session) => {
+            console.log('App: Auth state changed, session:', session);
             setIsLoggedIn(!!session);
             // Sync service is automatically active when user is logged in
         });
@@ -105,7 +107,12 @@ function App() {
     }
 
     return (
-        <BrowserRouter>
+        <BrowserRouter
+            future={{
+                v7_startTransition: true,
+                v7_relativeSplatPath: true
+            }}
+        >
             <BackgroundManager />
             <Routes>
                 {/* Public route */}
@@ -123,13 +130,10 @@ function App() {
                         <Route path="/pec" element={<PecVisualizerPage />} />
                         <Route path="/3d" element={<Viewer3DPage />} />
                         <Route path="/nii" element={<NiiCalculatorPage />} />
+                        <Route path="/personnel" element={<PersonnelManagementPage />} />
 
                         {/* Admin only route */}
-                        <Route path="/admin" element={
-                            <ProtectedRoute requireAdmin>
-                                <AdminDashboard />
-                            </ProtectedRoute>
-                        } />
+                        <Route path="/admin" element={<AdminDashboard />} />
                     </Route>
                 </Route>
 
