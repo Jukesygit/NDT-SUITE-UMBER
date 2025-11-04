@@ -574,7 +574,50 @@
     color: var(--text-primary);
 }
 
-/* Modal Overlay */
+/* Modal System */
+.modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+.modal-content {
+    position: relative;
+    z-index: 1001;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    background: linear-gradient(135deg,
+        rgba(255,255,255,0.15) 0%,
+        rgba(255,255,255,0.08) 100%),
+        rgba(30, 41, 59, 0.95);
+    border: 2px solid var(--glass-border-strong);
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6),
+                0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+    padding: 32px;
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: slideUp 0.3s ease-out;
+}
+
+/* Legacy Modal Classes (for compatibility) */
 .glass-modal-overlay {
     position: fixed;
     inset: 0;
@@ -696,6 +739,8 @@
 }
 
 /* Utility Classes */
+.hidden { display: none !important; }
+
 .text-primary { color: var(--text-primary); }
 .text-secondary { color: var(--text-secondary); }
 .text-tertiary { color: var(--text-tertiary); }
@@ -719,6 +764,44 @@
 .rounded-lg { border-radius: var(--radius-lg); }
 .rounded-xl { border-radius: var(--radius-xl); }
 .rounded-full { border-radius: var(--radius-full); }
+
+/* Layout Utilities */
+.space-y-2 > * + * { margin-top: 8px; }
+.space-y-3 > * + * { margin-top: 12px; }
+.space-y-4 > * + * { margin-top: 16px; }
+
+/* Item Styles */
+.glass-item {
+    background: var(--glass-bg-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all var(--transition-base);
+}
+
+.glass-item:hover {
+    background: var(--glass-bg-tertiary);
+    border-color: var(--glass-border);
+}
+
+/* Icon Button */
+.btn-icon {
+    padding: 8px;
+    background: var(--glass-bg-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all var(--transition-base);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-icon:hover {
+    background: var(--glass-bg-tertiary);
+    border-color: var(--glass-border);
+    color: var(--text-primary);
+    transform: translateY(-1px);
+}
 
 /* Enhanced Focus States */
 *:focus-visible {

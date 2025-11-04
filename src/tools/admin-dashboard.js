@@ -78,7 +78,7 @@ function cacheDom() {
             showParticles: true,
             particleCount: 30,
             gradientColors: ['#a78bfa', '#60a5fa'], // Purple to blue
-            height: '180px'
+            height: '100px'
         }
     );
     dom.headerContainer.appendChild(header);

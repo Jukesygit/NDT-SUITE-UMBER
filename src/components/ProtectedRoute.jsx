@@ -13,7 +13,11 @@ function ProtectedRoute({ isLoggedIn, requireAdmin, children }) {
     }
 
     // Render children if provided, otherwise render outlet for nested routes
-    return children || <Outlet />;
+    if (children) {
+        return children;
+    }
+
+    return <Outlet />;
 }
 
 export default ProtectedRoute;

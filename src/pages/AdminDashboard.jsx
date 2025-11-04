@@ -1,8 +1,15 @@
 import { useEffect, useRef } from 'react';
+import { Navigate } from 'react-router-dom';
 import adminDashboard from '../tools/admin-dashboard.js';
+import authManager from '../auth-manager.js';
 
 function AdminDashboard() {
     const containerRef = useRef(null);
+
+    // Check if user is admin
+    if (!authManager.isAdmin()) {
+        return <Navigate to="/" replace />;
+    }
 
     useEffect(() => {
         if (containerRef.current) {

@@ -293,8 +293,25 @@ class AuthManager {
     }
 
     async logout() {
+        console.log('AuthManager: Starting logout...');
+
+        // Clear current user first
+        this.currentUser = null;
+        this.currentProfile = null;
+
         if (this.useSupabase) {
-            await supabase.auth.signOut();
+            console.log('AuthManager: Signing out from Supabase...');
+            // Sign out and clear all sessions
+            const { error } = await supabase.auth.signOut({ scope: 'global' });
+            if (error) {
+                console.error('AuthManager: Supabase signOut error:', error);
+            } else {
+                console.log('AuthManager: Supabase signOut successful');
+            }
+
+            // Verify session is cleared
+            const { data: { session } } = await supabase.auth.getSession();
+            console.log('AuthManager: Session after signOut:', session);
         } else {
             sessionStorage.removeItem('currentUser');
             // Dispatch auth state change event for local mode
@@ -303,11 +320,9 @@ class AuthManager {
             }));
         }
 
-        this.currentUser = null;
-        this.currentProfile = null;
-
         // Dispatch logout event for components to clean up
         window.dispatchEvent(new CustomEvent('userLoggedOut'));
+        console.log('AuthManager: Logout complete');
     }
 
     showPasswordResetForm() {
@@ -607,6 +622,9 @@ class AuthManager {
         }
 
         if (this.useSupabase) {
+            // Ensure organization_id is a valid UUID string or null
+            const orgId = userData.organizationId ? String(userData.organizationId) : null;
+
             // Create auth user using signUp (admin.createUser requires service role key)
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email: userData.email,
@@ -614,19 +632,24 @@ class AuthManager {
                 options: {
                     data: {
                         username: userData.username,
-                        role: userData.role,
-                        organization_id: userData.organizationId
+                        role: userData.role || 'user',
+                        organization_id: orgId
                     },
                     emailRedirectTo: window.location.origin
                 }
             });
 
             if (authError) {
+                console.error('Supabase signUp error:', authError);
                 return { success: false, error: authError.message };
             }
 
+            if (!authData.user) {
+                return { success: false, error: 'User creation failed - no user returned' };
+            }
+
             // Profile is automatically created via trigger
-            return { success: true, user: { id: authData.user?.id, ...userData } };
+            return { success: true, user: { id: authData.user.id, ...userData } };
         } else {
             // Check if username already exists
             if (this.authData.users.find(u => u.username === userData.username)) {

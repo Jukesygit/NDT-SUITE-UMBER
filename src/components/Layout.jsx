@@ -1,4 +1,4 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import authManager from '../auth-manager.js';
@@ -27,6 +27,13 @@ const tools = [
         name: 'Profile',
         description: 'Manage your profile and request permissions.',
         icon: `<svg class="w-7 h-7 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>`
+    },
+    {
+        id: 'personnel',
+        path: '/personnel',
+        name: 'Personnel',
+        description: 'Manage employee competencies and certifications.',
+        icon: `<svg class="w-7 h-7 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>`
     },
     {
         id: 'tools-dropdown',
@@ -76,6 +83,7 @@ const tools = [
 
 function Layout() {
     const location = useLocation();
+    const navigate = useNavigate();
     const [isAdmin, setIsAdmin] = useState(false);
     const [syncStatusElement, setSyncStatusElement] = useState(null);
     const [dropdownOpen, setDropdownOpen] = useState(null);
@@ -127,14 +135,19 @@ function Layout() {
     // Handle click outside dropdown to close
     useEffect(() => {
         const handleClickOutside = (event) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+            // Check if click is outside both the button and the dropdown menu
+            if (dropdownOpen &&
+                dropdownRef.current &&
+                !dropdownRef.current.contains(event.target) &&
+                buttonRef.current &&
+                !buttonRef.current.contains(event.target)) {
                 setDropdownOpen(null);
             }
         };
 
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [dropdownOpen]);
 
     // Check if current path is in dropdown
     const isDropdownActive = (subTools) => {
@@ -176,7 +189,7 @@ function Layout() {
                                         .replace('class="w-7 h-7', 'class="w-7 h-7" style="display: block; opacity: 1;');
 
                                     return (
-                                        <div key={tool.id} style={{ position: 'relative', width: '100%' }} ref={dropdownRef}>
+                                        <div key={tool.id} style={{ position: 'relative', width: '100%' }}>
                                             <button
                                                 ref={buttonRef}
                                                 type="button"
@@ -245,6 +258,7 @@ function Layout() {
                                             {/* Dropdown Menu - Rendered as Portal */}
                                             {isOpen && ReactDOM.createPortal(
                                                 <div
+                                                    ref={dropdownRef}
                                                     style={{
                                                         position: 'fixed',
                                                         left: `${dropdownPosition.left}px`,
@@ -395,6 +409,60 @@ function Layout() {
                                 );
                             })}
                         </nav>
+                    </div>
+
+                    {/* Logout Button */}
+                    <div className="flex flex-col items-center gap-3 w-full px-3">
+                        <button
+                            onClick={async () => {
+                                try {
+                                    await authManager.logout();
+                                    // Wait for session to clear, then navigate
+                                    await new Promise(resolve => setTimeout(resolve, 200));
+                                    // Use navigate instead of hard reload
+                                    navigate('/login');
+                                } catch (error) {
+                                    console.error('Error logging out:', error);
+                                    navigate('/login');
+                                }
+                            }}
+                            className="tool-btn"
+                            style={{
+                                position: 'relative',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                height: '56px',
+                                width: '100%',
+                                borderRadius: '12px',
+                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                background: 'rgba(239, 68, 68, 0.15)',
+                                backdropFilter: 'blur(8px)',
+                                WebkitBackdropFilter: 'blur(8px)',
+                                border: '1.5px solid rgba(239, 68, 68, 0.3)',
+                                boxShadow: 'none',
+                                color: '#ffffff',
+                                cursor: 'pointer'
+                            }}
+                            title="Logout"
+                            aria-label="Logout"
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)';
+                                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)';
+                                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+                                e.currentTarget.style.boxShadow = '0 4px 16px rgba(239, 68, 68, 0.3)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
+                                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                                e.currentTarget.style.boxShadow = 'none';
+                            }}
+                        >
+                            <svg className="w-7 h-7 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                            </svg>
+                        </button>
                     </div>
                 </div>
             </aside>

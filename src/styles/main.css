@@ -294,3 +294,37 @@ html.dark #tool-tofd .loader {
     border-color: #3b82f6;
     background-color: rgba(59, 130, 246, 0.1);
 }
+
+/* Personnel Management - Pulse Animations for Expiring/Expired Certifications */
+@keyframes pulse-red {
+    0%, 100% {
+        box-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(239, 68, 68, 0.8), 0 0 30px rgba(239, 68, 68, 0.4);
+        transform: scale(1.05);
+    }
+}
+
+@keyframes pulse-orange {
+    0%, 100% {
+        box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(245, 158, 11, 0.8), 0 0 30px rgba(245, 158, 11, 0.4);
+        transform: scale(1.05);
+    }
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}

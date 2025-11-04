@@ -286,7 +286,7 @@ function cacheDom() {
     const header = createAnimatedHeader(
         'NII Coverage Calculator',
         'Matrix Vessel NII Coverage Calculator - MAI-F-NDT-036 REV 0',
-        { height: '180px', particleCount: 15, waveIntensity: 0.4 }
+        { height: '100px', particleCount: 15, waveIntensity: 0.4 }
     );
     dom.headerContainer.appendChild(header);
 }
