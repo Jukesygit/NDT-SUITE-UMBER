@@ -199,21 +199,28 @@ class AuthManager {
 
     // Create default ADMIN user and demo organization (local only)
     async createDefaultAdmin() {
+        // Import security utilities
+        const { generateSecurePassword } = await import('./config/security.js');
+
         const adminOrg = {
             id: this.generateId(),
             name: 'SYSTEM',
             createdAt: Date.now()
         };
 
+        // Generate a secure random password
+        const tempPassword = generateSecurePassword(16);
+
         const adminUser = {
             id: this.generateId(),
             username: 'admin',
-            password: 'admin123',
+            password: tempPassword, // This should be hashed server-side in production
             email: 'admin@ndtsuite.local',
             role: ROLES.ADMIN,
             organizationId: adminOrg.id,
             createdAt: Date.now(),
-            isActive: true
+            isActive: true,
+            requirePasswordChange: true // Force password change on first login
         };
 
         const demoOrg = {
@@ -227,12 +234,38 @@ class AuthManager {
 
         await this.saveAuthData();
 
-        console.log('Default admin created (username: admin, password: admin123)');
+        // Store the temporary password securely (only for local development)
+        if (process.env.NODE_ENV === 'development') {
+            console.log('====================================');
+            console.log('LOCAL DEVELOPMENT MODE');
+            console.log('Default admin account created');
+            console.log('Username: admin');
+            console.log('Temporary password:', tempPassword);
+            console.log('IMPORTANT: Change this password immediately');
+            console.log('====================================');
+        } else {
+            console.log('Default admin account created. Check server logs for credentials.');
+        }
     }
 
     // Authentication
     async login(email, password, rememberMe = false) {
         await this.ensureInitialized();
+
+        // Import rate limiter
+        const { loginRateLimiter } = await import('./config/security.js');
+
+        // Check rate limiting (use email as key)
+        const rateLimitCheck = loginRateLimiter.isAllowed(email.toLowerCase());
+        if (!rateLimitCheck.allowed) {
+            const retryMinutes = Math.ceil(rateLimitCheck.retryAfter / 60000);
+            return {
+                success: false,
+                error: `Too many login attempts. Please try again in ${retryMinutes} minutes.`,
+                rateLimited: true,
+                retryAfter: rateLimitCheck.retryAfter
+            };
+        }
 
         if (this.useSupabase) {
             const { data, error } = await supabase.auth.signInWithPassword({
@@ -251,6 +284,9 @@ class AuthManager {
                     await supabase.auth.signOut();
                     return { success: false, error: 'Account is not active' };
                 }
+
+                // Reset rate limiter on successful login
+                loginRateLimiter.reset(email.toLowerCase());
 
                 // Handle remember me
                 if (rememberMe) {

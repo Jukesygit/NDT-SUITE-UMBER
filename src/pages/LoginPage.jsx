@@ -1,24 +1,9 @@
-import { useEffect, useRef } from 'react';
+import React from 'react';
 import login from '../tools/login.js';
+import ToolContainer from '../components/ToolContainer';
 
 function LoginPage({ onLogin }) {
-    const containerRef = useRef(null);
-
-    useEffect(() => {
-        if (containerRef.current) {
-            // Initialize the login tool
-            login.init(containerRef.current, onLogin);
-        }
-
-        return () => {
-            // Cleanup if needed
-            if (login.destroy) {
-                login.destroy(containerRef.current);
-            }
-        };
-    }, [onLogin]);
-
-    return <div ref={containerRef} className="tool-container w-full h-full"></div>;
+    return <ToolContainer toolModule={login} onLogin={onLogin} />;
 }
 
 export default LoginPage;

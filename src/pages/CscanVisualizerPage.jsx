@@ -1,22 +1,9 @@
-import { useEffect, useRef } from 'react';
+import React from 'react';
 import cscanVisualizer from '../tools/cscan-visualizer.js';
+import ToolContainer from '../components/ToolContainer';
 
 function CscanVisualizerPage() {
-    const containerRef = useRef(null);
-
-    useEffect(() => {
-        if (containerRef.current) {
-            cscanVisualizer.init(containerRef.current);
-        }
-
-        return () => {
-            if (cscanVisualizer.destroy) {
-                cscanVisualizer.destroy(containerRef.current);
-            }
-        };
-    }, []);
-
-    return <div ref={containerRef} className="tool-container w-full h-full"></div>;
+    return <ToolContainer toolModule={cscanVisualizer} />;
 }
 
 export default CscanVisualizerPage;

@@ -42,7 +42,7 @@ class PersonnelService {
                         competency_id,
                         created_at,
                         issuing_body,
-                        certification_id,
+                        certificate_number,
                         competency_definitions!inner(
                             id,
                             name,

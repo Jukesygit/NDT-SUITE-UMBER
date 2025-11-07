@@ -1,5 +1,6 @@
 // C-Scan Visualizer Tool Module - Complete with all features (Part 1)
 import dataManager from '../data-manager.js';
+import Plotly from '../utils/plotly.js';
 
 let container, dom = {}, processedScans = [], currentScanData = null, compositeWorker = null, isShowingComposite = false, customColorRange = { min: null, max: null }, currentHoverPosition = { x: null, y: null }, selectedScans = new Set();
 

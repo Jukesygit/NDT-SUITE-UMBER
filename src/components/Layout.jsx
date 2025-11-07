@@ -88,8 +88,10 @@ function Layout() {
     const [syncStatusElement, setSyncStatusElement] = useState(null);
     const [dropdownOpen, setDropdownOpen] = useState(null);
     const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+    const [hoveredTool, setHoveredTool] = useState(null);
     const dropdownRef = useRef(null);
     const buttonRef = useRef(null);
+    const toolButtonRefs = useRef({});
 
     useEffect(() => {
         // Initial check
@@ -202,21 +204,31 @@ function Layout() {
                                                     height: '56px',
                                                     width: '100%',
                                                     borderRadius: '12px',
-                                                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                                                     background: (isActive || isOpen)
-                                                        ? `rgba(var(--accent-primary-raw), 0.2)`
-                                                        : 'rgba(255, 255, 255, 0.05)',
-                                                    backdropFilter: 'blur(8px)',
-                                                    WebkitBackdropFilter: 'blur(8px)',
-                                                    border: '1.5px solid',
-                                                    borderColor: (isActive || isOpen) ? `rgba(var(--accent-primary-raw), 0.4)` : 'rgba(255, 255, 255, 0.1)',
+                                                        ? 'linear-gradient(135deg, rgba(100, 150, 255, 0.18) 0%, rgba(100, 150, 255, 0.12) 100%)'
+                                                        : hoveredTool === tool.id
+                                                        ? 'linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.06) 100%)'
+                                                        : 'rgba(255, 255, 255, 0.04)',
+                                                    backdropFilter: 'blur(10px)',
+                                                    WebkitBackdropFilter: 'blur(10px)',
+                                                    border: '1px solid',
+                                                    borderColor: (isActive || isOpen)
+                                                        ? 'rgba(100, 150, 255, 0.4)'
+                                                        : hoveredTool === tool.id
+                                                        ? 'rgba(255, 255, 255, 0.18)'
+                                                        : 'rgba(255, 255, 255, 0.08)',
                                                     boxShadow: (isActive || isOpen)
-                                                        ? `0 4px 20px var(--accent-primary-glow), inset 0 1px 0 rgba(255, 255, 255, 0.1)`
-                                                        : 'none',
+                                                        ? '0 4px 20px rgba(100, 150, 255, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
+                                                        : hoveredTool === tool.id
+                                                        ? '0 4px 16px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+                                                        : 'inset 0 1px 0 rgba(255, 255, 255, 0.05)',
                                                     color: '#ffffff',
                                                     opacity: 0,
                                                     animation: `slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) ${index * 50}ms forwards`,
-                                                    cursor: 'pointer'
+                                                    cursor: 'pointer',
+                                                    transform: hoveredTool === tool.id ? 'translateY(-2px)' : 'translateY(0)',
+                                                    overflow: 'hidden'
                                                 }}
                                                 title={tool.name}
                                                 aria-label={tool.name}
@@ -235,23 +247,26 @@ function Layout() {
 
                                                     setDropdownOpen(isOpen ? null : tool.id);
                                                 }}
-                                                onMouseEnter={(e) => {
-                                                    if (!isActive && !isOpen) {
-                                                        e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)';
-                                                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
-                                                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                                                        e.currentTarget.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.2)';
-                                                    }
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    if (!isActive && !isOpen) {
-                                                        e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                                                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                                                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                                                        e.currentTarget.style.boxShadow = 'none';
-                                                    }
-                                                }}
+                                                onMouseEnter={() => setHoveredTool(tool.id)}
+                                                onMouseLeave={() => setHoveredTool(null)}
                                             >
+                                                {/* Active indicator */}
+                                                {(isActive || isOpen) && (
+                                                    <div
+                                                        style={{
+                                                            position: 'absolute',
+                                                            left: 0,
+                                                            top: '50%',
+                                                            transform: 'translateY(-50%)',
+                                                            width: '3px',
+                                                            height: '60%',
+                                                            backgroundColor: 'rgba(100, 150, 255, 0.9)',
+                                                            borderRadius: '0 2px 2px 0',
+                                                            boxShadow: '0 0 8px rgba(100, 150, 255, 0.4)',
+                                                            animation: 'slideInUp 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                                                        }}
+                                                    />
+                                                )}
                                                 <div dangerouslySetInnerHTML={{ __html: iconWithColor }} />
                                             </button>
 
@@ -263,19 +278,21 @@ function Layout() {
                                                         position: 'fixed',
                                                         left: `${dropdownPosition.left}px`,
                                                         top: `${dropdownPosition.top}px`,
-                                                        minWidth: '320px',
-                                                        maxWidth: '400px',
-                                                        backdropFilter: 'blur(20px)',
-                                                        WebkitBackdropFilter: 'blur(20px)',
-                                                        background: 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.08) 100%), rgba(15,15,20,0.95)',
-                                                        border: '1.5px solid rgba(255, 255, 255, 0.25)',
+                                                        minWidth: '340px',
+                                                        maxWidth: '420px',
+                                                        backdropFilter: 'blur(24px)',
+                                                        WebkitBackdropFilter: 'blur(24px)',
+                                                        background: 'linear-gradient(135deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.06) 100%), rgba(15,15,20,0.96)',
+                                                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                        borderTop: '1px solid rgba(255, 255, 255, 0.25)',
                                                         borderRadius: '16px',
-                                                        boxShadow: '0 16px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1) inset',
-                                                        padding: '8px',
+                                                        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08) inset',
+                                                        padding: '10px',
                                                         zIndex: 9999,
                                                         opacity: 0,
-                                                        animation: 'dropdownFadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards',
-                                                        pointerEvents: 'auto'
+                                                        animation: 'dropdownFadeIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',
+                                                        pointerEvents: 'auto',
+                                                        overflow: 'hidden'
                                                     }}
                                                     onClick={(e) => e.stopPropagation()}
                                                 >
@@ -293,28 +310,31 @@ function Layout() {
                                                                 style={{
                                                                     display: 'flex',
                                                                     alignItems: 'center',
-                                                                    gap: '12px',
-                                                                    padding: '12px 16px',
-                                                                    borderRadius: '10px',
-                                                                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                                    gap: '14px',
+                                                                    padding: '14px 16px',
+                                                                    borderRadius: '12px',
+                                                                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                                                                     background: isSubActive
-                                                                        ? `rgba(var(--accent-primary-raw), 0.2)`
+                                                                        ? 'linear-gradient(135deg, rgba(100, 150, 255, 0.16) 0%, rgba(100, 150, 255, 0.1) 100%)'
                                                                         : 'transparent',
                                                                     border: '1px solid',
                                                                     borderColor: isSubActive
-                                                                        ? `rgba(var(--accent-primary-raw), 0.3)`
+                                                                        ? 'rgba(100, 150, 255, 0.3)'
                                                                         : 'transparent',
                                                                     color: '#ffffff',
                                                                     textDecoration: 'none',
                                                                     opacity: 0,
-                                                                    animation: `slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1) ${subIndex * 40}ms forwards`,
-                                                                    cursor: 'pointer'
+                                                                    animation: `slideUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) ${subIndex * 50 + 50}ms forwards`,
+                                                                    cursor: 'pointer',
+                                                                    position: 'relative',
+                                                                    overflow: 'hidden'
                                                                 }}
                                                                 onMouseEnter={(e) => {
                                                                     if (!isSubActive) {
-                                                                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                                                                        e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.05) 100%)';
                                                                         e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
-                                                                        e.currentTarget.style.transform = 'translateX(4px)';
+                                                                        e.currentTarget.style.transform = 'translateX(6px)';
+                                                                        e.currentTarget.style.boxShadow = '0 2px 12px rgba(0, 0, 0, 0.15)';
                                                                     }
                                                                 }}
                                                                 onMouseLeave={(e) => {
@@ -322,27 +342,43 @@ function Layout() {
                                                                         e.currentTarget.style.background = 'transparent';
                                                                         e.currentTarget.style.borderColor = 'transparent';
                                                                         e.currentTarget.style.transform = 'translateX(0)';
+                                                                        e.currentTarget.style.boxShadow = 'none';
                                                                     }
                                                                 }}
                                                             >
                                                                 <div dangerouslySetInnerHTML={{ __html: subIconWithColor }} />
                                                                 <div style={{ flex: 1 }}>
                                                                     <div style={{
-                                                                        fontSize: '14px',
+                                                                        fontSize: '15px',
                                                                         fontWeight: '600',
-                                                                        marginBottom: '2px',
-                                                                        color: isSubActive ? 'rgba(var(--accent-primary-raw), 1)' : '#ffffff'
+                                                                        marginBottom: '3px',
+                                                                        color: isSubActive ? 'rgba(100, 150, 255, 1)' : '#ffffff',
+                                                                        letterSpacing: '-0.01em'
                                                                     }}>
                                                                         {subTool.name}
                                                                     </div>
                                                                     <div style={{
-                                                                        fontSize: '11px',
-                                                                        color: 'rgba(255, 255, 255, 0.6)',
-                                                                        lineHeight: '1.3'
+                                                                        fontSize: '12px',
+                                                                        color: 'rgba(255, 255, 255, 0.55)',
+                                                                        lineHeight: '1.4',
+                                                                        letterSpacing: '0.01em'
                                                                     }}>
                                                                         {subTool.description}
                                                                     </div>
                                                                 </div>
+                                                                {/* Active indicator for dropdown items */}
+                                                                {isSubActive && (
+                                                                    <div
+                                                                        style={{
+                                                                            width: '6px',
+                                                                            height: '6px',
+                                                                            borderRadius: '50%',
+                                                                            backgroundColor: 'rgba(100, 150, 255, 0.9)',
+                                                                            boxShadow: '0 0 8px rgba(100, 150, 255, 0.6)',
+                                                                            flexShrink: 0
+                                                                        }}
+                                                                    />
+                                                                )}
                                                             </Link>
                                                         );
                                                     })}
@@ -371,41 +407,55 @@ function Layout() {
                                             height: '56px',
                                             width: '100%',
                                             borderRadius: '12px',
-                                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                            transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                                             background: isActive
-                                                ? `rgba(var(--accent-primary-raw), 0.2)`
-                                                : 'rgba(255, 255, 255, 0.05)',
-                                            backdropFilter: 'blur(8px)',
-                                            WebkitBackdropFilter: 'blur(8px)',
-                                            border: '1.5px solid',
-                                            borderColor: isActive ? `rgba(var(--accent-primary-raw), 0.4)` : 'rgba(255, 255, 255, 0.1)',
+                                                ? 'linear-gradient(135deg, rgba(100, 150, 255, 0.18) 0%, rgba(100, 150, 255, 0.12) 100%)'
+                                                : hoveredTool === tool.id
+                                                ? 'linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.06) 100%)'
+                                                : 'rgba(255, 255, 255, 0.04)',
+                                            backdropFilter: 'blur(10px)',
+                                            WebkitBackdropFilter: 'blur(10px)',
+                                            border: '1px solid',
+                                            borderColor: isActive
+                                                ? 'rgba(100, 150, 255, 0.4)'
+                                                : hoveredTool === tool.id
+                                                ? 'rgba(255, 255, 255, 0.18)'
+                                                : 'rgba(255, 255, 255, 0.08)',
                                             boxShadow: isActive
-                                                ? `0 4px 20px var(--accent-primary-glow), inset 0 1px 0 rgba(255, 255, 255, 0.1)`
-                                                : 'none',
+                                                ? '0 4px 20px rgba(100, 150, 255, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
+                                                : hoveredTool === tool.id
+                                                ? '0 4px 16px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+                                                : 'inset 0 1px 0 rgba(255, 255, 255, 0.05)',
                                             color: '#ffffff',
                                             opacity: 0,
-                                            animation: `slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) ${index * 50}ms forwards`
+                                            animation: `slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) ${index * 50}ms forwards`,
+                                            transform: hoveredTool === tool.id ? 'translateY(-2px)' : 'translateY(0)',
+                                            overflow: 'hidden'
                                         }}
                                         title={tool.name}
                                         aria-label={tool.name}
-                                        onMouseEnter={(e) => {
-                                            if (!isActive) {
-                                                e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)';
-                                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
-                                                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                                                e.currentTarget.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.2)';
-                                            }
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            if (!isActive) {
-                                                e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                                                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                                                e.currentTarget.style.boxShadow = 'none';
-                                            }
-                                        }}
-                                        dangerouslySetInnerHTML={{ __html: iconWithColor }}
-                                    />
+                                        onMouseEnter={() => setHoveredTool(tool.id)}
+                                        onMouseLeave={() => setHoveredTool(null)}
+                                    >
+                                        {/* Active indicator */}
+                                        {isActive && (
+                                            <div
+                                                style={{
+                                                    position: 'absolute',
+                                                    left: 0,
+                                                    top: '50%',
+                                                    transform: 'translateY(-50%)',
+                                                    width: '3px',
+                                                    height: '60%',
+                                                    backgroundColor: 'rgba(100, 150, 255, 0.9)',
+                                                    borderRadius: '0 2px 2px 0',
+                                                    boxShadow: '0 0 8px rgba(100, 150, 255, 0.4)',
+                                                    animation: 'slideInUp 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                                                }}
+                                            />
+                                        )}
+                                        <div dangerouslySetInnerHTML={{ __html: iconWithColor }} />
+                                    </Link>
                                 );
                             })}
                         </nav>
@@ -435,29 +485,28 @@ function Layout() {
                                 height: '56px',
                                 width: '100%',
                                 borderRadius: '12px',
-                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                background: 'rgba(239, 68, 68, 0.15)',
-                                backdropFilter: 'blur(8px)',
-                                WebkitBackdropFilter: 'blur(8px)',
-                                border: '1.5px solid rgba(239, 68, 68, 0.3)',
-                                boxShadow: 'none',
+                                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                background: hoveredTool === 'logout'
+                                    ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.22) 0%, rgba(239, 68, 68, 0.16) 100%)'
+                                    : 'linear-gradient(135deg, rgba(239, 68, 68, 0.14) 0%, rgba(239, 68, 68, 0.1) 100%)',
+                                backdropFilter: 'blur(10px)',
+                                WebkitBackdropFilter: 'blur(10px)',
+                                border: '1px solid',
+                                borderColor: hoveredTool === 'logout'
+                                    ? 'rgba(239, 68, 68, 0.5)'
+                                    : 'rgba(239, 68, 68, 0.3)',
+                                boxShadow: hoveredTool === 'logout'
+                                    ? '0 4px 16px rgba(239, 68, 68, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+                                    : 'inset 0 1px 0 rgba(255, 255, 255, 0.05)',
                                 color: '#ffffff',
-                                cursor: 'pointer'
+                                cursor: 'pointer',
+                                transform: hoveredTool === 'logout' ? 'translateY(-2px)' : 'translateY(0)',
+                                overflow: 'hidden'
                             }}
                             title="Logout"
                             aria-label="Logout"
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)';
-                                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)';
-                                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
-                                e.currentTarget.style.boxShadow = '0 4px 16px rgba(239, 68, 68, 0.3)';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
-                                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
-                                e.currentTarget.style.boxShadow = 'none';
-                            }}
+                            onMouseEnter={() => setHoveredTool('logout')}
+                            onMouseLeave={() => setHoveredTool(null)}
                         >
                             <svg className="w-7 h-7 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import adminDashboard from '../tools/admin-dashboard.js';
 import authManager from '../auth-manager.js';

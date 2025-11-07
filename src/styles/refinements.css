@@ -1,0 +1,689 @@
+/**
+ * NDT SUITE - DESIGN REFINEMENTS
+ * Polish and improvements based on visual review
+ */
+
+/* ==========================================
+   PAGE HERO SECTIONS - More Refined
+   ========================================== */
+
+.page-hero {
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.08) 0%,
+    rgba(99, 102, 241, 0.05) 50%,
+    transparent 100%
+  );
+  border: var(--border-width-thin) solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-8) var(--spacing-10);
+  margin-bottom: var(--spacing-8);
+  position: relative;
+  overflow: hidden;
+}
+
+.page-hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(59, 130, 246, 0.3),
+    transparent
+  );
+}
+
+.page-hero__content {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-6);
+}
+
+.page-hero__icon {
+  width: 4rem;
+  height: 4rem;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(99, 102, 241, 0.05));
+  border: var(--border-width-thin) solid rgba(59, 130, 246, 0.2);
+  border-radius: var(--radius-xl);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary-400);
+}
+
+.page-hero__text h1 {
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  background: linear-gradient(135deg, var(--text-primary), var(--color-primary-300));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: var(--spacing-2);
+}
+
+.page-hero__text p {
+  font-size: var(--text-base);
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+/* ==========================================
+   REFINED STAT CARDS
+   ========================================== */
+
+.stat-card-refined {
+  background: var(--surface-raised);
+  border: var(--border-width-thin) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-6);
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition-normal);
+}
+
+.stat-card-refined::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-primary-500), var(--color-primary-400));
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+}
+
+.stat-card-refined:hover {
+  border-color: var(--border-default);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.stat-card-refined:hover::before {
+  opacity: 1;
+}
+
+.stat-card-refined__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-4);
+}
+
+.stat-card-refined__label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+}
+
+.stat-card-refined__icon {
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-md);
+  background: rgba(59, 130, 246, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary-400);
+}
+
+.stat-card-refined__icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.stat-card-refined__value {
+  font-size: var(--text-4xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  line-height: 1;
+  margin-bottom: var(--spacing-2);
+}
+
+.stat-card-refined__change {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+}
+
+.stat-card-refined__change--positive {
+  color: var(--color-success);
+}
+
+.stat-card-refined__change--negative {
+  color: var(--color-danger);
+}
+
+/* ==========================================
+   ENHANCED DATA TABLES
+   ========================================== */
+
+.table-refined {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.table-refined thead {
+  background: var(--surface-elevated);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.table-refined th {
+  padding: var(--spacing-4) var(--spacing-5);
+  text-align: left;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  border-bottom: 2px solid var(--border-default);
+  white-space: nowrap;
+}
+
+.table-refined tbody tr {
+  border-bottom: var(--border-width-thin) solid var(--border-subtle);
+  transition: all var(--transition-fast);
+}
+
+.table-refined tbody tr:hover {
+  background: var(--surface-hover);
+}
+
+.table-refined tbody tr:last-child {
+  border-bottom: none;
+}
+
+.table-refined td {
+  padding: var(--spacing-4) var(--spacing-5);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  vertical-align: middle;
+}
+
+.table-refined td:first-child {
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+}
+
+/* Table actions */
+.table-refined__actions {
+  display: flex;
+  gap: var(--spacing-2);
+  align-items: center;
+}
+
+.table-refined__action-btn {
+  padding: var(--spacing-2) var(--spacing-3);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  border-radius: var(--radius-md);
+  border: var(--border-width-thin) solid var(--border-default);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.table-refined__action-btn:hover {
+  background: var(--surface-elevated);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ==========================================
+   REFINED BADGES
+   ========================================== */
+
+.badge-refined {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  padding: var(--spacing-1) var(--spacing-3);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  line-height: 1;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  border: var(--border-width-thin) solid;
+}
+
+.badge-refined--admin {
+  background: rgba(168, 85, 247, 0.1);
+  color: #c084fc;
+  border-color: rgba(168, 85, 247, 0.3);
+}
+
+.badge-refined--viewer {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--color-primary-300);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.badge-refined--active {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--color-success-light);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.badge-refined--expiring {
+  background: rgba(249, 115, 22, 0.1);
+  color: var(--color-warning-light);
+  border-color: rgba(249, 115, 22, 0.3);
+}
+
+.badge-refined--expired {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-danger-light);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* ==========================================
+   FILTER BUTTONS - More Refined
+   ========================================== */
+
+.filter-group {
+  display: flex;
+  gap: var(--spacing-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--spacing-6);
+}
+
+.filter-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3) var(--spacing-5);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  border-radius: var(--radius-lg);
+  border: var(--border-width-default) solid var(--border-default);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  position: relative;
+}
+
+.filter-btn:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-elevated);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.filter-btn--active {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: var(--color-primary-300);
+}
+
+.filter-btn--active::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-400));
+  opacity: 0.1;
+  z-index: -1;
+}
+
+.filter-btn--danger {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--color-danger-light);
+}
+
+.filter-btn--warning {
+  border-color: rgba(249, 115, 22, 0.3);
+  background: rgba(249, 115, 22, 0.08);
+  color: var(--color-warning-light);
+}
+
+.filter-btn--success {
+  border-color: rgba(34, 197, 94, 0.3);
+  background: rgba(34, 197, 94, 0.08);
+  color: var(--color-success-light);
+}
+
+.filter-btn__count {
+  padding: var(--spacing-1) var(--spacing-2);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  min-width: 1.5rem;
+  text-align: center;
+}
+
+/* ==========================================
+   COMPETENCY MATRIX - Refined
+   ========================================== */
+
+.competency-matrix {
+  background: var(--surface-raised);
+  border: var(--border-width-thin) solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+.competency-matrix__table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.competency-matrix__table th {
+  padding: var(--spacing-4);
+  background: var(--surface-elevated);
+  border-bottom: 2px solid var(--border-default);
+  border-right: var(--border-width-thin) solid var(--border-subtle);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.competency-matrix__table th:first-child {
+  left: 0;
+  z-index: 11;
+  min-width: 250px;
+}
+
+.competency-matrix__category-header {
+  background: rgba(59, 130, 246, 0.05);
+  padding: var(--spacing-3) var(--spacing-4);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-primary-300);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  border-bottom: 2px solid rgba(59, 130, 246, 0.2);
+}
+
+.competency-matrix__table td {
+  padding: var(--spacing-2);
+  border-bottom: var(--border-width-thin) solid var(--border-subtle);
+  border-right: var(--border-width-thin) solid var(--border-subtle);
+  text-align: center;
+  vertical-align: middle;
+}
+
+.competency-matrix__table td:first-child {
+  text-align: left;
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
+  background: var(--surface-base);
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  padding: var(--spacing-3) var(--spacing-4);
+}
+
+.competency-matrix__table tbody tr:hover td {
+  background: var(--surface-hover);
+}
+
+.competency-matrix__table tbody tr:hover td:first-child {
+  color: var(--text-primary);
+}
+
+.competency-cell {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  border: var(--border-width-default) solid var(--border-default);
+  color: var(--text-quaternary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.competency-cell:hover {
+  background: var(--surface-elevated);
+  border-color: var(--border-strong);
+  transform: scale(1.05);
+  box-shadow: var(--shadow-md);
+}
+
+.competency-cell--filled {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: var(--color-primary-300);
+}
+
+.competency-cell--expiring {
+  background: rgba(249, 115, 22, 0.15);
+  border-color: rgba(249, 115, 22, 0.4);
+  color: var(--color-warning-light);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.competency-cell--expired {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: var(--color-danger-light);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* ==========================================
+   ASSET/VESSEL CARDS - Refined
+   ========================================== */
+
+.asset-card {
+  background: var(--surface-raised);
+  border: var(--border-width-thin) solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-6);
+  transition: all var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+}
+
+.asset-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--color-primary-500), transparent);
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+}
+
+.asset-card:hover {
+  border-color: var(--border-default);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-xl);
+}
+
+.asset-card:hover::before {
+  opacity: 1;
+}
+
+.asset-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-4);
+}
+
+.asset-card__title {
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-1);
+}
+
+.asset-card__meta {
+  display: flex;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-5);
+}
+
+.asset-card__meta-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.asset-card__meta-item svg {
+  width: 1rem;
+  height: 1rem;
+  opacity: 0.7;
+}
+
+.asset-card__footer {
+  display: flex;
+  gap: var(--spacing-3);
+  padding-top: var(--spacing-4);
+  border-top: var(--border-width-thin) solid var(--border-subtle);
+}
+
+/* ==========================================
+   ENHANCED BUTTONS IN CONTEXT
+   ========================================== */
+
+.btn-refined {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3) var(--spacing-5);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  line-height: 1;
+  border-radius: var(--radius-lg);
+  border: var(--border-width-default) solid;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-refined::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.btn-refined:hover::before {
+  opacity: 1;
+}
+
+.btn-refined--primary {
+  background: var(--color-primary-500);
+  border-color: var(--color-primary-600);
+  color: white;
+}
+
+.btn-refined--primary:hover {
+  background: var(--color-primary-400);
+  border-color: var(--color-primary-500);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-primary);
+}
+
+.btn-refined--secondary {
+  background: var(--surface-elevated);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.btn-refined--secondary:hover {
+  background: var(--surface-overlay);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* ==========================================
+   SPACING IMPROVEMENTS
+   ========================================== */
+
+.content-spacing {
+  padding: var(--spacing-8);
+}
+
+.section-spacing {
+  margin-bottom: var(--spacing-12);
+}
+
+.section-spacing:last-child {
+  margin-bottom: 0;
+}
+
+/* ==========================================
+   TABS - Refined
+   ========================================== */
+
+.tabs-refined {
+  border-bottom: 2px solid var(--border-subtle);
+  margin-bottom: var(--spacing-8);
+  display: flex;
+  gap: var(--spacing-2);
+}
+
+.tabs-refined__tab {
+  padding: var(--spacing-4) var(--spacing-6);
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  color: var(--text-tertiary);
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  position: relative;
+  margin-bottom: -2px;
+}
+
+.tabs-refined__tab:hover {
+  color: var(--text-secondary);
+  background: var(--surface-hover);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.tabs-refined__tab--active {
+  color: var(--color-primary-400);
+  border-bottom-color: var(--color-primary-500);
+}
+
+.tabs-refined__tab--active::before {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-primary-500), var(--color-primary-400));
+  border-radius: 2px 2px 0 0;
+}

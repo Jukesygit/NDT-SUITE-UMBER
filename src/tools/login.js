@@ -521,6 +521,38 @@ export default {
             dom.usernameLabel.style.transform = 'translateY(0)';
             dom.usernameLabel.style.fontSize = '11px';
         }
+
+        // Check for autofilled values and adjust labels accordingly
+        // Browser autofill happens after page load, so we need to check with a delay
+        setTimeout(() => {
+            if (dom.username.value) {
+                dom.usernameLabel.style.top = '6px';
+                dom.usernameLabel.style.transform = 'translateY(0)';
+                dom.usernameLabel.style.fontSize = '11px';
+            }
+            if (dom.password.value) {
+                dom.passwordLabel.style.top = '6px';
+                dom.passwordLabel.style.transform = 'translateY(0)';
+                dom.passwordLabel.style.fontSize = '11px';
+            }
+        }, 100);
+
+        // Also listen for animation start events (triggered by Chrome autofill)
+        dom.username.addEventListener('animationstart', (e) => {
+            if (e.animationName === 'onAutoFillStart') {
+                dom.usernameLabel.style.top = '6px';
+                dom.usernameLabel.style.transform = 'translateY(0)';
+                dom.usernameLabel.style.fontSize = '11px';
+            }
+        });
+
+        dom.password.addEventListener('animationstart', (e) => {
+            if (e.animationName === 'onAutoFillStart') {
+                dom.passwordLabel.style.top = '6px';
+                dom.passwordLabel.style.transform = 'translateY(0)';
+                dom.passwordLabel.style.fontSize = '11px';
+            }
+        });
     },
 
     destroy: () => {
