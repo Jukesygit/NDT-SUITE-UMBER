@@ -1294,6 +1294,9 @@ async function renderConfiguration() {
                 </p>
             </div>
             <div class="flex gap-2">
+                <button id="seed-personal-details-btn" class="text-white px-4 py-2 rounded-lg transition-colors text-sm" style="background: var(--success);">
+                    Seed Personal Details
+                </button>
                 <button id="export-config-btn" class="text-white px-4 py-2 rounded-lg transition-colors text-sm" style="background: var(--accent-primary);">
                     Export Config
                 </button>
@@ -1360,6 +1363,11 @@ async function renderConfiguration() {
     `;
 
     // Event listeners
+    const seedBtn = dom.configurationView.querySelector('#seed-personal-details-btn');
+    if (seedBtn) {
+        seedBtn.addEventListener('click', seedPersonalDetails);
+    }
+
     const exportBtn = dom.configurationView.querySelector('#export-config-btn');
     if (exportBtn) {
         exportBtn.addEventListener('click', exportConfiguration);
@@ -1474,6 +1482,93 @@ async function resetConfigList(listName) {
         } else {
             alert('Error: ' + result.error);
         }
+    }
+}
+
+async function seedPersonalDetails() {
+    if (!confirm('This will add personal detail fields (Date of Birth, Mobile Number, Email Address, etc.) to the competency system. Continue?')) {
+        return;
+    }
+
+    const seedBtn = dom.configurationView.querySelector('#seed-personal-details-btn');
+    const originalText = seedBtn.textContent;
+    seedBtn.disabled = true;
+    seedBtn.textContent = 'Seeding...';
+
+    try {
+        // First, ensure the Personal Details category exists
+        let { data: category, error: categoryError } = await supabase
+            .from('competency_categories')
+            .select('id, name')
+            .eq('name', 'Personal Details')
+            .single();
+
+        if (categoryError && categoryError.code === 'PGRST116') {
+            // Category doesn't exist, create it
+            const { data: newCategory, error: createError } = await supabase
+                .from('competency_categories')
+                .insert({ name: 'Personal Details', display_order: 1 })
+                .select()
+                .single();
+
+            if (createError) throw createError;
+            category = newCategory;
+        } else if (categoryError) {
+            throw categoryError;
+        }
+
+        // Define personal detail fields
+        const personalDetails = [
+            { name: 'Date of Birth', field_type: 'date', requires_document: false, display_order: 1 },
+            { name: 'Mobile Number', field_type: 'text', requires_document: false, display_order: 2 },
+            { name: 'Email Address', field_type: 'text', requires_document: false, display_order: 3 },
+            { name: 'Home Address', field_type: 'text', requires_document: false, display_order: 4 },
+            { name: 'Nearest UK Train Station', field_type: 'text', requires_document: false, display_order: 5 },
+            { name: 'Next of Kin / Emergency Contact Name', field_type: 'text', requires_document: false, display_order: 6 },
+            { name: 'Next of Kin / Emergency Contact Number', field_type: 'text', requires_document: false, display_order: 7 }
+        ];
+
+        let addedCount = 0;
+        let skippedCount = 0;
+
+        for (const detail of personalDetails) {
+            // Check if already exists
+            const { data: existing } = await supabase
+                .from('competency_definitions')
+                .select('id')
+                .eq('category_id', category.id)
+                .eq('name', detail.name)
+                .single();
+
+            if (existing) {
+                skippedCount++;
+            } else {
+                const { error: insertError } = await supabase
+                    .from('competency_definitions')
+                    .insert({
+                        category_id: category.id,
+                        name: detail.name,
+                        field_type: detail.field_type,
+                        requires_document: detail.requires_document,
+                        display_order: detail.display_order
+                    });
+
+                if (insertError) {
+                    console.error(`Error adding ${detail.name}:`, insertError);
+                } else {
+                    addedCount++;
+                }
+            }
+        }
+
+        alert(`Personal details seeded successfully!\n\nAdded: ${addedCount}\nSkipped (already exist): ${skippedCount}`);
+
+    } catch (error) {
+        console.error('Error seeding personal details:', error);
+        alert('Error seeding personal details: ' + error.message);
+    } finally {
+        seedBtn.disabled = false;
+        seedBtn.textContent = originalText;
     }
 }
 

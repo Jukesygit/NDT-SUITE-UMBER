@@ -4,6 +4,7 @@ import supabase, { isSupabaseConfigured } from '../supabase-client.js';
 import { createModernHeader } from '../components/modern-header.js';
 import { themes, saveTheme, getCurrentTheme } from '../themes.js';
 import competencyService from '../services/competency-service.js';
+import { filterOutPersonalDetails, getPersonalDetails, formatValue } from '../utils/competency-field-utils.js';
 
 let container, dom = {};
 
@@ -30,7 +31,7 @@ const HTML = `
         <div class="glass-card" style="padding: 24px; margin-bottom: 24px;">
             <h2 style="font-size: 18px; font-weight: 600; color: #ffffff; margin: 0 0 20px 0; padding-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Profile Information</h2>
 
-            <div class="space-y-4">
+            <div id="profile-info-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
                 <div>
                     <label style="display: block; font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, 0.6); margin-bottom: 6px;">Username</label>
                     <div id="profile-username" style="color: #ffffff; font-size: 16px;"></div>
@@ -50,6 +51,8 @@ const HTML = `
                     <label style="display: block; font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, 0.6); margin-bottom: 6px;">Current Role</label>
                     <div id="profile-role" class="glass-badge"></div>
                 </div>
+
+                <!-- Personal Details will be dynamically added here -->
             </div>
         </div>
 
@@ -114,10 +117,10 @@ const HTML = `
             </div>
         </div>
 
-        <!-- Competencies & Certifications Card -->
+        <!-- Certifications & Qualifications Card -->
         <div class="glass-card" style="padding: 24px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
-                <h2 style="font-size: 18px; font-weight: 600; color: #ffffff; margin: 0;">Competencies & Certifications</h2>
+                <h2 style="font-size: 18px; font-weight: 600; color: #ffffff; margin: 0;">Certifications & Qualifications</h2>
                 <div style="display: flex; gap: 12px;">
                     <button id="browse-competencies-btn" class="btn-primary" style="padding: 8px 16px; font-size: 14px;">
                         <svg style="width: 16px; height: 16px; display: inline-block; margin-right: 6px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -251,6 +254,7 @@ function cacheDom() {
     dom = {
         headerContainer: q('#profile-header-container'),
         themeSelector: q('#theme-selector'),
+        profileInfoGrid: q('#profile-info-grid'),
         profileUsername: q('#profile-username'),
         profileEmail: q('#profile-email'),
         profileOrganization: q('#profile-organization'),
@@ -640,10 +644,39 @@ async function loadCompetencies() {
 
         const competencies = await competencyService.getUserCompetenciesByCategory(user.id);
 
-        if (competencies.length === 0 || competencies.every(cat => cat.competencies.length === 0)) {
+        // Separate personal details from actual competencies/certifications
+        const personalDetailsCategories = [];
+        const certificationCategories = [];
+
+        competencies.forEach(category => {
+            const personalDetails = getPersonalDetails(category.competencies);
+            const certifications = filterOutPersonalDetails(category.competencies);
+
+            if (personalDetails.length > 0) {
+                personalDetailsCategories.push({
+                    ...category,
+                    competencies: personalDetails
+                });
+            }
+
+            if (certifications.length > 0) {
+                certificationCategories.push({
+                    ...category,
+                    competencies: certifications
+                });
+            }
+        });
+
+        // Add personal details to the profile info grid
+        if (personalDetailsCategories.length > 0 && personalDetailsCategories.some(cat => cat.competencies.length > 0)) {
+            appendPersonalDetailsToProfile(personalDetailsCategories);
+        }
+
+        // Render certifications
+        if (certificationCategories.length === 0 || certificationCategories.every(cat => cat.competencies.length === 0)) {
             dom.noCompetencies.classList.remove('hidden');
         } else {
-            renderCompetencies(competencies);
+            renderCompetencies(certificationCategories);
             dom.competencyCategories.classList.remove('hidden');
         }
     } catch (error) {
@@ -653,6 +686,32 @@ async function loadCompetencies() {
     } finally {
         dom.competencyLoading.classList.add('hidden');
     }
+}
+
+function appendPersonalDetailsToProfile(categoryGroups) {
+    // Flatten all personal details from all categories
+    const allPersonalDetails = categoryGroups
+        .filter(group => group.competencies.length > 0)
+        .flatMap(group => group.competencies);
+
+    // Append each detail to the profile info grid
+    allPersonalDetails.forEach(detail => {
+        const fieldType = detail.competency?.field_type || 'text';
+        const value = detail.value || '-';
+        const formattedValue = formatValue(value, fieldType);
+
+        const detailElement = document.createElement('div');
+        detailElement.innerHTML = `
+            <label style="display: block; font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, 0.6); margin-bottom: 6px;">
+                ${detail.competency.name}
+            </label>
+            <div style="color: #ffffff; font-size: 16px;">
+                ${formattedValue}
+            </div>
+        `;
+
+        dom.profileInfoGrid.appendChild(detailElement);
+    });
 }
 
 function renderCompetencies(categoryGroups) {
@@ -739,10 +798,16 @@ async function openBrowseModal() {
 
         // Load data
         if (!competencyCategories.length) {
-            competencyCategories = await competencyService.getCategories();
+            const allCategories = await competencyService.getCategories();
+            // Filter out "Personal Details" category
+            competencyCategories = allCategories.filter(cat =>
+                !cat.name.toLowerCase().includes('personal details')
+            );
         }
         if (!competencyDefinitions.length) {
-            competencyDefinitions = await competencyService.getCompetencyDefinitions();
+            const allDefinitions = await competencyService.getCompetencyDefinitions();
+            // Filter out personal details - only show certifications/qualifications
+            competencyDefinitions = filterOutPersonalDetails(allDefinitions);
         }
 
         const user = authManager.getCurrentUser();

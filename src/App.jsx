@@ -1,25 +1,32 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import './styles/main.css';
 import { initTheme } from './theme.js';
 import { initializeTheme } from './themes.js';
 import authManager from './auth-manager.js';
 import syncService from './sync-service.js';
 import { AnimatedBackground } from './animated-background.js';
+import { initGlobalStyleEnforcer } from './utils/globalStyleEnforcer.js';
 
-// Import pages/components
-import Layout from './components/Layout.jsx';
+// Import error boundaries
+import GlobalErrorBoundary from './components/GlobalErrorBoundary.jsx';
+import ErrorBoundary from './components/ErrorBoundary.tsx';
+
+// Import core components (always needed)
+import Layout from './components/LayoutNew.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
-import LoginPage from './pages/LoginPage.jsx';
-import AdminDashboard from './pages/AdminDashboard.jsx';
-import ProfilePage from './pages/ProfilePage.jsx';
-import DataHubPage from './pages/DataHubPage.jsx';
-import TofdCalculatorPage from './pages/TofdCalculatorPage.jsx';
-import CscanVisualizerPage from './pages/CscanVisualizerPage.jsx';
-import PecVisualizerPage from './pages/PecVisualizerPage.jsx';
-import Viewer3DPage from './pages/Viewer3DPage.jsx';
-import NiiCalculatorPage from './pages/NiiCalculatorPage.jsx';
-import PersonnelManagementPage from './pages/PersonnelManagementPage.jsx';
+import LoginPage from './pages/LoginPageNew.jsx';
+
+// Lazy load pages for code splitting
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard.jsx'));
+const ProfilePage = lazy(() => import('./pages/ProfilePageNew.jsx'));
+const DataHubPage = lazy(() => import('./pages/DataHubPage.jsx'));
+const TofdCalculatorPage = lazy(() => import('./pages/TofdCalculatorPage.jsx'));
+const CscanVisualizerPage = lazy(() => import('./pages/CscanVisualizerPage.jsx'));
+const PecVisualizerPage = lazy(() => import('./pages/PecVisualizerPage.jsx'));
+const Viewer3DPage = lazy(() => import('./pages/Viewer3DPage.jsx'));
+const NiiCalculatorPage = lazy(() => import('./pages/NiiCalculatorPage.jsx'));
+const PersonnelManagementPage = lazy(() => import('./pages/PersonnelManagementPage.jsx'));
 
 // Background manager component
 function BackgroundManager() {
@@ -69,17 +76,45 @@ function App() {
         // Initialize new color theme system (defaults to Cyber Teal)
         initializeTheme();
 
+        // Initialize global style enforcer after DOM is ready
+        setTimeout(() => {
+            initGlobalStyleEnforcer();
+        }, 100);
+
         // Check authentication status
         const checkAuth = async () => {
             try {
-                // Wait for auth manager to initialize
-                await authManager.initPromise;
-                const session = await authManager.getSession();
+                console.log('App: Starting auth check...');
+
+                // Add timeout to prevent infinite loading
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Auth check timeout')), 5000)
+                );
+
+                const authCheckPromise = async () => {
+                    // Wait for auth manager to initialize
+                    if (authManager.initPromise) {
+                        await authManager.initPromise;
+                    }
+                    const session = await authManager.getSession();
+                    return session;
+                };
+
+                const session = await Promise.race([
+                    authCheckPromise(),
+                    timeoutPromise
+                ]).catch(err => {
+                    console.warn('Auth check error or timeout:', err);
+                    return null;
+                });
+
+                console.log('App: Auth check complete, session:', session);
                 setIsLoggedIn(!!session);
             } catch (error) {
                 console.error('Auth check failed:', error);
                 setIsLoggedIn(false);
             } finally {
+                console.log('App: Setting loading to false');
                 setIsLoading(false);
             }
         };
@@ -100,47 +135,98 @@ function App() {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
-                <div className="text-xl">Loading...</div>
+            <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
+                <div className="text-center">
+                    <div className="spinner mb-4 mx-auto"></div>
+                    <div className="text-xl text-white">Loading NDT Suite...</div>
+                    <div className="text-sm text-gray-400 mt-2">Initializing application</div>
+                </div>
             </div>
         );
     }
 
+    // Loading component for lazy loaded pages
+    const PageLoader = () => (
+        <div className="flex items-center justify-center min-h-screen">
+            <div className="text-xl">Loading...</div>
+        </div>
+    );
+
     return (
-        <BrowserRouter
-            future={{
-                v7_startTransition: true,
-                v7_relativeSplatPath: true
-            }}
-        >
-            <BackgroundManager />
-            <Routes>
-                {/* Public route */}
-                <Route path="/login" element={
-                    isLoggedIn ? <Navigate to="/" replace /> : <LoginPage onLogin={() => setIsLoggedIn(true)} />
-                } />
+        <GlobalErrorBoundary>
+            <BrowserRouter
+                future={{
+                    v7_startTransition: true,
+                    v7_relativeSplatPath: true
+                }}
+            >
+                <BackgroundManager />
+                <Suspense fallback={<PageLoader />}>
+                    <Routes>
+                        {/* Public route */}
+                        <Route path="/login" element={
+                            isLoggedIn ? <Navigate to="/" replace /> : <LoginPage onLogin={() => setIsLoggedIn(true)} />
+                        } />
 
-                {/* Protected routes with layout */}
-                <Route element={<ProtectedRoute isLoggedIn={isLoggedIn} />}>
-                    <Route element={<Layout />}>
-                        <Route path="/" element={<DataHubPage />} />
-                        <Route path="/profile" element={<ProfilePage />} />
-                        <Route path="/tofd" element={<TofdCalculatorPage />} />
-                        <Route path="/cscan" element={<CscanVisualizerPage />} />
-                        <Route path="/pec" element={<PecVisualizerPage />} />
-                        <Route path="/3d" element={<Viewer3DPage />} />
-                        <Route path="/nii" element={<NiiCalculatorPage />} />
-                        <Route path="/personnel" element={<PersonnelManagementPage />} />
+                        {/* Protected routes with layout */}
+                        <Route element={<ProtectedRoute isLoggedIn={isLoggedIn} />}>
+                            <Route element={<Layout />}>
+                                <Route path="/" element={
+                                    <ErrorBoundary>
+                                        <DataHubPage />
+                                    </ErrorBoundary>
+                                } />
+                                <Route path="/profile" element={
+                                    <ErrorBoundary>
+                                        <ProfilePage />
+                                    </ErrorBoundary>
+                                } />
+                                <Route path="/tofd" element={
+                                    <ErrorBoundary>
+                                        <TofdCalculatorPage />
+                                    </ErrorBoundary>
+                                } />
+                                <Route path="/cscan" element={
+                                    <ErrorBoundary>
+                                        <CscanVisualizerPage />
+                                    </ErrorBoundary>
+                                } />
+                                <Route path="/pec" element={
+                                    <ErrorBoundary>
+                                        <PecVisualizerPage />
+                                    </ErrorBoundary>
+                                } />
+                                <Route path="/3d" element={
+                                    <ErrorBoundary>
+                                        <Viewer3DPage />
+                                    </ErrorBoundary>
+                                } />
+                                <Route path="/nii" element={
+                                    <ErrorBoundary>
+                                        <NiiCalculatorPage />
+                                    </ErrorBoundary>
+                                } />
+                                <Route path="/personnel" element={
+                                    <ErrorBoundary>
+                                        <PersonnelManagementPage />
+                                    </ErrorBoundary>
+                                } />
 
-                        {/* Admin only route */}
-                        <Route path="/admin" element={<AdminDashboard />} />
-                    </Route>
-                </Route>
+                                {/* Admin only route */}
+                                <Route path="/admin" element={
+                                    <ErrorBoundary>
+                                        <AdminDashboard />
+                                    </ErrorBoundary>
+                                } />
+                            </Route>
+                        </Route>
 
-                {/* Catch all - redirect to home */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-        </BrowserRouter>
+                        {/* Catch all - redirect to home */}
+                        <Route path="*" element={<Navigate to="/" replace />} />
+                    </Routes>
+                </Suspense>
+            </BrowserRouter>
+        </GlobalErrorBoundary>
     );
 }
 

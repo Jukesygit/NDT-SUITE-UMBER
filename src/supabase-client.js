@@ -1,41 +1,55 @@
 // Supabase Client Configuration
 import { createClient } from '@supabase/supabase-js';
+import environmentConfig from './config/environment.js';
 
-// Load Supabase credentials from environment variables
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Get Supabase credentials from secure config
+const SUPABASE_URL = environmentConfig.get('supabase.url');
+const SUPABASE_ANON_KEY = environmentConfig.get('supabase.anonKey');
 
-// Validate that environment variables are set
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    console.error('Missing Supabase credentials. Please check your .env file.');
-    console.error('Required variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY');
+// Create Supabase client only if properly configured
+let supabase = null;
+
+if (environmentConfig.isSupabaseConfigured()) {
+    try {
+        supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            auth: {
+                autoRefreshToken: true,
+                persistSession: true,
+                detectSessionInUrl: true,
+                storage: window.localStorage, // Explicit storage for better control
+                storageKey: 'ndt-suite-auth', // Custom key to avoid conflicts
+                flowType: 'pkce' // More secure flow for SPAs
+            },
+            global: {
+                headers: {
+                    'x-client-info': 'ndt-suite-web'
+                }
+            },
+            db: {
+                schema: 'public'
+            },
+            realtime: {
+                params: {
+                    eventsPerSecond: 10 // Rate limiting for realtime
+                }
+            }
+        });
+
+        console.log('Supabase client initialized successfully');
+    } catch (error) {
+        console.error('Failed to initialize Supabase client:', error);
+        supabase = null;
+    }
 } else {
-    console.log('Supabase URL configured:', SUPABASE_URL);
-    console.log('Supabase anon key length:', SUPABASE_ANON_KEY?.length);
+    console.info('Supabase not configured - running in local mode');
 }
 
-// Create Supabase client with options to support anonymous requests
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: true
-    },
-    global: {
-        headers: {
-            'x-client-info': 'supabase-js-web'
-        }
-    },
-    db: {
-        schema: 'public'
-    }
-});
+// Export the client (will be null if not configured)
+export { supabase };
 
 // Check if Supabase is properly configured
 export function isSupabaseConfigured() {
-    return SUPABASE_URL && SUPABASE_ANON_KEY &&
-           SUPABASE_URL !== 'YOUR_SUPABASE_URL' &&
-           SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY';
+    return environmentConfig.isSupabaseConfigured() && supabase !== null;
 }
 
 export default supabase;

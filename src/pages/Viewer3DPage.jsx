@@ -1,22 +1,9 @@
-import { useEffect, useRef } from 'react';
+import React from 'react';
 import viewer3D from '../tools/3d-viewer.js';
+import ToolContainer from '../components/ToolContainer';
 
 function Viewer3DPage() {
-    const containerRef = useRef(null);
-
-    useEffect(() => {
-        if (containerRef.current) {
-            viewer3D.init(containerRef.current);
-        }
-
-        return () => {
-            if (viewer3D.destroy) {
-                viewer3D.destroy(containerRef.current);
-            }
-        };
-    }, []);
-
-    return <div ref={containerRef} className="tool-container w-full h-full relative"></div>;
+    return <ToolContainer toolModule={viewer3D} className="viewer-3d" />;
 }
 
 export default Viewer3DPage;

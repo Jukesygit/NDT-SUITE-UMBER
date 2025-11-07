@@ -168,6 +168,72 @@ export function shouldShowDateFields(competency) {
 }
 
 /**
+ * Check if a competency is a personal detail (not a certification/qualification)
+ * @param {object} competency - The competency definition or employee competency
+ * @returns {boolean} - True if this is a personal detail
+ */
+export function isPersonalDetail(competency) {
+    if (!competency) return false;
+
+    // Check category name
+    const categoryName = competency.category?.name?.toLowerCase() ||
+                        competency.competency?.category?.name?.toLowerCase() || '';
+
+    if (categoryName.includes('personal details')) {
+        return true;
+    }
+
+    // Check field name for common personal detail patterns
+    const fieldName = competency.name?.toLowerCase() ||
+                     competency.competency?.name?.toLowerCase() || '';
+
+    const personalDetailPatterns = [
+        'date of birth',
+        'dob',
+        'mobile number',
+        'email address',
+        'home address',
+        'nearest uk train station',
+        'next of kin',
+        'emergency contact',
+        'phone number',
+        'contact number',
+        'postcode',
+        'postal code',
+        'pension information',
+        'vantage no',
+        'national insurance',
+        'ni number',
+        'employee id',
+        'employee number',
+        'payroll',
+        'address line'
+    ];
+
+    return personalDetailPatterns.some(pattern => fieldName.includes(pattern));
+}
+
+/**
+ * Filter out personal details from a list of competencies
+ * @param {Array} competencies - Array of competency definitions or employee competencies
+ * @returns {Array} - Filtered array without personal details
+ */
+export function filterOutPersonalDetails(competencies) {
+    if (!Array.isArray(competencies)) return [];
+    return competencies.filter(comp => !isPersonalDetail(comp));
+}
+
+/**
+ * Get only personal details from a list of competencies
+ * @param {Array} competencies - Array of competency definitions or employee competencies
+ * @returns {Array} - Array containing only personal details
+ */
+export function getPersonalDetails(competencies) {
+    if (!Array.isArray(competencies)) return [];
+    return competencies.filter(comp => isPersonalDetail(comp));
+}
+
+/**
  * Format a value for display based on field type
  * @param {any} value - The value to format
  * @param {string} fieldType - The field type

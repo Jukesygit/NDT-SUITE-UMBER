@@ -1,22 +1,9 @@
-import { useEffect, useRef } from 'react';
+import React from 'react';
 import tofdCalculator from '../tools/tofd-calculator.js';
+import ToolContainer from '../components/ToolContainer';
 
 function TofdCalculatorPage() {
-    const containerRef = useRef(null);
-
-    useEffect(() => {
-        if (containerRef.current) {
-            tofdCalculator.init(containerRef.current);
-        }
-
-        return () => {
-            if (tofdCalculator.destroy) {
-                tofdCalculator.destroy(containerRef.current);
-            }
-        };
-    }, []);
-
-    return <div ref={containerRef} className="tool-container w-full h-full"></div>;
+    return <ToolContainer toolModule={tofdCalculator} />;
 }
 
 export default TofdCalculatorPage;

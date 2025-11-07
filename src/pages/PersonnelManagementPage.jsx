@@ -3,9 +3,9 @@ import { createModernHeader } from '../components/modern-header.js';
 import authManager from '../auth-manager.js';
 import competencyService from '../services/competency-service.js';
 import personnelService from '../services/personnel-service.js';
-import { isSupabaseConfigured } from '../supabase-client.js';
-import CSVImportModal from '../components/CSVImportModal.jsx';
-import { shouldShowCertificationFields, shouldShowDateFields, getInputType, getPlaceholder } from '../utils/competency-field-utils.js';
+import supabase, { isSupabaseConfigured } from '../supabase-client.js';
+import UniversalImportModal from '../components/UniversalImportModal.jsx';
+import { shouldShowCertificationFields, shouldShowDateFields, getInputType, getPlaceholder, filterOutPersonalDetails } from '../utils/competency-field-utils.js';
 
 export default function PersonnelManagementPage() {
     const [view, setView] = useState('directory'); // directory, matrix, expiring
@@ -14,12 +14,16 @@ export default function PersonnelManagementPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterOrg, setFilterOrg] = useState('all');
     const [filterRole, setFilterRole] = useState('all');
+    const [filterCompetencies, setFilterCompetencies] = useState([]); // Array of competency IDs
     const [organizations, setOrganizations] = useState([]);
+    const [competencyDefinitions, setCompetencyDefinitions] = useState([]);
     const [selectedPerson, setSelectedPerson] = useState(null);
     const [expiringCompetencies, setExpiringCompetencies] = useState([]);
     const [competencyMatrix, setCompetencyMatrix] = useState(null);
     const [showImportModal, setShowImportModal] = useState(false);
     const [importSuccess, setImportSuccess] = useState(false);
+    const [sortColumn, setSortColumn] = useState('name'); // name, org, role, total, active, expiring, expired
+    const [sortDirection, setSortDirection] = useState('asc'); // asc, desc
 
     useEffect(() => {
         loadData();
@@ -33,15 +37,17 @@ export default function PersonnelManagementPage() {
 
         try {
             setLoading(true);
-            const [personnelData, orgsData, expiringData] = await Promise.all([
+            const [personnelData, orgsData, expiringData, competencyDefs] = await Promise.all([
                 personnelService.getAllPersonnelWithCompetencies(),
                 authManager.getOrganizations(),
-                competencyService.getExpiringCompetencies(30)
+                competencyService.getExpiringCompetencies(30),
+                competencyService.getCompetencyDefinitions()
             ]);
 
             setPersonnel(personnelData);
             setOrganizations(orgsData.filter(org => org.name !== 'SYSTEM'));
             setExpiringCompetencies(expiringData);
+            setCompetencyDefinitions(competencyDefs);
 
             if (showSuccess) {
                 setImportSuccess(true);
@@ -70,6 +76,33 @@ export default function PersonnelManagementPage() {
         }
     }, [view]);
 
+    const getCompetencyStats = (person) => {
+        // Filter out personal details - only count actual certifications/qualifications
+        const competencies = filterOutPersonalDetails(person.competencies || []);
+        const total = competencies.length;
+        const active = competencies.filter(c => c.status === 'active').length;
+        const expiring = competencies.filter(c => {
+            if (!c.expiry_date) return false;
+            const daysUntilExpiry = Math.ceil((new Date(c.expiry_date) - new Date()) / (1000 * 60 * 60 * 24));
+            return daysUntilExpiry > 0 && daysUntilExpiry <= 30;
+        }).length;
+        const expired = competencies.filter(c => c.status === 'expired' ||
+            (c.expiry_date && new Date(c.expiry_date) < new Date())).length;
+
+        return { total, active, expiring, expired };
+    };
+
+    const handleSort = (column) => {
+        if (sortColumn === column) {
+            // Toggle direction if clicking same column
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+        } else {
+            // Set new column with ascending as default
+            setSortColumn(column);
+            setSortDirection('asc');
+        }
+    };
+
     const filteredPersonnel = personnel.filter(person => {
         const matchesSearch = !searchTerm ||
             person.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -78,7 +111,56 @@ export default function PersonnelManagementPage() {
         const matchesOrg = filterOrg === 'all' || person.organization_id === filterOrg;
         const matchesRole = filterRole === 'all' || person.role === filterRole;
 
-        return matchesSearch && matchesOrg && matchesRole;
+        // Filter by competencies - person must have ALL selected competencies
+        const matchesCompetencies = filterCompetencies.length === 0 ||
+            filterCompetencies.every(compId =>
+                person.competencies?.some(c =>
+                    c.competency_id === compId &&
+                    (c.status === 'active' ||
+                     (c.expiry_date && new Date(c.expiry_date) >= new Date()))
+                )
+            );
+
+        return matchesSearch && matchesOrg && matchesRole && matchesCompetencies;
+    }).sort((a, b) => {
+        let aValue, bValue;
+
+        switch (sortColumn) {
+            case 'name':
+                aValue = (a.username || '').toLowerCase();
+                bValue = (b.username || '').toLowerCase();
+                break;
+            case 'org':
+                aValue = (a.organizations?.name || '').toLowerCase();
+                bValue = (b.organizations?.name || '').toLowerCase();
+                break;
+            case 'role':
+                aValue = (a.role || '').toLowerCase();
+                bValue = (b.role || '').toLowerCase();
+                break;
+            case 'total':
+                aValue = getCompetencyStats(a).total;
+                bValue = getCompetencyStats(b).total;
+                break;
+            case 'active':
+                aValue = getCompetencyStats(a).active;
+                bValue = getCompetencyStats(b).active;
+                break;
+            case 'expiring':
+                aValue = getCompetencyStats(a).expiring;
+                bValue = getCompetencyStats(b).expiring;
+                break;
+            case 'expired':
+                aValue = getCompetencyStats(a).expired;
+                bValue = getCompetencyStats(b).expired;
+                break;
+            default:
+                return 0;
+        }
+
+        if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
     });
 
     const handleExportToCSV = async () => {
@@ -95,21 +177,6 @@ export default function PersonnelManagementPage() {
             console.error('Error exporting:', error);
             alert('Failed to export data');
         }
-    };
-
-    const getCompetencyStats = (person) => {
-        const competencies = person.competencies || [];
-        const total = competencies.length;
-        const active = competencies.filter(c => c.status === 'active').length;
-        const expiring = competencies.filter(c => {
-            if (!c.expiry_date) return false;
-            const daysUntilExpiry = Math.ceil((new Date(c.expiry_date) - new Date()) / (1000 * 60 * 60 * 24));
-            return daysUntilExpiry > 0 && daysUntilExpiry <= 30;
-        }).length;
-        const expired = competencies.filter(c => c.status === 'expired' ||
-            (c.expiry_date && new Date(c.expiry_date) < new Date())).length;
-
-        return { total, active, expiring, expired };
     };
 
     if (!isSupabaseConfigured()) {
@@ -204,11 +271,20 @@ export default function PersonnelManagementPage() {
                         setFilterOrg={setFilterOrg}
                         filterRole={filterRole}
                         setFilterRole={setFilterRole}
+                        filterCompetencies={filterCompetencies}
+                        setFilterCompetencies={setFilterCompetencies}
                         organizations={organizations}
+                        competencyDefinitions={competencyDefinitions}
                         onExport={handleExportToCSV}
                         onSelectPerson={setSelectedPerson}
                         getCompetencyStats={getCompetencyStats}
-                        onImport={() => setShowImportModal(true)}
+                        onImport={() => {
+                            console.log('Import button clicked!');
+                            setShowImportModal(true);
+                        }}
+                        sortColumn={sortColumn}
+                        sortDirection={sortDirection}
+                        onSort={handleSort}
                     />
                 ) : view === 'matrix' ? (
                     <MatrixView
@@ -233,9 +309,9 @@ export default function PersonnelManagementPage() {
                 />
             )}
 
-            {/* CSV Import Modal */}
+            {/* Import Modal */}
             {showImportModal && (
-                <CSVImportModal
+                <UniversalImportModal
                     onClose={() => setShowImportModal(false)}
                     onComplete={() => loadData(true)}
                 />
@@ -272,34 +348,231 @@ export default function PersonnelManagementPage() {
 }
 
 // Directory View Component
-function DirectoryView({ personnel, searchTerm, setSearchTerm, filterOrg, setFilterOrg, filterRole, setFilterRole, organizations, onExport, onSelectPerson, getCompetencyStats, onImport }) {
+function DirectoryView({ personnel, searchTerm, setSearchTerm, filterOrg, setFilterOrg, filterRole, setFilterRole, filterCompetencies, setFilterCompetencies, organizations, competencyDefinitions, onExport, onSelectPerson, getCompetencyStats, onImport, sortColumn, sortDirection, onSort }) {
+    const [showCompetencyDropdown, setShowCompetencyDropdown] = useState(false);
+    const [expandedPersonId, setExpandedPersonId] = useState(null);
+    const [editingPersonId, setEditingPersonId] = useState(null);
+    const [editFormData, setEditFormData] = useState({
+        username: '',
+        email: '',
+        role: '',
+        organization_id: ''
+    });
+    const [saving, setSaving] = useState(false);
+    const [editingCompetencyId, setEditingCompetencyId] = useState(null);
+    const [competencyEditData, setCompetencyEditData] = useState({});
+    const currentUser = authManager.getCurrentUser();
+    const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'org_admin';
+
+    const handleEditCompetency = (comp) => {
+        setEditingCompetencyId(comp.id);
+        setCompetencyEditData({
+            value: comp.value || '',
+            issuing_body: comp.issuing_body || '',
+            certification_id: comp.certification_id || '',
+            expiry_date: comp.expiry_date ? new Date(comp.expiry_date).toISOString().split('T')[0] : '',
+            issued_date: comp.created_at ? new Date(comp.created_at).toISOString().split('T')[0] : '',
+            notes: comp.notes || ''
+        });
+    };
+
+    const handleSaveCompetency = async (compId) => {
+        if (!isAdmin) return;
+
+        setSaving(true);
+        try {
+            const updateData = {
+                value: competencyEditData.value || null,
+                issuing_body: competencyEditData.issuing_body || null,
+                certification_id: competencyEditData.certification_id || null,
+                expiry_date: competencyEditData.expiry_date || null,
+                notes: competencyEditData.notes || null
+            };
+
+            if (competencyEditData.issued_date) {
+                updateData.created_at = competencyEditData.issued_date;
+            }
+
+            const { error } = await supabase
+                .from('employee_competencies')
+                .update(updateData)
+                .eq('id', compId);
+
+            if (error) throw error;
+
+            window.location.reload();
+        } catch (error) {
+            console.error('Error updating competency:', error);
+            alert('Failed to update competency: ' + error.message);
+        } finally {
+            setSaving(false);
+            setEditingCompetencyId(null);
+        }
+    };
+
+    const handleCancelCompetencyEdit = () => {
+        setEditingCompetencyId(null);
+        setCompetencyEditData({});
+    };
+
+    const handleEditPerson = (person) => {
+        setEditingPersonId(person.id);
+        setEditFormData({
+            username: person.username,
+            email: person.email,
+            role: person.role,
+            organization_id: person.organization_id
+        });
+    };
+
+    const handleCancelEdit = () => {
+        setEditingPersonId(null);
+        setEditFormData({
+            username: '',
+            email: '',
+            role: '',
+            organization_id: ''
+        });
+    };
+
+    const handleSaveEdit = async (personId) => {
+        if (!isAdmin) return;
+
+        setSaving(true);
+        try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .update({
+                    username: editFormData.username,
+                    email: editFormData.email,
+                    role: editFormData.role,
+                    organization_id: editFormData.organization_id
+                })
+                .eq('id', personId);
+
+            if (error) throw error;
+
+            // Refresh the personnel list
+            window.location.reload();
+        } catch (error) {
+            console.error('Error updating profile:', error);
+            alert('Failed to update profile: ' + error.message);
+        } finally {
+            setSaving(false);
+            setEditingPersonId(null);
+        }
+    };
+
     return (
         <div>
-            {/* Filters and Actions */}
-            <div className="mb-6 flex flex-wrap gap-4 items-center justify-between">
-                <div className="flex gap-3 flex-1">
-                    <input
-                        type="text"
-                        placeholder="Search by name or email..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="glass-input"
-                        style={{ flex: 1, maxWidth: '400px' }}
-                    />
+            {/* Compact Stats - New Design */}
+            <div className="stats-compact" style={{ marginBottom: '24px' }}>
+                <div className="stat-compact">
+                    <div className="stat-compact__icon stat-compact__icon--primary">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                    </div>
+                    <div className="stat-compact__content">
+                        <div className="stat-compact__label">Total Personnel</div>
+                        <div className="stat-compact__value">{personnel.length}</div>
+                    </div>
+                </div>
+
+                <div className="stat-compact">
+                    <div className="stat-compact__icon stat-compact__icon--success">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <div className="stat-compact__content">
+                        <div className="stat-compact__label">Active Certs</div>
+                        <div className="stat-compact__value">
+                            {personnel.reduce((sum, p) => sum + getCompetencyStats(p).active, 0)}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="stat-compact">
+                    <div className="stat-compact__icon stat-compact__icon--warning">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <div className="stat-compact__content">
+                        <div className="stat-compact__label">Expiring Soon</div>
+                        <div className="stat-compact__value">
+                            {personnel.reduce((sum, p) => sum + getCompetencyStats(p).expiring, 0)}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="stat-compact">
+                    <div className="stat-compact__icon stat-compact__icon--danger">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </div>
+                    <div className="stat-compact__content">
+                        <div className="stat-compact__label">Expired</div>
+                        <div className="stat-compact__value">
+                            {personnel.reduce((sum, p) => sum + getCompetencyStats(p).expired, 0)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Enhanced Search & Filters Toolbar */}
+            <div className="filter-toolbar">
+                <div className="filter-toolbar__section">
+                    <div className="search-bar-enhanced">
+                        <input
+                            type="text"
+                            className="search-bar-enhanced__input"
+                            placeholder="Search personnel by name, email, or organization..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                        <svg className="search-bar-enhanced__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        {searchTerm && (
+                            <button
+                                className="search-bar-enhanced__clear"
+                                onClick={() => setSearchTerm('')}
+                            >
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                <div className="filter-toolbar__divider"></div>
+
+                <div className="filter-toolbar__section" style={{ flex: 'none' }}>
+                    <label className="filter-toolbar__label">Organization:</label>
                     <select
                         value={filterOrg}
                         onChange={(e) => setFilterOrg(e.target.value)}
-                        className="glass-select"
+                        className="filter-toolbar__select"
                     >
                         <option value="all">All Organizations</option>
                         {organizations.map(org => (
                             <option key={org.id} value={org.id}>{org.name}</option>
                         ))}
                     </select>
+                </div>
+
+                <div className="filter-toolbar__divider"></div>
+
+                <div className="filter-toolbar__section" style={{ flex: 'none' }}>
+                    <label className="filter-toolbar__label">Role:</label>
                     <select
                         value={filterRole}
                         onChange={(e) => setFilterRole(e.target.value)}
-                        className="glass-select"
+                        className="filter-toolbar__select"
                     >
                         <option value="all">All Roles</option>
                         <option value="admin">Admin</option>
@@ -308,53 +581,174 @@ function DirectoryView({ personnel, searchTerm, setSearchTerm, filterOrg, setFil
                         <option value="viewer">Viewer</option>
                     </select>
                 </div>
-                <div style={{ display: 'flex', gap: '12px' }}>
+
+                <div className="filter-toolbar__divider"></div>
+
+                <div className="filter-toolbar__section" style={{ flex: 'none', position: 'relative' }}>
+                    <label className="filter-toolbar__label">Competencies:</label>
+                    <div style={{ position: 'relative' }}>
+                        <button
+                            onClick={() => setShowCompetencyDropdown(!showCompetencyDropdown)}
+                            className="filter-toolbar__select"
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '8px',
+                                minWidth: '200px',
+                                cursor: 'pointer',
+                                textAlign: 'left'
+                            }}
+                        >
+                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {filterCompetencies.length === 0
+                                    ? 'All Qualifications'
+                                    : `${filterCompetencies.length} selected`}
+                            </span>
+                            <svg style={{ width: '16px', height: '16px', flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                        {showCompetencyDropdown && (
+                            <>
+                                <div
+                                    style={{
+                                        position: 'fixed',
+                                        inset: 0,
+                                        zIndex: 999
+                                    }}
+                                    onClick={() => setShowCompetencyDropdown(false)}
+                                />
+                                <div
+                                    className="glass-card"
+                                    style={{
+                                        position: 'absolute',
+                                        top: 'calc(100% + 4px)',
+                                        left: 0,
+                                        minWidth: '300px',
+                                        maxWidth: '400px',
+                                        maxHeight: '400px',
+                                        overflowY: 'auto',
+                                        zIndex: 1000,
+                                        padding: '12px'
+                                    }}
+                                >
+                                    {filterCompetencies.length > 0 && (
+                                        <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                                            <button
+                                                onClick={() => setFilterCompetencies([])}
+                                                className="btn btn--secondary btn--sm"
+                                                style={{ width: '100%', fontSize: '12px' }}
+                                            >
+                                                Clear All ({filterCompetencies.length})
+                                            </button>
+                                        </div>
+                                    )}
+                                    {Object.entries(
+                                        filterOutPersonalDetails(competencyDefinitions)
+                                            .sort((a, b) => {
+                                                const catCompare = (a.category?.name || '').localeCompare(b.category?.name || '');
+                                                return catCompare !== 0 ? catCompare : a.name.localeCompare(b.name);
+                                            })
+                                            .reduce((acc, comp) => {
+                                                const categoryName = comp.category?.name || 'Other';
+                                                if (!acc[categoryName]) acc[categoryName] = [];
+                                                acc[categoryName].push(comp);
+                                                return acc;
+                                            }, {})
+                                    ).map(([categoryName, comps]) => (
+                                            <div key={categoryName} style={{ marginBottom: '16px' }}>
+                                                <div style={{
+                                                    fontSize: '11px',
+                                                    fontWeight: '700',
+                                                    color: 'var(--accent-primary)',
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '0.5px',
+                                                    marginBottom: '8px',
+                                                    padding: '4px 8px',
+                                                    background: 'rgba(var(--accent-primary-rgb, 59, 130, 246), 0.1)',
+                                                    borderRadius: '4px'
+                                                }}>
+                                                    {categoryName}
+                                                </div>
+                                                {comps.map(comp => {
+                                                    const isSelected = filterCompetencies.includes(comp.id);
+                                                    return (
+                                                        <label
+                                                            key={comp.id}
+                                                            style={{
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '8px',
+                                                                padding: '8px',
+                                                                cursor: 'pointer',
+                                                                borderRadius: '6px',
+                                                                marginBottom: '4px',
+                                                                background: isSelected ? 'rgba(var(--accent-primary-rgb, 59, 130, 246), 0.15)' : 'transparent',
+                                                                transition: 'all 0.2s ease'
+                                                            }}
+                                                            className="hover:bg-white/5"
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isSelected}
+                                                                onChange={(e) => {
+                                                                    if (e.target.checked) {
+                                                                        setFilterCompetencies([...filterCompetencies, comp.id]);
+                                                                    } else {
+                                                                        setFilterCompetencies(filterCompetencies.filter(id => id !== comp.id));
+                                                                    }
+                                                                }}
+                                                                style={{
+                                                                    cursor: 'pointer',
+                                                                    width: '16px',
+                                                                    height: '16px',
+                                                                    flexShrink: 0
+                                                                }}
+                                                            />
+                                                            <span style={{
+                                                                fontSize: '13px',
+                                                                color: isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.8)',
+                                                                fontWeight: isSelected ? '600' : '400'
+                                                            }}>
+                                                                {comp.name}
+                                                            </span>
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                        ))}
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                <div className="filter-toolbar__divider"></div>
+
+                <div className="filter-toolbar__section" style={{ flex: 'none', justifyContent: 'flex-end' }}>
                     <button
-                        onClick={onImport}
-                        className="btn-primary"
-                        style={{ padding: '10px 20px' }}
+                        onClick={() => {
+                            console.log('Button clicked, onImport is:', onImport);
+                            if (onImport) {
+                                onImport();
+                            } else {
+                                console.error('onImport prop is not defined!');
+                            }
+                        }}
+                        className="btn btn--primary btn--md"
                     >
-                        <svg style={{ width: '16px', height: '16px', display: 'inline-block', marginRight: '6px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        <svg className="btn__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                         </svg>
-                        Import CSV
+                        Import from File
                     </button>
-                    <button
-                        onClick={onExport}
-                        className="btn-secondary"
-                        style={{ padding: '10px 20px' }}
-                    >
-                        <svg style={{ width: '16px', height: '16px', display: 'inline-block', marginRight: '6px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    <button onClick={onExport} className="btn btn--secondary btn--md">
+                        <svg className="btn__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                         Export to CSV
                     </button>
-                </div>
-            </div>
-
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <div className="glass-card" style={{ padding: '20px' }}>
-                    <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '8px' }}>Total Personnel</div>
-                    <div style={{ fontSize: '32px', fontWeight: 'bold', color: 'var(--accent-primary)' }}>{personnel.length}</div>
-                </div>
-                <div className="glass-card" style={{ padding: '20px' }}>
-                    <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '8px' }}>Active Certifications</div>
-                    <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#10b981' }}>
-                        {personnel.reduce((sum, p) => sum + getCompetencyStats(p).active, 0)}
-                    </div>
-                </div>
-                <div className="glass-card" style={{ padding: '20px' }}>
-                    <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '8px' }}>Expiring Soon</div>
-                    <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#f59e0b' }}>
-                        {personnel.reduce((sum, p) => sum + getCompetencyStats(p).expiring, 0)}
-                    </div>
-                </div>
-                <div className="glass-card" style={{ padding: '20px' }}>
-                    <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '8px' }}>Expired</div>
-                    <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#ef4444' }}>
-                        {personnel.reduce((sum, p) => sum + getCompetencyStats(p).expired, 0)}
-                    </div>
                 </div>
             </div>
 
@@ -364,13 +758,167 @@ function DirectoryView({ personnel, searchTerm, setSearchTerm, filterOrg, setFil
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead style={{ background: 'rgba(255, 255, 255, 0.05)', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
                             <tr>
-                                <th style={{ padding: '16px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.7)', textTransform: 'uppercase' }}>Name</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.7)', textTransform: 'uppercase' }}>Organization</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.7)', textTransform: 'uppercase' }}>Role</th>
-                                <th style={{ padding: '16px', textAlign: 'center', fontSize: '13px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.7)', textTransform: 'uppercase' }}>Total Certs</th>
-                                <th style={{ padding: '16px', textAlign: 'center', fontSize: '13px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.7)', textTransform: 'uppercase' }}>Active</th>
-                                <th style={{ padding: '16px', textAlign: 'center', fontSize: '13px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.7)', textTransform: 'uppercase' }}>Expiring</th>
-                                <th style={{ padding: '16px', textAlign: 'center', fontSize: '13px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.7)', textTransform: 'uppercase' }}>Expired</th>
+                                <th
+                                    style={{
+                                        padding: '16px',
+                                        textAlign: 'left',
+                                        fontSize: '13px',
+                                        fontWeight: '600',
+                                        color: sortColumn === 'name' ? '#ffffff' : 'rgba(255, 255, 255, 0.7)',
+                                        textTransform: 'uppercase',
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                        transition: 'color 0.2s'
+                                    }}
+                                    onClick={() => onSort('name')}
+                                    onMouseEnter={(e) => e.currentTarget.style.color = '#ffffff'}
+                                    onMouseLeave={(e) => e.currentTarget.style.color = sortColumn === 'name' ? '#ffffff' : 'rgba(255, 255, 255, 0.7)'}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        Name
+                                        {sortColumn === 'name' && (
+                                            <span style={{ fontSize: '10px' }}>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                                        )}
+                                    </div>
+                                </th>
+                                <th
+                                    style={{
+                                        padding: '16px',
+                                        textAlign: 'left',
+                                        fontSize: '13px',
+                                        fontWeight: '600',
+                                        color: sortColumn === 'org' ? '#ffffff' : 'rgba(255, 255, 255, 0.7)',
+                                        textTransform: 'uppercase',
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                        transition: 'color 0.2s'
+                                    }}
+                                    onClick={() => onSort('org')}
+                                    onMouseEnter={(e) => e.currentTarget.style.color = '#ffffff'}
+                                    onMouseLeave={(e) => e.currentTarget.style.color = sortColumn === 'org' ? '#ffffff' : 'rgba(255, 255, 255, 0.7)'}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        Organization
+                                        {sortColumn === 'org' && (
+                                            <span style={{ fontSize: '10px' }}>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                                        )}
+                                    </div>
+                                </th>
+                                <th
+                                    style={{
+                                        padding: '16px',
+                                        textAlign: 'left',
+                                        fontSize: '13px',
+                                        fontWeight: '600',
+                                        color: sortColumn === 'role' ? '#ffffff' : 'rgba(255, 255, 255, 0.7)',
+                                        textTransform: 'uppercase',
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                        transition: 'color 0.2s'
+                                    }}
+                                    onClick={() => onSort('role')}
+                                    onMouseEnter={(e) => e.currentTarget.style.color = '#ffffff'}
+                                    onMouseLeave={(e) => e.currentTarget.style.color = sortColumn === 'role' ? '#ffffff' : 'rgba(255, 255, 255, 0.7)'}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        Role
+                                        {sortColumn === 'role' && (
+                                            <span style={{ fontSize: '10px' }}>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                                        )}
+                                    </div>
+                                </th>
+                                <th
+                                    style={{
+                                        padding: '16px',
+                                        textAlign: 'center',
+                                        fontSize: '13px',
+                                        fontWeight: '600',
+                                        color: sortColumn === 'total' ? '#ffffff' : 'rgba(255, 255, 255, 0.7)',
+                                        textTransform: 'uppercase',
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                        transition: 'color 0.2s'
+                                    }}
+                                    onClick={() => onSort('total')}
+                                    onMouseEnter={(e) => e.currentTarget.style.color = '#ffffff'}
+                                    onMouseLeave={(e) => e.currentTarget.style.color = sortColumn === 'total' ? '#ffffff' : 'rgba(255, 255, 255, 0.7)'}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                                        Total Certs
+                                        {sortColumn === 'total' && (
+                                            <span style={{ fontSize: '10px' }}>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                                        )}
+                                    </div>
+                                </th>
+                                <th
+                                    style={{
+                                        padding: '16px',
+                                        textAlign: 'center',
+                                        fontSize: '13px',
+                                        fontWeight: '600',
+                                        color: sortColumn === 'active' ? '#ffffff' : 'rgba(255, 255, 255, 0.7)',
+                                        textTransform: 'uppercase',
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                        transition: 'color 0.2s'
+                                    }}
+                                    onClick={() => onSort('active')}
+                                    onMouseEnter={(e) => e.currentTarget.style.color = '#ffffff'}
+                                    onMouseLeave={(e) => e.currentTarget.style.color = sortColumn === 'active' ? '#ffffff' : 'rgba(255, 255, 255, 0.7)'}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                                        Active
+                                        {sortColumn === 'active' && (
+                                            <span style={{ fontSize: '10px' }}>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                                        )}
+                                    </div>
+                                </th>
+                                <th
+                                    style={{
+                                        padding: '16px',
+                                        textAlign: 'center',
+                                        fontSize: '13px',
+                                        fontWeight: '600',
+                                        color: sortColumn === 'expiring' ? '#ffffff' : 'rgba(255, 255, 255, 0.7)',
+                                        textTransform: 'uppercase',
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                        transition: 'color 0.2s'
+                                    }}
+                                    onClick={() => onSort('expiring')}
+                                    onMouseEnter={(e) => e.currentTarget.style.color = '#ffffff'}
+                                    onMouseLeave={(e) => e.currentTarget.style.color = sortColumn === 'expiring' ? '#ffffff' : 'rgba(255, 255, 255, 0.7)'}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                                        Expiring
+                                        {sortColumn === 'expiring' && (
+                                            <span style={{ fontSize: '10px' }}>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                                        )}
+                                    </div>
+                                </th>
+                                <th
+                                    style={{
+                                        padding: '16px',
+                                        textAlign: 'center',
+                                        fontSize: '13px',
+                                        fontWeight: '600',
+                                        color: sortColumn === 'expired' ? '#ffffff' : 'rgba(255, 255, 255, 0.7)',
+                                        textTransform: 'uppercase',
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                        transition: 'color 0.2s'
+                                    }}
+                                    onClick={() => onSort('expired')}
+                                    onMouseEnter={(e) => e.currentTarget.style.color = '#ffffff'}
+                                    onMouseLeave={(e) => e.currentTarget.style.color = sortColumn === 'expired' ? '#ffffff' : 'rgba(255, 255, 255, 0.7)'}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                                        Expired
+                                        {sortColumn === 'expired' && (
+                                            <span style={{ fontSize: '10px' }}>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                                        )}
+                                    </div>
+                                </th>
                                 <th style={{ padding: '16px', textAlign: 'right', fontSize: '13px', fontWeight: '600', color: 'rgba(255, 255, 255, 0.7)', textTransform: 'uppercase' }}>Actions</th>
                             </tr>
                         </thead>
@@ -383,40 +931,394 @@ function DirectoryView({ personnel, searchTerm, setSearchTerm, filterOrg, setFil
                                 </tr>
                             ) : personnel.map(person => {
                                 const stats = getCompetencyStats(person);
+                                const isExpanded = expandedPersonId === person.id;
                                 return (
-                                    <tr key={person.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }} className="hover:bg-white/5 transition-colors">
-                                        <td style={{ padding: '16px' }}>
-                                            <div style={{ fontWeight: '600', color: '#ffffff', marginBottom: '4px' }}>{person.username}</div>
-                                            <div style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.5)' }}>{person.email}</div>
-                                        </td>
-                                        <td style={{ padding: '16px', color: 'rgba(255, 255, 255, 0.7)' }}>
-                                            {person.organizations?.name || 'Unknown'}
-                                        </td>
-                                        <td style={{ padding: '16px' }}>
-                                            <span className="glass-badge">{person.role}</span>
-                                        </td>
-                                        <td style={{ padding: '16px', textAlign: 'center', fontSize: '16px', fontWeight: '600', color: '#ffffff' }}>
-                                            {stats.total}
-                                        </td>
-                                        <td style={{ padding: '16px', textAlign: 'center', fontSize: '16px', fontWeight: '600', color: '#10b981' }}>
-                                            {stats.active}
-                                        </td>
-                                        <td style={{ padding: '16px', textAlign: 'center', fontSize: '16px', fontWeight: '600', color: '#f59e0b' }}>
-                                            {stats.expiring}
-                                        </td>
-                                        <td style={{ padding: '16px', textAlign: 'center', fontSize: '16px', fontWeight: '600', color: '#ef4444' }}>
-                                            {stats.expired}
-                                        </td>
-                                        <td style={{ padding: '16px', textAlign: 'right' }}>
-                                            <button
-                                                onClick={() => onSelectPerson(person)}
-                                                className="btn-primary"
-                                                style={{ padding: '6px 16px', fontSize: '13px' }}
-                                            >
-                                                View Details
-                                            </button>
-                                        </td>
-                                    </tr>
+                                    <React.Fragment key={person.id}>
+                                        <tr style={{ borderBottom: isExpanded ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid rgba(255, 255, 255, 0.05)' }} className="hover:bg-white/5 transition-colors">
+                                            <td style={{ padding: '16px' }}>
+                                                <div style={{ fontWeight: '600', color: '#ffffff', marginBottom: '4px' }}>{person.username}</div>
+                                                <div style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.5)' }}>{person.email}</div>
+                                            </td>
+                                            <td style={{ padding: '16px', color: 'rgba(255, 255, 255, 0.7)' }}>
+                                                {person.organizations?.name || 'Unknown'}
+                                            </td>
+                                            <td style={{ padding: '16px' }}>
+                                                <span className="glass-badge">{person.role}</span>
+                                            </td>
+                                            <td style={{ padding: '16px', textAlign: 'center', fontSize: '16px', fontWeight: '600', color: '#ffffff' }}>
+                                                {stats.total}
+                                            </td>
+                                            <td style={{ padding: '16px', textAlign: 'center', fontSize: '16px', fontWeight: '600', color: '#10b981' }}>
+                                                {stats.active}
+                                            </td>
+                                            <td style={{ padding: '16px', textAlign: 'center', fontSize: '16px', fontWeight: '600', color: '#f59e0b' }}>
+                                                {stats.expiring}
+                                            </td>
+                                            <td style={{ padding: '16px', textAlign: 'center', fontSize: '16px', fontWeight: '600', color: '#ef4444' }}>
+                                                {stats.expired}
+                                            </td>
+                                            <td style={{ padding: '16px', textAlign: 'right' }}>
+                                                <button
+                                                    onClick={() => setExpandedPersonId(isExpanded ? null : person.id)}
+                                                    className="btn-primary"
+                                                    style={{
+                                                        fontSize: '13px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '8px',
+                                                        marginLeft: 'auto'
+                                                    }}
+                                                >
+                                                    {isExpanded ? 'Hide Details' : 'View Details'}
+                                                    <svg
+                                                        style={{
+                                                            width: '16px',
+                                                            height: '16px',
+                                                            transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                                                            transition: 'transform 0.2s ease'
+                                                        }}
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                    >
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                                    </svg>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        {isExpanded && (
+                                            <tr>
+                                                <td colSpan="8" style={{ padding: 0, borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                                                    <div style={{
+                                                        background: 'rgba(59, 130, 246, 0.05)',
+                                                        borderLeft: '4px solid var(--accent-primary)',
+                                                        padding: '24px',
+                                                        animation: 'slideDown 0.2s ease-out'
+                                                    }}>
+                                                        <div style={{ marginBottom: '20px' }}>
+                                                            <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#ffffff', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                    <svg style={{ width: '20px', height: '20px', color: 'var(--accent-primary)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                                                    </svg>
+                                                                    Personal Information
+                                                                </div>
+                                                                {isAdmin && editingPersonId !== person.id && (
+                                                                    <button
+                                                                        onClick={() => handleEditPerson(person)}
+                                                                        className="btn btn--secondary btn--sm"
+                                                                        style={{ fontSize: '12px', padding: '6px 12px' }}
+                                                                    >
+                                                                        <svg style={{ width: '14px', height: '14px', marginRight: '4px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                                        </svg>
+                                                                        Edit
+                                                                    </button>
+                                                                )}
+                                                            </h4>
+                                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+                                                                <div>
+                                                                    <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600', letterSpacing: '0.5px' }}>Username</div>
+                                                                    {editingPersonId === person.id ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            className="glass-input"
+                                                                            value={editFormData.username}
+                                                                            onChange={(e) => setEditFormData({ ...editFormData, username: e.target.value })}
+                                                                            style={{ marginTop: '4px' }}
+                                                                        />
+                                                                    ) : (
+                                                                        <div style={{ fontSize: '14px', color: '#ffffff', fontWeight: '500' }}>{person.username}</div>
+                                                                    )}
+                                                                </div>
+                                                                <div>
+                                                                    <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600', letterSpacing: '0.5px' }}>Email</div>
+                                                                    {editingPersonId === person.id ? (
+                                                                        <input
+                                                                            type="email"
+                                                                            className="glass-input"
+                                                                            value={editFormData.email}
+                                                                            onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                                                                            style={{ marginTop: '4px' }}
+                                                                        />
+                                                                    ) : (
+                                                                        <div style={{ fontSize: '14px', color: '#ffffff', fontWeight: '500' }}>{person.email}</div>
+                                                                    )}
+                                                                </div>
+                                                                <div>
+                                                                    <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600', letterSpacing: '0.5px' }}>Organization</div>
+                                                                    {editingPersonId === person.id ? (
+                                                                        <select
+                                                                            className="glass-select"
+                                                                            value={editFormData.organization_id}
+                                                                            onChange={(e) => setEditFormData({ ...editFormData, organization_id: e.target.value })}
+                                                                            style={{ marginTop: '4px' }}
+                                                                        >
+                                                                            {organizations.map(org => (
+                                                                                <option key={org.id} value={org.id}>{org.name}</option>
+                                                                            ))}
+                                                                        </select>
+                                                                    ) : (
+                                                                        <div style={{ fontSize: '14px', color: '#ffffff', fontWeight: '500' }}>{person.organizations?.name || 'Unknown'}</div>
+                                                                    )}
+                                                                </div>
+                                                                <div>
+                                                                    <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600', letterSpacing: '0.5px' }}>Role</div>
+                                                                    {editingPersonId === person.id ? (
+                                                                        <select
+                                                                            className="glass-select"
+                                                                            value={editFormData.role}
+                                                                            onChange={(e) => setEditFormData({ ...editFormData, role: e.target.value })}
+                                                                            style={{ marginTop: '4px' }}
+                                                                        >
+                                                                            <option value="viewer">Viewer</option>
+                                                                            <option value="editor">Editor</option>
+                                                                            <option value="org_admin">Org Admin</option>
+                                                                            <option value="admin">Admin</option>
+                                                                        </select>
+                                                                    ) : (
+                                                                        <div><span className="glass-badge">{person.role}</span></div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            {editingPersonId === person.id && (
+                                                                <div style={{ display: 'flex', gap: '12px', marginTop: '16px', justifyContent: 'flex-end' }}>
+                                                                    <button
+                                                                        onClick={handleCancelEdit}
+                                                                        className="btn btn--secondary btn--sm"
+                                                                        disabled={saving}
+                                                                    >
+                                                                        Cancel
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleSaveEdit(person.id)}
+                                                                        className="btn btn--primary btn--sm"
+                                                                        disabled={saving}
+                                                                    >
+                                                                        {saving ? 'Saving...' : 'Save Changes'}
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        <div style={{
+                                                            height: '1px',
+                                                            background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent)',
+                                                            margin: '20px 0'
+                                                        }}></div>
+
+                                                        <div>
+                                                            <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#ffffff', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                <svg style={{ width: '20px', height: '20px', color: 'var(--accent-primary)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                </svg>
+                                                                Competencies & Certifications ({person.competencies?.length || 0})
+                                                            </h4>
+                                                            {(!person.competencies || person.competencies.length === 0) ? (
+                                                                <div style={{
+                                                                    padding: '32px',
+                                                                    textAlign: 'center',
+                                                                    color: 'rgba(255, 255, 255, 0.5)',
+                                                                    background: 'rgba(255, 255, 255, 0.02)',
+                                                                    borderRadius: '8px',
+                                                                    border: '1px dashed rgba(255, 255, 255, 0.1)'
+                                                                }}>
+                                                                    <svg style={{ width: '48px', height: '48px', margin: '0 auto 12px', opacity: 0.3 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                    </svg>
+                                                                    No competencies recorded
+                                                                </div>
+                                                            ) : (
+                                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '8px' }}>
+                                                                    {person.competencies.map(comp => {
+                                                                        const isExpired = comp.status === 'expired' || (comp.expiry_date && new Date(comp.expiry_date) < new Date());
+                                                                        const isExpiringSoon = comp.expiry_date && !isExpired && Math.ceil((new Date(comp.expiry_date) - new Date()) / (1000 * 60 * 60 * 24)) <= 30;
+
+                                                                        const isEditing = editingCompetencyId === comp.id;
+                                                                        return (
+                                                                            <div
+                                                                                key={comp.id}
+                                                                                style={{
+                                                                                    padding: '10px 12px',
+                                                                                    background: 'rgba(255, 255, 255, 0.03)',
+                                                                                    borderRadius: '6px',
+                                                                                    borderLeft: `3px solid ${isExpired ? '#ef4444' : isExpiringSoon ? '#f59e0b' : '#10b981'}`,
+                                                                                    border: `1px solid ${isExpired ? 'rgba(239, 68, 68, 0.3)' : isExpiringSoon ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255, 255, 255, 0.1)'}`,
+                                                                                    borderLeftWidth: '3px',
+                                                                                    transition: 'all 0.2s ease'
+                                                                                }}
+                                                                                className="hover:bg-white/5"
+                                                                            >
+                                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', gap: '8px' }}>
+                                                                                    <div style={{ fontWeight: '600', color: '#ffffff', fontSize: '13px', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={comp.competency?.name}>
+                                                                                        {comp.competency?.name || 'Unknown Competency'}
+                                                                                    </div>
+                                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                                                                                        {isExpired ? (
+                                                                                            <span className="glass-badge badge-red" style={{ fontSize: '10px', padding: '2px 6px' }}>Expired</span>
+                                                                                        ) : isExpiringSoon ? (
+                                                                                            <span className="glass-badge" style={{ background: 'rgba(245, 158, 11, 0.3)', color: '#f59e0b', fontSize: '10px', padding: '2px 6px' }}>Expiring</span>
+                                                                                        ) : comp.status === 'pending_approval' ? (
+                                                                                            <span className="glass-badge" style={{ background: 'rgba(251, 191, 36, 0.2)', color: 'rgba(253, 224, 71, 1)', fontSize: '10px', padding: '2px 6px' }}>Pending</span>
+                                                                                        ) : (
+                                                                                            <span className="glass-badge badge-green" style={{ fontSize: '10px', padding: '2px 6px' }}>Active</span>
+                                                                                        )}
+                                                                                        {isAdmin && !isEditing && (
+                                                                                            <button
+                                                                                                onClick={() => handleEditCompetency(comp)}
+                                                                                                className="btn-icon"
+                                                                                                style={{ padding: '2px', marginLeft: '4px' }}
+                                                                                            >
+                                                                                                <svg style={{ width: '12px', height: '12px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                                                                </svg>
+                                                                                            </button>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                                {isEditing ? (
+                                                                                    <div style={{ fontSize: '11px', lineHeight: '1.4' }} className="space-y-2">
+                                                                                        <div>
+                                                                                            <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px' }}>Value</label>
+                                                                                            <input
+                                                                                                type="text"
+                                                                                                className="glass-input"
+                                                                                                value={competencyEditData.value}
+                                                                                                onChange={(e) => setCompetencyEditData({ ...competencyEditData, value: e.target.value })}
+                                                                                                style={{ fontSize: '11px', padding: '4px 8px' }}
+                                                                                            />
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px' }}>Issuing Body</label>
+                                                                                            <input
+                                                                                                type="text"
+                                                                                                className="glass-input"
+                                                                                                value={competencyEditData.issuing_body}
+                                                                                                onChange={(e) => setCompetencyEditData({ ...competencyEditData, issuing_body: e.target.value })}
+                                                                                                style={{ fontSize: '11px', padding: '4px 8px' }}
+                                                                                            />
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px' }}>Certification ID</label>
+                                                                                            <input
+                                                                                                type="text"
+                                                                                                className="glass-input"
+                                                                                                value={competencyEditData.certification_id}
+                                                                                                onChange={(e) => setCompetencyEditData({ ...competencyEditData, certification_id: e.target.value })}
+                                                                                                style={{ fontSize: '11px', padding: '4px 8px' }}
+                                                                                            />
+                                                                                        </div>
+                                                                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+                                                                                            <div>
+                                                                                                <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px' }}>Issued</label>
+                                                                                                <input
+                                                                                                    type="date"
+                                                                                                    className="glass-input"
+                                                                                                    value={competencyEditData.issued_date}
+                                                                                                    onChange={(e) => setCompetencyEditData({ ...competencyEditData, issued_date: e.target.value })}
+                                                                                                    style={{ fontSize: '11px', padding: '4px 8px' }}
+                                                                                                />
+                                                                                            </div>
+                                                                                            <div>
+                                                                                                <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px' }}>Expires</label>
+                                                                                                <input
+                                                                                                    type="date"
+                                                                                                    className="glass-input"
+                                                                                                    value={competencyEditData.expiry_date}
+                                                                                                    onChange={(e) => setCompetencyEditData({ ...competencyEditData, expiry_date: e.target.value })}
+                                                                                                    style={{ fontSize: '11px', padding: '4px 8px' }}
+                                                                                                />
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px' }}>Notes</label>
+                                                                                            <textarea
+                                                                                                className="glass-textarea"
+                                                                                                value={competencyEditData.notes}
+                                                                                                onChange={(e) => setCompetencyEditData({ ...competencyEditData, notes: e.target.value })}
+                                                                                                rows="2"
+                                                                                                style={{ fontSize: '11px', padding: '4px 8px' }}
+                                                                                            />
+                                                                                        </div>
+                                                                                        <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
+                                                                                            <button
+                                                                                                onClick={handleCancelCompetencyEdit}
+                                                                                                className="btn btn--secondary btn--sm"
+                                                                                                style={{ flex: 1, fontSize: '10px', padding: '4px 8px' }}
+                                                                                                disabled={saving}
+                                                                                            >
+                                                                                                Cancel
+                                                                                            </button>
+                                                                                            <button
+                                                                                                onClick={() => handleSaveCompetency(comp.id)}
+                                                                                                className="btn btn--primary btn--sm"
+                                                                                                style={{ flex: 1, fontSize: '10px', padding: '4px 8px' }}
+                                                                                                disabled={saving}
+                                                                                            >
+                                                                                                {saving ? 'Saving...' : 'Save'}
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div style={{ fontSize: '11px', lineHeight: '1.4' }}>
+                                                                                        {comp.issuing_body && (
+                                                                                            <div style={{ marginBottom: '3px' }}>
+                                                                                                <span style={{ color: 'rgba(255, 255, 255, 0.5)' }}>Issuer:</span>{' '}
+                                                                                                <span style={{ color: 'rgba(255, 255, 255, 0.9)' }}>{comp.issuing_body}</span>
+                                                                                            </div>
+                                                                                        )}
+                                                                                        {comp.certification_id && (
+                                                                                            <div style={{ marginBottom: '3px' }}>
+                                                                                                <span style={{ color: 'rgba(255, 255, 255, 0.5)' }}>ID:</span>{' '}
+                                                                                                <span style={{ color: 'rgba(255, 255, 255, 0.9)' }}>{comp.certification_id}</span>
+                                                                                            </div>
+                                                                                        )}
+                                                                                        {comp.value && (
+                                                                                            <div style={{ marginBottom: '3px' }}>
+                                                                                                <span style={{ color: 'rgba(255, 255, 255, 0.5)' }}>Value:</span>{' '}
+                                                                                                <span style={{ color: 'rgba(255, 255, 255, 0.9)' }}>{comp.value}</span>
+                                                                                            </div>
+                                                                                        )}
+                                                                                        {(comp.created_at || comp.expiry_date) && (
+                                                                                            <div style={{ display: 'flex', gap: '8px', marginTop: '4px', paddingTop: '4px', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                                                                                                {comp.created_at && (
+                                                                                                    <div style={{ flex: 1 }}>
+                                                                                                        <div style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '10px' }}>Issued</div>
+                                                                                                        <div style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: '500' }}>
+                                                                                                            {new Date(comp.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                )}
+                                                                                                {comp.expiry_date && (
+                                                                                                    <div style={{ flex: 1 }}>
+                                                                                                        <div style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '10px' }}>Expires</div>
+                                                                                                        <div style={{ color: isExpired ? '#ef4444' : isExpiringSoon ? '#f59e0b' : 'rgba(255, 255, 255, 0.9)', fontWeight: '500' }}>
+                                                                                                            {new Date(comp.expiry_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                )}
+                                                                                            </div>
+                                                                                        )}
+                                                                                        {comp.notes && (
+                                                                                            <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                                                                                                <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={comp.notes}>
+                                                                                                    {comp.notes}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </React.Fragment>
                                 );
                             })}
                         </tbody>
@@ -597,9 +1499,10 @@ function MatrixView({ personnel, competencyMatrix, loading, onMatrixUpdate }) {
         return 'active';
     };
 
-    // Group competencies by category
+    // Group competencies by category - filter out personal details
     const competenciesByCategory = {};
-    localMatrix.competencies.forEach(comp => {
+    const actualCompetencies = filterOutPersonalDetails(localMatrix.competencies);
+    actualCompetencies.forEach(comp => {
         const categoryName = comp.category?.name || 'Other';
         if (!competenciesByCategory[categoryName]) {
             competenciesByCategory[categoryName] = [];
@@ -618,7 +1521,8 @@ function MatrixView({ personnel, competencyMatrix, loading, onMatrixUpdate }) {
     };
 
     localMatrix.personnel.forEach(person => {
-        person.competencies.forEach(comp => {
+        // Only count actual competencies, not personal details
+        filterOutPersonalDetails(person.competencies).forEach(comp => {
             stats.total++;
             const status = getCompetencyStatus(comp);
             if (status === 'expiring') stats.expiring++;
@@ -653,7 +1557,7 @@ function MatrixView({ personnel, competencyMatrix, loading, onMatrixUpdate }) {
                             <button
                                 onClick={() => setStatusFilter('all')}
                                 className={statusFilter === 'all' ? 'btn-primary' : 'btn-secondary'}
-                                style={{ padding: '10px 20px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                                style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}
                             >
                                 All Competencies
                                 <span className="glass-badge" style={{ fontSize: '11px', background: 'rgba(255, 255, 255, 0.2)' }}>
@@ -664,7 +1568,6 @@ function MatrixView({ personnel, competencyMatrix, loading, onMatrixUpdate }) {
                                 onClick={() => setStatusFilter('expired')}
                                 className={statusFilter === 'expired' ? 'btn-primary' : 'btn-secondary'}
                                 style={{
-                                    padding: '10px 20px',
                                     fontSize: '13px',
                                     display: 'flex',
                                     alignItems: 'center',
@@ -684,7 +1587,6 @@ function MatrixView({ personnel, competencyMatrix, loading, onMatrixUpdate }) {
                                 onClick={() => setStatusFilter('expiring')}
                                 className={statusFilter === 'expiring' ? 'btn-primary' : 'btn-secondary'}
                                 style={{
-                                    padding: '10px 20px',
                                     fontSize: '13px',
                                     display: 'flex',
                                     alignItems: 'center',
@@ -704,7 +1606,6 @@ function MatrixView({ personnel, competencyMatrix, loading, onMatrixUpdate }) {
                                 onClick={() => setStatusFilter('active')}
                                 className={statusFilter === 'active' ? 'btn-primary' : 'btn-secondary'}
                                 style={{
-                                    padding: '10px 20px',
                                     fontSize: '13px',
                                     display: 'flex',
                                     alignItems: 'center',

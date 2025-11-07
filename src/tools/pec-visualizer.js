@@ -1,6 +1,7 @@
 // PEC Visualizer Tool Module - Complete with all features
 import dataManager from '../data-manager.js';
 import { createAnimatedHeader } from '../animated-background.js';
+import Plotly from '../utils/plotly.js';
 
 let container, dom = {}, heatmapData = null, customColorRange = { min: null, max: null };
 
