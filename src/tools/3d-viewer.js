@@ -1041,7 +1041,7 @@ async function exportToHub() {
 
             const scanData = {
                 name: projectName,
-                toolType: '3dviewer',
+                toolType: '3dview',
                 data: state,
                 thumbnail: thumbnail,
                 heatmapOnly: null
@@ -1540,7 +1540,7 @@ async function restoreState(state) {
 function handleLoad3DProjectEvent(event) {
     const { scanData } = event.detail;
 
-    if (!scanData || scanData.toolType !== '3dviewer') return;
+    if (!scanData || scanData.toolType !== '3dview') return;
 
     if (scanData.data) {
         restoreState(scanData.data);

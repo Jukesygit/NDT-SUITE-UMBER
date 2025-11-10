@@ -1318,14 +1318,14 @@ function renderScanDetailView(assetId, vesselId) {
                                 <span class="px-2 py-0.5 rounded font-medium ${
                                     scan.toolType === 'pec' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' :
                                     scan.toolType === 'cscan' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
-                                    scan.toolType === '3dviewer' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' :
+                                    scan.toolType === '3dview' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' :
                                     'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
-                                }">${scan.toolType === '3dviewer' ? '3D VIEWER' : scan.toolType.toUpperCase()}</span>
+                                }">${scan.toolType === '3dview' ? '3D VIEWER' : scan.toolType.toUpperCase()}</span>
                             </div>
                             <div>${new Date(scan.timestamp).toLocaleString()}</div>
                         </div>
                         <button class="mt-3 w-full bg-blue-600 text-white text-sm font-semibold py-2 rounded-lg hover:bg-blue-700 transition-colors open-scan-btn" data-scan-id="${scan.id}">
-                            Open in ${scan.toolType === 'pec' ? 'PEC Visualizer' : scan.toolType === 'cscan' ? 'C-Scan Visualizer' : scan.toolType === '3dviewer' ? '3D Viewer' : '3D Viewer'}
+                            Open in ${scan.toolType === 'pec' ? 'PEC Visualizer' : scan.toolType === 'cscan' ? 'C-Scan Visualizer' : scan.toolType === '3dview' ? '3D Viewer' : '3D Viewer'}
                         </button>
                     </div>
                 </div>
