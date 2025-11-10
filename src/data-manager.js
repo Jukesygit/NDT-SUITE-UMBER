@@ -1050,6 +1050,56 @@ class DataManager {
         return true;
     }
 
+    // Batch assign multiple scans to a strake (optimized for bulk operations)
+    async batchAssignScansToStrake(assetId, vesselId, scanIds, strakeId) {
+        if (!scanIds || scanIds.length === 0) return { success: 0, failed: 0 };
+
+        let successCount = 0;
+        let failCount = 0;
+
+        // Assign all scans in memory first (no storage saves yet)
+        for (const scanId of scanIds) {
+            const scan = this.getScan(assetId, vesselId, scanId);
+
+            if (!scan) {
+                failCount++;
+                continue;
+            }
+
+            // Remove from old strake if exists (no await needed - just memory operation)
+            if (scan.strakeId) {
+                delete scan.strakeId;
+            }
+
+            // Assign to new strake
+            scan.strakeId = strakeId || null;
+            successCount++;
+        }
+
+        // Save to storage ONCE after all assignments are done
+        await this.saveToStorage();
+
+        console.log(`[DATA-MANAGER] Batch assigned ${successCount} scans to strake locally`);
+
+        // Queue background sync operations for all scans (non-blocking)
+        if (authManager.useSupabase) {
+            for (const scanId of scanIds) {
+                syncQueue.add({
+                    type: 'update',
+                    table: 'scans',
+                    id: scanId,
+                    data: {
+                        strake_id: strakeId || null,
+                        updated_at: new Date().toISOString()
+                    }
+                });
+            }
+            console.log(`[DATA-MANAGER] Queued ${successCount} scan strake assignments for background sync`);
+        }
+
+        return { success: successCount, failed: failCount };
+    }
+
     async removeScanFromStrake(assetId, vesselId, scanId, strakeId) {
         const scan = this.getScan(assetId, vesselId, scanId);
 

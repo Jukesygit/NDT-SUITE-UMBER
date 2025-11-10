@@ -1606,12 +1606,10 @@ async function batchExportToHub() {
             }
         }
 
-        // Assign all created scans to strake if one was selected
+        // Assign all created scans to strake if one was selected (batch operation)
         if (strakeId && createdScanIds.length > 0) {
             try {
-                for (const scanId of createdScanIds) {
-                    await dataManager.assignScanToStrake(assetId, vesselId, scanId, strakeId);
-                }
+                await dataManager.batchAssignScansToStrake(assetId, vesselId, createdScanIds, strakeId);
             } catch (error) {
                 console.error('Error assigning scans to strake:', error);
             }
@@ -1799,6 +1797,8 @@ async function batchAssignToStrake() {
         confirmBtn.disabled = true;
         confirmBtn.textContent = 'Assigning...';
 
+        // Find all matching scans in the hub first
+        const scanIdsToAssign = [];
         for (const scan of selectedScansList) {
             // Try to find the scan in the hub by comparing filenames
             const scanFileName = scan.fileName?.replace(/\.(txt|csv)$/i, '');
@@ -1809,15 +1809,20 @@ async function batchAssignToStrake() {
             });
 
             if (hubScan) {
-                try {
-                    await dataManager.assignScanToStrake(assetId, vesselId, hubScan.id, strakeId);
-                    assignedCount++;
-                } catch (error) {
-                    console.error(`Error assigning scan ${scan.fileName}:`, error);
-                }
+                scanIdsToAssign.push(hubScan.id);
             } else {
                 notFoundCount++;
                 console.warn(`Scan not found in hub: ${scan.fileName}`);
+            }
+        }
+
+        // Batch assign all found scans at once
+        if (scanIdsToAssign.length > 0) {
+            try {
+                const result = await dataManager.batchAssignScansToStrake(assetId, vesselId, scanIdsToAssign, strakeId);
+                assignedCount = result.success;
+            } catch (error) {
+                console.error('Error assigning scans to strake:', error);
             }
         }
 
