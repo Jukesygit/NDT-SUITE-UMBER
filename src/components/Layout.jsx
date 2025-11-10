@@ -127,7 +127,11 @@ function Layout() {
     // Handle click outside dropdown to close
     useEffect(() => {
         const handleClickOutside = (event) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+            // Check if click is outside both the button and the dropdown portal
+            const isClickInButton = dropdownRef.current && dropdownRef.current.contains(event.target);
+            const isClickInDropdown = event.target.closest('[data-dropdown-portal]');
+
+            if (!isClickInButton && !isClickInDropdown) {
                 setDropdownOpen(null);
             }
         };
@@ -245,6 +249,7 @@ function Layout() {
                                             {/* Dropdown Menu - Rendered as Portal */}
                                             {isOpen && ReactDOM.createPortal(
                                                 <div
+                                                    data-dropdown-portal="true"
                                                     style={{
                                                         position: 'fixed',
                                                         left: `${dropdownPosition.left}px`,
