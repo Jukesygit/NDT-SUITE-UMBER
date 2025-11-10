@@ -174,6 +174,13 @@ class SyncQueue {
 
             } catch (error) {
                 console.error('[SYNC-QUEUE] Operation failed:', error);
+                console.error('[SYNC-QUEUE] Failed operation details:', {
+                    type: item.operation.type,
+                    table: item.operation.table,
+                    id: item.operation.id,
+                    errorCode: error.code,
+                    errorMessage: error.message
+                });
 
                 item.retries++;
                 item.lastError = error.message;
@@ -272,7 +279,8 @@ class SyncQueue {
         const { error } = await supabase
             .from(table)
             .update(data)
-            .eq('id', id);
+            .eq('id', id)
+            .select(); // Add select to ensure proper response format
 
         if (error) throw error;
     }
