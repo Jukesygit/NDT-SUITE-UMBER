@@ -26,7 +26,7 @@ const CscanVisualizerPage = lazy(() => import('./pages/CscanVisualizerPage.jsx')
 const PecVisualizerPage = lazy(() => import('./pages/PecVisualizerPage.jsx'));
 const Viewer3DPage = lazy(() => import('./pages/Viewer3DPage.jsx'));
 const NiiCalculatorPage = lazy(() => import('./pages/NiiCalculatorPage.jsx'));
-const PersonnelManagementPage = lazy(() => import('./pages/PersonnelManagementPage.jsx'));
+const PersonnelManagementPage = lazy(() => import('./pages/PersonnelManagementPage.tsx'));
 
 // Background manager component
 function BackgroundManager() {
