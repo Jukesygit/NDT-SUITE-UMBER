@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import authManager from '../auth-manager.js';
-import competencyService from '../services/competency-service.js';
+import competencyService from '../services/competency-service.ts';
 
 export default function UniversalImportModal({ onClose, onComplete }) {
     console.log('UniversalImportModal component loaded');
