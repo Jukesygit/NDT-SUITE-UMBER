@@ -47,10 +47,17 @@ function LoginPageNew({ onLogin }) {
       } else if (mode === 'reset') {
         const result = await authManager.resetPassword(email);
         if (result.error) {
-          setError(result.error.message || 'Password reset failed');
+          const errorMsg = result.error.message || 'Password reset failed';
+
+          // Check for rate limit error
+          if (errorMsg.includes('rate limit') || errorMsg.includes('429')) {
+            setError('Too many password reset attempts. Please wait an hour and try again, or try a different email address.');
+          } else {
+            setError(errorMsg);
+          }
         } else {
           setError('');
-          alert('Password reset email sent! Please check your inbox.');
+          alert('Password reset email sent! Please check your inbox (and spam folder).');
           setMode('login');
         }
       }

@@ -361,6 +361,28 @@ class AuthManager {
         console.log('AuthManager: Logout complete');
     }
 
+    async resetPassword(email) {
+        await this.ensureInitialized();
+
+        if (this.useSupabase) {
+            const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${window.location.origin}/`
+            });
+
+            if (error) {
+                return { success: false, error };
+            }
+
+            return { success: true, data };
+        } else {
+            // For local mode, just show a message
+            return {
+                success: false,
+                error: { message: 'Password reset is not available in local mode. Please contact your administrator.' }
+            };
+        }
+    }
+
     showPasswordResetForm() {
         // Create a modal overlay for password reset
         const modal = document.createElement('div');
