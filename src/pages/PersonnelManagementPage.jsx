@@ -5,7 +5,7 @@ import competencyService from '../services/competency-service.js';
 import personnelService from '../services/personnel-service.js';
 import supabase, { isSupabaseConfigured } from '../supabase-client.js';
 import UniversalImportModal from '../components/UniversalImportModal.jsx';
-import { shouldShowCertificationFields, shouldShowDateFields, getInputType, getPlaceholder, filterOutPersonalDetails } from '../utils/competency-field-utils.js';
+import { shouldShowCertificationFields, shouldShowDateFields, getInputType, getPlaceholder, filterOutPersonalDetails, isNDTCertification, requiresWitnessCheck } from '../utils/competency-field-utils.js';
 
 export default function PersonnelManagementPage() {
     const [view, setView] = useState('directory'); // directory, matrix, expiring
@@ -231,16 +231,6 @@ export default function PersonnelManagementPage() {
                         Personnel Directory
                     </button>
                     <button
-                        onClick={() => setView('matrix')}
-                        className="tab-btn px-4 py-3 text-sm font-medium border-b-2"
-                        style={{
-                            borderColor: view === 'matrix' ? 'var(--accent-primary)' : 'transparent',
-                            color: view === 'matrix' ? 'var(--accent-primary)' : 'rgba(255, 255, 255, 0.6)'
-                        }}
-                    >
-                        Competency Matrix
-                    </button>
-                    <button
                         onClick={() => setView('expiring')}
                         className="tab-btn px-4 py-3 text-sm font-medium border-b-2"
                         style={{
@@ -372,7 +362,12 @@ function DirectoryView({ personnel, searchTerm, setSearchTerm, filterOrg, setFil
             certification_id: comp.certification_id || '',
             expiry_date: comp.expiry_date ? new Date(comp.expiry_date).toISOString().split('T')[0] : '',
             issued_date: comp.created_at ? new Date(comp.created_at).toISOString().split('T')[0] : '',
-            notes: comp.notes || ''
+            notes: comp.notes || '',
+            witness_checked: comp.witness_checked || false,
+            witnessed_by: comp.witnessed_by || '',
+            witnessed_at: comp.witnessed_at ? new Date(comp.witnessed_at).toISOString().split('T')[0] : '',
+            witness_notes: comp.witness_notes || '',
+            competency: comp.competency // Store for checking if NDT
         });
     };
 
@@ -386,7 +381,11 @@ function DirectoryView({ personnel, searchTerm, setSearchTerm, filterOrg, setFil
                 issuing_body: competencyEditData.issuing_body || null,
                 certification_id: competencyEditData.certification_id || null,
                 expiry_date: competencyEditData.expiry_date || null,
-                notes: competencyEditData.notes || null
+                notes: competencyEditData.notes || null,
+                witness_checked: competencyEditData.witness_checked || false,
+                witnessed_by: competencyEditData.witnessed_by || null,
+                witnessed_at: competencyEditData.witnessed_at || null,
+                witness_notes: competencyEditData.witness_notes || null
             };
 
             if (competencyEditData.issued_date) {
@@ -400,13 +399,14 @@ function DirectoryView({ personnel, searchTerm, setSearchTerm, filterOrg, setFil
 
             if (error) throw error;
 
-            window.location.reload();
+            // Reload data without full page refresh to maintain scroll position and expanded state
+            await loadData();
+            setEditingCompetencyId(null);
         } catch (error) {
             console.error('Error updating competency:', error);
             alert('Failed to update competency: ' + error.message);
         } finally {
             setSaving(false);
-            setEditingCompetencyId(null);
         }
     };
 
@@ -452,14 +452,14 @@ function DirectoryView({ personnel, searchTerm, setSearchTerm, filterOrg, setFil
 
             if (error) throw error;
 
-            // Refresh the personnel list
-            window.location.reload();
+            // Reload data without full page refresh
+            await loadData();
+            setEditingPersonId(null);
         } catch (error) {
             console.error('Error updating profile:', error);
             alert('Failed to update profile: ' + error.message);
         } finally {
             setSaving(false);
-            setEditingPersonId(null);
         }
     };
 
@@ -1128,191 +1128,354 @@ function DirectoryView({ personnel, searchTerm, setSearchTerm, filterOrg, setFil
                                                                     </svg>
                                                                     No competencies recorded
                                                                 </div>
-                                                            ) : (
-                                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '8px' }}>
-                                                                    {person.competencies.map(comp => {
-                                                                        const isExpired = comp.status === 'expired' || (comp.expiry_date && new Date(comp.expiry_date) < new Date());
-                                                                        const isExpiringSoon = comp.expiry_date && !isExpired && Math.ceil((new Date(comp.expiry_date) - new Date()) / (1000 * 60 * 60 * 24)) <= 30;
+                                                            ) : (() => {
+                                                                // Group competencies by category
+                                                                const competenciesByCategory = {};
+                                                                person.competencies.forEach(comp => {
+                                                                    const categoryName = comp.competency?.category?.name || 'Uncategorized';
+                                                                    if (!competenciesByCategory[categoryName]) {
+                                                                        competenciesByCategory[categoryName] = [];
+                                                                    }
+                                                                    competenciesByCategory[categoryName].push(comp);
+                                                                });
 
-                                                                        const isEditing = editingCompetencyId === comp.id;
-                                                                        return (
-                                                                            <div
-                                                                                key={comp.id}
-                                                                                style={{
-                                                                                    padding: '10px 12px',
-                                                                                    background: 'rgba(255, 255, 255, 0.03)',
-                                                                                    borderRadius: '6px',
-                                                                                    borderLeft: `3px solid ${isExpired ? '#ef4444' : isExpiringSoon ? '#f59e0b' : '#10b981'}`,
-                                                                                    border: `1px solid ${isExpired ? 'rgba(239, 68, 68, 0.3)' : isExpiringSoon ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255, 255, 255, 0.1)'}`,
-                                                                                    borderLeftWidth: '3px',
-                                                                                    transition: 'all 0.2s ease'
-                                                                                }}
-                                                                                className="hover:bg-white/5"
-                                                                            >
-                                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', gap: '8px' }}>
-                                                                                    <div style={{ fontWeight: '600', color: '#ffffff', fontSize: '13px', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={comp.competency?.name}>
-                                                                                        {comp.competency?.name || 'Unknown Competency'}
-                                                                                    </div>
-                                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-                                                                                        {isExpired ? (
-                                                                                            <span className="glass-badge badge-red" style={{ fontSize: '10px', padding: '2px 6px' }}>Expired</span>
-                                                                                        ) : isExpiringSoon ? (
-                                                                                            <span className="glass-badge" style={{ background: 'rgba(245, 158, 11, 0.3)', color: '#f59e0b', fontSize: '10px', padding: '2px 6px' }}>Expiring</span>
-                                                                                        ) : comp.status === 'pending_approval' ? (
-                                                                                            <span className="glass-badge" style={{ background: 'rgba(251, 191, 36, 0.2)', color: 'rgba(253, 224, 71, 1)', fontSize: '10px', padding: '2px 6px' }}>Pending</span>
-                                                                                        ) : (
-                                                                                            <span className="glass-badge badge-green" style={{ fontSize: '10px', padding: '2px 6px' }}>Active</span>
-                                                                                        )}
-                                                                                        {isAdmin && !isEditing && (
-                                                                                            <button
-                                                                                                onClick={() => handleEditCompetency(comp)}
-                                                                                                className="btn-icon"
-                                                                                                style={{ padding: '2px', marginLeft: '4px' }}
-                                                                                            >
-                                                                                                <svg style={{ width: '12px', height: '12px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                                                                </svg>
-                                                                                            </button>
-                                                                                        )}
-                                                                                    </div>
+                                                                const categories = Object.keys(competenciesByCategory).sort();
+
+                                                                return (
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                                                        {categories.map(categoryName => (
+                                                                            <div key={categoryName}>
+                                                                                {/* Category Header */}
+                                                                                <div style={{
+                                                                                    marginBottom: '8px',
+                                                                                    paddingBottom: '6px',
+                                                                                    borderBottom: '2px solid rgba(255, 255, 255, 0.1)'
+                                                                                }}>
+                                                                                    <h5 style={{
+                                                                                        fontSize: '16px',
+                                                                                        fontWeight: '600',
+                                                                                        color: 'rgba(255, 255, 255, 0.9)',
+                                                                                        margin: 0,
+                                                                                        display: 'flex',
+                                                                                        alignItems: 'center',
+                                                                                        gap: '8px'
+                                                                                    }}>
+                                                                                        {categoryName}
+                                                                                        <span style={{
+                                                                                            fontSize: '11px',
+                                                                                            fontWeight: '400',
+                                                                                            color: 'rgba(255, 255, 255, 0.5)',
+                                                                                            background: 'rgba(255, 255, 255, 0.05)',
+                                                                                            padding: '2px 8px',
+                                                                                            borderRadius: '12px'
+                                                                                        }}>
+                                                                                            {competenciesByCategory[categoryName].length}
+                                                                                        </span>
+                                                                                    </h5>
                                                                                 </div>
-                                                                                {isEditing ? (
-                                                                                    <div style={{ fontSize: '11px', lineHeight: '1.4' }} className="space-y-2">
-                                                                                        <div>
-                                                                                            <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px' }}>Value</label>
-                                                                                            <input
-                                                                                                type="text"
-                                                                                                className="glass-input"
-                                                                                                value={competencyEditData.value}
-                                                                                                onChange={(e) => setCompetencyEditData({ ...competencyEditData, value: e.target.value })}
-                                                                                                style={{ fontSize: '11px', padding: '4px 8px' }}
-                                                                                            />
-                                                                                        </div>
-                                                                                        <div>
-                                                                                            <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px' }}>Issuing Body</label>
-                                                                                            <input
-                                                                                                type="text"
-                                                                                                className="glass-input"
-                                                                                                value={competencyEditData.issuing_body}
-                                                                                                onChange={(e) => setCompetencyEditData({ ...competencyEditData, issuing_body: e.target.value })}
-                                                                                                style={{ fontSize: '11px', padding: '4px 8px' }}
-                                                                                            />
-                                                                                        </div>
-                                                                                        <div>
-                                                                                            <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px' }}>Certification ID</label>
-                                                                                            <input
-                                                                                                type="text"
-                                                                                                className="glass-input"
-                                                                                                value={competencyEditData.certification_id}
-                                                                                                onChange={(e) => setCompetencyEditData({ ...competencyEditData, certification_id: e.target.value })}
-                                                                                                style={{ fontSize: '11px', padding: '4px 8px' }}
-                                                                                            />
-                                                                                        </div>
-                                                                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
-                                                                                            <div>
-                                                                                                <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px' }}>Issued</label>
-                                                                                                <input
-                                                                                                    type="date"
-                                                                                                    className="glass-input"
-                                                                                                    value={competencyEditData.issued_date}
-                                                                                                    onChange={(e) => setCompetencyEditData({ ...competencyEditData, issued_date: e.target.value })}
-                                                                                                    style={{ fontSize: '11px', padding: '4px 8px' }}
-                                                                                                />
-                                                                                            </div>
-                                                                                            <div>
-                                                                                                <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px' }}>Expires</label>
-                                                                                                <input
-                                                                                                    type="date"
-                                                                                                    className="glass-input"
-                                                                                                    value={competencyEditData.expiry_date}
-                                                                                                    onChange={(e) => setCompetencyEditData({ ...competencyEditData, expiry_date: e.target.value })}
-                                                                                                    style={{ fontSize: '11px', padding: '4px 8px' }}
-                                                                                                />
-                                                                                            </div>
-                                                                                        </div>
-                                                                                        <div>
-                                                                                            <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px' }}>Notes</label>
-                                                                                            <textarea
-                                                                                                className="glass-textarea"
-                                                                                                value={competencyEditData.notes}
-                                                                                                onChange={(e) => setCompetencyEditData({ ...competencyEditData, notes: e.target.value })}
-                                                                                                rows="2"
-                                                                                                style={{ fontSize: '11px', padding: '4px 8px' }}
-                                                                                            />
-                                                                                        </div>
-                                                                                        <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
-                                                                                            <button
-                                                                                                onClick={handleCancelCompetencyEdit}
-                                                                                                className="btn btn--secondary btn--sm"
-                                                                                                style={{ flex: 1, fontSize: '10px', padding: '4px 8px' }}
-                                                                                                disabled={saving}
+
+                                                                                {/* Competencies Grid */}
+                                                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '8px' }}>
+                                                                                    {competenciesByCategory[categoryName].map(comp => {
+                                                                                        const isExpired = comp.status === 'expired' || (comp.expiry_date && new Date(comp.expiry_date) < new Date());
+                                                                                        const isExpiringSoon = comp.expiry_date && !isExpired && Math.ceil((new Date(comp.expiry_date) - new Date()) / (1000 * 60 * 60 * 24)) <= 30;
+
+                                                                                        const isEditing = editingCompetencyId === comp.id;
+                                                                                        return (
+                                                                                            <div
+                                                                                                key={comp.id}
+                                                                                                style={{
+                                                                                                    padding: '10px 12px',
+                                                                                                    background: 'rgba(255, 255, 255, 0.03)',
+                                                                                                    borderRadius: '6px',
+                                                                                                    borderLeft: `3px solid ${isExpired ? '#ef4444' : isExpiringSoon ? '#f59e0b' : '#10b981'}`,
+                                                                                                    border: `1px solid ${isExpired ? 'rgba(239, 68, 68, 0.3)' : isExpiringSoon ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255, 255, 255, 0.1)'}`,
+                                                                                                    borderLeftWidth: '3px',
+                                                                                                    transition: 'all 0.2s ease'
+                                                                                                }}
+                                                                                                className="hover:bg-white/5"
                                                                                             >
-                                                                                                Cancel
-                                                                                            </button>
-                                                                                            <button
-                                                                                                onClick={() => handleSaveCompetency(comp.id)}
-                                                                                                className="btn btn--primary btn--sm"
-                                                                                                style={{ flex: 1, fontSize: '10px', padding: '4px 8px' }}
-                                                                                                disabled={saving}
-                                                                                            >
-                                                                                                {saving ? 'Saving...' : 'Save'}
-                                                                                            </button>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                ) : (
-                                                                                    <div style={{ fontSize: '11px', lineHeight: '1.4' }}>
-                                                                                        {comp.issuing_body && (
-                                                                                            <div style={{ marginBottom: '3px' }}>
-                                                                                                <span style={{ color: 'rgba(255, 255, 255, 0.5)' }}>Issuer:</span>{' '}
-                                                                                                <span style={{ color: 'rgba(255, 255, 255, 0.9)' }}>{comp.issuing_body}</span>
-                                                                                            </div>
-                                                                                        )}
-                                                                                        {comp.certification_id && (
-                                                                                            <div style={{ marginBottom: '3px' }}>
-                                                                                                <span style={{ color: 'rgba(255, 255, 255, 0.5)' }}>ID:</span>{' '}
-                                                                                                <span style={{ color: 'rgba(255, 255, 255, 0.9)' }}>{comp.certification_id}</span>
-                                                                                            </div>
-                                                                                        )}
-                                                                                        {comp.value && (
-                                                                                            <div style={{ marginBottom: '3px' }}>
-                                                                                                <span style={{ color: 'rgba(255, 255, 255, 0.5)' }}>Value:</span>{' '}
-                                                                                                <span style={{ color: 'rgba(255, 255, 255, 0.9)' }}>{comp.value}</span>
-                                                                                            </div>
-                                                                                        )}
-                                                                                        {(comp.created_at || comp.expiry_date) && (
-                                                                                            <div style={{ display: 'flex', gap: '8px', marginTop: '4px', paddingTop: '4px', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                                                                                                {comp.created_at && (
-                                                                                                    <div style={{ flex: 1 }}>
-                                                                                                        <div style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '10px' }}>Issued</div>
-                                                                                                        <div style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: '500' }}>
-                                                                                                            {new Date(comp.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}
+                                                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', gap: '8px' }}>
+                                                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, overflow: 'hidden' }}>
+                                                                                                        <div style={{ fontWeight: '600', color: '#ffffff', fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={comp.competency?.name}>
+                                                                                                            {comp.competency?.name || 'Unknown Competency'}
                                                                                                         </div>
+                                                                                                        {requiresWitnessCheck(comp) && comp.witness_checked && (
+                                                                                                            <svg
+                                                                                                                style={{ width: '14px', height: '14px', color: '#10b981', flexShrink: 0 }}
+                                                                                                                fill="currentColor"
+                                                                                                                viewBox="0 0 20 20"
+                                                                                                                title={`Witnessed on ${comp.witnessed_at ? new Date(comp.witnessed_at).toLocaleDateString('en-GB') : 'unknown date'}`}
+                                                                                                            >
+                                                                                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                                                                            </svg>
+                                                                                                        )}
                                                                                                     </div>
-                                                                                                )}
-                                                                                                {comp.expiry_date && (
-                                                                                                    <div style={{ flex: 1 }}>
-                                                                                                        <div style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '10px' }}>Expires</div>
-                                                                                                        <div style={{ color: isExpired ? '#ef4444' : isExpiringSoon ? '#f59e0b' : 'rgba(255, 255, 255, 0.9)', fontWeight: '500' }}>
-                                                                                                            {new Date(comp.expiry_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}
-                                                                                                        </div>
+                                                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                                                                                                        {isExpired ? (
+                                                                                                            <span className="glass-badge badge-red" style={{ fontSize: '10px', padding: '2px 6px' }}>Expired</span>
+                                                                                                        ) : isExpiringSoon ? (
+                                                                                                            <span className="glass-badge" style={{ background: 'rgba(245, 158, 11, 0.3)', color: '#f59e0b', fontSize: '10px', padding: '2px 6px' }}>Expiring</span>
+                                                                                                        ) : comp.status === 'pending_approval' ? (
+                                                                                                            <span className="glass-badge" style={{ background: 'rgba(251, 191, 36, 0.2)', color: 'rgba(253, 224, 71, 1)', fontSize: '10px', padding: '2px 6px' }}>Pending</span>
+                                                                                                        ) : (
+                                                                                                            <span className="glass-badge badge-green" style={{ fontSize: '10px', padding: '2px 6px' }}>Active</span>
+                                                                                                        )}
+                                                                                                        {isAdmin && !isEditing && (
+                                                                                                            <button
+                                                                                                                onClick={() => handleEditCompetency(comp)}
+                                                                                                                className="btn-icon"
+                                                                                                                style={{ padding: '2px', marginLeft: '4px' }}
+                                                                                                            >
+                                                                                                                <svg style={{ width: '12px', height: '12px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                                                                                </svg>
+                                                                                                            </button>
+                                                                                                        )}
                                                                                                     </div>
-                                                                                                )}
-                                                                                            </div>
-                                                                                        )}
-                                                                                        {comp.notes && (
-                                                                                            <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                                                                                                <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={comp.notes}>
-                                                                                                    {comp.notes}
                                                                                                 </div>
-                                                                                            </div>
-                                                                                        )}
-                                                                                    </div>
-                                                                                )}
+                                                                                                {isEditing ? (
+                                                                                                    <div style={{ fontSize: '11px', lineHeight: '1.4' }} className="space-y-2">
+                                                                                                        <div>
+                                                                                                            <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px' }}>Value</label>
+                                                                                                            <input
+                                                                                                                type="text"
+                                                                                                                className="glass-input"
+                                                                                                                value={competencyEditData.value}
+                                                                                                                onChange={(e) => setCompetencyEditData({ ...competencyEditData, value: e.target.value })}
+                                                                                                                style={{ fontSize: '11px', padding: '4px 8px' }}
+                                                                                                            />
+                                                                                                        </div>
+                                                                                                        <div>
+                                                                                                            <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px' }}>Issuing Body</label>
+                                                                                                            <input
+                                                                                                                type="text"
+                                                                                                                className="glass-input"
+                                                                                                                value={competencyEditData.issuing_body}
+                                                                                                                onChange={(e) => setCompetencyEditData({ ...competencyEditData, issuing_body: e.target.value })}
+                                                                                                                style={{ fontSize: '11px', padding: '4px 8px' }}
+                                                                                                            />
+                                                                                                        </div>
+                                                                                                        <div>
+                                                                                                            <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px' }}>Certification ID</label>
+                                                                                                            <input
+                                                                                                                type="text"
+                                                                                                                className="glass-input"
+                                                                                                                value={competencyEditData.certification_id}
+                                                                                                                onChange={(e) => setCompetencyEditData({ ...competencyEditData, certification_id: e.target.value })}
+                                                                                                                style={{ fontSize: '11px', padding: '4px 8px' }}
+                                                                                                            />
+                                                                                                        </div>
+                                                                                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+                                                                                                            <div>
+                                                                                                                <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px' }}>Issued</label>
+                                                                                                                <input
+                                                                                                                    type="date"
+                                                                                                                    className="glass-input"
+                                                                                                                    value={competencyEditData.issued_date}
+                                                                                                                    onChange={(e) => setCompetencyEditData({ ...competencyEditData, issued_date: e.target.value })}
+                                                                                                                    style={{ fontSize: '11px', padding: '4px 8px' }}
+                                                                                                                />
+                                                                                                            </div>
+                                                                                                            <div>
+                                                                                                                <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px' }}>Expires</label>
+                                                                                                                <input
+                                                                                                                    type="date"
+                                                                                                                    className="glass-input"
+                                                                                                                    value={competencyEditData.expiry_date}
+                                                                                                                    onChange={(e) => setCompetencyEditData({ ...competencyEditData, expiry_date: e.target.value })}
+                                                                                                                    style={{ fontSize: '11px', padding: '4px 8px' }}
+                                                                                                                />
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                        <div>
+                                                                                                            <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px' }}>Notes</label>
+                                                                                                            <textarea
+                                                                                                                className="glass-textarea"
+                                                                                                                value={competencyEditData.notes}
+                                                                                                                onChange={(e) => setCompetencyEditData({ ...competencyEditData, notes: e.target.value })}
+                                                                                                                rows="2"
+                                                                                                                style={{ fontSize: '11px', padding: '4px 8px' }}
+                                                                                                            />
+                                                                                                        </div>
+                                                                                                        {requiresWitnessCheck(competencyEditData.competency) && (
+                                                                                                            <>
+                                                                                                                <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.1)', paddingTop: '8px', marginTop: '8px' }}>
+                                                                                                                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '6px' }}>
+                                                                                                                        <label style={{ fontSize: '10px', color: 'var(--accent-primary)', fontWeight: '600' }}>
+                                                                                                                            <input
+                                                                                                                                type="checkbox"
+                                                                                                                                checked={competencyEditData.witness_checked}
+                                                                                                                                onChange={(e) => {
+                                                                                                                                    const checked = e.target.checked;
+                                                                                                                                    setCompetencyEditData({
+                                                                                                                                        ...competencyEditData,
+                                                                                                                                        witness_checked: checked,
+                                                                                                                                        witnessed_at: checked && !competencyEditData.witnessed_at
+                                                                                                                                            ? new Date().toISOString().split('T')[0]
+                                                                                                                                            : competencyEditData.witnessed_at,
+                                                                                                                                        witnessed_by: checked && !competencyEditData.witnessed_by
+                                                                                                                                            ? currentUser?.id
+                                                                                                                                            : competencyEditData.witnessed_by
+                                                                                                                                    });
+                                                                                                                                }}
+                                                                                                                                style={{ marginRight: '4px' }}
+                                                                                                                            />
+                                                                                                                            Competency Witness Check
+                                                                                                                        </label>
+                                                                                                                    </div>
+                                                                                                                    {competencyEditData.witness_checked && (
+                                                                                                                        <>
+                                                                                                                            <div>
+                                                                                                                                <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px' }}>Witness</label>
+                                                                                                                                <select
+                                                                                                                                    className="glass-input"
+                                                                                                                                    value={competencyEditData.witnessed_by}
+                                                                                                                                    onChange={(e) => setCompetencyEditData({ ...competencyEditData, witnessed_by: e.target.value })}
+                                                                                                                                    style={{ fontSize: '11px', padding: '4px 8px' }}
+                                                                                                                                >
+                                                                                                                                    <option value="">Select Witness</option>
+                                                                                                                                    {personnel.filter(p => p.is_active).map(p => (
+                                                                                                                                        <option key={p.id} value={p.id}>{p.username}</option>
+                                                                                                                                    ))}
+                                                                                                                                </select>
+                                                                                                                            </div>
+                                                                                                                            <div>
+                                                                                                                                <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px', marginTop: '4px' }}>Witness Date</label>
+                                                                                                                                <input
+                                                                                                                                    type="date"
+                                                                                                                                    className="glass-input"
+                                                                                                                                    value={competencyEditData.witnessed_at}
+                                                                                                                                    onChange={(e) => setCompetencyEditData({ ...competencyEditData, witnessed_at: e.target.value })}
+                                                                                                                                    style={{ fontSize: '11px', padding: '4px 8px' }}
+                                                                                                                                />
+                                                                                                                            </div>
+                                                                                                                            <div>
+                                                                                                                                <label style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '2px', marginTop: '4px' }}>Witness Notes</label>
+                                                                                                                                <textarea
+                                                                                                                                    className="glass-textarea"
+                                                                                                                                    value={competencyEditData.witness_notes}
+                                                                                                                                    onChange={(e) => setCompetencyEditData({ ...competencyEditData, witness_notes: e.target.value })}
+                                                                                                                                    rows="2"
+                                                                                                                                    placeholder="Optional observations from witness check..."
+                                                                                                                                    style={{ fontSize: '11px', padding: '4px 8px' }}
+                                                                                                                                />
+                                                                                                                            </div>
+                                                                                                                        </>
+                                                                                                                    )}
+                                                                                                                </div>
+                                                                                                            </>
+                                                                                                        )}
+                                                                                                        <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
+                                                                                                            <button
+                                                                                                                onClick={handleCancelCompetencyEdit}
+                                                                                                                className="btn btn--secondary btn--sm"
+                                                                                                                style={{ flex: 1, fontSize: '10px', padding: '4px 8px' }}
+                                                                                                                disabled={saving}
+                                                                                                            >
+                                                                                                                Cancel
+                                                                                                            </button>
+                                                                                                            <button
+                                                                                                                onClick={() => handleSaveCompetency(comp.id)}
+                                                                                                                className="btn btn--primary btn--sm"
+                                                                                                                style={{ flex: 1, fontSize: '10px', padding: '4px 8px' }}
+                                                                                                                disabled={saving}
+                                                                                                            >
+                                                                                                                {saving ? 'Saving...' : 'Save'}
+                                                                                                            </button>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                ) : (
+                                                                                                    <div style={{ fontSize: '11px', lineHeight: '1.4' }}>
+                                                                                                        {comp.issuing_body && (
+                                                                                                            <div style={{ marginBottom: '3px' }}>
+                                                                                                                <span style={{ color: 'rgba(255, 255, 255, 0.5)' }}>Issuer:</span>{' '}
+                                                                                                                <span style={{ color: 'rgba(255, 255, 255, 0.9)' }}>{comp.issuing_body}</span>
+                                                                                                            </div>
+                                                                                                        )}
+                                                                                                        {comp.certification_id && (
+                                                                                                            <div style={{ marginBottom: '3px' }}>
+                                                                                                                <span style={{ color: 'rgba(255, 255, 255, 0.5)' }}>ID:</span>{' '}
+                                                                                                                <span style={{ color: 'rgba(255, 255, 255, 0.9)' }}>{comp.certification_id}</span>
+                                                                                                            </div>
+                                                                                                        )}
+                                                                                                        {comp.value && (
+                                                                                                            <div style={{ marginBottom: '3px' }}>
+                                                                                                                <span style={{ color: 'rgba(255, 255, 255, 0.5)' }}>Value:</span>{' '}
+                                                                                                                <span style={{ color: 'rgba(255, 255, 255, 0.9)' }}>{comp.value}</span>
+                                                                                                            </div>
+                                                                                                        )}
+                                                                                                        {(comp.created_at || comp.expiry_date) && (
+                                                                                                            <div style={{ display: 'flex', gap: '8px', marginTop: '4px', paddingTop: '4px', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                                                                                                                {comp.created_at && (
+                                                                                                                    <div style={{ flex: 1 }}>
+                                                                                                                        <div style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '10px' }}>Issued</div>
+                                                                                                                        <div style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: '500' }}>
+                                                                                                                            {new Date(comp.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}
+                                                                                                                        </div>
+                                                                                                                    </div>
+                                                                                                                )}
+                                                                                                                {comp.expiry_date && (
+                                                                                                                    <div style={{ flex: 1 }}>
+                                                                                                                        <div style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '10px' }}>Expires</div>
+                                                                                                                        <div style={{ color: isExpired ? '#ef4444' : isExpiringSoon ? '#f59e0b' : 'rgba(255, 255, 255, 0.9)', fontWeight: '500' }}>
+                                                                                                                            {new Date(comp.expiry_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}
+                                                                                                                        </div>
+                                                                                                                    </div>
+                                                                                                                )}
+                                                                                                            </div>
+                                                                                                        )}
+                                                                                                        {comp.notes && (
+                                                                                                            <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                                                                                                                <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={comp.notes}>
+                                                                                                                    {comp.notes}
+                                                                                                                </div>
+                                                                                                            </div>
+                                                                                                        )}
+                                                                                                        {requiresWitnessCheck(comp) && (
+                                                                                                            <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                                                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px' }}>
+                                                                                                                    {comp.witness_checked ? (
+                                                                                                                        <>
+                                                                                                                            <svg style={{ width: '12px', height: '12px', color: '#10b981' }} fill="currentColor" viewBox="0 0 20 20">
+                                                                                                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                                                                                            </svg>
+                                                                                                                            <div style={{ color: '#10b981', fontWeight: '600' }}>
+                                                                                                                                Witnessed
+                                                                                                                                {comp.witnessed_at && (
+                                                                                                                                    <span style={{ fontWeight: '400', marginLeft: '4px', color: 'rgba(255, 255, 255, 0.6)' }}>
+                                                                                                                                        ({new Date(comp.witnessed_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })})
+                                                                                                                                    </span>
+                                                                                                                                )}
+                                                                                                                            </div>
+                                                                                                                        </>
+                                                                                                                    ) : (
+                                                                                                                        <>
+                                                                                                                            <svg style={{ width: '12px', height: '12px', color: '#6b7280' }} fill="currentColor" viewBox="0 0 20 20">
+                                                                                                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                                                                                                            </svg>
+                                                                                                                            <span style={{ color: '#6b7280' }}>Not witnessed</span>
+                                                                                                                        </>
+                                                                                                                    )}
+                                                                                                                </div>
+                                                                                                                {comp.witness_checked && comp.witness_notes && (
+                                                                                                                    <div style={{ marginTop: '4px', fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)', fontStyle: 'italic' }}>
+                                                                                                                        {comp.witness_notes}
+                                                                                                                    </div>
+                                                                                                                )}
+                                                                                                            </div>
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                )}
                                                                             </div>
                                                                         );
                                                                     })}
-                                                                </div>
-                                                            )}
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                )
+                                                            })()}
                                                         </div>
                                                     </div>
                                                 </td>

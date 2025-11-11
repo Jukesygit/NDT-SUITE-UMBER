@@ -142,6 +142,10 @@ export interface EmployeeCompetency {
   updated_at: string;            // ISO timestamp
   issuing_body: string | null;   // Name of certification issuing organization
   certification_id: string | null;  // Certification ID number
+  witness_checked: boolean;      // Matrix competency witness inspection completed
+  witnessed_by: string | null;   // UUID - References auth.users(id) of witness
+  witnessed_at: string | null;   // ISO timestamp of witness check
+  witness_notes: string | null;  // Optional notes from witness check
 }
 
 /**
@@ -160,6 +164,10 @@ export interface EmployeeCompetencyInsert {
   notes?: string | null;
   issuing_body?: string | null;
   certification_id?: string | null;
+  witness_checked?: boolean;
+  witnessed_by?: string | null;
+  witnessed_at?: string | null;
+  witness_notes?: string | null;
 }
 
 /**
@@ -211,6 +219,73 @@ export function isValidRole(role: string): role is Profile['role'] {
 }
 
 /**
+ * Competency Comment row type
+ */
+export interface CompetencyComment {
+  id: string;                           // UUID
+  employee_competency_id: string;       // UUID - References employee_competencies(id)
+  comment_text: string;
+  comment_type: 'general' | 'expiry_update' | 'renewal_in_progress' | 'renewal_completed' | 'unable_to_renew' | 'escalation';
+  is_pinned: boolean;
+  created_by: string | null;            // UUID - References auth.users(id)
+  created_at: string;                   // ISO timestamp
+  updated_at: string;                   // ISO timestamp
+  mentioned_users: string[] | null;     // Array of user UUIDs
+  attachments: any[] | null;            // JSON array of attachment metadata
+}
+
+/**
+ * Competency Comment insert type
+ */
+export interface CompetencyCommentInsert {
+  employee_competency_id: string;
+  comment_text: string;
+  comment_type?: 'general' | 'expiry_update' | 'renewal_in_progress' | 'renewal_completed' | 'unable_to_renew' | 'escalation';
+  is_pinned?: boolean;
+  created_by?: string | null;
+  mentioned_users?: string[] | null;
+  attachments?: any[] | null;
+}
+
+/**
+ * Competency Comment update type
+ */
+export interface CompetencyCommentUpdate {
+  comment_text?: string;
+  comment_type?: 'general' | 'expiry_update' | 'renewal_in_progress' | 'renewal_completed' | 'unable_to_renew' | 'escalation';
+  is_pinned?: boolean;
+  mentioned_users?: string[] | null;
+  attachments?: any[] | null;
+}
+
+/**
+ * Extended EmployeeCompetency with comment info
+ */
+export interface EmployeeCompetencyWithComments extends EmployeeCompetency {
+  comments?: CompetencyComment[];
+  comment_count?: number;
+  latest_comment?: string | null;
+  has_pinned_comments?: boolean;
+}
+
+/**
+ * Expiring competency with comment info (from RPC function)
+ */
+export interface ExpiringCompetencyWithComments {
+  user_id: string;
+  username: string;
+  email: string;
+  competency_id: string;
+  competency_name: string;
+  expiry_date: string;
+  days_until_expiry: number;
+  comment_count: number;
+  latest_comment: string | null;
+  latest_comment_type: string | null;
+  has_renewal_in_progress: boolean;
+}
+
+/**
  * Competency status type guard
  */
 export function isValidCompetencyStatus(status: string): status is EmployeeCompetency['status'] {
@@ -222,4 +297,11 @@ export function isValidCompetencyStatus(status: string): status is EmployeeCompe
  */
 export function isValidFieldType(type: string): type is CompetencyDefinition['field_type'] {
   return ['text', 'date', 'expiry_date', 'boolean', 'file', 'number'].includes(type);
+}
+
+/**
+ * Comment type type guard
+ */
+export function isValidCommentType(type: string): type is CompetencyComment['comment_type'] {
+  return ['general', 'expiry_update', 'renewal_in_progress', 'renewal_completed', 'unable_to_renew', 'escalation'].includes(type);
 }

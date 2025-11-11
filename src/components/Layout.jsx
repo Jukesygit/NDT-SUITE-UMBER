@@ -466,14 +466,16 @@ function Layout() {
                         <button
                             onClick={async () => {
                                 try {
+                                    console.log('Layout: Logout button clicked');
                                     await authManager.logout();
-                                    // Wait for session to clear, then navigate
-                                    await new Promise(resolve => setTimeout(resolve, 200));
-                                    // Use navigate instead of hard reload
-                                    navigate('/login');
+                                    // Wait a bit for auth state to propagate
+                                    await new Promise(resolve => setTimeout(resolve, 100));
+                                    // Navigate to login
+                                    navigate('/login', { replace: true });
                                 } catch (error) {
-                                    console.error('Error logging out:', error);
-                                    navigate('/login');
+                                    console.error('Layout: Error logging out:', error);
+                                    // Navigate anyway to ensure user gets to login screen
+                                    navigate('/login', { replace: true });
                                 }
                             }}
                             className="tool-btn"

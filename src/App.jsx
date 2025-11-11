@@ -128,8 +128,16 @@ function App() {
             // Sync service is automatically active when user is logged in
         });
 
+        // Also listen for explicit logout event
+        const handleLogout = () => {
+            console.log('App: User logged out event received');
+            setIsLoggedIn(false);
+        };
+        window.addEventListener('userLoggedOut', handleLogout);
+
         return () => {
             if (unsubscribe) unsubscribe();
+            window.removeEventListener('userLoggedOut', handleLogout);
         };
     }, []);
 

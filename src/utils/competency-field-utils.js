@@ -260,3 +260,100 @@ export function formatValue(value, fieldType) {
 
     return value;
 }
+
+/**
+ * Check if a competency is an NDT certification
+ * @param {object} competency - The competency definition or employee competency
+ * @returns {boolean} - True if this is an NDT certification
+ */
+export function isNDTCertification(competency) {
+    if (!competency) return false;
+
+    // Check category name
+    const categoryName = competency.category?.name?.toLowerCase() ||
+                        competency.competency?.category?.name?.toLowerCase() || '';
+
+    if (categoryName === 'ndt certifications') {
+        return true;
+    }
+
+    // Check field name for NDT patterns as backup
+    const fieldName = competency.name?.toLowerCase() ||
+                     competency.competency?.name?.toLowerCase() || '';
+
+    const ndtPatterns = [
+        'en 9712',
+        'pcn',
+        'paut',
+        'tofd',
+        'mut',
+        'rad',
+        'eci',
+        'mpi',
+        'lpi',
+        'vis',
+        'basic radiation safety',
+        'pec l2'
+    ];
+
+    return ndtPatterns.some(pattern => fieldName.includes(pattern));
+}
+
+/**
+ * Check if an NDT competency requires a witness check
+ * Some NDT fields like "PCN Number" are informational and don't need witness checks
+ * @param {object} competency - The competency definition or employee competency
+ * @returns {boolean} - True if this NDT cert requires a witness check
+ */
+export function requiresWitnessCheck(competency) {
+    if (!isNDTCertification(competency)) {
+        return false;
+    }
+
+    const fieldName = competency.name?.toLowerCase() ||
+                     competency.competency?.name?.toLowerCase() || '';
+
+    // These NDT fields don't require witness checks (they're informational)
+    const excludedFields = [
+        'pcn number',
+        'pcn no',
+        'certificate number'
+    ];
+
+    if (excludedFields.some(excluded => fieldName === excluded)) {
+        return false;
+    }
+
+    // If it's an expiry_date type NDT cert, it needs a witness check
+    const fieldType = competency.field_type || competency.competency?.field_type;
+    if (fieldType === 'expiry_date') {
+        return true;
+    }
+
+    // Boolean type NDT certs may also need witness checks
+    if (fieldType === 'boolean' && fieldName.includes('matrix competency')) {
+        return false; // These are the old boolean witness fields, skip them
+    }
+
+    return true;
+}
+
+/**
+ * Get witness check status summary for a list of competencies
+ * @param {Array} competencies - Array of employee competencies
+ * @returns {object} - Object with total, witnessed, and percentage
+ */
+export function getWitnessCheckSummary(competencies) {
+    if (!Array.isArray(competencies)) {
+        return { total: 0, witnessed: 0, percentage: 0 };
+    }
+
+    const ndtCerts = competencies.filter(comp => requiresWitnessCheck(comp));
+    const witnessed = ndtCerts.filter(comp => comp.witness_checked === true).length;
+
+    return {
+        total: ndtCerts.length,
+        witnessed: witnessed,
+        percentage: ndtCerts.length > 0 ? Math.round((witnessed / ndtCerts.length) * 100) : 0
+    };
+}
