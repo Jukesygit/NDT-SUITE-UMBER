@@ -42,21 +42,33 @@ class PersonnelService {
                         competency_id,
                         created_at,
                         issuing_body,
-                        certificate_number,
+                        certification_id,
+                        witness_checked,
+                        witnessed_by,
+                        witnessed_at,
+                        witness_notes,
                         competency_definitions!inner(
                             id,
                             name,
                             description,
                             field_type,
-                            category_id
+                            category_id,
+                            competency_categories(
+                                id,
+                                name,
+                                description
+                            )
                         )
                     `)
                     .eq('user_id', profile.id);
 
-                // Flatten the competency_definitions structure
+                // Flatten the competency_definitions structure and nested category
                 const flattenedCompetencies = (competencies || []).map(comp => ({
                     ...comp,
-                    competency: comp.competency_definitions
+                    competency: {
+                        ...comp.competency_definitions,
+                        category: comp.competency_definitions?.competency_categories || null
+                    }
                 }));
 
                 return {
@@ -440,7 +452,11 @@ class PersonnelService {
                 certification_id: certificationId || null,
                 value: value || null,
                 verified_by: currentUser.id,
-                verified_at: new Date().toISOString()
+                verified_at: new Date().toISOString(),
+                witness_checked: false,
+                witnessed_by: null,
+                witnessed_at: null,
+                witness_notes: null
             })
             .select()
             .single();

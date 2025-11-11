@@ -131,12 +131,16 @@ function LayoutNew() {
 
   const handleLogout = async () => {
     try {
+      console.log('LayoutNew: Logout initiated');
       await authManager.logout();
-      await new Promise(resolve => setTimeout(resolve, 200));
-      navigate('/login');
+      // Wait a bit for auth state to propagate
+      await new Promise(resolve => setTimeout(resolve, 100));
+      // Navigate to login
+      navigate('/login', { replace: true });
     } catch (error) {
-      console.error('Error logging out:', error);
-      navigate('/login');
+      console.error('LayoutNew: Error logging out:', error);
+      // Navigate anyway to ensure user gets to login screen
+      navigate('/login', { replace: true });
     }
   };
 

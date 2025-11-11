@@ -125,7 +125,12 @@ class CompetencyService {
             document_url: data.documentUrl || null,
             document_name: data.documentName || null,
             notes: data.notes || null,
-            status: data.status || 'active'
+            status: data.status || 'active',
+            // Witness check fields
+            witness_checked: data.witnessChecked || false,
+            witnessed_by: data.witnessedBy || null,
+            witnessed_at: data.witnessedAt || null,
+            witness_notes: data.witnessNotes || null
         };
 
         const { data: result, error } = await supabase
@@ -198,19 +203,24 @@ class CompetencyService {
     /**
      * Get expiring competencies
      * @param {number} daysThreshold - Number of days to look ahead (default 30)
+     * @param {boolean} includeComments - Include comment information (default false)
      */
-    async getExpiringCompetencies(daysThreshold = 30) {
+    async getExpiringCompetencies(daysThreshold = 30, includeComments = false) {
         if (!isSupabaseConfigured()) {
             throw new Error('Supabase not configured');
         }
 
-        // Try using the RPC function first
+        // Use the enhanced RPC function with comments if requested
+        const functionName = includeComments
+            ? 'get_expiring_competencies_with_comments'
+            : 'get_expiring_competencies';
+
         const { data, error } = await supabase
-            .rpc('get_expiring_competencies', { days_threshold: daysThreshold });
+            .rpc(functionName, { days_threshold: daysThreshold });
 
         // If the function doesn't exist, fallback to a query
         if (error && error.message?.includes('function')) {
-            console.warn('get_expiring_competencies function not found, using fallback query');
+            console.warn(`${functionName} function not found, using fallback query`);
 
             const futureDate = new Date();
             futureDate.setDate(futureDate.getDate() + daysThreshold);
@@ -240,9 +250,16 @@ class CompetencyService {
                 user_id: item.user_id,
                 username: item.profiles?.username,
                 email: item.profiles?.email,
+                competency_id: item.id,
                 competency_name: item.competency_definitions?.name,
                 expiry_date: item.expiry_date,
-                days_until_expiry: Math.ceil((new Date(item.expiry_date) - new Date()) / (1000 * 60 * 60 * 24))
+                days_until_expiry: Math.ceil((new Date(item.expiry_date) - new Date()) / (1000 * 60 * 60 * 24)),
+                ...(includeComments && {
+                    comment_count: 0,
+                    latest_comment: null,
+                    latest_comment_type: null,
+                    has_renewal_in_progress: false
+                })
             }));
         }
 
@@ -448,6 +465,153 @@ class CompetencyService {
 
         if (error) throw error;
         return data;
+    }
+
+    /**
+     * Get comments for a competency
+     * @param {string} employeeCompetencyId - Employee competency ID
+     */
+    async getCompetencyComments(employeeCompetencyId) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        const { data, error } = await supabase
+            .from('competency_comments')
+            .select(`
+                *,
+                author:profiles!competency_comments_created_by_fkey(
+                    id,
+                    username,
+                    email,
+                    avatar_url
+                )
+            `)
+            .eq('employee_competency_id', employeeCompetencyId)
+            .order('is_pinned', { ascending: false })
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    }
+
+    /**
+     * Add a comment to a competency
+     * @param {string} employeeCompetencyId - Employee competency ID
+     * @param {string} commentText - Comment text
+     * @param {string} commentType - Comment type (general, expiry_update, renewal_in_progress, etc.)
+     * @param {boolean} isPinned - Whether to pin the comment
+     * @param {Array<string>} mentionedUsers - Array of user IDs mentioned in comment
+     */
+    async addCompetencyComment(employeeCompetencyId, commentText, commentType = 'general', isPinned = false, mentionedUsers = null) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        const currentUser = authManager.getCurrentUser();
+        if (!currentUser) {
+            throw new Error('Not authenticated');
+        }
+
+        const { data, error } = await supabase
+            .from('competency_comments')
+            .insert({
+                employee_competency_id: employeeCompetencyId,
+                comment_text: commentText,
+                comment_type: commentType,
+                is_pinned: isPinned,
+                created_by: currentUser.id,
+                mentioned_users: mentionedUsers
+            })
+            .select(`
+                *,
+                author:profiles!competency_comments_created_by_fkey(
+                    id,
+                    username,
+                    email,
+                    avatar_url
+                )
+            `)
+            .single();
+
+        if (error) throw error;
+        return data;
+    }
+
+    /**
+     * Update a comment
+     * @param {string} commentId - Comment ID
+     * @param {object} updates - Fields to update
+     */
+    async updateCompetencyComment(commentId, updates) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        const { data, error } = await supabase
+            .from('competency_comments')
+            .update(updates)
+            .eq('id', commentId)
+            .select(`
+                *,
+                author:profiles!competency_comments_created_by_fkey(
+                    id,
+                    username,
+                    email,
+                    avatar_url
+                )
+            `)
+            .single();
+
+        if (error) throw error;
+        return data;
+    }
+
+    /**
+     * Delete a comment
+     * @param {string} commentId - Comment ID
+     */
+    async deleteCompetencyComment(commentId) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        const { error } = await supabase
+            .from('competency_comments')
+            .delete()
+            .eq('id', commentId);
+
+        if (error) throw error;
+        return true;
+    }
+
+    /**
+     * Pin/unpin a comment
+     * @param {string} commentId - Comment ID
+     * @param {boolean} isPinned - Whether to pin or unpin
+     */
+    async pinCompetencyComment(commentId, isPinned) {
+        return this.updateCompetencyComment(commentId, { is_pinned: isPinned });
+    }
+
+    /**
+     * Get competencies with recent comments
+     * @param {string} userId - Optional user ID to filter by
+     * @param {number} daysBack - Number of days to look back (default 7)
+     */
+    async getCompetenciesWithComments(userId = null, daysBack = 7) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        const { data, error } = await supabase
+            .rpc('get_competencies_with_comments', {
+                p_user_id: userId,
+                p_days_back: daysBack
+            });
+
+        if (error) throw error;
+        return data || [];
     }
 }
 
