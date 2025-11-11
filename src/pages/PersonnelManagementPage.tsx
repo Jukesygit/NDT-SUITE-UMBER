@@ -51,7 +51,8 @@ export default function PersonnelManagementPage() {
         pendingApprovals,
         loading,
         error,
-        refetch
+        refetch,
+        updateCompetency
     } = usePersonnelData();
 
     // Custom hooks for filtering
@@ -255,6 +256,7 @@ export default function PersonnelManagementPage() {
                         sortDirection={sortDirection}
                         onSort={handleSort}
                         onRefresh={refetch}
+                        onUpdateCompetency={updateCompetency}
                     />
                 ) : view === 'matrix' ? (
                     <MatrixView

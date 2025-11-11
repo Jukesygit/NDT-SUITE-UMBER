@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import crypto from 'crypto'
+import path from 'path'
 
 // Generate nonces for inline scripts that absolutely need them
 const generateNonce = () => crypto.randomBytes(16).toString('base64')
@@ -19,7 +20,18 @@ export default defineConfig({
     })
   ],
   resolve: {
-    dedupe: ['react', 'react-dom']
+    dedupe: ['react', 'react-dom'],
+    // Path aliases matching tsconfig.json
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+      '@components': path.resolve(__dirname, './src/components'),
+      '@utils': path.resolve(__dirname, './src/utils'),
+      '@services': path.resolve(__dirname, './src/services'),
+      '@hooks': path.resolve(__dirname, './src/hooks'),
+      '@types': path.resolve(__dirname, './src/types'),
+      '@config': path.resolve(__dirname, './src/config'),
+      '@store': path.resolve(__dirname, './src/store')
+    }
   },
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-router-dom']

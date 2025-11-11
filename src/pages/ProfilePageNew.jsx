@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createModernHeader } from '../components/modern-header.js';
 import authManager, { ROLES } from '../auth-manager.js';
 import supabase, { isSupabaseConfigured } from '../supabase-client.js';
-import competencyService from '../services/competency-service.js';
+import competencyService from '../services/competency-service';
 import { shouldShowCertificationFields, shouldShowDateFields, getInputType, getPlaceholder, filterOutPersonalDetails, getPersonalDetails, formatValue } from '../utils/competency-field-utils.js';
 import { themes, saveTheme, getCurrentTheme } from '../themes.js';
 
@@ -20,6 +20,7 @@ export default function ProfilePageNew() {
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [categories, setCategories] = useState([]);
+    const [uploadingDocument, setUploadingDocument] = useState(false);
 
     // Profile fields editing
     const [editingProfile, setEditingProfile] = useState(false);
@@ -270,8 +271,59 @@ export default function ProfilePageNew() {
             expiry_date: comp.expiry_date ? new Date(comp.expiry_date).toISOString().split('T')[0] : '',
             issued_date: comp.created_at ? new Date(comp.created_at).toISOString().split('T')[0] : '',
             notes: comp.notes || '',
+            document_url: comp.document_url || '',
+            document_name: comp.document_name || '',
+            status: comp.status || 'active',
             definition
         });
+    };
+
+    const handleDocumentUpload = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        // Validate file type
+        const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+        if (!allowedTypes.includes(file.type)) {
+            alert('Please upload a PDF, image (JPG/PNG), or Word document');
+            return;
+        }
+
+        // Validate file size (max 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            alert('File must be less than 5MB');
+            return;
+        }
+
+        setUploadingDocument(true);
+        try {
+            const definition = competencyDefinitions.find(d => d.id === editingCompetency.competency_id);
+            const result = await competencyService.uploadDocument(file, user.id, definition.name);
+
+            setEditFormData({
+                ...editFormData,
+                document_url: result.path,
+                document_name: result.name,
+                status: 'pending_approval' // Auto-set to pending when document uploaded
+            });
+
+            alert('Document uploaded successfully! Competency will be pending admin approval.');
+        } catch (error) {
+            console.error('Error uploading document:', error);
+            alert('Failed to upload document: ' + error.message);
+        } finally {
+            setUploadingDocument(false);
+        }
+    };
+
+    const handleRemoveDocument = () => {
+        if (confirm('Are you sure you want to remove this document?')) {
+            setEditFormData({
+                ...editFormData,
+                document_url: '',
+                document_name: ''
+            });
+        }
     };
 
     const handleSaveCompetency = async () => {
@@ -284,7 +336,10 @@ export default function ProfilePageNew() {
                 issuing_body: editFormData.issuing_body || null,
                 certification_id: editFormData.certification_id || null,
                 expiry_date: editFormData.expiry_date || null,
-                notes: editFormData.notes || null
+                notes: editFormData.notes || null,
+                document_url: editFormData.document_url || null,
+                document_name: editFormData.document_name || null,
+                status: editFormData.status || 'active'
             };
 
             // If it's a date field, update created_at as well
@@ -300,7 +355,6 @@ export default function ProfilePageNew() {
                     .insert({
                         user_id: user.id,
                         competency_id: editingCompetency.competency_id,
-                        status: 'active',
                         ...dataToSave
                     });
 
@@ -685,6 +739,9 @@ export default function ProfilePageNew() {
                                     const isEditing = editingCompetency?.id === comp.id;
                                     const isExpired = comp.expiry_date && new Date(comp.expiry_date) < new Date();
                                     const isExpiringSoon = comp.expiry_date && !isExpired && Math.ceil((new Date(comp.expiry_date) - new Date()) / (1000 * 60 * 60 * 24)) <= 30;
+                                    const hasDocument = comp.document_url && comp.document_name;
+                                    const isPending = comp.status === 'pending_approval';
+                                    const isRejected = comp.status === 'rejected';
 
                                     return (
                                         <div
@@ -698,8 +755,15 @@ export default function ProfilePageNew() {
                                             }}
                                         >
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
-                                                <div>
-                                                    <div style={{ fontSize: '15px', fontWeight: '600', color: '#ffffff', marginBottom: '4px' }}>{definition.name}</div>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                                        <div style={{ fontSize: '15px', fontWeight: '600', color: '#ffffff' }}>{definition.name}</div>
+                                                        {hasDocument && (
+                                                            <svg style={{ width: '16px', height: '16px', color: isPending ? '#f59e0b' : '#10b981' }} fill="none" stroke="currentColor" viewBox="0 0 24 24" title={isPending ? 'Document pending approval' : 'Document attached'}>
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                            </svg>
+                                                        )}
+                                                    </div>
                                                     {!isEditing && (
                                                         <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)' }}>
                                                             {definition.category?.name}
@@ -707,7 +771,11 @@ export default function ProfilePageNew() {
                                                     )}
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    {isExpired ? (
+                                                    {isPending ? (
+                                                        <span className="glass-badge" style={{ background: 'rgba(245, 158, 11, 0.3)', color: '#f59e0b', fontSize: '10px', padding: '4px 8px' }}>Pending Approval</span>
+                                                    ) : isRejected ? (
+                                                        <span className="glass-badge badge-red" style={{ fontSize: '10px', padding: '4px 8px' }}>Rejected</span>
+                                                    ) : isExpired ? (
                                                         <span className="glass-badge badge-red" style={{ fontSize: '10px', padding: '4px 8px' }}>Expired</span>
                                                     ) : isExpiringSoon ? (
                                                         <span className="glass-badge" style={{ background: 'rgba(245, 158, 11, 0.3)', color: '#f59e0b', fontSize: '10px', padding: '4px 8px' }}>Expiring Soon</span>
@@ -789,6 +857,45 @@ export default function ProfilePageNew() {
                                                             style={{ fontSize: '13px' }}
                                                         />
                                                     </div>
+
+                                                    {/* Document Upload Section */}
+                                                    <div style={{ paddingTop: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                                                        <label style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', display: 'block', marginBottom: '8px' }}>Supporting Document</label>
+                                                        {editFormData.document_name ? (
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                                                                <svg style={{ width: '18px', height: '18px', color: '#10b981', flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                </svg>
+                                                                <div style={{ flex: 1, fontSize: '13px', color: 'rgba(255, 255, 255, 0.9)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                    {editFormData.document_name}
+                                                                </div>
+                                                                <button onClick={handleRemoveDocument} className="btn-icon" style={{ padding: '4px', color: '#ef4444' }} type="button">
+                                                                    <svg style={{ width: '14px', height: '14px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                                                    </svg>
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <label className="btn btn--secondary btn--sm" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', width: '100%', justifyContent: 'center' }}>
+                                                                <svg style={{ width: '14px', height: '14px', marginRight: '6px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                                                </svg>
+                                                                {uploadingDocument ? 'Uploading...' : 'Upload Document'}
+                                                                <input
+                                                                    type="file"
+                                                                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                                                    onChange={handleDocumentUpload}
+                                                                    disabled={uploadingDocument}
+                                                                    style={{ display: 'none' }}
+                                                                />
+                                                            </label>
+                                                        )}
+                                                        <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.4)', marginTop: '6px' }}>
+                                                            PDF, JPG, PNG, or Word documents (max 5MB)
+                                                            {editFormData.document_name && ' • Document will require admin approval'}
+                                                        </div>
+                                                    </div>
+
                                                     <div style={{ display: 'flex', gap: '8px' }}>
                                                         <button onClick={() => { setEditingCompetency(null); setEditFormData({}); }} className="btn btn--secondary btn--sm" style={{ flex: 1 }}>Cancel</button>
                                                         <button onClick={handleSaveCompetency} className="btn btn--primary btn--sm" style={{ flex: 1 }} disabled={saving}>
@@ -827,6 +934,36 @@ export default function ProfilePageNew() {
                                                     {comp.notes && (
                                                         <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.05)', fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)', fontStyle: 'italic' }}>
                                                             {comp.notes}
+                                                        </div>
+                                                    )}
+                                                    {hasDocument && (
+                                                        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                                                            <button
+                                                                onClick={async () => {
+                                                                    try {
+                                                                        const url = await competencyService.getDocumentUrl(comp.document_url);
+                                                                        window.open(url, '_blank');
+                                                                    } catch (error) {
+                                                                        console.error('Error downloading document:', error);
+                                                                        alert('Failed to open document: ' + error.message);
+                                                                    }
+                                                                }}
+                                                                className="btn btn--secondary btn--sm"
+                                                                style={{ fontSize: '12px' }}
+                                                            >
+                                                                <svg style={{ width: '14px', height: '14px', marginRight: '6px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                </svg>
+                                                                View Document
+                                                            </button>
+                                                            {isPending && (
+                                                                <div style={{ fontSize: '11px', color: '#f59e0b', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                    <svg style={{ width: '12px', height: '12px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                    </svg>
+                                                                    Awaiting admin approval
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>

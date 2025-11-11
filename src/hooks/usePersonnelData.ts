@@ -18,6 +18,7 @@ interface UsePersonnelDataReturn {
     loading: boolean;
     error: string | null;
     refetch: (showSuccess?: boolean) => Promise<void>;
+    updateCompetency: (personId: string, competencyId: string, updates: any) => void;
 }
 
 /**
@@ -122,6 +123,26 @@ export function usePersonnelData(): UsePersonnelDataReturn {
         loadData();
     }, [loadData]);
 
+    /**
+     * Update a specific competency locally without full refetch
+     * This prevents scroll position loss and maintains UX during updates
+     */
+    const updateCompetency = useCallback((personId: string, competencyId: string, updates: any) => {
+        setPersonnel(prevPersonnel => {
+            return prevPersonnel.map(person => {
+                if (person.id !== personId) return person;
+
+                return {
+                    ...person,
+                    competencies: person.competencies?.map(comp => {
+                        if (comp.id !== competencyId) return comp;
+                        return { ...comp, ...updates };
+                    })
+                };
+            });
+        });
+    }, []);
+
     return {
         personnel,
         organizations,
@@ -130,6 +151,7 @@ export function usePersonnelData(): UsePersonnelDataReturn {
         pendingApprovals,
         loading,
         error,
-        refetch: loadData
+        refetch: loadData,
+        updateCompetency
     };
 }

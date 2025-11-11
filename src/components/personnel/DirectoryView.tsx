@@ -4,6 +4,7 @@ import authManager from '../../auth-manager.js';
 import supabase from '../../supabase-client.js';
 import toast from '../Toast.jsx';
 import { filterOutPersonalDetails, requiresWitnessCheck } from '../../utils/competency-field-utils.js';
+import competencyService from '../../services/competency-service';
 import type { PersonnelWithCompetencies, CompetencyDefinition, Organization } from '../../types/index.js';
 import type { SortColumn, SortDirection } from '../../hooks/usePersonnelSort.js';
 
@@ -35,6 +36,7 @@ interface DirectoryViewProps {
     sortDirection: SortDirection;
     onSort: (column: SortColumn) => void;
     onRefresh: () => Promise<void>;
+    onUpdateCompetency: (personId: string, competencyId: string, updates: any) => void;
 }
 
 /**
@@ -68,7 +70,8 @@ export function DirectoryView({
     sortColumn,
     sortDirection,
     onSort,
-    onRefresh
+    onRefresh,
+    onUpdateCompetency
 }: DirectoryViewProps) {
     const [showCompetencyDropdown, setShowCompetencyDropdown] = useState(false);
     const [expandedPersonId, setExpandedPersonId] = useState<string | null>(null);
@@ -102,7 +105,7 @@ export function DirectoryView({
         });
     };
 
-    const handleSaveCompetency = async (compId: string) => {
+    const handleSaveCompetency = async (compId: string, personId: string) => {
         if (!isAdmin) return;
 
         setSaving(true);
@@ -130,8 +133,8 @@ export function DirectoryView({
 
             if (error) throw error;
 
-            // Reload data without full page refresh to maintain scroll position and expanded state
-            await onRefresh();
+            // Update locally without full page refresh to maintain scroll position and expanded state
+            onUpdateCompetency(personId, compId, updateData);
             setEditingCompetencyId(null);
             toast.success('Competency updated successfully!');
         } catch (error: any) {
@@ -912,6 +915,9 @@ export function DirectoryView({
                                                                                     {competenciesByCategory[categoryName].map((comp: any) => {
                                                                                         const isExpired = comp.status === 'expired' || (comp.expiry_date && new Date(comp.expiry_date) < new Date());
                                                                                         const isExpiringSoon = comp.expiry_date && !isExpired && Math.ceil((new Date(comp.expiry_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) <= 30;
+                                                                                        const hasDocument = comp.document_url && comp.document_name;
+                                                                                        const isPendingApproval = comp.status === 'pending_approval';
+                                                                                        const isRejected = comp.status === 'rejected';
 
                                                                                         const isEditing = editingCompetencyId === comp.id;
                                                                                         return (
@@ -933,6 +939,22 @@ export function DirectoryView({
                                                                                                         <div style={{ fontWeight: '600', color: '#ffffff', fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={comp.competency?.name}>
                                                                                                             {comp.competency?.name || 'Unknown Competency'}
                                                                                                         </div>
+                                                                                                        {hasDocument && (
+                                                                                                            <svg
+                                                                                                                style={{
+                                                                                                                    width: '14px',
+                                                                                                                    height: '14px',
+                                                                                                                    color: isPendingApproval ? '#f59e0b' : isRejected ? '#ef4444' : '#10b981',
+                                                                                                                    flexShrink: 0
+                                                                                                                }}
+                                                                                                                fill="none"
+                                                                                                                stroke="currentColor"
+                                                                                                                viewBox="0 0 24 24"
+                                                                                                                title={isPendingApproval ? 'Document pending approval' : isRejected ? 'Document rejected' : 'Document attached'}
+                                                                                                            >
+                                                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                                                            </svg>
+                                                                                                        )}
                                                                                                         {requiresWitnessCheck(comp) && comp.witness_checked && (
                                                                                                             <svg
                                                                                                                 style={{ width: '14px', height: '14px', color: '#10b981', flexShrink: 0 }}
@@ -1109,7 +1131,7 @@ export function DirectoryView({
                                                                                                                 Cancel
                                                                                                             </button>
                                                                                                             <button
-                                                                                                                onClick={() => handleSaveCompetency(comp.id)}
+                                                                                                                onClick={() => handleSaveCompetency(comp.id, person.id)}
                                                                                                                 className="btn btn--primary btn--sm"
                                                                                                                 style={{ flex: 1, fontSize: '10px', padding: '4px 8px' }}
                                                                                                                 disabled={saving}
@@ -1194,6 +1216,47 @@ export function DirectoryView({
                                                                                                                 {comp.witness_checked && comp.witness_notes && (
                                                                                                                     <div style={{ marginTop: '4px', fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)', fontStyle: 'italic' }}>
                                                                                                                         {comp.witness_notes}
+                                                                                                                    </div>
+                                                                                                                )}
+                                                                                                            </div>
+                                                                                                        )}
+                                                                                                        {hasDocument && (
+                                                                                                            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                                                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px' }}>
+                                                                                                                    <svg style={{ width: '14px', height: '14px', color: 'rgba(255, 255, 255, 0.5)', flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                                                                    </svg>
+                                                                                                                    <span style={{ color: 'rgba(255, 255, 255, 0.7)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={comp.document_name}>
+                                                                                                                        {comp.document_name}
+                                                                                                                    </span>
+                                                                                                                    <button
+                                                                                                                        onClick={async () => {
+                                                                                                                            try {
+                                                                                                                                const url = await competencyService.getDocumentUrl(comp.document_url);
+                                                                                                                                window.open(url, '_blank');
+                                                                                                                            } catch (error: any) {
+                                                                                                                                console.error('Error opening document:', error);
+                                                                                                                                toast.error('Failed to open document: ' + error.message);
+                                                                                                                            }
+                                                                                                                        }}
+                                                                                                                        className="btn btn--secondary btn--sm"
+                                                                                                                        style={{ fontSize: '10px', padding: '4px 8px', flexShrink: 0 }}
+                                                                                                                    >
+                                                                                                                        <svg style={{ width: '12px', height: '12px', marginRight: '4px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                                                                                        </svg>
+                                                                                                                        View
+                                                                                                                    </button>
+                                                                                                                </div>
+                                                                                                                {isPendingApproval && (
+                                                                                                                    <div style={{ marginTop: '4px', fontSize: '10px', color: '#f59e0b', fontStyle: 'italic' }}>
+                                                                                                                        ⏳ Awaiting admin approval
+                                                                                                                    </div>
+                                                                                                                )}
+                                                                                                                {isRejected && (
+                                                                                                                    <div style={{ marginTop: '4px', fontSize: '10px', color: '#ef4444', fontStyle: 'italic' }}>
+                                                                                                                        ❌ Document rejected
                                                                                                                     </div>
                                                                                                                 )}
                                                                                                             </div>

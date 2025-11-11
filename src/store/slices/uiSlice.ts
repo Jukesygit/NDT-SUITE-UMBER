@@ -9,7 +9,7 @@ interface Notification {
   type: 'success' | 'error' | 'warning' | 'info';
   message: string;
   duration?: number;
-  timestamp: Date;
+  timestamp: string; // ISO string for Redux serialization
 }
 
 interface Modal {
@@ -60,7 +60,7 @@ const uiSlice = createSlice({
       const notification: Notification = {
         ...action.payload,
         id: Date.now().toString(),
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(), // Use ISO string for Redux serialization
       };
       state.notifications.push(notification);
     },
