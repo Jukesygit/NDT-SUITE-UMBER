@@ -128,7 +128,7 @@ const authSlice = createSlice({
         state.session = null;
         state.error = null;
       })
-      .addCase(logout.rejected, (state, action) => {
+      .addCase(logout.rejected, (state) => {
         // Even if logout fails, clear the state
         state.isLoading = false;
         state.isAuthenticated = false;

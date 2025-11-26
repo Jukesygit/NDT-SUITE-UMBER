@@ -183,7 +183,8 @@ function ToolContainer({ toolModule, className = '', ...props }) {
     return (
         <div
             ref={containerRef}
-            className={`tool-container w-full h-full ${className}`}
+            className={`tool-container w-full h-full relative ${className}`}
+            style={{ minHeight: '100vh' }}
         />
     );
 }

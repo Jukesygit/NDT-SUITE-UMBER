@@ -264,6 +264,17 @@
   cursor: not-allowed;
 }
 
+/* Fix browser autofill styling */
+.input:-webkit-autofill,
+.input:-webkit-autofill:hover,
+.input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text-primary) !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--surface-raised) inset !important;
+  box-shadow: 0 0 0 1000px var(--surface-raised) inset !important;
+  transition: background-color 5000s ease-in-out 0s;
+  caret-color: var(--text-primary);
+}
+
 .input--error {
   border-color: var(--color-danger);
 }

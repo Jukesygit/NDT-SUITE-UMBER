@@ -72,3 +72,4 @@ supabase/.temp
 # Local data
 *.local.json
 localData/NUL
+nul
