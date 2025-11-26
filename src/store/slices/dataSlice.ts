@@ -2,7 +2,7 @@
  * Data Management Redux Slice
  */
 
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { Asset, Vessel, Scan, DataQuery } from '../../types/data.types';
 
 interface DataState {

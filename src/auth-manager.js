@@ -268,12 +268,23 @@ class AuthManager {
         }
 
         if (this.useSupabase) {
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email,
-                password
-            });
+            console.log('AuthManager: Attempting Supabase login for:', email);
+            let data, error;
+            try {
+                const response = await supabase.auth.signInWithPassword({
+                    email,
+                    password
+                });
+                data = response.data;
+                error = response.error;
+                console.log('AuthManager: Supabase response received', { hasData: !!data, hasError: !!error });
+            } catch (fetchError) {
+                console.error('AuthManager: Network/fetch error during login:', fetchError);
+                return { success: false, error: 'Unable to connect to authentication service. Please check your internet connection or try again later.' };
+            }
 
             if (error) {
+                console.error('AuthManager: Login error:', error.message);
                 return { success: false, error: error.message };
             }
 

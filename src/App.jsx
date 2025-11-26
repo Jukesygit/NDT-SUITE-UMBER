@@ -17,6 +17,9 @@ import Layout from './components/LayoutNew.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import LoginPage from './pages/LoginPageNew.jsx';
 
+// Import the Matrix logo loader
+import { MatrixLogoRacer } from './components/MatrixLogoLoader';
+
 // Lazy load pages for code splitting
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard.jsx'));
 const ProfilePage = lazy(() => import('./pages/ProfilePageNew.jsx'));
@@ -27,6 +30,8 @@ const PecVisualizerPage = lazy(() => import('./pages/PecVisualizerPage.jsx'));
 const Viewer3DPage = lazy(() => import('./pages/Viewer3DPage.jsx'));
 const NiiCalculatorPage = lazy(() => import('./pages/NiiCalculatorPage.jsx'));
 const PersonnelManagementPage = lazy(() => import('./pages/PersonnelManagementPage.jsx'));
+const LogoDemo = lazy(() => import('./pages/LogoDemo.tsx'));
+const LogoAnimatedDemo = lazy(() => import('./pages/LogoAnimatedDemo.tsx'));
 
 // Background manager component
 function BackgroundManager() {
@@ -86,9 +91,9 @@ function App() {
             try {
                 console.log('App: Starting auth check...');
 
-                // Add timeout to prevent infinite loading
+                // Add timeout to prevent infinite loading (increased to 15s for cold starts)
                 const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Auth check timeout')), 5000)
+                    setTimeout(() => reject(new Error('Auth check timeout')), 15000)
                 );
 
                 const authCheckPromise = async () => {
@@ -143,11 +148,10 @@ function App() {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
-                <div className="text-center">
-                    <div className="spinner mb-4 mx-auto"></div>
-                    <div className="text-xl text-white">Loading NDT Suite...</div>
-                    <div className="text-sm text-gray-400 mt-2">Initializing application</div>
+            <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
+                <div className="flex flex-col items-center gap-6">
+                    <MatrixLogoRacer size={280} duration={4} />
+                    <div className="text-lg text-gray-400 font-medium animate-pulse">Loading NDT Suite...</div>
                 </div>
             </div>
         );
@@ -155,8 +159,11 @@ function App() {
 
     // Loading component for lazy loaded pages
     const PageLoader = () => (
-        <div className="flex items-center justify-center min-h-screen">
-            <div className="text-xl">Loading...</div>
+        <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
+            <div className="flex flex-col items-center gap-6">
+                <MatrixLogoRacer size={200} duration={4} />
+                <div className="text-base text-gray-400 font-medium animate-pulse">Loading...</div>
+            </div>
         </div>
     );
 
@@ -175,6 +182,10 @@ function App() {
                         <Route path="/login" element={
                             isLoggedIn ? <Navigate to="/" replace /> : <LoginPage onLogin={() => setIsLoggedIn(true)} />
                         } />
+
+                        {/* Demo routes - remove after testing */}
+                        <Route path="/logo-demo" element={<LogoDemo />} />
+                        <Route path="/logo-animated" element={<LogoAnimatedDemo />} />
 
                         {/* Protected routes with layout */}
                         <Route element={<ProtectedRoute isLoggedIn={isLoggedIn} />}>

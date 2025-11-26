@@ -5,7 +5,6 @@
 
 import { store } from '../store';
 import { showNotification } from '../store/slices/uiSlice';
-import { AuthError } from '../types/auth.types';
 
 // Error types
 export enum ErrorType {
@@ -295,6 +294,11 @@ function reportError(errorInfo: any): void {
 
   // Send to error reporting service
   // fetch('/api/errors', { method: 'POST', body: JSON.stringify(reportData) });
+
+  // Log in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Error report:', reportData);
+  }
 }
 
 /**

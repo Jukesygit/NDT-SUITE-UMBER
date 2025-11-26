@@ -1,5 +1,6 @@
 import React from 'react';
 import '../styles/glassmorphic.css';
+import { MatrixLogoRacer } from './MatrixLogoLoader';
 
 /**
  * Loading States Component Library
@@ -453,15 +454,37 @@ export const SkeletonAvatar = ({ size = 'md', className = '' }) => {
  */
 export const LoadingOverlay = ({
   message = 'Loading...',
-  spinner = 'ring',
+  spinner = 'matrix',
   transparent = false,
   className = ''
 }) => {
   const spinners = {
     default: <Spinner size="lg" />,
     ring: <RingSpinner size="lg" />,
-    dots: <DotsSpinner size="lg" />
+    dots: <DotsSpinner size="lg" />,
+    matrix: <MatrixLogoRacer size={180} duration={4} />
   };
+
+  // Matrix spinner uses different styling
+  if (spinner === 'matrix') {
+    return (
+      <div
+        className={`fixed inset-0 flex items-center justify-center z-50 ${className}`}
+        style={{
+          backgroundColor: transparent ? 'rgba(0, 0, 0, 0.5)' : 'rgba(10, 10, 10, 0.95)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)'
+        }}
+      >
+        <div className="flex flex-col items-center gap-6">
+          {spinners[spinner]}
+          {message && (
+            <p className="text-base text-gray-400 font-medium animate-pulse">{message}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -489,7 +512,7 @@ export const LoadingOverlay = ({
  * Content Loading State
  */
 export const ContentLoader = ({
-  type = 'spinner',
+  type = 'matrix',
   message = 'Loading content...',
   className = ''
 }) => {
@@ -498,8 +521,9 @@ export const ContentLoader = ({
       {type === 'spinner' && <Spinner size="lg" />}
       {type === 'ring' && <RingSpinner size="lg" />}
       {type === 'dots' && <DotsSpinner size="lg" />}
+      {type === 'matrix' && <MatrixLogoRacer size={160} duration={4} />}
       {message && (
-        <p className="text-base text-secondary font-medium mt-4">{message}</p>
+        <p className={`text-base font-medium mt-4 ${type === 'matrix' ? 'text-gray-400 animate-pulse' : 'text-secondary'}`}>{message}</p>
       )}
     </div>
   );

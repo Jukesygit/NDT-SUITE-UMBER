@@ -6,6 +6,7 @@ import personnelService from '../services/personnel-service.js';
 import supabase, { isSupabaseConfigured } from '../supabase-client.js';
 import UniversalImportModal from '../components/UniversalImportModal.jsx';
 import { shouldShowCertificationFields, shouldShowDateFields, getInputType, getPlaceholder, filterOutPersonalDetails, isNDTCertification, requiresWitnessCheck } from '../utils/competency-field-utils.js';
+import { MatrixLogoRacer } from '../components/MatrixLogoLoader';
 
 export default function PersonnelManagementPage() {
     const [view, setView] = useState('directory'); // directory, matrix, expiring
@@ -249,8 +250,9 @@ export default function PersonnelManagementPage() {
             {/* Content Area */}
             <div className="flex-1 overflow-y-auto glass-scrollbar p-6">
                 {loading ? (
-                    <div className="flex items-center justify-center h-full">
-                        <div style={{ color: 'rgba(255, 255, 255, 0.6)' }}>Loading personnel data...</div>
+                    <div className="flex flex-col items-center justify-center h-full gap-4">
+                        <MatrixLogoRacer size={160} duration={4} />
+                        <div className="text-gray-400 animate-pulse">Loading personnel data...</div>
                     </div>
                 ) : view === 'directory' ? (
                     <DirectoryView
@@ -1637,8 +1639,9 @@ function MatrixView({ personnel, competencyMatrix, loading, onMatrixUpdate }) {
 
     if (loading || !localMatrix) {
         return (
-            <div className="flex items-center justify-center h-full">
-                <div style={{ color: 'rgba(255, 255, 255, 0.6)' }}>Loading competency matrix...</div>
+            <div className="flex flex-col items-center justify-center h-full gap-4">
+                <MatrixLogoRacer size={160} duration={4} />
+                <div className="text-gray-400 animate-pulse">Loading competency matrix...</div>
             </div>
         );
     }

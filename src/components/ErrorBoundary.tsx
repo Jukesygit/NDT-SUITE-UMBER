@@ -3,7 +3,7 @@
  * Catches JavaScript errors anywhere in the component tree
  */
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Component, ErrorInfo, ReactNode } from 'react';
 import { store } from '../store';
 import { showNotification } from '../store/slices/uiSlice';
 

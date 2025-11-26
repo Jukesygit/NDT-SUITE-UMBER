@@ -1,0 +1,4 @@
+Notes for ndt suite,
+deal with double area calculation of overlaps in csv, maybe big csv into composite. 
+-report from strake and scans=Composite on visio canvas, where the first page lets you slect area to zoom in on and that zoomed in area will appear later as its own page to comment on, that zoomed section of the heatmap is then anootatable on its own page with the abilty to make comments.
+Menu when setting up strake required coverage where you can use the GA+text fields to figure it out.
