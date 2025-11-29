@@ -255,10 +255,8 @@ a,
     pointer-events: auto !important;
 }
 
-/* Fix text colors for legacy content */
-.text-white {
-    color: var(--text-primary) !important;
-}
+/* REMOVED: Was breaking Tailwind text-white class
+   .text-white override moved to specific legacy selectors if needed */
 
 /* Responsive spacing helpers */
 @media (max-width: 768px) {

@@ -6,6 +6,8 @@ import competencyService from '../services/competency-service.js';
 import { shouldShowCertificationFields, shouldShowDateFields, getInputType, getPlaceholder, filterOutPersonalDetails, getPersonalDetails, formatValue } from '../utils/competency-field-utils.js';
 import { themes, saveTheme, getCurrentTheme } from '../themes.js';
 import { MatrixLogoRacer } from '../components/MatrixLogoLoader';
+import { RandomMatrixSpinner } from '../components/MatrixSpinners';
+import { useUserNotifications } from '../hooks/queries/useUserNotifications';
 
 export default function ProfilePageNew() {
     const [loading, setLoading] = useState(true);
@@ -46,6 +48,9 @@ export default function ProfilePageNew() {
     const [permissionRequests, setPermissionRequests] = useState([]);
     const [requestedRole, setRequestedRole] = useState('');
     const [requestMessage, setRequestMessage] = useState('');
+
+    // Notifications - competencies needing attention
+    const { data: changesRequestedComps = [], refetch: refetchNotifications } = useUserNotifications();
     const [submittingRequest, setSubmittingRequest] = useState(false);
     const [requestError, setRequestError] = useState('');
     const [requestSuccess, setRequestSuccess] = useState('');
@@ -306,10 +311,12 @@ export default function ProfilePageNew() {
             };
 
             // Set status - use 'pending_approval' if document was just added (new or changed)
+            // OR if this is a resubmission after changes were requested
             const documentJustAdded = editFormData.document_url &&
                 (editingCompetency.isNew || editFormData.document_url !== editingCompetency.document_url);
+            const isResubmission = editingCompetency.status === 'changes_requested';
 
-            if (documentJustAdded) {
+            if (documentJustAdded || isResubmission) {
                 dataToSave.status = 'pending_approval';
             } else if (editingCompetency.isNew) {
                 // New competency without document
@@ -346,6 +353,14 @@ export default function ProfilePageNew() {
             }
 
             await loadData();
+            // Refresh notifications to update the alert banner
+            refetchNotifications();
+
+            // Show success message for resubmissions
+            if (isResubmission) {
+                alert('Document resubmitted successfully! An admin will review your changes.');
+            }
+
             setEditingCompetency(null);
             setEditFormData({});
         } catch (error) {
@@ -664,7 +679,8 @@ export default function ProfilePageNew() {
                                 showParticles: true,
                                 particleCount: 20,
                                 gradientColors: ['#34d399', '#60a5fa'],
-                                height: '100px'
+                                height: '100px',
+                                showLogo: false
                             }
                         );
                         container.appendChild(header);
@@ -676,6 +692,102 @@ export default function ProfilePageNew() {
             {/* Content */}
             <div className="flex-1 overflow-y-auto glass-scrollbar p-6">
                 <div className="max-w-4xl mx-auto space-y-6">
+                    {/* Changes Requested Alert Banner */}
+                    {changesRequestedComps.length > 0 && (
+                        <div
+                            style={{
+                                background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(245, 158, 11, 0.05) 100%)',
+                                border: '1px solid rgba(245, 158, 11, 0.3)',
+                                borderRadius: '12px',
+                                padding: '16px 20px',
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+                                <div
+                                    style={{
+                                        width: '40px',
+                                        height: '40px',
+                                        borderRadius: '10px',
+                                        background: 'rgba(245, 158, 11, 0.2)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        flexShrink: 0,
+                                    }}
+                                >
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2">
+                                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                        <line x1="12" y1="9" x2="12" y2="13" />
+                                        <line x1="12" y1="17" x2="12.01" y2="17" />
+                                    </svg>
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: '15px', fontWeight: '600', color: '#f59e0b', marginBottom: '4px' }}>
+                                        Action Required
+                                    </div>
+                                    <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '12px' }}>
+                                        {changesRequestedComps.length} competenc{changesRequestedComps.length === 1 ? 'y needs' : 'ies need'} your attention.
+                                        An admin has requested changes to your submitted documents.
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        {changesRequestedComps.map((comp) => (
+                                            <div
+                                                key={comp.id}
+                                                style={{
+                                                    background: 'rgba(0, 0, 0, 0.2)',
+                                                    borderRadius: '8px',
+                                                    padding: '12px',
+                                                }}
+                                            >
+                                                <div style={{ fontSize: '14px', fontWeight: '500', color: '#ffffff', marginBottom: '4px' }}>
+                                                    {comp.competency?.name || 'Competency'}
+                                                </div>
+                                                {comp.notes && (
+                                                    <div style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '8px' }}>
+                                                        <span style={{ color: '#f59e0b' }}>Admin note:</span> "{comp.notes}"
+                                                    </div>
+                                                )}
+                                                <button
+                                                    onClick={() => {
+                                                        // Find and edit this competency
+                                                        const fullComp = competencies.find(c => c.id === comp.id);
+                                                        if (fullComp) {
+                                                            const definition = competencyDefinitions.find(d => d.id === fullComp.competency_id);
+                                                            setEditingCompetency(fullComp);
+                                                            setEditFormData({
+                                                                definition: definition,
+                                                                value: fullComp.value || '',
+                                                                issuing_body: fullComp.issuing_body || '',
+                                                                certification_id: fullComp.certification_id || '',
+                                                                issue_date: fullComp.issue_date || '',
+                                                                expiry_date: fullComp.expiry_date || '',
+                                                                witness_required: fullComp.witness_required || false,
+                                                                witnessed_by: fullComp.witnessed_by || '',
+                                                                document_url: fullComp.document_url || null,
+                                                                document_name: fullComp.document_name || null,
+                                                                notes: ''
+                                                            });
+                                                        }
+                                                    }}
+                                                    className="btn btn--sm"
+                                                    style={{
+                                                        background: 'rgba(245, 158, 11, 0.2)',
+                                                        color: '#f59e0b',
+                                                        border: '1px solid rgba(245, 158, 11, 0.3)',
+                                                        padding: '6px 12px',
+                                                        fontSize: '12px',
+                                                    }}
+                                                >
+                                                    Edit & Resubmit
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Basic Profile Information */}
                     <div className="glass-card" style={{ padding: '24px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
@@ -725,7 +837,7 @@ export default function ProfilePageNew() {
                                         alignItems: 'center',
                                         justifyContent: 'center'
                                     }}>
-                                        <div className="spinner" style={{ width: '30px', height: '30px' }}></div>
+                                        <RandomMatrixSpinner size={40} />
                                     </div>
                                 )}
                             </div>
@@ -1210,6 +1322,11 @@ export default function ProfilePageNew() {
                                                                 Pending Review
                                                             </span>
                                                         )}
+                                                        {comp.status === 'changes_requested' && (
+                                                            <span className="glass-badge" style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#f87171', fontSize: '9px', padding: '2px 6px', marginLeft: '4px', animation: 'pulse 2s infinite' }}>
+                                                                Changes Requested
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 )}
                                                 {!comp.document_name && (
@@ -1405,7 +1522,7 @@ export default function ProfilePageNew() {
                     }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
                             <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#ffffff', margin: 0 }}>
-                                {editingCompetency.isNew ? 'Add' : 'Edit'} {editFormData.definition?.name || 'Certification'}
+                                {editingCompetency.status === 'changes_requested' ? 'Resubmit' : editingCompetency.isNew ? 'Add' : 'Edit'} {editFormData.definition?.name || 'Certification'}
                             </h3>
                             <button
                                 onClick={() => { setEditingCompetency(null); setEditFormData({}); }}
@@ -1417,6 +1534,36 @@ export default function ProfilePageNew() {
                                 </svg>
                             </button>
                         </div>
+
+                        {/* Resubmission Notice */}
+                        {editingCompetency.status === 'changes_requested' && (
+                            <div
+                                style={{
+                                    background: 'rgba(245, 158, 11, 0.1)',
+                                    border: '1px solid rgba(245, 158, 11, 0.3)',
+                                    borderRadius: '8px',
+                                    padding: '12px',
+                                    marginBottom: '8px',
+                                }}
+                            >
+                                <div style={{ fontSize: '13px', fontWeight: '600', color: '#f59e0b', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                        <line x1="12" y1="9" x2="12" y2="13" />
+                                        <line x1="12" y1="17" x2="12.01" y2="17" />
+                                    </svg>
+                                    Changes Requested by Admin
+                                </div>
+                                {editingCompetency.notes && (
+                                    <div style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.8)', marginBottom: '8px' }}>
+                                        "{editingCompetency.notes}"
+                                    </div>
+                                )}
+                                <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                                    Please make the requested changes and save to resubmit for review.
+                                </div>
+                            </div>
+                        )}
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                             {shouldShowCertificationFields(editFormData.definition) && (
@@ -1481,16 +1628,39 @@ export default function ProfilePageNew() {
                                         alignItems: 'center',
                                         gap: '12px',
                                         padding: '12px 16px',
-                                        background: 'rgba(16, 185, 129, 0.1)',
-                                        border: '1px solid rgba(16, 185, 129, 0.3)',
+                                        background: editingCompetency.status === 'changes_requested' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                                        border: `1px solid ${editingCompetency.status === 'changes_requested' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`,
                                         borderRadius: '8px'
                                     }}>
-                                        <svg style={{ width: '20px', height: '20px', color: '#10b981', flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg style={{ width: '20px', height: '20px', color: editingCompetency.status === 'changes_requested' ? '#f59e0b' : '#10b981', flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                         </svg>
                                         <span style={{ flex: 1, color: '#ffffff', fontSize: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                             {editFormData.document_name}
                                         </span>
+                                        <label
+                                            style={{
+                                                padding: '4px 10px',
+                                                fontSize: '12px',
+                                                color: 'var(--accent-primary)',
+                                                background: 'rgba(96, 165, 250, 0.1)',
+                                                border: '1px solid rgba(96, 165, 250, 0.3)',
+                                                borderRadius: '4px',
+                                                cursor: uploadingDocument ? 'wait' : 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px'
+                                            }}
+                                        >
+                                            {uploadingDocument ? 'Uploading...' : 'Replace'}
+                                            <input
+                                                type="file"
+                                                accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,.pdf"
+                                                onChange={handleDocumentUpload}
+                                                disabled={uploadingDocument}
+                                                style={{ display: 'none' }}
+                                            />
+                                        </label>
                                         <button
                                             type="button"
                                             onClick={handleRemoveDocument}
@@ -1520,7 +1690,7 @@ export default function ProfilePageNew() {
                                     >
                                         {uploadingDocument ? (
                                             <>
-                                                <div className="spinner" style={{ width: '24px', height: '24px', marginBottom: '8px' }}></div>
+                                                <div style={{ marginBottom: '8px' }}><RandomMatrixSpinner size={32} /></div>
                                                 <span style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '13px' }}>Uploading...</span>
                                             </>
                                         ) : (
@@ -1574,7 +1744,10 @@ export default function ProfilePageNew() {
                                 style={{ flex: 1 }}
                                 disabled={saving}
                             >
-                                {saving ? 'Saving...' : (editingCompetency.isNew ? 'Add Certification' : 'Save Changes')}
+                                {saving ? 'Saving...' : (
+                                    editingCompetency.status === 'changes_requested' ? 'Resubmit for Review' :
+                                    editingCompetency.isNew ? 'Add Certification' : 'Save Changes'
+                                )}
                             </button>
                         </div>
                     </div>

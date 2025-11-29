@@ -48,6 +48,8 @@
     "@reduxjs/toolkit": "^2.10.1",
     "@supabase/supabase-js": "^2.75.0",
     "@tailwindcss/postcss": "^4.1.16",
+    "@tanstack/react-query": "^5.90.11",
+    "@tanstack/react-query-devtools": "^5.91.1",
     "autoprefixer": "^10.4.21",
     "bcryptjs": "^3.0.3",
     "crypto-js": "^4.2.0",

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import authManager from '../auth-manager.js';
 import syncStatus from './sync-status.js';
 import { LogoGradientShift } from './MatrixLogoAnimated';
+import { NotificationBell } from './NotificationBell';
 
 // Navigation configuration
 const navigationConfig = [
@@ -130,19 +131,13 @@ function LayoutNew() {
     return toolsItem?.children?.some(child => child.path === location.pathname);
   };
 
-  const handleLogout = async () => {
-    try {
-      console.log('LayoutNew: Logout initiated');
-      await authManager.logout();
-      // Wait a bit for auth state to propagate
-      await new Promise(resolve => setTimeout(resolve, 100));
-      // Navigate to login
-      navigate('/login', { replace: true });
-    } catch (error) {
-      console.error('LayoutNew: Error logging out:', error);
-      // Navigate anyway to ensure user gets to login screen
-      navigate('/login', { replace: true });
-    }
+  const handleLogout = () => {
+    // Navigate immediately for instant feedback
+    navigate('/login', { replace: true });
+    // Then cleanup in background (non-blocking)
+    authManager.logout().catch(error => {
+      console.error('LayoutNew: Error during logout cleanup:', error);
+    });
   };
 
   // Filter navigation based on admin status
@@ -157,7 +152,7 @@ function LayoutNew() {
         <div className="header__container">
           <Link to="/" className="header__brand">
             <LogoGradientShift size={44} />
-            <span>NDT Suite</span>
+            <span>Matrix Hub</span>
           </Link>
 
           <nav className="header__nav">
@@ -225,6 +220,7 @@ function LayoutNew() {
           </nav>
 
           <div className="header__actions">
+            <NotificationBell />
             <button
               onClick={handleLogout}
               className="btn btn--ghost btn--sm"

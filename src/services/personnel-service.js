@@ -15,68 +15,76 @@ class PersonnelService {
             throw new Error('Supabase not configured');
         }
 
-        // First get all profiles
-        const { data: profiles, error: profilesError } = await supabase
-            .from('profiles')
-            .select(`
-                *,
-                organizations(id, name)
-            `)
-            .order('username', { ascending: true });
-
-        if (profilesError) throw profilesError;
-
-        // Then get competencies for each profile
-        const profilesWithCompetencies = await Promise.all(
-            profiles.map(async (profile) => {
-                const { data: competencies, error: compError } = await supabase
-                    .from('employee_competencies')
-                    .select(`
+        // Fetch profiles and all competencies in parallel (2 queries instead of N+1)
+        const [profilesResult, competenciesResult] = await Promise.all([
+            supabase
+                .from('profiles')
+                .select(`
+                    *,
+                    organizations(id, name)
+                `)
+                .order('username', { ascending: true }),
+            supabase
+                .from('employee_competencies')
+                .select(`
+                    id,
+                    user_id,
+                    value,
+                    expiry_date,
+                    status,
+                    document_url,
+                    document_name,
+                    notes,
+                    competency_id,
+                    created_at,
+                    issuing_body,
+                    certification_id,
+                    witness_checked,
+                    witnessed_by,
+                    witnessed_at,
+                    witness_notes,
+                    competency_definitions!inner(
                         id,
-                        value,
-                        expiry_date,
-                        status,
-                        document_url,
-                        document_name,
-                        notes,
-                        competency_id,
-                        created_at,
-                        issuing_body,
-                        certification_id,
-                        witness_checked,
-                        witnessed_by,
-                        witnessed_at,
-                        witness_notes,
-                        competency_definitions!inner(
+                        name,
+                        description,
+                        field_type,
+                        category_id,
+                        competency_categories(
                             id,
                             name,
-                            description,
-                            field_type,
-                            category_id,
-                            competency_categories(
-                                id,
-                                name,
-                                description
-                            )
+                            description
                         )
-                    `)
-                    .eq('user_id', profile.id);
+                    )
+                `)
+        ]);
 
-                // Flatten the competency_definitions structure and nested category
-                const flattenedCompetencies = (competencies || []).map(comp => ({
-                    ...comp,
-                    competency: {
-                        ...comp.competency_definitions,
-                        category: comp.competency_definitions?.competency_categories || null
-                    }
-                }));
+        if (profilesResult.error) throw profilesResult.error;
+        if (competenciesResult.error) throw competenciesResult.error;
 
-                return {
-                    ...profile,
-                    competencies: flattenedCompetencies || []
-                };
-            })
-        );
+        const profiles = profilesResult.data;
+        const allCompetencies = competenciesResult.data || [];
+
+        // Group competencies by user_id for efficient lookup
+        const competenciesByUser = {};
+        allCompetencies.forEach(comp => {
+            if (!competenciesByUser[comp.user_id]) {
+                competenciesByUser[comp.user_id] = [];
+            }
+            // Flatten the competency_definitions structure
+            competenciesByUser[comp.user_id].push({
+                ...comp,
+                competency: {
+                    ...comp.competency_definitions,
+                    category: comp.competency_definitions?.competency_categories || null
+                }
+            });
+        });
+
+        // Attach competencies to each profile
+        const profilesWithCompetencies = profiles.map(profile => ({
+            ...profile,
+            competencies: competenciesByUser[profile.id] || []
+        }));
 
         return profilesWithCompetencies;
     }

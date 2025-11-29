@@ -1,6 +1,6 @@
 import React from 'react';
 import '../styles/glassmorphic.css';
-import { MatrixLogoRacer } from './MatrixLogoLoader';
+import { RandomMatrixSpinner } from './MatrixSpinners';
 
 /**
  * Loading States Component Library
@@ -462,7 +462,7 @@ export const LoadingOverlay = ({
     default: <Spinner size="lg" />,
     ring: <RingSpinner size="lg" />,
     dots: <DotsSpinner size="lg" />,
-    matrix: <MatrixLogoRacer size={180} duration={4} />
+    matrix: <RandomMatrixSpinner size={180} />
   };
 
   // Matrix spinner uses different styling
@@ -521,7 +521,7 @@ export const ContentLoader = ({
       {type === 'spinner' && <Spinner size="lg" />}
       {type === 'ring' && <RingSpinner size="lg" />}
       {type === 'dots' && <DotsSpinner size="lg" />}
-      {type === 'matrix' && <MatrixLogoRacer size={160} duration={4} />}
+      {type === 'matrix' && <RandomMatrixSpinner size={160} />}
       {message && (
         <p className={`text-base font-medium mt-4 ${type === 'matrix' ? 'text-gray-400 animate-pulse' : 'text-secondary'}`}>{message}</p>
       )}

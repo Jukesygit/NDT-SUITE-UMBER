@@ -7,9 +7,12 @@ import supabase, { isSupabaseConfigured } from '../supabase-client.js';
 import UniversalImportModal from '../components/UniversalImportModal.jsx';
 import { shouldShowCertificationFields, shouldShowDateFields, getInputType, getPlaceholder, filterOutPersonalDetails, isNDTCertification, requiresWitnessCheck } from '../utils/competency-field-utils.js';
 import { MatrixLogoRacer } from '../components/MatrixLogoLoader';
+import { useAuth } from '../contexts/AuthContext';
+import { PendingApprovalsView } from './personnel/PendingApprovalsView';
+import { usePendingApprovals } from '../hooks/queries/useCompetencies';
 
 export default function PersonnelManagementPage() {
-    const [view, setView] = useState('directory'); // directory, matrix, expiring
+    const [view, setView] = useState('directory'); // directory, matrix, expiring, approvals
     const [personnel, setPersonnel] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -25,6 +28,12 @@ export default function PersonnelManagementPage() {
     const [importSuccess, setImportSuccess] = useState(false);
     const [sortColumn, setSortColumn] = useState('name'); // name, org, role, total, active, expiring, expired
     const [sortDirection, setSortDirection] = useState('asc'); // asc, desc
+
+    // Auth context for role-based UI
+    const { isAdmin } = useAuth();
+
+    // Pending approvals query (only fetched when user is admin)
+    const pendingApprovalsQuery = usePendingApprovals();
 
     useEffect(() => {
         loadData();
@@ -209,7 +218,8 @@ export default function PersonnelManagementPage() {
                                 showParticles: true,
                                 particleCount: 25,
                                 gradientColors: ['#10b981', '#3b82f6'],
-                                height: '100px'
+                                height: '100px',
+                                showLogo: false
                             }
                         );
                         container.appendChild(header);
@@ -244,6 +254,21 @@ export default function PersonnelManagementPage() {
                             <span className="ml-2 glass-badge badge-red text-xs">{expiringCompetencies.length}</span>
                         )}
                     </button>
+                    {isAdmin && (
+                        <button
+                            onClick={() => setView('approvals')}
+                            className="tab-btn px-4 py-3 text-sm font-medium border-b-2"
+                            style={{
+                                borderColor: view === 'approvals' ? 'var(--accent-primary)' : 'transparent',
+                                color: view === 'approvals' ? 'var(--accent-primary)' : 'rgba(255, 255, 255, 0.6)'
+                            }}
+                        >
+                            Pending Approvals
+                            {(pendingApprovalsQuery.data?.length || 0) > 0 && (
+                                <span className="ml-2 glass-badge badge-yellow text-xs">{pendingApprovalsQuery.data?.length}</span>
+                            )}
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -284,6 +309,8 @@ export default function PersonnelManagementPage() {
                         competencyMatrix={competencyMatrix}
                         loading={!competencyMatrix}
                     />
+                ) : view === 'approvals' && isAdmin ? (
+                    <PendingApprovalsView />
                 ) : (
                     <ExpiringView
                         expiringCompetencies={expiringCompetencies}

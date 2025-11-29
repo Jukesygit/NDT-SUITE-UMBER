@@ -339,37 +339,53 @@ class AuthManager {
         }
     }
 
-    async logout() {
-        console.log('AuthManager: Starting logout...');
+    async signUp(email, password) {
+        await this.ensureInitialized();
 
-        // Clear current user first
+        if (this.useSupabase) {
+            const { data, error } = await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                    emailRedirectTo: `${window.location.origin}/login`
+                }
+            });
+
+            if (error) {
+                return { success: false, error };
+            }
+
+            return { success: true, data };
+        } else {
+            // For local mode, self-registration is not supported
+            // Users should use the account request flow
+            return {
+                success: false,
+                error: { message: 'Self-registration is not available in local mode. Please contact your administrator.' }
+            };
+        }
+    }
+
+    async logout() {
+        // Clear current user immediately
         this.currentUser = null;
         this.currentProfile = null;
 
+        // Dispatch logout event for components to clean up
+        window.dispatchEvent(new CustomEvent('userLoggedOut'));
+
         if (this.useSupabase) {
-            console.log('AuthManager: Signing out from Supabase...');
-            // Sign out and clear all sessions
-            const { error } = await supabase.auth.signOut({ scope: 'global' });
+            // Sign out from current device only (faster than global)
+            const { error } = await supabase.auth.signOut({ scope: 'local' });
             if (error) {
                 console.error('AuthManager: Supabase signOut error:', error);
-            } else {
-                console.log('AuthManager: Supabase signOut successful');
             }
-
-            // Verify session is cleared
-            const { data: { session } } = await supabase.auth.getSession();
-            console.log('AuthManager: Session after signOut:', session);
         } else {
             sessionStorage.removeItem('currentUser');
-            // Dispatch auth state change event for local mode
             window.dispatchEvent(new CustomEvent('authStateChange', {
                 detail: { session: null }
             }));
         }
-
-        // Dispatch logout event for components to clean up
-        window.dispatchEvent(new CustomEvent('userLoggedOut'));
-        console.log('AuthManager: Logout complete');
     }
 
     async resetPassword(email) {
@@ -377,7 +393,7 @@ class AuthManager {
 
         if (this.useSupabase) {
             const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: `${window.location.origin}/`
+                redirectTo: `${window.location.origin}/login`
             });
 
             if (error) {

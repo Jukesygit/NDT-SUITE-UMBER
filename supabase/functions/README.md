@@ -1,8 +1,97 @@
 # Supabase Edge Functions
 
-## Deploying the Edge Function
+## Available Functions
 
-To deploy the `submit-account-request` edge function:
+| Function | Description |
+|----------|-------------|
+| `submit-account-request` | Handle anonymous account request submissions |
+| `approve-account-request` | Process account request approvals |
+| `transfer-asset` | Handle asset transfers between users |
+| `send-email` | Send transactional emails via Resend |
+
+---
+
+## Deploying Edge Functions
+
+### Prerequisites
+
+1. Install the Supabase CLI:
+```bash
+npm install -g supabase
+```
+
+2. Login to Supabase:
+```bash
+supabase login
+```
+
+3. Link your project:
+```bash
+supabase link --project-ref cngschckqhfpwjcvsbad
+```
+
+### Deploy All Functions
+```bash
+supabase functions deploy
+```
+
+### Deploy Individual Function
+```bash
+supabase functions deploy send-email
+supabase functions deploy submit-account-request
+```
+
+---
+
+## Function: send-email
+
+Sends transactional emails via Resend API.
+
+### Setup
+
+1. **Add Resend API Key as Secret:**
+```bash
+supabase secrets set RESEND_API_KEY=re_AmFX7KEW...your_full_key
+```
+
+2. **Deploy the function:**
+```bash
+supabase functions deploy send-email
+```
+
+### Usage
+
+```javascript
+import { sendEmail, sendCompetencyExpirationNotification } from './services/email-service';
+
+// Simple email
+await sendEmail({
+    to: 'user@example.com',
+    subject: 'Hello',
+    html: '<h1>Hello World</h1>',
+});
+
+// Competency expiration notification
+await sendCompetencyExpirationNotification({
+    recipientEmail: 'user@example.com',
+    recipientName: 'John Smith',
+    competency: {
+        name: 'NDT Level II',
+        expiryDate: '2025-02-15',
+    },
+    daysUntilExpiry: 30,
+});
+```
+
+### Security
+- Requires authenticated user (Bearer token)
+- API key stored as Supabase secret (never exposed to client)
+
+---
+
+## Function: submit-account-request
+
+Handle anonymous account request submissions (bypasses RLS).
 
 1. Install the Supabase CLI:
 ```bash

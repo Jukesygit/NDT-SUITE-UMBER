@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Papa from 'papaparse';
 import authManager from '../auth-manager.js';
 import competencyService from '../services/competency-service.js';
+import { RandomMatrixSpinner } from './MatrixSpinners';
 
 export default function CSVImportModal({ onClose, onComplete }) {
     const [file, setFile] = useState(null);
@@ -449,7 +450,9 @@ export default function CSVImportModal({ onClose, onComplete }) {
                     <div>
                         <div className="glass-card" style={{ padding: '32px', textAlign: 'center' }}>
                             <div style={{ marginBottom: '20px' }}>
-                                <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
+                                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
+                                    <RandomMatrixSpinner size={100} />
+                                </div>
                                 <div style={{ fontSize: '16px', fontWeight: '600', color: '#ffffff', marginBottom: '8px' }}>
                                     {progress.status}
                                 </div>
