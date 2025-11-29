@@ -201,6 +201,95 @@ class CompetencyService {
     }
 
     /**
+     * Get all competencies pending document approval
+     * Returns competencies with status='pending_approval' that have documents attached
+     */
+    async getPendingApprovals() {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        // First get the pending competencies
+        const { data: competencies, error: compError } = await supabase
+            .from('employee_competencies')
+            .select(`
+                *,
+                competency:competency_definitions(
+                    id,
+                    name,
+                    description,
+                    field_type,
+                    category:competency_categories(id, name)
+                )
+            `)
+            .eq('status', 'pending_approval')
+            .not('document_url', 'is', null)
+            .order('created_at', { ascending: false });
+
+        if (compError) throw compError;
+        if (!competencies || competencies.length === 0) return [];
+
+        // Get unique user IDs
+        const userIds = [...new Set(competencies.map(c => c.user_id))];
+
+        // Fetch user profiles separately
+        const { data: profiles, error: profileError } = await supabase
+            .from('profiles')
+            .select(`
+                id,
+                username,
+                email,
+                avatar_url,
+                organization_id,
+                organizations(id, name)
+            `)
+            .in('id', userIds);
+
+        if (profileError) throw profileError;
+
+        // Create a map for quick lookup
+        const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+
+        // Combine the data
+        return competencies.map(comp => ({
+            ...comp,
+            user: profileMap.get(comp.user_id) || null
+        }));
+    }
+
+    /**
+     * Request changes to a competency (send back to user with comment)
+     * @param {string} competencyId - Employee competency ID
+     * @param {string} comment - Comment explaining what changes are needed
+     */
+    async requestChanges(competencyId, comment) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        const currentUser = authManager.getCurrentUser();
+        if (!currentUser) {
+            throw new Error('Not authenticated');
+        }
+
+        // Update status and add comment as note
+        const { data, error } = await supabase
+            .from('employee_competencies')
+            .update({
+                status: 'changes_requested',
+                notes: comment,
+                verified_by: currentUser.id,
+                verified_at: new Date().toISOString()
+            })
+            .eq('id', competencyId)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    }
+
+    /**
      * Get expiring competencies
      * @param {number} daysThreshold - Number of days to look ahead (default 30)
      * @param {boolean} includeComments - Include comment information (default false)

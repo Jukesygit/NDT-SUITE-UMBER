@@ -1,4 +1,5 @@
 import React from 'react';
+import { RandomMatrixSpinner } from './MatrixSpinners';
 
 interface MatrixLogoLoaderProps {
   size?: number;
@@ -435,7 +436,7 @@ export const MatrixLoadingOverlay: React.FC<MatrixLoadingOverlayProps> = ({
   const loaders = {
     simple: <MatrixLogoLoader size={size} />,
     full: <MatrixLogoLoaderFull size={size} />,
-    racer: <MatrixLogoRacer size={size} />
+    racer: <RandomMatrixSpinner size={size} />
   };
 
   return (

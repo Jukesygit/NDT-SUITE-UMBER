@@ -1,5 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, Suspense, lazy } from 'react';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { queryClient } from './lib/query-client';
 import './styles/main.css';
 import { initTheme } from './theme.js';
 import { initializeTheme } from './themes.js';
@@ -7,6 +10,9 @@ import authManager from './auth-manager.js';
 import syncService from './sync-service.js';
 import { AnimatedBackground } from './animated-background.js';
 import { initGlobalStyleEnforcer } from './utils/globalStyleEnforcer.js';
+
+// Auth context - provides reactive auth state to all components
+import { AuthProvider } from './contexts/AuthContext';
 
 // Import error boundaries
 import GlobalErrorBoundary from './components/GlobalErrorBoundary.jsx';
@@ -18,20 +24,29 @@ import ProtectedRoute from './components/ProtectedRoute.jsx';
 import LoginPage from './pages/LoginPageNew.jsx';
 
 // Import the Matrix logo loader
-import { MatrixLogoRacer } from './components/MatrixLogoLoader';
+import { RandomMatrixSpinner } from './components/MatrixSpinners';
 
 // Lazy load pages for code splitting
-const AdminDashboard = lazy(() => import('./pages/AdminDashboard.jsx'));
-const ProfilePage = lazy(() => import('./pages/ProfilePageNew.jsx'));
-const DataHubPage = lazy(() => import('./pages/DataHubPage.jsx'));
+const ProfilePage = lazy(() => import('./pages/ProfilePageNew.jsx')); // Primary - battle-tested UI
+const DataHubPage = lazy(() => import('./pages/data-hub/index.tsx'));
 const TofdCalculatorPage = lazy(() => import('./pages/TofdCalculatorPage.jsx'));
 const CscanVisualizerPage = lazy(() => import('./pages/CscanVisualizerPage.jsx'));
 const PecVisualizerPage = lazy(() => import('./pages/PecVisualizerPage.jsx'));
 const Viewer3DPage = lazy(() => import('./pages/Viewer3DPage.jsx'));
 const NiiCalculatorPage = lazy(() => import('./pages/NiiCalculatorPage.jsx'));
-const PersonnelManagementPage = lazy(() => import('./pages/PersonnelManagementPage.jsx'));
+const PersonnelPage = lazy(() => import('./pages/PersonnelManagementPage.jsx')); // Primary - battle-tested UI
 const LogoDemo = lazy(() => import('./pages/LogoDemo.tsx'));
 const LogoAnimatedDemo = lazy(() => import('./pages/LogoAnimatedDemo.tsx'));
+
+// Experimental modernized pages (React Query based) - for continued development
+const ProfilePageNew = lazy(() => import('./pages/profile/ProfilePage.tsx'));
+const PersonnelPageNew = lazy(() => import('./pages/personnel/PersonnelPage.tsx'));
+const AdminPageNew = lazy(() => import('./pages/admin/index.tsx'));
+const AdminStyleDemo = lazy(() => import('./pages/admin/StyleDemo.tsx'));
+
+// Data Hub pages
+const VesselOverviewPage = lazy(() => import('./pages/data-hub/VesselOverviewPage.tsx'));
+const InspectionPage = lazy(() => import('./pages/data-hub/InspectionPage.tsx'));
 
 // Background manager component
 function BackgroundManager() {
@@ -150,7 +165,7 @@ function App() {
         return (
             <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
                 <div className="flex flex-col items-center gap-6">
-                    <MatrixLogoRacer size={280} duration={4} />
+                    <RandomMatrixSpinner size={280} />
                     <div className="text-lg text-gray-400 font-medium animate-pulse">Loading NDT Suite...</div>
                 </div>
             </div>
@@ -161,91 +176,117 @@ function App() {
     const PageLoader = () => (
         <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
             <div className="flex flex-col items-center gap-6">
-                <MatrixLogoRacer size={200} duration={4} />
+                <RandomMatrixSpinner size={200} />
                 <div className="text-base text-gray-400 font-medium animate-pulse">Loading...</div>
             </div>
         </div>
     );
 
     return (
-        <GlobalErrorBoundary>
-            <BrowserRouter
-                future={{
-                    v7_startTransition: true,
-                    v7_relativeSplatPath: true
-                }}
-            >
-                <BackgroundManager />
-                <Suspense fallback={<PageLoader />}>
-                    <Routes>
-                        {/* Public route */}
-                        <Route path="/login" element={
-                            isLoggedIn ? <Navigate to="/" replace /> : <LoginPage onLogin={() => setIsLoggedIn(true)} />
-                        } />
+        <QueryClientProvider client={queryClient}>
+            <AuthProvider>
+                <GlobalErrorBoundary>
+                    <BrowserRouter
+                        future={{
+                            v7_startTransition: true,
+                            v7_relativeSplatPath: true
+                        }}
+                    >
+                    <BackgroundManager />
+                    <Suspense fallback={<PageLoader />}>
+                        <Routes>
+                            {/* Public route */}
+                            <Route path="/login" element={
+                                isLoggedIn ? <Navigate to="/" replace /> : <LoginPage onLogin={() => setIsLoggedIn(true)} />
+                            } />
 
-                        {/* Demo routes - remove after testing */}
-                        <Route path="/logo-demo" element={<LogoDemo />} />
-                        <Route path="/logo-animated" element={<LogoAnimatedDemo />} />
+                            {/* Demo routes - remove after testing */}
+                            <Route path="/logo-demo" element={<LogoDemo />} />
+                            <Route path="/logo-animated" element={<LogoAnimatedDemo />} />
+                            <Route path="/admin-style-demo" element={<AdminStyleDemo />} />
 
-                        {/* Protected routes with layout */}
-                        <Route element={<ProtectedRoute isLoggedIn={isLoggedIn} />}>
-                            <Route element={<Layout />}>
-                                <Route path="/" element={
-                                    <ErrorBoundary>
-                                        <DataHubPage />
-                                    </ErrorBoundary>
-                                } />
-                                <Route path="/profile" element={
-                                    <ErrorBoundary>
-                                        <ProfilePage />
-                                    </ErrorBoundary>
-                                } />
-                                <Route path="/tofd" element={
-                                    <ErrorBoundary>
-                                        <TofdCalculatorPage />
-                                    </ErrorBoundary>
-                                } />
-                                <Route path="/cscan" element={
-                                    <ErrorBoundary>
-                                        <CscanVisualizerPage />
-                                    </ErrorBoundary>
-                                } />
-                                <Route path="/pec" element={
-                                    <ErrorBoundary>
-                                        <PecVisualizerPage />
-                                    </ErrorBoundary>
-                                } />
-                                <Route path="/3d" element={
-                                    <ErrorBoundary>
-                                        <Viewer3DPage />
-                                    </ErrorBoundary>
-                                } />
-                                <Route path="/nii" element={
-                                    <ErrorBoundary>
-                                        <NiiCalculatorPage />
-                                    </ErrorBoundary>
-                                } />
-                                <Route path="/personnel" element={
-                                    <ErrorBoundary>
-                                        <PersonnelManagementPage />
-                                    </ErrorBoundary>
-                                } />
+                            {/* Protected routes with layout */}
+                            <Route element={<ProtectedRoute isLoggedIn={isLoggedIn} />}>
+                                <Route element={<Layout />}>
+                                    <Route path="/" element={
+                                        <ErrorBoundary>
+                                            <DataHubPage />
+                                        </ErrorBoundary>
+                                    } />
+                                    <Route path="/vessel/:assetId/:vesselId" element={
+                                        <ErrorBoundary>
+                                            <VesselOverviewPage />
+                                        </ErrorBoundary>
+                                    } />
+                                    <Route path="/inspection/:assetId/:vesselId" element={
+                                        <ErrorBoundary>
+                                            <InspectionPage />
+                                        </ErrorBoundary>
+                                    } />
+                                    <Route path="/profile" element={
+                                        <ErrorBoundary>
+                                            <ProfilePage />
+                                        </ErrorBoundary>
+                                    } />
+                                    <Route path="/profile-new" element={
+                                        <ErrorBoundary>
+                                            <ProfilePageNew />
+                                        </ErrorBoundary>
+                                    } />
+                                    <Route path="/tofd" element={
+                                        <ErrorBoundary>
+                                            <TofdCalculatorPage />
+                                        </ErrorBoundary>
+                                    } />
+                                    <Route path="/cscan" element={
+                                        <ErrorBoundary>
+                                            <CscanVisualizerPage />
+                                        </ErrorBoundary>
+                                    } />
+                                    <Route path="/pec" element={
+                                        <ErrorBoundary>
+                                            <PecVisualizerPage />
+                                        </ErrorBoundary>
+                                    } />
+                                    <Route path="/3d" element={
+                                        <ErrorBoundary>
+                                            <Viewer3DPage />
+                                        </ErrorBoundary>
+                                    } />
+                                    <Route path="/nii" element={
+                                        <ErrorBoundary>
+                                            <NiiCalculatorPage />
+                                        </ErrorBoundary>
+                                    } />
+                                    <Route path="/personnel" element={
+                                        <ErrorBoundary>
+                                            <PersonnelPage />
+                                        </ErrorBoundary>
+                                    } />
+                                    <Route path="/personnel-new" element={
+                                        <ErrorBoundary>
+                                            <PersonnelPageNew />
+                                        </ErrorBoundary>
+                                    } />
 
-                                {/* Admin only route */}
-                                <Route path="/admin" element={
-                                    <ErrorBoundary>
-                                        <AdminDashboard />
-                                    </ErrorBoundary>
-                                } />
+                                    {/* Admin only route */}
+                                    <Route path="/admin" element={
+                                        <ErrorBoundary>
+                                            <AdminPageNew />
+                                        </ErrorBoundary>
+                                    } />
+                                </Route>
                             </Route>
-                        </Route>
 
-                        {/* Catch all - redirect to home */}
-                        <Route path="*" element={<Navigate to="/" replace />} />
-                    </Routes>
-                </Suspense>
-            </BrowserRouter>
-        </GlobalErrorBoundary>
+                            {/* Catch all - redirect to home */}
+                            <Route path="*" element={<Navigate to="/" replace />} />
+                        </Routes>
+                    </Suspense>
+                    </BrowserRouter>
+                </GlobalErrorBoundary>
+            </AuthProvider>
+            <ReactQueryDevtools initialIsOpen={false} />
+        </QueryClientProvider>
     );
 }
 

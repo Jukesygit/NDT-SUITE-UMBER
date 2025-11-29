@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authManager from '../auth-manager.js';
 import { LogoGradientShift } from '../components/MatrixLogoAnimated';
+import { RandomMatrixSpinner } from '../components/MatrixSpinners';
 
 function LoginPageNew({ onLogin }) {
   const navigate = useNavigate();
@@ -141,10 +142,10 @@ function LoginPageNew({ onLogin }) {
               disabled={isLoading}
             >
               {isLoading ? (
-                <>
-                  <span className="spinner spinner--sm"></span>
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  <RandomMatrixSpinner size={20} />
                   Processing...
-                </>
+                </span>
               ) : (
                 <>
                   {mode === 'login' && 'Sign In'}

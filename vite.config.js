@@ -48,8 +48,12 @@ export default defineConfig({
         "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
         // Workers
         "worker-src 'self' blob:",
+        // Frames - allow embedding PDFs from Supabase storage
+        "frame-src 'self' https://*.supabase.co blob:",
         // Frame ancestors
         "frame-ancestors 'self'",
+        // Object/embed sources for PDFs
+        "object-src 'self' https://*.supabase.co blob:",
         // Base URI
         "base-uri 'self'",
         // Form action
@@ -78,6 +82,8 @@ export default defineConfig({
         "img-src 'self' data: blob: https://*.supabase.co",
         "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
         "worker-src 'self' blob:",
+        "frame-src 'self' https://*.supabase.co blob:",
+        "object-src 'self' https://*.supabase.co blob:",
         "frame-ancestors 'none'",
         "base-uri 'self'",
         "form-action 'self'",

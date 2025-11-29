@@ -11,7 +11,6 @@ class SyncStatus {
         this.container = null;
         this.statusIcon = null;
         this.statusText = null;
-        this.progressBar = null;
         this.setupEventListeners();
     }
 
@@ -43,15 +42,11 @@ class SyncStatus {
                     </svg>
                 </div>
                 <span class="sync-text">Synced</span>
-                <div class="sync-progress" style="display: none;">
-                    <div class="sync-progress-bar"></div>
-                </div>
             </div>
         `;
 
         this.statusIcon = this.container.querySelector('.sync-icon');
         this.statusText = this.container.querySelector('.sync-text');
-        this.progressBar = this.container.querySelector('.sync-progress');
 
         // Add click handler for manual sync
         this.container.addEventListener('click', () => this.handleClick());
@@ -193,7 +188,6 @@ class SyncStatus {
         this.container.classList.add('syncing');
         this.statusText.textContent = `Syncing (${queueSize})`;
         this.showLogoAnimation(true);
-        this.progressBar.style.display = 'none';
         this.container.title = `${queueSize} operation${queueSize === 1 ? '' : 's'} pending`;
     }
 
@@ -206,7 +200,6 @@ class SyncStatus {
         this.container.classList.remove('error', 'syncing', 'offline', 'needs-sync');
         this.container.classList.add('success');
         this.showLogoAnimation(false);
-        this.progressBar.style.display = 'none';
         this.statusText.textContent = 'Synced';
         this.container.title = 'All changes synced';
     }
@@ -221,7 +214,6 @@ class SyncStatus {
         this.container.classList.add('syncing');
         this.statusText.textContent = 'Syncing...';
         this.showLogoAnimation(true);
-        this.progressBar.style.display = 'block';
     }
 
     /**
@@ -233,7 +225,6 @@ class SyncStatus {
         this.container.classList.remove('error', 'syncing', 'offline', 'needs-sync');
         this.container.classList.add('success');
         this.showLogoAnimation(false);
-        this.progressBar.style.display = 'none';
 
         let message = 'Synced';
         if (detail?.downloaded || detail?.uploaded) {
@@ -262,7 +253,6 @@ class SyncStatus {
         this.container.classList.remove('success', 'syncing', 'offline', 'needs-sync');
         this.container.classList.add('error');
         this.showLogoAnimation(false);
-        this.progressBar.style.display = 'none';
         this.statusText.textContent = 'Sync failed';
 
         console.error('Sync error:', error);
@@ -287,7 +277,6 @@ class SyncStatus {
         this.container.classList.remove('error', 'syncing', 'offline', 'needs-sync');
         this.container.classList.add('success');
         this.showLogoAnimation(false);
-        this.progressBar.style.display = 'none';
 
         const timeAgo = this.getTimeAgo(lastSyncTime);
         this.statusText.textContent = 'Synced';
@@ -303,7 +292,6 @@ class SyncStatus {
         this.container.classList.remove('error', 'syncing', 'offline', 'success');
         this.container.classList.add('needs-sync');
         this.showLogoAnimation(false);
-        this.progressBar.style.display = 'none';
         this.statusText.textContent = 'Click to sync';
     }
 
@@ -316,7 +304,6 @@ class SyncStatus {
         this.container.classList.remove('error', 'syncing', 'offline', 'success');
         this.container.classList.add('pending');
         this.showLogoAnimation(false);
-        this.progressBar.style.display = 'none';
         this.statusText.textContent = 'Auto-syncing...';
         this.container.title = 'Changes will sync automatically';
     }
@@ -483,28 +470,6 @@ style.textContent = `
 
     .sync-text {
         white-space: nowrap;
-    }
-
-    .sync-progress {
-        width: 100px;
-        height: 4px;
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 2px;
-        overflow: hidden;
-    }
-
-    .sync-progress-bar {
-        height: 100%;
-        background: #4caf50;
-        width: 0%;
-        transition: width 0.3s ease;
-        animation: progress 1.5s ease-in-out infinite;
-    }
-
-    @keyframes progress {
-        0% { width: 0%; }
-        50% { width: 100%; }
-        100% { width: 0%; }
     }
 
     .migration-modal {
