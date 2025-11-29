@@ -4,8 +4,6 @@
  */
 
 import { Component, ErrorInfo, ReactNode } from 'react';
-import { store } from '../store';
-import { showNotification } from '../store/slices/uiSlice';
 
 interface Props {
   children: ReactNode;
@@ -47,15 +45,6 @@ class ErrorBoundary extends Component<Props, State> {
       error,
       errorInfo,
     });
-
-    // Send error to Redux store for notification
-    store.dispatch(
-      showNotification({
-        type: 'error',
-        message: `Application error: ${error.message}`,
-        duration: 10000,
-      })
-    );
 
     // In production, send error to error reporting service
     if (process.env.NODE_ENV === 'production') {

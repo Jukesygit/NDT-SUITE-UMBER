@@ -3,9 +3,6 @@
  * Centralized error handling and reporting
  */
 
-import { store } from '../store';
-import { showNotification } from '../store/slices/uiSlice';
-
 // Error types
 export enum ErrorType {
   NETWORK = 'NETWORK',
@@ -252,6 +249,7 @@ function logError(errorInfo: any): void {
 
 /**
  * Show notification to user
+ * TODO: Integrate with a toast/notification system when available
  */
 function notifyUser(errorInfo: any): void {
   const notificationType =
@@ -261,13 +259,8 @@ function notifyUser(errorInfo: any): void {
       ? 'warning'
       : 'info';
 
-  store.dispatch(
-    showNotification({
-      type: notificationType as any,
-      message: errorInfo.message,
-      duration: errorInfo.recoverable ? 5000 : 10000,
-    })
-  );
+  // Log to console for now - can be integrated with a toast system later
+  console.warn(`[${notificationType.toUpperCase()}] ${errorInfo.message}`);
 }
 
 /**
@@ -289,7 +282,7 @@ function reportError(errorInfo: any): void {
       url: window.location.href,
       referrer: document.referrer,
     },
-    user: store.getState().auth.user?.id || 'anonymous',
+    user: 'anonymous', // TODO: Get user ID from auth context when needed
   };
 
   // Send to error reporting service
