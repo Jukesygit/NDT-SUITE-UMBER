@@ -108,7 +108,6 @@ export default defineConfig({
         manualChunks: {
           // Vendor chunks
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'redux-vendor': ['@reduxjs/toolkit', 'react-redux', 'redux-persist'],
           'supabase-vendor': ['@supabase/supabase-js'],
           'ui-vendor': ['three', 'html2canvas', 'jspdf'],
           'utils-vendor': ['docx', 'papaparse', 'pdfmake', 'crypto-js', 'bcryptjs']
