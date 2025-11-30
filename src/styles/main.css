@@ -1,296 +1,449 @@
-/* Global Styles */
-body {
-    font-family: 'Inter', sans-serif;
-    overflow: hidden;
-    background: linear-gradient(135deg, #2a2a35 0%, #35353f 50%, #2d2d38 100%);
+/**
+ * NDT SUITE - MAIN ENTRY POINT
+ *
+ * This file imports all design system modules in the correct order.
+ * Layer order matters: tokens → reset → base → components → utilities → layout → animations
+ */
+
+/* ==========================================
+   DESIGN SYSTEM FOUNDATION
+   ========================================== */
+
+/* 1. Design tokens - CSS custom properties */
+@import './design-tokens.css';
+
+/* 2. Modern CSS reset */
+@import './reset.css';
+
+/* 3. Base element styles */
+@import './base.css';
+
+/* ==========================================
+   COMPONENT LIBRARY
+   ========================================== */
+
+/* 4. Reusable component styles */
+@import './components-new.css';
+
+/* ==========================================
+   UTILITIES & HELPERS
+   ========================================== */
+
+/* 5. Utility classes */
+@import './utilities.css';
+
+/* 6. Layout patterns */
+@import './layout.css';
+
+/* 7. Animations */
+@import './animations.css';
+
+/* 8. Design refinements */
+@import './refinements.css';
+
+/* 9. Personnel page fixes */
+@import './personnel-fixes.css';
+
+/* ==========================================
+   APPLICATION-SPECIFIC OVERRIDES
+   ========================================== */
+
+/* Main app container */
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  isolation: isolate;
 }
 
-#main-content {
-    min-height: 0;
-}
-
-/* Input field text colors for better readability */
+/* Input fields - ensure readability with light backgrounds */
 input[type="text"],
 input[type="number"],
 input[type="email"],
 input[type="password"],
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="search"],
+input[type="url"],
+input[type="tel"],
 select,
-textarea,
-.input-field {
-    color: #111827 !important;
-    background-color: #ffffff !important;
+textarea {
+  color: var(--color-neutral-900);
+  background-color: var(--color-neutral-0);
+  border: var(--border-width-thin) solid var(--color-neutral-300);
 }
 
-html.dark input[type="text"],
-html.dark input[type="number"],
-html.dark input[type="email"],
-html.dark input[type="password"],
-html.dark select,
-html.dark textarea,
-html.dark .input-field {
-    color: #111827 !important;
-    background-color: #ffffff !important;
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="date"]:focus,
+input[type="time"]:focus,
+input[type="datetime-local"]:focus,
+input[type="search"]:focus,
+input[type="url"]:focus,
+input[type="tel"]:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--interactive-default);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-/* Ensure select option text is readable */
-select option,
-.input-field option {
-    color: #111827 !important;
-    background-color: #ffffff !important;
+/* Select options */
+select option {
+  color: var(--color-neutral-900);
+  background-color: var(--color-neutral-0);
 }
 
-#app-container {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    transition: flex-direction 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+/* Range inputs for calculators */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: var(--color-neutral-300);
+  border-radius: var(--radius-full);
+  outline: none;
+  cursor: pointer;
 }
 
-#toolbar {
-    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-                height 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-                padding 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-    width: 100%;
-    height: auto;
-    min-height: 80px;
-    padding: 0 1rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: var(--interactive-default);
+  cursor: pointer;
+  border-radius: 50%;
+  border: 2px solid var(--color-neutral-0);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast);
 }
 
-#toolbar-content {
-    transition: flex-direction 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+input[type="range"]::-webkit-slider-thumb:hover {
+  background: var(--interactive-hover);
+  transform: scale(1.1);
 }
 
-#app-container.tool-active {
-    flex-direction: row;
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: var(--interactive-default);
+  cursor: pointer;
+  border-radius: 50%;
+  border: 2px solid var(--color-neutral-0);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast);
 }
 
-#app-container.tool-active #toolbar {
-    width: 90px;
-    height: 100vh;
-    padding: 0;
-    border-bottom: none;
-    border-right: 1.5px solid rgba(255, 255, 255, 0.2);
+input[type="range"]::-moz-range-thumb:hover {
+  background: var(--interactive-hover);
+  transform: scale(1.1);
 }
 
-#app-container.tool-active #toolbar-content {
-    flex-direction: column;
+/* Checkbox styling */
+input[type="checkbox"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  cursor: pointer;
+  accent-color: var(--interactive-default);
 }
 
-#landing-content, 
+/* Radio button styling */
+input[type="radio"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  cursor: pointer;
+  accent-color: var(--interactive-default);
+}
+
+/* File input styling */
+input[type="file"] {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+input[type="file"]::file-selector-button {
+  padding: var(--spacing-2) var(--spacing-4);
+  background: var(--interactive-default);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: var(--font-medium);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  margin-right: var(--spacing-3);
+}
+
+input[type="file"]::file-selector-button:hover {
+  background: var(--interactive-hover);
+}
+
+/* ==========================================
+   TOOL-SPECIFIC STYLES
+   These maintain compatibility with existing tools
+   ========================================== */
+
+/* Tool container */
 .tool-container {
-    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  padding: var(--spacing-8);
+  background: var(--surface-base);
 }
 
-.tool-container {
-    width: 100%;
-    height: 100%;
-    overflow: auto;
+/* 3D Viewer specific styles */
+#tool-3dview,
+.tool-container.viewer-3d {
+  position: relative;
+  padding: 0;
+  overflow: hidden;
+  height: 100%;
+  min-height: calc(100vh - 80px);
 }
 
-/* TOFD Calculator Styles */
-#tool-tofd input[type=range] {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 4px;
-    background: #e2e8f0;
-    border-radius: 2px;
-    outline: none;
-}
-
-html.dark #tool-tofd input[type=range] {
-    background: #475569;
-}
-
-#tool-tofd input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 16px;
-    height: 16px;
-    background: #3b82f6;
-    cursor: pointer;
-    border-radius: 50%;
-    border: 2px solid #fff;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-
-html.dark #tool-tofd input[type=range]::-webkit-slider-thumb {
-    border-color: #1e293b;
-}
-
-#tool-tofd .modal-overlay {
-    transition: opacity 0.2s ease-in-out;
-}
-
-#tool-tofd .modal-content {
-    transition: all 0.2s ease-in-out;
-}
-
-#tool-tofd .loader {
-    border: 4px solid #e5e7eb;
-    border-top: 4px solid #3b82f6;
-    border-radius: 50%;
-    width: 36px;
-    height: 36px;
-    animation: spin 1s linear infinite;
-}
-
-html.dark #tool-tofd .loader {
-    border-color: #4b5563;
-    border-top-color: #60a5fa;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-/* Loading Spinner */
-.loading-spinner {
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    border-top: 2px solid #60a5fa;
-    border-radius: 50%;
-    width: 16px;
-    height: 16px;
-    animation: spin 1s linear infinite;
-}
-
-/* C-Scan Visualizer Styles */
-.file-input-button {
-    transition: background-color 0.2s, box-shadow 0.2s;
-}
-
-.file-input-button:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-
-.progress-bar-inner {
-    transition: width 0.3s ease-in-out;
-}
-
-/* 3D Viewer Styles */
-#tool-3dview {
-    position: relative;
-}
-
-/* Support both old #tool-3dview and new .tool-container for 3D viewer */
 #tool-3dview #ui-container,
 .tool-container #ui-container {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    z-index: 10;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    max-height: calc(100vh - 120px);
-    overflow-y: auto;
+  position: absolute;
+  top: var(--spacing-6);
+  left: var(--spacing-6);
+  z-index: var(--z-dropdown);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
 }
 
 #tool-3dview .control-panel,
 .tool-container .control-panel {
-    background-color: rgba(255, 255, 255, 0.8);
-    -webkit-backdrop-filter: blur(4px);
-    backdrop-filter: blur(4px);
-    padding: 1rem;
-    border-radius: 0.75rem;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    width: 280px;
-    color: #1f2937;
+  background: var(--surface-elevated);
+  backdrop-filter: blur(var(--blur-md));
+  padding: var(--spacing-6);
+  border-radius: var(--radius-xl);
+  border: var(--border-width-thin) solid var(--border-subtle);
+  box-shadow: var(--shadow-lg);
+  width: 300px;
 }
 
 #tool-3dview .panel-header,
 .tool-container .panel-header {
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-primary);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-lg);
 }
 
 #tool-3dview .panel-content,
 .tool-container .panel-content {
-    margin-top: 1rem;
-    transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out;
-    max-height: 1000px;
-    opacity: 1;
-    overflow: hidden;
+  margin-top: var(--spacing-4);
+  transition: max-height var(--transition-normal), opacity var(--transition-normal);
+  max-height: 1000px;
+  opacity: 1;
+  overflow: hidden;
 }
 
 #tool-3dview .panel-content.collapsed,
 .tool-container .panel-content.collapsed {
-    max-height: 0;
-    opacity: 0;
-    margin-top: 0;
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
 }
 
 #tool-3dview .arrow-icon,
 .tool-container .arrow-icon {
-    transition: transform 0.3s ease-in-out;
+  transition: transform var(--transition-normal);
 }
 
 #tool-3dview .arrow-icon.collapsed,
 .tool-container .arrow-icon.collapsed {
-    transform: rotate(-90deg);
+  transform: rotate(-90deg);
 }
 
 #tool-3dview .upload-label,
 #tool-3dview .action-btn,
 .tool-container .upload-label,
 .tool-container .action-btn {
-    cursor: pointer;
-    padding: 0.5rem 1rem;
-    background-color: #4f46e5;
-    color: white;
-    border-radius: 0.5rem;
-    font-weight: 500;
-    transition: background-color 0.2s;
-    display: inline-block;
-    text-align: center;
-    width: 100%;
+  cursor: pointer;
+  padding: var(--spacing-3) var(--spacing-5);
+  background: var(--interactive-default);
+  color: var(--text-inverse);
+  border-radius: var(--radius-md);
+  font-weight: var(--font-medium);
+  font-size: var(--text-base);
+  transition: all var(--transition-fast);
+  display: inline-block;
+  text-align: center;
+  width: 100%;
+  border: none;
 }
 
 #tool-3dview .upload-label:hover,
 #tool-3dview .action-btn:hover,
 .tool-container .upload-label:hover,
 .tool-container .action-btn:hover {
-    background-color: #4338ca;
+  background: var(--interactive-hover);
+  box-shadow: var(--shadow-primary);
 }
 
 #tool-3dview .mode-btn,
 .tool-container .mode-btn {
-    padding: 0.5rem 1rem;
-    border-radius: 0.5rem;
-    border: 1px solid #d1d5db;
-    background-color: white;
-    transition: background-color 0.2s, color 0.2s;
+  padding: var(--spacing-3) var(--spacing-4);
+  border-radius: var(--radius-md);
+  border: var(--border-width-thin) solid var(--border-default);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-weight: var(--font-medium);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+#tool-3dview .mode-btn:hover,
+.tool-container .mode-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
 }
 
 #tool-3dview .mode-btn.active,
 .tool-container .mode-btn.active {
-    background-color: #3b82f6;
-    color: white;
-    border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--color-primary-300);
+  border-color: rgba(59, 130, 246, 0.3);
 }
 
 #tool-3dview .layer-item,
 .tool-container .layer-item {
-    display: flex;
-    align-items: center;
-    padding: 0.5rem;
-    border: 2px solid transparent;
-    border-radius: 0.5rem;
-    cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3);
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  color: var(--text-secondary);
 }
 
 #tool-3dview .layer-item:hover,
 .tool-container .layer-item:hover {
-    background-color: rgba(0,0,0,0.05);
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 #tool-3dview .layer-item.selected,
 .tool-container .layer-item.selected {
-    border-color: #3b82f6;
-    background-color: rgba(59, 130, 246, 0.1);
+  border-color: var(--interactive-default);
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--text-primary);
+}
+
+#renderer-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+#tool-3dview #renderer-container canvas,
+.tool-container #renderer-container canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ==========================================
+   LOADING STATES
+   ========================================== */
+
+.spinner {
+  border: 2px solid var(--border-default);
+  border-top-color: var(--interactive-default);
+  border-radius: 50%;
+  width: 1.5rem;
+  height: 1.5rem;
+  animation: spin 0.6s linear infinite;
+}
+
+.loading-spinner {
+  border: 2px solid var(--border-default);
+  border-top-color: var(--interactive-default);
+  border-radius: 50%;
+  width: 1.25rem;
+  height: 1.25rem;
+  animation: spin 0.6s linear infinite;
+}
+
+/* ==========================================
+   PROGRESS BARS
+   ========================================== */
+
+.progress-bar {
+  width: 100%;
+  height: 0.5rem;
+  background: var(--surface-raised);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-bar-inner {
+  height: 100%;
+  background: var(--interactive-default);
+  border-radius: var(--radius-full);
+  transition: width var(--transition-normal);
+}
+
+/* ==========================================
+   FILE INPUT BUTTONS
+   ========================================== */
+
+.file-input-button {
+  padding: var(--spacing-3) var(--spacing-6);
+  background: var(--interactive-default);
+  color: var(--text-inverse);
+  border-radius: var(--radius-md);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-block;
+}
+
+.file-input-button:hover {
+  background: var(--interactive-hover);
+  box-shadow: var(--shadow-primary);
+}
+
+/* ==========================================
+   RESPONSIVE UTILITIES
+   ========================================== */
+
+@media (max-width: 768px) {
+  .tool-container {
+    padding: var(--spacing-6) var(--spacing-4);
+  }
+
+  #tool-3dview #ui-container,
+  .tool-container #ui-container {
+    top: var(--spacing-4);
+    left: var(--spacing-4);
+    right: var(--spacing-4);
+  }
+
+  #tool-3dview .control-panel,
+  .tool-container .control-panel {
+    width: 100%;
+    max-width: 100%;
+  }
 }

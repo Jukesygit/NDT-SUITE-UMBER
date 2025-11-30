@@ -1,11 +1,75 @@
-node_modules
-dist
-.DS_Store
-*.log
-.vercel
-.claude
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
 
-# Environment variables (contains secrets)
+# Testing
+coverage/
+*.lcov
+.nyc_output
+
+# Production
+build/
+dist/
+*.local
+
+# Environment variables - CRITICAL: Never commit these!
 .env
 .env.local
-.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+*.log
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.claude
+
+# TypeScript
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Cache
+.npm
+.eslintcache
+.stylelintcache
+.prettiercache
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+.temp/
+
+# Logs
+logs/
+
+# OS files
+Thumbs.db
+desktop.ini
+
+# Deployment
+.vercel
+
+# Supabase
+supabase/.branches
+supabase/.temp
+
+# Local data
+*.local.json
+localData/NUL
+nul

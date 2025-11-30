@@ -6,10 +6,11 @@ const AUTH_STORE_KEY = 'auth_data';
 
 // User roles and permissions
 export const ROLES = {
-    ADMIN: 'admin',           // Super admin - access to all orgs
-    ORG_ADMIN: 'org_admin',   // Organization admin - manage users in their org
-    EDITOR: 'editor',         // Can create/edit/delete data
-    VIEWER: 'viewer'          // Read-only access
+    ADMIN: 'admin',           // Super admin - access to all orgs, including admin tools
+    MANAGER: 'manager',       // Manager - access to everything except admin tools
+    ORG_ADMIN: 'org_admin',   // Organization admin - manage users in their org (limited nav)
+    EDITOR: 'editor',         // Can create/edit/delete data (limited nav)
+    VIEWER: 'viewer'          // Read-only access (limited nav)
 };
 
 export const PERMISSIONS = {
@@ -23,6 +24,14 @@ export const PERMISSIONS = {
 
 const ROLE_PERMISSIONS = {
     [ROLES.ADMIN]: [
+        PERMISSIONS.VIEW,
+        PERMISSIONS.CREATE,
+        PERMISSIONS.EDIT,
+        PERMISSIONS.DELETE,
+        PERMISSIONS.EXPORT,
+        PERMISSIONS.MANAGE_USERS
+    ],
+    [ROLES.MANAGER]: [
         PERMISSIONS.VIEW,
         PERMISSIONS.CREATE,
         PERMISSIONS.EDIT,
@@ -199,21 +208,28 @@ class AuthManager {
 
     // Create default ADMIN user and demo organization (local only)
     async createDefaultAdmin() {
+        // Import security utilities
+        const { generateSecurePassword } = await import('./config/security.js');
+
         const adminOrg = {
             id: this.generateId(),
             name: 'SYSTEM',
             createdAt: Date.now()
         };
 
+        // Generate a secure random password
+        const tempPassword = generateSecurePassword(16);
+
         const adminUser = {
             id: this.generateId(),
             username: 'admin',
-            password: 'admin123',
+            password: tempPassword, // This should be hashed server-side in production
             email: 'admin@ndtsuite.local',
             role: ROLES.ADMIN,
             organizationId: adminOrg.id,
             createdAt: Date.now(),
-            isActive: true
+            isActive: true,
+            requirePasswordChange: true // Force password change on first login
         };
 
         const demoOrg = {
@@ -227,20 +243,57 @@ class AuthManager {
 
         await this.saveAuthData();
 
-        console.log('Default admin created (username: admin, password: admin123)');
+        // Store the temporary password securely (only for local development)
+        if (process.env.NODE_ENV === 'development') {
+            console.log('====================================');
+            console.log('LOCAL DEVELOPMENT MODE');
+            console.log('Default admin account created');
+            console.log('Username: admin');
+            console.log('Temporary password:', tempPassword);
+            console.log('IMPORTANT: Change this password immediately');
+            console.log('====================================');
+        } else {
+            console.log('Default admin account created. Check server logs for credentials.');
+        }
     }
 
     // Authentication
     async login(email, password, rememberMe = false) {
         await this.ensureInitialized();
 
+        // Import rate limiter
+        const { loginRateLimiter } = await import('./config/security.js');
+
+        // Check rate limiting (use email as key)
+        const rateLimitCheck = loginRateLimiter.isAllowed(email.toLowerCase());
+        if (!rateLimitCheck.allowed) {
+            const retryMinutes = Math.ceil(rateLimitCheck.retryAfter / 60000);
+            return {
+                success: false,
+                error: `Too many login attempts. Please try again in ${retryMinutes} minutes.`,
+                rateLimited: true,
+                retryAfter: rateLimitCheck.retryAfter
+            };
+        }
+
         if (this.useSupabase) {
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email,
-                password
-            });
+            console.log('AuthManager: Attempting Supabase login for:', email);
+            let data, error;
+            try {
+                const response = await supabase.auth.signInWithPassword({
+                    email,
+                    password
+                });
+                data = response.data;
+                error = response.error;
+                console.log('AuthManager: Supabase response received', { hasData: !!data, hasError: !!error });
+            } catch (fetchError) {
+                console.error('AuthManager: Network/fetch error during login:', fetchError);
+                return { success: false, error: 'Unable to connect to authentication service. Please check your internet connection or try again later.' };
+            }
 
             if (error) {
+                console.error('AuthManager: Login error:', error.message);
                 return { success: false, error: error.message };
             }
 
@@ -251,6 +304,9 @@ class AuthManager {
                     await supabase.auth.signOut();
                     return { success: false, error: 'Account is not active' };
                 }
+
+                // Reset rate limiter on successful login
+                loginRateLimiter.reset(email.toLowerCase());
 
                 // Handle remember me
                 if (rememberMe) {
@@ -292,22 +348,75 @@ class AuthManager {
         }
     }
 
-    async logout() {
-        if (this.useSupabase) {
-            await supabase.auth.signOut();
-        } else {
-            sessionStorage.removeItem('currentUser');
-            // Dispatch auth state change event for local mode
-            window.dispatchEvent(new CustomEvent('authStateChange', {
-                detail: { session: null }
-            }));
-        }
+    async signUp(email, password) {
+        await this.ensureInitialized();
 
+        if (this.useSupabase) {
+            const { data, error } = await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                    emailRedirectTo: `${window.location.origin}/login`
+                }
+            });
+
+            if (error) {
+                return { success: false, error };
+            }
+
+            return { success: true, data };
+        } else {
+            // For local mode, self-registration is not supported
+            // Users should use the account request flow
+            return {
+                success: false,
+                error: { message: 'Self-registration is not available in local mode. Please contact your administrator.' }
+            };
+        }
+    }
+
+    async logout() {
+        // Clear current user immediately
         this.currentUser = null;
         this.currentProfile = null;
 
         // Dispatch logout event for components to clean up
         window.dispatchEvent(new CustomEvent('userLoggedOut'));
+
+        if (this.useSupabase) {
+            // Sign out from current device only (faster than global)
+            const { error } = await supabase.auth.signOut({ scope: 'local' });
+            if (error) {
+                console.error('AuthManager: Supabase signOut error:', error);
+            }
+        } else {
+            sessionStorage.removeItem('currentUser');
+            window.dispatchEvent(new CustomEvent('authStateChange', {
+                detail: { session: null }
+            }));
+        }
+    }
+
+    async resetPassword(email) {
+        await this.ensureInitialized();
+
+        if (this.useSupabase) {
+            const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${window.location.origin}/login`
+            });
+
+            if (error) {
+                return { success: false, error };
+            }
+
+            return { success: true, data };
+        } else {
+            // For local mode, just show a message
+            return {
+                success: false,
+                error: { message: 'Password reset is not available in local mode. Please contact your administrator.' }
+            };
+        }
     }
 
     showPasswordResetForm() {
@@ -403,8 +512,17 @@ class AuthManager {
         return this.currentUser?.role === ROLES.ADMIN;
     }
 
+    isManager() {
+        return this.currentUser?.role === ROLES.MANAGER;
+    }
+
     isOrgAdmin() {
         return this.currentUser?.role === ROLES.ORG_ADMIN;
+    }
+
+    // Check if user has elevated access (admin or manager)
+    hasElevatedAccess() {
+        return this.isAdmin() || this.isManager();
     }
 
     // Permissions
@@ -607,6 +725,9 @@ class AuthManager {
         }
 
         if (this.useSupabase) {
+            // Ensure organization_id is a valid UUID string or null
+            const orgId = userData.organizationId ? String(userData.organizationId) : null;
+
             // Create auth user using signUp (admin.createUser requires service role key)
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email: userData.email,
@@ -614,19 +735,24 @@ class AuthManager {
                 options: {
                     data: {
                         username: userData.username,
-                        role: userData.role,
-                        organization_id: userData.organizationId
+                        role: userData.role || 'user',
+                        organization_id: orgId
                     },
                     emailRedirectTo: window.location.origin
                 }
             });
 
             if (authError) {
+                console.error('Supabase signUp error:', authError);
                 return { success: false, error: authError.message };
             }
 
+            if (!authData.user) {
+                return { success: false, error: 'User creation failed - no user returned' };
+            }
+
             // Profile is automatically created via trigger
-            return { success: true, user: { id: authData.user?.id, ...userData } };
+            return { success: true, user: { id: authData.user.id, ...userData } };
         } else {
             // Check if username already exists
             if (this.authData.users.find(u => u.username === userData.username)) {

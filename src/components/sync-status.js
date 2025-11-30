@@ -11,7 +11,6 @@ class SyncStatus {
         this.container = null;
         this.statusIcon = null;
         this.statusText = null;
-        this.progressBar = null;
         this.setupEventListeners();
     }
 
@@ -30,20 +29,24 @@ class SyncStatus {
         this.container.innerHTML = `
             <div class="sync-status-content">
                 <div class="sync-icon">
-                    <svg class="sync-icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg class="sync-icon-svg sync-icon-default" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                    </svg>
+                    <svg class="sync-logo-svg" width="40" height="22" viewBox="0 0 2256 1202" fill="none" style="display: none;">
+                        <path class="sync-logo-bg" d="M36 1199.2 c-17.1 -4.5 -30.8 -18.8 -34 -35.7 -0.8 -4.4 -1 -75 -0.8 -266 l0.3 -260 3.3 -9.5 c4 -11.5 10.6 -22.3 18.1 -29.9 5.6 -5.6 778.3 -585.2 787.1 -590.3 7 -4.1 16.1 -6.1 25 -5.5 19 1.3 34.9 13.6 41.1 31.7 l2.2 6.5 0.8 239.5 c0.5 140.3 1.3 241.8 1.8 245.2 2.3 13.5 12.2 26.1 25.7 32.5 7.8 3.7 8.1 3.8 19.9 3.8 11.4 0 12.3 -0.2 18.5 -3.1 3.8 -1.8 30.2 -20.7 64.5 -46.1 31.9 -23.6 197.5 -146.4 368 -272.9 181 -134.2 312.7 -231.2 316.5 -233.1 14.7 -7.4 31.1 -6.1 45.8 3.5 7 4.6 11.7 10.2 16.1 19.2 l3.6 7.5 0.6 56 c0.4 30.8 1 146 1.3 256 0.5 129.9 1.1 201.9 1.8 205.5 2.4 12.9 12.6 27.8 23.9 35.1 2.8 1.7 8 4.4 11.7 5.8 l6.7 2.6 193 0.5 c182.3 0.5 193.3 0.7 199 2.4 27.8 8.4 47.4 28.1 55.2 55.7 1.7 6.1 1.8 16.8 1.8 241.9 0 264.2 0.7 239.6 -7.4 256.5 -9.3 19.4 -24.4 32.7 -45.6 40.2 l-8 2.8 -186 0 -186 0 -8.8 -3.1 c-28.6 -10.3 -48 -34.1 -51.7 -63.8 -1.6 -12.8 -1.4 -382.3 0.3 -382.9 0.9 -0.4 0.9 -0.6 0 -0.6 -1 -0.1 -1.3 -6.6 -1.3 -28.9 0 -31.8 -0.5 -35.7 -6.2 -46.6 -4.1 -7.7 -14.5 -18.2 -22.3 -22.3 -17 -8.9 -37 -9.1 -53 -0.4 -2.7 1.5 -166.1 124.2 -363 272.6 -196.9 148.5 -360.4 271.4 -363.4 273.2 -7.8 4.7 -18.6 6.9 -27.8 5.6 -20 -2.9 -36.8 -18.3 -40.3 -37.2 -0.7 -3.5 -1 -90 -1 -249 0 -266.9 0.4 -249.6 -5.7 -260.1 -12.5 -21.4 -39.4 -29.9 -60.8 -19.3 -10.9 5.5 -98.7 71.1 -414.5 309.8 -181.2 136.9 -332 250.2 -335 251.7 -9.8 4.9 -19.9 5.9 -31 3z" stroke="#10b98150" stroke-width="50" fill="none"/>
+                        <path class="sync-logo-light" d="M36 1199.2 c-17.1 -4.5 -30.8 -18.8 -34 -35.7 -0.8 -4.4 -1 -75 -0.8 -266 l0.3 -260 3.3 -9.5 c4 -11.5 10.6 -22.3 18.1 -29.9 5.6 -5.6 778.3 -585.2 787.1 -590.3 7 -4.1 16.1 -6.1 25 -5.5 19 1.3 34.9 13.6 41.1 31.7 l2.2 6.5 0.8 239.5 c0.5 140.3 1.3 241.8 1.8 245.2 2.3 13.5 12.2 26.1 25.7 32.5 7.8 3.7 8.1 3.8 19.9 3.8 11.4 0 12.3 -0.2 18.5 -3.1 3.8 -1.8 30.2 -20.7 64.5 -46.1 31.9 -23.6 197.5 -146.4 368 -272.9 181 -134.2 312.7 -231.2 316.5 -233.1 14.7 -7.4 31.1 -6.1 45.8 3.5 7 4.6 11.7 10.2 16.1 19.2 l3.6 7.5 0.6 56 c0.4 30.8 1 146 1.3 256 0.5 129.9 1.1 201.9 1.8 205.5 2.4 12.9 12.6 27.8 23.9 35.1 2.8 1.7 8 4.4 11.7 5.8 l6.7 2.6 193 0.5 c182.3 0.5 193.3 0.7 199 2.4 27.8 8.4 47.4 28.1 55.2 55.7 1.7 6.1 1.8 16.8 1.8 241.9 0 264.2 0.7 239.6 -7.4 256.5 -9.3 19.4 -24.4 32.7 -45.6 40.2 l-8 2.8 -186 0 -186 0 -8.8 -3.1 c-28.6 -10.3 -48 -34.1 -51.7 -63.8 -1.6 -12.8 -1.4 -382.3 0.3 -382.9 0.9 -0.4 0.9 -0.6 0 -0.6 -1 -0.1 -1.3 -6.6 -1.3 -28.9 0 -31.8 -0.5 -35.7 -6.2 -46.6 -4.1 -7.7 -14.5 -18.2 -22.3 -22.3 -17 -8.9 -37 -9.1 -53 -0.4 -2.7 1.5 -166.1 124.2 -363 272.6 -196.9 148.5 -360.4 271.4 -363.4 273.2 -7.8 4.7 -18.6 6.9 -27.8 5.6 -20 -2.9 -36.8 -18.3 -40.3 -37.2 -0.7 -3.5 -1 -90 -1 -249 0 -266.9 0.4 -249.6 -5.7 -260.1 -12.5 -21.4 -39.4 -29.9 -60.8 -19.3 -10.9 5.5 -98.7 71.1 -414.5 309.8 -181.2 136.9 -332 250.2 -335 251.7 -9.8 4.9 -19.9 5.9 -31 3z" stroke="#10b981" stroke-width="50" fill="none" stroke-dasharray="4000 6000"/>
+                        <circle class="sync-logo-circle1-bg" cx="1558" cy="1065" r="130" stroke="#10b98150" stroke-width="50" fill="none"/>
+                        <circle class="sync-logo-circle1" cx="1558" cy="1065" r="130" stroke="#10b981" stroke-width="50" fill="none" stroke-dasharray="600 600"/>
+                        <circle class="sync-logo-circle2-bg" cx="2020" cy="380" r="130" stroke="#10b98150" stroke-width="50" fill="none"/>
+                        <circle class="sync-logo-circle2" cx="2020" cy="380" r="130" stroke="#10b981" stroke-width="50" fill="none" stroke-dasharray="600 600"/>
                     </svg>
                 </div>
                 <span class="sync-text">Synced</span>
-                <div class="sync-progress" style="display: none;">
-                    <div class="sync-progress-bar"></div>
-                </div>
             </div>
         `;
 
         this.statusIcon = this.container.querySelector('.sync-icon');
         this.statusText = this.container.querySelector('.sync-text');
-        this.progressBar = this.container.querySelector('.sync-progress');
 
         // Add click handler for manual sync
         this.container.addEventListener('click', () => this.handleClick());
@@ -184,8 +187,7 @@ class SyncStatus {
         this.container.classList.remove('error', 'success', 'offline', 'needs-sync');
         this.container.classList.add('syncing');
         this.statusText.textContent = `Syncing (${queueSize})`;
-        this.statusIcon.classList.add('spinning');
-        this.progressBar.style.display = 'none';
+        this.showLogoAnimation(true);
         this.container.title = `${queueSize} operation${queueSize === 1 ? '' : 's'} pending`;
     }
 
@@ -197,8 +199,7 @@ class SyncStatus {
 
         this.container.classList.remove('error', 'syncing', 'offline', 'needs-sync');
         this.container.classList.add('success');
-        this.statusIcon.classList.remove('spinning');
-        this.progressBar.style.display = 'none';
+        this.showLogoAnimation(false);
         this.statusText.textContent = 'Synced';
         this.container.title = 'All changes synced';
     }
@@ -212,8 +213,7 @@ class SyncStatus {
         this.container.classList.remove('error', 'success', 'offline', 'needs-sync');
         this.container.classList.add('syncing');
         this.statusText.textContent = 'Syncing...';
-        this.statusIcon.classList.add('spinning');
-        this.progressBar.style.display = 'block';
+        this.showLogoAnimation(true);
     }
 
     /**
@@ -224,8 +224,7 @@ class SyncStatus {
 
         this.container.classList.remove('error', 'syncing', 'offline', 'needs-sync');
         this.container.classList.add('success');
-        this.statusIcon.classList.remove('spinning');
-        this.progressBar.style.display = 'none';
+        this.showLogoAnimation(false);
 
         let message = 'Synced';
         if (detail?.downloaded || detail?.uploaded) {
@@ -253,8 +252,7 @@ class SyncStatus {
 
         this.container.classList.remove('success', 'syncing', 'offline', 'needs-sync');
         this.container.classList.add('error');
-        this.statusIcon.classList.remove('spinning');
-        this.progressBar.style.display = 'none';
+        this.showLogoAnimation(false);
         this.statusText.textContent = 'Sync failed';
 
         console.error('Sync error:', error);
@@ -278,8 +276,7 @@ class SyncStatus {
 
         this.container.classList.remove('error', 'syncing', 'offline', 'needs-sync');
         this.container.classList.add('success');
-        this.statusIcon.classList.remove('spinning');
-        this.progressBar.style.display = 'none';
+        this.showLogoAnimation(false);
 
         const timeAgo = this.getTimeAgo(lastSyncTime);
         this.statusText.textContent = 'Synced';
@@ -294,8 +291,7 @@ class SyncStatus {
 
         this.container.classList.remove('error', 'syncing', 'offline', 'success');
         this.container.classList.add('needs-sync');
-        this.statusIcon.classList.remove('spinning');
-        this.progressBar.style.display = 'none';
+        this.showLogoAnimation(false);
         this.statusText.textContent = 'Click to sync';
     }
 
@@ -307,10 +303,29 @@ class SyncStatus {
 
         this.container.classList.remove('error', 'syncing', 'offline', 'success');
         this.container.classList.add('pending');
-        this.statusIcon.classList.remove('spinning');
-        this.progressBar.style.display = 'none';
+        this.showLogoAnimation(false);
         this.statusText.textContent = 'Auto-syncing...';
         this.container.title = 'Changes will sync automatically';
+    }
+
+    /**
+     * Toggle between default icon and animated logo
+     */
+    showLogoAnimation(show) {
+        if (!this.container) return;
+
+        const defaultIcon = this.container.querySelector('.sync-icon-default');
+        const logoSvg = this.container.querySelector('.sync-logo-svg');
+
+        if (defaultIcon && logoSvg) {
+            if (show) {
+                defaultIcon.style.display = 'none';
+                logoSvg.style.display = 'block';
+            } else {
+                defaultIcon.style.display = 'block';
+                logoSvg.style.display = 'none';
+            }
+        }
     }
 
     /**
@@ -396,7 +411,7 @@ style.textContent = `
         color: white;
     }
 
-    .sync-status.syncing .sync-icon-svg {
+    .sync-status.syncing .sync-icon-svg.sync-icon-default {
         animation: spin 1s linear infinite;
     }
 
@@ -425,30 +440,36 @@ style.textContent = `
         to { transform: rotate(360deg); }
     }
 
+    /* Matrix logo animation for syncing */
+    .sync-logo-svg {
+        filter: drop-shadow(0 0 4px #10b98180);
+    }
+
+    .sync-logo-light {
+        animation: syncLogoRace 3s linear infinite;
+    }
+
+    .sync-logo-circle1 {
+        animation: syncCircleRace 1.5s linear infinite;
+    }
+
+    .sync-logo-circle2 {
+        animation: syncCircleRace 1.5s linear infinite;
+        animation-delay: 0.75s;
+    }
+
+    @keyframes syncLogoRace {
+        0% { stroke-dashoffset: 0; }
+        100% { stroke-dashoffset: -9500; }
+    }
+
+    @keyframes syncCircleRace {
+        0% { stroke-dashoffset: 0; }
+        100% { stroke-dashoffset: -1200; }
+    }
+
     .sync-text {
         white-space: nowrap;
-    }
-
-    .sync-progress {
-        width: 100px;
-        height: 4px;
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 2px;
-        overflow: hidden;
-    }
-
-    .sync-progress-bar {
-        height: 100%;
-        background: #4caf50;
-        width: 0%;
-        transition: width 0.3s ease;
-        animation: progress 1.5s ease-in-out infinite;
-    }
-
-    @keyframes progress {
-        0% { width: 0%; }
-        50% { width: 100%; }
-        100% { width: 0%; }
     }
 
     .migration-modal {

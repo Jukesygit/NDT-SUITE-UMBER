@@ -137,31 +137,49 @@ USING (
     )
 );
 
--- INSERT: Users can create assets in their organization
+-- INSERT: Users can create assets in their organization (admins can create for any org)
 CREATE POLICY "Users can create assets in their org" ON assets FOR INSERT
 WITH CHECK (
-    organization_id = (SELECT organization_id FROM profiles WHERE id = auth.uid())
-    AND created_by = auth.uid()
-);
-
--- UPDATE: Users can update assets in their org (if they have permission)
-CREATE POLICY "Users can update own org assets" ON assets FOR UPDATE
-USING (
-    organization_id = (SELECT organization_id FROM profiles WHERE id = auth.uid())
-    AND (
-        -- Asset owner
-        created_by = auth.uid()
-        OR
-        -- Editor or higher role
-        (SELECT role FROM profiles WHERE id = auth.uid()) IN ('editor', 'org_admin', 'admin')
+    -- Normal users: can create assets in their own organization
+    (
+        organization_id = (SELECT organization_id FROM profiles WHERE id = auth.uid())
+        AND created_by = auth.uid()
+    )
+    OR
+    -- Admins: can create assets in ANY organization
+    (
+        (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin'
+        AND created_by = auth.uid()
     )
 );
 
--- DELETE: Only editors and above can delete
+-- UPDATE: Users can update assets in their org (admins can update any org)
+CREATE POLICY "Users can update own org assets" ON assets FOR UPDATE
+USING (
+    -- Normal users: can update assets in their org if owner or editor+
+    (
+        organization_id = (SELECT organization_id FROM profiles WHERE id = auth.uid())
+        AND (
+            created_by = auth.uid()
+            OR (SELECT role FROM profiles WHERE id = auth.uid()) IN ('editor', 'org_admin', 'admin')
+        )
+    )
+    OR
+    -- Admins: can update assets in ANY organization
+    (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin'
+);
+
+-- DELETE: Editors and above can delete (admins can delete any org)
 CREATE POLICY "Editors can delete own org assets" ON assets FOR DELETE
 USING (
-    organization_id = (SELECT organization_id FROM profiles WHERE id = auth.uid())
-    AND (SELECT role FROM profiles WHERE id = auth.uid()) IN ('editor', 'org_admin', 'admin')
+    -- Normal users: editors+ can delete in their org
+    (
+        organization_id = (SELECT organization_id FROM profiles WHERE id = auth.uid())
+        AND (SELECT role FROM profiles WHERE id = auth.uid()) IN ('editor', 'org_admin', 'admin')
+    )
+    OR
+    -- Admins: can delete assets in ANY organization
+    (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin'
 );
 
 -- ============================================

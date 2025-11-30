@@ -80,11 +80,24 @@ export class AnimatedBackground {
     }
 
     drawBackground() {
+        // Modern glassmorphic gradient with deep blue/purple tones
         const gradient = this.ctx.createLinearGradient(0, 0, this.canvas.width, this.canvas.height);
-        gradient.addColorStop(0, '#2a2a35');
-        gradient.addColorStop(0.5, '#35353f');
-        gradient.addColorStop(1, '#2d2d38');
+        gradient.addColorStop(0, 'rgba(15, 23, 42, 0.95)'); // Deep slate
+        gradient.addColorStop(0.3, 'rgba(30, 41, 59, 0.9)');
+        gradient.addColorStop(0.6, 'rgba(51, 65, 85, 0.85)');
+        gradient.addColorStop(1, 'rgba(30, 41, 59, 0.95)');
         this.ctx.fillStyle = gradient;
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Add subtle radial gradient overlay for depth
+        const radialGradient = this.ctx.createRadialGradient(
+            this.canvas.width / 2, this.canvas.height / 2, 0,
+            this.canvas.width / 2, this.canvas.height / 2, this.canvas.width * 0.7
+        );
+        radialGradient.addColorStop(0, 'rgba(59, 130, 246, 0.05)'); // Blue accent
+        radialGradient.addColorStop(0.5, 'rgba(147, 51, 234, 0.03)'); // Purple accent
+        radialGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        this.ctx.fillStyle = radialGradient;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     }
 
@@ -100,13 +113,16 @@ export class AnimatedBackground {
             if (p.y < 0) p.y = this.canvas.height;
             if (p.y > this.canvas.height) p.y = 0;
 
-            // Draw particle with glow
-            const grad = this.ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 3);
-            grad.addColorStop(0, `hsla(${p.hue}, 70%, 60%, ${p.opacity})`);
-            grad.addColorStop(1, `hsla(${p.hue}, 70%, 60%, 0)`);
+            // Draw particle with modern glow effect
+            const grad = this.ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 4);
+            // Use blue/cyan tones for modern look
+            const hue = 200 + p.hue * 0.3; // Blue to cyan range
+            grad.addColorStop(0, `hsla(${hue}, 85%, 65%, ${p.opacity * 0.8})`);
+            grad.addColorStop(0.5, `hsla(${hue}, 80%, 60%, ${p.opacity * 0.3})`);
+            grad.addColorStop(1, `hsla(${hue}, 75%, 55%, 0)`);
             this.ctx.fillStyle = grad;
             this.ctx.beginPath();
-            this.ctx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2);
+            this.ctx.arc(p.x, p.y, p.size * 4, 0, Math.PI * 2);
             this.ctx.fill();
         });
     }
@@ -156,20 +172,28 @@ export class AnimatedBackground {
 
         const normalizedDistortion = Math.min(distortion / 30, 1);
         const colorIntensity = Math.pow(normalizedDistortion, 2.5);
-        const greyValue = 15 + 140 * colorIntensity; // Doubled from 70
-        const accentBlend = Math.pow(colorIntensity, 2.5) * 0.35;
 
-        const r = Math.floor((greyValue * (1 - accentBlend) + 120 * accentBlend + specular * 100) * shadeFactor);
-        const g = Math.floor((greyValue * (1 - accentBlend) + 140 * accentBlend + specular * 100) * shadeFactor);
-        const b = Math.floor((greyValue * (1 - accentBlend) + 180 * accentBlend + specular * 100) * shadeFactor);
+        // Modern blue/purple color scheme
+        const baseValue = 20 + 60 * colorIntensity;
+        const accentBlend = Math.pow(colorIntensity, 2) * 0.4;
+
+        // Blue-purple gradient based on distortion
+        const r = Math.floor((baseValue * (1 - accentBlend) + 59 * accentBlend + specular * 80) * shadeFactor);
+        const g = Math.floor((baseValue * (1 - accentBlend) + 130 * accentBlend + specular * 120) * shadeFactor);
+        const b = Math.floor((baseValue * (1 - accentBlend) + 246 * accentBlend + specular * 180) * shadeFactor);
 
         this.ctx.beginPath();
         this.ctx.moveTo(v1.x, v1.y);
         this.ctx.lineTo(v2.x, v2.y);
         this.ctx.lineTo(v3.x, v3.y);
         this.ctx.closePath();
-        this.ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.85)`;
+        this.ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.15)`; // More transparent for glass effect
         this.ctx.fill();
+
+        // Add subtle stroke for definition
+        this.ctx.strokeStyle = `rgba(${r + 20}, ${g + 30}, ${b + 40}, 0.08)`;
+        this.ctx.lineWidth = 0.5;
+        this.ctx.stroke();
     }
 
     drawMesh() {
@@ -201,9 +225,14 @@ export class AnimatedBackground {
         this.updateVertices(time);
         this.drawMesh();
 
-        // Subtle scan line effect
-        this.ctx.fillStyle = 'rgba(100, 150, 200, 0.015)';
-        this.ctx.fillRect(0, (time * 80) % this.canvas.height, this.canvas.width, 2);
+        // Modern subtle scan line effect with gradient
+        const scanY = (time * 50) % this.canvas.height;
+        const scanGradient = this.ctx.createLinearGradient(0, scanY - 20, 0, scanY + 20);
+        scanGradient.addColorStop(0, 'rgba(59, 130, 246, 0)');
+        scanGradient.addColorStop(0.5, 'rgba(59, 130, 246, 0.03)');
+        scanGradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
+        this.ctx.fillStyle = scanGradient;
+        this.ctx.fillRect(0, scanY - 20, this.canvas.width, 40);
 
         this.animationFrameId = requestAnimationFrame(() => this.animate());
     }
@@ -241,14 +270,49 @@ export function createAnimatedHeader(title, subtitle, options = {}) {
     container.style.cssText = `
         position: relative;
         width: 100%;
-        height: ${options.height || '200px'};
+        height: ${options.height || '140px'};
         overflow: hidden;
         margin-bottom: 24px;
+        border-radius: 16px;
+        background: linear-gradient(135deg,
+            rgba(15, 23, 42, 0.9) 0%,
+            rgba(30, 41, 59, 0.85) 50%,
+            rgba(51, 65, 85, 0.9) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.1);
     `;
 
     const canvas = document.createElement('canvas');
-    canvas.style.cssText = 'position: absolute; top: 0; left: 0; width: 100%; height: 100%;';
+    canvas.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: 16px;
+        opacity: 0.8;
+    `;
     container.appendChild(canvas);
+
+    // Glass overlay for extra depth
+    const glassOverlay = document.createElement('div');
+    glassOverlay.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(135deg,
+            rgba(59, 130, 246, 0.05) 0%,
+            transparent 50%,
+            rgba(147, 51, 234, 0.05) 100%);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-radius: 16px;
+        pointer-events: none;
+    `;
+    container.appendChild(glassOverlay);
 
     const content = document.createElement('div');
     content.className = 'animated-header-content';
@@ -260,7 +324,7 @@ export function createAnimatedHeader(title, subtitle, options = {}) {
         align-items: center;
         justify-content: center;
         height: 100%;
-        padding: 40px 20px;
+        padding: 32px 20px;
         text-align: center;
     `;
 
@@ -268,11 +332,15 @@ export function createAnimatedHeader(title, subtitle, options = {}) {
         const titleEl = document.createElement('h1');
         titleEl.textContent = title;
         titleEl.style.cssText = `
-            font-size: 32px;
+            font-size: 28px;
             font-weight: 700;
-            color: #ffffff;
-            margin: 0 0 12px 0;
+            background: linear-gradient(135deg, #ffffff 0%, #e2e8f0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 0 0 8px 0;
             letter-spacing: -0.5px;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         `;
         content.appendChild(titleEl);
     }
@@ -281,10 +349,12 @@ export function createAnimatedHeader(title, subtitle, options = {}) {
         const subtitleEl = document.createElement('p');
         subtitleEl.textContent = subtitle;
         subtitleEl.style.cssText = `
-            font-size: 16px;
-            color: rgba(150, 180, 255, 0.8);
+            font-size: 14px;
+            color: rgba(203, 213, 225, 0.9);
             margin: 0;
             font-weight: 500;
+            letter-spacing: 0.5px;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
         `;
         content.appendChild(subtitleEl);
     }

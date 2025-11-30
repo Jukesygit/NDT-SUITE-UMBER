@@ -43,25 +43,29 @@ class DataManager {
             await authManager.ensureInitialized();
 
             // CLOUD-FIRST: Try to load from Supabase if configured and logged in
+            // Use FAST initialization - only fetch asset metadata, not vessels/scans
+            // Vessels and scans are loaded lazily when user clicks on them
             if (authManager.useSupabase && authManager.isLoggedIn()) {
-                console.log('[DATA-MANAGER] Loading data from Supabase...');
+                console.log('[DATA-MANAGER] Fast init: Loading asset metadata from Supabase...');
                 try {
-                    const downloadResult = await syncService.downloadAllData();
+                    // Use fast method that only fetches asset list (1 query)
+                    // instead of downloadAllData which does N+1 queries for vessels
+                    const downloadResult = await syncService.downloadAssetsOnly();
 
                     if (downloadResult.success) {
-                        console.log(`[DATA-MANAGER] Loaded ${downloadResult.count || 0} items from Supabase`);
+                        console.log(`[DATA-MANAGER] Fast init: Loaded ${downloadResult.count || 0} assets from Supabase`);
 
                         // Load the freshly downloaded data from IndexedDB
                         const loadedData = await indexedDB.loadData();
                         this.data = loadedData;
 
-                        console.log('[DATA-MANAGER] Data loaded from cloud successfully');
+                        console.log('[DATA-MANAGER] Fast init complete - vessels will load on demand');
                         return;
                     } else {
-                        console.warn('[DATA-MANAGER] Failed to load from Supabase, falling back to local cache:', downloadResult.error);
+                        console.warn('[DATA-MANAGER] Fast init failed, falling back to local cache:', downloadResult.error);
                     }
                 } catch (error) {
-                    console.error('[DATA-MANAGER] Error loading from Supabase:', error);
+                    console.error('[DATA-MANAGER] Error during fast init:', error);
                     console.log('[DATA-MANAGER] Falling back to local cache');
                 }
             }
@@ -176,6 +180,132 @@ class DataManager {
         this.data[orgId] = orgData;
     }
 
+    /**
+     * Lazy-load vessels for an asset from Supabase
+     * Called when user clicks on an asset to view its vessels
+     */
+    async loadVesselsForAsset(assetId) {
+        if (!authManager.useSupabase || !authManager.isLoggedIn()) {
+            return false;
+        }
+
+        const asset = this.getAsset(assetId);
+        if (!asset) {
+            console.warn('[DATA-MANAGER] Asset not found:', assetId);
+            return false;
+        }
+
+        // If vessels are already loaded, skip
+        if (asset.vessels && asset.vessels.length > 0) {
+            console.log('[DATA-MANAGER] Vessels already loaded for asset:', asset.name);
+            return true;
+        }
+
+        try {
+            console.log('[DATA-MANAGER] Lazy-loading vessels for asset:', asset.name);
+
+            // Fetch vessels from Supabase
+            const { data: vessels, error } = await supabase
+                .from('vessels')
+                .select('id, name, model_3d_url, created_at, updated_at')
+                .eq('asset_id', assetId);
+
+            if (error) throw error;
+
+            if (!vessels || vessels.length === 0) {
+                console.log('[DATA-MANAGER] No vessels found for asset:', asset.name);
+                return true;
+            }
+
+            console.log(`[DATA-MANAGER] Found ${vessels.length} vessels for asset:`, asset.name);
+
+            // Transform and store vessels
+            asset.vessels = vessels.map(v => ({
+                id: v.id,
+                name: v.name,
+                model3d: null, // Will be loaded separately if needed
+                model3dUrl: v.model_3d_url,
+                images: [],
+                scans: [],
+                strakes: []
+            }));
+
+            // Save to IndexedDB
+            await this.saveToStorage();
+
+            console.log('[DATA-MANAGER] Vessels loaded and cached for asset:', asset.name);
+            return true;
+
+        } catch (error) {
+            console.error('[DATA-MANAGER] Error loading vessels:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Lazy-load scans for a vessel from Supabase
+     * Called when user clicks on a vessel to view its scans
+     */
+    async loadScansForVessel(assetId, vesselId) {
+        if (!authManager.useSupabase || !authManager.isLoggedIn()) {
+            return false;
+        }
+
+        const asset = this.getAsset(assetId);
+        const vessel = asset?.vessels?.find(v => v.id === vesselId);
+
+        if (!vessel) {
+            console.warn('[DATA-MANAGER] Vessel not found:', vesselId);
+            return false;
+        }
+
+        // If scans are already loaded, skip
+        if (vessel.scans && vessel.scans.length > 0) {
+            console.log('[DATA-MANAGER] Scans already loaded for vessel:', vessel.name);
+            return true;
+        }
+
+        try {
+            console.log('[DATA-MANAGER] Lazy-loading scans for vessel:', vessel.name);
+
+            // Fetch scans from Supabase (metadata + thumbnail only, not full data)
+            const { data: scans, error } = await supabase
+                .from('scans')
+                .select('id, name, tool_type, thumbnail, created_at, updated_at')
+                .eq('vessel_id', vesselId)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            if (!scans || scans.length === 0) {
+                console.log('[DATA-MANAGER] No scans found for vessel:', vessel.name);
+                return true;
+            }
+
+            console.log(`[DATA-MANAGER] Found ${scans.length} scans for vessel:`, vessel.name);
+
+            // Transform and store scans
+            vessel.scans = scans.map(s => ({
+                id: s.id,
+                name: s.name,
+                toolType: s.tool_type,
+                thumbnail: s.thumbnail,
+                timestamp: new Date(s.created_at).getTime(),
+                data: null // Full data loaded on demand when scan is opened
+            }));
+
+            // Save to IndexedDB
+            await this.saveToStorage();
+
+            console.log('[DATA-MANAGER] Scans loaded and cached for vessel:', vessel.name);
+            return true;
+
+        } catch (error) {
+            console.error('[DATA-MANAGER] Error loading scans:', error);
+            return false;
+        }
+    }
+
     // Get data for specific organization (ADMIN and SYSTEM org users)
     getOrgData(organizationId) {
         const isSystemOrg = authManager.currentProfile?.organizations?.name === 'SYSTEM';
@@ -219,6 +349,62 @@ class DataManager {
         await this.saveToStorage();
 
         console.log('[DATA-MANAGER] Asset created locally:', asset.name);
+
+        // Queue background sync to Supabase (non-blocking)
+        if (authManager.useSupabase) {
+            syncQueue.add({
+                type: 'insert',
+                table: 'assets',
+                data: {
+                    id: asset.id,
+                    name: asset.name,
+                    organization_id: orgId,
+                    created_by: userId,
+                    created_at: new Date(asset.createdAt).toISOString()
+                }
+            });
+            console.log('[DATA-MANAGER] Queued asset creation for background sync');
+        }
+
+        return asset;
+    }
+
+    /**
+     * Create an asset for a specific organization (admin use)
+     * @param {string} orgId - Target organization ID
+     * @param {string} name - Asset name
+     * @returns {Promise<Object>} Created asset
+     */
+    async createAssetForOrg(orgId, name) {
+        const userId = authManager.getCurrentUser()?.id;
+
+        if (!userId) {
+            throw new Error('Must be logged in to create assets');
+        }
+
+        if (!orgId) {
+            throw new Error('Organization ID is required');
+        }
+
+        const asset = {
+            id: this.generateId(),
+            name: name,
+            vessels: [],
+            organizationId: orgId,
+            createdBy: userId,
+            createdAt: Date.now()
+        };
+
+        // Ensure org data structure exists
+        if (!this.data[orgId]) {
+            this.data[orgId] = { assets: [] };
+        }
+
+        // Add to local data
+        this.data[orgId].assets.push(asset);
+        await this.saveToStorage();
+
+        console.log('[DATA-MANAGER] Asset created for org:', orgId, asset.name);
 
         // Queue background sync to Supabase (non-blocking)
         if (authManager.useSupabase) {

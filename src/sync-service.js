@@ -48,7 +48,10 @@ class SyncService {
     }
 
     /**
-     * Full sync: Upload local data and download remote data
+     * Sync: Upload local changes to Supabase
+     *
+     * NOTE: Downloads are no longer performed here. React Query handles all data
+     * fetching with proper caching. This sync only uploads pending local changes.
      */
     async fullSync() {
         if (this.syncInProgress) {
@@ -61,47 +64,39 @@ class SyncService {
             return { success: false, error: 'User not logged in' };
         }
 
-        console.log('Starting full sync...');
+        console.log('[SYNC] Starting upload sync...');
         this.syncInProgress = true;
 
         try {
-            // Step 1: Download remote data first (to avoid overwriting newer data)
-            console.log('Step 1: Downloading remote data...');
-            const downloadResult = await this.downloadAllData();
-            if (!downloadResult.success) {
-                throw new Error(`Download failed: ${downloadResult.error}`);
-            }
-
-            // Step 2: Upload local data
-            console.log('Step 2: Uploading local data...');
+            // Upload local data to Supabase
+            // Note: Downloads removed - React Query handles fetching with lazy loading
+            console.log('[SYNC] Uploading local changes...');
             const uploadResult = await this.uploadAllData();
             if (!uploadResult.success) {
                 throw new Error(`Upload failed: ${uploadResult.error}`);
             }
 
             this.lastSyncTime = new Date();
-            this.pendingChanges = false; // Clear pending changes after successful sync
-            console.log('Full sync completed successfully');
+            this.pendingChanges = false;
+            console.log('[SYNC] Upload sync completed successfully');
 
             // Dispatch event for UI updates
             window.dispatchEvent(new CustomEvent('syncCompleted', {
                 detail: {
                     success: true,
                     timestamp: this.lastSyncTime,
-                    downloaded: downloadResult.count,
                     uploaded: uploadResult.count
                 }
             }));
 
             return {
                 success: true,
-                downloaded: downloadResult.count,
                 uploaded: uploadResult.count,
                 timestamp: this.lastSyncTime
             };
 
         } catch (error) {
-            console.error('Sync failed:', error);
+            console.error('[SYNC] Upload failed:', error);
 
             window.dispatchEvent(new CustomEvent('syncFailed', {
                 detail: { error: error.message }
@@ -110,6 +105,91 @@ class SyncService {
             return { success: false, error: error.message };
         } finally {
             this.syncInProgress = false;
+        }
+    }
+
+    /**
+     * Fast initialization - only fetch asset metadata, no nested vessels/scans
+     * This is used for initial page load to avoid N+1 queries
+     * Vessels and scans are loaded lazily when user clicks on them
+     */
+    async downloadAssetsOnly() {
+        const user = authManager.getCurrentUser();
+        const orgId = authManager.getCurrentOrganizationId();
+
+        if (!user || !orgId) {
+            return { success: false, error: 'No user or organization' };
+        }
+
+        try {
+            const isSystemOrg = authManager.currentProfile?.organizations?.name === 'SYSTEM';
+
+            // Fetch ONLY asset metadata - no vessels, no scans
+            let query = supabase
+                .from('assets')
+                .select('id, name, organization_id, created_by, created_at, updated_at')
+                .abortSignal(AbortSignal.timeout(10000)); // 10s timeout is enough for just metadata
+
+            if (!isSystemOrg) {
+                query = query.eq('organization_id', orgId);
+            }
+
+            console.log('[SYNC-SERVICE] Fast init: Fetching asset metadata only...');
+            const { data: assets, error: assetsError } = await query;
+
+            if (assetsError) {
+                if (assetsError.code === '57014' || assetsError.message?.includes('timeout')) {
+                    console.warn('[SYNC-SERVICE] Fast init timeout, skipping');
+                    return { success: true, count: 0, skipped: true };
+                }
+                throw assetsError;
+            }
+
+            if (!assets || assets.length === 0) {
+                console.log('[SYNC-SERVICE] Fast init: No assets found');
+                return { success: true, count: 0 };
+            }
+
+            console.log(`[SYNC-SERVICE] Fast init: Found ${assets.length} assets`);
+
+            // Load current local data
+            const localData = await indexedDB.loadData();
+
+            // Process assets without fetching nested data
+            for (const remoteAsset of assets) {
+                const targetOrgId = isSystemOrg ? remoteAsset.organization_id : orgId;
+
+                if (!localData[targetOrgId]) {
+                    localData[targetOrgId] = { assets: [] };
+                }
+
+                let localAsset = localData[targetOrgId].assets.find(a => a.id === remoteAsset.id);
+
+                if (!localAsset) {
+                    localAsset = {
+                        id: remoteAsset.id,
+                        name: remoteAsset.name,
+                        organizationId: remoteAsset.organization_id,
+                        createdBy: remoteAsset.created_by,
+                        createdAt: new Date(remoteAsset.created_at).getTime(),
+                        vessels: [] // Empty - will be loaded lazily
+                    };
+                    localData[targetOrgId].assets.push(localAsset);
+                } else {
+                    // Update name if changed
+                    localAsset.name = remoteAsset.name;
+                }
+            }
+
+            // Save to IndexedDB
+            await indexedDB.saveData(localData);
+            console.log(`[SYNC-SERVICE] Fast init complete: ${assets.length} assets loaded`);
+
+            return { success: true, count: assets.length };
+
+        } catch (error) {
+            console.error('[SYNC-SERVICE] Fast init failed:', error);
+            return { success: false, error: error.message };
         }
     }
 
