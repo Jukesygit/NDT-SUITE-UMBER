@@ -5,7 +5,7 @@
 CREATE TABLE IF NOT EXISTS permission_requests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    requested_role TEXT NOT NULL CHECK (requested_role IN ('admin', 'org_admin', 'editor', 'viewer')),
+    requested_role TEXT NOT NULL CHECK (requested_role IN ('admin', 'manager', 'org_admin', 'editor', 'viewer')),
     user_current_role TEXT NOT NULL,
     message TEXT,
     status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),

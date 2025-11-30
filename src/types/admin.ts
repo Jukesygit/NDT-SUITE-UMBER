@@ -29,7 +29,7 @@ export interface OrganizationStats extends Organization {
 // User Types
 // ============================================================================
 
-export type UserRole = 'admin' | 'org_admin' | 'editor' | 'viewer';
+export type UserRole = 'admin' | 'manager' | 'org_admin' | 'editor' | 'viewer';
 
 export interface AdminUser {
   id: string;

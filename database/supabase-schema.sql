@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     username TEXT UNIQUE NOT NULL,
     email TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('admin', 'org_admin', 'editor', 'viewer')),
+    role TEXT NOT NULL CHECK (role IN ('admin', 'manager', 'org_admin', 'editor', 'viewer')),
     organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS account_requests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     username TEXT NOT NULL,
     email TEXT NOT NULL,
-    requested_role TEXT NOT NULL CHECK (requested_role IN ('admin', 'org_admin', 'editor', 'viewer')),
+    requested_role TEXT NOT NULL CHECK (requested_role IN ('admin', 'manager', 'org_admin', 'editor', 'viewer')),
     organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
     message TEXT,
     status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
@@ -229,6 +229,71 @@ CREATE TRIGGER update_profiles_updated_at
 -- Note: You'll need to create the admin user through Supabase Auth first, then update this
 INSERT INTO organizations (name) VALUES ('SYSTEM') ON CONFLICT DO NOTHING;
 INSERT INTO organizations (name) VALUES ('Demo Organization') ON CONFLICT DO NOTHING;
+
+-- System Announcements table
+-- Global announcements visible to all users, editable only by admin
+CREATE TABLE IF NOT EXISTS system_announcements (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT,
+    message TEXT NOT NULL,
+    type TEXT DEFAULT 'info' CHECK (type IN ('info', 'warning', 'success', 'error')),
+    is_active BOOLEAN DEFAULT true,
+    is_dismissible BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    created_by UUID REFERENCES profiles(id),
+    updated_by UUID REFERENCES profiles(id)
+);
+
+-- Enable RLS
+ALTER TABLE system_announcements ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies for system_announcements
+-- All authenticated users can view active announcements, admins can view all
+CREATE POLICY "Users can view active announcements, admins can view all"
+    ON system_announcements FOR SELECT
+    USING (
+        is_active = true
+        OR EXISTS (
+            SELECT 1 FROM profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+-- Only admins can insert announcements
+CREATE POLICY "Only admins can insert announcements"
+    ON system_announcements FOR INSERT
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+-- Only admins can update announcements
+CREATE POLICY "Only admins can update announcements"
+    ON system_announcements FOR UPDATE
+    USING (
+        EXISTS (
+            SELECT 1 FROM profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+-- Only admins can delete announcements
+CREATE POLICY "Only admins can delete announcements"
+    ON system_announcements FOR DELETE
+    USING (
+        EXISTS (
+            SELECT 1 FROM profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+-- Trigger for updated_at
+CREATE TRIGGER update_system_announcements_updated_at
+    BEFORE UPDATE ON system_announcements
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- After running this schema, you should:
 -- 1. Go to Supabase Auth -> Users and create an admin user

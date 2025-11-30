@@ -233,9 +233,11 @@ export function EditUserModal({ isOpen, onClose, user }: EditUserModalProps) {
                     error={errors.role}
                     required
                     options={[
-                        { value: 'viewer', label: 'Viewer - Read-only access' },
-                        { value: 'editor', label: 'Editor - Can create and edit' },
-                        { value: 'org_admin', label: 'Org Admin - Manage organization' },
+                        { value: 'viewer', label: 'Viewer - Read-only access (Data Hub, Tools, Profile)' },
+                        { value: 'editor', label: 'Editor - Can create and edit (Data Hub, Tools, Profile)' },
+                        { value: 'org_admin', label: 'Org Admin - Manage organization (Data Hub, Tools, Profile)' },
+                        { value: 'manager', label: 'Manager - Full access except Admin tools' },
+                        { value: 'admin', label: 'Admin - Full system access' },
                     ]}
                 />
 

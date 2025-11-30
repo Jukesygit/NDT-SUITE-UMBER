@@ -6,10 +6,11 @@ const AUTH_STORE_KEY = 'auth_data';
 
 // User roles and permissions
 export const ROLES = {
-    ADMIN: 'admin',           // Super admin - access to all orgs
-    ORG_ADMIN: 'org_admin',   // Organization admin - manage users in their org
-    EDITOR: 'editor',         // Can create/edit/delete data
-    VIEWER: 'viewer'          // Read-only access
+    ADMIN: 'admin',           // Super admin - access to all orgs, including admin tools
+    MANAGER: 'manager',       // Manager - access to everything except admin tools
+    ORG_ADMIN: 'org_admin',   // Organization admin - manage users in their org (limited nav)
+    EDITOR: 'editor',         // Can create/edit/delete data (limited nav)
+    VIEWER: 'viewer'          // Read-only access (limited nav)
 };
 
 export const PERMISSIONS = {
@@ -23,6 +24,14 @@ export const PERMISSIONS = {
 
 const ROLE_PERMISSIONS = {
     [ROLES.ADMIN]: [
+        PERMISSIONS.VIEW,
+        PERMISSIONS.CREATE,
+        PERMISSIONS.EDIT,
+        PERMISSIONS.DELETE,
+        PERMISSIONS.EXPORT,
+        PERMISSIONS.MANAGE_USERS
+    ],
+    [ROLES.MANAGER]: [
         PERMISSIONS.VIEW,
         PERMISSIONS.CREATE,
         PERMISSIONS.EDIT,
@@ -503,8 +512,17 @@ class AuthManager {
         return this.currentUser?.role === ROLES.ADMIN;
     }
 
+    isManager() {
+        return this.currentUser?.role === ROLES.MANAGER;
+    }
+
     isOrgAdmin() {
         return this.currentUser?.role === ROLES.ORG_ADMIN;
+    }
+
+    // Check if user has elevated access (admin or manager)
+    hasElevatedAccess() {
+        return this.isAdmin() || this.isManager();
     }
 
     // Permissions

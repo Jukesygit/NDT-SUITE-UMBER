@@ -258,6 +258,12 @@ function App() {
                                             <NiiCalculatorPage />
                                         </ErrorBoundary>
                                     } />
+                                </Route>
+                            </Route>
+
+                            {/* Personnel routes - require elevated access (admin or manager) */}
+                            <Route element={<ProtectedRoute isLoggedIn={isLoggedIn} requireElevatedAccess />}>
+                                <Route element={<Layout />}>
                                     <Route path="/personnel" element={
                                         <ErrorBoundary>
                                             <PersonnelPage />
@@ -268,8 +274,12 @@ function App() {
                                             <PersonnelPageNew />
                                         </ErrorBoundary>
                                     } />
+                                </Route>
+                            </Route>
 
-                                    {/* Admin only route */}
+                            {/* Admin only route */}
+                            <Route element={<ProtectedRoute isLoggedIn={isLoggedIn} requireAdmin />}>
+                                <Route element={<Layout />}>
                                     <Route path="/admin" element={
                                         <ErrorBoundary>
                                             <AdminPageNew />
