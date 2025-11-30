@@ -1,22 +1,26 @@
-import { useEffect, useRef } from 'react';
-import cscanVisualizer from '../tools/cscan-visualizer.js';
+import React from 'react';
+import CscanVisualizer from '../components/CscanVisualizer/CscanVisualizer';
 
+/**
+ * CscanVisualizerPage - Full-bleed page wrapper for the C-Scan tool
+ * Uses negative margins and fixed height to break out of the layout container
+ */
 function CscanVisualizerPage() {
-    const containerRef = useRef(null);
-
-    useEffect(() => {
-        if (containerRef.current) {
-            cscanVisualizer.init(containerRef.current);
-        }
-
-        return () => {
-            if (cscanVisualizer.destroy) {
-                cscanVisualizer.destroy(containerRef.current);
-            }
-        };
-    }, []);
-
-    return <div ref={containerRef} className="tool-container w-full h-full"></div>;
+    return (
+        <div
+            className="cscan-page-wrapper"
+            style={{
+                // Break out of the main__container padding and max-width
+                margin: 'calc(-1 * var(--spacing-8, 2rem))',
+                width: 'calc(100% + 2 * var(--spacing-8, 2rem))',
+                // Calculate height: viewport - header height (use CSS var)
+                height: 'calc(100vh - var(--header-height, 4rem))',
+                maxWidth: 'none',
+            }}
+        >
+            <CscanVisualizer />
+        </div>
+    );
 }
 
 export default CscanVisualizerPage;

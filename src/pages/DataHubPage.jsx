@@ -1,22 +1,9 @@
-import { useEffect, useRef } from 'react';
+import React from 'react';
 import dataHub from '../tools/data-hub.js';
+import ToolContainer from '../components/ToolContainer.jsx';
 
-function DataHubPage() {
-    const containerRef = useRef(null);
-
-    useEffect(() => {
-        if (containerRef.current) {
-            dataHub.init(containerRef.current);
-        }
-
-        return () => {
-            if (dataHub.destroy) {
-                dataHub.destroy(containerRef.current);
-            }
-        };
-    }, []);
-
-    return <div ref={containerRef} className="tool-container w-full h-full"></div>;
-}
+const DataHubPage = () => {
+    return <ToolContainer toolModule={dataHub} />;
+};
 
 export default DataHubPage;

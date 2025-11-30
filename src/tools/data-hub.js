@@ -2,6 +2,7 @@
 import dataManager from '../data-manager.js';
 import reportDialog from '../components/report-dialog.js';
 import { createModernHeader } from '../components/modern-header.js';
+import Plotly from '../utils/plotly.js';
 
 let container, dom = {};
 let currentView = 'assets'; // 'assets', 'vessel-detail', 'scan-detail'
@@ -15,66 +16,68 @@ const HTML = `
     <!-- Modern Header -->
     <div id="data-hub-header-container"></div>
 
-    <div class="glass-panel" style="padding: var(--spacing-md) var(--spacing-lg); flex-shrink: 0; border-radius: 0;">
-        <div class="flex justify-between items-center">
-            <div id="stats-bar" class="flex gap-3 items-center flex-grow text-xs"></div>
-            <div id="loading-indicator" class="hidden items-center gap-2 mr-3">
-                <div class="loading-spinner"></div>
-                <span class="text-xs" style="color: rgba(255, 255, 255, 0.7);">Loading data...</span>
+    <!-- Navigation Tabs - matching Personnel Management style -->
+    <div class="glass-panel" style="border-bottom: 1px solid rgba(255, 255, 255, 0.1); border-radius: 0; flex-shrink: 0; padding: 0;">
+        <div class="flex px-6 justify-between items-center">
+            <div id="stats-bar" class="stat-pills" style="padding: 12px 0;"></div>
+            <div id="loading-indicator" class="hidden items-center" style="gap: var(--spacing-sm);">
+                <div class="spinner"></div>
+                <span class="text-sm text-secondary">Loading...</span>
             </div>
-            <div class="flex gap-1.5">
-                <button id="import-btn" class="btn-secondary text-xs px-2 py-1">
+            <div class="flex items-center" style="gap: var(--spacing-sm); padding: 8px 0;">
+                <button id="import-btn" class="btn btn-secondary text-sm" style="padding: 8px 16px;">
                     Import
                 </button>
-                <button id="export-all-btn" class="btn-secondary text-xs px-2 py-1">
+                <button id="export-all-btn" class="btn btn-secondary text-sm" style="padding: 8px 16px;">
                     Export
                 </button>
-                <button id="new-asset-btn" class="btn-primary text-xs px-2 py-1">
+                <button id="new-asset-btn" class="btn btn-primary text-sm" style="padding: 8px 16px;">
                     + Asset
                 </button>
             </div>
         </div>
     </div>
 
-    <div id="breadcrumb" class="px-4 py-1.5 flex items-center gap-2 text-xs flex-shrink-0" style="background: rgba(255, 255, 255, 0.03); border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
-        <button id="breadcrumb-home" style="color: var(--accent-primary-bright);" class="hover:underline">Home</button>
+    <div id="breadcrumb" class="flex items-center flex-shrink-0 text-sm" style="padding: var(--spacing-md) var(--spacing-lg); gap: var(--spacing-sm); background: var(--glass-bg-secondary); border-bottom: 1px solid var(--glass-border);">
+        <button id="breadcrumb-home" class="hover:underline text-accent">Home</button>
     </div>
 
-    <div class="flex-grow overflow-y-auto glass-scrollbar p-6">
+    <div class="flex-grow overflow-y-auto glass-scrollbar" style="padding: var(--spacing-xl);">
         <div id="assets-view"></div>
         <div id="vessel-detail-view" class="hidden"></div>
         <div id="scan-detail-view" class="hidden"></div>
     </div>
 
     <!-- Expandable Visualizer Container -->
-    <div id="expandable-visualizer" class="hidden fixed inset-0 z-50 bg-black bg-opacity-75 flex items-center justify-center" style="animation: fadeIn 0.2s ease-out;">
-        <div id="visualizer-container" class="bg-white dark:bg-gray-900 rounded-lg shadow-2xl overflow-hidden" style="
+    <div id="expandable-visualizer" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(6px); animation: fadeIn 0.2s ease-out;">
+        <div id="visualizer-container" class="glass-card overflow-hidden" style="
             width: 90vw;
             height: 90vh;
             max-width: 1800px;
             max-height: 1200px;
             animation: expandIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            border-radius: var(--radius-lg);
         ">
             <!-- Header -->
-            <div class="glass-panel" style="padding: 12px 20px; border-radius: 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+            <div class="glass-panel" style="padding: var(--spacing-md) var(--spacing-lg); border-radius: 0; border-bottom: 1px solid var(--glass-border);">
                 <div class="flex justify-between items-center">
-                    <div class="flex items-center gap-3">
-                        <h2 id="visualizer-title" class="text-lg font-bold text-white">Scan Visualizer</h2>
-                        <span id="visualizer-type-badge" class="px-3 py-1 rounded-full text-xs font-medium bg-white bg-opacity-10 text-white border border-white border-opacity-20"></span>
+                    <div class="flex items-center" style="gap: var(--spacing-md);">
+                        <h2 id="visualizer-title" class="text-lg font-bold text-primary">Scan Visualizer</h2>
+                        <span id="visualizer-type-badge" class="glass-badge badge-blue"></span>
                     </div>
-                    <div class="flex gap-2">
-                        <button id="visualizer-open-in-tool-btn" class="bg-white bg-opacity-10 hover:bg-opacity-20 text-white px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center gap-2 border border-white border-opacity-20" title="Open in dedicated tool">
+                    <div class="flex" style="gap: var(--spacing-sm);">
+                        <button id="visualizer-open-in-tool-btn" class="btn btn-secondary text-sm flex items-center" style="gap: var(--spacing-sm);" title="Open in dedicated tool">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
                         </svg>
                         Open in Tool
                     </button>
-                        <button id="visualizer-minimize-btn" class="bg-white bg-opacity-10 hover:bg-opacity-20 text-white p-2 rounded-lg transition-colors border border-white border-opacity-20" title="Minimize">
+                        <button id="visualizer-minimize-btn" class="btn-icon" title="Minimize">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                             </svg>
                         </button>
-                        <button id="visualizer-close-btn" class="bg-white bg-opacity-10 hover:bg-opacity-20 text-white p-2 rounded-lg transition-colors border border-white border-opacity-20" title="Close">
+                        <button id="visualizer-close-btn" class="btn-icon" title="Close">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                             </svg>
@@ -83,23 +86,23 @@ const HTML = `
                 </div>
             </div>
             <!-- Content -->
-            <div id="visualizer-content" class="h-full overflow-auto" style="height: calc(100% - 52px);"></div>
+            <div id="visualizer-content" class="h-full overflow-auto glass-scrollbar" style="height: calc(100% - 60px);"></div>
         </div>
     </div>
 
     <!-- Minimized Visualizer -->
-    <div id="minimized-visualizer" class="hidden fixed bottom-6 right-6 z-40 glass-panel rounded-lg shadow-2xl cursor-pointer hover:shadow-3xl transition-all" style="animation: slideInUp 0.3s ease-out;">
-        <div class="px-4 py-3 flex items-center gap-3">
+    <div id="minimized-visualizer" class="hidden fixed z-40 glass-card cursor-pointer" style="bottom: var(--spacing-xl); right: var(--spacing-xl); animation: slideInUp 0.3s ease-out; border-radius: var(--radius-lg);">
+        <div class="flex items-center" style="padding: var(--spacing-md) var(--spacing-lg); gap: var(--spacing-md);">
             <div class="flex-grow">
-                <div id="minimized-title" class="text-white font-semibold text-sm"></div>
-                <div id="minimized-type" class="text-white text-opacity-70 text-xs"></div>
+                <div id="minimized-title" class="text-primary font-semibold text-sm"></div>
+                <div id="minimized-type" class="text-secondary text-xs"></div>
             </div>
-            <button id="minimized-restore-btn" class="bg-white bg-opacity-10 hover:bg-opacity-20 text-white p-2 rounded transition-colors border border-white border-opacity-20">
+            <button id="minimized-restore-btn" class="btn-icon">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
                 </svg>
             </button>
-            <button id="minimized-close-btn" class="bg-white bg-opacity-10 hover:bg-opacity-20 text-white p-2 rounded transition-colors border border-white border-opacity-20">
+            <button id="minimized-close-btn" class="btn-icon">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                 </svg>
@@ -178,7 +181,8 @@ function cacheDom() {
             showParticles: true,
             particleCount: 25,
             gradientColors: ['#60a5fa', '#34d399'],
-            height: '160px'
+            height: '100px',
+            showLogo: false
         }
     );
     dom.headerContainer.appendChild(header);
@@ -187,54 +191,47 @@ function cacheDom() {
 function renderStats() {
     const stats = dataManager.getStats();
     dom.statsBar.innerHTML = `
-        <div class="stat-badge tooltip" data-tooltip="Total number of assets in the system">
-            <svg class="w-4 h-4" style="opacity: 0.6;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-            </svg>
-            <span class="stat-badge-label">Assets:</span>
-            <span class="stat-badge-value">${stats.totalAssets}</span>
+        <div class="stat-pill tooltip" data-tooltip="Total number of assets in the system">
+            <span class="stat-pill__label">Assets</span>
+            <span class="stat-pill__value">${stats.totalAssets}</span>
         </div>
-        <div class="stat-badge tooltip" data-tooltip="Total number of vessels across all assets">
-            <svg class="w-4 h-4" style="opacity: 0.6;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
-            </svg>
-            <span class="stat-badge-label">Vessels:</span>
-            <span class="stat-badge-value">${stats.totalVessels}</span>
+        <div class="stat-pill tooltip" data-tooltip="Total number of vessels across all assets">
+            <span class="stat-pill__label">Vessels</span>
+            <span class="stat-pill__value">${stats.totalVessels}</span>
         </div>
-        <div class="stat-badge tooltip" data-tooltip="Total number of inspection scans stored">
-            <svg class="w-4 h-4" style="opacity: 0.6;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-            </svg>
-            <span class="stat-badge-label">Scans:</span>
-            <span class="stat-badge-value">${stats.totalScans}</span>
+        <div class="stat-pill tooltip" data-tooltip="Total number of inspection scans stored">
+            <span class="stat-pill__label">Scans</span>
+            <span class="stat-pill__value">${stats.totalScans}</span>
         </div>
-        <div class="stat-badge tooltip" data-tooltip="Scan breakdown: PEC (Pulsed Eddy Current) / C-Scan (Ultrasonic) / 3D Models">
-            <span class="stat-badge-label">PEC:</span>
-            <span class="stat-badge-value">${stats.scansByType.pec || 0}</span>
-            <span style="color: var(--text-dim); margin: 0 4px;">/</span>
-            <span class="stat-badge-label">C-Scan:</span>
-            <span class="stat-badge-value">${stats.scansByType.cscan || 0}</span>
-            <span style="color: var(--text-dim); margin: 0 4px;">/</span>
-            <span class="stat-badge-label">3D:</span>
-            <span class="stat-badge-value">${stats.scansByType['3dview'] || 0}</span>
+        <div class="stat-pill tooltip" data-tooltip="PEC (Pulsed Eddy Current) scans">
+            <span class="stat-pill__label">PEC</span>
+            <span class="stat-pill__value">${stats.scansByType.pec || 0}</span>
+        </div>
+        <div class="stat-pill tooltip" data-tooltip="C-Scan (Ultrasonic) scans">
+            <span class="stat-pill__label">C-Scan</span>
+            <span class="stat-pill__value">${stats.scansByType.cscan || 0}</span>
+        </div>
+        <div class="stat-pill tooltip" data-tooltip="3D Model scans">
+            <span class="stat-pill__label">3D</span>
+            <span class="stat-pill__value">${stats.scansByType['3dview'] || 0}</span>
         </div>
     `;
 }
 
 function updateBreadcrumb() {
-    let breadcrumbHTML = '<button id="breadcrumb-home" style="color: var(--accent-primary-bright);" class="hover:underline">Home</button>';
+    let breadcrumbHTML = '<button id="breadcrumb-home" class="hover:underline text-accent">Home</button>';
 
     if (currentAssetId) {
         const asset = dataManager.getAsset(currentAssetId);
         if (asset) {
-            breadcrumbHTML += ` <span style="color: var(--text-tertiary);">/</span> <button id="breadcrumb-asset" style="color: var(--accent-primary-bright);" class="hover:underline">${asset.name}</button>`;
+            breadcrumbHTML += ` <span class="text-tertiary">/</span> <button id="breadcrumb-asset" class="hover:underline text-accent">${asset.name}</button>`;
         }
     }
 
     if (currentVesselId && currentAssetId) {
         const vessel = dataManager.getVessel(currentAssetId, currentVesselId);
         if (vessel) {
-            breadcrumbHTML += ` <span style="color: var(--text-tertiary);">/</span> <span style="color: var(--text-secondary);">${vessel.name}</span>`;
+            breadcrumbHTML += ` <span class="text-tertiary">/</span> <span class="text-secondary">${vessel.name}</span>`;
         }
     }
 
@@ -266,13 +263,13 @@ function renderAssetsView() {
 
     if (assets.length === 0) {
         dom.assetsView.innerHTML = `
-            <div class="text-center py-12">
-                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="text-center" style="padding: var(--spacing-3xl) 0;">
+                <svg class="mx-auto text-dim" style="width: 48px; height: 48px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
                 </svg>
-                <h3 class="mt-2 text-lg font-medium text-gray-900 dark:text-white">No assets yet</h3>
-                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Get started by creating an asset to organize your scans.</p>
-                <button id="empty-new-asset-btn" class="mt-4 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
+                <h3 class="text-lg font-semibold text-primary" style="margin-top: var(--spacing-md);">No assets yet</h3>
+                <p class="text-sm text-secondary" style="margin-top: var(--spacing-sm);">Get started by creating an asset to organize your scans.</p>
+                <button id="empty-new-asset-btn" class="btn btn-success" style="margin-top: var(--spacing-lg);">
                     Create First Asset
                 </button>
             </div>
@@ -284,71 +281,31 @@ function renderAssetsView() {
     }
 
     dom.assetsView.innerHTML = `
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" style="gap: 16px;">
             ${assets.map((asset, index) => {
                 const vesselCount = asset.vessels.length;
                 const scanCount = asset.vessels.reduce((sum, v) => sum + v.scans.length, 0);
                 return `
-                    <div class="glass-card" data-asset-id="${asset.id}"
-                         style="padding: 0; opacity: 0; animation: slideUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) ${index * 100}ms forwards;">
-                        <div style="padding: var(--spacing-xl);">
-                            <div class="flex justify-between items-start" style="margin-bottom: var(--spacing-lg);">
-                                <h3 style="color: var(--accent-primary-light); font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; margin: 0;">${asset.name}</h3>
-                                <button class="asset-menu-btn" data-asset-id="${asset.id}" aria-label="Menu for ${asset.name}"
-                                        style="color: var(--text-tertiary); padding: var(--spacing-sm); border-radius: var(--radius-md); transition: all var(--transition-base); background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);"
-                                        onmouseover="this.style.background='rgba(255,255,255,0.12)'; this.style.borderColor='rgba(255,255,255,0.2)'; this.style.color='var(--text-primary)';"
-                                        onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.borderColor='rgba(255,255,255,0.1)'; this.style.color='var(--text-tertiary)';">
-                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
+                    <div class="glass-card list-item-hover view-asset-btn" data-asset-id="${asset.id}"
+                         style="padding: 16px; cursor: pointer; opacity: 0; animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) ${index * 50}ms forwards;">
+                        <div class="flex justify-between items-start" style="margin-bottom: 12px;">
+                            <div class="flex items-center" style="gap: 10px;">
+                                <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(59, 130, 246, 0.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                    <svg style="width: 18px; height: 18px; color: var(--color-primary-400);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                                     </svg>
-                                </button>
-                            </div>
-                            <div class="flex gap-3" style="margin-bottom: var(--spacing-lg);">
-                                <div class="tooltip" data-tooltip="${vesselCount} vessel${vesselCount !== 1 ? 's' : ''} in this asset"
-                                     style="flex: 1;
-                                            display: flex;
-                                            flex-direction: column;
-                                            align-items: center;
-                                            justify-content: center;
-                                            padding: 16px;
-                                            background: rgba(var(--accent-primary-raw), 0.15);
-                                            border: 1.5px solid rgba(var(--accent-primary-raw), 0.3);
-                                            border-radius: 12px;
-                                            backdrop-filter: blur(8px);
-                                            gap: 4px;">
-                                    <span style="font-size: 32px; font-weight: 700; line-height: 1; color: var(--accent-primary-light);">${vesselCount}</span>
-                                    <span style="font-size: 11px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.5px; color: #ffffff; font-weight: 400;">Vessels</span>
                                 </div>
-                                <div class="tooltip" data-tooltip="${scanCount} inspection scan${scanCount !== 1 ? 's' : ''} total"
-                                     style="flex: 1;
-                                            display: flex;
-                                            flex-direction: column;
-                                            align-items: center;
-                                            justify-content: center;
-                                            padding: 16px;
-                                            background: rgba(var(--accent-primary-raw), 0.15);
-                                            border: 1.5px solid rgba(var(--accent-primary-raw), 0.3);
-                                            border-radius: 12px;
-                                            backdrop-filter: blur(8px);
-                                            gap: 4px;">
-                                    <span style="font-size: 32px; font-weight: 700; line-height: 1; color: var(--accent-primary-light);">${scanCount}</span>
-                                    <span style="font-size: 11px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.5px; color: #ffffff; font-weight: 400;">Scans</span>
-                                </div>
+                                <h3 style="font-size: 15px; font-weight: 600; color: var(--text-primary); margin: 0; line-height: 1.3;">${asset.name}</h3>
                             </div>
-                        </div>
-                        <div style="padding: var(--spacing-lg) var(--spacing-xl); background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)); border-top: 1.5px solid rgba(255,255,255,0.15); backdrop-filter: blur(8px);">
-                            <button class="view-asset-btn" data-asset-id="${asset.id}"
-                                    style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 14px 20px;
-                                           background: rgba(var(--accent-primary-raw), 0.2); border: 1.5px solid rgba(var(--accent-primary-raw), 0.4); border-radius: 12px;
-                                           color: var(--accent-primary-light); font-size: 15px; font-weight: 600;
-                                           transition: all 0.3s; cursor: pointer; backdrop-filter: blur(8px);"
-                                    onmouseover="this.style.background='rgba(var(--accent-primary-raw), 0.3)'; this.style.transform='translateX(4px)';"
-                                    onmouseout="this.style.background='rgba(var(--accent-primary-raw), 0.2)'; this.style.transform='translateX(0)';">
-                                <span>View Details</span>
-                                <svg style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path>
+                            <button class="btn-icon asset-menu-btn" data-asset-id="${asset.id}" aria-label="Menu for ${asset.name}" style="width: 28px; height: 28px;">
+                                <svg style="width: 16px; height: 16px;" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                    <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
                                 </svg>
                             </button>
+                        </div>
+                        <div style="font-size: 12px; color: rgba(255, 255, 255, 0.5); display: flex; gap: 16px;">
+                            <span><strong style="color: var(--text-primary);">${vesselCount}</strong> vessel${vesselCount !== 1 ? 's' : ''}</span>
+                            <span><strong style="color: var(--text-primary);">${scanCount}</strong> scan${scanCount !== 1 ? 's' : ''}</span>
                         </div>
                     </div>
                 `;
@@ -372,7 +329,7 @@ function renderAssetsView() {
     });
 }
 
-function showVesselDetailView(assetId) {
+async function showVesselDetailView(assetId) {
     currentView = 'vessel-detail';
     currentAssetId = assetId;
     currentVesselId = null;
@@ -381,8 +338,20 @@ function showVesselDetailView(assetId) {
     dom.vesselDetailView.classList.remove('hidden');
     dom.scanDetailView.classList.add('hidden');
 
-    renderVesselDetailView(assetId);
+    // Show loading state while lazy-loading vessels
+    dom.vesselDetailView.innerHTML = `
+        <div class="text-center" style="padding: var(--spacing-3xl) 0;">
+            <div class="spinner mx-auto"></div>
+            <p class="text-sm text-secondary" style="margin-top: var(--spacing-md);">Loading vessels...</p>
+        </div>
+    `;
     updateBreadcrumb();
+
+    // Lazy-load vessels from Supabase if not already loaded
+    await dataManager.loadVesselsForAsset(assetId);
+
+    // Now render with the loaded data
+    renderVesselDetailView(assetId);
 }
 
 function renderVesselDetailView(assetId) {
@@ -392,15 +361,15 @@ function renderVesselDetailView(assetId) {
         return;
     }
 
-    if (asset.vessels.length === 0) {
+    if (!asset.vessels || asset.vessels.length === 0) {
         dom.vesselDetailView.innerHTML = `
-            <div class="text-center py-12">
-                <svg class="mx-auto h-12 w-12" style="color: var(--text-dim);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="text-center" style="padding: var(--spacing-3xl) 0;">
+                <svg class="mx-auto text-dim" style="width: 48px; height: 48px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
                 </svg>
-                <h3 class="mt-2 text-lg font-medium" style="color: var(--text-primary);">No vessels in this asset</h3>
-                <p class="mt-1 text-sm" style="color: var(--text-secondary);">Add a vessel to start organizing scans.</p>
-                <button id="empty-new-vessel-btn" class="mt-4 btn-success px-4 py-2">
+                <h3 class="text-lg font-semibold text-primary" style="margin-top: var(--spacing-md);">No vessels in this asset</h3>
+                <p class="text-sm text-secondary" style="margin-top: var(--spacing-sm);">Add a vessel to start organizing scans.</p>
+                <button id="empty-new-vessel-btn" class="btn btn-success" style="margin-top: var(--spacing-lg);">
                     Create First Vessel
                 </button>
             </div>
@@ -412,101 +381,83 @@ function renderVesselDetailView(assetId) {
     }
 
     dom.vesselDetailView.innerHTML = `
-        <div class="mb-4 flex justify-between items-center">
-            <h2 class="text-2xl font-bold" style="color: var(--accent-primary-light); letter-spacing: -0.02em;">${asset.name} - Vessels</h2>
-            <button id="new-vessel-btn" class="btn-success px-4 py-2 text-sm">
+        <div class="flex justify-between items-center" style="margin-bottom: 20px;">
+            <h2 style="font-size: 18px; font-weight: 600; color: var(--text-primary); margin: 0;">${asset.name} - Vessels</h2>
+            <button id="new-vessel-btn" class="btn btn-success text-sm" style="padding: 8px 16px;">
                 + New Vessel
             </button>
         </div>
-        <div class="space-y-6">
+        <div style="display: flex; flex-direction: column; gap: 16px;">
             ${asset.vessels.map(vessel => {
                 const scanCount = vessel.scans.length;
                 const images = vessel.images || [];
                 const imageCount = images.length;
                 return `
-                    <div class="glass-card">
-                        <div class="p-6">
-                            <div class="flex gap-4 items-start mb-4">
-                                <div class="flex-shrink-0 w-24 h-24 rounded-lg flex items-center justify-center relative overflow-hidden ${vessel.model3d ? 'cursor-pointer' : ''}" style="background: var(--accent-primary-subtle); border: 1.5px solid var(--card-border); transition: all var(--transition-base);" onmouseover="this.style.borderColor='var(--accent-primary-glow)'" onmouseout="this.style.borderColor='var(--card-border)'"">
-                                    ${vessel.model3d ? `
-                                        <canvas class="vessel-3d-preview" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" style="width: 96px; height: 96px; display: block;"></canvas>
-                                    ` : `
-                                        <button class="upload-model-btn text-gray-400 hover:text-blue-500 flex flex-col items-center gap-1" data-vessel-id="${vessel.id}" aria-label="Upload 3D model for ${vessel.name}">
-                                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    <div class="glass-card" style="padding: 0; overflow: hidden;">
+                        <!-- Compact Vessel Header -->
+                        <div style="padding: 16px; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.06);">
+                            <div class="flex-shrink-0 flex items-center justify-center relative overflow-hidden ${vessel.model3d ? 'cursor-pointer' : ''}" style="width: 64px; height: 64px; border-radius: 8px; background: var(--glass-bg-tertiary); border: 1px solid var(--glass-border);">
+                                ${vessel.model3d ? `
+                                    <canvas class="vessel-3d-preview" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" style="width: 64px; height: 64px; display: block;"></canvas>
+                                ` : `
+                                    <button class="upload-model-btn text-dim hover:text-accent flex flex-col items-center" style="gap: 2px;" data-vessel-id="${vessel.id}" aria-label="Upload 3D model for ${vessel.name}">
+                                        <svg style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                        </svg>
+                                        <span style="font-size: 9px;">3D</span>
+                                    </button>
+                                `}
+                            </div>
+                            <div class="flex-grow min-w-0">
+                                <div class="flex justify-between items-center" style="margin-bottom: 6px;">
+                                    <h3 style="font-size: 16px; font-weight: 600; color: var(--text-primary); margin: 0;">${vessel.name}</h3>
+                                    <div class="flex items-center" style="gap: 8px;">
+                                        <button class="generate-report-btn btn btn-primary text-xs flex items-center" style="gap: 4px; padding: 6px 12px;" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-vessel-name="${vessel.name}">
+                                            <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                                             </svg>
-                                            <span class="text-xs">Add 3D</span>
+                                            Report
                                         </button>
-                                    `}
+                                        <button class="vessel-menu-btn btn-icon" data-vessel-id="${vessel.id}" aria-label="Menu for ${vessel.name}" style="width: 28px; height: 28px;">
+                                            <svg style="width: 16px; height: 16px;" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                                <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
                                 </div>
-                                <div class="flex-grow min-w-0">
-                                    <div class="flex justify-between items-start mb-2">
-                                        <h3 class="text-xl font-bold truncate" style="color: var(--accent-primary-light); letter-spacing: -0.02em;">${vessel.name}</h3>
-                                        <div class="flex items-center gap-2">
-                                            <button class="generate-report-btn btn-primary text-sm px-3 py-1.5 flex items-center gap-1.5" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" data-vessel-name="${vessel.name}">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                                                </svg>
-                                                Generate Report
-                                            </button>
-                                            <button class="vessel-menu-btn text-gray-500 hover:text-gray-700 dark:hover:text-gray-300" data-vessel-id="${vessel.id}" aria-label="Menu for ${vessel.name}">
-                                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                                                    <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
-                                                </svg>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div class="space-y-1 text-sm" style="color: var(--text-secondary);">
-                                        <div>Scans: <span class="font-semibold" style="color: var(--text-primary);">${scanCount}</span></div>
-                                        <div>Images: <span class="font-semibold" style="color: var(--text-primary);">${imageCount}</span></div>
-                                        ${vessel.strakes && vessel.strakes.length > 0 ? `<div>Strakes: <span class="font-semibold" style="color: var(--text-primary);">${vessel.strakes.length}</span></div>` : ''}
-                                    </div>
+                                <div style="font-size: 12px; color: rgba(255, 255, 255, 0.5); display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
+                                    <span><strong style="color: var(--text-primary);">${scanCount}</strong> scans</span>
+                                    <span><strong style="color: var(--text-primary);">${imageCount}</strong> images</span>
+                                    ${vessel.strakes && vessel.strakes.length > 0 ? `<span><strong style="color: var(--text-primary);">${vessel.strakes.length}</strong> strakes</span>` : ''}
                                     ${vessel.strakes && vessel.strakes.length > 0 ? `
-                                        <div class="mt-2 flex flex-wrap gap-2">
-                                            ${vessel.strakes.map(strake => {
-                                                const coverage = dataManager.calculateStrakeCoverage(assetId, vessel.id, strake.id);
-                                                const percentage = coverage.coveragePercentage;
-                                                // Dynamic colors: red (0-33%), yellow (34-66%), orange (67-99%), green (100%+)
-                                                let badgeClass, badgeStyle;
-                                                if (percentage >= 100) {
-                                                    badgeClass = 'badge-green';
-                                                    badgeStyle = '';
-                                                } else if (percentage >= 67) {
-                                                    badgeClass = 'glass-badge';
-                                                    badgeStyle = 'background: rgba(245, 158, 11, 0.15); color: rgba(251, 191, 36, 1); border-color: rgba(245, 158, 11, 0.4);';
-                                                } else if (percentage >= 34) {
-                                                    badgeClass = 'badge-yellow';
-                                                    badgeStyle = '';
-                                                } else {
-                                                    badgeClass = 'badge-red';
-                                                    badgeStyle = '';
-                                                }
-                                                return `
-                                                    <div class="glass-badge ${badgeClass}" style="${badgeStyle}">
-                                                        ${strake.name}: ${percentage.toFixed(0)}%
-                                                    </div>
-                                                `;
-                                            }).join('')}
-                                        </div>
+                                        ${vessel.strakes.map(strake => {
+                                            const coverage = dataManager.calculateStrakeCoverage(assetId, vessel.id, strake.id);
+                                            const percentage = coverage.coveragePercentage;
+                                            let badgeClass = percentage >= 100 ? 'badge-green' : percentage >= 67 ? '' : percentage >= 34 ? 'badge-yellow' : 'badge-red';
+                                            let badgeStyle = percentage >= 67 && percentage < 100 ? 'background: rgba(245, 158, 11, 0.15); color: rgba(251, 191, 36, 1); border-color: rgba(245, 158, 11, 0.4);' : '';
+                                            return `<span class="glass-badge ${badgeClass}" style="font-size: 10px; padding: 2px 8px; ${badgeStyle}">${strake.name}: ${percentage.toFixed(0)}%</span>`;
+                                        }).join('')}
                                     ` : ''}
                                 </div>
                             </div>
+                        </div>
 
-                            <!-- Main Content Grid: Scans/Strakes on Left, Drawings/Images/Reports on Right -->
-                            <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                        <!-- Main Content Grid: Scans/Strakes on Left, Drawings/Images/Reports on Right -->
+                        <div style="padding: 16px;">
+                            <div class="grid grid-cols-1 lg:grid-cols-5" style="gap: 16px;">
                                 <!-- LEFT COLUMN: Scans Section with Strake Grouping (order-2 on mobile, order-1 on lg) -->
                                 <div class="lg:col-span-2 order-2 lg:order-1">
-                                    <div class="flex justify-between items-center mb-3">
-                                        <div class="text-xs font-semibold uppercase" style="color: var(--text-secondary);">Scans${vessel.strakes && vessel.strakes.length > 0 ? ' by Strake' : ''}</div>
+                                    <div class="flex justify-between items-center" style="margin-bottom: var(--spacing-md);">
+                                        <div class="text-xs font-semibold text-secondary" style="text-transform: uppercase;">Scans${vessel.strakes && vessel.strakes.length > 0 ? ' by Strake' : ''}</div>
                                         ${vessel.strakes && vessel.strakes.length > 0 ? '' : `
-                                            <button class="manage-strakes-btn btn-secondary text-xs px-3 py-1.5" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                            <button class="manage-strakes-btn btn btn-secondary text-xs" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
                                                 + Add Strake
                                             </button>
                                         `}
                                     </div>
                                     ${(() => {
                                         const renderScanCard = (scan) => `
-                                            <div class="scan-card-compact group relative cursor-pointer rounded-lg overflow-hidden transition-all" style="background: var(--accent-primary-subtle); border: 1.5px solid var(--card-border); backdrop-filter: blur(8px);" data-scan-id="${scan.id}" data-asset-id="${assetId}" data-vessel-id="${vessel.id}" onmouseover="this.style.borderColor='var(--accent-primary-glow)'; this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--card-border)'; this.style.transform='translateY(0)'"">
+                                            <div class="scan-card-compact glass-card group relative cursor-pointer overflow-hidden" style="padding: 0; transition: all var(--transition-base);" data-scan-id="${scan.id}" data-asset-id="${assetId}" data-vessel-id="${vessel.id}">
                                                 ${scan.thumbnail ? `
                                                     <div class="aspect-video bg-gray-200 dark:bg-gray-600 relative">
                                                         <img src="${scan.thumbnail}" alt="${scan.name}" class="w-full h-full object-cover">
@@ -542,13 +493,13 @@ function renderVesselDetailView(assetId) {
                                                         </div>
                                                     </div>
                                                 `}
-                                                <div class="p-2">
-                                                    <div class="text-xs font-semibold truncate mb-1" style="color: var(--text-primary);" title="${scan.name}">${scan.name}</div>
+                                                <div style="padding: var(--spacing-sm);">
+                                                    <div class="text-xs font-semibold text-primary truncate" style="margin-bottom: var(--spacing-xs);" title="${scan.name}">${scan.name}</div>
                                                     <span class="glass-badge ${
                                                         scan.toolType === 'pec' ? 'badge-yellow' :
                                                         scan.toolType === 'cscan' ? 'badge-blue' :
                                                         'badge-purple'
-                                                    }" style="padding: 2px 6px; font-size: 10px;">${scan.toolType.toUpperCase()}</span>
+                                                    }" style="padding: 2px 8px; font-size: 10px;">${scan.toolType.toUpperCase()}</span>
                                                 </div>
                                             </div>
                                         `;
@@ -565,15 +516,15 @@ function renderVesselDetailView(assetId) {
                                             const unassignedScans = vessel.scans.filter(s => !s.strakeId);
 
                                             return `
-                                                <div class="space-y-4">
-                                                    <div class="flex justify-end gap-2">
-                                                        <button class="add-scans-to-strake-btn btn-primary text-xs px-3 py-1.5" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
-                                                            <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <div style="display: flex; flex-direction: column; gap: var(--spacing-lg);">
+                                                    <div class="flex justify-end" style="gap: var(--spacing-sm);">
+                                                        <button class="add-scans-to-strake-btn btn btn-primary text-xs flex items-center" style="gap: var(--spacing-xs);" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                                                             </svg>
                                                             Add Scans
                                                         </button>
-                                                        <button class="manage-strakes-btn btn-secondary text-xs px-3 py-1.5" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                        <button class="manage-strakes-btn btn btn-secondary text-xs" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
                                                             Manage Strakes
                                                         </button>
                                                     </div>
@@ -582,26 +533,26 @@ function renderVesselDetailView(assetId) {
                                                         const coverage = dataManager.calculateStrakeCoverage(assetId, vessel.id, strake.id);
 
                                                         return `
-                                                            <div class="glass-panel p-4" style="background: var(--glass-bg-tertiary); border: 1.5px solid var(--glass-border);">
-                                                                <div class="flex justify-between items-start mb-3">
+                                                            <div class="glass-panel" style="padding: var(--spacing-lg); background: var(--glass-bg-tertiary); border: 1px solid var(--glass-border);">
+                                                                <div class="flex justify-between items-start" style="margin-bottom: var(--spacing-md);">
                                                                     <div class="flex-1">
-                                                                        <div class="flex items-center gap-2 mb-2">
-                                                                            <h4 class="font-semibold" style="color: var(--text-primary);">${strake.name}</h4>
-                                                                            <button class="edit-strake-btn text-gray-500 hover:text-blue-600 dark:hover:text-blue-400" data-strake-id="${strake.id}" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" title="Edit strake">
+                                                                        <div class="flex items-center" style="gap: var(--spacing-sm); margin-bottom: var(--spacing-sm);">
+                                                                            <h4 class="font-semibold text-primary">${strake.name}</h4>
+                                                                            <button class="edit-strake-btn text-dim hover:text-accent transition-colors" data-strake-id="${strake.id}" data-vessel-id="${vessel.id}" data-asset-id="${assetId}" title="Edit strake">
                                                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                                                                                 </svg>
                                                                             </button>
                                                                         </div>
-                                                                        <div class="text-xs space-y-1" style="color: var(--text-secondary);">
+                                                                        <div class="text-xs text-secondary" style="display: flex; flex-direction: column; gap: var(--spacing-xs);">
                                                                             <div>Strake Area: ${strake.totalArea.toFixed(1)} m²</div>
                                                                             <div>Required (${strake.requiredCoverage}%): ${coverage.targetArea.toFixed(1)} m²</div>
                                                                             <div>Scanned: ${coverage.totalScannedArea.toFixed(1)} m² (${coverage.scanCount} scan${coverage.scanCount !== 1 ? 's' : ''})</div>
                                                                         </div>
-                                                                        <div class="mt-2">
-                                                                            <div class="flex items-center gap-2 mb-1">
-                                                                                <div class="flex-1 h-2 rounded-full overflow-hidden" style="background: rgba(255, 255, 255, 0.1);">
-                                                                                    <div class="h-full transition-all duration-500" style="width: ${coverage.coveragePercentage}%; background: ${coverage.isComplete ? 'var(--success)' : 'var(--info)'};"></div>
+                                                                        <div style="margin-top: var(--spacing-sm);">
+                                                                            <div class="flex items-center" style="gap: var(--spacing-sm); margin-bottom: var(--spacing-xs);">
+                                                                                <div class="flex-1 overflow-hidden" style="height: 8px; border-radius: var(--radius-full); background: var(--glass-bg-secondary);">
+                                                                                    <div class="h-full" style="width: ${coverage.coveragePercentage}%; background: ${coverage.isComplete ? 'var(--success)' : 'var(--info)'}; transition: width 0.5s ease;"></div>
                                                                                 </div>
                                                                                 <span class="text-xs font-semibold" style="color: ${coverage.isComplete ? 'var(--success-light)' : 'var(--info-light)'};">${coverage.coveragePercentage.toFixed(1)}%</span>
                                                                             </div>
@@ -609,20 +560,20 @@ function renderVesselDetailView(assetId) {
                                                                     </div>
                                                                 </div>
                                                                 ${strakeScans.length > 0 ? `
-                                                                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
+                                                                    <div class="grid grid-cols-2 sm:grid-cols-3" style="gap: var(--spacing-md); margin-top: var(--spacing-md);">
                                                                         ${strakeScans.map(renderScanCard).join('')}
                                                                     </div>
                                                                 ` : `
-                                                                    <p class="text-xs text-gray-500 dark:text-gray-400 italic mt-2">No scans assigned to this strake</p>
+                                                                    <p class="text-xs text-secondary italic" style="margin-top: var(--spacing-sm);">No scans assigned to this strake</p>
                                                                 `}
                                                             </div>
                                                         `;
                                                     }).join('')}
 
                                                     ${unassignedScans.length > 0 ? `
-                                                        <div class="glass-panel p-4" style="background: var(--glass-bg-secondary); border: 1.5px dashed var(--glass-border);">
-                                                            <h4 class="font-semibold mb-3" style="color: var(--text-secondary);">Unassigned Scans</h4>
-                                                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                                        <div class="glass-panel" style="padding: var(--spacing-lg); background: var(--glass-bg-secondary); border: 1px dashed var(--glass-border);">
+                                                            <h4 class="font-semibold text-secondary" style="margin-bottom: var(--spacing-md);">Unassigned Scans</h4>
+                                                            <div class="grid grid-cols-2 sm:grid-cols-3" style="gap: var(--spacing-md);">
                                                                 ${unassignedScans.map(renderScanCard).join('')}
                                                             </div>
                                                         </div>
@@ -634,19 +585,19 @@ function renderVesselDetailView(assetId) {
                                 </div>
 
                                 <!-- RIGHT COLUMN: Location/GA Drawings, Reports, and Images (order-1 on mobile, order-2 on lg) -->
-                                <div class="lg:col-span-3 space-y-4 order-1 lg:order-2">
+                                <div class="lg:col-span-3 order-1 lg:order-2" style="display: flex; flex-direction: column; gap: var(--spacing-lg);">
                                     <!-- Location and GA Drawings Section -->
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="grid grid-cols-1 md:grid-cols-2" style="gap: var(--spacing-lg);">
                                         <!-- Location Drawing -->
-                                        <div class="glass-panel p-4">
-                                            <div class="flex justify-between items-center mb-3">
-                                                <div class="text-sm font-semibold" style="color: var(--text-primary);">Location Drawing</div>
+                                        <div class="glass-panel" style="padding: var(--spacing-lg);">
+                                            <div class="flex justify-between items-center" style="margin-bottom: var(--spacing-md);">
+                                                <div class="text-sm font-semibold text-primary">Location Drawing</div>
                                                 ${vessel.locationDrawing ? `
-                                                    <button class="annotate-location-btn btn-primary text-xs px-3 py-1.5" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                    <button class="annotate-location-btn btn btn-primary text-xs" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
                                                         ✏️ Annotate
                                                     </button>
                                                 ` : `
-                                                    <button class="upload-location-btn btn-success text-xs px-3 py-1.5" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
+                                                    <button class="upload-location-btn btn btn-success text-xs" data-vessel-id="${vessel.id}" data-asset-id="${assetId}">
                                                         + Upload
                                                     </button>
                                                 `}
@@ -1252,7 +1203,7 @@ function open3DModel(modelData, vesselName) {
     window.dispatchEvent(event);
 }
 
-function showScanDetailView(assetId, vesselId) {
+async function showScanDetailView(assetId, vesselId) {
     currentView = 'scan-detail';
     currentAssetId = assetId;
     currentVesselId = vesselId;
@@ -1261,8 +1212,20 @@ function showScanDetailView(assetId, vesselId) {
     dom.vesselDetailView.classList.add('hidden');
     dom.scanDetailView.classList.remove('hidden');
 
-    renderScanDetailView(assetId, vesselId);
+    // Show loading state while lazy-loading scans
+    dom.scanDetailView.innerHTML = `
+        <div class="text-center" style="padding: var(--spacing-3xl) 0;">
+            <div class="spinner mx-auto"></div>
+            <p class="text-sm text-secondary" style="margin-top: var(--spacing-md);">Loading scans...</p>
+        </div>
+    `;
     updateBreadcrumb();
+
+    // Lazy-load scans from Supabase if not already loaded
+    await dataManager.loadScansForVessel(assetId, vesselId);
+
+    // Now render with the loaded data
+    renderScanDetailView(assetId, vesselId);
 }
 
 function renderScanDetailView(assetId, vesselId) {
@@ -1272,7 +1235,7 @@ function renderScanDetailView(assetId, vesselId) {
         return;
     }
 
-    if (vessel.scans.length === 0) {
+    if (!vessel.scans || vessel.scans.length === 0) {
         dom.scanDetailView.innerHTML = `
             <div class="text-center py-12">
                 <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

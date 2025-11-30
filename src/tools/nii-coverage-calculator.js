@@ -1,8 +1,10 @@
 // NII Coverage Calculator Tool Module
 // Matrix Vessel NII Coverage Calculator - MAI-F-NDT-036
 import { createAnimatedHeader } from '../animated-background.js';
+import { initGlobalStyleEnforcer, destroyGlobalStyleEnforcer } from '../utils/globalStyleEnforcer.js';
 
 let container, dom = {};
+let styleEnforcer = null;
 
 // Clock position mapping to degrees
 const CLOCK_POSITIONS = {
@@ -20,10 +22,10 @@ const defaultPautTasks = [
 ];
 
 const defaultPecTasks = [
-    { task: 'A', axis1: '', axis2: '', desc: '', accessFactor: 0.33 },
-    { task: 'B', axis1: '', axis2: '', desc: '', accessFactor: 0.33 },
-    { task: 'C', axis1: '', axis2: '', desc: '', accessFactor: 0.33 },
-    { task: 'D', axis1: '', axis2: '', desc: '', accessFactor: 0.33 }
+    { task: 'A', axis1: '', axis2: '', desc: '', accessFactor: 0.5 },
+    { task: 'B', axis1: '', axis2: '', desc: '', accessFactor: 0.5 },
+    { task: 'C', axis1: '', axis2: '', desc: '', accessFactor: 0.5 },
+    { task: 'D', axis1: '', axis2: '', desc: '', accessFactor: 0.5 }
 ];
 
 const defaultTofdTasks = [
@@ -48,8 +50,8 @@ const HTML = `
         </header>
 
         <!-- Vessel Parameters -->
-        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 mb-6">
-            <h2 class="text-lg font-semibold dark:text-white pb-4 border-b dark:border-slate-700">Input Parameters</h2>
+        <div class="glass-panel rounded-lg p-6 mb-6">
+            <h2 class="text-lg font-semibold text-primary pb-4 border-b border-glass">Input Parameters</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
                 <div>
                     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Project Name</label>
@@ -89,8 +91,8 @@ const HTML = `
         </div>
 
         <!-- Vessel Geometry Results -->
-        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 mb-6">
-            <h2 class="text-lg font-semibold dark:text-white pb-4 border-b dark:border-slate-700">Output</h2>
+        <div class="glass-panel rounded-lg p-6 mb-6">
+            <h2 class="text-lg font-semibold text-primary pb-4 border-b border-glass">Output</h2>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
                 <div class="p-3 bg-green-100 dark:bg-green-900/30 rounded">
                     <p class="text-xs text-slate-600 dark:text-slate-400">Circ</p>
@@ -128,10 +130,10 @@ const HTML = `
         </div>
 
         <!-- PAUT Time Calculations -->
-        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 mb-6">
-            <div class="flex justify-between items-center pb-4 border-b dark:border-slate-700">
-                <h2 class="text-lg font-semibold dark:text-white">PAUT Time Calculations</h2>
-                <button id="addPautTaskBtn" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1.5 rounded-md transition-colors">+ Add Task</button>
+        <div class="glass-panel rounded-lg p-6 mb-6">
+            <div class="flex justify-between items-center pb-4 border-b border-glass">
+                <h2 class="text-lg font-semibold text-primary">PAUT Time Calculations</h2>
+                <button id="addPautTaskBtn" class="btn btn-primary btn-sm">+ Add Task</button>
             </div>
             <div class="overflow-x-auto mt-4">
                 <table class="w-full text-sm">
@@ -160,10 +162,10 @@ const HTML = `
         </div>
 
         <!-- PEC Time Calculations -->
-        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 mb-6">
-            <div class="flex justify-between items-center pb-4 border-b dark:border-slate-700">
-                <h2 class="text-lg font-semibold dark:text-white">PEC Time Calculations</h2>
-                <button id="addPecTaskBtn" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1.5 rounded-md transition-colors">+ Add Task</button>
+        <div class="glass-panel rounded-lg p-6 mb-6">
+            <div class="flex justify-between items-center pb-4 border-b border-glass">
+                <h2 class="text-lg font-semibold text-primary">PEC Time Calculations</h2>
+                <button id="addPecTaskBtn" class="btn btn-primary btn-sm">+ Add Task</button>
             </div>
             <div class="overflow-x-auto mt-4">
                 <table class="w-full text-sm">
@@ -192,10 +194,10 @@ const HTML = `
         </div>
 
         <!-- TOFD Time Calculations -->
-        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 mb-6">
-            <div class="flex justify-between items-center pb-4 border-b dark:border-slate-700">
-                <h2 class="text-lg font-semibold dark:text-white">TOFD Time Calculations</h2>
-                <button id="addTofdTaskBtn" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1.5 rounded-md transition-colors">+ Add Task</button>
+        <div class="glass-panel rounded-lg p-6 mb-6">
+            <div class="flex justify-between items-center pb-4 border-b border-glass">
+                <h2 class="text-lg font-semibold text-primary">TOFD Time Calculations</h2>
+                <button id="addTofdTaskBtn" class="btn btn-primary btn-sm">+ Add Task</button>
             </div>
             <div class="overflow-x-auto mt-4">
                 <table class="w-full text-sm">
@@ -222,8 +224,8 @@ const HTML = `
         </div>
 
         <!-- Summary -->
-        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 mb-6">
-            <h2 class="text-lg font-semibold dark:text-white pb-4 border-b dark:border-slate-700">Total Times (based on 9 hour shifts)</h2>
+        <div class="glass-panel rounded-lg p-6 mb-6">
+            <h2 class="text-lg font-semibold text-primary pb-4 border-b border-glass">Total Times (based on 9 hour shifts)</h2>
             <div class="overflow-x-auto mt-4">
                 <table class="w-full text-sm">
                     <thead>
@@ -286,7 +288,7 @@ function cacheDom() {
     const header = createAnimatedHeader(
         'NII Coverage Calculator',
         'Matrix Vessel NII Coverage Calculator - MAI-F-NDT-036 REV 0',
-        { height: '180px', particleCount: 15, waveIntensity: 0.4 }
+        { height: '100px', particleCount: 15, waveIntensity: 0.4 }
     );
     dom.headerContainer.appendChild(header);
 }
@@ -310,15 +312,17 @@ function calculateGeometry() {
     const circStartPos = dom.circStart.value;
     const circEndPos = dom.circEnd.value;
 
-    // Calculate circumference
-    const circ = id > 0 ? Math.PI * id : 0;
+    // Calculate circumference using OD (Outside Diameter) like Excel
+    // Excel formula: =PI()*(ID+(2*WT))
+    const od = id + (2 * wt);
+    const circ = id > 0 ? Math.PI * od : 0;
 
     // Calculate shell area (cylindrical surface)
     const shellArea = (circ * tanTan) / 1000000; // Convert mm² to m²
 
-    // Calculate dome ends projected area (single dome)
-    const radius = id / 2;
-    const domeArea = id > 0 ? (Math.PI * radius * radius) / 1000000 : 0;
+    // Calculate dome ends projected area (2 domes with 1.09 factor for elliptical heads)
+    // Excel formula: =2*(1.09*((ID+2*WT)^2)/1000000)
+    const domeArea = id > 0 ? 2 * (1.09 * Math.pow(od, 2)) / 1000000 : 0;
 
     // Total surface area
     const totalArea = shellArea + domeArea;
@@ -333,11 +337,11 @@ function calculateGeometry() {
         segmentLength = (segmentDeg / 360) * circ;
     }
 
-    // Grid calculations (250x250mm grids = 0.0625 m²)
-    const shellGrids = shellArea > 0 ? Math.ceil(shellArea / 0.0625) : 0;
+    // Grid calculations - Excel divides by 0.25 not 0.0625
+    const shellGrids = shellArea > 0 ? Math.ceil(shellArea / 0.25) : 0;
     const shellHours = shellGrids * 0.5;
 
-    const domeGrids = domeArea > 0 ? Math.ceil(domeArea / 0.0625) : 0;
+    const domeGrids = domeArea > 0 ? Math.ceil(domeArea / 0.25) : 0;
 
     return {
         circ: circ.toFixed(2),
@@ -371,9 +375,13 @@ function renderPautTable() {
         const axis2 = parseFloat(task.axis2) || 0;
         const area = axis1 > 0 && axis2 > 0 ? (axis1 * axis2) / 1000000 : 0;
         const grids = area > 0 ? Math.ceil(area / 0.25) : 0;
-        const scanTime = grids * task.accessFactor;
-        const analysisTime = grids * 0.125;
-        const reportTime = grids * 0.042;
+        // Excel formulas for PAUT:
+        // Scan Time: =ROUNDUP((accessFactor*grids), 0)
+        // Analysis Time: =ROUNDUP((scanTime/2), 1)
+        // Report Time: =ROUNDUP((analysisTime/2), 1)
+        const scanTime = Math.ceil(task.accessFactor * grids);
+        const analysisTime = Math.ceil(scanTime / 2 * 10) / 10; // ROUNDUP to 1 decimal
+        const reportTime = Math.ceil(analysisTime / 2 * 10) / 10; // ROUNDUP to 1 decimal
 
         html += `
             <tr class="border-b dark:border-slate-700">
@@ -388,7 +396,8 @@ function renderPautTable() {
                 <td class="p-2 text-right dark:text-slate-300">${analysisTime.toFixed(1)}</td>
                 <td class="p-2 text-right dark:text-slate-300">${reportTime.toFixed(1)}</td>
                 <td class="p-2 text-center">
-                    <button data-paut-delete="${index}" aria-label="Delete PAUT task ${task.task}" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-xs px-2 py-1">✕</button>
+                    <button data-paut-duplicate="${index}" aria-label="Duplicate PAUT task ${task.task}" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-xs px-2 py-1 mr-1" title="Duplicate">📋</button>
+                    <button data-paut-delete="${index}" aria-label="Delete PAUT task ${task.task}" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-xs px-2 py-1" title="Delete">✕</button>
                 </td>
             </tr>
         `;
@@ -407,9 +416,9 @@ function calculatePautTotals() {
         const axis2 = parseFloat(task.axis2) || 0;
         const area = axis1 > 0 && axis2 > 0 ? (axis1 * axis2) / 1000000 : 0;
         const grids = area > 0 ? Math.ceil(area / 0.25) : 0;
-        const scanTime = grids * task.accessFactor;
-        const analysisTime = grids * 0.125;
-        const reportTime = grids * 0.042;
+        const scanTime = Math.ceil(task.accessFactor * grids);
+        const analysisTime = Math.ceil(scanTime / 2 * 10) / 10;
+        const reportTime = Math.ceil(analysisTime / 2 * 10) / 10;
 
         totalArea += area;
         totalScan += scanTime;
@@ -429,7 +438,10 @@ function calculatePautTotals() {
         </tr>
     `;
 
-    dom.pautNII.textContent = (totalArea * 0.3).toFixed(2) + ' m²';
+    // Excel uses 40% for PAUT NII Assessment, not 30%
+    const geom = calculateGeometry();
+    const totalSurfaceArea = parseFloat(geom.totalArea);
+    dom.pautNII.textContent = (totalSurfaceArea * 0.4).toFixed(2) + ' m²';
 
     return { scan: totalScan, analysis: totalAnalysis, report: totalReport };
 }
@@ -440,8 +452,20 @@ function attachPautListeners() {
             const index = parseInt(e.target.dataset.pautIndex);
             const field = e.target.dataset.pautField;
             pautTasks[index][field] = e.target.value;
-            renderPautTable();
-            updateSummary();
+
+            // Only update calculations, not the entire table
+            if (field === 'axis1' || field === 'axis2' || field === 'accessFactor') {
+                updatePautRow(index);
+                calculatePautTotals();
+                updateSummary();
+            }
+        });
+    });
+
+    container.querySelectorAll('[data-paut-duplicate]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const index = parseInt(e.target.dataset.pautDuplicate);
+            duplicatePautTask(index);
         });
     });
 
@@ -453,6 +477,27 @@ function attachPautListeners() {
             updateSummary();
         });
     });
+}
+
+function updatePautRow(index) {
+    const task = pautTasks[index];
+    const axis1 = parseFloat(task.axis1) || 0;
+    const axis2 = parseFloat(task.axis2) || 0;
+    const area = axis1 > 0 && axis2 > 0 ? (axis1 * axis2) / 1000000 : 0;
+    const grids = area > 0 ? Math.ceil(area / 0.25) : 0;
+    const scanTime = Math.ceil(task.accessFactor * grids);
+    const analysisTime = Math.ceil(scanTime / 2 * 10) / 10;
+    const reportTime = Math.ceil(analysisTime / 2 * 10) / 10;
+
+    // Update only the calculated cells
+    const row = dom.pautTableBody.querySelector(`tr:nth-child(${index + 1})`);
+    if (row) {
+        row.querySelector('td:nth-child(5)').textContent = area.toFixed(2);
+        row.querySelector('td:nth-child(6)').textContent = grids;
+        row.querySelector('td:nth-child(8)').textContent = scanTime.toFixed(1);
+        row.querySelector('td:nth-child(9)').textContent = analysisTime.toFixed(1);
+        row.querySelector('td:nth-child(10)').textContent = reportTime.toFixed(1);
+    }
 }
 
 function addPautTask() {
@@ -468,6 +513,20 @@ function addPautTask() {
     updateSummary();
 }
 
+function duplicatePautTask(index) {
+    const taskToDuplicate = pautTasks[index];
+    const newTask = {
+        task: getNextTaskLetter(pautTasks),
+        axis1: taskToDuplicate.axis1,
+        axis2: taskToDuplicate.axis2,
+        desc: taskToDuplicate.desc + ' (Copy)',
+        accessFactor: taskToDuplicate.accessFactor
+    };
+    pautTasks.push(newTask);
+    renderPautTable();
+    updateSummary();
+}
+
 function renderPecTable() {
     let html = '';
 
@@ -476,9 +535,10 @@ function renderPecTable() {
         const axis2 = parseFloat(task.axis2) || 0;
         const area = axis1 > 0 && axis2 > 0 ? (axis1 * axis2) / 1000000 : 0;
         const grids = area > 0 ? Math.ceil(area / 0.25) : 0;
-        const scanTime = grids * task.accessFactor;
-        const analysisTime = grids * 0.167;
-        const reportTime = grids * 0.083;
+        // PEC uses same time calculations as PAUT in Excel
+        const scanTime = Math.ceil(task.accessFactor * grids);
+        const analysisTime = Math.ceil(scanTime / 2 * 10) / 10;
+        const reportTime = Math.ceil(analysisTime / 2 * 10) / 10;
 
         html += `
             <tr class="border-b dark:border-slate-700">
@@ -493,7 +553,8 @@ function renderPecTable() {
                 <td class="p-2 text-right dark:text-slate-300">${analysisTime.toFixed(1)}</td>
                 <td class="p-2 text-right dark:text-slate-300">${reportTime.toFixed(1)}</td>
                 <td class="p-2 text-center">
-                    <button data-pec-delete="${index}" aria-label="Delete PEC task ${task.task}" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-xs px-2 py-1">✕</button>
+                    <button data-pec-duplicate="${index}" aria-label="Duplicate PEC task ${task.task}" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-xs px-2 py-1 mr-1" title="Duplicate">📋</button>
+                    <button data-pec-delete="${index}" aria-label="Delete PEC task ${task.task}" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-xs px-2 py-1" title="Delete">✕</button>
                 </td>
             </tr>
         `;
@@ -512,9 +573,9 @@ function calculatePecTotals() {
         const axis2 = parseFloat(task.axis2) || 0;
         const area = axis1 > 0 && axis2 > 0 ? (axis1 * axis2) / 1000000 : 0;
         const grids = area > 0 ? Math.ceil(area / 0.25) : 0;
-        const scanTime = grids * task.accessFactor;
-        const analysisTime = grids * 0.167;
-        const reportTime = grids * 0.083;
+        const scanTime = Math.ceil(task.accessFactor * grids);
+        const analysisTime = Math.ceil(scanTime / 2 * 10) / 10;
+        const reportTime = Math.ceil(analysisTime / 2 * 10) / 10;
 
         totalArea += area;
         totalScan += scanTime;
@@ -534,7 +595,10 @@ function calculatePecTotals() {
         </tr>
     `;
 
-    dom.pecNII.textContent = (totalArea * 0.8).toFixed(2) + ' m²';
+    // Excel uses 40% of (shell + dome) for PEC NII Assessment
+    const geom = calculateGeometry();
+    const shellAndDome = parseFloat(geom.shellArea) + parseFloat(geom.domeArea);
+    dom.pecNII.textContent = (shellAndDome * 0.4).toFixed(2) + ' m²';
 
     return { scan: totalScan, analysis: totalAnalysis, report: totalReport };
 }
@@ -545,8 +609,20 @@ function attachPecListeners() {
             const index = parseInt(e.target.dataset.pecIndex);
             const field = e.target.dataset.pecField;
             pecTasks[index][field] = e.target.value;
-            renderPecTable();
-            updateSummary();
+
+            // Only update calculations, not the entire table
+            if (field === 'axis1' || field === 'axis2' || field === 'accessFactor') {
+                updatePecRow(index);
+                calculatePecTotals();
+                updateSummary();
+            }
+        });
+    });
+
+    container.querySelectorAll('[data-pec-duplicate]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const index = parseInt(e.target.dataset.pecDuplicate);
+            duplicatePecTask(index);
         });
     });
 
@@ -560,13 +636,48 @@ function attachPecListeners() {
     });
 }
 
+function updatePecRow(index) {
+    const task = pecTasks[index];
+    const axis1 = parseFloat(task.axis1) || 0;
+    const axis2 = parseFloat(task.axis2) || 0;
+    const area = axis1 > 0 && axis2 > 0 ? (axis1 * axis2) / 1000000 : 0;
+    const grids = area > 0 ? Math.ceil(area / 0.25) : 0;
+    const scanTime = Math.ceil(task.accessFactor * grids);
+    const analysisTime = Math.ceil(scanTime / 2 * 10) / 10;
+    const reportTime = Math.ceil(analysisTime / 2 * 10) / 10;
+
+    // Update only the calculated cells
+    const row = dom.pecTableBody.querySelector(`tr:nth-child(${index + 1})`);
+    if (row) {
+        row.querySelector('td:nth-child(5)').textContent = area.toFixed(2);
+        row.querySelector('td:nth-child(6)').textContent = grids;
+        row.querySelector('td:nth-child(8)').textContent = scanTime.toFixed(1);
+        row.querySelector('td:nth-child(9)').textContent = analysisTime.toFixed(1);
+        row.querySelector('td:nth-child(10)').textContent = reportTime.toFixed(1);
+    }
+}
+
 function addPecTask() {
     const newTask = {
         task: getNextTaskLetter(pecTasks),
         axis1: '',
         axis2: '',
         desc: '',
-        accessFactor: 0.33
+        accessFactor: 0.5
+    };
+    pecTasks.push(newTask);
+    renderPecTable();
+    updateSummary();
+}
+
+function duplicatePecTask(index) {
+    const taskToDuplicate = pecTasks[index];
+    const newTask = {
+        task: getNextTaskLetter(pecTasks),
+        axis1: taskToDuplicate.axis1,
+        axis2: taskToDuplicate.axis2,
+        desc: taskToDuplicate.desc + ' (Copy)',
+        accessFactor: taskToDuplicate.accessFactor
     };
     pecTasks.push(newTask);
     renderPecTable();
@@ -579,9 +690,13 @@ function renderTofdTable() {
     tofdTasks.forEach((task, index) => {
         const length = parseFloat(task.length) || 0;
         const groups = parseFloat(task.groups) || 0;
-        const scanTime = groups * 1.6;
-        const analysisTime = groups * 0.6;
-        const reportTime = groups * 0.2;
+        // Excel formulas for TOFD:
+        // Scan Time: =ROUNDUP((((accessFactor*groups)/1000)*length), 0)
+        // Analysis Time: =ROUNDUP((scanTime/3.33), 0)
+        // Report Time: =ROUNDUP((analysisTime/3), 0)
+        const scanTime = Math.ceil(((task.accessFactor * groups) / 1000) * length);
+        const analysisTime = Math.ceil(scanTime / 3.33);
+        const reportTime = Math.ceil(analysisTime / 3);
 
         html += `
             <tr class="border-b dark:border-slate-700">
@@ -594,7 +709,8 @@ function renderTofdTable() {
                 <td class="p-2 text-right dark:text-slate-300">${analysisTime.toFixed(1)}</td>
                 <td class="p-2 text-right dark:text-slate-300">${reportTime.toFixed(1)}</td>
                 <td class="p-2 text-center">
-                    <button data-tofd-delete="${index}" aria-label="Delete TOFD task ${task.task}" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-xs px-2 py-1">✕</button>
+                    <button data-tofd-duplicate="${index}" aria-label="Duplicate TOFD task ${task.task}" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-xs px-2 py-1 mr-1" title="Duplicate">📋</button>
+                    <button data-tofd-delete="${index}" aria-label="Delete TOFD task ${task.task}" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-xs px-2 py-1" title="Delete">✕</button>
                 </td>
             </tr>
         `;
@@ -611,11 +727,11 @@ function calculateTofdTotals() {
     tofdTasks.forEach(task => {
         const length = parseFloat(task.length) || 0;
         const groups = parseFloat(task.groups) || 0;
-        const scanTime = groups * 1.6;
-        const analysisTime = groups * 0.6;
-        const reportTime = groups * 0.2;
+        const scanTime = Math.ceil(((task.accessFactor * groups) / 1000) * length);
+        const analysisTime = Math.ceil(scanTime / 3.33);
+        const reportTime = Math.ceil(analysisTime / 3);
 
-        totalLength += length * groups;
+        totalLength += length;  // Just sum lengths, not length * groups
         totalScan += scanTime;
         totalAnalysis += analysisTime;
         totalReport += reportTime;
@@ -630,7 +746,7 @@ function calculateTofdTotals() {
         </tr>
     `;
 
-    dom.tofdLength.textContent = (totalLength / 1000).toFixed(1) + ' m';
+    dom.tofdLength.textContent = totalLength.toFixed(1) + ' mm';  // Display in mm like Excel
 
     return { scan: totalScan, analysis: totalAnalysis, report: totalReport };
 }
@@ -641,8 +757,20 @@ function attachTofdListeners() {
             const index = parseInt(e.target.dataset.tofdIndex);
             const field = e.target.dataset.tofdField;
             tofdTasks[index][field] = e.target.value;
-            renderTofdTable();
-            updateSummary();
+
+            // Only update calculations, not the entire table
+            if (field === 'length' || field === 'groups' || field === 'accessFactor') {
+                updateTofdRow(index);
+                calculateTofdTotals();
+                updateSummary();
+            }
+        });
+    });
+
+    container.querySelectorAll('[data-tofd-duplicate]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const index = parseInt(e.target.dataset.tofdDuplicate);
+            duplicateTofdTask(index);
         });
     });
 
@@ -656,6 +784,23 @@ function attachTofdListeners() {
     });
 }
 
+function updateTofdRow(index) {
+    const task = tofdTasks[index];
+    const length = parseFloat(task.length) || 0;
+    const groups = parseFloat(task.groups) || 0;
+    const scanTime = Math.ceil(((task.accessFactor * groups) / 1000) * length);
+    const analysisTime = Math.ceil(scanTime / 3.33);
+    const reportTime = Math.ceil(analysisTime / 3);
+
+    // Update only the calculated cells
+    const row = dom.tofdTableBody.querySelector(`tr:nth-child(${index + 1})`);
+    if (row) {
+        row.querySelector('td:nth-child(6)').textContent = scanTime.toFixed(1);
+        row.querySelector('td:nth-child(7)').textContent = analysisTime.toFixed(1);
+        row.querySelector('td:nth-child(8)').textContent = reportTime.toFixed(1);
+    }
+}
+
 function addTofdTask() {
     const newTask = {
         task: getNextTaskLetter(tofdTasks),
@@ -663,6 +808,20 @@ function addTofdTask() {
         groups: '',
         desc: '',
         accessFactor: 0.5
+    };
+    tofdTasks.push(newTask);
+    renderTofdTable();
+    updateSummary();
+}
+
+function duplicateTofdTask(index) {
+    const taskToDuplicate = tofdTasks[index];
+    const newTask = {
+        task: getNextTaskLetter(tofdTasks),
+        length: taskToDuplicate.length,
+        groups: taskToDuplicate.groups,
+        desc: taskToDuplicate.desc + ' (Copy)',
+        accessFactor: taskToDuplicate.accessFactor
     };
     tofdTasks.push(newTask);
     renderTofdTable();
@@ -710,6 +869,13 @@ export default {
     init: (toolContainer) => {
         container = toolContainer;
         container.innerHTML = HTML;
+
+        // Add tool-container class for global styles
+        container.classList.add('tool-container');
+
+        // Initialize global style enforcer
+        styleEnforcer = initGlobalStyleEnforcer();
+
         cacheDom();
         addEventListeners();
 
@@ -728,6 +894,12 @@ export default {
             if (animContainer && animContainer._animationInstance) {
                 animContainer._animationInstance.destroy();
             }
+        }
+
+        // Clean up global style enforcer
+        if (styleEnforcer) {
+            destroyGlobalStyleEnforcer();
+            styleEnforcer = null;
         }
 
         container.innerHTML = '';

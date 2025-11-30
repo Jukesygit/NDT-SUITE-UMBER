@@ -538,29 +538,7 @@ class ReportDialog {
                 gap: 8px;
             }
 
-            .btn-secondary {
-                background: #334155;
-                color: #f1f5f9;
-            }
-
-            .btn-secondary:hover {
-                background: #475569;
-            }
-
-            .btn-primary {
-                background: #3b82f6;
-                color: white;
-            }
-
-            .btn-primary:hover {
-                background: #2563eb;
-            }
-
-            .btn-primary:disabled {
-                background: #475569;
-                cursor: not-allowed;
-                opacity: 0.6;
-            }
+            /* Button styles now defined in glassmorphic.css */
 
             .btn-spinner {
                 display: inline-block;

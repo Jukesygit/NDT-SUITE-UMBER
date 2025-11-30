@@ -13,18 +13,18 @@ export function createModernHeader(title, subtitle = '', options = {}) {
         showParticles = true,
         particleCount = 20,
         gradientColors = ['#60a5fa', '#34d399'], // Cyan to emerald by default
-        height = '160px',
+        height = '100px',
         showStats = false,
         statsContent = null,
         showLogo = true,
-        logoSize = '80px'
+        logoSize = '60px'
     } = options;
 
     const header = document.createElement('div');
     header.className = 'modern-header';
     header.style.cssText = `
         position: relative;
-        padding: var(--spacing-2xl) var(--spacing-2xl);
+        padding: var(--spacing-lg) var(--spacing-2xl);
         flex-shrink: 0;
         background: linear-gradient(135deg,
             rgba(15, 23, 42, 0.95) 0%,
@@ -143,9 +143,9 @@ export function createModernHeader(title, subtitle = '', options = {}) {
     titleElement.className = 'modern-header-title';
     titleElement.textContent = title;
     titleElement.style.cssText = `
-        font-size: 48px;
+        font-size: 36px;
         font-weight: 700;
-        margin: 0 0 ${subtitle ? '12px' : '0'} 0;
+        margin: 0 0 ${subtitle ? '8px' : '0'} 0;
         background: linear-gradient(135deg, ${gradientColors.join(', ')});
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
@@ -162,7 +162,7 @@ export function createModernHeader(title, subtitle = '', options = {}) {
         subtitleElement.className = 'modern-header-subtitle';
         subtitleElement.textContent = subtitle;
         subtitleElement.style.cssText = `
-            font-size: 18px;
+            font-size: 16px;
             color: rgba(255, 255, 255, 0.75);
             margin: 0;
             font-weight: 500;

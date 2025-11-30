@@ -1,160 +1,229 @@
 // C-Scan Visualizer Tool Module - Complete with all features (Part 1)
+// Updated layout for better responsiveness
 import dataManager from '../data-manager.js';
+import Plotly from '../utils/plotly.js';
 
 let container, dom = {}, processedScans = [], currentScanData = null, compositeWorker = null, isShowingComposite = false, customColorRange = { min: null, max: null }, currentHoverPosition = { x: null, y: null }, selectedScans = new Set();
 
 const HTML = `
-<div class="h-full w-full" style="display: flex; flex-direction: column; overflow: hidden;">
-    <div class="glass-panel" style="padding: 8px 16px; flex-shrink: 0; border-radius: 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
-        <div class="flex justify-between items-center">
-            <div>
-                <h1 class="text-lg font-bold text-white">Phased Array C-Scan Visualizer</h1>
-                <p class="text-xs text-white text-opacity-70">Upload C-Scan data files to generate interactive corrosion heatmaps</p>
-            </div>
+<div class="h-full w-full flex flex-col bg-gray-900" style="min-height: 100vh;">
+    <!-- Enhanced Header with Animated Gradient Background -->
+    <div class="relative h-28 flex-shrink-0 overflow-hidden bg-gradient-to-br from-blue-900 via-indigo-900 to-purple-900">
+        <!-- Animated gradient overlay -->
+        <div class="absolute inset-0 bg-gradient-to-r from-blue-600/20 via-purple-600/20 to-pink-600/20 animate-pulse"></div>
+
+        <!-- Glass panel effect -->
+        <div class="absolute inset-0 backdrop-blur-sm bg-black/10"></div>
+
+        <!-- Content -->
+        <div class="relative z-10 h-full flex flex-col justify-center px-6">
+            <h1 class="text-2xl font-bold text-white mb-1">Phased Array C-Scan Visualizer v2.1</h1>
+            <p class="text-sm text-white/80">Interactive corrosion mapping and analysis dashboard</p>
         </div>
+
+        <!-- Bottom border glow -->
+        <div class="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-400 to-transparent"></div>
     </div>
-    <div class="glass-scrollbar" style="flex: 1; overflow-y: auto; padding: 12px;">
-    <header class="bg-white dark:bg-gray-800 shadow-md rounded-xl p-6 mb-8 flex justify-between items-center flex-shrink-0" style="display: none;">
-        <div>
-            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Phased Array C-Scan Visualizer</h1>
-            <p class="mt-2 text-gray-600 dark:text-gray-400">Upload a C-Scan data file (.txt or .csv) to generate an interactive corrosion heatmap.</p>
-        </div>
-    </header>
-    
-    <main class="bg-white dark:bg-gray-800 shadow-md rounded-xl p-4 flex-grow flex flex-col overflow-y-auto">
-        <div id="upload-section" class="text-center border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 md:p-12">
-            <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-            <h2 class="mt-4 text-xl font-semibold text-gray-900 dark:text-white">Upload C-Scan file(s)</h2>
-            <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Drag and drop or click to select one or more files.</p>
-            <input type="file" id="file-input" class="hidden" accept=".txt,.csv" multiple>
-            <button id="upload-button" class="mt-6 file-input-button bg-blue-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-blue-700 transition-colors">
-                Select Files
-            </button>
-        </div>
-        
-        <div id="status-message" class="hidden mt-4 text-center p-4 rounded-lg"></div>
-        <div id="progress-container" class="hidden mt-4 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
-            <div id="progress-bar" class="progress-bar-inner bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
-        </div>
-        
-        <div id="file-management-section" class="hidden mt-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-inner">
-            <div class="flex flex-wrap justify-between items-center border-b border-gray-200 dark:border-gray-600 pb-2 mb-2">
-                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Processed Files</h3>
-                <div class="flex gap-1.5 mt-2 md:mt-0 flex-wrap">
-                    <button id="composite-button" class="file-input-button bg-green-600 text-white font-semibold py-1.5 px-3 text-sm rounded-lg hover:bg-green-700 transition-colors">
-                        Generate Composite
-                    </button>
-                    <button id="export-button" class="file-input-button bg-purple-600 text-white font-semibold py-1.5 px-3 text-sm rounded-lg hover:bg-purple-700 hidden transition-colors">
-                        Export Image
-                    </button>
-                    <button id="export-clean-button" class="file-input-button bg-teal-600 text-white font-semibold py-1.5 px-3 text-sm rounded-lg hover:bg-teal-700 hidden transition-colors">
-                        Export Heatmap
-                    </button>
-                    <button id="export-to-hub-btn" class="file-input-button bg-orange-600 text-white font-semibold py-1.5 px-3 text-sm rounded-lg hover:bg-orange-700 hidden transition-colors">
-                        To Hub
-                    </button>
-                    <button id="batch-export-to-hub-btn" class="file-input-button bg-blue-600 text-white font-semibold py-1.5 px-3 text-sm rounded-lg hover:bg-blue-700 hidden transition-colors">
-                        Batch (<span id="selected-count">0</span>)
-                    </button>
-                    <button id="batch-assign-strake-btn" class="file-input-button bg-indigo-600 text-white font-semibold py-1.5 px-3 text-sm rounded-lg hover:bg-indigo-700 hidden transition-colors">
-                        Assign
+
+    <!-- Main Content Area - Three Panel Layout -->
+    <div class="flex-1 flex overflow-hidden min-h-0">
+        <!-- Left Panel - File Management (Fixed Width) -->
+        <div class="w-64 flex-shrink-0 bg-gray-800 border-r border-gray-700 flex flex-col">
+            <!-- Upload Section -->
+            <div class="p-4 border-b border-gray-700">
+                <div id="upload-section" class="border-2 border-dashed border-gray-600 rounded-lg p-4 hover:border-blue-500 transition-colors cursor-pointer bg-gray-900/50">
+                    <svg class="mx-auto h-8 w-8 text-gray-400 mb-2" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <p class="text-xs text-gray-400 text-center mb-2">Drag files or click to browse</p>
+                    <input type="file" id="file-input" class="hidden" accept=".txt,.csv" multiple>
+                    <button id="upload-button" class="w-full bg-blue-600 text-white text-sm font-medium py-1.5 rounded hover:bg-blue-700 transition-colors">
+                        Select Files
                     </button>
                 </div>
+                <div id="status-message" class="hidden mt-2 text-xs p-2 rounded"></div>
+                <div id="progress-container" class="hidden mt-2 w-full bg-gray-700 rounded-full h-1.5">
+                    <div id="progress-bar" class="bg-blue-500 h-1.5 rounded-full transition-all" style="width: 0%"></div>
+                </div>
             </div>
-            <div class="mb-3 flex items-center gap-2">
-                <input type="checkbox" id="select-all-checkbox" class="w-4 h-4 cursor-pointer">
-                <label for="select-all-checkbox" class="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">Select All</label>
+
+            <!-- File List Section (Scrollable) -->
+            <div id="file-management-section" class="hidden flex-1 flex flex-col overflow-hidden">
+                <div class="px-4 py-2 border-b border-gray-700 flex items-center justify-between">
+                    <h3 class="text-sm font-semibold text-white">Processed Files</h3>
+                    <span id="file-count" class="text-xs text-gray-400">0 files</span>
+                </div>
+                <div class="px-4 py-2 flex items-center gap-2 border-b border-gray-700">
+                    <input type="checkbox" id="select-all-checkbox" class="w-4 h-4 rounded">
+                    <label for="select-all-checkbox" class="text-xs text-gray-300 cursor-pointer">Select All</label>
+                    <span id="selected-count-label" class="ml-auto text-xs text-gray-400 hidden">0 selected</span>
+                </div>
+                <div id="file-list" class="flex-1 overflow-y-auto p-2 space-y-1"></div>
+
+                <!-- File Actions (Sticky Bottom) -->
+                <div class="p-3 border-t border-gray-700 bg-gray-900/50">
+                    <div class="grid grid-cols-2 gap-1.5">
+                        <button id="clear-files-button" class="bg-red-600/90 text-white text-xs font-medium py-1.5 rounded hover:bg-red-600 transition-colors">
+                            Clear All
+                        </button>
+                        <button id="composite-button" class="bg-green-600/90 text-white text-xs font-medium py-1.5 rounded hover:bg-green-600 transition-colors">
+                            Composite
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div id="file-list" class="text-sm text-gray-700 dark:text-gray-300"></div>
         </div>
-        
-        <div id="controls-section" class="hidden mt-3 space-y-2">
-            <div class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-inner">
-                <button id="toggle-controls-btn" class="w-full flex justify-between items-center text-left font-semibold text-gray-900 dark:text-white mb-2">
-                    <span class="text-base">Display Controls</span>
-                    <svg id="controls-chevron" class="w-5 h-5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+
+        <!-- Center Panel - Visualization (Flexible Width) -->
+        <div class="flex-1 flex flex-col bg-gray-900 overflow-hidden min-w-0">
+            <!-- Quick Controls Bar -->
+            <div id="controls-section" class="hidden border-b border-gray-700 bg-gray-800/50">
+                <div class="p-3">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <!-- Color Scale -->
+                        <div class="flex items-center gap-2">
+                            <label for="colorscale-cscan" class="text-xs text-gray-400">Color:</label>
+                            <select id="colorscale-cscan" class="text-xs bg-gray-700 text-white rounded px-2 py-1 border border-gray-600 focus:border-blue-500">
+                                <option value="Viridis">Viridis</option>
+                                <option value="RdBu">Red-Blue</option>
+                                <option value="YlOrRd">Yellow-Orange-Red</option>
+                                <option value="Jet" selected>Jet</option>
+                                <option value="Hot">Hot</option>
+                                <option value="Picnic">Picnic</option>
+                                <option value="Portland">Portland</option>
+                                <option value="Electric">Electric</option>
+                            </select>
+                        </div>
+
+                        <!-- Smoothing -->
+                        <div class="flex items-center gap-2">
+                            <label for="smoothing-cscan" class="text-xs text-gray-400">Smooth:</label>
+                            <select id="smoothing-cscan" class="text-xs bg-gray-700 text-white rounded px-2 py-1 border border-gray-600 focus:border-blue-500">
+                                <option value="false">None</option>
+                                <option value="best" selected>Best</option>
+                                <option value="fast">Fast</option>
+                            </select>
+                        </div>
+
+                        <!-- Checkboxes -->
+                        <div class="flex items-center gap-3">
+                            <label class="flex items-center gap-1 cursor-pointer">
+                                <input type="checkbox" id="reverse-scale-cscan" class="w-3 h-3 rounded" checked>
+                                <span class="text-xs text-gray-400">Reverse</span>
+                            </label>
+                            <label class="flex items-center gap-1 cursor-pointer">
+                                <input type="checkbox" id="show-grid-cscan" class="w-3 h-3 rounded" checked>
+                                <span class="text-xs text-gray-400">Grid</span>
+                            </label>
+                            <label class="flex items-center gap-1 cursor-pointer">
+                                <input type="checkbox" id="show-profiles-cscan" class="w-3 h-3 rounded" checked>
+                                <span class="text-xs text-gray-400">Profiles</span>
+                            </label>
+                        </div>
+
+                        <!-- Min/Max Controls -->
+                        <div class="ml-auto flex items-center gap-2">
+                            <label class="text-xs text-gray-400">Range:</label>
+                            <input type="number" id="min-thickness" step="0.1" placeholder="Min" class="w-16 text-xs bg-gray-700 text-white rounded px-2 py-1 border border-gray-600 focus:border-blue-500">
+                            <span class="text-xs text-gray-400">-</span>
+                            <input type="number" id="max-thickness" step="0.1" placeholder="Max" class="w-16 text-xs bg-gray-700 text-white rounded px-2 py-1 border border-gray-600 focus:border-blue-500">
+                            <button id="update-button" class="bg-blue-600 text-white text-xs font-medium px-3 py-1 rounded hover:bg-blue-700 transition-colors">Apply</button>
+                            <button id="reset-range-btn" class="bg-gray-600 text-white text-xs font-medium px-3 py-1 rounded hover:bg-gray-700 transition-colors">Auto</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visualization Container -->
+            <div id="visualization-section" class="hidden flex-1 flex flex-col p-3 overflow-hidden">
+                <!-- Main Heatmap (70% height) -->
+                <div id="plot-container" class="flex-1 bg-gray-800 rounded-lg shadow-lg mb-2 min-h-0"></div>
+
+                <!-- Bottom Profile (30% height) -->
+                <div id="profile-bottom" class="h-36 bg-gray-800 rounded-lg shadow-lg"></div>
+            </div>
+
+            <!-- Empty State -->
+            <div id="empty-state" class="flex-1 flex items-center justify-center text-gray-500">
+                <div class="text-center">
+                    <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                    <p class="text-sm font-medium">No data loaded</p>
+                    <p class="text-xs mt-1">Upload C-Scan files to begin analysis</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel - Statistics & Export (Fixed Width) -->
+        <div class="w-72 flex-shrink-0 bg-gray-800 border-l border-gray-700 flex flex-col">
+            <!-- Statistics Card -->
+            <div id="stats-section" class="hidden p-4 border-b border-gray-700">
+                <h3 class="text-sm font-semibold text-white mb-3">Scan Statistics</h3>
+                <div id="stats-cscan" class="grid grid-cols-2 gap-2 text-xs"></div>
+            </div>
+
+            <!-- Scan Profile -->
+            <div id="profile-container" class="hidden flex-1 p-4 min-h-0">
+                <h3 class="text-sm font-semibold text-white mb-2">Scan Profile</h3>
+                <div id="profile-right" class="h-full bg-gray-800 rounded-lg shadow-lg"></div>
+            </div>
+
+            <!-- Advanced Controls (Collapsible) -->
+            <div id="advanced-controls" class="hidden border-t border-gray-700 bg-gray-900/50">
+                <button id="toggle-advanced-btn" class="w-full px-4 py-2 flex justify-between items-center text-left hover:bg-gray-700/50 transition-colors">
+                    <span class="text-xs font-medium text-gray-300">Advanced Options</span>
+                    <svg id="advanced-chevron" class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                     </svg>
                 </button>
-                <div id="controls-content" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <div class="control-group">
-                        <label for="colorscale-cscan" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Color Scale:</label>
-                        <select id="colorscale-cscan" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm sm:text-sm dark:bg-gray-700 dark:text-white px-3 py-2">
-                            <option value="Viridis">Viridis</option>
-                            <option value="RdBu">Red-Blue</option>
-                            <option value="YlOrRd">Yl-Or-Rd</option>
-                            <option value="Jet" selected>Jet</option>
-                            <option value="Hot">Hot</option>
-                            <option value="Picnic">Picnic</option>
-                            <option value="Portland">Portland</option>
-                            <option value="Electric">Electric</option>
+                <div id="advanced-content" class="hidden p-4 space-y-3 border-t border-gray-700">
+                    <div>
+                        <label for="layout-preset" class="block text-xs text-gray-400 mb-1">Layout Preset:</label>
+                        <select id="layout-preset" class="w-full text-xs bg-gray-700 text-white rounded px-2 py-1 border border-gray-600 focus:border-blue-500">
+                            <option value="single">Single View</option>
+                            <option value="2x2">2x2 Grid</option>
+                            <option value="3x3">3x3 Grid</option>
+                            <option value="1x2">Side by Side</option>
+                            <option value="comparison">Comparison</option>
                         </select>
-                    </div>
-                    <div class="control-group">
-                        <label for="smoothing-cscan" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Smoothing:</label>
-                        <select id="smoothing-cscan" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm sm:text-sm dark:bg-gray-700 dark:text-white px-3 py-2">
-                            <option value="false">None (Blocky)</option>
-                            <option value="best" selected>Smooth (Best)</option>
-                            <option value="fast">Smooth (Fast)</option>
-                        </select>
-                    </div>
-                    <div class="flex items-center gap-2 pt-5">
-                        <input type="checkbox" id="reverse-scale-cscan" class="w-5 h-5 cursor-pointer" checked>
-                        <label for="reverse-scale-cscan" class="text-sm font-medium text-gray-700 dark:text-gray-300">Reverse</label>
-                        <input type="checkbox" id="show-grid-cscan" checked class="w-5 h-5 cursor-pointer ml-4">
-                        <label for="show-grid-cscan" class="text-sm font-medium text-gray-700 dark:text-gray-300">Grid</label>
-                        <input type="checkbox" id="show-profiles-cscan" checked class="w-5 h-5 cursor-pointer ml-4">
-                        <label for="show-profiles-cscan" class="text-sm font-medium text-gray-700 dark:text-gray-300">Profiles</label>
                     </div>
                 </div>
             </div>
 
-            <div class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-inner grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 items-center">
-                <div>
-                    <label for="min-thickness" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Min (mm):</label>
-                    <input type="number" id="min-thickness" step="0.1" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm sm:text-sm dark:bg-gray-700 dark:text-white px-3 py-2">
-                </div>
-                <div>
-                    <label for="max-thickness" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Max (mm):</label>
-                    <input type="number" id="max-thickness" step="0.1" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm sm:text-sm dark:bg-gray-700 dark:text-white px-3 py-2">
-                </div>
-                <div class="flex gap-2 pt-5">
-                    <button id="update-button" class="file-input-button bg-blue-600 text-white font-semibold py-1.5 px-3 text-sm rounded-lg hover:bg-blue-700 transition-colors">Apply</button>
-                    <button id="reset-range-btn" class="file-input-button bg-gray-500 text-white font-semibold py-1.5 px-3 text-sm rounded-lg hover:bg-gray-600 transition-colors">Auto</button>
-                </div>
+            <!-- Metadata Section (Collapsible) -->
+            <div id="metadata-section" class="hidden border-t border-gray-700 bg-gray-900/50">
+                <button id="toggle-metadata-btn" class="w-full px-4 py-2 flex justify-between items-center text-left hover:bg-gray-700/50 transition-colors">
+                    <span class="text-xs font-medium text-gray-300">Scan Metadata</span>
+                    <svg id="metadata-chevron" class="w-4 h-4 text-gray-400 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </button>
+                <div id="metadata-content" class="hidden p-4 grid grid-cols-2 gap-2 text-xs border-t border-gray-700"></div>
             </div>
-        </div>
 
-        <div id="visualization-section" class="hidden mt-3 w-full flex-grow">
-            <div class="grid grid-cols-1 lg:grid-cols-4 gap-3 w-full h-full" style="min-height: 600px;">
-                <!-- Main heatmap (spans 3 columns) -->
-                <div class="lg:col-span-3 flex flex-col gap-2">
-                    <div id="plot-container" class="w-full bg-white dark:bg-gray-800 rounded-lg shadow-md" style="height: calc(100% - 180px); min-height: 400px;"></div>
-                    <!-- Bottom profile (Index/Y-axis) -->
-                    <div id="profile-bottom" class="w-full bg-white dark:bg-gray-800 rounded-lg shadow-md" style="height: 160px;"></div>
+            <!-- Export Actions (Sticky Bottom) -->
+            <div id="export-section" class="hidden p-4 border-t border-gray-700 bg-gray-900/50">
+                <h3 class="text-sm font-semibold text-white mb-3">Export Options</h3>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="export-button" class="bg-purple-600/90 text-white text-xs font-medium py-2 rounded hover:bg-purple-600 transition-colors">
+                        Export Image
+                    </button>
+                    <button id="export-clean-button" class="bg-teal-600/90 text-white text-xs font-medium py-2 rounded hover:bg-teal-600 transition-colors">
+                        Export Heatmap
+                    </button>
+                    <button id="export-to-hub-btn" class="bg-orange-600/90 text-white text-xs font-medium py-2 rounded hover:bg-orange-600 transition-colors">
+                        Send to Hub
+                    </button>
+                    <button id="batch-export-to-hub-btn" class="bg-blue-600/90 text-white text-xs font-medium py-2 rounded hover:bg-blue-600 transition-colors hidden">
+                        Batch Export
+                    </button>
                 </div>
-                <!-- Right column with profile and stats -->
-                <div class="lg:col-span-1 flex flex-col gap-2">
-                    <!-- Right profile (Scan/X-axis) -->
-                    <div id="profile-right" class="w-full bg-white dark:bg-gray-800 rounded-lg shadow-md" style="flex: 1 1 auto; min-height: 300px;"></div>
-                    <!-- Stats display -->
-                    <div id="stats-cscan" class="grid grid-cols-1 gap-1 p-1.5 bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-inner"></div>
-                </div>
+                <button id="batch-assign-strake-btn" class="w-full mt-2 bg-indigo-600/90 text-white text-xs font-medium py-2 rounded hover:bg-indigo-600 transition-colors hidden">
+                    Assign to Strake
+                </button>
             </div>
         </div>
-        
-        <div id="metadata-section" class="hidden mt-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-inner">
-            <button id="toggle-metadata-btn" class="w-full flex justify-between items-center text-left font-semibold text-gray-900 dark:text-white mb-2">
-                <span class="text-base">Scan Metadata</span>
-                <svg id="metadata-chevron" class="w-5 h-5 transition-transform rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-            </button>
-            <div id="metadata-content" class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm hidden"></div>
-        </div>
-    </main>
     </div>
 </div>
 `;
@@ -162,44 +231,67 @@ const HTML = `
 function cacheDom() {
     const q = (s) => container.querySelector(s);
     dom = {
+        // Upload elements
         uploadButton: q('#upload-button'),
         fileInput: q('#file-input'),
         uploadSection: q('#upload-section'),
         statusMessage: q('#status-message'),
+        progressContainer: q('#progress-container'),
+        progressBar: q('#progress-bar'),
+
+        // File management elements
+        fileManagementSection: q('#file-management-section'),
+        fileListContainer: q('#file-list'),
+        fileCount: q('#file-count'),
+        selectAllCheckbox: q('#select-all-checkbox'),
+        selectedCountLabel: q('#selected-count-label'),
+        clearFilesButton: q('#clear-files-button'),
+        compositeButton: q('#composite-button'),
+
+        // Visualization elements
         visualizationSection: q('#visualization-section'),
         plotContainer: q('#plot-container'),
         profileBottom: q('#profile-bottom'),
         profileRight: q('#profile-right'),
-        metadataSection: q('#metadata-section'),
-        metadataContent: q('#metadata-content'),
+        emptyState: q('#empty-state'),
+
+        // Controls elements
         controlsSection: q('#controls-section'),
-        minThicknessInput: q('#min-thickness'),
-        maxThicknessInput: q('#max-thickness'),
-        updateButton: q('#update-button'),
-        resetRangeBtn: q('#reset-range-btn'),
-        fileManagementSection: q('#file-management-section'),
-        fileListContainer: q('#file-list'),
-        compositeButton: q('#composite-button'),
-        exportButton: q('#export-button'),
-        exportCleanButton: q('#export-clean-button'),
-        exportToHubBtn: q('#export-to-hub-btn'),
-        batchExportToHubBtn: q('#batch-export-to-hub-btn'),
-        batchAssignStrakeBtn: q('#batch-assign-strake-btn'),
-        selectAllCheckbox: q('#select-all-checkbox'),
-        selectedCountSpan: q('#selected-count'),
-        progressContainer: q('#progress-container'),
-        progressBar: q('#progress-bar'),
         colorscaleSelect: q('#colorscale-cscan'),
         smoothingSelect: q('#smoothing-cscan'),
         reverseScaleCheckbox: q('#reverse-scale-cscan'),
         showGridCheckbox: q('#show-grid-cscan'),
         showProfilesCheckbox: q('#show-profiles-cscan'),
+        minThicknessInput: q('#min-thickness'),
+        maxThicknessInput: q('#max-thickness'),
+        updateButton: q('#update-button'),
+        resetRangeBtn: q('#reset-range-btn'),
+
+        // Statistics elements
+        statsSection: q('#stats-section'),
         statsContainer: q('#stats-cscan'),
-        toggleControlsBtn: q('#toggle-controls-btn'),
-        controlsContent: q('#controls-content'),
-        controlsChevron: q('#controls-chevron'),
+        profileContainer: q('#profile-container'),
+
+        // Advanced controls elements
+        advancedControls: q('#advanced-controls'),
+        toggleAdvancedBtn: q('#toggle-advanced-btn'),
+        advancedChevron: q('#advanced-chevron'),
+        advancedContent: q('#advanced-content'),
+        layoutPresetSelect: q('#layout-preset'),
+
+        // Metadata elements
+        metadataSection: q('#metadata-section'),
         toggleMetadataBtn: q('#toggle-metadata-btn'),
-        metadataChevron: q('#metadata-chevron')
+        metadataChevron: q('#metadata-chevron'),
+        metadataContent: q('#metadata-content'),
+
+        // Export elements
+        exportSection: q('#export-section'),
+        exportButton: q('#export-button'),
+        exportCleanButton: q('#export-clean-button'),
+        exportToHubBtn: q('#export-to-hub-btn'),
+        batchExportToHubBtn: q('#batch-export-to-hub-btn'),
+        batchAssignStrakeBtn: q('#batch-assign-strake-btn')
     };
 }
 
@@ -225,9 +317,11 @@ function showStatus(message, isError = false) {
 
 async function handleFiles(files) {
     showStatus(`Processing ${files.length} file(s)...`);
-    [dom.visualizationSection, dom.metadataSection, dom.controlsSection, dom.fileManagementSection, dom.exportButton, dom.exportCleanButton, dom.exportToHubBtn].forEach(el => el.classList.add('hidden'));
 
-    processedScans = [];
+    // Hide empty state when processing files
+    if (dom.emptyState) dom.emptyState.classList.add('hidden');
+
+    // Don't reset processedScans, append to it instead to allow incremental file uploads
     isShowingComposite = false;
     customColorRange = { min: null, max: null };
 
@@ -249,8 +343,18 @@ async function handleFiles(files) {
         renderMetadata(currentScanData.metadata);
         renderFileList();
         showStatus(`${processedScans.length} file(s) processed.`);
-        dom.uploadSection.classList.add('hidden');
-        [dom.fileManagementSection, dom.controlsSection].forEach(el => el.classList.remove('hidden'));
+
+        // Show all relevant panels
+        [dom.fileManagementSection, dom.controlsSection, dom.visualizationSection,
+         dom.statsSection, dom.profileContainer, dom.exportSection, dom.advancedControls,
+         dom.metadataSection].forEach(el => {
+            if (el) el.classList.remove('hidden');
+        });
+
+        // Update file count
+        if (dom.fileCount) {
+            dom.fileCount.textContent = `${processedScans.length} file${processedScans.length !== 1 ? 's' : ''}`;
+        }
     }
 }
 
@@ -662,6 +766,9 @@ function updatePlot() {
             Plotly.Plots.resize(dom.plotContainer);
         }, 100);
 
+        // Remove any existing hover listeners to prevent memory leak
+        dom.plotContainer.removeAllListeners('plotly_hover');
+
         // Add hover event listener for interactive profile updates
         dom.plotContainer.on('plotly_hover', (data) => {
             if (data.points && data.points[0]) {
@@ -697,8 +804,33 @@ function updatePlot() {
     // Show/hide profile containers based on checkbox
     updateProfileVisibility();
 
-    dom.visualizationSection.classList.remove('hidden');
-    [dom.exportButton, dom.exportCleanButton, dom.exportToHubBtn].forEach(b => b.classList.remove('hidden'));
+    // Show visualization section and hide empty state
+    if (dom.visualizationSection) dom.visualizationSection.classList.remove('hidden');
+    if (dom.emptyState) dom.emptyState.classList.add('hidden');
+
+    // Show export buttons
+    [dom.exportButton, dom.exportCleanButton, dom.exportToHubBtn].forEach(b => {
+        if (b) b.classList.remove('hidden');
+    });
+}
+
+function updateDebugInfo() {
+    const vizSection = document.getElementById('visualization-section');
+    const widthSpan = document.getElementById('container-width');
+    const breakpointSpan = document.getElementById('active-breakpoint');
+
+    if (vizSection && widthSpan && breakpointSpan) {
+        const width = vizSection.offsetWidth;
+        widthSpan.textContent = width;
+
+        let breakpoint = 'xs (<640px)';
+        if (width >= 1024) {
+            breakpoint = 'lg (≥1024px, 4-col)';
+        } else if (width >= 640) {
+            breakpoint = 'sm (≥640px, 2-col)';
+        }
+        breakpointSpan.textContent = breakpoint;
+    }
 }
 
 function updateProfileVisibility() {
@@ -713,7 +845,7 @@ function updateProfileVisibility() {
         // Update layout to grid with profiles
         const vizGrid = dom.visualizationSection.querySelector('.grid');
         if (vizGrid) {
-            vizGrid.className = 'grid grid-cols-1 lg:grid-cols-4 gap-3 w-full h-full';
+            vizGrid.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full h-full';
             vizGrid.style.minHeight = '600px';
         }
 
@@ -731,7 +863,7 @@ function updateProfileVisibility() {
         // Update layout - stats stay in right column
         const vizGrid = dom.visualizationSection.querySelector('.grid');
         if (vizGrid) {
-            vizGrid.className = 'grid grid-cols-1 lg:grid-cols-4 gap-3 w-full h-full';
+            vizGrid.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full h-full';
             vizGrid.style.minHeight = '500px';
         }
 
@@ -748,26 +880,48 @@ function updateProfileVisibility() {
 
 function updateBatchButtons() {
     const selectedCount = selectedScans.size;
-    dom.selectedCountSpan.textContent = selectedCount;
 
-    if (selectedCount > 0) {
-        dom.batchExportToHubBtn.classList.remove('hidden');
-        dom.batchAssignStrakeBtn.classList.remove('hidden');
-    } else {
-        dom.batchExportToHubBtn.classList.add('hidden');
-        dom.batchAssignStrakeBtn.classList.add('hidden');
+    // Update selected count label
+    if (dom.selectedCountLabel) {
+        if (selectedCount > 0) {
+            dom.selectedCountLabel.textContent = `${selectedCount} selected`;
+            dom.selectedCountLabel.classList.remove('hidden');
+        } else {
+            dom.selectedCountLabel.classList.add('hidden');
+        }
+    }
+
+    // Update batch export button text
+    if (dom.batchExportToHubBtn) {
+        dom.batchExportToHubBtn.textContent = `Batch Export (${selectedCount})`;
+        if (selectedCount > 0) {
+            dom.batchExportToHubBtn.classList.remove('hidden');
+        } else {
+            dom.batchExportToHubBtn.classList.add('hidden');
+        }
+    }
+
+    // Show/hide batch assign button
+    if (dom.batchAssignStrakeBtn) {
+        if (selectedCount > 0) {
+            dom.batchAssignStrakeBtn.classList.remove('hidden');
+        } else {
+            dom.batchAssignStrakeBtn.classList.add('hidden');
+        }
     }
 
     // Update select all checkbox state
-    if (selectedCount === 0) {
-        dom.selectAllCheckbox.checked = false;
-        dom.selectAllCheckbox.indeterminate = false;
-    } else if (selectedCount === processedScans.length) {
-        dom.selectAllCheckbox.checked = true;
-        dom.selectAllCheckbox.indeterminate = false;
-    } else {
-        dom.selectAllCheckbox.checked = false;
-        dom.selectAllCheckbox.indeterminate = true;
+    if (dom.selectAllCheckbox) {
+        if (selectedCount === 0) {
+            dom.selectAllCheckbox.checked = false;
+            dom.selectAllCheckbox.indeterminate = false;
+        } else if (selectedCount === processedScans.length) {
+            dom.selectAllCheckbox.checked = true;
+            dom.selectAllCheckbox.indeterminate = false;
+        } else {
+            dom.selectAllCheckbox.checked = false;
+            dom.selectAllCheckbox.indeterminate = true;
+        }
     }
 }
 
@@ -787,15 +941,19 @@ function renderFileList() {
     dom.fileListContainer.innerHTML = '';
     processedScans.forEach((scan, index) => {
         const wrapper = document.createElement('div');
-        wrapper.className = 'flex items-center gap-2 p-2 mt-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors';
+        wrapper.className = 'flex flex-col p-2 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer border border-transparent';
         if (!isShowingComposite && scan === currentScanData) {
-            wrapper.classList.add('bg-blue-100', 'dark:bg-blue-900/50');
+            wrapper.classList.add('bg-blue-900/30', 'border-blue-500');
         }
+
+        // Top row with checkbox and filename
+        const topRow = document.createElement('div');
+        topRow.className = 'flex items-center gap-2';
 
         // Checkbox for batch selection
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
-        checkbox.className = 'w-4 h-4 cursor-pointer';
+        checkbox.className = 'w-3 h-3 rounded cursor-pointer';
         checkbox.checked = selectedScans.has(index);
         checkbox.onclick = (e) => {
             e.stopPropagation();
@@ -807,14 +965,34 @@ function renderFileList() {
             updateBatchButtons();
         };
 
-        // File name label
+        // File name (truncated if too long)
         const label = document.createElement('div');
-        label.className = 'flex-1 cursor-pointer';
+        label.className = 'flex-1 text-xs text-gray-200 truncate';
         if (!isShowingComposite && scan === currentScanData) {
-            label.classList.add('font-semibold');
+            label.classList.add('font-semibold', 'text-blue-400');
         }
-        label.textContent = scan.fileName;
-        label.onclick = () => {
+
+        // Extract just the filename without extension for compactness
+        const fileName = scan.fileName.replace(/\.[^/.]+$/, "");
+        const truncatedName = fileName.length > 25 ? fileName.substring(0, 22) + '...' : fileName;
+        label.textContent = truncatedName;
+        label.title = scan.fileName; // Full name on hover
+
+        // Bottom row with metadata
+        const metaRow = document.createElement('div');
+        metaRow.className = 'text-xs text-gray-400 mt-1 pl-5';
+
+        // Calculate valid area if metadata exists
+        if (scan.metadata) {
+            const validArea = scan.metadata['Valid Area (m²)'] || scan.metadata['Valid Area'] || 'N/A';
+            const ndPercent = scan.metadata['No Data %'] || scan.metadata['ND %'] || 'N/A';
+            metaRow.textContent = `Area: ${validArea} • ND: ${ndPercent}`;
+        } else {
+            metaRow.textContent = 'No metadata';
+        }
+
+        // Click handler for the entire wrapper
+        wrapper.onclick = () => {
             currentScanData = scan;
             isShowingComposite = false;
             renderPlot(currentScanData);
@@ -822,10 +1000,17 @@ function renderFileList() {
             renderFileList();
         };
 
-        wrapper.appendChild(checkbox);
-        wrapper.appendChild(label);
+        topRow.appendChild(checkbox);
+        topRow.appendChild(label);
+        wrapper.appendChild(topRow);
+        wrapper.appendChild(metaRow);
         dom.fileListContainer.appendChild(wrapper);
     });
+
+    // Update file count
+    if (dom.fileCount) {
+        dom.fileCount.textContent = `${processedScans.length} file${processedScans.length !== 1 ? 's' : ''}`;
+    }
 
     updateBatchButtons();
 }
@@ -909,6 +1094,187 @@ function getCompositeWorker() {
     `;
     
     return new Worker(URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' })));
+}
+
+function clearFiles() {
+    processedScans = [];
+    selectedScans.clear();
+    isShowingComposite = false;
+    currentScanData = null;
+    customColorRange = { min: null, max: null };
+
+    // Hide all panels
+    [dom.visualizationSection, dom.metadataSection, dom.controlsSection,
+     dom.fileManagementSection, dom.statsSection, dom.profileContainer,
+     dom.exportSection, dom.advancedControls].forEach(el => {
+        if (el) el.classList.add('hidden');
+    });
+
+    // Show empty state
+    if (dom.emptyState) dom.emptyState.classList.remove('hidden');
+
+    // Clear the plots
+    if (dom.plotContainer) Plotly.purge(dom.plotContainer);
+    if (dom.profileBottom) Plotly.purge(dom.profileBottom);
+    if (dom.profileRight) Plotly.purge(dom.profileRight);
+
+    // Reset file input and count
+    dom.fileInput.value = '';
+    if (dom.fileCount) dom.fileCount.textContent = '0 files';
+
+    showStatus("All files cleared. Ready to upload new files.");
+}
+
+// Layout presets configuration
+const LAYOUT_PRESETS = {
+    single: {
+        name: 'Single View',
+        columns: 1,
+        rows: 1,
+        showProfiles: true
+    },
+    '2x2': {
+        name: '2x2 Grid',
+        columns: 2,
+        rows: 2,
+        showProfiles: false
+    },
+    '3x3': {
+        name: '3x3 Grid',
+        columns: 3,
+        rows: 3,
+        showProfiles: false
+    },
+    '1x2': {
+        name: 'Side by Side',
+        columns: 2,
+        rows: 1,
+        showProfiles: false
+    },
+    comparison: {
+        name: 'Comparison Mode',
+        columns: 2,
+        rows: 1,
+        showProfiles: true,
+        syncAxes: true
+    }
+};
+
+let currentLayout = 'single';
+let layoutPlots = [];
+
+function handleLayoutChange() {
+    const selectedLayout = dom.layoutPresetSelect.value;
+    currentLayout = selectedLayout;
+    const preset = LAYOUT_PRESETS[selectedLayout];
+
+    showStatus(`Switching to ${preset.name} layout...`);
+
+    // Clear existing plots
+    if (layoutPlots.length > 0) {
+        layoutPlots.forEach(plot => {
+            if (plot.container) {
+                Plotly.purge(plot.container);
+            }
+        });
+        layoutPlots = [];
+    }
+
+    // Apply new layout
+    applyLayout(preset);
+
+    // Update profiles visibility based on layout
+    dom.showProfilesCheckbox.checked = preset.showProfiles;
+    updateProfileVisibility();
+
+    // Re-render current data if available
+    if (currentScanData) {
+        renderPlot(currentScanData);
+    }
+
+    showStatus(`Layout changed to ${preset.name}`);
+}
+
+function applyLayout(preset) {
+    const plotContainer = dom.plotContainer;
+    const visualizationSection = dom.visualizationSection;
+
+    if (preset.columns === 1 && preset.rows === 1) {
+        // Single view - restore normal layout
+        plotContainer.style.display = 'block';
+        plotContainer.style.gridTemplateColumns = '';
+        plotContainer.style.gridTemplateRows = '';
+    } else {
+        // Grid layout
+        plotContainer.style.display = 'grid';
+        plotContainer.style.gridTemplateColumns = `repeat(${preset.columns}, 1fr)`;
+        plotContainer.style.gridTemplateRows = `repeat(${preset.rows}, 1fr)`;
+        plotContainer.style.gap = '10px';
+
+        // Create subplot containers if needed
+        const totalPlots = preset.columns * preset.rows;
+        plotContainer.innerHTML = '';
+
+        for (let i = 0; i < totalPlots && i < processedScans.length; i++) {
+            const plotDiv = document.createElement('div');
+            plotDiv.id = `subplot-${i}`;
+            plotDiv.className = 'cscan-subplot';
+            plotDiv.style.width = '100%';
+            plotDiv.style.height = '100%';
+            plotDiv.style.minHeight = '400px';
+            plotContainer.appendChild(plotDiv);
+
+            // Render scan in this subplot
+            if (processedScans[i]) {
+                renderSubplot(processedScans[i], plotDiv, preset);
+            }
+        }
+    }
+}
+
+function renderSubplot(scanData, container, preset) {
+    const data = [{
+        z: scanData.compositeMatrix || scanData.thickness_values,
+        x: scanData.x_coords,
+        y: scanData.y_coords,
+        type: 'heatmap',
+        colorscale: dom.colorscaleSelect.value,
+        reversescale: dom.reverseScaleCheckbox.checked,
+        showscale: true,
+        hovertemplate: 'X: %{x:.1f} mm<br>Y: %{y:.1f} mm<br>Thickness: %{z:.2f} mm<extra></extra>',
+        zsmooth: dom.smoothingSelect.value
+    }];
+
+    const layout = {
+        title: scanData.fileName || 'Scan',
+        xaxis: {
+            title: 'X Position (mm)',
+            scaleanchor: preset.syncAxes ? 'y' : null,
+            scaleratio: preset.syncAxes ? 1.0 : null,
+            showgrid: dom.showGridCheckbox.checked
+        },
+        yaxis: {
+            title: 'Y Position (mm)',
+            showgrid: dom.showGridCheckbox.checked
+        },
+        margin: { l: 60, r: 40, t: 40, b: 60 },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)'
+    };
+
+    // Apply custom color range if set
+    if (customColorRange.min !== null && customColorRange.max !== null) {
+        data[0].zmin = customColorRange.min;
+        data[0].zmax = customColorRange.max;
+    }
+
+    Plotly.newPlot(container, data, layout, {
+        responsive: true,
+        displaylogo: false,
+        modeBarButtonsToRemove: ['lasso2d', 'select2d']
+    });
+
+    layoutPlots.push({ container, data: scanData });
 }
 
 function generateComposite() {
@@ -1263,15 +1629,36 @@ async function exportToHub() {
         const thumbnails = await generateThumbnails();
         const stats = calculateStats(currentScanData);
 
+        // Create a compressed version of scan data for large datasets
+        // Only store essential data needed to recreate the visualization
+        const compressedScanData = {
+            ...currentScanData,
+            // For large arrays, store only essential info
+            thickness_values_flat: currentScanData.thickness_values_flat.length > 100000
+                ? null  // Don't store if too large, can reconstruct from matrix
+                : currentScanData.thickness_values_flat,
+            // Keep metadata and coordinates as they're small
+            metadata: currentScanData.metadata,
+            x_coords: currentScanData.x_coords,
+            y_coords: currentScanData.y_coords,
+            rows: currentScanData.rows,
+            cols: currentScanData.cols,
+            fileName: currentScanData.fileName,
+            // For composites, store the matrix in a more efficient way if needed
+            compositeMatrix: currentScanData.compositeMatrix
+        };
+
         const scanData = {
             name: scanNameValue,
             toolType: 'cscan',
             data: {
-                scanData: currentScanData,
+                scanData: compressedScanData,
                 isComposite: isShowingComposite,
                 customColorRange: customColorRange,
                 stats: stats,
-                fileName: currentScanData.fileName
+                fileName: currentScanData.fileName,
+                // Store a flag if data was compressed
+                isCompressed: currentScanData.thickness_values_flat.length > 100000
             },
             thumbnail: thumbnails ? thumbnails.full : null,
             heatmapOnly: thumbnails ? thumbnails.heatmapOnly : null
@@ -1578,15 +1965,30 @@ async function batchExportToHub() {
                     ? scan.fileName?.replace(/\.(txt|csv)$/i, '') || `C-Scan ${i + 1}`
                     : `C-Scan ${new Date().toLocaleDateString()} - ${i + 1}`;
 
+                // Compress large scan data to avoid file size limits
+                const compressedScan = {
+                    ...scan,
+                    thickness_values_flat: scan.thickness_values_flat?.length > 100000
+                        ? null  // Don't store if too large
+                        : scan.thickness_values_flat,
+                    metadata: scan.metadata,
+                    x_coords: scan.x_coords,
+                    y_coords: scan.y_coords,
+                    rows: scan.rows,
+                    cols: scan.cols,
+                    fileName: scan.fileName
+                };
+
                 const scanData = {
                     name: scanName,
                     toolType: 'cscan',
                     data: {
-                        scanData: scan,
+                        scanData: compressedScan,
                         isComposite: false,
                         customColorRange: { min: null, max: null },
                         stats: stats,
-                        fileName: scan.fileName
+                        fileName: scan.fileName,
+                        isCompressed: scan.thickness_values_flat?.length > 100000
                     },
                     thumbnail: thumbnails ? thumbnails.full : null,
                     heatmapOnly: thumbnails ? thumbnails.heatmapOnly : null
@@ -1730,10 +2132,28 @@ async function batchAssignToStrake() {
         const vesselId = vesselSelect.value;
         if (assetId && vesselId) {
             const vessel = dataManager.getVessel(assetId, vesselId);
-            strakeSection.style.display = 'block';
-            const strakes = vessel.strakes || [];
-            strakeSelect.innerHTML = '<option value="">-- Select Strake --</option>' +
-                strakes.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+            if (vessel) {
+                strakeSection.style.display = 'block';
+
+                // Initialize strakes array if it doesn't exist (for backward compatibility)
+                if (!vessel.strakes) {
+                    vessel.strakes = [];
+                    // Save the update to ensure strakes array persists
+                    dataManager.saveToStorage();
+                }
+
+                const strakes = vessel.strakes || [];
+
+                if (strakes.length === 0) {
+                    strakeSelect.innerHTML = '<option value="">-- No strakes available (Create new) --</option>';
+                } else {
+                    strakeSelect.innerHTML = '<option value="">-- Select Strake --</option>' +
+                        strakes.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+                }
+            } else {
+                strakeSection.style.display = 'none';
+                showStatus('Vessel not found', true);
+            }
         } else {
             strakeSection.style.display = 'none';
         }
@@ -1871,24 +2291,17 @@ function fileInputHandler(event) {
 }
 
 function loadScanData(event) {
-    console.log('[C-SCAN] loadScanData called:', event.detail);
     const { scanData } = event.detail;
 
     if (!scanData || scanData.toolType !== 'cscan') {
-        console.log('[C-SCAN] Ignoring event - not a cscan:', scanData?.toolType);
         return;
     }
-
-    console.log('[C-SCAN] Loading scan:', scanData.name);
 
     // Ensure DOM elements are initialized
     if (!dom || !dom.minThicknessInput) {
-        console.warn('[C-SCAN] DOM not ready, retrying in 200ms...');
         setTimeout(() => loadScanData(event), 200);
         return;
     }
-
-    console.log('[C-SCAN] DOM is ready, processing scan data');
 
     // Load the saved scan data
     if (scanData.data && scanData.data.scanData) {
@@ -1929,6 +2342,7 @@ function addEventListeners() {
     dom.fileInput.addEventListener('change', fileInputHandler);
     dom.updateButton.addEventListener('click', applyCustomRange);
     dom.resetRangeBtn.addEventListener('click', resetRange);
+    dom.clearFilesButton.addEventListener('click', clearFiles);
     dom.compositeButton.addEventListener('click', generateComposite);
     dom.exportButton.addEventListener('click', exportImage);
     dom.exportCleanButton.addEventListener('click', exportCleanImageAsPNG);
@@ -1938,6 +2352,7 @@ function addEventListeners() {
     dom.selectAllCheckbox.addEventListener('change', toggleSelectAll);
     dom.colorscaleSelect.addEventListener('change', updatePlot);
     dom.smoothingSelect.addEventListener('change', updatePlot);
+    dom.layoutPresetSelect.addEventListener('change', handleLayoutChange);
     dom.reverseScaleCheckbox.addEventListener('change', updatePlot);
     dom.showGridCheckbox.addEventListener('change', updatePlot);
     dom.showProfilesCheckbox.addEventListener('change', () => {
@@ -1948,17 +2363,19 @@ function addEventListeners() {
         }
     });
 
-    // Collapsible controls toggle
-    dom.toggleControlsBtn.addEventListener('click', () => {
-        const isHidden = dom.controlsContent.classList.contains('hidden');
-        if (isHidden) {
-            dom.controlsContent.classList.remove('hidden');
-            dom.controlsChevron.style.transform = 'rotate(180deg)';
-        } else {
-            dom.controlsContent.classList.add('hidden');
-            dom.controlsChevron.style.transform = 'rotate(0deg)';
-        }
-    });
+    // Advanced controls toggle
+    if (dom.toggleAdvancedBtn) {
+        dom.toggleAdvancedBtn.addEventListener('click', () => {
+            const isHidden = dom.advancedContent.classList.contains('hidden');
+            if (isHidden) {
+                dom.advancedContent.classList.remove('hidden');
+                dom.advancedChevron.style.transform = 'rotate(180deg)';
+            } else {
+                dom.advancedContent.classList.add('hidden');
+                dom.advancedChevron.style.transform = 'rotate(0deg)';
+            }
+        });
+    }
 
     // Collapsible metadata toggle
     dom.toggleMetadataBtn.addEventListener('click', () => {
@@ -1974,6 +2391,13 @@ function addEventListeners() {
 
     document.addEventListener('themeChanged', updatePlot);
     window.addEventListener('loadScanData', loadScanData);
+
+    // Update plot on resize for responsiveness
+    window.addEventListener('resize', () => {
+        if (currentScanData) {
+            updatePlot();
+        }
+    });
 }
 
 function removeEventListeners() {
