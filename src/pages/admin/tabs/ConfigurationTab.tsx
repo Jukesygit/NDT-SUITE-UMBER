@@ -1,14 +1,12 @@
 /**
  * ConfigurationTab - Admin dashboard configuration management
  *
- * Manages report field configuration lists:
- * - 11 different configuration lists (procedure numbers, equipment models, etc.)
- * - Add, edit, delete items
- * - Reset individual lists or all lists
- * - Export/import configuration as JSON
+ * Manages:
+ * - System announcements (global messages for all users)
+ * - Report field configuration lists (procedure numbers, equipment models, etc.)
  */
 
-import { useState, useRef, KeyboardEvent } from 'react';
+import { useState, useRef, KeyboardEvent, FormEvent } from 'react';
 import { useAdminConfig, useConfigMetadata } from '../../../hooks/queries/useAdminConfig';
 import {
     useAddConfigItem,
@@ -18,7 +16,10 @@ import {
     useResetAllConfig,
     useImportConfig,
 } from '../../../hooks/mutations/useConfigMutations';
+import { useAnnouncement } from '../../../hooks/queries/useAnnouncement';
+import { useUpdateAnnouncement, useClearAnnouncement } from '../../../hooks/mutations/useAnnouncementMutations';
 import { adminService } from '../../../services/admin-service';
+import type { UpdateAnnouncementData } from '../../../services/admin-service';
 import { SectionSpinner, ErrorDisplay, EmptyState, ConfirmDialog } from '../../../components/ui';
 
 // Type for configuration list names
@@ -57,10 +58,19 @@ function downloadJson(content: string, filename: string) {
     URL.revokeObjectURL(url);
 }
 
+// Announcement type options
+const announcementTypes = [
+    { value: 'info', label: 'Info', color: '#60a5fa' },
+    { value: 'warning', label: 'Warning', color: '#fbbf24' },
+    { value: 'success', label: 'Success', color: '#22c55e' },
+    { value: 'error', label: 'Error', color: '#ef4444' },
+] as const;
+
 export default function ConfigurationTab() {
     // Data hooks
     const { data: config, isLoading, error } = useAdminConfig();
     const metadata = useConfigMetadata();
+    const { data: announcement, isLoading: announcementLoading } = useAnnouncement();
 
     // Mutation hooks
     const addItemMutation = useAddConfigItem();
@@ -69,8 +79,10 @@ export default function ConfigurationTab() {
     const resetListMutation = useResetConfigList();
     const resetAllMutation = useResetAllConfig();
     const importMutation = useImportConfig();
+    const updateAnnouncementMutation = useUpdateAnnouncement();
+    const clearAnnouncementMutation = useClearAnnouncement();
 
-    // Local state
+    // Local state - Config lists
     const [addingToList, setAddingToList] = useState<ConfigListName | null>(null);
     const [addItemValue, setAddItemValue] = useState('');
     const [editingItem, setEditingItem] = useState<ItemAction & { index: number } | null>(null);
@@ -79,8 +91,59 @@ export default function ConfigurationTab() {
     const [resettingList, setResettingList] = useState<ConfigListName | null>(null);
     const [resetAllOpen, setResetAllOpen] = useState(false);
 
+    // Local state - Announcement editor
+    const [announcementTitle, setAnnouncementTitle] = useState('');
+    const [announcementMessage, setAnnouncementMessage] = useState('');
+    const [announcementType, setAnnouncementType] = useState<'info' | 'warning' | 'success' | 'error'>('info');
+    const [announcementActive, setAnnouncementActive] = useState(true);
+    const [announcementDismissible, setAnnouncementDismissible] = useState(true);
+    const [announcementEditing, setAnnouncementEditing] = useState(false);
+    const [clearAnnouncementOpen, setClearAnnouncementOpen] = useState(false);
+
     // Refs
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Load announcement data into form when it changes
+    const loadAnnouncementToForm = () => {
+        if (announcement) {
+            setAnnouncementTitle(announcement.title || '');
+            setAnnouncementMessage(announcement.message || '');
+            setAnnouncementType(announcement.type);
+            setAnnouncementActive(announcement.is_active);
+            setAnnouncementDismissible(announcement.is_dismissible);
+        } else {
+            setAnnouncementTitle('');
+            setAnnouncementMessage('');
+            setAnnouncementType('info');
+            setAnnouncementActive(true);
+            setAnnouncementDismissible(true);
+        }
+        setAnnouncementEditing(true);
+    };
+
+    // Handle announcement save
+    const handleSaveAnnouncement = async (e: FormEvent) => {
+        e.preventDefault();
+        if (!announcementMessage.trim()) return;
+
+        const data: UpdateAnnouncementData = {
+            title: announcementTitle.trim() || null,
+            message: announcementMessage.trim(),
+            type: announcementType,
+            is_active: announcementActive,
+            is_dismissible: announcementDismissible,
+        };
+
+        await updateAnnouncementMutation.mutateAsync(data);
+        setAnnouncementEditing(false);
+    };
+
+    // Handle announcement clear
+    const handleClearAnnouncement = async () => {
+        await clearAnnouncementMutation.mutateAsync();
+        setClearAnnouncementOpen(false);
+        setAnnouncementEditing(false);
+    };
 
     // Loading states
     if (isLoading) {
@@ -200,40 +263,232 @@ export default function ConfigurationTab() {
     const listNames = Object.keys(metadata) as ConfigListName[];
 
     return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-start justify-between">
-                <div>
-                    <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                        Report Field Configuration
-                    </h2>
-                    <p style={{ marginTop: '4px', fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)' }}>
-                        Manage suggested values for report fields across the system
-                    </p>
+        <div className="space-y-8">
+            {/* System Announcement Section */}
+            <div className="glass-card" style={{ padding: '24px' }}>
+                <div className="flex items-start justify-between mb-4">
+                    <div>
+                        <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                            System Announcement
+                        </h2>
+                        <p style={{ marginTop: '4px', fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)' }}>
+                            Display a message to all users below the header
+                        </p>
+                    </div>
+                    {!announcementEditing && (
+                        <button
+                            onClick={loadAnnouncementToForm}
+                            className="btn btn-primary"
+                        >
+                            {announcement?.is_active ? 'Edit Announcement' : 'Create Announcement'}
+                        </button>
+                    )}
                 </div>
 
-                {/* Action buttons */}
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={handleExport}
-                        className="btn btn-secondary"
+                {announcementLoading ? (
+                    <div style={{ padding: '20px', textAlign: 'center', color: 'rgba(255, 255, 255, 0.6)' }}>
+                        Loading...
+                    </div>
+                ) : announcementEditing ? (
+                    <form onSubmit={handleSaveAnnouncement} className="space-y-4">
+                        {/* Title (optional) */}
+                        <div>
+                            <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: 'rgba(255, 255, 255, 0.8)', marginBottom: '6px' }}>
+                                Title (optional)
+                            </label>
+                            <input
+                                type="text"
+                                value={announcementTitle}
+                                onChange={(e) => setAnnouncementTitle(e.target.value)}
+                                placeholder="e.g., System Maintenance"
+                                className="glass-input"
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+
+                        {/* Message (required) */}
+                        <div>
+                            <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: 'rgba(255, 255, 255, 0.8)', marginBottom: '6px' }}>
+                                Message *
+                            </label>
+                            <textarea
+                                value={announcementMessage}
+                                onChange={(e) => setAnnouncementMessage(e.target.value)}
+                                placeholder="Enter your announcement message..."
+                                required
+                                rows={3}
+                                className="glass-input"
+                                style={{ width: '100%', resize: 'vertical' }}
+                            />
+                        </div>
+
+                        {/* Type selector */}
+                        <div>
+                            <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: 'rgba(255, 255, 255, 0.8)', marginBottom: '6px' }}>
+                                Type
+                            </label>
+                            <div className="flex gap-2">
+                                {announcementTypes.map((type) => (
+                                    <button
+                                        key={type.value}
+                                        type="button"
+                                        onClick={() => setAnnouncementType(type.value)}
+                                        style={{
+                                            padding: '8px 16px',
+                                            fontSize: '14px',
+                                            fontWeight: 500,
+                                            borderRadius: '6px',
+                                            border: announcementType === type.value ? `2px solid ${type.color}` : '2px solid rgba(255, 255, 255, 0.1)',
+                                            background: announcementType === type.value ? `${type.color}20` : 'transparent',
+                                            color: announcementType === type.value ? type.color : 'rgba(255, 255, 255, 0.7)',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s',
+                                        }}
+                                    >
+                                        {type.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Options */}
+                        <div className="flex gap-6">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={announcementActive}
+                                    onChange={(e) => setAnnouncementActive(e.target.checked)}
+                                    style={{ width: '18px', height: '18px' }}
+                                />
+                                <span style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.8)' }}>
+                                    Active (visible to users)
+                                </span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={announcementDismissible}
+                                    onChange={(e) => setAnnouncementDismissible(e.target.checked)}
+                                    style={{ width: '18px', height: '18px' }}
+                                />
+                                <span style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.8)' }}>
+                                    Dismissible (users can hide)
+                                </span>
+                            </label>
+                        </div>
+
+                        {/* Form actions */}
+                        <div className="flex gap-2 pt-2">
+                            <button
+                                type="submit"
+                                disabled={!announcementMessage.trim() || updateAnnouncementMutation.isPending}
+                                className="btn btn-primary"
+                            >
+                                {updateAnnouncementMutation.isPending ? 'Saving...' : 'Save Announcement'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setAnnouncementEditing(false)}
+                                className="btn btn-secondary"
+                            >
+                                Cancel
+                            </button>
+                            {announcement?.is_active && (
+                                <button
+                                    type="button"
+                                    onClick={() => setClearAnnouncementOpen(true)}
+                                    className="btn btn-danger"
+                                    style={{ marginLeft: 'auto' }}
+                                >
+                                    Clear Announcement
+                                </button>
+                            )}
+                        </div>
+                    </form>
+                ) : announcement?.is_active ? (
+                    /* Current announcement preview */
+                    <div
+                        style={{
+                            padding: '16px',
+                            borderRadius: '8px',
+                            background: announcementTypes.find(t => t.value === announcement.type)?.color + '15',
+                            border: `1px solid ${announcementTypes.find(t => t.value === announcement.type)?.color}40`,
+                        }}
                     >
-                        Export Config
-                    </button>
-                    <button
-                        onClick={handleImportClick}
-                        className="btn btn-secondary"
-                    >
-                        Import Config
-                    </button>
-                    <button
-                        onClick={() => setResetAllOpen(true)}
-                        className="btn btn-danger"
-                    >
-                        Reset All
-                    </button>
-                </div>
+                        <div className="flex items-center gap-2 mb-2">
+                            <span
+                                style={{
+                                    padding: '2px 8px',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    borderRadius: '4px',
+                                    background: announcementTypes.find(t => t.value === announcement.type)?.color + '30',
+                                    color: announcementTypes.find(t => t.value === announcement.type)?.color,
+                                    textTransform: 'uppercase',
+                                }}
+                            >
+                                {announcement.type}
+                            </span>
+                            {announcement.is_dismissible && (
+                                <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                                    Dismissible
+                                </span>
+                            )}
+                        </div>
+                        {announcement.title && (
+                            <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                                {announcement.title}
+                            </div>
+                        )}
+                        <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.85)' }}>
+                            {announcement.message}
+                        </div>
+                    </div>
+                ) : (
+                    <EmptyState
+                        title="No active announcement"
+                        message="Create an announcement to display a message to all users"
+                        icon="default"
+                        className="py-6"
+                    />
+                )}
             </div>
+
+            {/* Report Field Configuration Section */}
+            <div className="space-y-6">
+                {/* Header */}
+                <div className="flex items-start justify-between">
+                    <div>
+                        <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                            Report Field Configuration
+                        </h2>
+                        <p style={{ marginTop: '4px', fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)' }}>
+                            Manage suggested values for report fields across the system
+                        </p>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleExport}
+                            className="btn btn-secondary"
+                        >
+                            Export Config
+                        </button>
+                        <button
+                            onClick={handleImportClick}
+                            className="btn btn-secondary"
+                        >
+                            Import Config
+                        </button>
+                        <button
+                            onClick={() => setResetAllOpen(true)}
+                            className="btn btn-danger"
+                        >
+                            Reset All
+                        </button>
+                    </div>
+                </div>
 
             {/* Hidden file input for import */}
             <input
@@ -502,6 +757,19 @@ export default function ConfigurationTab() {
                 variant="danger"
                 isLoading={resetAllMutation.isPending}
             />
+
+            {/* Clear announcement confirmation dialog */}
+            <ConfirmDialog
+                isOpen={clearAnnouncementOpen}
+                onClose={() => setClearAnnouncementOpen(false)}
+                onConfirm={handleClearAnnouncement}
+                title="Clear Announcement"
+                message="Are you sure you want to clear the current announcement? It will no longer be visible to users."
+                confirmText="Clear"
+                variant="danger"
+                isLoading={clearAnnouncementMutation.isPending}
+            />
+            </div>
         </div>
     );
 }

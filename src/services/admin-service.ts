@@ -138,6 +138,27 @@ export interface ServiceResult<T = any> {
   message?: string;
 }
 
+export interface SystemAnnouncement {
+  id: string;
+  title: string | null;
+  message: string;
+  type: 'info' | 'warning' | 'success' | 'error';
+  is_active: boolean;
+  is_dismissible: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+export interface UpdateAnnouncementData {
+  title?: string | null;
+  message: string;
+  type: 'info' | 'warning' | 'success' | 'error';
+  is_active: boolean;
+  is_dismissible: boolean;
+}
+
 // ============================================================================
 // Admin Service Class
 // ============================================================================
@@ -644,6 +665,134 @@ class AdminService {
    */
   async importConfig(jsonString: string): Promise<ServiceResult> {
     return await adminConfig.importConfig(jsonString);
+  }
+
+  // ==========================================================================
+  // ANNOUNCEMENTS
+  // ==========================================================================
+
+  /**
+   * Get the active system announcement
+   */
+  async getActiveAnnouncement(): Promise<SystemAnnouncement | null> {
+    if (!authManager.isUsingSupabase()) {
+      return null;
+    }
+
+    try {
+      const { data, error } = await supabase!
+        .from('system_announcements')
+        .select('*')
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching announcement:', error);
+        return null;
+      }
+
+      return data as SystemAnnouncement | null;
+    } catch (error) {
+      console.error('Error fetching announcement:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Update or create the system announcement (admin only)
+   */
+  async updateAnnouncement(data: UpdateAnnouncementData): Promise<ServiceResult<SystemAnnouncement>> {
+    if (!authManager.isUsingSupabase()) {
+      return { success: false, error: 'Supabase not configured' };
+    }
+
+    try {
+      const user = authManager.getCurrentUser();
+      if (!user) {
+        return { success: false, error: 'User not authenticated' };
+      }
+
+      // Check for existing announcement
+      const { data: existing } = await supabase!
+        .from('system_announcements')
+        .select('id')
+        .limit(1)
+        .maybeSingle();
+
+      let result;
+
+      if (existing) {
+        // Update existing announcement
+        const { data: updated, error } = await supabase!
+          .from('system_announcements')
+          .update({
+            title: data.title,
+            message: data.message,
+            type: data.type,
+            is_active: data.is_active,
+            is_dismissible: data.is_dismissible,
+            updated_by: user.id,
+          })
+          .eq('id', existing.id)
+          .select()
+          .single();
+
+        if (error) {
+          return { success: false, error: error.message };
+        }
+        result = updated;
+      } else {
+        // Create new announcement
+        const { data: created, error } = await supabase!
+          .from('system_announcements')
+          .insert({
+            title: data.title,
+            message: data.message,
+            type: data.type,
+            is_active: data.is_active,
+            is_dismissible: data.is_dismissible,
+            created_by: user.id,
+            updated_by: user.id,
+          })
+          .select()
+          .single();
+
+        if (error) {
+          return { success: false, error: error.message };
+        }
+        result = created;
+      }
+
+      return { success: true, data: result as SystemAnnouncement };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Clear the system announcement (set inactive)
+   */
+  async clearAnnouncement(): Promise<ServiceResult> {
+    if (!authManager.isUsingSupabase()) {
+      return { success: false, error: 'Supabase not configured' };
+    }
+
+    try {
+      const { error } = await supabase!
+        .from('system_announcements')
+        .update({ is_active: false })
+        .eq('is_active', true);
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
   }
 }
 

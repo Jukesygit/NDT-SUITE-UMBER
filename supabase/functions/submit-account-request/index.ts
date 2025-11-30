@@ -37,7 +37,7 @@ serve(async (req) => {
     }
 
     // Validate requested_role is one of the allowed values
-    const allowedRoles = ['admin', 'org_admin', 'editor', 'viewer']
+    const allowedRoles = ['admin', 'manager', 'org_admin', 'editor', 'viewer']
     if (!allowedRoles.includes(requested_role)) {
       return new Response(
         JSON.stringify({ error: 'Invalid role' }),

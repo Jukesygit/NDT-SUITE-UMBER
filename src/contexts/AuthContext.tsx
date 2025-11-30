@@ -13,7 +13,7 @@ export interface AuthUser {
     id: string;
     username: string | null;
     email: string | null;
-    role: 'admin' | 'org_admin' | 'editor' | 'viewer';
+    role: 'admin' | 'manager' | 'org_admin' | 'editor' | 'viewer';
     organizationId: string | null;
     isActive: boolean;
 }
@@ -32,7 +32,7 @@ export interface AuthProfile {
     } | null;
 }
 
-export type UserRole = 'admin' | 'org_admin' | 'editor' | 'viewer';
+export type UserRole = 'admin' | 'manager' | 'org_admin' | 'editor' | 'viewer';
 
 interface AuthContextType {
     // State
@@ -43,8 +43,10 @@ interface AuthContextType {
 
     // Role checks
     isAdmin: boolean;
+    isManager: boolean;
     isOrgAdmin: boolean;
     isEditor: boolean;
+    hasElevatedAccess: boolean;  // admin or manager
 
     // Helper methods
     hasRole: (roles: UserRole | UserRole[]) => boolean;
@@ -134,8 +136,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Computed values
     const isAuthenticated = !!user;
     const isAdmin = user?.role === 'admin';
+    const isManager = user?.role === 'manager';
     const isOrgAdmin = user?.role === 'org_admin';
-    const isEditor = user?.role === 'editor' || isAdmin || isOrgAdmin;
+    const isEditor = user?.role === 'editor' || isAdmin || isManager || isOrgAdmin;
+    const hasElevatedAccess = isAdmin || isManager;
 
     // Check if user has one of the specified roles
     const hasRole = useCallback((roles: UserRole | UserRole[]): boolean => {
@@ -173,8 +177,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         isLoading,
         isAuthenticated,
         isAdmin,
+        isManager,
         isOrgAdmin,
         isEditor,
+        hasElevatedAccess,
         hasRole,
         hasPermission,
         logout,

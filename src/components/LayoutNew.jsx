@@ -4,6 +4,7 @@ import authManager from '../auth-manager.js';
 import syncStatus from './sync-status.js';
 import { LogoGradientShift } from './MatrixLogoAnimated';
 import { NotificationBell } from './NotificationBell';
+import { AnnouncementBanner } from './AnnouncementBanner';
 
 // Navigation configuration
 const navigationConfig = [
@@ -22,6 +23,7 @@ const navigationConfig = [
     id: 'personnel',
     path: '/personnel',
     label: 'Personnel',
+    requiresElevatedAccess: true,  // Only visible to admin and manager
     icon: (
       <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
@@ -103,20 +105,22 @@ function LayoutNew() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [hasElevatedAccess, setHasElevatedAccess] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
 
   useEffect(() => {
-    const checkAdmin = () => {
+    const checkAccess = () => {
       setIsAdmin(authManager.isAdmin());
+      setHasElevatedAccess(authManager.hasElevatedAccess());
     };
 
-    checkAdmin();
-    const unsubscribe = authManager.onAuthStateChange(checkAdmin);
-    window.addEventListener('userLoggedIn', checkAdmin);
+    checkAccess();
+    const unsubscribe = authManager.onAuthStateChange(checkAccess);
+    window.addEventListener('userLoggedIn', checkAccess);
 
     return () => {
       if (unsubscribe) unsubscribe();
-      window.removeEventListener('userLoggedIn', checkAdmin);
+      window.removeEventListener('userLoggedIn', checkAccess);
     };
   }, []);
 
@@ -140,10 +144,15 @@ function LayoutNew() {
     });
   };
 
-  // Filter navigation based on admin status
-  const visibleNav = navigationConfig.filter(item =>
-    !item.adminOnly || isAdmin
-  );
+  // Filter navigation based on user role
+  // - adminOnly: Only visible to admin
+  // - requiresElevatedAccess: Visible to admin and manager
+  // - no flag: Visible to everyone (Data Hub, Tools, Profile)
+  const visibleNav = navigationConfig.filter(item => {
+    if (item.adminOnly) return isAdmin;
+    if (item.requiresElevatedAccess) return hasElevatedAccess;
+    return true;
+  });
 
   return (
     <div className="app">
@@ -235,6 +244,9 @@ function LayoutNew() {
           </div>
         </div>
       </header>
+
+      {/* System Announcement Banner */}
+      <AnnouncementBanner />
 
       {/* Main Content */}
       <main className="main">
