@@ -2,27 +2,50 @@ import React, { useState, useEffect } from 'react';
 import { createModernHeader } from '../components/modern-header.js';
 import authManager, { ROLES } from '../auth-manager.js';
 import supabase, { isSupabaseConfigured } from '../supabase-client.js';
-import competencyService from '../services/competency-service.js';
 import { shouldShowCertificationFields, shouldShowDateFields, getInputType, getPlaceholder, filterOutPersonalDetails, getPersonalDetails, formatValue } from '../utils/competency-field-utils.js';
 import { themes, saveTheme, getCurrentTheme } from '../themes.js';
 import { MatrixLogoRacer } from '../components/MatrixLogoLoader';
 import { RandomMatrixSpinner } from '../components/MatrixSpinners';
+
+// React Query hooks
+import { useCurrentProfile } from '../hooks/queries/useProfile';
+import { useCompetencies, useCompetencyDefinitions, useCompetencyCategories } from '../hooks/queries/useCompetencies';
+import { useUpdateProfile } from '../hooks/mutations/useUpdateProfile';
+import { useUploadAvatar } from '../hooks/mutations/useUploadAvatar';
+import { useUserPermissionRequests } from '../hooks/queries/useUserPermissionRequests';
+import { useCreatePermissionRequest } from '../hooks/mutations/useCreatePermissionRequest';
+import { useUploadCompetencyDocument } from '../hooks/mutations/useUploadCompetencyDocument';
 import { useUserNotifications } from '../hooks/queries/useUserNotifications';
 
 export default function ProfilePageNew() {
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [user, setUser] = useState(null);
-    const [profile, setProfile] = useState(null);
-    const [organization, setOrganization] = useState(null);
-    const [competencies, setCompetencies] = useState([]);
-    const [competencyDefinitions, setCompetencyDefinitions] = useState([]);
+    // Get current user from authManager (synchronous)
+    const currentUser = authManager.getCurrentUser();
+    const userId = currentUser?.id;
+
+    // React Query hooks for data fetching
+    const { data: profile, isLoading: profileLoading, error: profileError } = useCurrentProfile();
+    const { data: competencies = [], isLoading: competenciesLoading } = useCompetencies(userId);
+    const { data: competencyDefinitions = [], isLoading: definitionsLoading } = useCompetencyDefinitions();
+    const { data: categories = [], isLoading: categoriesLoading } = useCompetencyCategories();
+    const { data: permissionRequests = [], isLoading: requestsLoading } = useUserPermissionRequests(userId);
+    const { data: changesRequestedComps = [], refetch: refetchNotifications } = useUserNotifications();
+
+    // Mutations
+    const updateProfile = useUpdateProfile();
+    const uploadAvatar = useUploadAvatar();
+    const createPermissionRequest = useCreatePermissionRequest();
+    const uploadCompetencyDocument = useUploadCompetencyDocument();
+
+    // Derived loading state
+    const loading = profileLoading || competenciesLoading || definitionsLoading || categoriesLoading;
+
+    // UI state (modals, editing, forms)
     const [editingCompetency, setEditingCompetency] = useState(null);
     const [editFormData, setEditFormData] = useState({});
     const [showAddModal, setShowAddModal] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
-    const [categories, setCategories] = useState([]);
+    const [savingCompetency, setSavingCompetency] = useState(false);
 
     // Profile fields editing
     const [editingProfile, setEditingProfile] = useState(false);
@@ -38,245 +61,86 @@ export default function ProfilePageNew() {
         date_of_birth: '',
         avatar_url: ''
     });
-    const [uploadingAvatar, setUploadingAvatar] = useState(false);
-    const [uploadingDocument, setUploadingDocument] = useState(false);
 
     // Theme state
     const [currentTheme, setCurrentTheme] = useState(getCurrentTheme());
 
     // Permission request state
-    const [permissionRequests, setPermissionRequests] = useState([]);
     const [requestedRole, setRequestedRole] = useState('');
     const [requestMessage, setRequestMessage] = useState('');
-
-    // Notifications - competencies needing attention
-    const { data: changesRequestedComps = [], refetch: refetchNotifications } = useUserNotifications();
-    const [submittingRequest, setSubmittingRequest] = useState(false);
     const [requestError, setRequestError] = useState('');
     const [requestSuccess, setRequestSuccess] = useState('');
 
+    // Initialize profile form data when profile loads
     useEffect(() => {
-        loadData();
-        loadPermissionRequests();
-    }, []);
-
-    const loadData = async () => {
-        try {
-            setLoading(true);
-            const currentUser = authManager.getCurrentUser();
-            const currentProfile = authManager.getCurrentProfile();
-
-            console.log('[ProfilePage] Current user:', currentUser);
-            console.log('[ProfilePage] Current profile:', currentProfile);
-
-            if (!currentUser) {
-                window.location.href = '/login';
-                return;
-            }
-
-            setUser(currentUser);
-            setProfile(currentProfile);
+        if (profile && currentUser) {
             setProfileFormData({
                 username: currentUser.username || '',
                 email: currentUser.email || '',
-                mobile_number: currentProfile?.mobile_number || '',
-                email_address: currentProfile?.email_address || currentUser.email || '',
-                home_address: currentProfile?.home_address || '',
-                nearest_uk_train_station: currentProfile?.nearest_uk_train_station || '',
-                next_of_kin: currentProfile?.next_of_kin || '',
-                next_of_kin_emergency_contact_number: currentProfile?.next_of_kin_emergency_contact_number || '',
-                date_of_birth: currentProfile?.date_of_birth || '',
-                avatar_url: currentProfile?.avatar_url || ''
+                mobile_number: profile.mobile_number || '',
+                email_address: profile.email_address || currentUser.email || '',
+                home_address: profile.home_address || '',
+                nearest_uk_train_station: profile.nearest_uk_train_station || '',
+                next_of_kin: profile.next_of_kin || '',
+                next_of_kin_emergency_contact_number: profile.next_of_kin_emergency_contact_number || '',
+                date_of_birth: profile.date_of_birth || '',
+                avatar_url: profile.avatar_url || ''
             });
-
-            // Load organization
-            if (currentProfile?.organization_id) {
-                const org = await authManager.getOrganization(currentProfile.organization_id);
-                console.log('[ProfilePage] Organization:', org);
-                setOrganization(org);
-            }
-
-            // Load competencies
-            if (isSupabaseConfigured()) {
-                console.log('[ProfilePage] Loading competencies for user:', currentUser.id);
-                const userComps = await competencyService.getUserCompetencies(currentUser.id);
-                console.log('[ProfilePage] User competencies:', userComps);
-                setCompetencies(userComps);
-
-                const compDefs = await competencyService.getCompetencyDefinitions();
-                console.log('[ProfilePage] Competency definitions:', compDefs);
-                setCompetencyDefinitions(compDefs);
-
-                const cats = await competencyService.getCategories();
-                console.log('[ProfilePage] Categories:', cats);
-                setCategories(cats);
-
-                // Debug: Check personal details
-                const personalDetails = getPersonalDetails(userComps);
-                console.log('[ProfilePage] Personal details:', personalDetails);
-
-                // Debug: Check certifications
-                const certifications = userComps.filter(c => {
-                    const def = compDefs.find(d => d.id === c.competency_id);
-                    return shouldShowCertificationFields(def);
-                });
-                console.log('[ProfilePage] Certifications:', certifications);
-            } else {
-                console.warn('[ProfilePage] Supabase is not configured');
-            }
-        } catch (error) {
-            console.error('[ProfilePage] Error loading profile data:', error);
-        } finally {
-            setLoading(false);
         }
-    };
+    }, [profile, currentUser]);
 
     const handleAvatarUpload = async (event) => {
         const file = event.target.files?.[0];
-        if (!file) {
-            console.log('[ProfilePage] No file selected');
-            return;
-        }
-
-        console.log('[ProfilePage] Avatar upload started:', {
-            fileName: file.name,
-            fileType: file.type,
-            fileSize: file.size
-        });
+        if (!file || !userId) return;
 
         // Validate file type
         if (!file.type.startsWith('image/')) {
-            console.error('[ProfilePage] Invalid file type:', file.type);
             alert('Please upload an image file');
             return;
         }
 
         // Validate file size (max 2MB)
         if (file.size > 2 * 1024 * 1024) {
-            console.error('[ProfilePage] File too large:', file.size);
             alert('Image must be less than 2MB');
             return;
         }
 
-        setUploadingAvatar(true);
-        try {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-            const filePath = `${user.id}/${fileName}`;
-
-            console.log('[ProfilePage] Uploading to storage:', filePath);
-
-            // Upload to Supabase storage
-            const { data: uploadData, error: uploadError } = await supabase.storage
-                .from('avatars')
-                .upload(filePath, file, {
-                    cacheControl: '3600',
-                    upsert: true
-                });
-
-            console.log('[ProfilePage] Upload response:', { uploadData, uploadError });
-
-            if (uploadError) {
-                console.error('[ProfilePage] Upload error:', uploadError);
-                throw uploadError;
+        uploadAvatar.mutate({ userId, file }, {
+            onSuccess: (result) => {
+                setProfileFormData({ ...profileFormData, avatar_url: result.url });
+                alert('Profile picture updated successfully!');
+            },
+            onError: (error) => {
+                console.error('[ProfilePage] Error uploading avatar:', error);
+                alert('Failed to upload profile picture: ' + error.message);
             }
-
-            // Get public URL
-            const { data: urlData } = supabase.storage
-                .from('avatars')
-                .getPublicUrl(filePath);
-
-            const avatarUrl = urlData.publicUrl;
-            console.log('[ProfilePage] Public URL:', avatarUrl);
-
-            // Update profile
-            console.log('[ProfilePage] Updating profile with avatar URL...');
-            const { data: updateData, error: updateError } = await supabase
-                .from('profiles')
-                .update({ avatar_url: avatarUrl })
-                .eq('id', user.id)
-                .select();
-
-            console.log('[ProfilePage] Profile update response:', { updateData, updateError });
-
-            if (updateError) {
-                console.error('[ProfilePage] Profile update error:', updateError);
-                throw updateError;
-            }
-
-            setProfileFormData({ ...profileFormData, avatar_url: avatarUrl });
-            await loadData();
-            alert('Profile picture updated successfully!');
-        } catch (error) {
-            console.error('[ProfilePage] Error uploading avatar:', error);
-            console.error('[ProfilePage] Error details:', {
-                message: error.message,
-                code: error.code,
-                details: error.details,
-                hint: error.hint,
-                statusCode: error.statusCode
-            });
-            alert('Failed to upload profile picture: ' + error.message);
-        } finally {
-            console.log('[ProfilePage] Avatar upload complete');
-            setUploadingAvatar(false);
-        }
+        });
     };
 
     const handleSaveProfile = async () => {
-        if (!user) {
-            console.error('[ProfilePage] No user found');
-            return;
-        }
+        if (!userId) return;
 
-        console.log('[ProfilePage] Starting profile save for user:', user.id);
-        console.log('[ProfilePage] Profile data to save:', profileFormData);
+        const data = {
+            username: profileFormData.username,
+            mobile_number: profileFormData.mobile_number,
+            email_address: profileFormData.email_address,
+            home_address: profileFormData.home_address,
+            nearest_uk_train_station: profileFormData.nearest_uk_train_station,
+            next_of_kin: profileFormData.next_of_kin,
+            next_of_kin_emergency_contact_number: profileFormData.next_of_kin_emergency_contact_number,
+            date_of_birth: profileFormData.date_of_birth
+        };
 
-        setSaving(true);
-        try {
-            console.log('[ProfilePage] Updating profiles table...');
-            const { data, error } = await supabase
-                .from('profiles')
-                .update({
-                    username: profileFormData.username,
-                    email: profileFormData.email,
-                    mobile_number: profileFormData.mobile_number,
-                    email_address: profileFormData.email_address,
-                    home_address: profileFormData.home_address,
-                    nearest_uk_train_station: profileFormData.nearest_uk_train_station,
-                    next_of_kin: profileFormData.next_of_kin,
-                    next_of_kin_emergency_contact_number: profileFormData.next_of_kin_emergency_contact_number,
-                    date_of_birth: profileFormData.date_of_birth
-                })
-                .eq('id', user.id)
-                .select();
-
-            console.log('[ProfilePage] Update response:', { data, error });
-
-            if (error) {
-                console.error('[ProfilePage] Supabase error:', error);
-                throw error;
+        updateProfile.mutate({ userId, data }, {
+            onSuccess: () => {
+                setEditingProfile(false);
+                alert('Profile updated successfully!');
+            },
+            onError: (error) => {
+                console.error('[ProfilePage] Error updating profile:', error);
+                alert('Failed to update profile: ' + error.message);
             }
-
-            console.log('[ProfilePage] Profile updated successfully, refreshing user data...');
-
-            // Reload data
-            await loadData();
-            setEditingProfile(false);
-            alert('Profile updated successfully!');
-        } catch (error) {
-            console.error('[ProfilePage] Error updating profile:', error);
-            console.error('[ProfilePage] Error details:', {
-                message: error.message,
-                code: error.code,
-                details: error.details,
-                hint: error.hint
-            });
-            alert('Failed to update profile: ' + error.message);
-        } finally {
-            console.log('[ProfilePage] Save complete, setting saving to false');
-            setSaving(false);
-        }
+        });
     };
 
     const handleEditCompetency = (comp) => {
@@ -296,46 +160,46 @@ export default function ProfilePageNew() {
     };
 
     const handleSaveCompetency = async () => {
-        if (!editingCompetency || !user) return;
+        if (!editingCompetency || !userId) return;
 
-        setSaving(true);
+        const dataToSave = {
+            value: editFormData.value || null,
+            issuing_body: editFormData.issuing_body || null,
+            certification_id: editFormData.certification_id || null,
+            expiry_date: editFormData.expiry_date || null,
+            notes: editFormData.notes || null,
+            document_url: editFormData.document_url || null,
+            document_name: editFormData.document_name || null
+        };
+
+        // Set status - use 'pending_approval' if document was just added (new or changed)
+        // OR if this is a resubmission after changes were requested
+        const documentJustAdded = editFormData.document_url &&
+            (editingCompetency.isNew || editFormData.document_url !== editingCompetency.document_url);
+        const isResubmission = editingCompetency.status === 'changes_requested';
+
+        if (documentJustAdded || isResubmission) {
+            dataToSave.status = 'pending_approval';
+        } else if (editingCompetency.isNew) {
+            // New competency without document
+            dataToSave.status = 'active';
+        }
+        // For existing competencies without document changes, don't modify status
+
+        // If it's a date field, update created_at as well
+        if (editFormData.issued_date) {
+            dataToSave.created_at = editFormData.issued_date;
+        }
+
+        setSavingCompetency(true);
         try {
-            const dataToSave = {
-                value: editFormData.value || null,
-                issuing_body: editFormData.issuing_body || null,
-                certification_id: editFormData.certification_id || null,
-                expiry_date: editFormData.expiry_date || null,
-                notes: editFormData.notes || null,
-                document_url: editFormData.document_url || null,
-                document_name: editFormData.document_name || null
-            };
-
-            // Set status - use 'pending_approval' if document was just added (new or changed)
-            // OR if this is a resubmission after changes were requested
-            const documentJustAdded = editFormData.document_url &&
-                (editingCompetency.isNew || editFormData.document_url !== editingCompetency.document_url);
-            const isResubmission = editingCompetency.status === 'changes_requested';
-
-            if (documentJustAdded || isResubmission) {
-                dataToSave.status = 'pending_approval';
-            } else if (editingCompetency.isNew) {
-                // New competency without document
-                dataToSave.status = 'active';
-            }
-            // For existing competencies without document changes, don't modify status
-
-            // If it's a date field, update created_at as well
-            if (editFormData.issued_date) {
-                dataToSave.created_at = editFormData.issued_date;
-            }
-
             // Check if this is a new competency or an update
             if (editingCompetency.isNew || !editingCompetency.id) {
                 // Insert new competency
                 const { error } = await supabase
                     .from('employee_competencies')
                     .insert({
-                        user_id: user.id,
+                        user_id: userId,
                         competency_id: editingCompetency.competency_id,
                         status: 'active',
                         ...dataToSave
@@ -352,7 +216,6 @@ export default function ProfilePageNew() {
                 if (error) throw error;
             }
 
-            await loadData();
             // Refresh notifications to update the alert banner
             refetchNotifications();
 
@@ -367,7 +230,7 @@ export default function ProfilePageNew() {
             console.error('Error saving competency:', error);
             alert('Failed to save: ' + error.message);
         } finally {
-            setSaving(false);
+            setSavingCompetency(false);
         }
     };
 
@@ -410,104 +273,50 @@ export default function ProfilePageNew() {
 
     const handleDeleteCompetency = async (compId) => {
         if (!confirm('Are you sure you want to delete this competency?')) return;
+        if (!userId) return;
 
-        setSaving(true);
         try {
-            const { error } = await supabase
+            const { data, error } = await supabase
                 .from('employee_competencies')
                 .delete()
-                .eq('id', compId);
+                .eq('id', compId)
+                .eq('user_id', userId)
+                .select();
 
             if (error) throw error;
 
-            await loadData();
+            // Check if anything was actually deleted
+            if (!data || data.length === 0) {
+                throw new Error('Unable to delete competency. You may not have permission to delete this item.');
+            }
         } catch (error) {
-            console.error('Error deleting competency:', error);
+            console.error('[ProfilePage] Error deleting competency:', error);
             alert('Failed to delete: ' + error.message);
-        } finally {
-            setSaving(false);
         }
     };
 
     // Handle document upload for competencies
     const handleDocumentUpload = async (event) => {
         const file = event.target.files?.[0];
-        if (!file || !user || !editFormData.definition) {
-            console.log('[DocumentUpload] Missing required data:', { file: !!file, user: !!user, definition: !!editFormData.definition });
-            return;
-        }
+        if (!file || !userId || !editFormData.definition) return;
 
-        console.log('[DocumentUpload] Starting upload:', {
-            fileName: file.name,
-            fileType: file.type,
-            fileSize: file.size,
-            userId: user.id,
-            competencyName: editFormData.definition.name
-        });
-
-        // Validate file type - images and PDFs supported
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
-        if (!allowedTypes.includes(file.type)) {
-            alert('Please upload an image (JPG, PNG, GIF, WebP) or PDF file.');
-            return;
-        }
-
-        // Validate file size (max 10MB)
-        if (file.size > 10 * 1024 * 1024) {
-            alert('File must be less than 10MB');
-            return;
-        }
-
-        setUploadingDocument(true);
-        try {
-            // Upload directly using supabase storage - use 'avatars' bucket which we know works
-            const fileExt = file.name.split('.').pop();
-            const competencySlug = editFormData.definition.name.replace(/\s+/g, '_').toLowerCase();
-            const fileName = `cert_${competencySlug}_${Date.now()}.${fileExt}`;
-            const filePath = `${user.id}/certificates/${fileName}`;
-
-            console.log('[DocumentUpload] Uploading to path:', filePath);
-
-            const { data: uploadData, error: uploadError } = await supabase.storage
-                .from('avatars')
-                .upload(filePath, file, {
-                    cacheControl: '3600',
-                    upsert: true
+        uploadCompetencyDocument.mutate({
+            userId,
+            competencyName: editFormData.definition.name,
+            file
+        }, {
+            onSuccess: (result) => {
+                setEditFormData({
+                    ...editFormData,
+                    document_url: result.url,
+                    document_name: result.name
                 });
-
-            console.log('[DocumentUpload] Upload response:', { uploadData, uploadError });
-
-            if (uploadError) {
-                throw uploadError;
+            },
+            onError: (error) => {
+                console.error('[DocumentUpload] Error:', error);
+                alert('Failed to upload document: ' + (error.message || 'Unknown error'));
             }
-
-            // Get public URL
-            const { data: urlData } = supabase.storage
-                .from('avatars')
-                .getPublicUrl(filePath);
-
-            console.log('[DocumentUpload] Public URL:', urlData.publicUrl);
-
-            setEditFormData({
-                ...editFormData,
-                document_url: urlData.publicUrl,
-                document_name: file.name
-            });
-
-            console.log('[DocumentUpload] Success!');
-        } catch (error) {
-            console.error('[DocumentUpload] Error:', error);
-            console.error('[DocumentUpload] Error details:', {
-                message: error.message,
-                code: error.code,
-                details: error.details,
-                hint: error.hint,
-                statusCode: error.statusCode
-            });
-            alert('Failed to upload document: ' + (error.message || 'Unknown error'));
-        } finally {
-            setUploadingDocument(false);
-        }
+        });
     };
 
     // Remove document from form
@@ -525,34 +334,9 @@ export default function ProfilePageNew() {
         setCurrentTheme(themeId);
     };
 
-    // Load permission requests
-    const loadPermissionRequests = async () => {
-        if (!isSupabaseConfigured()) return;
-
-        try {
-            const currentUser = authManager.getCurrentUser();
-            if (!currentUser) return;
-
-            const { data: requests, error } = await supabase
-                .from('permission_requests')
-                .select('*')
-                .eq('user_id', currentUser.id)
-                .order('created_at', { ascending: false });
-
-            if (error) {
-                console.error('Error loading permission requests:', error);
-                return;
-            }
-
-            setPermissionRequests(requests || []);
-        } catch (error) {
-            console.error('Error loading permission requests:', error);
-        }
-    };
-
     // Get available roles for upgrade
     const getAvailableRoles = () => {
-        if (!user) return [];
+        if (!currentUser) return [];
 
         const roleHierarchy = {
             [ROLES.VIEWER]: ['editor', 'org_admin', 'admin'],
@@ -561,7 +345,7 @@ export default function ProfilePageNew() {
             [ROLES.ADMIN]: []
         };
 
-        return roleHierarchy[user.role] || [];
+        return roleHierarchy[currentUser.role] || [];
     };
 
     // Submit permission request
@@ -580,48 +364,24 @@ export default function ProfilePageNew() {
             return;
         }
 
-        if (!isSupabaseConfigured()) {
-            setRequestError('Permission requests require Supabase backend');
-            return;
-        }
+        if (!userId || !currentUser) return;
 
-        setSubmittingRequest(true);
-
-        try {
-            // Check for existing pending request
-            const { data: existingRequests } = await supabase
-                .from('permission_requests')
-                .select('id')
-                .eq('user_id', user.id)
-                .eq('status', 'pending');
-
-            if (existingRequests && existingRequests.length > 0) {
-                setRequestError('You already have a pending permission request');
-                return;
+        createPermissionRequest.mutate({
+            userId,
+            requestedRole,
+            userCurrentRole: currentUser.role,
+            message: requestMessage
+        }, {
+            onSuccess: () => {
+                setRequestSuccess('Permission request submitted successfully! An admin will review it shortly.');
+                setRequestedRole('');
+                setRequestMessage('');
+            },
+            onError: (error) => {
+                console.error('Error submitting permission request:', error);
+                setRequestError(error.message || 'Failed to submit request');
             }
-
-            // Create permission request
-            const { error } = await supabase
-                .from('permission_requests')
-                .insert({
-                    user_id: user.id,
-                    requested_role: requestedRole,
-                    user_current_role: user.role,
-                    message: requestMessage.trim()
-                });
-
-            if (error) throw error;
-
-            setRequestSuccess('Permission request submitted successfully! An admin will review it shortly.');
-            setRequestedRole('');
-            setRequestMessage('');
-            await loadPermissionRequests();
-        } catch (error) {
-            console.error('Error submitting permission request:', error);
-            setRequestError(error.message || 'Failed to submit request');
-        } finally {
-            setSubmittingRequest(false);
-        }
+        });
     };
 
     const getFilteredDefinitions = () => {
@@ -657,7 +417,15 @@ export default function ProfilePageNew() {
         );
     }
 
-    if (!user) {
+    if (profileError) {
+        return (
+            <div className="h-full flex items-center justify-center">
+                <div style={{ color: 'rgba(239, 68, 68, 0.8)' }}>Error loading profile: {profileError.message}</div>
+            </div>
+        );
+    }
+
+    if (!currentUser || !profile) {
         return (
             <div className="h-full flex items-center justify-center">
                 <div style={{ color: 'rgba(255, 255, 255, 0.6)' }}>Please log in to view your profile.</div>
@@ -824,7 +592,7 @@ export default function ProfilePageNew() {
                                         </svg>
                                     )}
                                 </div>
-                                {uploadingAvatar && (
+                                {uploadAvatar.isPending && (
                                     <div style={{
                                         position: 'absolute',
                                         top: 0,
@@ -842,18 +610,18 @@ export default function ProfilePageNew() {
                                 )}
                             </div>
                             <div>
-                                <h3 style={{ fontSize: '20px', fontWeight: '600', color: '#ffffff', margin: '0 0 8px 0' }}>{user.username}</h3>
-                                <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)', margin: '0 0 12px 0' }}>{user.email}</p>
+                                <h3 style={{ fontSize: '20px', fontWeight: '600', color: '#ffffff', margin: '0 0 8px 0' }}>{currentUser.username}</h3>
+                                <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)', margin: '0 0 12px 0' }}>{currentUser.email}</p>
                                 <label className="btn btn--secondary btn--sm" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}>
                                     <svg style={{ width: '14px', height: '14px', marginRight: '6px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                     </svg>
-                                    {uploadingAvatar ? 'Uploading...' : 'Change Photo'}
+                                    {uploadAvatar.isPending ? 'Uploading...' : 'Change Photo'}
                                     <input
                                         type="file"
                                         accept="image/*"
                                         onChange={handleAvatarUpload}
-                                        disabled={uploadingAvatar}
+                                        disabled={uploadAvatar.isPending}
                                         style={{ display: 'none' }}
                                     />
                                 </label>
@@ -978,23 +746,23 @@ export default function ProfilePageNew() {
                             {/* Organization (Read-only) */}
                             <div>
                                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>Organization</label>
-                                <div style={{ color: '#ffffff', fontSize: '15px' }}>{organization?.name || '-'}</div>
+                                <div style={{ color: '#ffffff', fontSize: '15px' }}>{profile.organization?.name || '-'}</div>
                             </div>
 
                             {/* Role (Read-only) */}
                             <div>
                                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '6px' }}>Role</label>
-                                <div><span className="glass-badge">{user.role}</span></div>
+                                <div><span className="glass-badge">{currentUser.role}</span></div>
                             </div>
                         </div>
 
                         {editingProfile && (
                             <div style={{ display: 'flex', gap: '12px', marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255, 255, 255, 0.1)', justifyContent: 'flex-end' }}>
-                                <button onClick={() => setEditingProfile(false)} className="btn btn--secondary" disabled={saving}>
+                                <button onClick={() => setEditingProfile(false)} className="btn btn--secondary" disabled={updateProfile.isPending}>
                                     Cancel
                                 </button>
-                                <button onClick={handleSaveProfile} className="btn btn--primary" disabled={saving}>
-                                    {saving ? 'Saving...' : 'Save Changes'}
+                                <button onClick={handleSaveProfile} className="btn btn--primary" disabled={updateProfile.isPending}>
+                                    {updateProfile.isPending ? 'Saving...' : 'Save Changes'}
                                 </button>
                             </div>
                         )}
@@ -1071,7 +839,7 @@ export default function ProfilePageNew() {
                     </div>
 
                     {/* Permission Request Section - Only show if not admin */}
-                    {user.role !== ROLES.ADMIN && (
+                    {currentUser.role !== ROLES.ADMIN && (
                         <div className="glass-card" style={{ padding: '24px' }}>
                             <div style={{ marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
                                 <h2 style={{ fontSize: '18px', fontWeight: '600', color: '#ffffff', margin: 0 }}>Request Permission Upgrade</h2>
@@ -1126,10 +894,10 @@ export default function ProfilePageNew() {
                                 <button
                                     type="submit"
                                     className="btn btn--primary"
-                                    disabled={submittingRequest}
+                                    disabled={createPermissionRequest.isPending}
                                     style={{ width: '100%' }}
                                 >
-                                    {submittingRequest ? 'Submitting...' : 'Submit Request'}
+                                    {createPermissionRequest.isPending ? 'Submitting...' : 'Submit Request'}
                                 </button>
                             </form>
                         </div>
@@ -1646,18 +1414,18 @@ export default function ProfilePageNew() {
                                                 background: 'rgba(96, 165, 250, 0.1)',
                                                 border: '1px solid rgba(96, 165, 250, 0.3)',
                                                 borderRadius: '4px',
-                                                cursor: uploadingDocument ? 'wait' : 'pointer',
+                                                cursor: uploadCompetencyDocument.isPending ? 'wait' : 'pointer',
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 gap: '4px'
                                             }}
                                         >
-                                            {uploadingDocument ? 'Uploading...' : 'Replace'}
+                                            {uploadCompetencyDocument.isPending ? 'Uploading...' : 'Replace'}
                                             <input
                                                 type="file"
                                                 accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,.pdf"
                                                 onChange={handleDocumentUpload}
-                                                disabled={uploadingDocument}
+                                                disabled={uploadCompetencyDocument.isPending}
                                                 style={{ display: 'none' }}
                                             />
                                         </label>
@@ -1681,14 +1449,14 @@ export default function ProfilePageNew() {
                                         padding: '20px',
                                         border: '2px dashed rgba(255, 255, 255, 0.2)',
                                         borderRadius: '8px',
-                                        cursor: uploadingDocument ? 'wait' : 'pointer',
+                                        cursor: uploadCompetencyDocument.isPending ? 'wait' : 'pointer',
                                         transition: 'all 0.2s ease',
                                         background: 'rgba(255, 255, 255, 0.02)'
                                     }}
-                                    onMouseEnter={(e) => { if (!uploadingDocument) e.currentTarget.style.borderColor = 'var(--accent-primary)'; }}
+                                    onMouseEnter={(e) => { if (!uploadCompetencyDocument.isPending) e.currentTarget.style.borderColor = 'var(--accent-primary)'; }}
                                     onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'; }}
                                     >
-                                        {uploadingDocument ? (
+                                        {uploadCompetencyDocument.isPending ? (
                                             <>
                                                 <div style={{ marginBottom: '8px' }}><RandomMatrixSpinner size={32} /></div>
                                                 <span style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '13px' }}>Uploading...</span>
@@ -1710,7 +1478,7 @@ export default function ProfilePageNew() {
                                             type="file"
                                             accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,.pdf"
                                             onChange={handleDocumentUpload}
-                                            disabled={uploadingDocument}
+                                            disabled={uploadCompetencyDocument.isPending}
                                             style={{ display: 'none' }}
                                         />
                                     </label>
@@ -1742,9 +1510,9 @@ export default function ProfilePageNew() {
                                 onClick={handleSaveCompetency}
                                 className="btn btn--primary"
                                 style={{ flex: 1 }}
-                                disabled={saving}
+                                disabled={savingCompetency}
                             >
-                                {saving ? 'Saving...' : (
+                                {savingCompetency ? 'Saving...' : (
                                     editingCompetency.status === 'changes_requested' ? 'Resubmit for Review' :
                                     editingCompetency.isNew ? 'Add Certification' : 'Save Changes'
                                 )}

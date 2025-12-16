@@ -18,16 +18,16 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
--- Bucket for vessel images
+-- Bucket for vessel images (inspection photos - not sensitive personal data)
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
     'vessel-images',
     'vessel-images',
-    false, -- Private bucket
+    true, -- Public bucket - vessel inspection photos are not sensitive
     10485760, -- 10MB limit per file
-    ARRAY['image/jpeg', 'image/png', 'image/jpg', 'image/webp']
+    ARRAY['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'image/gif', 'image/bmp']
 )
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET public = true;
 
 -- Bucket for scan thumbnails and heatmaps
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

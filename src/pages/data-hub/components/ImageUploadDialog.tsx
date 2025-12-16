@@ -136,14 +136,14 @@ export default function ImageUploadDialog({
                     <button
                         onClick={handleClose}
                         disabled={isUploading}
-                        className="btn btn-secondary"
+                        className="btn-secondary"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleUpload}
                         disabled={files.length === 0 || isUploading}
-                        className="btn btn-primary"
+                        className="btn-primary"
                     >
                         {isUploading ? `Uploading... ${uploadProgress}%` : `Upload ${files.length} Image${files.length !== 1 ? 's' : ''}`}
                     </button>
@@ -176,7 +176,7 @@ export default function ImageUploadDialog({
                 onClick={handleFileSelect}
             >
                 <svg
-                    className="mx-auto h-12 w-12 mb-3"
+                    className="mx-auto w-12 h-12 mb-3"
                     style={{ color: isDragging ? 'var(--accent-primary)' : 'var(--text-dim)' }}
                     fill="none"
                     stroke="currentColor"
@@ -250,7 +250,12 @@ export default function ImageUploadDialog({
                                     className="absolute top-1 right-1 p-1 rounded-full bg-red-600 text-white opacity-0 group-hover:opacity-100 transition-opacity"
                                     title="Remove"
                                 >
-                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg
+                                        className="w-3 h-3"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                     </svg>
                                 </button>

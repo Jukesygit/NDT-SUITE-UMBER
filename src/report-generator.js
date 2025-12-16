@@ -1,8 +1,10 @@
 // Report Generator Module - Generates inspection reports in multiple formats
 import { Document, Paragraph, TextRun, AlignmentType, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle, ImageRun } from 'docx';
-import { jsPDF } from 'jspdf';
 import dataManager from './data-manager.js';
 import authManager from './auth-manager.js';
+
+// jsPDF will be dynamically imported when needed
+let jsPDF = null;
 
 class ReportGenerator {
     constructor() {
@@ -675,6 +677,12 @@ class ReportGenerator {
      * @returns {Promise<Blob>} PDF blob
      */
     async generatePDF() {
+        // Dynamically import jsPDF when needed
+        if (!jsPDF) {
+            const jsPDFModule = await import('jspdf');
+            jsPDF = jsPDFModule.jsPDF;
+        }
+
         const { metadata, asset, vessel } = this.reportData;
 
         const doc = new jsPDF({

@@ -1,4 +1,4 @@
-import { CscanData, CscanStats } from '../types';
+import { CscanData, CscanStats, SourceRegion, OffsetDetection } from '../types';
 
 // Generate unique ID for files
 const generateId = () => `cscan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -306,15 +306,28 @@ export const processFiles = async (
 export const createComposite = (scans: CscanData[]): CscanData | null => {
   if (scans.length < 2) return null;
 
-  // Step 1: Find global extent across all scans
+  // Step 1: Find global extent across all scans and track source regions
   let gMinX = Infinity, gMaxX = -Infinity;
   let gMinY = Infinity, gMaxY = -Infinity;
+
+  const sourceRegions: SourceRegion[] = [];
 
   scans.forEach(scan => {
     const minX = Math.min(...scan.xAxis);
     const maxX = Math.max(...scan.xAxis);
     const minY = Math.min(...scan.yAxis);
     const maxY = Math.max(...scan.yAxis);
+
+    // Track source region for filename overlay
+    sourceRegions.push({
+      filename: scan.filename,
+      minX,
+      maxX,
+      minY,
+      maxY,
+      centerX: (minX + maxX) / 2,
+      centerY: (minY + maxY) / 2
+    });
 
     if (minX < gMinX) gMinX = minX;
     if (maxX > gMaxX) gMaxX = maxX;
@@ -404,6 +417,160 @@ export const createComposite = (scans: CscanData[]): CscanData | null => {
     },
     validPoints: stats.validPoints,
     timestamp: new Date(),
-    isComposite: true
+    isComposite: true,
+    sourceRegions
   };
+};
+
+// =============================================================================
+// CSV OFFSET DETECTION AND CORRECTION
+// =============================================================================
+
+// Tolerance for detecting offset mismatch (in mm)
+const OFFSET_TOLERANCE = 10;
+
+/**
+ * Parse filename to extract expected Index and Scan ranges
+ * Filename pattern: ... S-{start}-{end} I-{start}-{end} ...
+ */
+const parseFilenameOffsets = (filename: string): {
+  indexStart: number | null;
+  indexEnd: number | null;
+  scanStart: number | null;
+  scanEnd: number | null;
+} => {
+  // Match I-{start}-{end} pattern (Index axis)
+  const indexMatch = filename.match(/I-(\d+)-(\d+)/i);
+  // Match S-{start}-{end} pattern (Scan axis)
+  const scanMatch = filename.match(/S-(\d+)-(\d+)/i);
+
+  return {
+    indexStart: indexMatch ? parseInt(indexMatch[1], 10) : null,
+    indexEnd: indexMatch ? parseInt(indexMatch[2], 10) : null,
+    scanStart: scanMatch ? parseInt(scanMatch[1], 10) : null,
+    scanEnd: scanMatch ? parseInt(scanMatch[2], 10) : null
+  };
+};
+
+/**
+ * Detect if a scan file has incorrect axis offsets
+ * Compares metadata/filename expected values against actual data values
+ */
+export const detectOffsets = (scan: CscanData): OffsetDetection => {
+  const filenameOffsets = parseFilenameOffsets(scan.filename);
+
+  // Get expected values from metadata (more reliable) or filename
+  const expectedIndexStart = scan.metadata?.['IndexStart (mm)'] ?? filenameOffsets.indexStart;
+  const expectedScanStart = scan.metadata?.['ScanStart (mm)'] ?? filenameOffsets.scanStart;
+
+  // Get actual values from parsed data
+  // yAxis is Index (rows), xAxis is Scan (columns)
+  const actualIndexStart = scan.yAxis.length > 0 ? Math.min(...scan.yAxis) : 0;
+  const actualScanStart = scan.xAxis.length > 0 ? Math.min(...scan.xAxis) : 0;
+
+  // Calculate offsets needed
+  const indexOffset = expectedIndexStart !== null
+    ? expectedIndexStart - actualIndexStart
+    : 0;
+  const scanOffset = expectedScanStart !== null
+    ? expectedScanStart - actualScanStart
+    : 0;
+
+  // Determine if correction is needed (with tolerance)
+  const indexNeedsCorrection = Math.abs(indexOffset) > OFFSET_TOLERANCE;
+  const scanNeedsCorrection = Math.abs(scanOffset) > OFFSET_TOLERANCE;
+
+  return {
+    fileId: scan.id,
+    filename: scan.filename,
+    expectedIndexStart,
+    actualIndexStart,
+    indexOffset,
+    indexNeedsCorrection,
+    expectedScanStart,
+    actualScanStart,
+    scanOffset,
+    scanNeedsCorrection
+  };
+};
+
+/**
+ * Detect offsets for multiple scans
+ * Returns only scans that need correction
+ */
+export const detectOffsetsForScans = (scans: CscanData[]): OffsetDetection[] => {
+  return scans
+    .filter(scan => !scan.isComposite) // Skip composite scans
+    .map(scan => detectOffsets(scan))
+    .filter(detection => detection.indexNeedsCorrection || detection.scanNeedsCorrection);
+};
+
+/**
+ * Apply offset correction to a single scan
+ * Returns a new CscanData with corrected axis values
+ */
+export const applyOffsetCorrection = (
+  scan: CscanData,
+  correctIndex: boolean,
+  correctScan: boolean
+): CscanData => {
+  const detection = detectOffsets(scan);
+
+  // Create new axis arrays with corrections applied
+  const correctedYAxis = correctIndex && detection.indexNeedsCorrection
+    ? scan.yAxis.map(y => y + detection.indexOffset)
+    : [...scan.yAxis];
+
+  const correctedXAxis = correctScan && detection.scanNeedsCorrection
+    ? scan.xAxis.map(x => x + detection.scanOffset)
+    : [...scan.xAxis];
+
+  // Recalculate stats with new coordinates (for area calculations)
+  const stats = calculateStats(scan.data, correctedXAxis, correctedYAxis);
+
+  return {
+    ...scan,
+    xAxis: correctedXAxis,
+    yAxis: correctedYAxis,
+    stats,
+    metadata: {
+      ...scan.metadata,
+      _correctionApplied: true,
+      _indexOffsetApplied: correctIndex ? detection.indexOffset : 0,
+      _scanOffsetApplied: correctScan ? detection.scanOffset : 0
+    }
+  };
+};
+
+/**
+ * Apply offset corrections to multiple scans
+ */
+export const applyOffsetCorrections = (
+  scans: CscanData[],
+  correctIndex: boolean,
+  correctScan: boolean
+): CscanData[] => {
+  return scans.map(scan => {
+    if (scan.isComposite) return scan; // Don't correct composites
+
+    const detection = detectOffsets(scan);
+    const needsCorrection =
+      (correctIndex && detection.indexNeedsCorrection) ||
+      (correctScan && detection.scanNeedsCorrection);
+
+    if (!needsCorrection) return scan;
+
+    return applyOffsetCorrection(scan, correctIndex, correctScan);
+  });
+};
+
+/**
+ * Check if any scans in a collection need offset correction
+ */
+export const hasOffsetsToCorrect = (scans: CscanData[]): boolean => {
+  return scans.some(scan => {
+    if (scan.isComposite) return false;
+    const detection = detectOffsets(scan);
+    return detection.indexNeedsCorrection || detection.scanNeedsCorrection;
+  });
 };

@@ -119,8 +119,8 @@ export const SpinnerClassic: React.FC<SpinnerProps> = ({ size = 80, className = 
   const height = size * (1202 / 2256);
 
   return (
-    <div className={className} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={className} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         {/* Background track */}
         <path d={MATRIX_LOGO.mainPath} stroke="#10b98125" strokeWidth="50" fill="none" />
         <circle cx="1558" cy="1065" r="130" stroke="#10b98125" strokeWidth="50" fill="none" />
@@ -163,8 +163,8 @@ export const SpinnerOcean: React.FC<SpinnerProps> = ({ size = 80, className = ''
   const height = size * (1202 / 2256);
 
   return (
-    <div className={className} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={className} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         {/* Background track */}
         <path d={MATRIX_LOGO.mainPath} stroke="#3b82f620" strokeWidth="50" fill="none" />
         <circle cx="1558" cy="1065" r="130" stroke="#3b82f620" strokeWidth="50" fill="none" />
@@ -207,8 +207,8 @@ export const SpinnerCyan: React.FC<SpinnerProps> = ({ size = 80, className = '' 
   const height = size * (1202 / 2256);
 
   return (
-    <div className={className} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={className} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         {/* Background track */}
         <path d={MATRIX_LOGO.mainPath} stroke="#06b6d420" strokeWidth="50" fill="none" />
         <circle cx="1558" cy="1065" r="130" stroke="#06b6d420" strokeWidth="50" fill="none" />
@@ -251,8 +251,8 @@ export const SpinnerDual: React.FC<SpinnerProps> = ({ size = 80, className = '' 
   const height = size * (1202 / 2256);
 
   return (
-    <div className={className} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={className} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         {/* Background track */}
         <path d={MATRIX_LOGO.mainPath} stroke="#3b82f615" strokeWidth="50" fill="none" />
         <circle cx="1558" cy="1065" r="130" stroke="#3b82f615" strokeWidth="50" fill="none" />
@@ -305,8 +305,8 @@ export const SpinnerReverse: React.FC<SpinnerProps> = ({ size = 80, className = 
   const height = size * (1202 / 2256);
 
   return (
-    <div className={className} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={className} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         {/* Background track */}
         <path d={MATRIX_LOGO.mainPath} stroke="#6366f120" strokeWidth="50" fill="none" />
         <circle cx="1558" cy="1065" r="130" stroke="#6366f120" strokeWidth="50" fill="none" />
@@ -349,8 +349,8 @@ export const SpinnerSnake: React.FC<SpinnerProps> = ({ size = 80, className = ''
   const height = size * (1202 / 2256);
 
   return (
-    <div className={className} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={className} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         {/* Background track */}
         <path d={MATRIX_LOGO.mainPath} stroke="#10b98115" strokeWidth="50" fill="none" />
         <circle cx="1558" cy="1065" r="130" stroke="#10b98115" strokeWidth="50" fill="none" />
@@ -392,8 +392,8 @@ export const SpinnerColorShift: React.FC<SpinnerProps> = ({ size = 80, className
   const height = size * (1202 / 2256);
 
   return (
-    <div className={className} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={className} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         {/* Background track */}
         <path d={MATRIX_LOGO.mainPath} stroke="#3b82f615" strokeWidth="50" fill="none" />
         <circle cx="1558" cy="1065" r="130" stroke="#3b82f615" strokeWidth="50" fill="none" />
@@ -436,8 +436,8 @@ export const SpinnerSpectrum: React.FC<SpinnerProps> = ({ size = 80, className =
   const height = size * (1202 / 2256);
 
   return (
-    <div className={className} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={className} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         {/* Background track */}
         <path d={MATRIX_LOGO.mainPath} stroke="#ffffff10" strokeWidth="50" fill="none" />
         <circle cx="1558" cy="1065" r="130" stroke="#ffffff10" strokeWidth="50" fill="none" />
@@ -480,8 +480,8 @@ export const SpinnerFast: React.FC<SpinnerProps> = ({ size = 80, className = '' 
   const height = size * (1202 / 2256);
 
   return (
-    <div className={className} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={className} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         {/* Background track */}
         <path d={MATRIX_LOGO.mainPath} stroke="#06b6d418" strokeWidth="50" fill="none" />
         <circle cx="1558" cy="1065" r="130" stroke="#06b6d418" strokeWidth="50" fill="none" />
@@ -524,8 +524,8 @@ export const SpinnerThick: React.FC<SpinnerProps> = ({ size = 80, className = ''
   const height = size * (1202 / 2256);
 
   return (
-    <div className={className} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={className} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         {/* Background track */}
         <path d={MATRIX_LOGO.mainPath} stroke="#3b82f612" strokeWidth="70" fill="none" />
         <circle cx="1558" cy="1065" r="130" stroke="#3b82f612" strokeWidth="70" fill="none" />
@@ -568,8 +568,8 @@ export const SpinnerTriple: React.FC<SpinnerProps> = ({ size = 80, className = '
   const height = size * (1202 / 2256);
 
   return (
-    <div className={className} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={className} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         {/* Background track */}
         <path d={MATRIX_LOGO.mainPath} stroke="#ffffff08" strokeWidth="50" fill="none" />
         <circle cx="1558" cy="1065" r="130" stroke="#ffffff08" strokeWidth="50" fill="none" />
@@ -629,8 +629,8 @@ export const SpinnerEmeraldCyan: React.FC<SpinnerProps> = ({ size = 80, classNam
   const height = size * (1202 / 2256);
 
   return (
-    <div className={className} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={className} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         {/* Background track */}
         <path d={MATRIX_LOGO.mainPath} stroke="#10b98115" strokeWidth="50" fill="none" />
         <circle cx="1558" cy="1065" r="130" stroke="#10b98115" strokeWidth="50" fill="none" />
@@ -674,8 +674,8 @@ export const SpinnerGradientStroke: React.FC<SpinnerProps> = ({ size = 80, class
   const id = React.useId().replace(/:/g, '');
 
   return (
-    <div className={className} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={className} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         <defs>
           <linearGradient id={`grad-stroke-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#3b82f6" />
@@ -726,8 +726,8 @@ export const SpinnerIndigo: React.FC<SpinnerProps> = ({ size = 80, className = '
   const height = size * (1202 / 2256);
 
   return (
-    <div className={className} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={className} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         {/* Background track */}
         <path d={MATRIX_LOGO.mainPath} stroke="#6366f118" strokeWidth="50" fill="none" />
         <circle cx="1558" cy="1065" r="130" stroke="#6366f118" strokeWidth="50" fill="none" />
@@ -770,8 +770,8 @@ export const SpinnerDotted: React.FC<SpinnerProps> = ({ size = 80, className = '
   const height = size * (1202 / 2256);
 
   return (
-    <div className={className} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={className} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         {/* Background track */}
         <path d={MATRIX_LOGO.mainPath} stroke="#3b82f612" strokeWidth="50" fill="none" />
         <circle cx="1558" cy="1065" r="130" stroke="#3b82f612" strokeWidth="50" fill="none" />
@@ -817,8 +817,8 @@ export const SpinnerSlow: React.FC<SpinnerProps> = ({ size = 80, className = '' 
   const height = size * (1202 / 2256);
 
   return (
-    <div className={className} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={className} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         {/* Background track */}
         <path d={MATRIX_LOGO.mainPath} stroke="#06b6d415" strokeWidth="50" fill="none" />
         <circle cx="1558" cy="1065" r="130" stroke="#06b6d415" strokeWidth="50" fill="none" />

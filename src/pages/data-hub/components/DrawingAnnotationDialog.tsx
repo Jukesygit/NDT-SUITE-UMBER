@@ -297,10 +297,10 @@ export default function DrawingAnnotationDialog({
             size="xl"
             footer={
                 <>
-                    <button onClick={onClose} disabled={isSaving} className="btn btn-secondary">
+                    <button onClick={onClose} disabled={isSaving} className="btn-secondary">
                         Cancel
                     </button>
-                    <button onClick={handleSave} disabled={isSaving} className="btn btn-primary">
+                    <button onClick={handleSave} disabled={isSaving} className="btn-primary">
                         {isSaving ? 'Saving...' : 'Save Annotations'}
                     </button>
                 </>

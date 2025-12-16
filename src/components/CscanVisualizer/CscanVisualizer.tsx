@@ -5,7 +5,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Layers,
-  BarChart2,
   Grid3x3,
   Send
 } from 'lucide-react';
@@ -15,12 +14,13 @@ import ToolBar from './ToolBar';
 import StatsPanel from './StatsPanel';
 import ExportToHubModal from './ExportToHubModal';
 import AssignStrakeModal from './AssignStrakeModal';
+import CsvRepairModal from './CsvRepairModal';
 import { CscanData, Tool, DisplaySettings } from './types';
-import { processFiles, createComposite } from './utils/fileParser';
+import { processFiles, createComposite, hasOffsetsToCorrect } from './utils/fileParser';
 
 const CscanVisualizer: React.FC = () => {
   // Refs
-  const canvasRef = useRef<{ exportImage: () => Promise<string | null> }>(null);
+  const canvasRef = useRef<{ exportImage: () => Promise<string | null>; exportCleanHeatmap: () => Promise<string | null> }>(null);
 
   // Core state
   const [scanData, setScanData] = useState<CscanData | null>(null);
@@ -36,8 +36,10 @@ const CscanVisualizer: React.FC = () => {
   // Modal state
   const [showExportModal, setShowExportModal] = useState(false);
   const [showAssignStrakeModal, setShowAssignStrakeModal] = useState(false);
+  const [showRepairModal, setShowRepairModal] = useState(false);
   const [scansForExport, setScansForExport] = useState<CscanData[]>([]);
   const [scansForStrakeAssign, setScansForStrakeAssign] = useState<CscanData[]>([]);
+  const [pendingScans, setPendingScans] = useState<CscanData[]>([]);
   const [isBatchExport, setIsBatchExport] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -46,32 +48,59 @@ const CscanVisualizer: React.FC = () => {
     colorScale: 'Jet',
     reverseScale: true,
     showGrid: true,
+    showFilenames: false,
     smoothing: 'best',
     range: { min: null, max: null }
   });
+
+  // Helper to add scans to state
+  const addScansToState = useCallback((scans: CscanData[]) => {
+    if (scans.length === 0) return;
+
+    setProcessedScans(prev => [...prev, ...scans]);
+    const firstScan = scans[0];
+    setScanData(firstScan);
+
+    const metaMin = firstScan.metadata?.['Min Thickness (mm)'];
+    const metaMax = firstScan.metadata?.['Max Thickness (mm)'];
+    if (metaMin !== undefined && metaMax !== undefined) {
+      setDisplaySettings(prev => ({
+        ...prev,
+        range: { min: parseFloat(metaMin), max: parseFloat(metaMax) }
+      }));
+    }
+  }, []);
 
   // Handlers
   const handleFileUpload = useCallback(async (files: File[]) => {
     try {
       const newScans = await processFiles(files);
       if (newScans.length > 0) {
-        setProcessedScans(prev => [...prev, ...newScans]);
-        const firstScan = newScans[0];
-        setScanData(firstScan);
-
-        const metaMin = firstScan.metadata?.['Min Thickness (mm)'];
-        const metaMax = firstScan.metadata?.['Max Thickness (mm)'];
-        if (metaMin !== undefined && metaMax !== undefined) {
-          setDisplaySettings(prev => ({
-            ...prev,
-            range: { min: parseFloat(metaMin), max: parseFloat(metaMax) }
-          }));
+        // Check if any scans have offset issues
+        if (hasOffsetsToCorrect(newScans)) {
+          // Store scans and show repair modal
+          setPendingScans(newScans);
+          setShowRepairModal(true);
+        } else {
+          // No issues, add directly
+          addScansToState(newScans);
         }
       }
     } catch (error) {
       console.error('Error processing files:', error);
     }
-  }, []);
+  }, [addScansToState]);
+
+  // Handle repair completion
+  const handleRepairComplete = useCallback((repairedScans: CscanData[]) => {
+    addScansToState(repairedScans);
+    setPendingScans([]);
+    setStatusMessage({
+      type: 'success',
+      message: `${repairedScans.length} file${repairedScans.length !== 1 ? 's' : ''} loaded successfully`
+    });
+    setTimeout(() => setStatusMessage(null), 3000);
+  }, [addScansToState]);
 
   const handleFileSelect = useCallback((fileId: string) => {
     const scan = processedScans.find(s => s.id === fileId);
@@ -152,7 +181,7 @@ const CscanVisualizer: React.FC = () => {
     if (!scanData || !canvasRef.current) return;
 
     try {
-      const dataUrl = await canvasRef.current.exportImage();
+      const dataUrl = await canvasRef.current.exportCleanHeatmap();
       if (dataUrl) {
         const link = document.createElement('a');
         const filename = scanData.isComposite
@@ -209,6 +238,8 @@ const CscanVisualizer: React.FC = () => {
         onDisplaySettingsChange={setDisplaySettings}
         dataMin={dataMin}
         dataMax={dataMax}
+        showStats={showStats}
+        onToggleStats={() => setShowStats(!showStats)}
       />
 
       {/* Main Content Area - relative container for absolute children */}
@@ -296,32 +327,25 @@ const CscanVisualizer: React.FC = () => {
             >
               <Layers className="w-4 h-4 text-gray-400" />
             </button>
-            <button
-              onClick={() => setShowStats(!showStats)}
-              className={`p-2 hover:bg-gray-700 rounded transition-colors ${showStats ? 'bg-blue-600' : ''}`}
-              title="Statistics"
-            >
-              <BarChart2 className="w-4 h-4 text-gray-400" />
-            </button>
             <span className="text-xs text-gray-500 [writing-mode:vertical-rl] rotate-180">
               {processedScans.length} files
             </span>
           </div>
-
-          {/* Stats Panel - floating independently */}
-          {showStats && (
-            <div
-              className="absolute left-14 top-4 w-64 rounded-lg shadow-xl border border-gray-700"
-              style={{ backgroundColor: '#1f2937' }}
-            >
-              <StatsPanel
-                data={scanData}
-                isExpanded={true}
-                onToggle={() => setShowStats(false)}
-              />
-            </div>
-          )}
         </div>
+
+        {/* Stats Panel - Independent floating popout */}
+        {showStats && (
+          <div
+            className="absolute left-4 bottom-12 z-30 rounded-lg shadow-xl border border-gray-700"
+            style={{ backgroundColor: '#1f2937', minWidth: '520px' }}
+          >
+            <StatsPanel
+              data={scanData}
+              isExpanded={true}
+              onToggle={() => setShowStats(false)}
+            />
+          </div>
+        )}
 
         {/* RIGHT TOOLBAR - floating overlay */}
         <div className="absolute right-0 top-0 bottom-0 w-12 z-20 border-l border-gray-700 flex flex-col items-center py-4 space-y-4" style={{ backgroundColor: '#1f2937' }}>
@@ -414,6 +438,17 @@ const CscanVisualizer: React.FC = () => {
         onClose={() => setShowAssignStrakeModal(false)}
         scans={scansForStrakeAssign}
         onAssignComplete={handleExportComplete}
+      />
+
+      {/* CSV Repair Modal */}
+      <CsvRepairModal
+        isOpen={showRepairModal}
+        onClose={() => {
+          setShowRepairModal(false);
+          setPendingScans([]);
+        }}
+        scans={pendingScans}
+        onRepairComplete={handleRepairComplete}
       />
     </div>
   );

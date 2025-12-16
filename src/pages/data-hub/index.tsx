@@ -5,12 +5,14 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { createModernHeader } from '../../components/modern-header.js';
 import { SectionSpinner } from '../../components/ui';
 import { ErrorDisplay } from '../../components/ui/ErrorDisplay';
 import { MatrixLogoRacer } from '../../components/MatrixLogoLoader';
-import { useDataHubOrganizations, useAssetsByOrg, useVesselsByAsset } from '../../hooks/queries';
+import { useDataHubOrganizations, useAssetsByOrg, useVesselsByAsset, dataHubKeys, inspectionKeys } from '../../hooks/queries';
 import type { AssetWithCounts, VesselWithCounts } from '../../hooks/queries/useDataHub';
+import { assetService } from '../../services/asset-service.js';
 import CreateAssetDialog from './components/CreateAssetDialog';
 import CreateVesselDialog from './components/CreateVesselDialog';
 
@@ -26,6 +28,7 @@ interface NavigationState {
 
 export default function DataHubPage() {
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
 
     // Navigation state
     const [navState, setNavState] = useState<NavigationState>({
@@ -118,6 +121,32 @@ export default function DataHubPage() {
     const handleVesselClick = (vessel: VesselWithCounts) => {
         // Navigate to vessel overview page
         navigate(`/vessel/${navState.selectedAssetId}/${vessel.id}`);
+    };
+
+    // Prefetching handlers for performance optimization
+    const handleAssetHover = (assetId: string) => {
+        // Prefetch vessels for this asset when user hovers
+        queryClient.prefetchQuery({
+            queryKey: dataHubKeys.vessels(assetId),
+            queryFn: () => assetService.getVesselsWithCounts(assetId),
+            staleTime: 2 * 60 * 1000, // Match the hook's staleTime
+        });
+    };
+
+    const handleVesselHover = (vesselId: string) => {
+        // Prefetch vessel details when user hovers
+        queryClient.prefetchQuery({
+            queryKey: dataHubKeys.vessel(vesselId),
+            queryFn: () => assetService.getVessel(vesselId),
+            staleTime: 2 * 60 * 1000,
+        });
+
+        // Also prefetch inspections for vessel overview page
+        queryClient.prefetchQuery({
+            queryKey: inspectionKeys.list(vesselId),
+            queryFn: () => assetService.getInspections(vesselId),
+            staleTime: 2 * 60 * 1000,
+        });
     };
 
     // Loading state
@@ -218,8 +247,7 @@ export default function DataHubPage() {
                                 Assets
                             </h2>
                             <button
-                                className="btn btn-primary flex items-center gap-2"
-                                style={{ padding: '8px 14px', fontSize: '13px' }}
+                                className="btn-primary btn-sm"
                                 onClick={() => setShowCreateAssetDialog(true)}
                             >
                                 <PlusIcon />
@@ -245,6 +273,7 @@ export default function DataHubPage() {
                                         key={asset.id}
                                         asset={asset}
                                         onClick={() => handleAssetClick(asset)}
+                                        onHover={() => handleAssetHover(asset.id)}
                                     />
                                 ))}
                             </div>
@@ -259,8 +288,7 @@ export default function DataHubPage() {
                                 Vessels
                             </h2>
                             <button
-                                className="btn btn-primary flex items-center gap-2"
-                                style={{ padding: '8px 14px', fontSize: '13px' }}
+                                className="btn-primary btn-sm"
                                 onClick={() => setShowCreateVesselDialog(true)}
                             >
                                 <PlusIcon />
@@ -286,6 +314,7 @@ export default function DataHubPage() {
                                         key={vessel.id}
                                         vessel={vessel}
                                         onClick={() => handleVesselClick(vessel)}
+                                        onHover={() => handleVesselHover(vessel.id)}
                                     />
                                 ))}
                             </div>
@@ -323,12 +352,14 @@ export default function DataHubPage() {
 interface AssetCardProps {
     asset: AssetWithCounts;
     onClick: () => void;
+    onHover: () => void;
 }
 
-function AssetCard({ asset, onClick }: AssetCardProps) {
+function AssetCard({ asset, onClick, onHover }: AssetCardProps) {
     return (
         <div
             onClick={onClick}
+            onMouseEnter={onHover}
             className="glass-card list-item-hover cursor-pointer"
             style={{ padding: '16px' }}
         >
@@ -374,12 +405,14 @@ function AssetCard({ asset, onClick }: AssetCardProps) {
 interface VesselCardProps {
     vessel: VesselWithCounts;
     onClick: () => void;
+    onHover: () => void;
 }
 
-function VesselCard({ vessel, onClick }: VesselCardProps) {
+function VesselCard({ vessel, onClick, onHover }: VesselCardProps) {
     return (
         <div
             onClick={onClick}
+            onMouseEnter={onHover}
             className="glass-card list-item-hover cursor-pointer"
             style={{ padding: '16px' }}
         >
@@ -463,8 +496,7 @@ function EmptyState({ title, message, icon, onCreateClick, createLabel }: EmptyS
             </p>
             {onCreateClick && createLabel && (
                 <button
-                    className="btn btn-primary flex items-center gap-2"
-                    style={{ padding: '10px 18px', fontSize: '14px' }}
+                    className="btn-primary"
                     onClick={onCreateClick}
                 >
                     <PlusIcon />

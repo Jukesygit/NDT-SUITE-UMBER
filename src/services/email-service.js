@@ -5,6 +5,21 @@
 
 import { supabase } from '../supabaseClient';
 
+/**
+ * HTML-escape a string to prevent XSS in email templates
+ * @param {string} str - String to escape
+ * @returns {string} Escaped string
+ */
+function escapeHtml(str) {
+    if (typeof str !== 'string') return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+}
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 /**
@@ -108,6 +123,14 @@ function generateCompetencyExpirationEmail({
     urgencyColor,
     urgencyText,
 }) {
+    // Sanitize all user-provided data to prevent XSS
+    const safeRecipientName = escapeHtml(recipientName);
+    const safeCompetencyName = escapeHtml(competencyName);
+    const safeExpiryDate = escapeHtml(expiryDate);
+    const safeUrgencyText = escapeHtml(urgencyText);
+    // urgencyColor is controlled internally, but validate it's a valid color
+    const safeUrgencyColor = /^#[0-9a-fA-F]{6}$/.test(urgencyColor) ? urgencyColor : '#3b82f6';
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -136,9 +159,9 @@ function generateCompetencyExpirationEmail({
                     <!-- Urgency Banner -->
                     <tr>
                         <td style="padding: 0 40px;">
-                            <div style="padding: 12px 20px; background: ${urgencyColor}20; border: 1px solid ${urgencyColor}40; border-radius: 8px; text-align: center;">
-                                <span style="font-size: 14px; font-weight: 600; color: ${urgencyColor}; text-transform: uppercase; letter-spacing: 0.5px;">
-                                    ⚠️ ${urgencyText}
+                            <div style="padding: 12px 20px; background: ${safeUrgencyColor}20; border: 1px solid ${safeUrgencyColor}40; border-radius: 8px; text-align: center;">
+                                <span style="font-size: 14px; font-weight: 600; color: ${safeUrgencyColor}; text-transform: uppercase; letter-spacing: 0.5px;">
+                                    ⚠️ ${safeUrgencyText}
                                 </span>
                             </div>
                         </td>
@@ -148,7 +171,7 @@ function generateCompetencyExpirationEmail({
                     <tr>
                         <td style="padding: 30px 40px 40px;">
                             <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 600; color: #f8fafc;">
-                                Hi ${recipientName},
+                                Hi ${safeRecipientName},
                             </h2>
 
                             <p style="margin: 0 0 24px; font-size: 15px; line-height: 1.6; color: #cbd5e1;">
@@ -163,7 +186,7 @@ function generateCompetencyExpirationEmail({
                                             <span style="font-size: 13px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Competency</span>
                                         </td>
                                         <td style="padding: 8px 0; border-bottom: 1px solid rgba(148, 163, 184, 0.1); text-align: right;">
-                                            <span style="font-size: 15px; font-weight: 600; color: #f8fafc;">${competencyName}</span>
+                                            <span style="font-size: 15px; font-weight: 600; color: #f8fafc;">${safeCompetencyName}</span>
                                         </td>
                                     </tr>
                                     <tr>
@@ -171,7 +194,7 @@ function generateCompetencyExpirationEmail({
                                             <span style="font-size: 13px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Expiry Date</span>
                                         </td>
                                         <td style="padding: 8px 0; border-bottom: 1px solid rgba(148, 163, 184, 0.1); text-align: right;">
-                                            <span style="font-size: 15px; font-weight: 600; color: #f8fafc;">${expiryDate}</span>
+                                            <span style="font-size: 15px; font-weight: 600; color: #f8fafc;">${safeExpiryDate}</span>
                                         </td>
                                     </tr>
                                     <tr>
@@ -179,7 +202,7 @@ function generateCompetencyExpirationEmail({
                                             <span style="font-size: 13px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Days Remaining</span>
                                         </td>
                                         <td style="padding: 8px 0; text-align: right;">
-                                            <span style="display: inline-block; padding: 4px 12px; font-size: 14px; font-weight: 600; color: ${urgencyColor}; background: ${urgencyColor}20; border-radius: 20px;">
+                                            <span style="display: inline-block; padding: 4px 12px; font-size: 14px; font-weight: 600; color: ${safeUrgencyColor}; background: ${safeUrgencyColor}20; border-radius: 20px;">
                                                 ${daysUntilExpiry} days
                                             </span>
                                         </td>

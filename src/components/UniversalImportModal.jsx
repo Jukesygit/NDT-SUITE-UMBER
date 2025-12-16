@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
 import authManager from '../auth-manager.js';
 import competencyService from '../services/competency-service.js';
 import { RandomMatrixSpinner } from './MatrixSpinners';
+
+// XLSX will be dynamically imported when needed
+let XLSX = null;
 
 export default function UniversalImportModal({ onClose, onComplete }) {
     console.log('UniversalImportModal component loaded');
@@ -152,7 +154,13 @@ export default function UniversalImportModal({ onClose, onComplete }) {
         }
     };
 
-    const parseExcelFile = (uploadedFile) => {
+    const parseExcelFile = async (uploadedFile) => {
+        // Dynamically import XLSX when needed
+        if (!XLSX) {
+            const xlsxModule = await import('xlsx');
+            XLSX = xlsxModule;
+        }
+
         const reader = new FileReader();
         reader.onload = (e) => {
             try {

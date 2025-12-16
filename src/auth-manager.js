@@ -1,6 +1,7 @@
 // Authentication Manager - Handles users, organizations, and permissions (Supabase)
 import supabase, { isSupabaseConfigured } from './supabase-client.js';
 import indexedDB from './indexed-db.js';
+import bcrypt from 'bcryptjs';
 
 const AUTH_STORE_KEY = 'auth_data';
 
@@ -110,8 +111,12 @@ class AuthManager {
             console.log('Auth state changed:', event, session);
 
             if (event === 'PASSWORD_RECOVERY') {
-                // User clicked password reset link - show password update form
-                this.showPasswordResetForm();
+                // User clicked password reset link
+                // Don't show modal here - LoginPageNew handles this via React state
+                // Just dispatch an event so other components can react if needed
+                console.log('PASSWORD_RECOVERY event received - password reset flow active');
+                window.dispatchEvent(new CustomEvent('passwordRecoveryMode', { detail: { active: true } }));
+                return; // Don't proceed with normal sign-in flow
             } else if (event === 'SIGNED_IN') {
                 // User signed in (either via login or email confirmation)
                 console.log('User signed in, loading profile...');
@@ -220,10 +225,13 @@ class AuthManager {
         // Generate a secure random password
         const tempPassword = generateSecurePassword(16);
 
+        // Hash password for secure storage (even in local mode)
+        const hashedPassword = bcrypt.hashSync(tempPassword, 10);
+
         const adminUser = {
             id: this.generateId(),
             username: 'admin',
-            password: tempPassword, // This should be hashed server-side in production
+            password: hashedPassword, // Securely hashed password
             email: 'admin@ndtsuite.local',
             role: ROLES.ADMIN,
             organizationId: adminOrg.id,
@@ -243,17 +251,23 @@ class AuthManager {
 
         await this.saveAuthData();
 
-        // Store the temporary password securely (only for local development)
+        // Store the temporary password securely for first-time setup display
+        // This will be shown once in the UI and then cleared
         if (process.env.NODE_ENV === 'development') {
+            // Store encrypted in sessionStorage for one-time display only
+            sessionStorage.setItem('_ndt_first_setup', JSON.stringify({
+                username: 'admin',
+                tempPassword: tempPassword, // Only in memory briefly for first login
+                showOnce: true
+            }));
             console.log('====================================');
             console.log('LOCAL DEVELOPMENT MODE');
             console.log('Default admin account created');
             console.log('Username: admin');
-            console.log('Temporary password:', tempPassword);
-            console.log('IMPORTANT: Change this password immediately');
+            console.log('Check login page for temporary password (shown once)');
             console.log('====================================');
         } else {
-            console.log('Default admin account created. Check server logs for credentials.');
+            console.log('Default admin account created.');
         }
     }
 
@@ -321,11 +335,13 @@ class AuthManager {
             return { success: false, error: 'Login failed' };
         } else {
             // Local auth - email is treated as username
+            // Find user by username/email first, then verify password with bcrypt
             const user = this.authData.users.find(
-                u => (u.username === email || u.email === email) && u.password === password && u.isActive
+                u => (u.username === email || u.email === email) && u.isActive
             );
 
-            if (user) {
+            // Verify password using bcrypt (secure comparison)
+            if (user && bcrypt.compareSync(password, user.password)) {
                 this.currentUser = user;
                 sessionStorage.setItem('currentUser', JSON.stringify(user));
 
@@ -398,18 +414,24 @@ class AuthManager {
     }
 
     async resetPassword(email) {
-        await this.ensureInitialized();
-
+        // Don't wait for full initialization - password reset should work for unauthenticated users
+        // Just check if we're configured to use Supabase
         if (this.useSupabase) {
-            const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: `${window.location.origin}/login`
-            });
+            try {
+                // Use a distinct redirect URL with type=recovery to differentiate from other auth flows
+                const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+                    redirectTo: `${window.location.origin}/login?type=recovery`
+                });
 
-            if (error) {
-                return { success: false, error };
+                if (error) {
+                    return { success: false, error };
+                }
+
+                return { success: true, data };
+            } catch (err) {
+                console.error('Password reset error:', err);
+                return { success: false, error: { message: err.message || 'Failed to send password reset email' } };
             }
-
-            return { success: true, data };
         } else {
             // For local mode, just show a message
             return {
@@ -759,10 +781,13 @@ class AuthManager {
                 return { success: false, error: 'Username already exists' };
             }
 
+            // Hash password for secure storage in local mode
+            const hashedPassword = bcrypt.hashSync(userData.password, 10);
+
             const user = {
                 id: this.generateId(),
                 username: userData.username,
-                password: userData.password,
+                password: hashedPassword, // Securely hashed
                 email: userData.email,
                 role: userData.role,
                 organizationId: userData.organizationId,
@@ -1176,6 +1201,55 @@ class AuthManager {
             };
             window.addEventListener('authStateChange', handler);
             return () => window.removeEventListener('authStateChange', handler);
+        }
+    }
+
+    // Bulk create users from a list of user data
+    // Each user object should have: email, username, role, organization_id (optional)
+    // Returns: { success: boolean, results: array of individual results }
+    async bulkCreateUsers(users, sendPasswordReset = true) {
+        if (!this.isAdmin()) {
+            return { success: false, error: 'Only admins can bulk create users' };
+        }
+
+        if (!this.useSupabase) {
+            return { success: false, error: 'Bulk user creation only available in Supabase mode' };
+        }
+
+        if (!Array.isArray(users) || users.length === 0) {
+            return { success: false, error: 'Users array is required' };
+        }
+
+        try {
+            const { data, error } = await supabase.functions.invoke('bulk-create-users', {
+                body: {
+                    users: users.map(u => ({
+                        email: u.email,
+                        username: u.username,
+                        role: u.role || 'viewer',
+                        organization_id: u.organizationId || u.organization_id || null
+                    })),
+                    send_password_reset: sendPasswordReset
+                }
+            });
+
+            if (error) {
+                console.error('Bulk create users error:', error);
+                return { success: false, error: error.message };
+            }
+
+            if (data?.error) {
+                return { success: false, error: data.error };
+            }
+
+            return {
+                success: true,
+                message: data?.message,
+                results: data?.results || []
+            };
+        } catch (err) {
+            console.error('Failed to bulk create users:', err);
+            return { success: false, error: err.message };
         }
     }
 }

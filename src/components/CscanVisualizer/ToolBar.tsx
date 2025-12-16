@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Move, ZoomIn } from 'lucide-react';
+import { Move, ZoomIn, BarChart2 } from 'lucide-react';
 import { Tool, DisplaySettings } from './types';
 
 interface ToolBarProps {
@@ -9,6 +9,8 @@ interface ToolBarProps {
   onDisplaySettingsChange: (settings: DisplaySettings) => void;
   dataMin?: number;
   dataMax?: number;
+  showStats?: boolean;
+  onToggleStats?: () => void;
 }
 
 const ToolBar: React.FC<ToolBarProps> = ({
@@ -17,7 +19,9 @@ const ToolBar: React.FC<ToolBarProps> = ({
   displaySettings,
   onDisplaySettingsChange,
   dataMin = 0,
-  dataMax = 100
+  dataMax = 100,
+  showStats = false,
+  onToggleStats
 }) => {
   // Local state for min/max inputs
   const [minInput, setMinInput] = useState<string>(
@@ -177,6 +181,19 @@ const ToolBar: React.FC<ToolBarProps> = ({
             />
             <span className="text-xs text-gray-400">Grid</span>
           </label>
+
+          <label className="flex items-center gap-1 cursor-pointer" title="Show source filenames on composite scans">
+            <input
+              type="checkbox"
+              checked={displaySettings.showFilenames}
+              onChange={(e) => onDisplaySettingsChange({
+                ...displaySettings,
+                showFilenames: e.target.checked
+              })}
+              className="w-3 h-3 rounded"
+            />
+            <span className="text-xs text-gray-400">Filenames</span>
+          </label>
         </div>
 
         <div className="w-px h-6 bg-gray-700" />
@@ -242,6 +259,25 @@ const ToolBar: React.FC<ToolBarProps> = ({
             Auto
           </button>
         </div>
+
+        <div className="w-px h-6 bg-gray-700" />
+
+        {/* Stats Toggle */}
+        {onToggleStats && (
+          <button
+            onClick={onToggleStats}
+            className={`
+              flex items-center gap-1.5 px-3 py-1.5 rounded transition-colors
+              ${showStats
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}
+            `}
+            title="Toggle Statistics Panel"
+          >
+            <BarChart2 className="w-4 h-4" />
+            <span className="text-xs font-medium">Stats</span>
+          </button>
+        )}
       </div>
     </div>
   );

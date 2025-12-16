@@ -225,20 +225,18 @@ function StrakeForm({
                 />
             </div>
 
-            <div className="flex gap-2 mt-2">
+            <div className="flex gap-2 mt-3">
                 <button
                     onClick={handleSubmit}
                     disabled={isSubmitting}
-                    className="btn btn-success text-xs"
-                    style={{ padding: '6px 12px' }}
+                    className="btn-success btn-sm"
                 >
                     {isSubmitting ? 'Saving...' : isEditing ? 'Update' : 'Create'}
                 </button>
                 <button
                     onClick={onCancel}
                     disabled={isSubmitting}
-                    className="btn btn-secondary text-xs"
-                    style={{ padding: '6px 12px' }}
+                    className="btn-secondary btn-sm"
                 >
                     Cancel
                 </button>
@@ -340,7 +338,7 @@ export default function StrakeManagementDialog({
                 {!showForm && (
                     <button
                         onClick={handleAddClick}
-                        className="btn btn-primary text-sm flex items-center gap-2"
+                        className="btn-primary btn-sm"
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

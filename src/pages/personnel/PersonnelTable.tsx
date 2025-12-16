@@ -3,7 +3,10 @@
  */
 
 import React, { useState, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { Person, PersonCompetency, CompetencyStats, Organization } from '../../hooks/queries/usePersonnel';
+import { personnelKeys } from '../../hooks/queries/usePersonnel';
+import personnelService from '../../services/personnel-service.js';
 import { PersonnelExpandedRow } from './PersonnelExpandedRow';
 
 interface PersonnelTableProps {
@@ -126,11 +129,24 @@ export function PersonnelTable({
     organizations,
     onPersonUpdate,
 }: PersonnelTableProps) {
+    const queryClient = useQueryClient();
     const [expandedPersonId, setExpandedPersonId] = useState<string | null>(null);
 
     const handleToggleExpand = useCallback((personId: string) => {
         setExpandedPersonId((prev) => (prev === personId ? null : personId));
     }, []);
+
+    // Prefetch person details when hovering over a row
+    const handlePersonHover = useCallback((personId: string) => {
+        queryClient.prefetchQuery({
+            queryKey: personnelKeys.detail(personId),
+            queryFn: async () => {
+                const report = await personnelService.getPersonnelComplianceReport(personId);
+                return report?.person || null;
+            },
+            staleTime: 1 * 60 * 1000, // Match the hook's staleTime
+        });
+    }, [queryClient]);
 
     if (personnel.length === 0) {
         return (
@@ -241,6 +257,7 @@ export function PersonnelTable({
                                                 : '1px solid rgba(255, 255, 255, 0.05)',
                                         }}
                                         className="hover:bg-white/5 transition-colors"
+                                        onMouseEnter={() => handlePersonHover(person.id)}
                                     >
                                         <td style={{ padding: '16px' }}>
                                             <div

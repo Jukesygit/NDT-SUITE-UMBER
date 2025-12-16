@@ -86,27 +86,15 @@ export function useAssetsByOrg(organizationId: string | null) {
 /**
  * Fetch vessels for a specific asset
  * Includes scan counts for each vessel
+ * OPTIMIZED: Uses single query with aggregation instead of N+1 queries
  */
 export function useVesselsByAsset(assetId: string | null) {
     return useQuery({
         queryKey: dataHubKeys.vessels(assetId || ''),
         queryFn: async (): Promise<VesselWithCounts[]> => {
             if (!assetId) return [];
-
-            const vessels = await assetService.getVessels(assetId);
-
-            // Get scan counts for each vessel
-            const vesselsWithCounts = await Promise.all(
-                vessels.map(async (vessel: Vessel) => {
-                    const scans = await assetService.getScans(vessel.id);
-                    return {
-                        ...vessel,
-                        scanCount: scans?.length || 0
-                    };
-                })
-            );
-
-            return vesselsWithCounts;
+            // Use optimized method that gets vessels with counts in 1 query
+            return await assetService.getVesselsWithCounts(assetId);
         },
         enabled: !!assetId,
         staleTime: 2 * 60 * 1000, // 2 minutes
@@ -134,6 +122,8 @@ export function useVesselDetails(vesselId: string | null) {
 
 export const inspectionKeys = {
     all: ['inspection'] as const,
+    list: (vesselId: string) => [...inspectionKeys.all, 'list', vesselId] as const,
+    detail: (inspectionId: string) => [...inspectionKeys.all, 'detail', inspectionId] as const,
     scans: (vesselId: string) => [...inspectionKeys.all, 'scans', vesselId] as const,
     strakes: (vesselId: string) => [...inspectionKeys.all, 'strakes', vesselId] as const,
     images: (vesselId: string) => [...inspectionKeys.all, 'images', vesselId] as const,
@@ -166,6 +156,49 @@ export interface VesselImage {
     image_url: string;
     vessel_id: string;
     created_at: string;
+}
+
+export interface Inspection {
+    id: string;
+    name: string;
+    status: 'planned' | 'in_progress' | 'completed' | 'on_hold';
+    inspector_id: string | null;
+    inspection_date: string | null;
+    notes: string | null;
+    vessel_id: string;
+    created_at: string;
+    updated_at: string;
+    metadata: Record<string, unknown>;
+}
+
+/**
+ * Fetch inspections for a vessel
+ */
+export function useVesselInspections(vesselId: string | null) {
+    return useQuery({
+        queryKey: inspectionKeys.list(vesselId || ''),
+        queryFn: async (): Promise<Inspection[]> => {
+            if (!vesselId) return [];
+            return await assetService.getInspections(vesselId);
+        },
+        enabled: !!vesselId,
+        staleTime: 2 * 60 * 1000, // 2 minutes
+    });
+}
+
+/**
+ * Fetch single inspection details
+ */
+export function useInspection(inspectionId: string | null) {
+    return useQuery({
+        queryKey: inspectionKeys.detail(inspectionId || ''),
+        queryFn: async (): Promise<Inspection | null> => {
+            if (!inspectionId) return null;
+            return await assetService.getInspection(inspectionId);
+        },
+        enabled: !!inspectionId,
+        staleTime: 2 * 60 * 1000,
+    });
 }
 
 /**

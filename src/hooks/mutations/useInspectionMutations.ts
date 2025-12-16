@@ -261,3 +261,69 @@ export function useRemoveDrawing() {
         },
     });
 }
+
+// ============================================================================
+// Inspection Mutations
+// ============================================================================
+
+interface CreateInspectionData {
+    name: string;
+    status?: 'planned' | 'in_progress' | 'completed' | 'on_hold';
+    inspection_date?: string;
+    notes?: string;
+}
+
+/**
+ * Create a new inspection
+ */
+export function useCreateInspection() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({ vesselId, data }: { vesselId: string; data: CreateInspectionData }) =>
+            assetService.createInspection(vesselId, data),
+        onSuccess: (_, { vesselId }) => {
+            // Invalidate inspections list for this vessel
+            queryClient.invalidateQueries({ queryKey: inspectionKeys.list(vesselId) });
+        },
+    });
+}
+
+/**
+ * Update an inspection
+ */
+export function useUpdateInspection() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({
+            inspectionId,
+            updates,
+        }: {
+            inspectionId: string;
+            vesselId: string;
+            updates: Partial<CreateInspectionData>;
+        }) => assetService.updateInspection(inspectionId, updates),
+        onSuccess: (_, { vesselId, inspectionId }) => {
+            // Invalidate inspections list and detail
+            queryClient.invalidateQueries({ queryKey: inspectionKeys.list(vesselId) });
+            queryClient.invalidateQueries({ queryKey: inspectionKeys.detail(inspectionId) });
+        },
+    });
+}
+
+/**
+ * Delete an inspection
+ */
+export function useDeleteInspection() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({ inspectionId }: { inspectionId: string; vesselId: string }) =>
+            assetService.deleteInspection(inspectionId),
+        onSuccess: (_, { vesselId }) => {
+            // Invalidate inspections list for this vessel
+            queryClient.invalidateQueries({ queryKey: inspectionKeys.list(vesselId) });
+        },
+    });
+}

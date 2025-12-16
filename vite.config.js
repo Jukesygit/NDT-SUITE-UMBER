@@ -19,7 +19,7 @@ export default defineConfig({
     })
   ],
   resolve: {
-    dedupe: ['react', 'react-dom']
+    dedupe: ['react', 'react-dom', 'react-router-dom']
   },
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-router-dom']
@@ -106,10 +106,12 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          // Vendor chunks
+          // Vendor chunks - core libraries always loaded
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
           'supabase-vendor': ['@supabase/supabase-js'],
-          'ui-vendor': ['three', 'html2canvas', 'jspdf'],
+          // Heavy libraries are dynamically imported, so we don't bundle them in static chunks
+          // Removed: 'three', 'html2canvas', 'jspdf', 'plotly.js-dist-min', 'xlsx'
+          // These will be loaded on-demand when their features are used
           'utils-vendor': ['docx', 'papaparse', 'pdfmake', 'crypto-js', 'bcryptjs']
         }
       }

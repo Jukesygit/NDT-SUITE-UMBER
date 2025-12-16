@@ -1,9 +1,8 @@
 // 3D Viewer Tool Module - Complete with all features (Part 1/3)
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import dataManager from '../data-manager.js';
+
+// Three.js and addons will be dynamically imported
+let THREE, OrbitControls, TransformControls, OBJLoader;
 
 let container, scene, camera, renderer, orbitControls, transformControls, model, decalMaterial, directionalLight;
 let layers = [], selectedLayer = null, needsRender = true, continuousRender = false, animationFrameId;
@@ -1553,6 +1552,20 @@ export default {
         container.innerHTML = HTML;
         container.style.overflow = 'hidden';
         cacheDomElements();
+
+        // Dynamically import Three.js and addons only when 3D viewer is loaded
+        const [threeModule, orbitControlsModule, transformControlsModule, objLoaderModule] = await Promise.all([
+            import('three'),
+            import('three/addons/controls/OrbitControls.js'),
+            import('three/addons/controls/TransformControls.js'),
+            import('three/addons/loaders/OBJLoader.js')
+        ]);
+
+        THREE = threeModule;
+        OrbitControls = orbitControlsModule.OrbitControls;
+        TransformControls = transformControlsModule.TransformControls;
+        OBJLoader = objLoaderModule.OBJLoader;
+
         doInit();
 
         // Listen for 3D model loading events from data hub

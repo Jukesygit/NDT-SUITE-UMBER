@@ -150,7 +150,7 @@ export default function ScansGrid({
                     </div>
                     {onManageStrakes && (
                         <button
-                            className="btn btn-secondary text-xs"
+                            className="btn-secondary text-xs"
                             onClick={onManageStrakes}
                         >
                             + Add Strake
@@ -194,7 +194,7 @@ export default function ScansGrid({
             <div className="flex justify-end" style={{ gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-lg)' }}>
                 {onAddScans && (
                     <button
-                        className="btn btn-primary text-xs flex items-center"
+                        className="btn-primary text-xs flex items-center"
                         style={{ gap: 'var(--spacing-xs)' }}
                         onClick={onAddScans}
                     >
@@ -206,7 +206,7 @@ export default function ScansGrid({
                 )}
                 {onManageStrakes && (
                     <button
-                        className="btn btn-secondary text-xs"
+                        className="btn-secondary text-xs"
                         onClick={onManageStrakes}
                     >
                         Manage Strakes
