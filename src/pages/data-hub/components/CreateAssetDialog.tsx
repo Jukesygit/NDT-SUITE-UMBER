@@ -115,17 +115,15 @@ export default function CreateAssetDialog({ isOpen, onClose, organizationId }: C
                     <div className="flex justify-end gap-3">
                         <button
                             type="button"
-                            className="btn btn-secondary"
+                            className="btn-secondary"
                             onClick={handleClose}
-                            style={{ padding: '10px 16px', fontSize: '14px' }}
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
-                            className="btn btn-primary"
+                            className="btn-primary"
                             disabled={!name.trim() || createAsset.isPending}
-                            style={{ padding: '10px 16px', fontSize: '14px' }}
                         >
                             {createAsset.isPending ? 'Creating...' : 'Create Asset'}
                         </button>

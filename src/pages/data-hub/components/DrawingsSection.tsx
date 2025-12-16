@@ -48,16 +48,14 @@ function DrawingCard({
                 </div>
                 {hasDrawing ? (
                     <button
-                        className="btn btn-primary text-xs"
-                        style={{ padding: '6px 12px' }}
+                        className="btn-primary btn-sm"
                         onClick={onAnnotate}
                     >
                         Annotate
                     </button>
                 ) : (
                     <button
-                        className="btn btn-success text-xs"
-                        style={{ padding: '6px 12px' }}
+                        className="btn-success btn-sm"
                         onClick={onUpload}
                     >
                         + Upload

@@ -374,7 +374,20 @@ class AdminService {
       // First, get permission requests without join (FK may not exist)
       const { data: requests, error: reqError } = await supabase!
         .from('permission_requests')
-        .select('*')
+        .select(`
+          id,
+          user_id,
+          requested_role,
+          user_current_role,
+          message,
+          status,
+          approved_by,
+          rejected_by,
+          rejection_reason,
+          created_at,
+          approved_at,
+          rejected_at
+        `)
         .order('created_at', { ascending: false });
 
       if (reqError) {
@@ -682,7 +695,18 @@ class AdminService {
     try {
       const { data, error } = await supabase!
         .from('system_announcements')
-        .select('*')
+        .select(`
+          id,
+          title,
+          message,
+          type,
+          is_active,
+          is_dismissible,
+          created_at,
+          updated_at,
+          created_by,
+          updated_by
+        `)
         .eq('is_active', true)
         .order('updated_at', { ascending: false })
         .limit(1)

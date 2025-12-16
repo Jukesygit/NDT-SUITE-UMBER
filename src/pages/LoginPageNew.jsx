@@ -1,31 +1,144 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authManager from '../auth-manager.js';
+import supabase from '../supabase-client.js';
 import { LogoGradientShift } from '../components/MatrixLogoAnimated';
 import { RandomMatrixSpinner } from '../components/MatrixSpinners';
+import { useAuth } from '../contexts/AuthContext';
 
-function LoginPageNew({ onLogin }) {
+// Storage key for tracking password reset mode
+const PASSWORD_RESET_KEY = 'ndt_password_reset_pending';
+
+// Check for recovery mode before component mounts (synchronous check)
+const getInitialMode = () => {
+  if (typeof window !== 'undefined') {
+    const hash = window.location.hash;
+    const params = new URLSearchParams(window.location.search);
+
+    // Check for explicit type=recovery parameter (our redirect URL includes this)
+    if (params.get('type') === 'recovery') {
+      console.log('Initial mode: update-password (type=recovery parameter detected)');
+      sessionStorage.setItem(PASSWORD_RESET_KEY, 'true');
+      return 'update-password';
+    }
+
+    // Check hash-based recovery (older Supabase flow)
+    if (hash && hash.includes('type=recovery')) {
+      console.log('Initial mode: update-password (recovery token in hash)');
+      sessionStorage.setItem(PASSWORD_RESET_KEY, 'true');
+      return 'update-password';
+    }
+
+    // Check for code parameter WITH type=recovery (PKCE flow - both may be present)
+    // Note: We no longer assume any code param is password reset - it could be email confirmation
+    if (params.get('code') && params.get('type') === 'recovery') {
+      console.log('Initial mode: update-password (code + recovery type detected)');
+      sessionStorage.setItem(PASSWORD_RESET_KEY, 'true');
+      return 'update-password';
+    }
+
+    // Don't trust sessionStorage alone on fresh page loads - it may be stale
+    // The sessionStorage flag is only used to prevent redirects during the password update flow,
+    // not to determine the initial mode. Clear any stale flag.
+    if (sessionStorage.getItem(PASSWORD_RESET_KEY) === 'true') {
+      console.log('Clearing stale password reset flag from sessionStorage');
+      sessionStorage.removeItem(PASSWORD_RESET_KEY);
+    }
+  }
+  return 'login';
+};
+
+function LoginPageNew() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [mode, setMode] = useState('login'); // 'login', 'register', 'reset'
+  const [successMessage, setSuccessMessage] = useState('');
+  const [mode, setMode] = useState(getInitialMode); // 'login', 'register', 'reset', 'update-password'
 
   useEffect(() => {
-    // Check if already logged in
-    const checkSession = async () => {
-      const session = await authManager.getSession();
-      if (session) {
-        navigate('/');
-      }
+    // Check if we're in password reset mode (from sessionStorage)
+    const isPasswordResetMode = sessionStorage.getItem(PASSWORD_RESET_KEY) === 'true';
+
+    // Note: We don't force mode to 'update-password' here anymore.
+    // getInitialMode() handles the initial mode, and we allow explicit mode changes
+    // (like clicking "Back to sign in") to take precedence.
+
+    // Listen for password recovery event from auth-manager
+    const handlePasswordRecovery = () => {
+      console.log('passwordRecoveryMode event received');
+      sessionStorage.setItem(PASSWORD_RESET_KEY, 'true');
+      setMode('update-password');
     };
-    checkSession();
-  }, [navigate]);
+    window.addEventListener('passwordRecoveryMode', handlePasswordRecovery);
+
+    // Listen for Supabase auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Login page auth event:', event);
+
+      // Re-check sessionStorage in case it was set by another handler
+      const currentPasswordResetMode = sessionStorage.getItem(PASSWORD_RESET_KEY) === 'true';
+
+      if (event === 'PASSWORD_RECOVERY') {
+        console.log('PASSWORD_RECOVERY event received');
+        sessionStorage.setItem(PASSWORD_RESET_KEY, 'true');
+        setMode('update-password');
+        // Clean up URL but keep type=recovery for page reloads
+        const url = new URL(window.location.href);
+        url.searchParams.delete('code');
+        window.history.replaceState(null, '', url.toString());
+      } else if (event === 'USER_UPDATED' && currentPasswordResetMode) {
+        // Password was updated successfully - this fires faster than the promise resolves
+        console.log('USER_UPDATED: Password update confirmed, switching to login');
+        window.history.replaceState(null, '', window.location.pathname);
+        setSuccessMessage('Password updated successfully! You can now sign in with your new password.');
+        setNewPassword('');
+        setConfirmPassword('');
+        setIsLoading(false);
+        setMode('login');
+        // Sign out and THEN clear the password reset flag (prevents redirect while still logged in)
+        supabase.auth.signOut()
+          .then(() => {
+            console.log('Sign out complete, clearing password reset flag');
+            sessionStorage.removeItem(PASSWORD_RESET_KEY);
+          })
+          .catch(err => {
+            console.log('Sign out error:', err);
+            // Clear flag anyway after a delay to prevent stuck state
+            setTimeout(() => sessionStorage.removeItem(PASSWORD_RESET_KEY), 2000);
+          });
+      } else if (event === 'SIGNED_IN') {
+        // Only navigate away if NOT in password reset mode
+        // Check both the initial value and current sessionStorage
+        if (!currentPasswordResetMode && mode !== 'update-password') {
+          console.log('SIGNED_IN: Not in password reset mode, redirecting to home');
+          navigate('/');
+        } else {
+          console.log('SIGNED_IN: In password reset mode, staying on login page');
+        }
+      }
+    });
+
+    // Only redirect if logged in and NOT in password reset mode
+    if (isAuthenticated && !isPasswordResetMode && mode !== 'update-password') {
+      console.log('User already logged in, redirecting to home');
+      navigate('/');
+    }
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('passwordRecoveryMode', handlePasswordRecovery);
+    };
+  }, [navigate, mode, isAuthenticated]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccessMessage('');
     setIsLoading(true);
 
     try {
@@ -34,7 +147,6 @@ function LoginPageNew({ onLogin }) {
         if (result.error) {
           setError(result.error.message || 'Login failed');
         } else {
-          if (onLogin) onLogin();
           navigate('/');
         }
       } else if (mode === 'register') {
@@ -62,6 +174,57 @@ function LoginPageNew({ onLogin }) {
           alert('Password reset email sent! Please check your inbox (and spam folder).');
           setMode('login');
         }
+      } else if (mode === 'update-password') {
+        // Handle password update after clicking reset link
+        if (newPassword !== confirmPassword) {
+          setError('Passwords do not match');
+          setIsLoading(false);
+          return;
+        }
+
+        if (newPassword.length < 6) {
+          setError('Password must be at least 6 characters');
+          setIsLoading(false);
+          return;
+        }
+
+        // Check if we have a session (the code should have been exchanged for a session)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          // Try to exchange the code if it's still in the URL
+          const params = new URLSearchParams(window.location.search);
+          const code = params.get('code');
+          if (code) {
+            console.log('No session found, attempting to exchange code...');
+            const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+            if (exchangeError) {
+              console.error('Code exchange failed:', exchangeError);
+              setError('Your password reset link has expired. Please request a new one.');
+              setIsLoading(false);
+              return;
+            }
+          } else {
+            setError('Your password reset session has expired. Please request a new password reset link.');
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        // Update the password - use a longer timeout (30s) for slow connections
+        try {
+          const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+
+          if (updateError) {
+            setError('Error updating password: ' + updateError.message);
+          } else {
+            // Success! The USER_UPDATED event handler will take care of UI updates
+            // This else block is a fallback in case the event doesn't fire
+            console.log('updateUser promise resolved successfully');
+          }
+        } catch (updateErr) {
+          console.error('Password update error:', updateErr);
+          setError('Error updating password: ' + (updateErr.message || 'Unknown error'));
+        }
       }
     } catch (err) {
       setError(err.message || 'An error occurred');
@@ -83,11 +246,13 @@ function LoginPageNew({ onLogin }) {
             <div className="login-card__logo">
               <LogoGradientShift size={90} />
             </div>
-            <h1 className="login-card__title">Matrix Hub</h1>
+            <h1 className="login-card__title">Matrix Portal</h1>
             <p className="login-card__subtitle">
               {mode === 'login' && 'Sign in to your account'}
               {mode === 'register' && 'Create a new account'}
               {mode === 'reset' && 'Reset your password'}
+              {mode === 'update-password' && 'Enter your new password'}
+              {mode === 'processing' && 'Processing your request...'}
             </p>
           </div>
 
@@ -98,26 +263,45 @@ function LoginPageNew({ onLogin }) {
             </div>
           )}
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="login-card__form">
-            <div className="input-group">
-              <label htmlFor="email" className="input-group__label">
-                Email Address
-              </label>
-              <input
-                id="email"
-                type="email"
-                className="input input--md"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                required
-                autoComplete="email"
-                disabled={isLoading}
-              />
+          {/* Success Message */}
+          {successMessage && (
+            <div className="alert alert--success animate-slideDown">
+              <div className="alert__message">{successMessage}</div>
             </div>
+          )}
 
-            {mode !== 'reset' && (
+          {/* Processing state - show loading spinner */}
+          {mode === 'processing' && (
+            <div className="login-card__processing">
+              <RandomMatrixSpinner size={60} />
+              <p className="text-sm text-tertiary mt-4">Verifying your reset link...</p>
+            </div>
+          )}
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="login-card__form" style={{ display: mode === 'processing' ? 'none' : 'block' }}>
+            {/* Email field - shown for login, register, reset modes */}
+            {mode !== 'update-password' && (
+              <div className="input-group">
+                <label htmlFor="email" className="input-group__label">
+                  Email Address
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  className="input input--md"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  required
+                  autoComplete="email"
+                  disabled={isLoading}
+                />
+              </div>
+            )}
+
+            {/* Password field - shown for login and register modes */}
+            {(mode === 'login' || mode === 'register') && (
               <div className="input-group">
                 <label htmlFor="password" className="input-group__label">
                   Password
@@ -136,6 +320,47 @@ function LoginPageNew({ onLogin }) {
               </div>
             )}
 
+            {/* New password fields - shown for update-password mode */}
+            {mode === 'update-password' && (
+              <>
+                <div className="input-group">
+                  <label htmlFor="new-password" className="input-group__label">
+                    New Password
+                  </label>
+                  <input
+                    id="new-password"
+                    type="password"
+                    className="input input--md"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    minLength={6}
+                    autoComplete="new-password"
+                    disabled={isLoading}
+                  />
+                </div>
+
+                <div className="input-group">
+                  <label htmlFor="confirm-password" className="input-group__label">
+                    Confirm Password
+                  </label>
+                  <input
+                    id="confirm-password"
+                    type="password"
+                    className="input input--md"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    minLength={6}
+                    autoComplete="new-password"
+                    disabled={isLoading}
+                  />
+                </div>
+              </>
+            )}
+
             <button
               type="submit"
               className="btn btn--primary btn--lg w-full"
@@ -151,6 +376,7 @@ function LoginPageNew({ onLogin }) {
                   {mode === 'login' && 'Sign In'}
                   {mode === 'register' && 'Create Account'}
                   {mode === 'reset' && 'Send Reset Link'}
+                  {mode === 'update-password' && 'Update Password'}
                 </>
               )}
             </button>
@@ -209,6 +435,37 @@ function LoginPageNew({ onLogin }) {
                   style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
                 >
                   Sign in
+                </button>
+              </div>
+            )}
+
+            {mode === 'update-password' && (
+              <div className="text-sm text-tertiary text-center">
+                Changed your mind?{' '}
+                <button
+                  type="button"
+                  className="text-primary font-medium hover:underline"
+                  onClick={() => {
+                    // Update UI immediately
+                    window.history.replaceState(null, '', window.location.pathname);
+                    setMode('login');
+                    setError('');
+                    setSuccessMessage('');
+                    // Sign out and THEN clear flag (prevents redirect while still logged in)
+                    supabase.auth.signOut()
+                      .then(() => {
+                        console.log('Sign out complete, clearing password reset flag');
+                        sessionStorage.removeItem(PASSWORD_RESET_KEY);
+                      })
+                      .catch(err => {
+                        console.log('Sign out error:', err);
+                        setTimeout(() => sessionStorage.removeItem(PASSWORD_RESET_KEY), 2000);
+                      });
+                  }}
+                  disabled={isLoading}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                >
+                  Back to sign in
                 </button>
               </div>
             )}
@@ -281,6 +538,14 @@ function LoginPageNew({ onLogin }) {
 
         .login-card__form {
           margin-bottom: var(--spacing-6);
+        }
+
+        .login-card__processing {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: var(--spacing-8) 0;
         }
 
         .login-card__footer {

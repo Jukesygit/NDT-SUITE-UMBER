@@ -3,14 +3,17 @@
  * Navigation: DataHub -> Asset -> Vessel Overview -> Inspection
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createModernHeader } from '../../components/modern-header.js';
 import { SectionSpinner } from '../../components/ui';
 import { ErrorDisplay } from '../../components/ui/ErrorDisplay';
 import { MatrixLogoRacer } from '../../components/MatrixLogoLoader';
 import { assetService } from '../../services/asset-service.js';
+import { useVesselInspections, type Inspection, inspectionKeys } from '../../hooks/queries/useDataHub';
+import { useCreateInspection } from '../../hooks/mutations/useInspectionMutations';
+import CreateInspectionDialog from './components/CreateInspectionDialog';
 
 interface Scan {
     id: string;
@@ -40,6 +43,8 @@ interface Asset {
 export default function VesselOverviewPage() {
     const { assetId, vesselId } = useParams<{ assetId: string; vesselId: string }>();
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
+    const [showCreateDialog, setShowCreateDialog] = useState(false);
 
     // Fetch vessel details
     const {
@@ -68,10 +73,15 @@ export default function VesselOverviewPage() {
         enabled: !!assetId,
     });
 
-    // Fetch scans (inspection history)
+    // Fetch inspections
+    const {
+        data: inspections = [],
+        isLoading: inspectionsLoading
+    } = useVesselInspections(vesselId || null);
+
+    // Fetch scans (for legacy display / stats)
     const {
         data: scans = [],
-        isLoading: scansLoading
     } = useQuery({
         queryKey: ['scans', vesselId],
         queryFn: async (): Promise<Scan[]> => {
@@ -80,6 +90,9 @@ export default function VesselOverviewPage() {
         },
         enabled: !!vesselId,
     });
+
+    // Create inspection mutation
+    const createInspection = useCreateInspection();
 
     // Initialize the modern header
     useEffect(() => {
@@ -100,19 +113,54 @@ export default function VesselOverviewPage() {
         }
     }, [vessel?.name]);
 
+    // Prefetch likely navigation data when component mounts
+    useEffect(() => {
+        if (vesselId) {
+            // Prefetch strakes (likely needed for inspection page)
+            queryClient.prefetchQuery({
+                queryKey: inspectionKeys.strakes(vesselId),
+                queryFn: () => assetService.getStrakes(vesselId),
+                staleTime: 2 * 60 * 1000,
+            });
+
+            // Prefetch vessel images (likely needed for inspection page)
+            queryClient.prefetchQuery({
+                queryKey: inspectionKeys.images(vesselId),
+                queryFn: () => assetService.getVesselImages(vesselId),
+                staleTime: 2 * 60 * 1000,
+            });
+        }
+    }, [vesselId, queryClient]);
+
     // Handlers
     const handleBackToAsset = () => {
         navigate('/');
     };
 
-    const handleCreateInspection = () => {
-        // Navigate to inspection page with "new" mode
-        navigate(`/inspection/${assetId}/${vesselId}`);
+    const handleOpenCreateDialog = () => {
+        setShowCreateDialog(true);
     };
 
-    const handleViewInspection = (scan: Scan) => {
-        // Navigate to inspection page with scan context
-        navigate(`/inspection/${assetId}/${vesselId}?scan=${scan.id}`);
+    const handleCreateInspection = async (data: {
+        name: string;
+        status: 'planned' | 'in_progress' | 'completed' | 'on_hold';
+        inspection_date?: string;
+        notes?: string;
+    }) => {
+        if (!vesselId) return;
+        const inspection = await createInspection.mutateAsync({ vesselId, data });
+        // Navigate to the new inspection
+        navigate(`/inspection/${assetId}/${vesselId}/${inspection.id}`);
+    };
+
+    const handleViewInspection = (inspection: Inspection) => {
+        // Navigate to inspection page with inspection ID
+        navigate(`/inspection/${assetId}/${vesselId}/${inspection.id}`);
+    };
+
+    const handleQuickInspection = () => {
+        // Quick start: navigate to inspection page without pre-created inspection
+        navigate(`/inspection/${assetId}/${vesselId}`);
     };
 
     // Loading state
@@ -139,14 +187,6 @@ export default function VesselOverviewPage() {
             </div>
         );
     }
-
-    // Group scans by date for inspection history
-    const scansByDate = scans.reduce((acc, scan) => {
-        const date = new Date(scan.created_at).toLocaleDateString();
-        if (!acc[date]) acc[date] = [];
-        acc[date].push(scan);
-        return acc;
-    }, {} as Record<string, Scan[]>);
 
     return (
         <div className="h-full flex flex-col overflow-hidden">
@@ -228,36 +268,43 @@ export default function VesselOverviewPage() {
                             <div className="flex gap-6">
                                 <div>
                                     <div style={{ fontSize: '24px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                        {inspections.length}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                                        Inspections
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '24px', fontWeight: 600, color: 'var(--text-primary)' }}>
                                         {scans.length}
                                     </div>
                                     <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
                                         Total Scans
                                     </div>
                                 </div>
-                                <div>
-                                    <div style={{ fontSize: '24px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                                        {Object.keys(scansByDate).length}
-                                    </div>
-                                    <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
-                                        Inspection Days
-                                    </div>
-                                </div>
                             </div>
                         </div>
 
-                        {/* Action Button */}
-                        <button
-                            onClick={handleCreateInspection}
-                            className="btn btn-primary"
-                            style={{ padding: '12px 24px', fontSize: '14px' }}
-                        >
-                            <PlusIcon />
-                            <span style={{ marginLeft: '8px' }}>New Inspection</span>
-                        </button>
+                        {/* Action Buttons */}
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={handleOpenCreateDialog}
+                                className="btn-primary"
+                            >
+                                <PlusIcon />
+                                New Inspection
+                            </button>
+                            <button
+                                onClick={handleQuickInspection}
+                                className="btn-secondary btn-sm"
+                            >
+                                Quick Start
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                {/* Inspection History */}
+                {/* Inspections List */}
                 <div>
                     <h3 style={{
                         fontSize: '16px',
@@ -265,12 +312,12 @@ export default function VesselOverviewPage() {
                         color: 'var(--text-primary)',
                         marginBottom: '16px',
                     }}>
-                        Inspection History
+                        Inspections
                     </h3>
 
-                    {scansLoading ? (
+                    {inspectionsLoading ? (
                         <SectionSpinner message="Loading inspections..." />
-                    ) : scans.length === 0 ? (
+                    ) : inspections.length === 0 ? (
                         <div
                             className="glass-card"
                             style={{
@@ -297,115 +344,111 @@ export default function VesselOverviewPage() {
                                 Create your first inspection to start recording scan data.
                             </p>
                             <button
-                                onClick={handleCreateInspection}
-                                className="btn btn-success"
-                                style={{ padding: '10px 20px' }}
+                                onClick={handleOpenCreateDialog}
+                                className="btn-success"
                             >
                                 Create First Inspection
                             </button>
                         </div>
                     ) : (
-                        <div className="space-y-4">
-                            {Object.entries(scansByDate)
-                                .sort(([a], [b]) => new Date(b).getTime() - new Date(a).getTime())
-                                .map(([date, dateScans]) => (
-                                    <div key={date} className="glass-card" style={{ padding: '16px' }}>
-                                        <div
-                                            className="flex items-center justify-between mb-3"
-                                            style={{
-                                                paddingBottom: '12px',
-                                                borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-                                            }}
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <CalendarIcon />
-                                                <span style={{
-                                                    fontSize: '14px',
-                                                    fontWeight: 500,
-                                                    color: 'var(--text-primary)',
-                                                }}>
-                                                    {date}
-                                                </span>
-                                            </div>
-                                            <span
-                                                className="glass-badge"
-                                                style={{ fontSize: '11px', padding: '4px 10px' }}
-                                            >
-                                                {dateScans.length} scan{dateScans.length !== 1 ? 's' : ''}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {inspections.map((inspection) => (
+                                <div
+                                    key={inspection.id}
+                                    onClick={() => handleViewInspection(inspection)}
+                                    className="glass-card list-item-hover cursor-pointer"
+                                    style={{ padding: '20px' }}
+                                >
+                                    <div className="flex items-start justify-between mb-3">
+                                        <h4 style={{
+                                            fontSize: '16px',
+                                            fontWeight: 600,
+                                            color: 'var(--text-primary)',
+                                        }}>
+                                            {inspection.name}
+                                        </h4>
+                                        <StatusBadge status={inspection.status} />
+                                    </div>
+
+                                    {inspection.inspection_date && (
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <CalendarIcon />
+                                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                                                {new Date(inspection.inspection_date).toLocaleDateString()}
                                             </span>
                                         </div>
+                                    )}
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                            {dateScans.map((scan) => (
-                                                <div
-                                                    key={scan.id}
-                                                    onClick={() => handleViewInspection(scan)}
-                                                    className="glass-panel list-item-hover cursor-pointer"
-                                                    style={{ padding: '12px' }}
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div
-                                                            style={{
-                                                                width: '32px',
-                                                                height: '32px',
-                                                                borderRadius: '6px',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                background: getScanTypeColor(scan.tool_type),
-                                                            }}
-                                                        >
-                                                            <ScanIcon type={scan.tool_type} />
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <div
-                                                                style={{
-                                                                    fontSize: '13px',
-                                                                    fontWeight: 500,
-                                                                    color: 'var(--text-primary)',
-                                                                    overflow: 'hidden',
-                                                                    textOverflow: 'ellipsis',
-                                                                    whiteSpace: 'nowrap',
-                                                                }}
-                                                            >
-                                                                {scan.name}
-                                                            </div>
-                                                            <div style={{
-                                                                fontSize: '11px',
-                                                                color: 'rgba(255, 255, 255, 0.4)',
-                                                            }}>
-                                                                {scan.tool_type.toUpperCase()}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
+                                    {inspection.notes && (
+                                        <p style={{
+                                            fontSize: '13px',
+                                            color: 'var(--text-dim)',
+                                            marginTop: '8px',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            display: '-webkit-box',
+                                            WebkitLineClamp: 2,
+                                            WebkitBoxOrient: 'vertical',
+                                        }}>
+                                            {inspection.notes}
+                                        </p>
+                                    )}
+
+                                    <div style={{
+                                        fontSize: '11px',
+                                        color: 'var(--text-dim)',
+                                        marginTop: '12px',
+                                        paddingTop: '12px',
+                                        borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                                    }}>
+                                        Created {new Date(inspection.created_at).toLocaleDateString()}
                                     </div>
-                                ))}
+                                </div>
+                            ))}
                         </div>
                     )}
                 </div>
             </div>
+
+            {/* Create Inspection Dialog */}
+            <CreateInspectionDialog
+                isOpen={showCreateDialog}
+                onClose={() => setShowCreateDialog(false)}
+                vesselName={vessel?.name || ''}
+                onCreateInspection={handleCreateInspection}
+            />
         </div>
     );
 }
 
 // ============================================================================
-// Helper Functions
+// Helper Components
 // ============================================================================
 
-function getScanTypeColor(type: string): string {
-    switch (type) {
-        case 'pec':
-            return 'rgba(234, 179, 8, 0.15)';
-        case 'cscan':
-            return 'rgba(59, 130, 246, 0.15)';
-        case '3dview':
-            return 'rgba(168, 85, 247, 0.15)';
-        default:
-            return 'rgba(255, 255, 255, 0.1)';
-    }
+function StatusBadge({ status }: { status: string }) {
+    const statusConfig: Record<string, { color: string; bg: string; label: string }> = {
+        planned: { color: '#60a5fa', bg: 'rgba(96, 165, 250, 0.15)', label: 'Planned' },
+        in_progress: { color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', label: 'In Progress' },
+        completed: { color: '#22c55e', bg: 'rgba(34, 197, 94, 0.15)', label: 'Completed' },
+        on_hold: { color: '#9ca3af', bg: 'rgba(156, 163, 175, 0.15)', label: 'On Hold' },
+    };
+
+    const config = statusConfig[status] || statusConfig.planned;
+
+    return (
+        <span
+            style={{
+                fontSize: '11px',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                background: config.bg,
+                color: config.color,
+                fontWeight: 500,
+            }}
+        >
+            {config.label}
+        </span>
+    );
 }
 
 // ============================================================================
@@ -444,14 +487,4 @@ function CalendarIcon() {
     );
 }
 
-function ScanIcon({ type }: { type: string }) {
-    const color = type === 'pec' ? 'rgba(234, 179, 8, 0.9)' :
-                  type === 'cscan' ? 'rgba(59, 130, 246, 0.9)' :
-                  'rgba(168, 85, 247, 0.9)';
-
-    return (
-        <svg width="14" height="14" fill="none" stroke={color} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-        </svg>
-    );
-}
+// ScanIcon removed - unused

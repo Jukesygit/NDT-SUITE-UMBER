@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, BarChart2 } from 'lucide-react';
-import { CscanData } from './types';
+import { CscanData, CscanStats } from './types';
 
 interface StatsPanelProps {
   data: CscanData | null;
@@ -10,29 +10,39 @@ interface StatsPanelProps {
 
 const StatsPanel: React.FC<StatsPanelProps> = ({ data, onToggle }) => {
   // Calculate statistics
-  const stats = React.useMemo(() => {
+  const stats = React.useMemo((): CscanStats | null => {
     if (!data) return null;
 
     if (data.stats) {
       return data.stats;
     }
 
-    // Calculate stats from data if not provided
+    // Calculate stats from data if not provided (fallback)
     const flatData = data.data.flat().filter((v): v is number => v !== null && !isNaN(v));
     const validPoints = flatData.length;
+    const totalPoints = data.width * data.height;
+    const ndCount = totalPoints - validPoints;
 
     if (validPoints === 0) {
       return {
         min: 0,
         max: 0,
         mean: 0,
+        median: 0,
         stdDev: 0,
         validPoints: 0,
-        totalPoints: data.width * data.height,
+        totalPoints,
+        totalArea: 0,
+        validArea: 0,
         ndPercent: 100,
-        validArea: 0
+        ndCount,
+        ndArea: 0
       };
     }
+
+    // Sort for median
+    const sorted = flatData.slice().sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
 
     const min = Math.min(...flatData);
     const max = Math.max(...flatData);
@@ -41,15 +51,33 @@ const StatsPanel: React.FC<StatsPanelProps> = ({ data, onToggle }) => {
     const variance = flatData.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / validPoints;
     const stdDev = Math.sqrt(variance);
 
+    // Calculate area using coordinate spacing
+    const xSpacing = data.xAxis && data.xAxis.length > 1
+      ? Math.abs(data.xAxis[1] - data.xAxis[0])
+      : 1.0;
+    const ySpacing = data.yAxis && data.yAxis.length > 1
+      ? Math.abs(data.yAxis[1] - data.yAxis[0])
+      : 1.0;
+    const pointArea = xSpacing * ySpacing; // mm²
+
+    const totalArea = totalPoints * pointArea;
+    const ndArea = ndCount * pointArea;
+    const validArea = totalArea - ndArea;
+    const ndPercent = (ndCount / totalPoints) * 100;
+
     return {
       min,
       max,
       mean,
+      median,
       stdDev,
       validPoints,
-      totalPoints: data.width * data.height,
-      ndPercent: ((data.width * data.height - validPoints) / (data.width * data.height)) * 100,
-      validArea: (validPoints / (data.width * data.height)) * 100
+      totalPoints,
+      totalArea,
+      validArea,
+      ndPercent,
+      ndCount,
+      ndArea
     };
   }, [data]);
 
@@ -67,6 +95,9 @@ const StatsPanel: React.FC<StatsPanelProps> = ({ data, onToggle }) => {
     }
     return value.toString();
   };
+
+  // Convert mm² to m²
+  const mmSqToMSq = (mmSq: number) => mmSq / 1000000;
 
   return (
     <div>
@@ -93,45 +124,53 @@ const StatsPanel: React.FC<StatsPanelProps> = ({ data, onToggle }) => {
             </p>
           ) : (
             <>
-              {/* Main Stats Grid */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded p-2" style={{ backgroundColor: '#111827' }}>
-                  <div className="text-xs text-gray-400 mb-1">Minimum</div>
-                  <div className="text-sm font-mono text-white">{formatValue(stats.min)} mm</div>
+              {/* Thickness Stats - Top Row (5 cards) */}
+              <div className="grid grid-cols-5 gap-1.5">
+                <div className="rounded p-2 text-center" style={{ backgroundColor: '#111827' }}>
+                  <div className="text-[10px] text-gray-400 mb-0.5">Min</div>
+                  <div className="text-sm font-mono text-cyan-400">{formatValue(stats.min)} mm</div>
                 </div>
-                <div className="rounded p-2" style={{ backgroundColor: '#111827' }}>
-                  <div className="text-xs text-gray-400 mb-1">Maximum</div>
-                  <div className="text-sm font-mono text-white">{formatValue(stats.max)} mm</div>
+                <div className="rounded p-2 text-center" style={{ backgroundColor: '#111827' }}>
+                  <div className="text-[10px] text-gray-400 mb-0.5">Max</div>
+                  <div className="text-sm font-mono text-cyan-400">{formatValue(stats.max)} mm</div>
                 </div>
-                <div className="rounded p-2" style={{ backgroundColor: '#111827' }}>
-                  <div className="text-xs text-gray-400 mb-1">Mean</div>
-                  <div className="text-sm font-mono text-white">{formatValue(stats.mean)} mm</div>
+                <div className="rounded p-2 text-center" style={{ backgroundColor: '#111827' }}>
+                  <div className="text-[10px] text-gray-400 mb-0.5">Mean</div>
+                  <div className="text-sm font-mono text-cyan-400">{formatValue(stats.mean)} mm</div>
                 </div>
-                <div className="rounded p-2" style={{ backgroundColor: '#111827' }}>
-                  <div className="text-xs text-gray-400 mb-1">Std Dev</div>
-                  <div className="text-sm font-mono text-white">{formatValue(stats.stdDev)} mm</div>
+                <div className="rounded p-2 text-center" style={{ backgroundColor: '#111827' }}>
+                  <div className="text-[10px] text-gray-400 mb-0.5">Median</div>
+                  <div className="text-sm font-mono text-cyan-400">{formatValue(stats.median)} mm</div>
+                </div>
+                <div className="rounded p-2 text-center" style={{ backgroundColor: '#111827' }}>
+                  <div className="text-[10px] text-gray-400 mb-0.5">Std Dev</div>
+                  <div className="text-sm font-mono text-cyan-400">{formatValue(stats.stdDev)} mm</div>
                 </div>
               </div>
 
-              {/* Coverage Stats */}
-              <div className="space-y-1.5 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Valid Points</span>
-                  <span className="font-mono text-white">{formatLargeNumber(stats.validPoints)}</span>
+              {/* Area Stats - Bottom Row (4 cards) */}
+              <div className="grid grid-cols-4 gap-1.5">
+                <div className="rounded p-2 text-center" style={{ backgroundColor: '#111827' }}>
+                  <div className="text-[10px] text-gray-400 mb-0.5">Total Area</div>
+                  <div className="text-sm font-mono text-white">{formatValue(mmSqToMSq(stats.totalArea), 4)} m²</div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Total Points</span>
-                  <span className="font-mono text-white">{formatLargeNumber(stats.totalPoints || data.width * data.height)}</span>
+                <div className="rounded p-2 text-center" style={{ backgroundColor: '#111827' }}>
+                  <div className="text-[10px] text-gray-400 mb-0.5">ND %</div>
+                  <div className="text-sm font-mono text-white">{formatValue(stats.ndPercent, 1)} %</div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Coverage</span>
-                  <span className="font-mono text-white">{formatValue(100 - stats.ndPercent, 1)}%</span>
+                <div className="rounded p-2 text-center" style={{ backgroundColor: '#111827' }}>
+                  <div className="text-[10px] text-gray-400 mb-0.5">Valid Area</div>
+                  <div className="text-sm font-mono text-white">{formatValue(mmSqToMSq(stats.validArea), 4)} m²</div>
+                </div>
+                <div className="rounded p-2 text-center" style={{ backgroundColor: '#111827' }}>
+                  <div className="text-[10px] text-gray-400 mb-0.5">Valid Points</div>
+                  <div className="text-sm font-mono text-white">{formatLargeNumber(stats.validPoints)}</div>
                 </div>
               </div>
 
               {/* Visual Range Bar */}
               <div className="space-y-1">
-                <div className="text-xs text-gray-400">Value Range</div>
+                <div className="text-xs text-gray-400">Thickness Range</div>
                 <div className="relative h-6 rounded overflow-hidden" style={{ backgroundColor: '#111827' }}>
                   <div
                     className="absolute h-full bg-gradient-to-r from-blue-600 to-green-500"
@@ -142,14 +181,6 @@ const StatsPanel: React.FC<StatsPanelProps> = ({ data, onToggle }) => {
                     <span className="text-xs text-white font-bold">{formatValue(stats.mean, 1)}</span>
                     <span className="text-xs text-white/80">{formatValue(stats.max, 1)}</span>
                   </div>
-                </div>
-              </div>
-
-              {/* File Info */}
-              <div className="pt-2 border-t border-gray-700 space-y-1 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Dimensions</span>
-                  <span className="text-gray-300">{data.width} × {data.height}</span>
                 </div>
               </div>
             </>

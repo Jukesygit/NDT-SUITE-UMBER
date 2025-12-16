@@ -20,7 +20,13 @@ class PersonnelService {
             supabase
                 .from('profiles')
                 .select(`
-                    *,
+                    id,
+                    username,
+                    email,
+                    role,
+                    organization_id,
+                    avatar_url,
+                    is_active,
                     organizations(id, name)
                 `)
                 .order('username', { ascending: true }),
@@ -299,7 +305,14 @@ class PersonnelService {
         const { data: person, error: personError } = await supabase
             .from('profiles')
             .select(`
-                *,
+                id,
+                username,
+                email,
+                role,
+                organization_id,
+                avatar_url,
+                is_active,
+                created_at,
                 organizations(id, name)
             `)
             .eq('id', userId)
@@ -353,7 +366,16 @@ class PersonnelService {
         // Get history
         const { data: history, error: historyError } = await supabase
             .from('competency_history')
-            .select('*')
+            .select(`
+                id,
+                user_id,
+                competency_id,
+                action,
+                old_value,
+                new_value,
+                changed_by,
+                created_at
+            `)
             .eq('user_id', userId)
             .order('created_at', { ascending: false })
             .limit(50);

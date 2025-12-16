@@ -85,7 +85,7 @@ export default function VesselImagesSection({
                     Vessel Images
                 </div>
                 <button
-                    className="btn btn-primary text-xs"
+                    className="btn-primary text-xs"
                     style={{ padding: '6px 12px' }}
                     onClick={onUploadImage}
                 >

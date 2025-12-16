@@ -16,7 +16,13 @@ class CompetencyService {
 
         const { data, error } = await supabase
             .from('competency_categories')
-            .select('*')
+            .select(`
+                id,
+                name,
+                description,
+                display_order,
+                is_active
+            `)
             .eq('is_active', true)
             .order('display_order', { ascending: true });
 
@@ -36,7 +42,15 @@ class CompetencyService {
         let query = supabase
             .from('competency_definitions')
             .select(`
-                *,
+                id,
+                name,
+                description,
+                field_type,
+                category_id,
+                display_order,
+                is_active,
+                requires_document,
+                requires_approval,
                 category:competency_categories(id, name, description)
             `)
             .eq('is_active', true)
@@ -63,7 +77,21 @@ class CompetencyService {
         const { data, error } = await supabase
             .from('employee_competencies')
             .select(`
-                *,
+                id,
+                user_id,
+                competency_id,
+                value,
+                expiry_date,
+                document_url,
+                document_name,
+                notes,
+                status,
+                witness_checked,
+                witnessed_by,
+                witnessed_at,
+                witness_notes,
+                created_at,
+                updated_at,
                 competency:competency_definitions(
                     id,
                     name,
@@ -213,7 +241,19 @@ class CompetencyService {
         const { data: competencies, error: compError } = await supabase
             .from('employee_competencies')
             .select(`
-                *,
+                id,
+                user_id,
+                competency_id,
+                value,
+                expiry_date,
+                document_url,
+                document_name,
+                notes,
+                status,
+                created_at,
+                updated_at,
+                issuing_body,
+                certification_id,
                 competency:competency_definitions(
                     id,
                     name,
@@ -368,7 +408,14 @@ class CompetencyService {
         const { data, error } = await supabase
             .from('competency_history')
             .select(`
-                *,
+                id,
+                user_id,
+                competency_id,
+                action,
+                old_value,
+                new_value,
+                changed_by,
+                created_at,
                 competency:competency_definitions(name)
             `)
             .eq('user_id', userId)
@@ -568,7 +615,15 @@ class CompetencyService {
         const { data, error } = await supabase
             .from('competency_comments')
             .select(`
-                *,
+                id,
+                employee_competency_id,
+                comment_text,
+                comment_type,
+                is_pinned,
+                created_by,
+                created_at,
+                updated_at,
+                mentioned_users,
                 author:profiles!competency_comments_created_by_fkey(
                     id,
                     username,
@@ -613,7 +668,15 @@ class CompetencyService {
                 mentioned_users: mentionedUsers
             })
             .select(`
-                *,
+                id,
+                employee_competency_id,
+                comment_text,
+                comment_type,
+                is_pinned,
+                created_by,
+                created_at,
+                updated_at,
+                mentioned_users,
                 author:profiles!competency_comments_created_by_fkey(
                     id,
                     username,
@@ -642,7 +705,15 @@ class CompetencyService {
             .update(updates)
             .eq('id', commentId)
             .select(`
-                *,
+                id,
+                employee_competency_id,
+                comment_text,
+                comment_type,
+                is_pinned,
+                created_by,
+                created_at,
+                updated_at,
+                mentioned_users,
                 author:profiles!competency_comments_created_by_fkey(
                     id,
                     username,

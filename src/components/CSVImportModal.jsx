@@ -3,6 +3,7 @@ import Papa from 'papaparse';
 import authManager from '../auth-manager.js';
 import competencyService from '../services/competency-service.js';
 import { RandomMatrixSpinner } from './MatrixSpinners';
+import { sanitizeString, validateEmail } from '../utils/validation.js';
 
 export default function CSVImportModal({ onClose, onComplete }) {
     const [file, setFile] = useState(null);
@@ -119,11 +120,17 @@ export default function CSVImportModal({ onClose, onComplete }) {
                         }
                     });
 
-                    // Only include rows that have BOTH a name AND an email
+                    // Only include rows that have BOTH a name AND a valid email
                     const name = rowObj['Employee Name'];
                     const email = rowObj['Email Address'];
 
-                    if (name && name.trim() !== '' && email && email.includes('@')) {
+                    // Validate email properly using validation utility
+                    const emailValidation = email ? validateEmail(email) : { isValid: false };
+
+                    if (name && name.trim() !== '' && emailValidation.isValid) {
+                        // Sanitize the employee name before storing
+                        rowObj['Employee Name'] = sanitizeString(name, { encodeHtml: false, maxLength: 100 });
+                        rowObj['Email Address'] = emailValidation.sanitized;
                         dataRows.push(rowObj);
                     }
                 }
@@ -197,7 +204,8 @@ export default function CSVImportModal({ onClose, onComplete }) {
 
             for (let i = 0; i < parseData.rows.length; i++) {
                 const row = parseData.rows[i];
-                const employeeName = row['Employee Name'];
+                // Employee name is already sanitized during parsing, but double-check
+                const employeeName = sanitizeString(row['Employee Name'] || '', { encodeHtml: false, maxLength: 100 });
 
                 setProgress({
                     current: i + 1,
@@ -206,21 +214,23 @@ export default function CSVImportModal({ onClose, onComplete }) {
                 });
 
                 try {
-                    // Extract email and generate username
+                    // Extract and validate email (already validated during parsing)
                     const email = row['Email Address'];
-                    if (!email || !email.includes('@')) {
+                    const emailValidation = validateEmail(email);
+                    if (!emailValidation.isValid) {
                         importErrors.push(`Row ${i + 1} (${employeeName}): Invalid or missing email address`);
                         continue;
                     }
 
-                    const username = employeeName.toLowerCase().replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '');
+                    // Generate safe username from sanitized name
+                    const username = employeeName.toLowerCase().replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '').substring(0, 20);
 
                     // Create user account
                     let userId;
                     try {
                         const tempPassword = 'TempPass123!'; // Users will need to reset
                         const createResult = await authManager.createUser({
-                            email: email.trim(),
+                            email: emailValidation.sanitized, // Use validated and sanitized email
                             username: username,
                             password: tempPassword,
                             role: 'viewer', // Changed from 'user' to valid role
@@ -285,11 +295,12 @@ export default function CSVImportModal({ onClose, onComplete }) {
                         let processedValue = null;
                         let expiryDate = null;
 
-                        // Process based on field type
+                        // Process based on field type - sanitize all text inputs
                         if (definition.field_type === 'expiry_date') {
                             expiryDate = parseDate(value);
                             if (!expiryDate) continue;
-                            processedValue = value; // Keep original format as display value
+                            // Sanitize display value to prevent XSS
+                            processedValue = sanitizeString(value, { encodeHtml: false, maxLength: 50 });
                         } else if (definition.field_type === 'date') {
                             processedValue = parseDate(value);
                             if (!processedValue) continue;
@@ -297,7 +308,8 @@ export default function CSVImportModal({ onClose, onComplete }) {
                             processedValue = parseBoolean(value);
                             if (!processedValue) continue;
                         } else {
-                            processedValue = value.trim();
+                            // Sanitize text values to prevent injection attacks
+                            processedValue = sanitizeString(value, { encodeHtml: false, maxLength: 500 });
                         }
 
                         competenciesToCreate.push({

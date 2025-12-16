@@ -50,14 +50,14 @@ export default function ScanReassignDialog({
                     <button
                         onClick={onClose}
                         disabled={isSubmitting}
-                        className="btn btn-secondary"
+                        className="btn-secondary"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleSubmit}
                         disabled={isSubmitting}
-                        className="btn btn-primary"
+                        className="btn-primary"
                     >
                         {isSubmitting ? 'Reassigning...' : 'Reassign Scan'}
                     </button>

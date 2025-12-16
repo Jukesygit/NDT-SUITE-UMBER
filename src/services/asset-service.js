@@ -3,6 +3,50 @@ import supabase, { isSupabaseConfigured } from '../supabase-client.js';
 import authManager from '../auth-manager.js';
 
 /**
+ * Allowed image MIME types for security
+ */
+const ALLOWED_IMAGE_TYPES = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'image/bmp'
+];
+
+/**
+ * Validate that a file is an allowed image type
+ * @param {File} file - File to validate
+ * @returns {{ valid: boolean, error?: string }}
+ */
+function validateImageFile(file) {
+    if (!file) {
+        return { valid: false, error: 'No file provided' };
+    }
+
+    // Check MIME type
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+        return {
+            valid: false,
+            error: `Invalid file type: ${file.type}. Allowed types: JPEG, PNG, GIF, WebP, BMP`
+        };
+    }
+
+    // Reject SVG files (can contain JavaScript)
+    if (file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')) {
+        return { valid: false, error: 'SVG files are not allowed for security reasons' };
+    }
+
+    // Check file size (max 10MB)
+    const MAX_SIZE = 10 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+        return { valid: false, error: 'File size exceeds 10MB limit' };
+    }
+
+    return { valid: true };
+}
+
+/**
  * Service for managing assets, vessels, and scans
  * Designed for lazy-loading - fetch only what's needed when needed
  */
@@ -114,6 +158,79 @@ class AssetService {
     }
 
     /**
+     * Get vessels for a specific asset with scan counts (optimized - no N+1 queries)
+     * Uses Supabase's relational query with count to fetch all data in 1-2 queries
+     */
+    async getVesselsWithCounts(assetId) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        if (!assetId) {
+            throw new Error('Asset ID is required');
+        }
+
+        // Try to use Supabase's aggregation feature to get vessels with scan counts in one query
+        // This uses the foreign key relationship between vessels and scans
+        const { data: vessels, error } = await supabase
+            .from('vessels')
+            .select(`
+                id,
+                name,
+                asset_id,
+                model_3d_url,
+                created_at,
+                updated_at,
+                scans(count)
+            `)
+            .eq('asset_id', assetId)
+            .order('name', { ascending: true });
+
+        if (error) {
+            // Fallback: If aggregation doesn't work, use the efficient count method
+            console.warn('Aggregation query failed, falling back to count queries:', error);
+
+            const { data: vesselsList, error: vesselError } = await supabase
+                .from('vessels')
+                .select('id, name, asset_id, model_3d_url, created_at, updated_at')
+                .eq('asset_id', assetId)
+                .order('name', { ascending: true });
+
+            if (vesselError) throw vesselError;
+
+            // Use efficient head-only count queries (no data transfer, just count)
+            const vesselsWithCounts = await Promise.all(
+                (vesselsList || []).map(async (vessel) => {
+                    const { count: scanCount } = await supabase
+                        .from('scans')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('vessel_id', vessel.id);
+
+                    return {
+                        ...vessel,
+                        scanCount: scanCount || 0
+                    };
+                })
+            );
+
+            return vesselsWithCounts;
+        }
+
+        // Map the aggregation result to our expected format
+        return (vessels || []).map(vessel => ({
+            id: vessel.id,
+            name: vessel.name,
+            asset_id: vessel.asset_id,
+            model_3d_url: vessel.model_3d_url,
+            created_at: vessel.created_at,
+            updated_at: vessel.updated_at,
+            scanCount: Array.isArray(vessel.scans) && vessel.scans.length > 0
+                ? vessel.scans[0].count
+                : 0
+        }));
+    }
+
+    /**
      * Get a single vessel by ID with basic info
      */
     async getVessel(vesselId) {
@@ -163,7 +280,20 @@ class AssetService {
 
         const { data, error } = await supabase
             .from('scans')
-            .select('*')
+            .select(`
+                id,
+                vessel_id,
+                name,
+                tool_type,
+                data,
+                data_url,
+                thumbnail_url,
+                heatmap_url,
+                strake_id,
+                created_at,
+                updated_at,
+                metadata
+            `)
             .eq('id', scanId)
             .single();
 
@@ -207,7 +337,16 @@ class AssetService {
 
         const { data, error } = await supabase
             .from('strakes')
-            .select('*')
+            .select(`
+                id,
+                vessel_id,
+                name,
+                total_area,
+                required_coverage,
+                created_at,
+                updated_at,
+                metadata
+            `)
             .eq('vessel_id', vesselId)
             .order('name', { ascending: true });
 
@@ -534,17 +673,29 @@ class AssetService {
             throw new Error('Supabase not configured');
         }
 
+        // Get organization ID for storage path (required by RLS policy)
+        const orgId = authManager.getCurrentOrganizationId();
+        if (!orgId) {
+            throw new Error('Organization ID not found - cannot upload images');
+        }
+
         const uploadedImages = [];
 
         for (const file of files) {
-            // Generate unique file path
-            const fileExt = file.name.split('.').pop();
+            // Validate file type and size for security
+            const validation = validateImageFile(file);
+            if (!validation.valid) {
+                throw new Error(`File "${file.name}": ${validation.error}`);
+            }
+
+            // Generate unique file path with org ID prefix (required by RLS policy)
+            const fileExt = file.name.split('.').pop().toLowerCase();
             const fileName = `${this.generateId()}.${fileExt}`;
-            const filePath = `vessels/${vesselId}/images/${fileName}`;
+            const filePath = `${orgId}/vessels/${vesselId}/images/${fileName}`;
 
             // Upload to Supabase storage
             const { error: uploadError } = await supabase.storage
-                .from('vessel-files')
+                .from('vessel-images')
                 .upload(filePath, file, {
                     cacheControl: '3600',
                     upsert: false,
@@ -554,7 +705,7 @@ class AssetService {
 
             // Get public URL
             const { data: { publicUrl } } = supabase.storage
-                .from('vessel-files')
+                .from('vessel-images')
                 .getPublicUrl(filePath);
 
             // Create database record
@@ -590,13 +741,30 @@ class AssetService {
             throw new Error('Supabase not configured');
         }
 
-        const fileExt = file.name.split('.').pop();
+        // Get organization ID for storage path (required by RLS policy)
+        const orgId = authManager.getCurrentOrganizationId();
+        if (!orgId) {
+            throw new Error('Organization ID not found - cannot upload drawing');
+        }
+
+        // Validate file type and size for security
+        const validation = validateImageFile(file);
+        if (!validation.valid) {
+            throw new Error(`Drawing file: ${validation.error}`);
+        }
+
+        // Validate drawing type
+        if (!['location', 'ga'].includes(drawingType)) {
+            throw new Error('Invalid drawing type. Must be "location" or "ga"');
+        }
+
+        const fileExt = file.name.split('.').pop().toLowerCase();
         const fileName = `${drawingType}_${this.generateId()}.${fileExt}`;
-        const filePath = `vessels/${vesselId}/drawings/${fileName}`;
+        const filePath = `${orgId}/vessels/${vesselId}/drawings/${fileName}`;
 
         // Upload to storage
         const { error: uploadError } = await supabase.storage
-            .from('vessel-files')
+            .from('vessel-images')
             .upload(filePath, file, {
                 cacheControl: '3600',
                 upsert: false,
@@ -606,7 +774,7 @@ class AssetService {
 
         // Get public URL
         const { data: { publicUrl } } = supabase.storage
-            .from('vessel-files')
+            .from('vessel-images')
             .getPublicUrl(filePath);
 
         // Update vessel record with drawing URL
@@ -718,6 +886,139 @@ class AssetService {
 
         if (error) throw error;
         return data;
+    }
+
+    // ============== INSPECTION METHODS ==============
+
+    /**
+     * Get all inspections for a vessel
+     */
+    async getInspections(vesselId) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        if (!vesselId) {
+            throw new Error('Vessel ID is required');
+        }
+
+        const { data, error } = await supabase
+            .from('inspections')
+            .select(`
+                id,
+                name,
+                status,
+                inspector_id,
+                inspection_date,
+                notes,
+                vessel_id,
+                created_at,
+                updated_at,
+                metadata
+            `)
+            .eq('vessel_id', vesselId)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    }
+
+    /**
+     * Get a single inspection by ID with scan/image counts
+     */
+    async getInspection(inspectionId) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        const { data, error } = await supabase
+            .from('inspections')
+            .select(`
+                id,
+                vessel_id,
+                name,
+                status,
+                inspector_id,
+                inspection_date,
+                notes,
+                created_at,
+                updated_at,
+                metadata
+            `)
+            .eq('id', inspectionId)
+            .single();
+
+        if (error) throw error;
+        return data;
+    }
+
+    /**
+     * Create a new inspection
+     * @param {string} vesselId - Vessel ID
+     * @param {object} data - Inspection data (name, status, inspection_date, notes)
+     */
+    async createInspection(vesselId, data) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        const user = authManager.getCurrentUser();
+        if (!user) {
+            throw new Error('User not authenticated');
+        }
+
+        const { data: inspection, error } = await supabase
+            .from('inspections')
+            .insert({
+                id: this.generateId(),
+                vessel_id: vesselId,
+                name: data.name,
+                status: data.status || 'in_progress',
+                inspector_id: user.id,
+                inspection_date: data.inspection_date || new Date().toISOString().split('T')[0],
+                notes: data.notes || '',
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+        return inspection;
+    }
+
+    /**
+     * Update an inspection
+     */
+    async updateInspection(inspectionId, updates) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        const { data, error } = await supabase
+            .from('inspections')
+            .update({ ...updates, updated_at: new Date().toISOString() })
+            .eq('id', inspectionId)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    }
+
+    /**
+     * Delete an inspection
+     */
+    async deleteInspection(inspectionId) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        const { error } = await supabase
+            .from('inspections')
+            .delete()
+            .eq('id', inspectionId);
+
+        if (error) throw error;
+        return true;
     }
 
     /**

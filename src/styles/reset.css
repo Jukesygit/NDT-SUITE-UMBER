@@ -57,10 +57,15 @@ ol[role='list'] {
 
 /* Make images easier to work with */
 img,
-picture,
-svg {
+picture {
   max-width: 100%;
   display: block;
+}
+
+/* SVGs should respect their explicit dimensions */
+svg {
+  display: block;
+  flex-shrink: 0;
 }
 
 /* Inherit fonts for inputs and buttons */

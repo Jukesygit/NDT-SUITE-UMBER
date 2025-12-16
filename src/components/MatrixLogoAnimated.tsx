@@ -25,8 +25,8 @@ export const LogoGradientShift: React.FC<AnimatedLogoProps> = ({
   const id = React.useId().replace(/:/g, '');
 
   return (
-    <div className={`logo-gradient ${className}`} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={`logo-gradient ${className}`} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         <defs>
           <linearGradient id={`grad-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#10b981">
@@ -59,8 +59,8 @@ export const LogoGradientWave: React.FC<AnimatedLogoProps> = ({
   const id = React.useId().replace(/:/g, '');
 
   return (
-    <div className={`logo-gradient-wave ${className}`} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={`logo-gradient-wave ${className}`} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         <defs>
           <linearGradient id={`wave-${id}`} x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="#10b981">
@@ -93,8 +93,8 @@ export const LogoGradientPulse: React.FC<AnimatedLogoProps> = ({
   const id = React.useId().replace(/:/g, '');
 
   return (
-    <div className={`logo-gradient-pulse ${className}`} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={`logo-gradient-pulse ${className}`} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         <defs>
           <radialGradient id={`pulse-${id}`} cx="50%" cy="50%" r="70%">
             <stop offset="0%" stopColor="#10b981">
@@ -125,8 +125,8 @@ export const LogoGradientSweep: React.FC<AnimatedLogoProps> = ({
   const id = React.useId().replace(/:/g, '');
 
   return (
-    <div className={`logo-gradient-sweep ${className}`} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={`logo-gradient-sweep ${className}`} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         <defs>
           <linearGradient id={`sweep-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#10b981" />
@@ -162,8 +162,8 @@ export const LogoGradientBreathe: React.FC<AnimatedLogoProps> = ({
   const id = React.useId().replace(/:/g, '');
 
   return (
-    <div className={`logo-gradient-breathe ${className}`} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={`logo-gradient-breathe ${className}`} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         <defs>
           <linearGradient id={`breathe-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#10b981">
@@ -204,8 +204,8 @@ export const LogoGradientSplit: React.FC<AnimatedLogoProps> = ({
   const id = React.useId().replace(/:/g, '');
 
   return (
-    <div className={`logo-gradient-split ${className}`} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={`logo-gradient-split ${className}`} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         <defs>
           <linearGradient id={`split-${id}`} x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="#10b981" />
@@ -237,8 +237,8 @@ export const LogoGradientShimmer: React.FC<AnimatedLogoProps> = ({
   const id = React.useId().replace(/:/g, '');
 
   return (
-    <div className={`logo-gradient-shimmer ${className}`} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={`logo-gradient-shimmer ${className}`} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         <defs>
           <linearGradient id={`shimmer-base-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#10b981" />
@@ -281,8 +281,8 @@ export const LogoGradientAurora: React.FC<AnimatedLogoProps> = ({
   const id = React.useId().replace(/:/g, '');
 
   return (
-    <div className={`logo-gradient-aurora ${className}`} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={`logo-gradient-aurora ${className}`} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         <defs>
           <linearGradient id={`aurora-${id}`} x1="0%" y1="100%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="#10b981">
@@ -320,8 +320,8 @@ export const LogoStatic: React.FC<AnimatedLogoProps> = ({
   const height = size * (1202 / 2256);
 
   return (
-    <div className={`logo-static ${className}`} style={{ width: size, height }}>
-      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none">
+    <div className={`logo-static ${className}`} style={{ width: size, height, overflow: 'visible' }}>
+      <svg viewBox={MATRIX_LOGO.viewBox} width={size} height={height} fill="none" style={{ overflow: 'visible' }}>
         <defs>
           <linearGradient id="static-grad" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#10b981" />

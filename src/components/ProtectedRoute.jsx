@@ -1,27 +1,27 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import authManager from '../auth-manager.js';
-import { useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 
-function ProtectedRoute({ isLoggedIn, requireAdmin, requireElevatedAccess, children }) {
+function ProtectedRoute({ requireAdmin, requireElevatedAccess, children }) {
     const location = useLocation();
+    const { isAuthenticated, isAdmin, hasElevatedAccess, isLoading } = useAuth();
 
-    // Add a check to ensure we're in a Router context
-    useEffect(() => {
-        // This will only run if we're inside a Router
-    }, [location]);
+    // Show nothing while loading (AuthProvider will handle the loading state)
+    if (isLoading) {
+        return null;
+    }
 
     // Check if user is logged in
-    if (isLoggedIn === false) {
+    if (!isAuthenticated) {
         return <Navigate to="/login" state={{ from: location }} replace />;
     }
 
     // Check admin requirement (only admin can access)
-    if (requireAdmin && !authManager.isAdmin()) {
+    if (requireAdmin && !isAdmin) {
         return <Navigate to="/" replace />;
     }
 
     // Check elevated access requirement (admin or manager can access)
-    if (requireElevatedAccess && !authManager.hasElevatedAccess()) {
+    if (requireElevatedAccess && !hasElevatedAccess) {
         return <Navigate to="/" replace />;
     }
 

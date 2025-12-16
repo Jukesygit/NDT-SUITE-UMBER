@@ -25,6 +25,9 @@
 /* 4. Reusable component styles */
 @import './components-new.css';
 
+/* 5. Glassmorphic theme (buttons, cards, inputs for dark theme) */
+@import './glassmorphic.css';
+
 /* ==========================================
    UTILITIES & HELPERS
    ========================================== */

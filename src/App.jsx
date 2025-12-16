@@ -34,19 +34,19 @@ const CscanVisualizerPage = lazy(() => import('./pages/CscanVisualizerPage.jsx')
 const PecVisualizerPage = lazy(() => import('./pages/PecVisualizerPage.jsx'));
 const Viewer3DPage = lazy(() => import('./pages/Viewer3DPage.jsx'));
 const NiiCalculatorPage = lazy(() => import('./pages/NiiCalculatorPage.jsx'));
-const PersonnelPage = lazy(() => import('./pages/PersonnelManagementPage.jsx')); // Primary - battle-tested UI
+const PersonnelPage = lazy(() => import('./pages/personnel/PersonnelPage.tsx')); // Modernized - uses React Query
 const LogoDemo = lazy(() => import('./pages/LogoDemo.tsx'));
 const LogoAnimatedDemo = lazy(() => import('./pages/LogoAnimatedDemo.tsx'));
 
 // Experimental modernized pages (React Query based) - for continued development
 const ProfilePageNew = lazy(() => import('./pages/profile/ProfilePage.tsx'));
-const PersonnelPageNew = lazy(() => import('./pages/personnel/PersonnelPage.tsx'));
 const AdminPageNew = lazy(() => import('./pages/admin/index.tsx'));
 const AdminStyleDemo = lazy(() => import('./pages/admin/StyleDemo.tsx'));
 
 // Data Hub pages
 const VesselOverviewPage = lazy(() => import('./pages/data-hub/VesselOverviewPage.tsx'));
 const InspectionPage = lazy(() => import('./pages/data-hub/InspectionPage.tsx'));
+
 
 // Background manager component
 function BackgroundManager() {
@@ -86,7 +86,6 @@ function BackgroundManager() {
 }
 
 function App() {
-    const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
@@ -101,64 +100,35 @@ function App() {
             initGlobalStyleEnforcer();
         }, 100);
 
-        // Check authentication status
-        const checkAuth = async () => {
+        // Wait for auth manager to initialize before rendering
+        const initApp = async () => {
             try {
-                console.log('App: Starting auth check...');
+                console.log('App: Initializing...');
 
                 // Add timeout to prevent infinite loading (increased to 15s for cold starts)
                 const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Auth check timeout')), 15000)
+                    setTimeout(() => reject(new Error('Initialization timeout')), 15000)
                 );
 
-                const authCheckPromise = async () => {
-                    // Wait for auth manager to initialize
-                    if (authManager.initPromise) {
-                        await authManager.initPromise;
-                    }
-                    const session = await authManager.getSession();
-                    return session;
-                };
+                const initPromise = authManager.initPromise || Promise.resolve();
 
-                const session = await Promise.race([
-                    authCheckPromise(),
+                await Promise.race([
+                    initPromise,
                     timeoutPromise
                 ]).catch(err => {
-                    console.warn('Auth check error or timeout:', err);
-                    return null;
+                    console.warn('App initialization error or timeout:', err);
                 });
 
-                console.log('App: Auth check complete, session:', session);
-                setIsLoggedIn(!!session);
+                console.log('App: Initialization complete');
             } catch (error) {
-                console.error('Auth check failed:', error);
-                setIsLoggedIn(false);
+                console.error('App initialization failed:', error);
             } finally {
                 console.log('App: Setting loading to false');
                 setIsLoading(false);
             }
         };
 
-        checkAuth();
-
-        // Listen for auth state changes
-        const unsubscribe = authManager.onAuthStateChange((session) => {
-            console.log('App: Auth state changed, session:', session);
-            setIsLoggedIn(!!session);
-            // Sync service is automatically active when user is logged in
-        });
-
-        // Also listen for explicit logout event
-        const handleLogout = () => {
-            console.log('App: User logged out event received');
-            setIsLoggedIn(false);
-        };
-        window.addEventListener('userLoggedOut', handleLogout);
-
-        return () => {
-            if (unsubscribe) unsubscribe();
-            window.removeEventListener('userLoggedOut', handleLogout);
-        };
+        initApp();
     }, []);
 
     if (isLoading) {
@@ -195,10 +165,8 @@ function App() {
                     <BackgroundManager />
                     <Suspense fallback={<PageLoader />}>
                         <Routes>
-                            {/* Public route */}
-                            <Route path="/login" element={
-                                isLoggedIn ? <Navigate to="/" replace /> : <LoginPage onLogin={() => setIsLoggedIn(true)} />
-                            } />
+                            {/* Public route - LoginPage handles its own redirect logic */}
+                            <Route path="/login" element={<LoginPage />} />
 
                             {/* Demo routes - remove after testing */}
                             <Route path="/logo-demo" element={<LogoDemo />} />
@@ -206,7 +174,7 @@ function App() {
                             <Route path="/admin-style-demo" element={<AdminStyleDemo />} />
 
                             {/* Protected routes with layout */}
-                            <Route element={<ProtectedRoute isLoggedIn={isLoggedIn} />}>
+                            <Route element={<ProtectedRoute />}>
                                 <Route element={<Layout />}>
                                     <Route path="/" element={
                                         <ErrorBoundary>
@@ -216,6 +184,11 @@ function App() {
                                     <Route path="/vessel/:assetId/:vesselId" element={
                                         <ErrorBoundary>
                                             <VesselOverviewPage />
+                                        </ErrorBoundary>
+                                    } />
+                                    <Route path="/inspection/:assetId/:vesselId/:inspectionId" element={
+                                        <ErrorBoundary>
+                                            <InspectionPage />
                                         </ErrorBoundary>
                                     } />
                                     <Route path="/inspection/:assetId/:vesselId" element={
@@ -262,23 +235,18 @@ function App() {
                             </Route>
 
                             {/* Personnel routes - require elevated access (admin or manager) */}
-                            <Route element={<ProtectedRoute isLoggedIn={isLoggedIn} requireElevatedAccess />}>
+                            <Route element={<ProtectedRoute requireElevatedAccess />}>
                                 <Route element={<Layout />}>
                                     <Route path="/personnel" element={
                                         <ErrorBoundary>
                                             <PersonnelPage />
                                         </ErrorBoundary>
                                     } />
-                                    <Route path="/personnel-new" element={
-                                        <ErrorBoundary>
-                                            <PersonnelPageNew />
-                                        </ErrorBoundary>
-                                    } />
                                 </Route>
                             </Route>
 
                             {/* Admin only route */}
-                            <Route element={<ProtectedRoute isLoggedIn={isLoggedIn} requireAdmin />}>
+                            <Route element={<ProtectedRoute requireAdmin />}>
                                 <Route element={<Layout />}>
                                     <Route path="/admin" element={
                                         <ErrorBoundary>

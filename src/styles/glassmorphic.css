@@ -53,6 +53,9 @@
     --accent-blue-glow: rgba(100, 150, 255, 0.3);
     --accent-blue-subtle: rgba(100, 150, 255, 0.15);
 
+    /* Primary Accent (alias for accent-blue) */
+    --accent-primary: rgba(100, 150, 255, 0.9);
+
     /* Semantic Colors */
     --success: rgba(34, 197, 94, 0.9);
     --success-light: rgba(134, 239, 172, 1);
@@ -221,20 +224,20 @@
 
 /* Primary Button - Minimal & Professional */
 .btn-primary {
-    padding: 11px var(--spacing-lg);
-    font-size: var(--text-base);
-    font-weight: var(--font-medium);
-    color: var(--text-primary);
-    background: linear-gradient(135deg, rgba(100, 150, 255, 0.85), rgba(110, 160, 255, 0.85));
-    border: 1px solid rgba(100, 150, 255, 0.3);
-    border-radius: 10px;
-    cursor: pointer;
+    padding: 11px var(--spacing-lg) !important;
+    font-size: var(--text-base) !important;
+    font-weight: var(--font-medium) !important;
+    color: var(--text-primary) !important;
+    background: linear-gradient(135deg, rgba(100, 150, 255, 0.85), rgba(110, 160, 255, 0.85)) !important;
+    border: 1px solid rgba(100, 150, 255, 0.3) !important;
+    border-radius: 10px !important;
+    cursor: pointer !important;
     transition: all var(--transition-base);
-    box-shadow: 0 2px 12px rgba(100, 150, 255, 0.2);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing-sm);
+    box-shadow: 0 2px 12px rgba(100, 150, 255, 0.2) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: var(--spacing-sm) !important;
     position: relative;
     overflow: hidden;
 }
@@ -273,22 +276,36 @@
     z-index: 1;
 }
 
+/* Ensure SVG icons inside buttons are properly sized */
+.btn-primary svg,
+.btn-secondary svg,
+.btn-success svg,
+.btn-danger svg {
+    width: 1em !important;
+    height: 1em !important;
+    max-width: 1em !important;
+    max-height: 1em !important;
+    flex-shrink: 0;
+    flex-grow: 0;
+}
+
 /* Secondary Button - Minimal & Professional */
 .btn-secondary {
-    padding: 11px var(--spacing-lg);
-    font-size: var(--text-base);
-    font-weight: var(--font-medium);
-    color: var(--text-primary);
-    background: var(--glass-bg-secondary);
-    backdrop-filter: blur(8px);
-    border: 1px solid var(--glass-border);
-    border-radius: 10px;
-    cursor: pointer;
+    padding: 11px var(--spacing-lg) !important;
+    font-size: var(--text-base) !important;
+    font-weight: var(--font-medium) !important;
+    color: var(--text-primary) !important;
+    background: var(--glass-bg-secondary) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    border: 1px solid var(--glass-border) !important;
+    border-radius: 10px !important;
+    cursor: pointer !important;
     transition: all var(--transition-base);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing-sm);
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: var(--spacing-sm) !important;
 }
 
 .btn-secondary:hover {
@@ -304,20 +321,20 @@
 
 /* Success Button - Minimal */
 .btn-success {
-    padding: 11px var(--spacing-lg);
-    font-size: var(--text-base);
-    font-weight: var(--font-medium);
-    color: var(--text-primary);
-    background: linear-gradient(135deg, rgba(34, 197, 94, 0.85), rgba(34, 197, 94, 0.9));
-    border: 1px solid rgba(34, 197, 94, 0.3);
-    border-radius: 10px;
-    cursor: pointer;
+    padding: 11px var(--spacing-lg) !important;
+    font-size: var(--text-base) !important;
+    font-weight: var(--font-medium) !important;
+    color: var(--text-primary) !important;
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.85), rgba(34, 197, 94, 0.9)) !important;
+    border: 1px solid rgba(34, 197, 94, 0.3) !important;
+    border-radius: 10px !important;
+    cursor: pointer !important;
     transition: all var(--transition-base);
-    box-shadow: 0 2px 12px rgba(34, 197, 94, 0.2);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing-sm);
+    box-shadow: 0 2px 12px rgba(34, 197, 94, 0.2) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: var(--spacing-sm) !important;
 }
 
 .btn-success:hover {
@@ -328,26 +345,52 @@
 
 /* Danger Button - Minimal */
 .btn-danger {
-    padding: 11px var(--spacing-lg);
-    font-size: var(--text-base);
-    font-weight: var(--font-medium);
-    color: var(--text-primary);
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.85), rgba(239, 68, 68, 0.9));
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    border-radius: 10px;
-    cursor: pointer;
+    padding: 11px var(--spacing-lg) !important;
+    font-size: var(--text-base) !important;
+    font-weight: var(--font-medium) !important;
+    color: var(--text-primary) !important;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.85), rgba(239, 68, 68, 0.9)) !important;
+    border: 1px solid rgba(239, 68, 68, 0.3) !important;
+    border-radius: 10px !important;
+    cursor: pointer !important;
     transition: all var(--transition-base);
-    box-shadow: 0 2px 12px rgba(239, 68, 68, 0.2);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing-sm);
+    box-shadow: 0 2px 12px rgba(239, 68, 68, 0.2) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: var(--spacing-sm) !important;
 }
 
 .btn-danger:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 20px rgba(239, 68, 68, 0.25);
     border-color: rgba(239, 68, 68, 0.4);
+}
+
+/* Small Button Variant - for compact UI */
+.btn-sm {
+    padding: 6px 12px !important;
+    font-size: var(--text-xs) !important;
+    border-radius: 8px !important;
+    gap: 4px !important;
+}
+
+.btn-sm svg {
+    width: 14px !important;
+    height: 14px !important;
+}
+
+/* Extra Small Button Variant */
+.btn-xs {
+    padding: 4px 8px !important;
+    font-size: 11px !important;
+    border-radius: 6px !important;
+    gap: 3px !important;
+}
+
+.btn-xs svg {
+    width: 12px !important;
+    height: 12px !important;
 }
 
 /* Input Fields - Refined */

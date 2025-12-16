@@ -78,10 +78,20 @@ export {
     useAssetsByOrg,
     useVesselsByAsset,
     useVesselDetails,
+    useVesselInspections,
+    useInspection,
+    useVesselScans,
+    useVesselStrakes,
+    useVesselImages,
     dataHubKeys,
+    inspectionKeys,
 } from './useDataHub';
 export type {
     AssetWithCounts,
     Vessel,
     VesselWithCounts,
+    Inspection,
+    Scan,
+    Strake,
+    VesselImage,
 } from './useDataHub';

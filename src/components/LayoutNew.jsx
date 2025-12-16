@@ -161,7 +161,7 @@ function LayoutNew() {
         <div className="header__container">
           <Link to="/" className="header__brand">
             <LogoGradientShift size={44} />
-            <span>Matrix Hub</span>
+            <span>Matrix Portal</span>
           </Link>
 
           <nav className="header__nav">
