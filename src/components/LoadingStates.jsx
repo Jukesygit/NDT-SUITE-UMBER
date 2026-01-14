@@ -524,7 +524,7 @@ export const ContentLoader = ({
   className = ''
 }) => {
   return (
-    <div className={`flex flex-col items-center justify-center py-16 ${className}`}>
+    <div className={`flex flex-col items-center justify-center min-h-[60vh] ${className}`}>
       {type === 'spinner' && <Spinner size="lg" />}
       {type === 'ring' && <RingSpinner size="lg" />}
       {type === 'dots' && <DotsSpinner size="lg" />}
