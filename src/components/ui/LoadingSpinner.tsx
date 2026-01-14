@@ -31,7 +31,7 @@ export function PageSpinner({ message = 'Loading...' }: { message?: string }) {
  */
 export function SectionSpinner({ message = null }: { message?: string | null }) {
     return (
-        <div className="flex flex-col items-center justify-center py-8">
+        <div className="flex flex-col items-center justify-center min-h-[50vh]">
             <RandomMatrixSpinner size={80} />
             {message && (
                 <p className="text-sm text-secondary mt-3">{message}</p>
