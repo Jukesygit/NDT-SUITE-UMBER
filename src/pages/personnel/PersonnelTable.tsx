@@ -5,9 +5,11 @@
 import React, { useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Person, PersonCompetency, CompetencyStats, Organization } from '../../hooks/queries/usePersonnel';
-import { personnelKeys } from '../../hooks/queries/usePersonnel';
+import { personnelKeys, getPendingApprovalCount } from '../../hooks/queries/usePersonnel';
 import personnelService from '../../services/personnel-service.js';
 import { PersonnelExpandedRow } from './PersonnelExpandedRow';
+import { PersonDocumentReviewModal } from './PersonDocumentReviewModal';
+import { PersonAvatar } from './PersonAvatar';
 
 interface PersonnelTableProps {
     /** Personnel data to display */
@@ -117,6 +119,27 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
 }
 
 /**
+ * Review/clipboard icon for pending document approvals
+ */
+function ReviewIcon() {
+    return (
+        <svg
+            style={{ width: '16px', height: '16px' }}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+        >
+            <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+            />
+        </svg>
+    );
+}
+
+/**
  * PersonnelTable component
  */
 export function PersonnelTable({
@@ -131,10 +154,23 @@ export function PersonnelTable({
 }: PersonnelTableProps) {
     const queryClient = useQueryClient();
     const [expandedPersonId, setExpandedPersonId] = useState<string | null>(null);
+    // State for the document review modal
+    const [reviewingPerson, setReviewingPerson] = useState<Person | null>(null);
 
     const handleToggleExpand = useCallback((personId: string) => {
         setExpandedPersonId((prev) => (prev === personId ? null : personId));
     }, []);
+
+    // Open review modal for a person
+    const handleOpenReview = useCallback((person: Person) => {
+        setReviewingPerson(person);
+    }, []);
+
+    // Close review modal and refresh data
+    const handleCloseReview = useCallback(() => {
+        setReviewingPerson(null);
+        onPersonUpdate?.();
+    }, [onPersonUpdate]);
 
     // Prefetch person details when hovering over a row
     const handlePersonHover = useCallback((personId: string) => {
@@ -262,20 +298,35 @@ export function PersonnelTable({
                                         <td style={{ padding: '16px' }}>
                                             <div
                                                 style={{
-                                                    fontWeight: '600',
-                                                    color: '#ffffff',
-                                                    marginBottom: '4px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '12px',
                                                 }}
                                             >
-                                                {person.username}
-                                            </div>
-                                            <div
-                                                style={{
-                                                    fontSize: '13px',
-                                                    color: 'rgba(255, 255, 255, 0.5)',
-                                                }}
-                                            >
-                                                {person.email}
+                                                <PersonAvatar
+                                                    avatarUrl={person.avatar_url}
+                                                    username={person.username}
+                                                    size={48}
+                                                />
+                                                <div>
+                                                    <div
+                                                        style={{
+                                                            fontWeight: '600',
+                                                            color: '#ffffff',
+                                                            marginBottom: '4px',
+                                                        }}
+                                                    >
+                                                        {person.username}
+                                                    </div>
+                                                    <div
+                                                        style={{
+                                                            fontSize: '13px',
+                                                            color: 'rgba(255, 255, 255, 0.5)',
+                                                        }}
+                                                    >
+                                                        {person.email}
+                                                    </div>
+                                                </div>
                                             </div>
                                         </td>
                                         <td style={{ padding: '16px', color: 'rgba(255, 255, 255, 0.7)' }}>
@@ -297,20 +348,61 @@ export function PersonnelTable({
                                             <StatBadge value={stats.expired} color="#ef4444" />
                                         </td>
                                         <td style={{ padding: '16px', textAlign: 'right' }}>
-                                            <button
-                                                onClick={() => handleToggleExpand(person.id)}
-                                                className="btn-primary"
-                                                style={{
-                                                    fontSize: '13px',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '8px',
-                                                    marginLeft: 'auto',
-                                                }}
-                                            >
-                                                {isExpanded ? 'Hide Details' : 'View Details'}
-                                                <ChevronIcon expanded={isExpanded} />
-                                            </button>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
+                                                {/* Review Documents Button - only show for admins when there are pending approvals */}
+                                                {isAdmin && (() => {
+                                                    const pendingCount = getPendingApprovalCount(person.competencies || []);
+                                                    if (pendingCount === 0) return null;
+                                                    return (
+                                                        <button
+                                                            onClick={() => handleOpenReview(person)}
+                                                            className="btn-secondary"
+                                                            style={{
+                                                                fontSize: '13px',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '6px',
+                                                                position: 'relative',
+                                                                padding: '8px 12px',
+                                                                background: 'rgba(251, 191, 36, 0.15)',
+                                                                borderColor: 'rgba(251, 191, 36, 0.4)',
+                                                                color: '#fbbf24',
+                                                            }}
+                                                            title={`Review ${pendingCount} pending document${pendingCount > 1 ? 's' : ''}`}
+                                                        >
+                                                            <ReviewIcon />
+                                                            Review
+                                                            <span
+                                                                style={{
+                                                                    background: '#f59e0b',
+                                                                    color: '#000',
+                                                                    fontSize: '11px',
+                                                                    fontWeight: '700',
+                                                                    padding: '2px 6px',
+                                                                    borderRadius: '10px',
+                                                                    minWidth: '18px',
+                                                                    textAlign: 'center',
+                                                                }}
+                                                            >
+                                                                {pendingCount}
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })()}
+                                                <button
+                                                    onClick={() => handleToggleExpand(person.id)}
+                                                    className="btn-primary"
+                                                    style={{
+                                                        fontSize: '13px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '8px',
+                                                    }}
+                                                >
+                                                    {isExpanded ? 'Hide Details' : 'View Details'}
+                                                    <ChevronIcon expanded={isExpanded} />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
 
@@ -339,6 +431,15 @@ export function PersonnelTable({
                     </tbody>
                 </table>
             </div>
+
+            {/* Person Document Review Modal */}
+            {reviewingPerson && (
+                <PersonDocumentReviewModal
+                    isOpen={!!reviewingPerson}
+                    onClose={handleCloseReview}
+                    person={reviewingPerson}
+                />
+            )}
         </div>
     );
 }

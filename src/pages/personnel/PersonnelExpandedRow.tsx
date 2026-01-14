@@ -355,6 +355,8 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                     document_url: data.document_url || null,
                     document_name: data.document_name || null,
                 },
+                // Pass previous document URL to detect new uploads (triggers pending_approval status)
+                previousDocumentUrl: editingCompetency.competency.document_url,
             });
             setEditingCompetency(null);
             onUpdate?.();
