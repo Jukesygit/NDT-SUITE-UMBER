@@ -200,7 +200,7 @@ export default function ProfilePage() {
             } else if (editingCompetency?.competency) {
                 updateCompetencyMutation.mutate(
                     {
-                        competencyId: editingCompetency.competency.id,
+                        competencyId: data.competency_id || editingCompetency.competency.competency_id,
                         userId: user.id,
                         data,
                     },
