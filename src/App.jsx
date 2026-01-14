@@ -27,7 +27,7 @@ import LoginPage from './pages/LoginPageNew.jsx';
 import { RandomMatrixSpinner } from './components/MatrixSpinners';
 
 // Lazy load pages for code splitting
-const ProfilePage = lazy(() => import('./pages/ProfilePageNew.jsx')); // Primary - battle-tested UI
+const ProfilePage = lazy(() => import('./pages/profile/ProfilePage.tsx')); // Primary - modernized with React Query
 const DataHubPage = lazy(() => import('./pages/data-hub/index.tsx'));
 const TofdCalculatorPage = lazy(() => import('./pages/TofdCalculatorPage.jsx'));
 const CscanVisualizerPage = lazy(() => import('./pages/CscanVisualizerPage.jsx'));
@@ -38,8 +38,8 @@ const PersonnelPage = lazy(() => import('./pages/personnel/PersonnelPage.tsx'));
 const LogoDemo = lazy(() => import('./pages/LogoDemo.tsx'));
 const LogoAnimatedDemo = lazy(() => import('./pages/LogoAnimatedDemo.tsx'));
 
-// Experimental modernized pages (React Query based) - for continued development
-const ProfilePageNew = lazy(() => import('./pages/profile/ProfilePage.tsx'));
+// Legacy pages (kept for reference/fallback)
+const ProfilePageLegacy = lazy(() => import('./pages/ProfilePageNew.jsx'));
 const AdminPageNew = lazy(() => import('./pages/admin/index.tsx'));
 const AdminStyleDemo = lazy(() => import('./pages/admin/StyleDemo.tsx'));
 
@@ -201,9 +201,9 @@ function App() {
                                             <ProfilePage />
                                         </ErrorBoundary>
                                     } />
-                                    <Route path="/profile-new" element={
+                                    <Route path="/profile-legacy" element={
                                         <ErrorBoundary>
-                                            <ProfilePageNew />
+                                            <ProfilePageLegacy />
                                         </ErrorBoundary>
                                     } />
                                     <Route path="/tofd" element={

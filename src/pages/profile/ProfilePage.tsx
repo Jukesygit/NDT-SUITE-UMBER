@@ -11,7 +11,7 @@ import { createModernHeader } from '../../components/modern-header.js';
 // React Query hooks
 import { useProfile } from '../../hooks/queries/useProfile';
 import { useCompetencies, useCompetencyDefinitions, useCompetencyCategories } from '../../hooks/queries/useCompetencies';
-import { useUpdateProfile, useUploadAvatar, useCreateCompetency, useUpdateCompetency } from '../../hooks/mutations';
+import { useUpdateProfile, useUploadAvatar, useCreateCompetency, useUpdateCompetency, useDeleteCompetency } from '../../hooks/mutations';
 
 // Components
 import { PageSpinner, ErrorDisplay, Modal } from '../../components/ui';
@@ -69,6 +69,7 @@ export default function ProfilePage() {
     const uploadAvatarMutation = useUploadAvatar();
     const createCompetencyMutation = useCreateCompetency();
     const updateCompetencyMutation = useUpdateCompetency();
+    const deleteCompetencyMutation = useDeleteCompetency();
 
     // Header setup
     useEffect(() => {
@@ -102,11 +103,27 @@ export default function ProfilePage() {
     const handleProfileSave = useCallback(
         (data: ProfileFormData) => {
             if (!user?.id) return;
+
+            // Filter out fields that shouldn't be sent to the profiles table
+            // email and username are read-only (email is in auth.users, username is set separately)
+            const profileUpdateData = {
+                mobile_number: data.mobile_number,
+                email_address: data.email_address,
+                home_address: data.home_address,
+                nearest_uk_train_station: data.nearest_uk_train_station,
+                next_of_kin: data.next_of_kin,
+                next_of_kin_emergency_contact_number: data.next_of_kin_emergency_contact_number,
+                date_of_birth: data.date_of_birth || undefined,
+            };
+
             updateProfileMutation.mutate(
-                { userId: user.id, data },
+                { userId: user.id, data: profileUpdateData },
                 {
                     onSuccess: () => {
                         setIsEditingProfile(false);
+                    },
+                    onError: (error) => {
+                        console.error('Failed to update profile:', error);
                     },
                 }
             );
@@ -150,6 +167,10 @@ export default function ProfilePage() {
                         onSuccess: () => {
                             setEditingCompetency(null);
                         },
+                        onError: (error) => {
+                            console.error('Failed to create competency:', error);
+                            alert('Failed to save competency. Please try again.');
+                        },
                     }
                 );
             } else if (editingCompetency?.competency) {
@@ -163,11 +184,40 @@ export default function ProfilePage() {
                         onSuccess: () => {
                             setEditingCompetency(null);
                         },
+                        onError: (error) => {
+                            console.error('Failed to update competency:', error);
+                            alert('Failed to save competency. Please try again.');
+                        },
                     }
                 );
             }
         },
         [user?.id, editingCompetency, createCompetencyMutation, updateCompetencyMutation]
+    );
+
+    // Handle delete competency
+    const handleDeleteCompetency = useCallback(
+        (competency: Competency) => {
+            if (!user?.id) return;
+            // Find the definition name for the confirm message
+            const definition = definitionsQuery.data?.find(
+                (d: CompetencyDefinition) => d.id === competency.competency_id
+            );
+            const name = definition?.name || 'this certification';
+            if (!window.confirm(`Are you sure you want to delete "${name}"?`)) {
+                return;
+            }
+            deleteCompetencyMutation.mutate(
+                { competencyId: competency.id, userId: user.id },
+                {
+                    onError: (error) => {
+                        console.error('Failed to delete competency:', error);
+                        alert('Failed to delete competency. Please try again.');
+                    },
+                }
+            );
+        },
+        [user?.id, deleteCompetencyMutation, definitionsQuery.data]
     );
 
     // Build profile form data
@@ -242,6 +292,7 @@ export default function ProfilePage() {
                         isLoading={competenciesQuery.isLoading}
                         onAdd={handleAddCompetency}
                         onEdit={handleEditCompetency}
+                        onDelete={handleDeleteCompetency}
                     />
                 </div>
             </div>

@@ -55,10 +55,12 @@ function LoginPageNew() {
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetCode, setResetCode] = useState('');
+  const [resetEmail, setResetEmail] = useState(''); // Store email for code verification
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-  const [mode, setMode] = useState(getInitialMode); // 'login', 'register', 'reset', 'update-password'
+  const [mode, setMode] = useState(getInitialMode); // 'login', 'register', 'reset', 'verify-code', 'update-password'
 
   useEffect(() => {
     // Check if we're in password reset mode (from sessionStorage)
@@ -164,14 +166,48 @@ function LoginPageNew() {
           const errorMsg = result.error.message || 'Password reset failed';
 
           // Check for rate limit error
-          if (errorMsg.includes('rate limit') || errorMsg.includes('429')) {
-            setError('Too many password reset attempts. Please wait an hour and try again, or try a different email address.');
+          if (errorMsg.includes('rate limit') || errorMsg.includes('429') || errorMsg.includes('wait')) {
+            setError(errorMsg);
           } else {
             setError(errorMsg);
           }
         } else {
           setError('');
-          alert('Password reset email sent! Please check your inbox (and spam folder).');
+          // Store email for the verify step and switch to code entry mode
+          setResetEmail(email);
+          setSuccessMessage('A 6-digit code has been sent to your email. Please check your inbox.');
+          setMode('verify-code');
+        }
+      } else if (mode === 'verify-code') {
+        // Verify the reset code and set new password
+        if (newPassword !== confirmPassword) {
+          setError('Passwords do not match');
+          setIsLoading(false);
+          return;
+        }
+
+        if (newPassword.length < 6) {
+          setError('Password must be at least 6 characters');
+          setIsLoading(false);
+          return;
+        }
+
+        if (!resetCode || resetCode.length !== 6) {
+          setError('Please enter the 6-digit code from your email');
+          setIsLoading(false);
+          return;
+        }
+
+        const result = await authManager.verifyResetCode(resetEmail, resetCode, newPassword);
+        if (result.error) {
+          setError(result.error.message || 'Failed to verify code');
+        } else {
+          setError('');
+          setSuccessMessage(result.message || 'Password updated successfully! You can now sign in.');
+          setResetCode('');
+          setNewPassword('');
+          setConfirmPassword('');
+          setResetEmail('');
           setMode('login');
         }
       } else if (mode === 'update-password') {
@@ -251,6 +287,7 @@ function LoginPageNew() {
               {mode === 'login' && 'Sign in to your account'}
               {mode === 'register' && 'Create a new account'}
               {mode === 'reset' && 'Reset your password'}
+              {mode === 'verify-code' && 'Enter code and new password'}
               {mode === 'update-password' && 'Enter your new password'}
               {mode === 'processing' && 'Processing your request...'}
             </p>
@@ -281,7 +318,7 @@ function LoginPageNew() {
           {/* Form */}
           <form onSubmit={handleSubmit} className="login-card__form" style={{ display: mode === 'processing' ? 'none' : 'block' }}>
             {/* Email field - shown for login, register, reset modes */}
-            {mode !== 'update-password' && (
+            {mode !== 'update-password' && mode !== 'verify-code' && (
               <div className="input-group">
                 <label htmlFor="email" className="input-group__label">
                   Email Address
@@ -320,7 +357,70 @@ function LoginPageNew() {
               </div>
             )}
 
-            {/* New password fields - shown for update-password mode */}
+            {/* Verify code fields - shown for verify-code mode */}
+            {mode === 'verify-code' && (
+              <>
+                <div className="input-group">
+                  <label htmlFor="reset-code" className="input-group__label">
+                    6-Digit Code
+                  </label>
+                  <input
+                    id="reset-code"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    className="input input--md"
+                    value={resetCode}
+                    onChange={(e) => setResetCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="123456"
+                    required
+                    autoComplete="one-time-code"
+                    disabled={isLoading}
+                    style={{ letterSpacing: '0.5em', textAlign: 'center', fontSize: '1.25rem', fontFamily: 'monospace' }}
+                  />
+                  <p className="text-xs text-tertiary mt-1">Check your email for the code</p>
+                </div>
+
+                <div className="input-group">
+                  <label htmlFor="new-password" className="input-group__label">
+                    New Password
+                  </label>
+                  <input
+                    id="new-password"
+                    type="password"
+                    className="input input--md"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    minLength={6}
+                    autoComplete="new-password"
+                    disabled={isLoading}
+                  />
+                </div>
+
+                <div className="input-group">
+                  <label htmlFor="confirm-password" className="input-group__label">
+                    Confirm Password
+                  </label>
+                  <input
+                    id="confirm-password"
+                    type="password"
+                    className="input input--md"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    minLength={6}
+                    autoComplete="new-password"
+                    disabled={isLoading}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* New password fields - shown for update-password mode (legacy link flow) */}
             {mode === 'update-password' && (
               <>
                 <div className="input-group">
@@ -375,7 +475,8 @@ function LoginPageNew() {
                 <>
                   {mode === 'login' && 'Sign In'}
                   {mode === 'register' && 'Create Account'}
-                  {mode === 'reset' && 'Send Reset Link'}
+                  {mode === 'reset' && 'Send Reset Code'}
+                  {mode === 'verify-code' && 'Reset Password'}
                   {mode === 'update-password' && 'Update Password'}
                 </>
               )}
@@ -435,6 +536,45 @@ function LoginPageNew() {
                   style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
                 >
                   Sign in
+                </button>
+              </div>
+            )}
+
+            {mode === 'verify-code' && (
+              <div className="text-sm text-tertiary text-center">
+                <button
+                  type="button"
+                  className="text-primary font-medium hover:underline"
+                  onClick={() => {
+                    setMode('reset');
+                    setResetCode('');
+                    setNewPassword('');
+                    setConfirmPassword('');
+                    setError('');
+                    setSuccessMessage('');
+                  }}
+                  disabled={isLoading}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                >
+                  Request a new code
+                </button>
+                {' | '}
+                <button
+                  type="button"
+                  className="text-primary font-medium hover:underline"
+                  onClick={() => {
+                    setMode('login');
+                    setResetCode('');
+                    setNewPassword('');
+                    setConfirmPassword('');
+                    setResetEmail('');
+                    setError('');
+                    setSuccessMessage('');
+                  }}
+                  disabled={isLoading}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                >
+                  Back to sign in
                 </button>
               </div>
             )}

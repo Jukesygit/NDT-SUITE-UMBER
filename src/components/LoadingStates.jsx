@@ -43,7 +43,10 @@ export const Spinner = ({ size = 'md', color = 'primary', className = '' }) => {
         border: `${size === 'xs' || size === 'sm' ? '2px' : '3px'} solid rgba(255, 255, 255, 0.1)`,
         borderTopColor: colors[color],
         borderRadius: '50%',
-        animation: 'spin 0.8s linear infinite'
+        animation: 'spin 0.8s linear infinite',
+        // GPU acceleration hints - prevents freezing during main thread work
+        willChange: 'transform',
+        transform: 'translateZ(0)',
       }}
       role="status"
       aria-label="Loading"
@@ -114,7 +117,9 @@ export const RingSpinner = ({ size = 'md', className = '' }) => {
           border: '3px solid transparent',
           borderTopColor: 'var(--accent-blue)',
           borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
+          animation: 'spin 1s linear infinite',
+          willChange: 'transform',
+          transform: 'translateZ(0)',
         }}
       />
       <div
@@ -124,7 +129,9 @@ export const RingSpinner = ({ size = 'md', className = '' }) => {
           border: '3px solid transparent',
           borderTopColor: 'var(--accent-blue-dim)',
           borderRadius: '50%',
-          animation: 'spin 1.5s linear infinite reverse'
+          animation: 'spin 1.5s linear infinite reverse',
+          willChange: 'transform',
+          transform: 'translateZ(0)',
         }}
       />
     </div>

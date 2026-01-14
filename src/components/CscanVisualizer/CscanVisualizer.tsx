@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   Download,
   Image,
@@ -6,7 +6,8 @@ import {
   ChevronRight,
   Layers,
   Grid3x3,
-  Send
+  Send,
+  Loader2
 } from 'lucide-react';
 import CanvasViewport from './CanvasViewport';
 import FilePanel from './FilePanel';
@@ -16,7 +17,15 @@ import ExportToHubModal from './ExportToHubModal';
 import AssignStrakeModal from './AssignStrakeModal';
 import CsvRepairModal from './CsvRepairModal';
 import { CscanData, Tool, DisplaySettings } from './types';
-import { processFiles, createComposite, hasOffsetsToCorrect } from './utils/fileParser';
+import { createComposite } from './utils/fileParser';
+import { exportAndDownloadHeatmap } from './utils/streamedExport';
+import {
+  processFilesWithWorker,
+  createCompositeWithWorker,
+  createCompositeFromDataWithWorker,
+  getCscanWorkerManager,
+  type ProcessingProgress
+} from './utils/workerManager';
 
 const CscanVisualizer: React.FC = () => {
   // Refs
@@ -42,6 +51,12 @@ const CscanVisualizer: React.FC = () => {
   const [pendingScans, setPendingScans] = useState<CscanData[]>([]);
   const [isBatchExport, setIsBatchExport] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Export progress state
+  const [exportProgress, setExportProgress] = useState<{ progress: number; message: string } | null>(null);
+
+  // Processing progress state (for file loading and composite creation)
+  const [processingProgress, setProcessingProgress] = useState<ProcessingProgress | null>(null);
 
   // Display settings
   const [displaySettings, setDisplaySettings] = useState<DisplaySettings>({
@@ -71,28 +86,56 @@ const CscanVisualizer: React.FC = () => {
     }
   }, []);
 
-  // Handlers
+  // Handlers - using Web Worker for memory-efficient processing
   const handleFileUpload = useCallback(async (files: File[]) => {
     try {
-      const newScans = await processFiles(files);
-      if (newScans.length > 0) {
+      // Show processing progress
+      setProcessingProgress({ current: 0, total: files.length, message: 'Starting...' });
+
+      const result = await processFilesWithWorker(files, {
+        batchSize: 15, // Process 15 files at a time to manage memory
+        onProgress: (progress) => {
+          setProcessingProgress(progress);
+        }
+      });
+
+      // Clear progress
+      setProcessingProgress(null);
+
+      if (result.scans.length > 0) {
         // Check if any scans have offset issues
-        if (hasOffsetsToCorrect(newScans)) {
+        if (result.hasOffsetIssues) {
           // Store scans and show repair modal
-          setPendingScans(newScans);
+          setPendingScans(result.scans);
           setShowRepairModal(true);
         } else {
           // No issues, add directly
-          addScansToState(newScans);
+          addScansToState(result.scans);
+          setStatusMessage({
+            type: 'success',
+            message: `${result.scans.length} file${result.scans.length !== 1 ? 's' : ''} loaded successfully`
+          });
+          setTimeout(() => setStatusMessage(null), 3000);
         }
       }
     } catch (error) {
       console.error('Error processing files:', error);
+      setProcessingProgress(null);
+      setStatusMessage({
+        type: 'error',
+        message: `Error processing files: ${(error as Error).message}`
+      });
+      setTimeout(() => setStatusMessage(null), 5000);
     }
   }, [addScansToState]);
 
   // Handle repair completion
   const handleRepairComplete = useCallback((repairedScans: CscanData[]) => {
+    // IMPORTANT: Clear worker cache since repaired scans have different coordinates
+    // than the cached versions. This forces composite creation to use the legacy
+    // algorithm with the corrected data from UI state.
+    getCscanWorkerManager().clearCache();
+
     addScansToState(repairedScans);
     setPendingScans([]);
     setStatusMessage({
@@ -122,7 +165,7 @@ const CscanVisualizer: React.FC = () => {
     }
   }, [processedScans]);
 
-  const handleCreateComposite = useCallback(() => {
+  const handleCreateComposite = useCallback(async () => {
     const scansToComposite = selectedScans.size > 1
       ? processedScans.filter(scan => selectedScans.has(scan.id))
       : processedScans;
@@ -132,15 +175,101 @@ const CscanVisualizer: React.FC = () => {
       return;
     }
 
-    const composite = createComposite(scansToComposite);
-    if (composite) {
-      setProcessedScans(prev => [...prev, composite]);
-      setScanData(composite);
-      setSelectedScans(new Set());
-      setDisplaySettings(prev => ({
-        ...prev,
-        range: { min: null, max: null }
-      }));
+    // Show progress
+    setProcessingProgress({
+      current: 0,
+      total: scansToComposite.length + 2,
+      message: 'Creating composite...'
+    });
+
+    try {
+      // Try worker-based composite first (streaming algorithm, memory efficient)
+      const scanIds = scansToComposite.map(s => s.id);
+      let workerResult = await createCompositeWithWorker(scanIds, {
+        onProgress: (progress) => {
+          setProcessingProgress(progress);
+        }
+      });
+
+      // If scans aren't in cache (e.g., after repair), send data directly to worker
+      if (!workerResult) {
+        setProcessingProgress({
+          current: 0,
+          total: scansToComposite.length + 2,
+          message: 'Processing with corrected data...'
+        });
+
+        workerResult = await createCompositeFromDataWithWorker(scansToComposite, {
+          onProgress: (progress) => {
+            setProcessingProgress(progress);
+          }
+        });
+      }
+
+      setProcessingProgress(null);
+
+      if (workerResult) {
+        // Worker succeeded - REPLACE source scans with composite to free memory
+        // Keep only scans that weren't used in the composite
+        const compositeSourceIds = new Set(scansToComposite.map(s => s.id));
+        setProcessedScans(prev => {
+          const nonSourceScans = prev.filter(s => !compositeSourceIds.has(s.id));
+          return [...nonSourceScans, workerResult.composite];
+        });
+        setScanData(workerResult.composite);
+        setSelectedScans(new Set());
+        setDisplaySettings(prev => ({
+          ...prev,
+          range: { min: null, max: null }
+        }));
+
+        // Clear worker cache to free memory from source scans
+        getCscanWorkerManager().clearCache();
+
+        setStatusMessage({
+          type: 'success',
+          message: `Composite created from ${scansToComposite.length} files (source files removed to free memory)`
+        });
+        setTimeout(() => setStatusMessage(null), 4000);
+      } else {
+        // Last resort: legacy composite (only if worker unavailable)
+        console.warn('Worker unavailable, using legacy composite');
+        const composite = createComposite(scansToComposite);
+        if (composite) {
+          // Also replace source scans in legacy path
+          const compositeSourceIds = new Set(scansToComposite.map(s => s.id));
+          setProcessedScans(prev => {
+            const nonSourceScans = prev.filter(s => !compositeSourceIds.has(s.id));
+            return [...nonSourceScans, composite];
+          });
+          setScanData(composite);
+          setSelectedScans(new Set());
+          setDisplaySettings(prev => ({
+            ...prev,
+            range: { min: null, max: null }
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Error creating composite:', error);
+      setProcessingProgress(null);
+
+      // Last resort fallback to legacy composite
+      console.warn('Error in worker, using legacy composite');
+      const composite = createComposite(scansToComposite);
+      if (composite) {
+        const compositeSourceIds = new Set(scansToComposite.map(s => s.id));
+        setProcessedScans(prev => {
+          const nonSourceScans = prev.filter(s => !compositeSourceIds.has(s.id));
+          return [...nonSourceScans, composite];
+        });
+        setScanData(composite);
+        setSelectedScans(new Set());
+        setDisplaySettings(prev => ({
+          ...prev,
+          range: { min: null, max: null }
+        }));
+      }
     }
   }, [processedScans, selectedScans]);
 
@@ -152,6 +281,15 @@ const CscanVisualizer: React.FC = () => {
       ...prev,
       range: { min: null, max: null }
     }));
+    // Clear worker cache to free memory
+    getCscanWorkerManager().clearCache();
+  }, []);
+
+  // Cleanup worker on unmount
+  useEffect(() => {
+    return () => {
+      getCscanWorkerManager().clearCache();
+    };
   }, []);
 
   // Export handlers
@@ -178,26 +316,34 @@ const CscanVisualizer: React.FC = () => {
   }, [scanData]);
 
   const handleExportCleanHeatmap = useCallback(async () => {
-    if (!scanData || !canvasRef.current) return;
+    if (!scanData) return;
+
+    setShowExportMenu(false);
 
     try {
-      const dataUrl = await canvasRef.current.exportCleanHeatmap();
-      if (dataUrl) {
-        const link = document.createElement('a');
-        const filename = scanData.isComposite
-          ? 'composite_heatmap.png'
-          : `${scanData.filename?.replace(/\.[^/.]+$/, '') || 'cscan'}_heatmap.png`;
-        link.download = filename;
-        link.href = dataUrl;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+      // Use streamed export for memory efficiency (handles large composites)
+      const success = await exportAndDownloadHeatmap(
+        scanData,
+        displaySettings,
+        (progress, message) => {
+          setExportProgress({ progress, message });
+        }
+      );
+
+      // Clear progress after a short delay
+      setTimeout(() => setExportProgress(null), 1500);
+
+      if (!success) {
+        setStatusMessage({ type: 'error', message: 'Failed to export heatmap' });
+        setTimeout(() => setStatusMessage(null), 5000);
       }
     } catch (error) {
       console.error('Error exporting heatmap:', error);
+      setExportProgress(null);
+      setStatusMessage({ type: 'error', message: 'Export failed - image may be too large' });
+      setTimeout(() => setStatusMessage(null), 5000);
     }
-    setShowExportMenu(false);
-  }, [scanData]);
+  }, [scanData, displaySettings]);
 
   const handleExportToHub = useCallback((scans: CscanData[]) => {
     setScansForExport(scans);
@@ -419,6 +565,89 @@ const CscanVisualizer: React.FC = () => {
           statusMessage.type === 'success' ? 'bg-green-600' : 'bg-red-600'
         } text-white text-sm`}>
           {statusMessage.message}
+        </div>
+      )}
+
+      {/* Export Progress Overlay */}
+      {exportProgress && (
+        <div
+          className="fixed inset-0 flex items-center justify-center z-50"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)' }}
+        >
+          <div
+            className="rounded-lg p-6 shadow-xl min-w-[320px]"
+            style={{
+              backgroundColor: '#1f2937',
+              border: '1px solid #374151'
+            }}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <Download className="w-5 h-5 animate-pulse" style={{ color: '#60a5fa' }} />
+              <span style={{ color: '#ffffff', fontWeight: 500 }}>Exporting Heatmap</span>
+            </div>
+            <div className="mb-2">
+              <div
+                className="h-2 rounded-full overflow-hidden"
+                style={{ backgroundColor: '#374151' }}
+              >
+                <div
+                  className="h-full transition-all duration-200"
+                  style={{
+                    width: `${exportProgress.progress}%`,
+                    backgroundColor: '#3b82f6'
+                  }}
+                />
+              </div>
+            </div>
+            <div className="flex justify-between text-xs" style={{ color: '#9ca3af' }}>
+              <span>{exportProgress.message}</span>
+              <span>{Math.round(exportProgress.progress)}%</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Processing Progress Overlay (File Loading & Composite Creation) */}
+      {processingProgress && (
+        <div
+          className="fixed inset-0 flex items-center justify-center z-50"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)' }}
+        >
+          <div
+            className="rounded-lg p-6 shadow-xl min-w-[360px]"
+            style={{
+              backgroundColor: '#1f2937',
+              border: '1px solid #374151'
+            }}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#60a5fa' }} />
+              <span style={{ color: '#ffffff', fontWeight: 500 }}>Processing Files</span>
+            </div>
+            <div className="mb-2">
+              <div
+                className="h-2 rounded-full overflow-hidden"
+                style={{ backgroundColor: '#374151' }}
+              >
+                <div
+                  className="h-full transition-all duration-200"
+                  style={{
+                    width: `${(processingProgress.current / processingProgress.total) * 100}%`,
+                    backgroundColor: '#3b82f6'
+                  }}
+                />
+              </div>
+            </div>
+            <div className="flex justify-between text-xs" style={{ color: '#9ca3af' }}>
+              <span className="truncate max-w-[240px]">{processingProgress.message}</span>
+              <span className="ml-2 whitespace-nowrap">{processingProgress.current}/{processingProgress.total}</span>
+            </div>
+            {processingProgress.memoryUsage && (
+              <div className="mt-2 text-xs" style={{ color: '#6b7280' }}>
+                Memory: {(processingProgress.memoryUsage / 1024 / 1024).toFixed(0)} MB
+              </div>
+            )}
+          </div>
         </div>
       )}
 
