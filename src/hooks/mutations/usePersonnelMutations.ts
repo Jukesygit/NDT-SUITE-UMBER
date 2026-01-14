@@ -36,6 +36,7 @@ export interface UpdateCompetencyData {
     created_at?: string; // issued_date maps to this
     document_url?: string | null;
     document_name?: string | null;
+    status?: string | null;
 }
 
 export interface AddCompetencyData {
@@ -46,6 +47,8 @@ export interface AddCompetencyData {
     certification_id?: string;
     expiry_date?: string;
     notes?: string;
+    document_url?: string;
+    document_name?: string;
 }
 
 /**
@@ -85,6 +88,7 @@ export function useUpdatePerson() {
 
 /**
  * Update a person's competency
+ * If a document is being added/updated, automatically sets status to 'pending_approval'
  */
 export function useUpdatePersonCompetency() {
     const queryClient = useQueryClient();
@@ -93,14 +97,22 @@ export function useUpdatePersonCompetency() {
         mutationFn: async ({
             competencyId,
             data,
+            previousDocumentUrl,
         }: {
             competencyId: string;
             personId: string; // For cache invalidation
             data: UpdateCompetencyData;
+            previousDocumentUrl?: string | null; // To detect if document was newly added
         }): Promise<PersonCompetency> => {
+            // If a document is being added or changed, set status to pending_approval
+            const updateData = { ...data };
+            if (data.document_url && data.document_url !== previousDocumentUrl) {
+                updateData.status = 'pending_approval';
+            }
+
             const { data: updated, error } = await supabase
                 .from('employee_competencies')
-                .update(data)
+                .update(updateData)
                 .eq('id', competencyId)
                 .select('*, competency:competency_definitions(*)')
                 .single();
@@ -116,6 +128,8 @@ export function useUpdatePersonCompetency() {
             });
             // Also invalidate matrix since it depends on competencies
             queryClient.invalidateQueries({ queryKey: personnelKeys.matrix() });
+            // Invalidate pending approvals since status may have changed
+            queryClient.invalidateQueries({ queryKey: ['competencies', 'pendingApprovals'] });
         },
     });
 }
@@ -152,15 +166,22 @@ export function useDeletePersonCompetency() {
 
 /**
  * Add a competency to a person
+ * If a document is included, automatically sets status to 'pending_approval'
  */
 export function useAddPersonCompetency() {
     const queryClient = useQueryClient();
 
     return useMutation({
         mutationFn: async (data: AddCompetencyData): Promise<PersonCompetency> => {
+            // If a document is included, set status to pending_approval
+            const insertData = {
+                ...data,
+                status: data.document_url ? 'pending_approval' : 'active',
+            };
+
             const { data: created, error } = await supabase
                 .from('employee_competencies')
-                .insert(data)
+                .insert(insertData)
                 .select('*, competency:competency_definitions(*)')
                 .single();
 
@@ -173,6 +194,8 @@ export function useAddPersonCompetency() {
                 queryKey: personnelKeys.detail(variables.user_id),
             });
             queryClient.invalidateQueries({ queryKey: personnelKeys.matrix() });
+            // Invalidate pending approvals since status may have changed
+            queryClient.invalidateQueries({ queryKey: ['competencies', 'pendingApprovals'] });
         },
     });
 }

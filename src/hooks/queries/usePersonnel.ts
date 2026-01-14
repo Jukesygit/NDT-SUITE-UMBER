@@ -177,4 +177,23 @@ export function getCompetencyStats(competencies: PersonCompetency[]): Competency
     return { total, active, expiring, expired };
 }
 
+/**
+ * Get count of competencies pending approval for a person
+ * This counts competencies with status='pending_approval' that have documents
+ */
+export function getPendingApprovalCount(competencies: PersonCompetency[]): number {
+    return competencies.filter(
+        c => c.status === 'pending_approval' && c.document_url
+    ).length;
+}
+
+/**
+ * Get competencies that are pending approval for a person
+ */
+export function getPendingApprovalCompetencies(competencies: PersonCompetency[]): PersonCompetency[] {
+    return competencies.filter(
+        c => c.status === 'pending_approval' && c.document_url
+    );
+}
+
 export default usePersonnel;

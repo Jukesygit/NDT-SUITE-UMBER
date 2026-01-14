@@ -17,6 +17,8 @@ export {
     useOrganizations,
     useCompetencyMatrix,
     getCompetencyStats,
+    getPendingApprovalCount,
+    getPendingApprovalCompetencies,
     personnelKeys,
 } from './usePersonnel';
 export type {
