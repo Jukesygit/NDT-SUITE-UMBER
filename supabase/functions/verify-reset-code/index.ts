@@ -129,10 +129,13 @@ serve(async (req) => {
       )
     }
 
-    // Update the user's password
+    // Update the user's password AND confirm their email (since receiving the code proves ownership)
     const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
       user.id,
-      { password: newPassword }
+      {
+        password: newPassword,
+        email_confirm: true  // Auto-confirm email since they received the reset code
+      }
     )
 
     if (updateError) {
