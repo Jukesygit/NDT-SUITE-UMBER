@@ -4,8 +4,9 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import type { Person, PersonCompetency, Organization } from '../../hooks/queries/usePersonnel';
-import { useUpdatePerson, useUpdatePersonCompetency } from '../../hooks/mutations';
+import { useUpdatePerson, useUpdatePersonCompetency, useUploadCompetencyDocument } from '../../hooks/mutations';
 import { Modal } from '../../components/ui';
+import { EditCompetencyModal, type CompetencyFormData } from '../profile/EditCompetencyModal';
 
 // Utility imports - ES module
 import { requiresWitnessCheck } from '../../utils/competency-field-utils.js';
@@ -28,19 +29,6 @@ interface PersonEditData {
     email: string;
     role: string;
     organization_id: string;
-}
-
-interface CompetencyEditData {
-    value: string;
-    issuing_body: string;
-    certification_id: string;
-    expiry_date: string;
-    issued_date: string;
-    notes: string;
-    witness_checked: boolean;
-    witnessed_by: string;
-    witnessed_at: string;
-    witness_notes: string;
 }
 
 /**
@@ -238,20 +226,15 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
         organization_id: person.organization_id || '',
     });
 
-    // Competency editing state
-    const [editingCompetencyId, setEditingCompetencyId] = useState<string | null>(null);
-    const [competencyEditData, setCompetencyEditData] = useState<CompetencyEditData>({
-        value: '',
-        issuing_body: '',
-        certification_id: '',
-        expiry_date: '',
-        issued_date: '',
-        notes: '',
-        witness_checked: false,
-        witnessed_by: '',
-        witnessed_at: '',
-        witness_notes: '',
-    });
+    // Competency editing modal state
+    const [editingCompetency, setEditingCompetency] = useState<{
+        competency: PersonCompetency;
+        definition: {
+            id: string;
+            name: string;
+            is_certification?: boolean;
+        };
+    } | null>(null);
 
     // Certificate detail modal state
     const [viewingCompetency, setViewingCompetency] = useState<PersonCompetency | null>(null);
@@ -296,6 +279,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
     // Mutations
     const updatePerson = useUpdatePerson();
     const updateCompetency = useUpdatePersonCompetency();
+    const uploadDocument = useUploadCompetencyDocument();
 
     const handleEditPerson = useCallback(() => {
         setPersonEditData({
@@ -320,48 +304,63 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
         onUpdate?.();
     }, [person.id, personEditData, updatePerson, onUpdate]);
 
+    // Open edit modal for a competency
     const handleEditCompetency = useCallback((comp: PersonCompetency) => {
-        setEditingCompetencyId(comp.id);
-        setCompetencyEditData({
-            value: comp.value || '',
-            issuing_body: comp.issuing_body || '',
-            certification_id: comp.certification_id || '',
-            expiry_date: comp.expiry_date ? new Date(comp.expiry_date).toISOString().split('T')[0] : '',
-            issued_date: comp.created_at ? new Date(comp.created_at).toISOString().split('T')[0] : '',
-            notes: comp.notes || '',
-            witness_checked: comp.witness_checked || false,
-            witnessed_by: comp.witnessed_by || '',
-            witnessed_at: comp.witnessed_at ? new Date(comp.witnessed_at).toISOString().split('T')[0] : '',
-            witness_notes: comp.witness_notes || '',
-        });
-    }, []);
-
-    const handleCancelCompetencyEdit = useCallback(() => {
-        setEditingCompetencyId(null);
-    }, []);
-
-    const handleSaveCompetency = useCallback(async () => {
-        if (!editingCompetencyId) return;
-
-        await updateCompetency.mutateAsync({
-            competencyId: editingCompetencyId,
-            personId: person.id,
-            data: {
-                value: competencyEditData.value || null,
-                issuing_body: competencyEditData.issuing_body || null,
-                certification_id: competencyEditData.certification_id || null,
-                expiry_date: competencyEditData.expiry_date || null,
-                notes: competencyEditData.notes || null,
-                witness_checked: competencyEditData.witness_checked,
-                witnessed_by: competencyEditData.witnessed_by || null,
-                witnessed_at: competencyEditData.witnessed_at || null,
-                witness_notes: competencyEditData.witness_notes || null,
-                created_at: competencyEditData.issued_date || undefined,
+        setEditingCompetency({
+            competency: comp,
+            definition: {
+                id: comp.competency_id,
+                name: comp.competency?.name || 'Certification',
+                is_certification: comp.competency?.is_certification,
             },
         });
-        setEditingCompetencyId(null);
-        onUpdate?.();
-    }, [editingCompetencyId, person.id, competencyEditData, updateCompetency, onUpdate]);
+    }, []);
+
+    // Handle document upload for competency modal
+    const handleDocumentUpload = useCallback(
+        async (file: File): Promise<{ url: string; name: string }> => {
+            if (!editingCompetency?.definition?.name) {
+                throw new Error('Competency not available');
+            }
+            return new Promise((resolve, reject) => {
+                uploadDocument.mutate(
+                    {
+                        userId: person.id,
+                        competencyName: editingCompetency.definition?.name || 'certificate',
+                        file,
+                    },
+                    {
+                        onSuccess: (result) => resolve(result),
+                        onError: (error) => reject(error),
+                    }
+                );
+            });
+        },
+        [person.id, editingCompetency?.definition?.name, uploadDocument]
+    );
+
+    // Save competency from modal
+    const handleSaveCompetencyModal = useCallback(
+        async (data: CompetencyFormData) => {
+            if (!editingCompetency) return;
+
+            await updateCompetency.mutateAsync({
+                competencyId: editingCompetency.competency.id,
+                personId: person.id,
+                data: {
+                    issuing_body: data.issuing_body || null,
+                    certification_id: data.certification_id || null,
+                    expiry_date: data.expiry_date || null,
+                    notes: data.notes || null,
+                    document_url: data.document_url || null,
+                    document_name: data.document_name || null,
+                },
+            });
+            setEditingCompetency(null);
+            onUpdate?.();
+        },
+        [editingCompetency, person.id, updateCompetency, onUpdate]
+    );
 
     const competenciesByCategory = groupByCategory(person.competencies || []);
     const categories = Object.keys(competenciesByCategory).sort();
@@ -663,7 +662,6 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                 >
                                     {competenciesByCategory[categoryName].map((comp) => {
                                         const status = getCompetencyStatus(comp);
-                                        const isEditing = editingCompetencyId === comp.id;
                                         const needsWitness = requiresWitnessCheck(comp);
 
                                         return (
@@ -735,11 +733,12 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                                         >
                                                             {status.label}
                                                         </span>
-                                                        {isAdmin && !isEditing && (
+                                                        {isAdmin && (
                                                             <button
                                                                 onClick={() => handleEditCompetency(comp)}
                                                                 className="btn-icon"
                                                                 style={{ padding: '2px', marginLeft: '4px' }}
+                                                                title="Edit certification"
                                                             >
                                                                 <svg
                                                                     style={{ width: '12px', height: '12px' }}
@@ -759,124 +758,39 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                                     </div>
                                                 </div>
 
-                                                {/* Competency Details or Edit Form */}
-                                                {isEditing ? (
-                                                    <div style={{ fontSize: '11px' }} className="space-y-2">
-                                                        <div
-                                                            style={{
-                                                                display: 'grid',
-                                                                gridTemplateColumns: '1fr 1fr',
-                                                                gap: '4px',
-                                                            }}
-                                                        >
-                                                            <div>
-                                                                <label
-                                                                    style={{
-                                                                        fontSize: '10px',
-                                                                        color: 'rgba(255, 255, 255, 0.5)',
-                                                                        display: 'block',
-                                                                        marginBottom: '2px',
-                                                                    }}
-                                                                >
-                                                                    Issued
-                                                                </label>
-                                                                <input
-                                                                    type="date"
-                                                                    className="glass-input"
-                                                                    value={competencyEditData.issued_date}
-                                                                    onChange={(e) =>
-                                                                        setCompetencyEditData({
-                                                                            ...competencyEditData,
-                                                                            issued_date: e.target.value,
-                                                                        })
-                                                                    }
-                                                                    style={{ fontSize: '11px', padding: '4px 8px' }}
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <label
-                                                                    style={{
-                                                                        fontSize: '10px',
-                                                                        color: 'rgba(255, 255, 255, 0.5)',
-                                                                        display: 'block',
-                                                                        marginBottom: '2px',
-                                                                    }}
-                                                                >
-                                                                    Expires
-                                                                </label>
-                                                                <input
-                                                                    type="date"
-                                                                    className="glass-input"
-                                                                    value={competencyEditData.expiry_date}
-                                                                    onChange={(e) =>
-                                                                        setCompetencyEditData({
-                                                                            ...competencyEditData,
-                                                                            expiry_date: e.target.value,
-                                                                        })
-                                                                    }
-                                                                    style={{ fontSize: '11px', padding: '4px 8px' }}
-                                                                />
-                                                            </div>
+                                                {/* Competency Details */}
+                                                <div
+                                                    style={{
+                                                        fontSize: '11px',
+                                                        color: 'rgba(255, 255, 255, 0.6)',
+                                                        lineHeight: '1.4',
+                                                    }}
+                                                >
+                                                    {comp.issuing_body && (
+                                                        <div>
+                                                            <span style={{ color: 'rgba(255, 255, 255, 0.4)' }}>
+                                                                Issued by:
+                                                            </span>{' '}
+                                                            {comp.issuing_body}
                                                         </div>
-                                                        <div
-                                                            style={{
-                                                                display: 'flex',
-                                                                gap: '8px',
-                                                                marginTop: '8px',
-                                                                justifyContent: 'flex-end',
-                                                            }}
-                                                        >
-                                                            <button
-                                                                onClick={handleCancelCompetencyEdit}
-                                                                className="btn btn--secondary"
-                                                                style={{ fontSize: '10px', padding: '4px 8px' }}
-                                                                disabled={updateCompetency.isPending}
-                                                            >
-                                                                Cancel
-                                                            </button>
-                                                            <button
-                                                                onClick={handleSaveCompetency}
-                                                                className="btn btn--primary"
-                                                                style={{ fontSize: '10px', padding: '4px 8px' }}
-                                                                disabled={updateCompetency.isPending}
-                                                            >
-                                                                {updateCompetency.isPending ? 'Saving...' : 'Save'}
-                                                            </button>
+                                                    )}
+                                                    {comp.certification_id && (
+                                                        <div>
+                                                            <span style={{ color: 'rgba(255, 255, 255, 0.4)' }}>
+                                                                Cert ID:
+                                                            </span>{' '}
+                                                            {comp.certification_id}
                                                         </div>
-                                                    </div>
-                                                ) : (
-                                                    <div
-                                                        style={{
-                                                            fontSize: '11px',
-                                                            color: 'rgba(255, 255, 255, 0.6)',
-                                                            lineHeight: '1.4',
-                                                        }}
-                                                    >
-                                                        {comp.issuing_body && (
-                                                            <div>
-                                                                <span style={{ color: 'rgba(255, 255, 255, 0.4)' }}>
-                                                                    Issued by:
-                                                                </span>{' '}
-                                                                {comp.issuing_body}
-                                                            </div>
-                                                        )}
-                                                        {comp.certification_id && (
-                                                            <div>
-                                                                <span style={{ color: 'rgba(255, 255, 255, 0.4)' }}>
-                                                                    Cert ID:
-                                                                </span>{' '}
-                                                                {comp.certification_id}
-                                                            </div>
-                                                        )}
-                                                        {comp.expiry_date && (
-                                                            <div>
-                                                                <span style={{ color: 'rgba(255, 255, 255, 0.4)' }}>
-                                                                    Expires:
-                                                                </span>{' '}
-                                                                {new Date(comp.expiry_date).toLocaleDateString('en-GB')}
-                                                            </div>
-                                                        )}
-                                                        {comp.document_url && (
+                                                    )}
+                                                    {comp.expiry_date && (
+                                                        <div>
+                                                            <span style={{ color: 'rgba(255, 255, 255, 0.4)' }}>
+                                                                Expires:
+                                                            </span>{' '}
+                                                            {new Date(comp.expiry_date).toLocaleDateString('en-GB')}
+                                                        </div>
+                                                    )}
+                                                    {comp.document_url && (
                                                             <button
                                                                 onClick={() => setViewingCompetency(comp)}
                                                                 style={{
@@ -898,7 +812,6 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                                             </button>
                                                         )}
                                                     </div>
-                                                )}
                                             </div>
                                         );
                                     })}
@@ -1093,6 +1006,31 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                         </button>
                     </div>
                 </Modal>
+            )}
+
+            {/* Edit Competency Modal (Admin only) */}
+            {editingCompetency && (
+                <EditCompetencyModal
+                    isOpen={!!editingCompetency}
+                    onClose={() => setEditingCompetency(null)}
+                    onSave={handleSaveCompetencyModal}
+                    isNew={false}
+                    initialData={{
+                        competency_id: editingCompetency.competency.competency_id,
+                        issuing_body: editingCompetency.competency.issuing_body || '',
+                        certification_id: editingCompetency.competency.certification_id || '',
+                        expiry_date: editingCompetency.competency.expiry_date
+                            ? new Date(editingCompetency.competency.expiry_date).toISOString().split('T')[0]
+                            : '',
+                        document_url: editingCompetency.competency.document_url || '',
+                        document_name: editingCompetency.competency.document_name || '',
+                        notes: editingCompetency.competency.notes || '',
+                    }}
+                    definition={editingCompetency.definition}
+                    isSaving={updateCompetency.isPending}
+                    onDocumentUpload={handleDocumentUpload}
+                    isUploadingDocument={uploadDocument.isPending}
+                />
             )}
         </div>
     );
