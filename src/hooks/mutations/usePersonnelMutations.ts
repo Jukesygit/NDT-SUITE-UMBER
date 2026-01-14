@@ -34,6 +34,8 @@ export interface UpdateCompetencyData {
     witnessed_at?: string | null;
     witness_notes?: string | null;
     created_at?: string; // issued_date maps to this
+    document_url?: string | null;
+    document_name?: string | null;
 }
 
 export interface AddCompetencyData {
