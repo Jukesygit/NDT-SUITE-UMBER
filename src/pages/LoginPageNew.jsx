@@ -147,14 +147,17 @@ function LoginPageNew() {
       if (mode === 'login') {
         const result = await authManager.login(email, password);
         if (result.error) {
-          setError(result.error.message || 'Login failed');
+          // Handle both string errors and object errors
+          const errorMsg = typeof result.error === 'string' ? result.error : (result.error?.message || 'Login failed');
+          setError(errorMsg);
         } else {
           navigate('/');
         }
       } else if (mode === 'register') {
         const result = await authManager.signUp(email, password);
         if (result.error) {
-          setError(result.error.message || 'Registration failed');
+          const errorMsg = typeof result.error === 'string' ? result.error : (result.error?.message || 'Registration failed');
+          setError(errorMsg);
         } else {
           setError('');
           setMode('login');
