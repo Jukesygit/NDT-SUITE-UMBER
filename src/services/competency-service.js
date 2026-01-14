@@ -145,6 +145,17 @@ class CompetencyService {
             throw new Error('Supabase not configured');
         }
 
+        // Determine status: if document is provided and no explicit status, set to pending_approval
+        let status = data.status;
+        if (!status) {
+            // Check if we're adding a new document - set to pending_approval for review
+            if (data.documentUrl) {
+                status = 'pending_approval';
+            } else {
+                status = 'active';
+            }
+        }
+
         const competencyData = {
             user_id: userId,
             competency_id: competencyId,
@@ -155,7 +166,7 @@ class CompetencyService {
             document_url: data.documentUrl || null,
             document_name: data.documentName || null,
             notes: data.notes || null,
-            status: data.status || 'active',
+            status: status,
             // Witness check fields
             witness_checked: data.witnessChecked || false,
             witnessed_by: data.witnessedBy || null,
