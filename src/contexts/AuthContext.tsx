@@ -117,6 +117,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
             }
         });
 
+        // Listen for login events (dispatched AFTER profile is loaded in auth-manager)
+        const handleLogin = () => {
+            if (mounted) {
+                loadAuthState();
+            }
+        };
+        window.addEventListener('userLoggedIn', handleLogin);
+
         // Listen for logout events
         const handleLogout = () => {
             if (mounted) {
@@ -129,6 +137,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return () => {
             mounted = false;
             if (unsubscribe) unsubscribe();
+            window.removeEventListener('userLoggedIn', handleLogin);
             window.removeEventListener('userLoggedOut', handleLogout);
         };
     }, [loadAuthState]);
