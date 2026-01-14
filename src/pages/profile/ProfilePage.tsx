@@ -11,7 +11,7 @@ import { createModernHeader } from '../../components/modern-header.js';
 // React Query hooks
 import { useProfile } from '../../hooks/queries/useProfile';
 import { useCompetencies, useCompetencyDefinitions, useCompetencyCategories } from '../../hooks/queries/useCompetencies';
-import { useUpdateProfile, useUploadAvatar, useCreateCompetency, useUpdateCompetency, useDeleteCompetency } from '../../hooks/mutations';
+import { useUpdateProfile, useUploadAvatar, useCreateCompetency, useUpdateCompetency, useDeleteCompetency, useUploadCompetencyDocument } from '../../hooks/mutations';
 
 // Components
 import { PageSpinner, ErrorDisplay, Modal } from '../../components/ui';
@@ -70,6 +70,7 @@ export default function ProfilePage() {
     const createCompetencyMutation = useCreateCompetency();
     const updateCompetencyMutation = useUpdateCompetency();
     const deleteCompetencyMutation = useDeleteCompetency();
+    const uploadDocumentMutation = useUploadCompetencyDocument();
 
     // Header setup
     useEffect(() => {
@@ -97,6 +98,29 @@ export default function ProfilePage() {
             uploadAvatarMutation.mutate({ userId: user.id, file });
         },
         [user?.id, uploadAvatarMutation]
+    );
+
+    // Handle document upload for competencies
+    const handleDocumentUpload = useCallback(
+        async (file: File): Promise<{ url: string; name: string }> => {
+            if (!user?.id || !editingCompetency?.definition?.name) {
+                throw new Error('User or competency not available');
+            }
+            return new Promise((resolve, reject) => {
+                uploadDocumentMutation.mutate(
+                    {
+                        userId: user.id,
+                        competencyName: editingCompetency.definition?.name || 'certificate',
+                        file,
+                    },
+                    {
+                        onSuccess: (result) => resolve(result),
+                        onError: (error) => reject(error),
+                    }
+                );
+            });
+        },
+        [user?.id, editingCompetency?.definition?.name, uploadDocumentMutation]
     );
 
     // Handle profile save
@@ -411,6 +435,8 @@ export default function ProfilePage() {
                     initialData={editingCompetency.competency}
                     definition={editingCompetency.definition}
                     isSaving={createCompetencyMutation.isPending || updateCompetencyMutation.isPending}
+                    onDocumentUpload={handleDocumentUpload}
+                    isUploadingDocument={uploadDocumentMutation.isPending}
                 />
             )}
         </div>
