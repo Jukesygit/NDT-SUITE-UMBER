@@ -2,12 +2,19 @@
  * PersonnelExpandedRow - Expanded details view for a person in the table
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { Person, PersonCompetency, Organization } from '../../hooks/queries/usePersonnel';
 import { useUpdatePerson, useUpdatePersonCompetency } from '../../hooks/mutations';
+import { Modal } from '../../components/ui';
 
 // Utility imports - ES module
 import { requiresWitnessCheck } from '../../utils/competency-field-utils.js';
+
+// @ts-ignore - JS module without types
+import supabaseImport from '../../supabase-client.js';
+import type { SupabaseClient } from '@supabase/supabase-js';
+// @ts-ignore - typing JS module import
+const supabaseClient: SupabaseClient = supabaseImport;
 
 interface PersonnelExpandedRowProps {
     person: Person;
@@ -119,6 +126,45 @@ function WitnessIcon() {
 }
 
 /**
+ * Document icon
+ */
+function DocumentIcon() {
+    return (
+        <svg style={{ width: '14px', height: '14px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            />
+        </svg>
+    );
+}
+
+/**
+ * Get document type from URL
+ */
+function getDocumentType(url?: string): 'image' | 'pdf' | 'other' {
+    if (!url) return 'other';
+    const lower = url.toLowerCase();
+    if (lower.match(/\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i)) return 'image';
+    if (lower.match(/\.pdf(\?|$)/i)) return 'pdf';
+    return 'other';
+}
+
+/**
+ * Format date for display
+ */
+function formatDate(dateString?: string): string {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+    });
+}
+
+/**
  * Get status color and label for a competency
  */
 function getCompetencyStatus(comp: PersonCompetency): { color: string; bgColor: string; label: string } {
@@ -206,6 +252,46 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
         witnessed_at: '',
         witness_notes: '',
     });
+
+    // Certificate detail modal state
+    const [viewingCompetency, setViewingCompetency] = useState<PersonCompetency | null>(null);
+    const [resolvedDocumentUrl, setResolvedDocumentUrl] = useState<string | null>(null);
+
+    // Resolve document URL when viewing a competency
+    useEffect(() => {
+        async function resolveUrl() {
+            if (!viewingCompetency?.document_url) {
+                setResolvedDocumentUrl(null);
+                return;
+            }
+
+            // If it's already a full URL, use it directly
+            if (viewingCompetency.document_url.startsWith('http')) {
+                setResolvedDocumentUrl(viewingCompetency.document_url);
+                return;
+            }
+
+            // It's a storage path - get a signed URL from the 'documents' bucket
+            try {
+                const { data, error } = await supabaseClient.storage
+                    .from('documents')
+                    .createSignedUrl(viewingCompetency.document_url, 3600); // 1 hour expiry
+
+                if (error) {
+                    console.error('Failed to get signed URL:', error);
+                    setResolvedDocumentUrl(null);
+                    return;
+                }
+
+                setResolvedDocumentUrl(data.signedUrl);
+            } catch (err) {
+                console.error('Error resolving document URL:', err);
+                setResolvedDocumentUrl(null);
+            }
+        }
+
+        resolveUrl();
+    }, [viewingCompetency?.document_url]);
 
     // Mutations
     const updatePerson = useUpdatePerson();
@@ -790,6 +876,27 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                                                 {new Date(comp.expiry_date).toLocaleDateString('en-GB')}
                                                             </div>
                                                         )}
+                                                        {comp.document_url && (
+                                                            <button
+                                                                onClick={() => setViewingCompetency(comp)}
+                                                                style={{
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '4px',
+                                                                    color: '#60a5fa',
+                                                                    fontSize: '11px',
+                                                                    textDecoration: 'none',
+                                                                    background: 'none',
+                                                                    border: 'none',
+                                                                    cursor: 'pointer',
+                                                                    padding: 0,
+                                                                    marginTop: '4px',
+                                                                }}
+                                                            >
+                                                                <DocumentIcon />
+                                                                View Certificate
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
@@ -801,6 +908,192 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                     </div>
                 )}
             </div>
+
+            {/* Certificate Detail Modal */}
+            {viewingCompetency && (
+                <Modal
+                    isOpen={!!viewingCompetency}
+                    onClose={() => setViewingCompetency(null)}
+                    title={`${viewingCompetency.competency?.name || 'Certificate'} - Details`}
+                    size="large"
+                >
+                    {/* Certificate Details */}
+                    <div style={{ marginBottom: '20px' }}>
+                        <div
+                            style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(2, 1fr)',
+                                gap: '16px',
+                                fontSize: '14px',
+                            }}
+                        >
+                            {viewingCompetency.issuing_body && (
+                                <div>
+                                    <span style={{ color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '4px' }}>
+                                        Issued By
+                                    </span>
+                                    <span style={{ color: '#ffffff', fontWeight: '500' }}>
+                                        {viewingCompetency.issuing_body}
+                                    </span>
+                                </div>
+                            )}
+                            {viewingCompetency.certification_id && (
+                                <div>
+                                    <span style={{ color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '4px' }}>
+                                        Certificate ID
+                                    </span>
+                                    <span style={{ color: '#ffffff', fontWeight: '500' }}>
+                                        {viewingCompetency.certification_id}
+                                    </span>
+                                </div>
+                            )}
+                            {viewingCompetency.created_at && (
+                                <div>
+                                    <span style={{ color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '4px' }}>
+                                        Issued Date
+                                    </span>
+                                    <span style={{ color: '#ffffff', fontWeight: '500' }}>
+                                        {formatDate(viewingCompetency.created_at)}
+                                    </span>
+                                </div>
+                            )}
+                            {viewingCompetency.expiry_date && (
+                                <div>
+                                    <span style={{ color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '4px' }}>
+                                        Expiry Date
+                                    </span>
+                                    <span
+                                        style={{
+                                            color: getCompetencyStatus(viewingCompetency).color,
+                                            fontWeight: '500',
+                                        }}
+                                    >
+                                        {formatDate(viewingCompetency.expiry_date)}
+                                    </span>
+                                </div>
+                            )}
+                            {viewingCompetency.notes && (
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                    <span style={{ color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '4px' }}>
+                                        Notes
+                                    </span>
+                                    <span style={{ color: '#ffffff' }}>
+                                        {viewingCompetency.notes}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Document Preview */}
+                    {viewingCompetency.document_url && (
+                        <div style={{ minHeight: '300px' }}>
+                            <div
+                                style={{
+                                    fontSize: '12px',
+                                    color: 'rgba(255, 255, 255, 0.5)',
+                                    marginBottom: '12px',
+                                    textTransform: 'uppercase',
+                                    fontWeight: '600',
+                                    letterSpacing: '0.5px',
+                                }}
+                            >
+                                Certificate Document
+                            </div>
+                            {!resolvedDocumentUrl && (
+                                <div style={{ textAlign: 'center', padding: '40px' }}>
+                                    <p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                                        Loading document...
+                                    </p>
+                                </div>
+                            )}
+                            {resolvedDocumentUrl && getDocumentType(viewingCompetency.document_url) === 'image' && (
+                                <img
+                                    src={resolvedDocumentUrl}
+                                    alt={`${viewingCompetency.competency?.name || 'Certificate'}`}
+                                    style={{
+                                        width: '100%',
+                                        height: 'auto',
+                                        maxHeight: '50vh',
+                                        objectFit: 'contain',
+                                        borderRadius: '8px',
+                                        background: 'rgba(255, 255, 255, 0.05)',
+                                    }}
+                                    onError={(e) => {
+                                        const target = e.target as HTMLImageElement;
+                                        target.style.display = 'none';
+                                        const fallback = target.nextElementSibling as HTMLElement;
+                                        if (fallback) fallback.style.display = 'block';
+                                    }}
+                                />
+                            )}
+                            {/* Fallback for failed image load */}
+                            {resolvedDocumentUrl && getDocumentType(viewingCompetency.document_url) === 'image' && (
+                                <div style={{ display: 'none', textAlign: 'center', padding: '40px' }}>
+                                    <p style={{ color: 'rgba(255, 255, 255, 0.7)', marginBottom: '16px' }}>
+                                        Unable to load image preview.
+                                    </p>
+                                    <a
+                                        href={resolvedDocumentUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="btn btn--primary"
+                                    >
+                                        Open Image in New Tab
+                                    </a>
+                                </div>
+                            )}
+                            {resolvedDocumentUrl && getDocumentType(viewingCompetency.document_url) === 'pdf' && (
+                                <iframe
+                                    src={resolvedDocumentUrl}
+                                    title={`${viewingCompetency.competency?.name || 'Certificate'}`}
+                                    style={{
+                                        width: '100%',
+                                        height: '50vh',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                    }}
+                                />
+                            )}
+                            {resolvedDocumentUrl && getDocumentType(viewingCompetency.document_url) === 'other' && (
+                                <div style={{ textAlign: 'center', padding: '40px' }}>
+                                    <p style={{ color: 'rgba(255, 255, 255, 0.7)', marginBottom: '16px' }}>
+                                        This document type cannot be previewed.
+                                    </p>
+                                    <a
+                                        href={resolvedDocumentUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="btn btn--primary"
+                                    >
+                                        Download Document
+                                    </a>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Modal Footer */}
+                    <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                        {resolvedDocumentUrl && (
+                            <a
+                                href={resolvedDocumentUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn btn--outline btn--sm"
+                            >
+                                Open in New Tab
+                            </a>
+                        )}
+                        <button
+                            onClick={() => setViewingCompetency(null)}
+                            className="btn btn--primary btn--sm"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </Modal>
+            )}
         </div>
     );
 }
