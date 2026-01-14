@@ -1,7 +1,7 @@
 {
-  "name": "ndt-tool-suite",
+  "name": "matrix-portal",
   "version": "1.0.0",
-  "description": "Modular NDT Tool Suite for Non-Destructive Testing",
+  "description": "Matrix Portal - Tools for Non-Destructive Testing",
   "type": "module",
   "engines": {
     "node": ">=18.0.0"

@@ -36,6 +36,7 @@ export interface Competency {
     document_name?: string;
     notes?: string;
     field_value?: string;
+    status?: 'active' | 'expired' | 'pending_approval' | 'rejected' | 'changes_requested';
 }
 
 interface CompetencyCardProps {
@@ -73,6 +74,25 @@ function useExpiryStatus(expiryDate?: string) {
             return { daysUntil, status: 'valid', color: '#10b981' };
         }
     }, [expiryDate]);
+}
+
+/**
+ * Get approval status display info
+ */
+function getApprovalStatus(status?: Competency['status']) {
+    switch (status) {
+        case 'pending_approval':
+            return { label: 'Pending Approval', color: '#f59e0b', show: true };
+        case 'rejected':
+            return { label: 'Rejected', color: '#ef4444', show: true };
+        case 'changes_requested':
+            return { label: 'Changes Requested', color: '#f97316', show: true };
+        case 'expired':
+            return { label: 'Expired', color: '#ef4444', show: true };
+        case 'active':
+        default:
+            return { label: '', color: '', show: false };
+    }
 }
 
 /**
@@ -158,11 +178,15 @@ export function CompetencyCard({
     compact = false,
 }: CompetencyCardProps) {
     const expiryStatus = useExpiryStatus(competency.expiry_date);
+    const approvalStatus = getApprovalStatus(competency.status);
     const [showDocumentModal, setShowDocumentModal] = useState(false);
     const [resolvedDocumentUrl, setResolvedDocumentUrl] = useState<string | null>(null);
 
     const name = definition?.name || 'Unknown Certification';
     const isCertification = definition?.is_certification !== false;
+
+    // Use approval status color if not active, otherwise use expiry status color
+    const displayColor = approvalStatus.show ? approvalStatus.color : expiryStatus.color;
 
     // Resolve document URL - handles both full URLs and storage paths
     useEffect(() => {
@@ -237,11 +261,11 @@ export function CompetencyCard({
                             width: '40px',
                             height: '40px',
                             borderRadius: '10px',
-                            background: `linear-gradient(135deg, ${expiryStatus.color}20, ${expiryStatus.color}10)`,
+                            background: `linear-gradient(135deg, ${displayColor}20, ${displayColor}10)`,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            color: expiryStatus.color,
+                            color: displayColor,
                             flexShrink: 0,
                         }}
                     >
@@ -371,8 +395,26 @@ export function CompetencyCard({
                 </button>
             )}
 
-            {/* Expiry Status Badge */}
-            {competency.expiry_date && expiryStatus.status !== 'none' && (
+            {/* Status Badges - approval status takes priority over expiry status */}
+            {approvalStatus.show ? (
+                <div
+                    style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '4px 10px',
+                        borderRadius: '9999px',
+                        background: `${approvalStatus.color}15`,
+                        border: `1px solid ${approvalStatus.color}30`,
+                        fontSize: '12px',
+                        fontWeight: '500',
+                        color: approvalStatus.color,
+                        alignSelf: 'flex-start',
+                    }}
+                >
+                    {approvalStatus.label}
+                </div>
+            ) : competency.expiry_date && expiryStatus.status !== 'none' ? (
                 <div
                     style={{
                         display: 'inline-flex',
@@ -394,7 +436,7 @@ export function CompetencyCard({
                     {expiryStatus.status === 'expiring' && `Expires in ${expiryStatus.daysUntil} days`}
                     {expiryStatus.status === 'valid' && 'Valid'}
                 </div>
-            )}
+            ) : null}
 
             {/* Document Viewer Modal */}
             {showDocumentModal && competency.document_url && (
