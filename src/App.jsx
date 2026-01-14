@@ -21,6 +21,7 @@ import ErrorBoundary from './components/ErrorBoundary.tsx';
 // Import core components (always needed)
 import Layout from './components/LayoutNew.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
+import RequireAccess from './components/RequireAccess.jsx';
 import LoginPage from './pages/LoginPageNew.jsx';
 
 // Import the Matrix logo loader
@@ -173,7 +174,8 @@ function App() {
                             <Route path="/logo-animated" element={<LogoAnimatedDemo />} />
                             <Route path="/admin-style-demo" element={<AdminStyleDemo />} />
 
-                            {/* Protected routes with layout */}
+                            {/* All protected routes share a SINGLE Layout instance */}
+                            {/* This prevents Layout remount when navigating between tabs */}
                             <Route element={<ProtectedRoute />}>
                                 <Route element={<Layout />}>
                                     <Route path="/" element={
@@ -231,27 +233,21 @@ function App() {
                                             <NiiCalculatorPage />
                                         </ErrorBoundary>
                                     } />
-                                </Route>
-                            </Route>
-
-                            {/* Personnel routes - require elevated access (admin or manager) */}
-                            <Route element={<ProtectedRoute requireElevatedAccess />}>
-                                <Route element={<Layout />}>
+                                    {/* Personnel route - requires elevated access (admin or manager) */}
                                     <Route path="/personnel" element={
-                                        <ErrorBoundary>
-                                            <PersonnelPage />
-                                        </ErrorBoundary>
+                                        <RequireAccess requireElevatedAccess>
+                                            <ErrorBoundary>
+                                                <PersonnelPage />
+                                            </ErrorBoundary>
+                                        </RequireAccess>
                                     } />
-                                </Route>
-                            </Route>
-
-                            {/* Admin only route */}
-                            <Route element={<ProtectedRoute requireAdmin />}>
-                                <Route element={<Layout />}>
+                                    {/* Admin route - requires admin role */}
                                     <Route path="/admin" element={
-                                        <ErrorBoundary>
-                                            <AdminPageNew />
-                                        </ErrorBoundary>
+                                        <RequireAccess requireAdmin>
+                                            <ErrorBoundary>
+                                                <AdminPageNew />
+                                            </ErrorBoundary>
+                                        </RequireAccess>
                                     } />
                                 </Route>
                             </Route>
