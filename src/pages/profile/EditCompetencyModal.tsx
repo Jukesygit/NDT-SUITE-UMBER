@@ -2,7 +2,7 @@
  * EditCompetencyModal - Modal for adding/editing competencies
  */
 
-import { useState, useCallback, ChangeEvent } from 'react';
+import { useState, useCallback, useEffect, ChangeEvent } from 'react';
 import { Modal, FormField, FormTextarea } from '../../components/ui';
 import { RandomMatrixSpinner } from '../../components/MatrixSpinners';
 import type { CompetencyDefinition } from './CompetencyCard';
@@ -133,6 +133,23 @@ export function EditCompetencyModal({
         definition,
     });
 
+    // Sync form state when modal opens with new definition/initialData
+    useEffect(() => {
+        if (isOpen) {
+            setFormData({
+                competency_id: initialData?.competency_id || definition?.id || '',
+                issuing_body: initialData?.issuing_body || '',
+                certification_id: initialData?.certification_id || '',
+                issued_date: initialData?.issued_date || '',
+                expiry_date: initialData?.expiry_date || '',
+                document_url: initialData?.document_url || '',
+                document_name: initialData?.document_name || '',
+                notes: initialData?.notes || '',
+                definition,
+            });
+        }
+    }, [isOpen, definition, initialData]);
+
     // Update field
     const updateField = useCallback((field: keyof CompetencyFormData, value: string) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
@@ -253,22 +270,13 @@ export function EditCompetencyModal({
                             containerClassName="mb-0"
                         />
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                            <FormField
-                                label="Issued Date"
-                                type="date"
-                                value={formData.issued_date}
-                                onChange={(e) => updateField('issued_date', e.target.value)}
-                                containerClassName="mb-0"
-                            />
-                            <FormField
-                                label="Expiry Date"
-                                type="date"
-                                value={formData.expiry_date}
-                                onChange={(e) => updateField('expiry_date', e.target.value)}
-                                containerClassName="mb-0"
-                            />
-                        </div>
+                        <FormField
+                            label="Expiry Date"
+                            type="date"
+                            value={formData.expiry_date}
+                            onChange={(e) => updateField('expiry_date', e.target.value)}
+                            containerClassName="mb-0"
+                        />
                     </>
                 )}
 

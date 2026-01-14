@@ -649,6 +649,9 @@
     border-top: 2px solid var(--text-primary);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
+    /* GPU acceleration - prevents freezing during main thread work */
+    will-change: transform;
+    transform: translateZ(0);
 }
 
 /* Badge/Pill - Minimal & Professional */

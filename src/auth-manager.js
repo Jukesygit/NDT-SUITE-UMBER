@@ -418,19 +418,24 @@ class AuthManager {
         // Just check if we're configured to use Supabase
         if (this.useSupabase) {
             try {
-                // Use a distinct redirect URL with type=recovery to differentiate from other auth flows
-                const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-                    redirectTo: `${window.location.origin}/login?type=recovery`
+                // Use custom code-based reset flow to bypass corporate email scanners
+                const { data, error } = await supabase.functions.invoke('send-reset-code', {
+                    body: { email }
                 });
 
                 if (error) {
-                    return { success: false, error };
+                    console.error('Send reset code error:', error);
+                    return { success: false, error: { message: error.message || 'Failed to send reset code' } };
                 }
 
-                return { success: true, data };
+                if (data?.error) {
+                    return { success: false, error: { message: data.error } };
+                }
+
+                return { success: true, data, useCodeFlow: true };
             } catch (err) {
                 console.error('Password reset error:', err);
-                return { success: false, error: { message: err.message || 'Failed to send password reset email' } };
+                return { success: false, error: { message: err.message || 'Failed to send password reset code' } };
             }
         } else {
             // For local mode, just show a message
@@ -438,6 +443,36 @@ class AuthManager {
                 success: false,
                 error: { message: 'Password reset is not available in local mode. Please contact your administrator.' }
             };
+        }
+    }
+
+    // Verify reset code and update password
+    async verifyResetCode(email, code, newPassword) {
+        if (!this.useSupabase) {
+            return {
+                success: false,
+                error: { message: 'Password reset is not available in local mode.' }
+            };
+        }
+
+        try {
+            const { data, error } = await supabase.functions.invoke('verify-reset-code', {
+                body: { email, code, newPassword }
+            });
+
+            if (error) {
+                console.error('Verify reset code error:', error);
+                return { success: false, error: { message: error.message || 'Failed to verify reset code' } };
+            }
+
+            if (data?.error) {
+                return { success: false, error: { message: data.error } };
+            }
+
+            return { success: true, message: data?.message };
+        } catch (err) {
+            console.error('Verify reset code error:', err);
+            return { success: false, error: { message: err.message || 'Failed to verify reset code' } };
         }
     }
 

@@ -150,6 +150,8 @@ class CompetencyService {
             competency_id: competencyId,
             value: data.value || null,
             expiry_date: data.expiryDate || null,
+            issuing_body: data.issuingBody || null,
+            certification_id: data.certificationId || null,
             document_url: data.documentUrl || null,
             document_name: data.documentName || null,
             notes: data.notes || null,

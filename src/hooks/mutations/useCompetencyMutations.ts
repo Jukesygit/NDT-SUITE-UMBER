@@ -44,16 +44,20 @@ export function useCreateCompetency() {
     return useMutation({
         mutationFn: async ({ userId, data }: CreateCompetencyParams) => {
             return competencyService.upsertCompetency(userId, data.competency_id, {
-                value: data.field_value,
+                value: data.field_value || data.certification_id,
                 expiryDate: data.expiry_date,
+                issuingBody: data.issuing_body,
+                certificationId: data.certification_id,
                 documentUrl: data.document_url,
                 documentName: data.document_name,
                 notes: data.notes,
             });
         },
         onSuccess: (_, variables) => {
+            // Invalidate all competency queries for this user
             queryClient.invalidateQueries({ queryKey: ['competencies', variables.userId] });
-            queryClient.invalidateQueries({ queryKey: ['expiring-competencies', variables.userId] });
+            queryClient.invalidateQueries({ queryKey: ['competencies', 'byCategory', variables.userId] });
+            queryClient.invalidateQueries({ queryKey: ['competencies', 'expiring'] });
         },
     });
 }
@@ -67,16 +71,20 @@ export function useUpdateCompetency() {
     return useMutation({
         mutationFn: async ({ competencyId, userId, data }: UpdateCompetencyParams) => {
             return competencyService.upsertCompetency(userId, competencyId, {
-                value: data.field_value,
+                value: data.field_value || data.certification_id,
                 expiryDate: data.expiry_date,
+                issuingBody: data.issuing_body,
+                certificationId: data.certification_id,
                 documentUrl: data.document_url,
                 documentName: data.document_name,
                 notes: data.notes,
             });
         },
         onSuccess: (_, variables) => {
+            // Invalidate all competency queries for this user
             queryClient.invalidateQueries({ queryKey: ['competencies', variables.userId] });
-            queryClient.invalidateQueries({ queryKey: ['expiring-competencies', variables.userId] });
+            queryClient.invalidateQueries({ queryKey: ['competencies', 'byCategory', variables.userId] });
+            queryClient.invalidateQueries({ queryKey: ['competencies', 'expiring'] });
         },
     });
 }
@@ -92,8 +100,10 @@ export function useDeleteCompetency() {
             return competencyService.deleteCompetency(competencyId);
         },
         onSuccess: (_, variables) => {
+            // Invalidate all competency queries for this user
             queryClient.invalidateQueries({ queryKey: ['competencies', variables.userId] });
-            queryClient.invalidateQueries({ queryKey: ['expiring-competencies', variables.userId] });
+            queryClient.invalidateQueries({ queryKey: ['competencies', 'byCategory', variables.userId] });
+            queryClient.invalidateQueries({ queryKey: ['competencies', 'expiring'] });
         },
     });
 }

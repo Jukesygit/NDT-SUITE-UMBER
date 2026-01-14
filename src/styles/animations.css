@@ -208,6 +208,8 @@
 
 .animate-spin {
   animation: spin 1s linear infinite;
+  will-change: transform;
+  transform: translateZ(0);
 }
 
 .animate-pulse {
@@ -220,6 +222,7 @@
 
 .animate-shimmer {
   animation: shimmer 2s linear infinite;
+  will-change: background-position;
 }
 
 .animate-shake {

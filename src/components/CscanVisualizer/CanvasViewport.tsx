@@ -1,5 +1,6 @@
-import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle, useState } from 'react';
+import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle, useState, useMemo } from 'react';
 import { CscanData, Tool, DisplaySettings } from './types';
+import { downsampleForDisplay, needsDownsampling } from './utils/downsample';
 
 interface CanvasViewportProps {
   data: CscanData;
@@ -27,6 +28,42 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
   const containerRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<HTMLDivElement>(null);
   const [plotlyLoaded, setPlotlyLoaded] = useState(false);
+
+  // Track last rendered data ID to avoid unnecessary full re-renders
+  const lastDataIdRef = useRef<string | null>(null);
+  // Debounce timer for style updates
+  const styleUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Downsample large datasets for display (prevents OOM)
+  // Full resolution is still used for exports
+  const displayData = useMemo(() => {
+    if (!data) return null;
+
+    const width = data.data[0]?.length ?? 0;
+    const height = data.data.length;
+
+    // Check if downsampling is needed
+    if (needsDownsampling(width, height)) {
+      const downsampled = downsampleForDisplay(data.data, data.xAxis, data.yAxis);
+      console.log(`Display data downsampled: ${width}x${height} -> ${downsampled.data[0]?.length}x${downsampled.data.length}`);
+      return {
+        zData: downsampled.data,
+        xAxis: downsampled.xAxis,
+        yAxis: downsampled.yAxis,
+        isDownsampled: true,
+        scale: downsampled.scale
+      };
+    }
+
+    // No downsampling needed
+    return {
+      zData: data.data,
+      xAxis: data.xAxis,
+      yAxis: data.yAxis,
+      isDownsampled: false,
+      scale: 1
+    };
+  }, [data]);
 
   // Load Plotly dynamically on component mount
   useEffect(() => {
@@ -162,22 +199,36 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
     }
   }), [data, displaySettings]);
 
-  // Render the heatmap
-  const renderPlot = useCallback(async () => {
-    if (!plotRef.current || !data || !Plotly) return;
+  // Full render - only called when data changes (not on settings changes)
+  const renderFullPlot = useCallback(async () => {
+    if (!plotRef.current || !data || !displayData || !Plotly) return;
 
-    const zData = data.data;
+    // IMPORTANT: Set this FIRST before any async work
+    // This prevents re-triggering full render on settings changes during initial render
+    lastDataIdRef.current = data.id;
+
+    // Cancel any pending style updates
+    if (styleUpdateTimerRef.current) {
+      clearTimeout(styleUpdateTimerRef.current);
+      styleUpdateTimerRef.current = null;
+    }
+
+    // Use downsampled data for display (prevents OOM)
+    const { zData, xAxis, yAxis, isDownsampled, scale } = displayData;
     const { min, max } = displaySettings.range;
-
-    // Use custom range if set, otherwise use data stats
     const zMin = min ?? data.stats?.min ?? 0;
     const zMax = max ?? data.stats?.max ?? 1;
+
+    // Log if using downsampled data
+    if (isDownsampled) {
+      console.log(`Rendering with ${scale}x downsampled data for display`);
+    }
 
     const trace: Partial<Plotly.Data> = {
       type: 'heatmap',
       z: zData,
-      x: data.xAxis,
-      y: data.yAxis,
+      x: xAxis,
+      y: yAxis,
       colorscale: displaySettings.colorScale,
       reversescale: displaySettings.reverseScale,
       zmin: zMin,
@@ -197,7 +248,6 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
     const annotations: Partial<Plotly.Annotations>[] = [];
     if (displaySettings.showFilenames && data.sourceRegions && data.sourceRegions.length > 0) {
       data.sourceRegions.forEach((region) => {
-        // Strip file extension for cleaner display
         const displayName = region.filename.replace(/\.[^/.]+$/, '');
         annotations.push({
           x: region.centerX,
@@ -206,11 +256,7 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
           yref: 'y',
           text: displayName,
           showarrow: false,
-          font: {
-            size: 12,
-            color: '#ffffff',
-            family: 'Arial, sans-serif'
-          },
+          font: { size: 12, color: '#ffffff', family: 'Arial, sans-serif' },
           bgcolor: 'rgba(0, 0, 0, 0.6)',
           bordercolor: 'rgba(255, 255, 255, 0.3)',
           borderwidth: 1,
@@ -219,11 +265,16 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
       });
     }
 
+    // Add indicator if displaying downsampled preview
+    const titleText = isDownsampled
+      ? `${data.filename || 'C-Scan Heatmap'} (Preview ${scale}x)`
+      : (data.filename || 'C-Scan Heatmap');
+
     const layout: Partial<Plotly.Layout> = {
       autosize: true,
       margin: { l: 60, r: 80, t: 30, b: 50 },
       title: {
-        text: data.filename || 'C-Scan Heatmap',
+        text: titleText,
         font: { size: 14, color: '#ffffff' },
         y: 0.98
       },
@@ -259,26 +310,93 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
 
     await Plotly.react(plotRef.current, [trace], layout, config);
 
-    // Force resize after render
+    // Ensure ref is set after async work completes (belt and suspenders)
+    lastDataIdRef.current = data.id;
+
     setTimeout(() => {
       if (plotRef.current) {
         Plotly.Plots.resize(plotRef.current);
       }
     }, 100);
+  }, [data, displayData]); // Depends on data and displayData (downsampled version)
+
+  // Lightweight update - only restyle/relayout, doesn't reload data
+  // This is debounced to prevent rapid-fire updates during slider drag
+  const updatePlotStyleDebounced = useCallback(() => {
+    // Cancel any pending update
+    if (styleUpdateTimerRef.current) {
+      clearTimeout(styleUpdateTimerRef.current);
+    }
+
+    // Debounce: wait 50ms before applying style changes
+    styleUpdateTimerRef.current = setTimeout(async () => {
+      if (!plotRef.current || !data || !Plotly) return;
+
+      const { min, max } = displaySettings.range;
+      const zMin = min ?? data.stats?.min ?? 0;
+      const zMax = max ?? data.stats?.max ?? 1;
+
+      console.log(`Restyle: zMin=${zMin}, zMax=${zMax}`);
+
+      try {
+        // Use restyle for color-related changes (lightweight, no data copy)
+        await Plotly.restyle(plotRef.current, {
+          colorscale: [displaySettings.colorScale],
+          reversescale: [displaySettings.reverseScale],
+          zmin: [zMin],
+          zmax: [zMax],
+          zsmooth: [displaySettings.smoothing === 'none' ? false : displaySettings.smoothing]
+        }, [0]);
+
+        // Use relayout for layout changes
+        await Plotly.relayout(plotRef.current, {
+          'xaxis.showgrid': displaySettings.showGrid,
+          'yaxis.showgrid': displaySettings.showGrid,
+          dragmode: activeTool === 'pan' ? 'pan' : 'zoom'
+        });
+      } catch (err) {
+        console.warn('Plot style update failed:', err);
+      }
+    }, 50);
   }, [data, displaySettings, activeTool]);
 
-  // Initialize and update plot
+  // Smart render - full render only when data changes, debounced restyle for settings
+  const renderPlot = useCallback(() => {
+    if (!plotRef.current || !data || !Plotly) return;
+
+    // Check if this is new data or just a settings change
+    if (lastDataIdRef.current !== data.id) {
+      // New data - need full render (async but we don't await)
+      console.log(`renderPlot: NEW DATA (ref=${lastDataIdRef.current}, data.id=${data.id})`);
+      renderFullPlot();
+    } else {
+      // Same data - debounced style update (much faster, no OOM risk)
+      console.log(`renderPlot: SETTINGS CHANGE -> restyle`);
+      updatePlotStyleDebounced();
+    }
+  }, [data, renderFullPlot, updatePlotStyleDebounced]);
+
+  // Initialize and update plot when renderPlot changes
   useEffect(() => {
     if (plotlyLoaded) {
       renderPlot();
     }
+  }, [renderPlot, plotlyLoaded]);
 
+  // Cleanup only on unmount - NOT on every settings change
+  useEffect(() => {
     return () => {
+      // Clear any pending debounced updates
+      if (styleUpdateTimerRef.current) {
+        clearTimeout(styleUpdateTimerRef.current);
+        styleUpdateTimerRef.current = null;
+      }
       if (plotRef.current && Plotly) {
         Plotly.purge(plotRef.current);
+        lastDataIdRef.current = null; // Reset so next mount does full render
       }
     };
-  }, [renderPlot, plotlyLoaded]);
+  }, []); // Empty deps = only runs on unmount
 
   // Handle container resize (not just window resize)
   useEffect(() => {
