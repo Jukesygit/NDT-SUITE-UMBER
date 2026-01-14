@@ -372,7 +372,32 @@ export function CompetencyCard({
                                     objectFit: 'contain',
                                     borderRadius: '8px',
                                 }}
+                                onError={(e) => {
+                                    console.error('Failed to load certificate image:', competency.document_url);
+                                    // Hide broken image and show fallback
+                                    const target = e.target as HTMLImageElement;
+                                    target.style.display = 'none';
+                                    // Show fallback message
+                                    const fallback = target.nextElementSibling as HTMLElement;
+                                    if (fallback) fallback.style.display = 'block';
+                                }}
                             />
+                        )}
+                        {/* Fallback for failed image load */}
+                        {documentType === 'image' && (
+                            <div style={{ display: 'none', textAlign: 'center', padding: '40px' }}>
+                                <p style={{ color: 'rgba(255, 255, 255, 0.7)', marginBottom: '16px' }}>
+                                    Unable to load image preview.
+                                </p>
+                                <a
+                                    href={competency.document_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="btn btn--primary"
+                                >
+                                    Open Image in New Tab
+                                </a>
+                            </div>
                         )}
                         {documentType === 'pdf' && (
                             <iframe
