@@ -1,6 +1,6 @@
-# NDT Tool Suite
+# Matrix Portal
 
-A modular Non-Destructive Testing (NDT) tool suite for managing inspection data, generating reports, and visualizing scan results.
+A modular Non-Destructive Testing (NDT) platform for managing inspection data, generating reports, and visualizing scan results.
 
 ## Features
 

@@ -431,10 +431,15 @@ export default function ProfilePage() {
                     isOpen={!!editingCompetency}
                     onClose={() => setEditingCompetency(null)}
                     onSave={handleSaveCompetency}
+                    onDelete={editingCompetency.competency ? () => {
+                        handleDeleteCompetency(editingCompetency.competency!);
+                        setEditingCompetency(null);
+                    } : undefined}
                     isNew={editingCompetency.isNew}
                     initialData={editingCompetency.competency}
                     definition={editingCompetency.definition}
                     isSaving={createCompetencyMutation.isPending || updateCompetencyMutation.isPending}
+                    isDeleting={deleteCompetencyMutation.isPending}
                     onDocumentUpload={handleDocumentUpload}
                     isUploadingDocument={uploadDocumentMutation.isPending}
                 />

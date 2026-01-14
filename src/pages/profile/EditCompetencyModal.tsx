@@ -26,6 +26,8 @@ interface EditCompetencyModalProps {
     onClose: () => void;
     /** Callback when save is clicked */
     onSave: (data: CompetencyFormData) => void;
+    /** Callback when delete is clicked (only shown when editing existing) */
+    onDelete?: () => void;
     /** Whether this is adding a new competency */
     isNew?: boolean;
     /** Initial data for editing */
@@ -34,6 +36,8 @@ interface EditCompetencyModalProps {
     definition?: CompetencyDefinition;
     /** Whether save is in progress */
     isSaving?: boolean;
+    /** Whether delete is in progress */
+    isDeleting?: boolean;
     /** Callback for document upload */
     onDocumentUpload?: (file: File) => Promise<{ url: string; name: string }>;
     /** Whether document upload is in progress */
@@ -113,10 +117,12 @@ export function EditCompetencyModal({
     isOpen,
     onClose,
     onSave,
+    onDelete,
     isNew = false,
     initialData,
     definition,
     isSaving = false,
+    isDeleting = false,
     onDocumentUpload,
     isUploadingDocument = false,
 }: EditCompetencyModalProps) {
@@ -232,22 +238,37 @@ export function EditCompetencyModal({
             closeOnBackdropClick={!isSaving}
             closeOnEscape={!isSaving}
             footer={
-                <>
-                    <button
-                        onClick={handleClose}
-                        className="btn btn--secondary"
-                        disabled={isSaving}
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        onClick={handleSave}
-                        className="btn btn--primary"
-                        disabled={isSaving}
-                    >
-                        {isSaving ? 'Saving...' : isNew ? 'Add Certification' : 'Save Changes'}
-                    </button>
-                </>
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                    {/* Delete button - only show when editing existing */}
+                    <div>
+                        {!isNew && onDelete && (
+                            <button
+                                onClick={onDelete}
+                                className="btn btn--danger"
+                                disabled={isSaving || isDeleting}
+                            >
+                                {isDeleting ? 'Deleting...' : 'Delete'}
+                            </button>
+                        )}
+                    </div>
+                    {/* Cancel and Save buttons */}
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            onClick={handleClose}
+                            className="btn btn--secondary"
+                            disabled={isSaving || isDeleting}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleSave}
+                            className="btn btn--primary"
+                            disabled={isSaving || isDeleting}
+                        >
+                            {isSaving ? 'Saving...' : isNew ? 'Add Certification' : 'Save Changes'}
+                        </button>
+                    </div>
+                </div>
             }
         >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
