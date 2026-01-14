@@ -2,8 +2,14 @@
  * CompetencyCard - Display card for a single competency/certification
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Modal } from '../../components/ui';
+
+import type { SupabaseClient } from '@supabase/supabase-js';
+// @ts-ignore - JS module without types
+import supabaseImport from '../../supabase-client.js';
+// @ts-ignore - typing JS module import
+const supabaseClient: SupabaseClient = supabaseImport;
 
 export interface CompetencyCategory {
     id: string;
@@ -153,9 +159,46 @@ export function CompetencyCard({
 }: CompetencyCardProps) {
     const expiryStatus = useExpiryStatus(competency.expiry_date);
     const [showDocumentModal, setShowDocumentModal] = useState(false);
+    const [resolvedDocumentUrl, setResolvedDocumentUrl] = useState<string | null>(null);
 
     const name = definition?.name || 'Unknown Certification';
     const isCertification = definition?.is_certification !== false;
+
+    // Resolve document URL - handles both full URLs and storage paths
+    useEffect(() => {
+        async function resolveUrl() {
+            if (!competency.document_url) {
+                setResolvedDocumentUrl(null);
+                return;
+            }
+
+            // If it's already a full URL, use it directly
+            if (competency.document_url.startsWith('http')) {
+                setResolvedDocumentUrl(competency.document_url);
+                return;
+            }
+
+            // It's a storage path - get a signed URL from the 'documents' bucket
+            try {
+                const { data, error } = await supabaseClient.storage
+                    .from('documents')
+                    .createSignedUrl(competency.document_url, 3600); // 1 hour expiry
+
+                if (error) {
+                    console.error('Failed to get signed URL:', error);
+                    setResolvedDocumentUrl(null);
+                    return;
+                }
+
+                setResolvedDocumentUrl(data.signedUrl);
+            } catch (err) {
+                console.error('Error resolving document URL:', err);
+                setResolvedDocumentUrl(null);
+            }
+        }
+
+        resolveUrl();
+    }, [competency.document_url]);
 
     // Determine if document is an image or PDF
     const getDocumentType = (url?: string): 'image' | 'pdf' | 'other' => {
@@ -166,6 +209,7 @@ export function CompetencyCard({
         return 'other';
     };
 
+    // Use the original URL for type detection (has extension), resolved URL for display
     const documentType = getDocumentType(competency.document_url);
 
     return (
@@ -361,9 +405,16 @@ export function CompetencyCard({
                     size="large"
                 >
                     <div style={{ minHeight: '400px' }}>
-                        {documentType === 'image' && (
+                        {!resolvedDocumentUrl && (
+                            <div style={{ textAlign: 'center', padding: '40px' }}>
+                                <p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                                    Loading document...
+                                </p>
+                            </div>
+                        )}
+                        {resolvedDocumentUrl && documentType === 'image' && (
                             <img
-                                src={competency.document_url}
+                                src={resolvedDocumentUrl}
                                 alt={`${name} certificate`}
                                 style={{
                                     width: '100%',
@@ -373,7 +424,7 @@ export function CompetencyCard({
                                     borderRadius: '8px',
                                 }}
                                 onError={(e) => {
-                                    console.error('Failed to load certificate image:', competency.document_url);
+                                    console.error('Failed to load certificate image:', resolvedDocumentUrl);
                                     // Hide broken image and show fallback
                                     const target = e.target as HTMLImageElement;
                                     target.style.display = 'none';
@@ -384,13 +435,13 @@ export function CompetencyCard({
                             />
                         )}
                         {/* Fallback for failed image load */}
-                        {documentType === 'image' && (
+                        {resolvedDocumentUrl && documentType === 'image' && (
                             <div style={{ display: 'none', textAlign: 'center', padding: '40px' }}>
                                 <p style={{ color: 'rgba(255, 255, 255, 0.7)', marginBottom: '16px' }}>
                                     Unable to load image preview.
                                 </p>
                                 <a
-                                    href={competency.document_url}
+                                    href={resolvedDocumentUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="btn btn--primary"
@@ -399,9 +450,9 @@ export function CompetencyCard({
                                 </a>
                             </div>
                         )}
-                        {documentType === 'pdf' && (
+                        {resolvedDocumentUrl && documentType === 'pdf' && (
                             <iframe
-                                src={competency.document_url}
+                                src={resolvedDocumentUrl}
                                 title={`${name} certificate`}
                                 style={{
                                     width: '100%',
@@ -411,13 +462,13 @@ export function CompetencyCard({
                                 }}
                             />
                         )}
-                        {documentType === 'other' && (
+                        {resolvedDocumentUrl && documentType === 'other' && (
                             <div style={{ textAlign: 'center', padding: '40px' }}>
                                 <p style={{ color: 'rgba(255, 255, 255, 0.7)', marginBottom: '16px' }}>
                                     This document type cannot be previewed.
                                 </p>
                                 <a
-                                    href={competency.document_url}
+                                    href={resolvedDocumentUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="btn btn--primary"
@@ -428,14 +479,16 @@ export function CompetencyCard({
                         )}
                     </div>
                     <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                        <a
-                            href={competency.document_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn btn--outline btn--sm"
-                        >
-                            Open in New Tab
-                        </a>
+                        {resolvedDocumentUrl && (
+                            <a
+                                href={resolvedDocumentUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn btn--outline btn--sm"
+                            >
+                                Open in New Tab
+                            </a>
+                        )}
                         <button
                             onClick={() => setShowDocumentModal(false)}
                             className="btn btn--primary btn--sm"
