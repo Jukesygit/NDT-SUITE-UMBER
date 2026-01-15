@@ -466,6 +466,45 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
         [addingCompetency?.id, addingCompetency?.name]
     );
 
+    // Memoize the definition and initialData for edit modal to prevent form reset on re-render
+    const editModalDefinition = useMemo(
+        () =>
+            editingCompetency
+                ? {
+                      id: editingCompetency.competency.competency_id,
+                      name: editingCompetency.definition.name,
+                      is_certification: editingCompetency.definition.is_certification,
+                  }
+                : undefined,
+        [editingCompetency?.competency.competency_id, editingCompetency?.definition.name, editingCompetency?.definition.is_certification]
+    );
+
+    const editModalInitialData = useMemo(
+        () =>
+            editingCompetency
+                ? {
+                      competency_id: editingCompetency.competency.competency_id,
+                      issuing_body: editingCompetency.competency.issuing_body || '',
+                      certification_id: editingCompetency.competency.certification_id || '',
+                      expiry_date: editingCompetency.competency.expiry_date
+                          ? new Date(editingCompetency.competency.expiry_date).toISOString().split('T')[0]
+                          : '',
+                      document_url: editingCompetency.competency.document_url || '',
+                      document_name: editingCompetency.competency.document_name || '',
+                      notes: editingCompetency.competency.notes || '',
+                  }
+                : undefined,
+        [
+            editingCompetency?.competency.competency_id,
+            editingCompetency?.competency.issuing_body,
+            editingCompetency?.competency.certification_id,
+            editingCompetency?.competency.expiry_date,
+            editingCompetency?.competency.document_url,
+            editingCompetency?.competency.document_name,
+            editingCompetency?.competency.notes,
+        ]
+    );
+
     const competenciesByCategory = groupByCategory(person.competencies || []);
     const categories = Object.keys(competenciesByCategory).sort();
 
@@ -1149,24 +1188,14 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
             )}
 
             {/* Edit Competency Modal (Admin only) */}
-            {editingCompetency && (
+            {editingCompetency && editModalDefinition && editModalInitialData && (
                 <EditCompetencyModal
                     isOpen={!!editingCompetency}
                     onClose={() => setEditingCompetency(null)}
                     onSave={handleSaveCompetencyModal}
                     isNew={false}
-                    initialData={{
-                        competency_id: editingCompetency.competency.competency_id,
-                        issuing_body: editingCompetency.competency.issuing_body || '',
-                        certification_id: editingCompetency.competency.certification_id || '',
-                        expiry_date: editingCompetency.competency.expiry_date
-                            ? new Date(editingCompetency.competency.expiry_date).toISOString().split('T')[0]
-                            : '',
-                        document_url: editingCompetency.competency.document_url || '',
-                        document_name: editingCompetency.competency.document_name || '',
-                        notes: editingCompetency.competency.notes || '',
-                    }}
-                    definition={editingCompetency.definition}
+                    initialData={editModalInitialData}
+                    definition={editModalDefinition}
                     isSaving={updateCompetency.isPending}
                     onDocumentUpload={handleDocumentUpload}
                     isUploadingDocument={uploadDocument.isPending}
