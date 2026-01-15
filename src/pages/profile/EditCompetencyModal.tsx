@@ -46,9 +46,16 @@ interface EditCompetencyModalProps {
 
 /**
  * Check if definition should show certification fields
+ * File-type competencies (like CV Document) only need document upload, not cert fields
  */
 function shouldShowCertificationFields(definition?: CompetencyDefinition): boolean {
     if (!definition) return true;
+
+    // File-type competencies don't need certification fields (issuing body, cert ID, expiry)
+    if (definition.field_type === 'file') {
+        return false;
+    }
+
     return definition.is_certification !== false;
 }
 

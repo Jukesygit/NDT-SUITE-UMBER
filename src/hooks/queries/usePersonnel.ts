@@ -36,6 +36,7 @@ export interface PersonCompetency {
         id: string;
         name: string;
         category: string;
+        field_type?: 'text' | 'date' | 'expiry_date' | 'boolean' | 'file' | 'number';
         is_certification?: boolean;
     };
 }

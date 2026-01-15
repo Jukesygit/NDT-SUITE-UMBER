@@ -234,6 +234,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
         definition: {
             id: string;
             name: string;
+            field_type?: 'text' | 'date' | 'expiry_date' | 'boolean' | 'file' | 'number';
             is_certification?: boolean;
         };
     } | null>(null);
@@ -335,6 +336,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
             definition: {
                 id: comp.competency_id,
                 name: comp.competency?.name || 'Certification',
+                field_type: comp.competency?.field_type,
                 is_certification: comp.competency?.is_certification,
             },
         });
@@ -460,10 +462,11 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                 ? {
                       id: addingCompetency.id,
                       name: addingCompetency.name,
-                      is_certification: true,
+                      field_type: addingCompetency.field_type,
+                      is_certification: addingCompetency.field_type !== 'file',
                   }
                 : undefined,
-        [addingCompetency?.id, addingCompetency?.name]
+        [addingCompetency?.id, addingCompetency?.name, addingCompetency?.field_type]
     );
 
     // Memoize the definition and initialData for edit modal to prevent form reset on re-render
@@ -473,10 +476,11 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                 ? {
                       id: editingCompetency.competency.competency_id,
                       name: editingCompetency.definition.name,
+                      field_type: editingCompetency.definition.field_type,
                       is_certification: editingCompetency.definition.is_certification,
                   }
                 : undefined,
-        [editingCompetency?.competency.competency_id, editingCompetency?.definition.name, editingCompetency?.definition.is_certification]
+        [editingCompetency?.competency.competency_id, editingCompetency?.definition.name, editingCompetency?.definition.field_type, editingCompetency?.definition.is_certification]
     );
 
     const editModalInitialData = useMemo(
