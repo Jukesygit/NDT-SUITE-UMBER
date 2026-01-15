@@ -21,6 +21,7 @@ export interface CompetencyDefinition {
     name: string;
     category?: CompetencyCategory | string;
     description?: string;
+    field_type?: 'text' | 'date' | 'expiry_date' | 'boolean' | 'file' | 'number';
     is_certification?: boolean;
     has_expiry?: boolean;
 }

@@ -14,7 +14,7 @@ export interface CompetencyDefinition {
     id: string;
     name: string;
     description: string | null;
-    field_type: string;
+    field_type: 'text' | 'date' | 'expiry_date' | 'boolean' | 'file' | 'number';
     category_id: string;
     category?: CompetencyCategory;
     display_order: number;
