@@ -407,6 +407,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
     }, []);
 
     // Handle document upload for new competency
+    // Use Promise wrapper with mutate callbacks (same pattern as ProfilePage)
     const handleNewDocumentUpload = useCallback(
         async (file: File): Promise<{ url: string; name: string }> => {
             const competencyName = addingCompetency?.name;
@@ -414,12 +415,19 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                 throw new Error('Competency not available');
             }
 
-            const result = await uploadDocument.mutateAsync({
-                userId: person.id,
-                competencyName: competencyName,
-                file,
+            return new Promise((resolve, reject) => {
+                uploadDocument.mutate(
+                    {
+                        userId: person.id,
+                        competencyName: competencyName,
+                        file,
+                    },
+                    {
+                        onSuccess: (result) => resolve(result),
+                        onError: (error) => reject(error),
+                    }
+                );
             });
-            return result;
         },
         [person.id, addingCompetency?.name, uploadDocument]
     );
