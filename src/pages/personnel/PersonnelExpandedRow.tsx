@@ -399,19 +399,29 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
     // Handle document upload for new competency
     const handleNewDocumentUpload = useCallback(
         async (file: File): Promise<{ url: string; name: string }> => {
-            if (!addingCompetency?.name) {
+            const competencyName = addingCompetency?.name;
+            console.log('handleNewDocumentUpload called', { competencyName, personId: person.id, fileName: file.name });
+
+            if (!competencyName) {
+                console.error('Competency name not available', { addingCompetency });
                 throw new Error('Competency not available');
             }
             return new Promise((resolve, reject) => {
                 uploadDocument.mutate(
                     {
                         userId: person.id,
-                        competencyName: addingCompetency.name,
+                        competencyName: competencyName,
                         file,
                     },
                     {
-                        onSuccess: (result) => resolve(result),
-                        onError: (error) => reject(error),
+                        onSuccess: (result) => {
+                            console.log('Upload success', result);
+                            resolve(result);
+                        },
+                        onError: (error) => {
+                            console.error('Upload error', error);
+                            reject(error);
+                        },
                     }
                 );
             });
