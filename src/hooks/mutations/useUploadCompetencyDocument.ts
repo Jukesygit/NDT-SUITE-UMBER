@@ -36,14 +36,14 @@ async function uploadCompetencyDocument(params: UploadCompetencyDocumentParams):
         throw new Error('File must be less than 10MB');
     }
 
-    // Upload directly using supabase storage - use 'avatars' bucket which we know works
+    // Upload to 'documents' bucket (matching competency-service.js pattern)
     const fileExt = file.name.split('.').pop();
     const competencySlug = competencyName.replace(/\s+/g, '_').toLowerCase();
-    const fileName = `cert_${competencySlug}_${Date.now()}.${fileExt}`;
-    const filePath = `${userId}/certificates/${fileName}`;
+    const fileName = `${userId}/${competencySlug}_${Date.now()}.${fileExt}`;
+    const filePath = `competency-documents/${fileName}`;
 
     const { error: uploadError } = await supabase.storage
-        .from('avatars')
+        .from('documents')
         .upload(filePath, file, {
             cacheControl: '3600',
             upsert: true
@@ -51,13 +51,9 @@ async function uploadCompetencyDocument(params: UploadCompetencyDocumentParams):
 
     if (uploadError) throw uploadError;
 
-    // Get public URL
-    const { data: urlData } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(filePath);
-
+    // Return the storage path (not a URL) - signed URLs are generated when viewing
     return {
-        url: urlData.publicUrl,
+        url: filePath,
         name: file.name
     };
 }
