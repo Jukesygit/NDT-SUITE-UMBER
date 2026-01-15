@@ -1,5 +1,5 @@
 -- Activity Log Schema
--- Tracks all user actions across the system for admin monitoring
+-- Tracks all user actions across the system for admin and manager monitoring
 
 -- Enable UUID extension if not already enabled
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -63,18 +63,19 @@ ALTER TABLE activity_log ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies if they exist (for idempotent migrations)
 DROP POLICY IF EXISTS "Admins can view all activity logs" ON activity_log;
+DROP POLICY IF EXISTS "Admins and managers can view all activity logs" ON activity_log;
 DROP POLICY IF EXISTS "Users can view own activity" ON activity_log;
 DROP POLICY IF EXISTS "Allow activity logging" ON activity_log;
 DROP POLICY IF EXISTS "Service role full access" ON activity_log;
 
--- Only admins can view all activity logs
-CREATE POLICY "Admins can view all activity logs"
+-- Admins and managers can view all activity logs from all organizations
+CREATE POLICY "Admins and managers can view all activity logs"
     ON activity_log FOR SELECT
     TO authenticated
     USING (
         EXISTS (
             SELECT 1 FROM profiles
-            WHERE id = auth.uid() AND role = 'admin'
+            WHERE id = auth.uid() AND role IN ('admin', 'manager')
         )
     );
 
