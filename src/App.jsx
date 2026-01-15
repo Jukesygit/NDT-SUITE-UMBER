@@ -49,6 +49,17 @@ const VesselOverviewPage = lazy(() => import('./pages/data-hub/VesselOverviewPag
 const InspectionPage = lazy(() => import('./pages/data-hub/InspectionPage.tsx'));
 
 
+// Suspense wrapper that keys by route to prevent stuck loading states
+function SuspenseRoutes({ children, fallback }) {
+    const location = useLocation();
+    // Use pathname as key to force fresh Suspense state on navigation
+    return (
+        <Suspense key={location.pathname} fallback={fallback}>
+            {children}
+        </Suspense>
+    );
+}
+
 // Background manager component
 function BackgroundManager() {
     const location = useLocation();
@@ -164,7 +175,7 @@ function App() {
                         }}
                     >
                     <BackgroundManager />
-                    <Suspense fallback={<PageLoader />}>
+                    <SuspenseRoutes fallback={<PageLoader />}>
                         <Routes>
                             {/* Public route - LoginPage handles its own redirect logic */}
                             <Route path="/login" element={<LoginPage />} />
@@ -255,7 +266,7 @@ function App() {
                             {/* Catch all - redirect to home */}
                             <Route path="*" element={<Navigate to="/" replace />} />
                         </Routes>
-                    </Suspense>
+                    </SuspenseRoutes>
                     </BrowserRouter>
                 </GlobalErrorBoundary>
             </AuthProvider>
