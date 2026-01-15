@@ -128,11 +128,14 @@ export default function AdminPage() {
 
             {/* Content Area - matching Personnel Management style */}
             <div className="flex-1 overflow-y-auto glass-scrollbar p-6">
-                <Suspense fallback={
-                    <div className="flex flex-col items-center justify-center h-full gap-4">
-                        <SectionSpinner message="Loading..." />
-                    </div>
-                }>
+                <Suspense
+                    key={activeTab}
+                    fallback={
+                        <div className="flex flex-col items-center justify-center h-full gap-4">
+                            <SectionSpinner message="Loading..." />
+                        </div>
+                    }
+                >
                     {renderTabContent()}
                 </Suspense>
             </div>
