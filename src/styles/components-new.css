@@ -239,6 +239,8 @@
   font-size: var(--text-base);
   line-height: 1.5;
   color: var(--text-primary);
+  -webkit-text-fill-color: var(--text-primary);
+  caret-color: var(--text-primary);
   background: var(--surface-raised);
   border: var(--border-width-thin) solid var(--border-default);
   border-radius: var(--radius-md);
@@ -257,6 +259,9 @@
   outline: none;
   border-color: var(--interactive-default);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  color: var(--text-primary);
+  -webkit-text-fill-color: var(--text-primary);
+  caret-color: var(--text-primary);
 }
 
 .input:disabled {

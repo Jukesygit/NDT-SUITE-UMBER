@@ -18,9 +18,18 @@ function createLoginHTML() {
         );
     `;
 
-    // Add keyframe animations
+    // Add keyframe animations and CSS variables
     const style = document.createElement('style');
     style.textContent = `
+        /* CSS Variables for login page */
+        :root {
+            --accent-primary: rgba(100, 150, 255, 0.9);
+            --accent-primary-light: rgba(120, 170, 255, 1);
+            --accent-primary-dim: rgba(100, 150, 255, 0.5);
+            --accent-primary-glow: rgba(100, 150, 255, 0.3);
+            --accent-primary-subtle: rgba(100, 150, 255, 0.15);
+        }
+
         @keyframes gradientRotate {
             0%, 100% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
@@ -51,6 +60,42 @@ function createLoginHTML() {
         @keyframes pulse {
             0%, 100% { opacity: 0.4; }
             50% { opacity: 0.8; }
+        }
+
+        /* Fix autofill text color - prevents black text on autofill */
+        #username:-webkit-autofill,
+        #username:-webkit-autofill:hover,
+        #username:-webkit-autofill:focus,
+        #password:-webkit-autofill,
+        #password:-webkit-autofill:hover,
+        #password:-webkit-autofill:focus,
+        #req-username:-webkit-autofill,
+        #req-username:-webkit-autofill:hover,
+        #req-username:-webkit-autofill:focus,
+        #req-email:-webkit-autofill,
+        #req-email:-webkit-autofill:hover,
+        #req-email:-webkit-autofill:focus {
+            -webkit-text-fill-color: #ffffff !important;
+            -webkit-box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.05) inset !important;
+            box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.05) inset !important;
+            transition: background-color 5000s ease-in-out 0s;
+            caret-color: #ffffff !important;
+        }
+
+        /* Ensure input text is always visible */
+        #username, #password, #req-username, #req-email, #req-message {
+            -webkit-text-fill-color: #ffffff !important;
+            caret-color: #ffffff !important;
+        }
+
+        /* Select dropdown fix */
+        #req-organization, #req-role {
+            -webkit-text-fill-color: #ffffff !important;
+        }
+
+        #req-organization option, #req-role option {
+            background-color: #1e293b;
+            color: #ffffff;
         }
     `;
     div.appendChild(style);
