@@ -3,7 +3,7 @@
  * Sends emails via Supabase Edge Function (which uses Resend)
  */
 
-import { supabase } from '../supabaseClient';
+import supabase from '../supabase-client.js';
 
 /**
  * HTML-escape a string to prevent XSS in email templates
@@ -28,14 +28,22 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
  * @param {string|string[]} options.to - Recipient email(s)
  * @param {string} options.subject - Email subject
  * @param {string} options.html - HTML content
+ * @param {string} [options.from] - Sender email (optional, defaults to notifications@matrixportal.io)
+ * @param {string|string[]} [options.cc] - CC recipient(s) (optional)
+ * @param {string} [options.replyTo] - Reply-to address (optional)
  * @returns {Promise<{success: boolean, id?: string, error?: string}>}
  */
-export async function sendEmail({ to, subject, html }) {
+export async function sendEmail({ to, subject, html, from, cc, replyTo }) {
     const { data: { session } } = await supabase.auth.getSession();
 
     if (!session) {
         throw new Error('User must be authenticated to send emails');
     }
+
+    const payload = { to, subject, html };
+    if (from) payload.from = from;
+    if (cc) payload.cc = cc;
+    if (replyTo) payload.replyTo = replyTo;
 
     const response = await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
         method: 'POST',
@@ -43,7 +51,7 @@ export async function sendEmail({ to, subject, html }) {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ to, subject, html }),
+        body: JSON.stringify(payload),
     });
 
     const data = await response.json();

@@ -2,6 +2,7 @@
 import supabase, { isSupabaseConfigured } from './supabase-client.js';
 import indexedDB from './indexed-db.js';
 import bcrypt from 'bcryptjs';
+import { logActivity } from './services/activity-log-service.ts';
 
 const AUTH_STORE_KEY = 'auth_data';
 
@@ -329,8 +330,24 @@ class AuthManager {
                     localStorage.removeItem('rememberedUsername');
                 }
 
+                // Log successful login
+                logActivity({
+                    userId: this.currentUser.id,
+                    actionType: 'login_success',
+                    actionCategory: 'auth',
+                    description: `User ${this.currentUser.username || email} logged in successfully`,
+                });
+
                 return { success: true, user: this.currentUser };
             }
+
+            // Log failed login
+            logActivity({
+                actionType: 'login_failed',
+                actionCategory: 'auth',
+                description: `Login failed for ${email}`,
+                details: { email },
+            });
 
             return { success: false, error: 'Login failed' };
         } else {
@@ -392,6 +409,20 @@ class AuthManager {
     }
 
     async logout() {
+        // Capture user info before clearing for activity log
+        const userId = this.currentUser?.id;
+        const username = this.currentUser?.username;
+
+        // Log logout activity (fire and forget)
+        if (userId) {
+            logActivity({
+                userId,
+                actionType: 'logout',
+                actionCategory: 'auth',
+                description: `User ${username || 'Unknown'} logged out`,
+            });
+        }
+
         // Clear current user immediately
         this.currentUser = null;
         this.currentProfile = null;

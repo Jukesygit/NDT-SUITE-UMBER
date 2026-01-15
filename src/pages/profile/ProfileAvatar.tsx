@@ -78,6 +78,10 @@ export function ProfileAvatar({
 }: ProfileAvatarProps) {
     const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
+
+        // Reset input value so same file can be selected again on retry
+        e.target.value = '';
+
         if (!file) return;
 
         // Validate file type

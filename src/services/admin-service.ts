@@ -8,6 +8,7 @@ import authManager from '../auth-manager.js';
 import dataManager from '../data-manager.js';
 import sharingManager from '../sharing-manager.js';
 import adminConfig from '../admin-config.js';
+import { logActivity } from './activity-log-service';
 import type { Organization, Profile } from '../types/database.types.js';
 import type { UserRole } from '../types/auth.types.js';
 
@@ -259,21 +260,58 @@ class AdminService {
    * Create a new organization
    */
   async createOrganization(name: string): Promise<ServiceResult<Organization>> {
-    return await authManager.createOrganization(name);
+    const result = await authManager.createOrganization(name);
+
+    if (result.success) {
+      logActivity({
+        actionType: 'organization_created',
+        actionCategory: 'admin',
+        description: `Created organization: ${name}`,
+        entityType: 'organization',
+        entityName: name,
+      });
+    }
+
+    return result;
   }
 
   /**
    * Update an organization
    */
   async updateOrganization(id: string, data: { name: string }): Promise<ServiceResult<Organization>> {
-    return await authManager.updateOrganization(id, data);
+    const result = await authManager.updateOrganization(id, data);
+
+    if (result.success) {
+      logActivity({
+        actionType: 'organization_updated',
+        actionCategory: 'admin',
+        description: `Updated organization: ${data.name}`,
+        entityType: 'organization',
+        entityId: id,
+        entityName: data.name,
+      });
+    }
+
+    return result;
   }
 
   /**
    * Delete an organization
    */
   async deleteOrganization(id: string): Promise<ServiceResult> {
-    return await authManager.deleteOrganization(id);
+    const result = await authManager.deleteOrganization(id);
+
+    if (result.success) {
+      logActivity({
+        actionType: 'organization_deleted',
+        actionCategory: 'admin',
+        description: `Deleted organization: ${id}`,
+        entityType: 'organization',
+        entityId: id,
+      });
+    }
+
+    return result;
   }
 
   // ==========================================================================
@@ -307,7 +345,20 @@ class AdminService {
       organizationId: data.organizationId,
     };
 
-    return await authManager.createUser(userData);
+    const result = await authManager.createUser(userData);
+
+    if (result.success) {
+      logActivity({
+        actionType: 'user_created',
+        actionCategory: 'admin',
+        description: `Created user: ${data.username}`,
+        entityType: 'user',
+        entityName: data.username,
+        details: { email: data.email, role: data.role },
+      });
+    }
+
+    return result;
   }
 
   /**
@@ -323,14 +374,40 @@ class AdminService {
     if (data.organizationId !== undefined) updates.organization_id = data.organizationId;
     if (data.isActive !== undefined) updates.is_active = data.isActive;
 
-    return await authManager.updateUser(id, updates);
+    const result = await authManager.updateUser(id, updates);
+
+    if (result.success) {
+      logActivity({
+        actionType: 'user_updated',
+        actionCategory: 'admin',
+        description: `Updated user: ${data.username || id}`,
+        entityType: 'user',
+        entityId: id,
+        entityName: data.username,
+        details: { updatedFields: Object.keys(data) },
+      });
+    }
+
+    return result;
   }
 
   /**
    * Delete a user
    */
   async deleteUser(id: string): Promise<ServiceResult> {
-    return await authManager.deleteUser(id);
+    const result = await authManager.deleteUser(id);
+
+    if (result.success) {
+      logActivity({
+        actionType: 'user_deleted',
+        actionCategory: 'admin',
+        description: `Deleted user: ${id}`,
+        entityType: 'user',
+        entityId: id,
+      });
+    }
+
+    return result;
   }
 
   // ==========================================================================
@@ -348,14 +425,39 @@ class AdminService {
    * Approve an account request
    */
   async approveAccountRequest(id: string): Promise<ServiceResult> {
-    return await authManager.approveAccountRequest(id);
+    const result = await authManager.approveAccountRequest(id);
+
+    if (result.success) {
+      logActivity({
+        actionType: 'account_approved',
+        actionCategory: 'admin',
+        description: `Approved account request`,
+        entityType: 'account_request',
+        entityId: id,
+      });
+    }
+
+    return result;
   }
 
   /**
    * Reject an account request
    */
   async rejectAccountRequest(id: string, reason?: string): Promise<ServiceResult> {
-    return await authManager.rejectAccountRequest(id, reason || '');
+    const result = await authManager.rejectAccountRequest(id, reason || '');
+
+    if (result.success) {
+      logActivity({
+        actionType: 'account_rejected',
+        actionCategory: 'admin',
+        description: `Rejected account request${reason ? `: ${reason}` : ''}`,
+        entityType: 'account_request',
+        entityId: id,
+        details: { reason },
+      });
+    }
+
+    return result;
   }
 
   // ==========================================================================
@@ -438,6 +540,14 @@ class AdminService {
         return { success: false, error: error.message };
       }
 
+      logActivity({
+        actionType: 'permission_approved',
+        actionCategory: 'admin',
+        description: `Approved permission request`,
+        entityType: 'permission_request',
+        entityId: id,
+      });
+
       return { success: true, data };
     } catch (error: any) {
       return { success: false, error: error.message };
@@ -461,6 +571,15 @@ class AdminService {
       if (error) {
         return { success: false, error: error.message };
       }
+
+      logActivity({
+        actionType: 'permission_rejected',
+        actionCategory: 'admin',
+        description: `Rejected permission request${reason ? `: ${reason}` : ''}`,
+        entityType: 'permission_request',
+        entityId: id,
+        details: { reason },
+      });
 
       return { success: true, data };
     } catch (error: any) {

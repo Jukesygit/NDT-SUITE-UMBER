@@ -16,6 +16,8 @@ interface EmailRequest {
   subject: string
   html: string
   from?: string
+  cc?: string | string[]
+  replyTo?: string
 }
 
 serve(async (req) => {
@@ -55,7 +57,7 @@ serve(async (req) => {
     }
 
     // Parse request body
-    const { to, subject, html, from }: EmailRequest = await req.json()
+    const { to, subject, html, from, cc, replyTo }: EmailRequest = await req.json()
 
     // Validate required fields
     if (!to || !subject || !html) {
@@ -74,6 +76,24 @@ serve(async (req) => {
       )
     }
 
+    // Build email payload
+    const emailPayload: Record<string, unknown> = {
+      from: from || 'NDT Suite <notifications@matrixportal.io>',
+      to: Array.isArray(to) ? to : [to],
+      subject,
+      html,
+    }
+
+    // Add optional CC recipients
+    if (cc) {
+      emailPayload.cc = Array.isArray(cc) ? cc : [cc]
+    }
+
+    // Add optional reply-to address
+    if (replyTo) {
+      emailPayload.reply_to = replyTo
+    }
+
     // Send email via Resend
     const resendResponse = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -81,12 +101,7 @@ serve(async (req) => {
         'Authorization': `Bearer ${RESEND_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        from: from || 'NDT Suite <noreply@matrixinspectionservices.com>',
-        to: Array.isArray(to) ? to : [to],
-        subject,
-        html,
-      }),
+      body: JSON.stringify(emailPayload),
     })
 
     const resendData = await resendResponse.json()

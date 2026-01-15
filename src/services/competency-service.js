@@ -1,6 +1,7 @@
 // Competency Management Service
 import supabase, { isSupabaseConfigured } from '../supabase-client.js';
 import authManager from '../auth-manager.js';
+import { logActivity } from './activity-log-service.ts';
 
 /**
  * Service for managing employee competencies, certifications, and qualifications
@@ -183,6 +184,18 @@ class CompetencyService {
             .single();
 
         if (error) throw error;
+
+        // Log competency activity
+        logActivity({
+            userId,
+            actionType: result.created_at === result.updated_at ? 'competency_created' : 'competency_updated',
+            actionCategory: 'competency',
+            description: `${result.created_at === result.updated_at ? 'Created' : 'Updated'} competency`,
+            entityType: 'competency',
+            entityId: result.id,
+            details: { competencyId, value: data.value, hasDocument: !!data.documentUrl },
+        });
+
         return result;
     }
 
@@ -201,6 +214,16 @@ class CompetencyService {
             .eq('id', competencyId);
 
         if (error) throw error;
+
+        // Log competency deletion
+        logActivity({
+            actionType: 'competency_deleted',
+            actionCategory: 'competency',
+            description: 'Deleted competency',
+            entityType: 'competency',
+            entityId: competencyId,
+        });
+
         return true;
     }
 
@@ -238,6 +261,17 @@ class CompetencyService {
             .single();
 
         if (error) throw error;
+
+        // Log competency approval/rejection
+        logActivity({
+            actionType: approved ? 'competency_approved' : 'competency_rejected',
+            actionCategory: 'competency',
+            description: `${approved ? 'Approved' : 'Rejected'} competency${reason ? `: ${reason}` : ''}`,
+            entityType: 'competency',
+            entityId: competencyId,
+            details: { approved, reason },
+        });
+
         return data;
     }
 

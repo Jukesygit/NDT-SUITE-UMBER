@@ -97,3 +97,10 @@ export type {
     Strake,
     VesselImage,
 } from './useDataHub';
+
+// Activity Log queries
+export {
+    useActivityLogs,
+    useActivityUsers,
+    activityLogKeys,
+} from './useActivityLog';

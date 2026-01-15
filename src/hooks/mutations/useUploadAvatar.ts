@@ -17,8 +17,14 @@ interface UploadAvatarResult {
 
 async function uploadAvatar(userId: string, file: File): Promise<UploadAvatarResult> {
     // Generate unique filename
-    const fileExt = file.name.split('.').pop();
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
     const fileName = `${userId}/avatar-${Date.now()}.${fileExt}`;
+
+    // Validate file type before upload
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+        throw new Error(`Invalid file type. Allowed types: ${allowedTypes.join(', ')}`);
+    }
 
     // Upload to storage
     const { error: uploadError } = await supabase.storage
@@ -28,7 +34,22 @@ async function uploadAvatar(userId: string, file: File): Promise<UploadAvatarRes
             upsert: true,
         });
 
-    if (uploadError) throw uploadError;
+    if (uploadError) {
+        // Provide more helpful error messages
+        if (uploadError.message?.includes('Bucket not found')) {
+            throw new Error('Avatar storage is not configured. Please contact support.');
+        }
+        if (uploadError.message?.includes('row-level security') || uploadError.message?.includes('policy')) {
+            throw new Error('You do not have permission to upload avatars. Please contact support.');
+        }
+        if (uploadError.message?.includes('mime type') || uploadError.message?.includes('file type')) {
+            throw new Error('This file type is not allowed. Please use JPEG, PNG, GIF, or WebP.');
+        }
+        if (uploadError.message?.includes('size')) {
+            throw new Error('File is too large. Maximum size is 2MB.');
+        }
+        throw new Error(`Upload failed: ${uploadError.message}`);
+    }
 
     // Get public URL
     const { data: urlData } = supabase.storage
@@ -43,7 +64,9 @@ async function uploadAvatar(userId: string, file: File): Promise<UploadAvatarRes
         .update({ avatar_url: avatarUrl })
         .eq('id', userId);
 
-    if (updateError) throw updateError;
+    if (updateError) {
+        throw new Error(`Failed to save avatar to profile: ${updateError.message}`);
+    }
 
     return { url: avatarUrl };
 }
