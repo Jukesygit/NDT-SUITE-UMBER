@@ -142,6 +142,7 @@ export function EditCompetencyModal({
     // Sync form state when modal opens with new definition/initialData
     useEffect(() => {
         if (isOpen) {
+            console.log('[EditCompetencyModal] useEffect resetting form', { definition, initialData });
             setFormData({
                 competency_id: initialData?.competency_id || definition?.id || '',
                 issuing_body: initialData?.issuing_body || '',
@@ -156,6 +157,11 @@ export function EditCompetencyModal({
         }
     }, [isOpen, definition, initialData]);
 
+    // Debug: Log form data changes
+    useEffect(() => {
+        console.log('[EditCompetencyModal] formData changed:', { document_name: formData.document_name, document_url: formData.document_url });
+    }, [formData.document_name, formData.document_url]);
+
     // Update field
     const updateField = useCallback((field: keyof CompetencyFormData, value: string) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
@@ -165,6 +171,7 @@ export function EditCompetencyModal({
     const handleDocumentChange = useCallback(
         async (e: ChangeEvent<HTMLInputElement>) => {
             const file = e.target.files?.[0];
+            console.log('[EditCompetencyModal] handleDocumentChange called', { file: file?.name, hasUploadFn: !!onDocumentUpload });
             if (!file || !onDocumentUpload) return;
 
             // Validate file type
@@ -180,15 +187,21 @@ export function EditCompetencyModal({
                 return;
             }
 
+            console.log('[EditCompetencyModal] About to call onDocumentUpload');
             try {
                 const result = await onDocumentUpload(file);
-                setFormData((prev) => ({
-                    ...prev,
-                    document_url: result.url,
-                    document_name: result.name,
-                }));
+                console.log('[EditCompetencyModal] Upload result received:', result);
+                setFormData((prev) => {
+                    console.log('[EditCompetencyModal] setFormData called, prev:', prev, 'new doc:', result);
+                    return {
+                        ...prev,
+                        document_url: result.url,
+                        document_name: result.name,
+                    };
+                });
+                console.log('[EditCompetencyModal] setFormData completed');
             } catch (error) {
-                console.error('Document upload failed:', error);
+                console.error('[EditCompetencyModal] Document upload failed:', error);
                 alert('Failed to upload document');
             }
         },
