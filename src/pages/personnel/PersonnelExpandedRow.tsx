@@ -240,6 +240,9 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
     const [viewingCompetency, setViewingCompetency] = useState<PersonCompetency | null>(null);
     const [resolvedDocumentUrl, setResolvedDocumentUrl] = useState<string | null>(null);
 
+    // Save error state
+    const [saveError, setSaveError] = useState<string | null>(null);
+
     // Resolve document URL when viewing a competency
     useEffect(() => {
         async function resolveUrl() {
@@ -282,6 +285,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
     const uploadDocument = useUploadCompetencyDocument();
 
     const handleEditPerson = useCallback(() => {
+        setSaveError(null);
         setPersonEditData({
             username: person.username,
             email: person.email,
@@ -296,12 +300,19 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
     }, []);
 
     const handleSavePerson = useCallback(async () => {
-        await updatePerson.mutateAsync({
-            personId: person.id,
-            data: personEditData,
-        });
-        setEditingPerson(false);
-        onUpdate?.();
+        setSaveError(null);
+        try {
+            await updatePerson.mutateAsync({
+                personId: person.id,
+                data: personEditData,
+            });
+            setEditingPerson(false);
+            onUpdate?.();
+        } catch (error: unknown) {
+            console.error('Failed to update person:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Failed to save changes. Please try again.';
+            setSaveError(errorMessage);
+        }
     }, [person.id, personEditData, updatePerson, onUpdate]);
 
     // Open edit modal for a competency
@@ -537,28 +548,44 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                 </div>
 
                 {editingPerson && (
-                    <div
-                        style={{
-                            display: 'flex',
-                            gap: '12px',
-                            marginTop: '16px',
-                            justifyContent: 'flex-end',
-                        }}
-                    >
-                        <button
-                            onClick={handleCancelPersonEdit}
-                            className="btn btn--secondary btn--sm"
-                            disabled={updatePerson.isPending}
+                    <div style={{ marginTop: '16px' }}>
+                        {saveError && (
+                            <div
+                                style={{
+                                    padding: '12px',
+                                    marginBottom: '12px',
+                                    background: 'rgba(239, 68, 68, 0.1)',
+                                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                                    borderRadius: '6px',
+                                    color: '#ef4444',
+                                    fontSize: '14px',
+                                }}
+                            >
+                                {saveError}
+                            </div>
+                        )}
+                        <div
+                            style={{
+                                display: 'flex',
+                                gap: '12px',
+                                justifyContent: 'flex-end',
+                            }}
                         >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleSavePerson}
-                            className="btn btn--primary btn--sm"
-                            disabled={updatePerson.isPending}
-                        >
-                            {updatePerson.isPending ? 'Saving...' : 'Save Changes'}
-                        </button>
+                            <button
+                                onClick={handleCancelPersonEdit}
+                                className="btn btn--secondary btn--sm"
+                                disabled={updatePerson.isPending}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSavePerson}
+                                className="btn btn--primary btn--sm"
+                                disabled={updatePerson.isPending}
+                            >
+                                {updatePerson.isPending ? 'Saving...' : 'Save Changes'}
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>

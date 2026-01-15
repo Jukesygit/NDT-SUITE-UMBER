@@ -4,6 +4,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { logActivity } from '../../services/activity-log-service';
 
 // ES module import
 // @ts-ignore - JS module without types
@@ -54,6 +55,17 @@ export function useUpdateProfile() {
         onSuccess: (_, variables) => {
             // Invalidate profile query to refetch
             queryClient.invalidateQueries({ queryKey: ['profile', variables.userId] });
+
+            // Log profile update activity
+            logActivity({
+                userId: variables.userId,
+                actionType: 'profile_updated',
+                actionCategory: 'profile',
+                description: 'Profile information updated',
+                entityType: 'profile',
+                entityId: variables.userId,
+                details: { updatedFields: Object.keys(variables.data) },
+            });
         },
     });
 }

@@ -95,7 +95,15 @@ export default function ProfilePage() {
     const handleAvatarUpload = useCallback(
         (file: File) => {
             if (!user?.id) return;
-            uploadAvatarMutation.mutate({ userId: user.id, file });
+            uploadAvatarMutation.mutate(
+                { userId: user.id, file },
+                {
+                    onError: (error) => {
+                        console.error('Avatar upload failed:', error);
+                        alert(error instanceof Error ? error.message : 'Failed to upload avatar. Please try again.');
+                    },
+                }
+            );
         },
         [user?.id, uploadAvatarMutation]
     );
