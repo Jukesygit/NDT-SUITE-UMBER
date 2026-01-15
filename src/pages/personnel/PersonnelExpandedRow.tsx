@@ -4,7 +4,9 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import type { Person, PersonCompetency, Organization } from '../../hooks/queries/usePersonnel';
-import { useUpdatePerson, useUpdatePersonCompetency, useUploadCompetencyDocument } from '../../hooks/mutations';
+import { useUpdatePerson, useUpdatePersonCompetency, useUploadCompetencyDocument, useAddPersonCompetency } from '../../hooks/mutations';
+import { useCompetencyDefinitions, useCompetencyCategories } from '../../hooks/queries/useCompetencies';
+import type { CompetencyDefinition, CompetencyCategory } from '../../hooks/queries/useCompetencies';
 import { Modal } from '../../components/ui';
 import { EditCompetencyModal, type CompetencyFormData } from '../profile/EditCompetencyModal';
 
@@ -243,6 +245,12 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
     // Save error state
     const [saveError, setSaveError] = useState<string | null>(null);
 
+    // Add competency picker state
+    const [showCompetencyPicker, setShowCompetencyPicker] = useState(false);
+    const [addingCompetency, setAddingCompetency] = useState<CompetencyDefinition | null>(null);
+    const [pickerSearchTerm, setPickerSearchTerm] = useState('');
+    const [pickerCategory, setPickerCategory] = useState<string>('all');
+
     // Resolve document URL when viewing a competency
     useEffect(() => {
         async function resolveUrl() {
@@ -283,6 +291,11 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
     const updatePerson = useUpdatePerson();
     const updateCompetency = useUpdatePersonCompetency();
     const uploadDocument = useUploadCompetencyDocument();
+    const addCompetency = useAddPersonCompetency();
+
+    // Query hooks for competency definitions (for add picker)
+    const definitionsQuery = useCompetencyDefinitions();
+    const categoriesQuery = useCompetencyCategories();
 
     const handleEditPerson = useCallback(() => {
         setSaveError(null);
@@ -373,6 +386,58 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
             onUpdate?.();
         },
         [editingCompetency, person.id, updateCompetency, onUpdate]
+    );
+
+    // Handle selecting a competency type from picker
+    const handleSelectCompetencyType = useCallback((definition: CompetencyDefinition) => {
+        setShowCompetencyPicker(false);
+        setAddingCompetency(definition);
+        setPickerSearchTerm('');
+        setPickerCategory('all');
+    }, []);
+
+    // Handle document upload for new competency
+    const handleNewDocumentUpload = useCallback(
+        async (file: File): Promise<{ url: string; name: string }> => {
+            if (!addingCompetency?.name) {
+                throw new Error('Competency not available');
+            }
+            return new Promise((resolve, reject) => {
+                uploadDocument.mutate(
+                    {
+                        userId: person.id,
+                        competencyName: addingCompetency.name,
+                        file,
+                    },
+                    {
+                        onSuccess: (result) => resolve(result),
+                        onError: (error) => reject(error),
+                    }
+                );
+            });
+        },
+        [person.id, addingCompetency?.name, uploadDocument]
+    );
+
+    // Save new competency
+    const handleSaveNewCompetency = useCallback(
+        async (data: CompetencyFormData) => {
+            if (!addingCompetency) return;
+
+            await addCompetency.mutateAsync({
+                user_id: person.id,
+                competency_id: addingCompetency.id,
+                issuing_body: data.issuing_body || undefined,
+                certification_id: data.certification_id || undefined,
+                expiry_date: data.expiry_date || undefined,
+                notes: data.notes || undefined,
+                document_url: data.document_url || undefined,
+                document_name: data.document_name || undefined,
+            });
+            setAddingCompetency(null);
+            onUpdate?.();
+        },
+        [addingCompetency, person.id, addCompetency, onUpdate]
     );
 
     const competenciesByCategory = groupByCategory(person.competencies || []);
@@ -609,11 +674,31 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                         marginBottom: '12px',
                         display: 'flex',
                         alignItems: 'center',
+                        justifyContent: 'space-between',
                         gap: '8px',
                     }}
                 >
-                    <CertIcon />
-                    Competencies & Certifications ({person.competencies?.length || 0})
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <CertIcon />
+                        Competencies & Certifications ({person.competencies?.length || 0})
+                    </div>
+                    {isAdmin && (
+                        <button
+                            onClick={() => setShowCompetencyPicker(true)}
+                            className="btn btn--primary btn--sm"
+                            style={{ fontSize: '12px', padding: '6px 12px' }}
+                        >
+                            <svg
+                                style={{ width: '12px', height: '12px', marginRight: '4px' }}
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Add Certification
+                        </button>
+                    )}
                 </h4>
 
                 {!person.competencies || person.competencies.length === 0 ? (
@@ -1058,6 +1143,132 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                     definition={editingCompetency.definition}
                     isSaving={updateCompetency.isPending}
                     onDocumentUpload={handleDocumentUpload}
+                    isUploadingDocument={uploadDocument.isPending}
+                />
+            )}
+
+            {/* Competency Type Picker Modal */}
+            <Modal
+                isOpen={showCompetencyPicker}
+                onClose={() => {
+                    setShowCompetencyPicker(false);
+                    setPickerSearchTerm('');
+                    setPickerCategory('all');
+                }}
+                title="Add Certification"
+                size="large"
+            >
+                {/* Search */}
+                <div style={{ marginBottom: '16px' }}>
+                    <input
+                        type="text"
+                        className="glass-input"
+                        placeholder="Search certifications..."
+                        value={pickerSearchTerm}
+                        onChange={(e) => setPickerSearchTerm(e.target.value)}
+                        style={{ width: '100%' }}
+                    />
+                </div>
+
+                {/* Category Filter */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                    <button
+                        onClick={() => setPickerCategory('all')}
+                        className={pickerCategory === 'all' ? 'btn btn--primary btn--sm' : 'btn btn--secondary btn--sm'}
+                    >
+                        All
+                    </button>
+                    {((categoriesQuery.data as CompetencyCategory[]) || [])
+                        .filter((cat) => !cat.name.toLowerCase().includes('personal details'))
+                        .map((cat) => (
+                            <button
+                                key={cat.id}
+                                onClick={() => setPickerCategory(cat.id)}
+                                className={pickerCategory === cat.id ? 'btn btn--primary btn--sm' : 'btn btn--secondary btn--sm'}
+                            >
+                                {cat.name}
+                            </button>
+                        ))}
+                </div>
+
+                {/* Competency List */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }} className="glass-scrollbar">
+                    {((definitionsQuery.data as CompetencyDefinition[]) || [])
+                        .filter((def) => {
+                            // Filter out personal details
+                            const categoryName = typeof def.category === 'object' ? def.category?.name : def.category;
+                            if (categoryName?.toLowerCase().includes('personal details')) return false;
+
+                            // Category filter
+                            if (pickerCategory !== 'all') {
+                                const defCategoryId = typeof def.category === 'object' ? def.category?.id : null;
+                                if (defCategoryId !== pickerCategory) return false;
+                            }
+
+                            // Search filter
+                            if (pickerSearchTerm) {
+                                const search = pickerSearchTerm.toLowerCase();
+                                if (!def.name.toLowerCase().includes(search)) return false;
+                            }
+
+                            return true;
+                        })
+                        .map((def) => (
+                            <div
+                                key={def.id}
+                                onClick={() => handleSelectCompetencyType(def)}
+                                style={{
+                                    padding: '14px 16px',
+                                    background: 'rgba(255, 255, 255, 0.03)',
+                                    borderRadius: '8px',
+                                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                                    e.currentTarget.style.borderColor = 'var(--accent-primary)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+                                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                                }}
+                            >
+                                <div>
+                                    <div style={{ fontSize: '14px', fontWeight: '500', color: '#ffffff', marginBottom: '2px' }}>
+                                        {def.name}
+                                    </div>
+                                    {def.description && (
+                                        <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                                            {def.description}
+                                        </div>
+                                    )}
+                                </div>
+                                <svg style={{ width: '18px', height: '18px', color: 'var(--accent-primary)', flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                                </svg>
+                            </div>
+                        ))}
+                </div>
+            </Modal>
+
+            {/* Add New Competency Modal */}
+            {addingCompetency && (
+                <EditCompetencyModal
+                    isOpen={!!addingCompetency}
+                    onClose={() => setAddingCompetency(null)}
+                    onSave={handleSaveNewCompetency}
+                    isNew={true}
+                    definition={{
+                        id: addingCompetency.id,
+                        name: addingCompetency.name,
+                        is_certification: true,
+                    }}
+                    isSaving={addCompetency.isPending}
+                    onDocumentUpload={handleNewDocumentUpload}
                     isUploadingDocument={uploadDocument.isPending}
                 />
             )}
