@@ -407,34 +407,35 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
     }, []);
 
     // Handle document upload for new competency
+    // DEBUG: Version marker v2 - 2026-01-15
     const handleNewDocumentUpload = useCallback(
         async (file: File): Promise<{ url: string; name: string }> => {
             const competencyName = addingCompetency?.name;
-            console.log('handleNewDocumentUpload called', { competencyName, personId: person.id, fileName: file.name });
+            // Use alert to bypass dev tools issues
+            console.log('[v2] handleNewDocumentUpload called', { competencyName, personId: person.id, fileName: file.name });
 
             if (!competencyName) {
-                console.error('Competency name not available', { addingCompetency });
+                console.error('[v2] Competency name not available', { addingCompetency });
+                alert('Debug: Competency name not available');
                 throw new Error('Competency not available');
             }
-            return new Promise((resolve, reject) => {
-                uploadDocument.mutate(
-                    {
-                        userId: person.id,
-                        competencyName: competencyName,
-                        file,
-                    },
-                    {
-                        onSuccess: (result) => {
-                            console.log('Upload success', result);
-                            resolve(result);
-                        },
-                        onError: (error) => {
-                            console.error('Upload error', error);
-                            reject(error);
-                        },
-                    }
-                );
-            });
+
+            try {
+                const result = await uploadDocument.mutateAsync({
+                    userId: person.id,
+                    competencyName: competencyName,
+                    file,
+                });
+                console.log('[v2] Upload success', result);
+                // Temporarily show success alert to confirm upload worked
+                alert(`Debug: Upload succeeded! Path: ${result.url}`);
+                return result;
+            } catch (error) {
+                console.error('[v2] Upload error', error);
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                alert(`Debug: Upload failed - ${errorMessage}`);
+                throw error;
+            }
         },
         [person.id, addingCompetency?.name, uploadDocument]
     );
