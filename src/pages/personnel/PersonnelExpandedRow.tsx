@@ -340,22 +340,32 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
         });
     }, []);
 
-    // Handle document upload for competency modal
+    // Handle document upload for competency modal (editing existing)
     const handleDocumentUpload = useCallback(
         async (file: File): Promise<{ url: string; name: string }> => {
-            if (!editingCompetency?.definition?.name) {
+            const competencyName = editingCompetency?.definition?.name;
+            console.log('handleDocumentUpload (edit) called', { competencyName, personId: person.id, fileName: file.name });
+
+            if (!competencyName) {
+                console.error('Competency name not available for edit', { editingCompetency });
                 throw new Error('Competency not available');
             }
             return new Promise((resolve, reject) => {
                 uploadDocument.mutate(
                     {
                         userId: person.id,
-                        competencyName: editingCompetency.definition?.name || 'certificate',
+                        competencyName: competencyName,
                         file,
                     },
                     {
-                        onSuccess: (result) => resolve(result),
-                        onError: (error) => reject(error),
+                        onSuccess: (result) => {
+                            console.log('Edit upload success', result);
+                            resolve(result);
+                        },
+                        onError: (error) => {
+                            console.error('Edit upload error', error);
+                            reject(error);
+                        },
                     }
                 );
             });
