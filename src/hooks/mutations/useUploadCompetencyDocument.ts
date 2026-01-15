@@ -24,6 +24,7 @@ interface UploadCompetencyDocumentResult {
 
 async function uploadCompetencyDocument(params: UploadCompetencyDocumentParams): Promise<UploadCompetencyDocumentResult> {
     const { userId, competencyName, file } = params;
+    console.log('uploadCompetencyDocument started', { userId, competencyName, fileName: file.name });
 
     // Validate file type - images and PDFs supported
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
@@ -49,13 +50,18 @@ async function uploadCompetencyDocument(params: UploadCompetencyDocumentParams):
             upsert: true
         });
 
-    if (uploadError) throw uploadError;
+    if (uploadError) {
+        console.error('Storage upload error', uploadError);
+        throw uploadError;
+    }
 
     // Return the storage path (not a URL) - signed URLs are generated when viewing
-    return {
+    const result = {
         url: filePath,
         name: file.name
     };
+    console.log('uploadCompetencyDocument complete', result);
+    return result;
 }
 
 /**
