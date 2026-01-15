@@ -407,38 +407,19 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
     }, []);
 
     // Handle document upload for new competency
-    // DEBUG: Version marker v3 - immediate alert test
     const handleNewDocumentUpload = useCallback(
         async (file: File): Promise<{ url: string; name: string }> => {
-            // IMMEDIATE alert - should show before any async operations
-            alert('DEBUG v3: handleNewDocumentUpload called - file: ' + file.name);
-
             const competencyName = addingCompetency?.name;
-            console.log('[v3] handleNewDocumentUpload called', { competencyName, personId: person.id, fileName: file.name });
-
             if (!competencyName) {
-                console.error('[v3] Competency name not available', { addingCompetency });
-                alert('DEBUG v3: Competency name not available');
                 throw new Error('Competency not available');
             }
 
-            alert('DEBUG v3: About to call uploadDocument.mutateAsync for ' + competencyName);
-
-            try {
-                const result = await uploadDocument.mutateAsync({
-                    userId: person.id,
-                    competencyName: competencyName,
-                    file,
-                });
-                console.log('[v3] Upload success', result);
-                alert('DEBUG v3: Upload succeeded! Path: ' + result.url);
-                return result;
-            } catch (error) {
-                console.error('[v3] Upload error', error);
-                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                alert('DEBUG v3: Upload failed - ' + errorMessage);
-                throw error;
-            }
+            const result = await uploadDocument.mutateAsync({
+                userId: person.id,
+                competencyName: competencyName,
+                file,
+            });
+            return result;
         },
         [person.id, addingCompetency?.name, uploadDocument]
     );
