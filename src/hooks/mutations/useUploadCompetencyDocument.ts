@@ -24,8 +24,9 @@ interface UploadCompetencyDocumentResult {
 
 async function uploadCompetencyDocument(params: UploadCompetencyDocumentParams): Promise<UploadCompetencyDocumentResult> {
     const { userId, competencyName, file } = params;
-    // DEBUG: Version marker v2 - 2026-01-15
-    console.log('[v2] uploadCompetencyDocument started', { userId, competencyName, fileName: file.name });
+    // DEBUG: Version marker v3
+    alert('DEBUG v3: uploadCompetencyDocument hook called - ' + competencyName);
+    console.log('[v3] uploadCompetencyDocument started', { userId, competencyName, fileName: file.name });
 
     // Validate file type - images and PDFs supported
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
