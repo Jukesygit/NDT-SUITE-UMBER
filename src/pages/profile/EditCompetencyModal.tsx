@@ -162,23 +162,10 @@ export function EditCompetencyModal({
     }, []);
 
     // Handle document upload
-    // DEBUG v3: Add alerts to trace file upload
     const handleDocumentChange = useCallback(
         async (e: ChangeEvent<HTMLInputElement>) => {
-            alert('DEBUG v3: handleDocumentChange triggered');
             const file = e.target.files?.[0];
-
-            if (!file) {
-                alert('DEBUG v3: No file selected');
-                return;
-            }
-
-            if (!onDocumentUpload) {
-                alert('DEBUG v3: onDocumentUpload is undefined/null!');
-                return;
-            }
-
-            alert('DEBUG v3: File selected: ' + file.name + ', onDocumentUpload exists');
+            if (!file || !onDocumentUpload) return;
 
             // Validate file type
             const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
@@ -193,10 +180,8 @@ export function EditCompetencyModal({
                 return;
             }
 
-            alert('DEBUG v3: About to call onDocumentUpload');
             try {
                 const result = await onDocumentUpload(file);
-                alert('DEBUG v3: onDocumentUpload returned: ' + JSON.stringify(result));
                 setFormData((prev) => ({
                     ...prev,
                     document_url: result.url,
