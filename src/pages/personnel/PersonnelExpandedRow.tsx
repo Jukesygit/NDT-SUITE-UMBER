@@ -2,7 +2,7 @@
  * PersonnelExpandedRow - Expanded details view for a person in the table
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import type { Person, PersonCompetency, Organization } from '../../hooks/queries/usePersonnel';
 import { useUpdatePerson, useUpdatePersonCompetency, useUploadCompetencyDocument, useAddPersonCompetency } from '../../hooks/mutations';
 import { useCompetencyDefinitions, useCompetencyCategories } from '../../hooks/queries/useCompetencies';
@@ -443,6 +443,19 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
             onUpdate?.();
         },
         [addingCompetency, person.id, addCompetency, onUpdate]
+    );
+
+    // Memoize the definition for add modal to prevent form reset on re-render
+    const addModalDefinition = useMemo(
+        () =>
+            addingCompetency
+                ? {
+                      id: addingCompetency.id,
+                      name: addingCompetency.name,
+                      is_certification: true,
+                  }
+                : undefined,
+        [addingCompetency?.id, addingCompetency?.name]
     );
 
     const competenciesByCategory = groupByCategory(person.competencies || []);
@@ -1261,17 +1274,13 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
             </Modal>
 
             {/* Add New Competency Modal */}
-            {addingCompetency && (
+            {addingCompetency && addModalDefinition && (
                 <EditCompetencyModal
                     isOpen={!!addingCompetency}
                     onClose={() => setAddingCompetency(null)}
                     onSave={handleSaveNewCompetency}
                     isNew={true}
-                    definition={{
-                        id: addingCompetency.id,
-                        name: addingCompetency.name,
-                        is_certification: true,
-                    }}
+                    definition={addModalDefinition}
                     isSaving={addCompetency.isPending}
                     onDocumentUpload={handleNewDocumentUpload}
                     isUploadingDocument={uploadDocument.isPending}
