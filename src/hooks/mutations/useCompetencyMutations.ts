@@ -58,6 +58,8 @@ export function useCreateCompetency() {
             queryClient.invalidateQueries({ queryKey: ['competencies', variables.userId] });
             queryClient.invalidateQueries({ queryKey: ['competencies', 'byCategory', variables.userId] });
             queryClient.invalidateQueries({ queryKey: ['competencies', 'expiring'] });
+            // Also invalidate personnel queries so Personnel page shows updated data
+            queryClient.invalidateQueries({ queryKey: ['personnel'] });
         },
     });
 }
@@ -85,6 +87,8 @@ export function useUpdateCompetency() {
             queryClient.invalidateQueries({ queryKey: ['competencies', variables.userId] });
             queryClient.invalidateQueries({ queryKey: ['competencies', 'byCategory', variables.userId] });
             queryClient.invalidateQueries({ queryKey: ['competencies', 'expiring'] });
+            // Also invalidate personnel queries so Personnel page shows updated data
+            queryClient.invalidateQueries({ queryKey: ['personnel'] });
         },
     });
 }
@@ -104,6 +108,8 @@ export function useDeleteCompetency() {
             queryClient.invalidateQueries({ queryKey: ['competencies', variables.userId] });
             queryClient.invalidateQueries({ queryKey: ['competencies', 'byCategory', variables.userId] });
             queryClient.invalidateQueries({ queryKey: ['competencies', 'expiring'] });
+            // Also invalidate personnel queries so Personnel page shows updated data
+            queryClient.invalidateQueries({ queryKey: ['personnel'] });
         },
     });
 }
@@ -128,6 +134,8 @@ export function useUploadCompetencyDocument() {
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['competencies', variables.userId] });
+            // Also invalidate personnel queries so Personnel page shows updated data
+            queryClient.invalidateQueries({ queryKey: ['personnel'] });
         },
     });
 }
