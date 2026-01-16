@@ -13,8 +13,9 @@ const SharingTab = lazy(() => import('./tabs/SharingTab'));
 const ConfigurationTab = lazy(() => import('./tabs/ConfigurationTab'));
 const ActivityLogTab = lazy(() => import('./tabs/ActivityLogTab'));
 const CompetencyTypesTab = lazy(() => import('./tabs/CompetencyTypesTab'));
+const NotificationsTab = lazy(() => import('./tabs/NotificationsTab'));
 
-type TabType = 'overview' | 'organizations' | 'users' | 'assets' | 'requests' | 'sharing' | 'configuration' | 'competency-types' | 'activity';
+type TabType = 'overview' | 'organizations' | 'users' | 'assets' | 'requests' | 'sharing' | 'notifications' | 'configuration' | 'competency-types' | 'activity';
 
 interface Tab {
     id: TabType;
@@ -28,6 +29,7 @@ const tabs: Tab[] = [
     { id: 'assets', label: 'Assets' },
     { id: 'requests', label: 'Requests' },
     { id: 'sharing', label: 'Sharing' },
+    { id: 'notifications', label: 'Notifications' },
     { id: 'configuration', label: 'Configuration' },
     { id: 'competency-types', label: 'Competency Types' },
     { id: 'activity', label: 'Activity Log' },
@@ -74,6 +76,8 @@ export default function AdminPage() {
                 return <RequestsTab />;
             case 'sharing':
                 return <SharingTab />;
+            case 'notifications':
+                return <NotificationsTab />;
             case 'configuration':
                 return <ConfigurationTab />;
             case 'competency-types':

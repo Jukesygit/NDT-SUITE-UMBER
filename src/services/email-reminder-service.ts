@@ -82,7 +82,7 @@ export async function getEmailReminderSettings(): Promise<EmailReminderSettings>
                 thresholds_months: [6, 3, 1, 0],
                 manager_emails: [],
                 sender_email: 'notifications@matrixportal.io',
-                sender_name: 'NDT Suite',
+                sender_name: 'Matrix Portal',
                 created_at: null,
                 updated_at: null,
                 updated_by: null,
