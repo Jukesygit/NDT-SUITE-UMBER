@@ -108,7 +108,7 @@ export const FormCheckbox = forwardRef<HTMLInputElement, FormCheckboxProps>(
                     role="presentation"
                 >
                     {/* Custom checkbox */}
-                    <div className="relative flex-shrink-0 mt-0.5">
+                    <div style={{ position: 'relative', flexShrink: 0, marginTop: '2px' }}>
                         <input
                             ref={setRefs}
                             type="checkbox"
@@ -117,37 +117,40 @@ export const FormCheckbox = forwardRef<HTMLInputElement, FormCheckboxProps>(
                             checked={checked}
                             aria-invalid={!!error}
                             aria-describedby={error ? `${fieldId}-error` : undefined}
-                            className="absolute opacity-0 w-0 h-0"
+                            style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
                             {...props}
                         />
-                        {/* Checkbox background */}
+                        {/* Checkbox box */}
                         <div
-                            className={`w-5 h-5 rounded border-2 transition-all duration-200 ${
-                                error ? 'border-red-500/50' : isChecked ? 'bg-blue-500 border-blue-500' : 'border-white/20'
-                            }`}
+                            style={{
+                                width: '18px',
+                                height: '18px',
+                                borderRadius: '4px',
+                                border: '2px solid',
+                                borderColor: error ? 'rgba(239, 68, 68, 0.5)' : isChecked ? '#3b82f6' : 'rgba(255, 255, 255, 0.2)',
+                                backgroundColor: isChecked ? '#3b82f6' : 'transparent',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'all 0.2s ease',
+                            }}
                         >
                             {/* Checkmark */}
                             {isChecked && (
                                 <svg
-                                    className="w-full h-full text-white p-0.5"
-                                    fill="none"
-                                    stroke="currentColor"
+                                    width="12"
+                                    height="12"
                                     viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="white"
+                                    strokeWidth="3"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
                                 >
                                     {indeterminate ? (
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={3}
-                                            d="M5 12h14"
-                                        />
+                                        <path d="M5 12h14" />
                                     ) : (
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={3}
-                                            d="M5 13l4 4L19 7"
-                                        />
+                                        <path d="M5 13l4 4L19 7" />
                                     )}
                                 </svg>
                             )}
