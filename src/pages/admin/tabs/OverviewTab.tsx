@@ -41,8 +41,8 @@ const ClockIcon = () => (
 
 export default function OverviewTab() {
     const { data: stats, isLoading: statsLoading, error: statsError } = useAdminStats();
-    const { data: organizations = [], isLoading: orgsLoading } = useOrganizationsWithStats();
-    const { data: users = [], isLoading: usersLoading } = useAdminUsers();
+    const { data: organizations, isLoading: orgsLoading, error: orgsError } = useOrganizationsWithStats();
+    const { data: users, isLoading: usersLoading, error: usersError } = useAdminUsers();
 
     // Show loading state with Matrix logo like Personnel page
     if (statsLoading) {
@@ -54,22 +54,30 @@ export default function OverviewTab() {
         );
     }
 
-    // Show error state
-    if (statsError) {
-        return <ErrorDisplay error={statsError} title="Failed to load dashboard" />;
+    // Show error state (check all errors)
+    const error = statsError || orgsError || usersError;
+    if (error) {
+        return <ErrorDisplay error={error} title="Failed to load dashboard" />;
     }
+
+    // Ensure arrays are always valid (defensive against null/undefined)
+    const safeOrganizations = Array.isArray(organizations) ? organizations : [];
+    const safeUsers = Array.isArray(users) ? users : [];
 
     // Calculate pending requests total
     const pendingRequests = (stats?.pendingAccountRequests || 0) + (stats?.pendingPermissionRequests || 0);
 
-    // Get top 5 organizations by asset count
-    const topOrganizations = organizations
+    // Get top 5 organizations by asset count (filter out any malformed entries)
+    const topOrganizations = safeOrganizations
+        .filter(org => org && org.organization && org.organization.id)
         .slice()
         .sort((a, b) => (b.assetCount || 0) - (a.assetCount || 0))
         .slice(0, 5);
 
-    // Get recent users (last 5)
-    const recentUsers = users.slice(0, 5);
+    // Get recent users (last 5, filter out malformed entries)
+    const recentUsers = safeUsers
+        .filter(user => user && user.id)
+        .slice(0, 5);
 
     return (
         <div>

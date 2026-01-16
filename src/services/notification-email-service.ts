@@ -4,11 +4,12 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { sendEmail } from './email-service.js';
+// @ts-ignore - JS module without type declarations
+import * as supabaseModule from '../supabase-client.js';
+// @ts-ignore - accessing property from untyped module
+const supabase: SupabaseClient | null = supabaseModule.supabase;
 
-// Import supabase client with type assertion
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { supabase } = require('../supabase-client.js') as { supabase: SupabaseClient | null };
+import { sendEmail } from './email-service.js';
 
 // ============================================================================
 // Types
