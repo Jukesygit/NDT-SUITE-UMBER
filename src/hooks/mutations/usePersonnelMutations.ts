@@ -21,6 +21,13 @@ export interface UpdatePersonData {
     email?: string;
     role?: string;
     organization_id?: string;
+    // Personal details
+    mobile_number?: string;
+    home_address?: string;
+    nearest_uk_train_station?: string;
+    date_of_birth?: string;
+    next_of_kin?: string;
+    next_of_kin_emergency_contact_number?: string;
 }
 
 export interface UpdateCompetencyData {

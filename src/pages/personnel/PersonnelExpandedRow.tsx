@@ -31,6 +31,13 @@ interface PersonEditData {
     email: string;
     role: string;
     organization_id: string;
+    // Personal details
+    mobile_number: string;
+    home_address: string;
+    nearest_uk_train_station: string;
+    date_of_birth: string;
+    next_of_kin: string;
+    next_of_kin_emergency_contact_number: string;
 }
 
 /**
@@ -226,6 +233,12 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
         email: person.email,
         role: person.role,
         organization_id: person.organization_id || '',
+        mobile_number: person.mobile_number || '',
+        home_address: person.home_address || '',
+        nearest_uk_train_station: person.nearest_uk_train_station || '',
+        date_of_birth: person.date_of_birth || '',
+        next_of_kin: person.next_of_kin || '',
+        next_of_kin_emergency_contact_number: person.next_of_kin_emergency_contact_number || '',
     });
 
     // Competency editing modal state
@@ -305,6 +318,12 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
             email: person.email,
             role: person.role,
             organization_id: person.organization_id || '',
+            mobile_number: person.mobile_number || '',
+            home_address: person.home_address || '',
+            nearest_uk_train_station: person.nearest_uk_train_station || '',
+            date_of_birth: person.date_of_birth || '',
+            next_of_kin: person.next_of_kin || '',
+            next_of_kin_emergency_contact_number: person.next_of_kin_emergency_contact_number || '',
         });
         setEditingPerson(true);
     }, [person]);
@@ -656,6 +675,138 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                     <option value="org_admin">Org Admin</option>
                                     <option value="admin">Admin</option>
                                 </select>
+                            </div>
+                            <div>
+                                <div
+                                    style={{
+                                        fontSize: '12px',
+                                        color: 'rgba(255, 255, 255, 0.5)',
+                                        marginBottom: '4px',
+                                        textTransform: 'uppercase',
+                                        fontWeight: '600',
+                                    }}
+                                >
+                                    Mobile Number
+                                </div>
+                                <input
+                                    type="tel"
+                                    className="glass-input"
+                                    value={personEditData.mobile_number}
+                                    onChange={(e) =>
+                                        setPersonEditData({ ...personEditData, mobile_number: e.target.value })
+                                    }
+                                    style={{ marginTop: '4px' }}
+                                />
+                            </div>
+                            <div>
+                                <div
+                                    style={{
+                                        fontSize: '12px',
+                                        color: 'rgba(255, 255, 255, 0.5)',
+                                        marginBottom: '4px',
+                                        textTransform: 'uppercase',
+                                        fontWeight: '600',
+                                    }}
+                                >
+                                    Date of Birth
+                                </div>
+                                <input
+                                    type="date"
+                                    className="glass-input"
+                                    value={personEditData.date_of_birth}
+                                    onChange={(e) =>
+                                        setPersonEditData({ ...personEditData, date_of_birth: e.target.value })
+                                    }
+                                    style={{ marginTop: '4px' }}
+                                />
+                            </div>
+                            <div>
+                                <div
+                                    style={{
+                                        fontSize: '12px',
+                                        color: 'rgba(255, 255, 255, 0.5)',
+                                        marginBottom: '4px',
+                                        textTransform: 'uppercase',
+                                        fontWeight: '600',
+                                    }}
+                                >
+                                    Home Address
+                                </div>
+                                <input
+                                    type="text"
+                                    className="glass-input"
+                                    value={personEditData.home_address}
+                                    onChange={(e) =>
+                                        setPersonEditData({ ...personEditData, home_address: e.target.value })
+                                    }
+                                    style={{ marginTop: '4px' }}
+                                />
+                            </div>
+                            <div>
+                                <div
+                                    style={{
+                                        fontSize: '12px',
+                                        color: 'rgba(255, 255, 255, 0.5)',
+                                        marginBottom: '4px',
+                                        textTransform: 'uppercase',
+                                        fontWeight: '600',
+                                    }}
+                                >
+                                    Nearest UK Train Station
+                                </div>
+                                <input
+                                    type="text"
+                                    className="glass-input"
+                                    value={personEditData.nearest_uk_train_station}
+                                    onChange={(e) =>
+                                        setPersonEditData({ ...personEditData, nearest_uk_train_station: e.target.value })
+                                    }
+                                    style={{ marginTop: '4px' }}
+                                />
+                            </div>
+                            <div>
+                                <div
+                                    style={{
+                                        fontSize: '12px',
+                                        color: 'rgba(255, 255, 255, 0.5)',
+                                        marginBottom: '4px',
+                                        textTransform: 'uppercase',
+                                        fontWeight: '600',
+                                    }}
+                                >
+                                    Next of Kin
+                                </div>
+                                <input
+                                    type="text"
+                                    className="glass-input"
+                                    value={personEditData.next_of_kin}
+                                    onChange={(e) =>
+                                        setPersonEditData({ ...personEditData, next_of_kin: e.target.value })
+                                    }
+                                    style={{ marginTop: '4px' }}
+                                />
+                            </div>
+                            <div>
+                                <div
+                                    style={{
+                                        fontSize: '12px',
+                                        color: 'rgba(255, 255, 255, 0.5)',
+                                        marginBottom: '4px',
+                                        textTransform: 'uppercase',
+                                        fontWeight: '600',
+                                    }}
+                                >
+                                    Emergency Contact
+                                </div>
+                                <input
+                                    type="tel"
+                                    className="glass-input"
+                                    value={personEditData.next_of_kin_emergency_contact_number}
+                                    onChange={(e) =>
+                                        setPersonEditData({ ...personEditData, next_of_kin_emergency_contact_number: e.target.value })
+                                    }
+                                    style={{ marginTop: '4px' }}
+                                />
                             </div>
                         </>
                     ) : (
