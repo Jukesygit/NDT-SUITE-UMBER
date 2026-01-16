@@ -60,6 +60,8 @@ export interface SendNotificationParams {
         role?: string;
         searchTerm?: string;
     };
+    /** If true, body is treated as raw HTML and sent directly without wrapper template */
+    isHtmlTemplate?: boolean;
 }
 
 export interface SendNotificationResult {
@@ -177,7 +179,7 @@ function generateNotificationEmailHtml(body: string, recipientName: string): str
 export async function sendNotificationEmails(
     params: SendNotificationParams
 ): Promise<SendNotificationResult> {
-    const { subject, body, recipients, filters } = params;
+    const { subject, body, recipients, filters, isHtmlTemplate } = params;
 
     if (!supabase) throw new Error('Supabase not configured');
     if (!recipients.length) throw new Error('No recipients selected');
@@ -229,7 +231,8 @@ export async function sendNotificationEmails(
     // Send emails using Promise.allSettled (handles individual failures gracefully)
     const emailPromises = recipients.map(async (recipient) => {
         try {
-            const html = generateNotificationEmailHtml(body, recipient.username);
+            // Use raw HTML if template provided, otherwise wrap in default template
+            const html = isHtmlTemplate ? body : generateNotificationEmailHtml(body, recipient.username);
             await sendEmail({ to: recipient.email, subject, html });
 
             // Update individual recipient status
