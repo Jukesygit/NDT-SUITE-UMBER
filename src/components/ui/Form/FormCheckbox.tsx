@@ -113,6 +113,7 @@ export const FormCheckbox = forwardRef<HTMLInputElement, FormCheckboxProps>(
                             `}
                             {...props}
                         />
+                        {/* Checkbox background */}
                         <div
                             className={`
                                 w-5 h-5 rounded
@@ -121,33 +122,31 @@ export const FormCheckbox = forwardRef<HTMLInputElement, FormCheckboxProps>(
                                 peer-checked:bg-blue-500 peer-checked:border-blue-500
                                 peer-focus:ring-2 peer-focus:ring-blue-500/30
                                 peer-disabled:opacity-50
-                                flex items-center justify-center
                             `}
+                        />
+                        {/* Checkmark - positioned as sibling so peer-checked works */}
+                        <svg
+                            className="absolute top-1 left-1 w-3 h-3 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
                         >
-                            {/* Checkmark */}
-                            <svg
-                                className="w-3 h-3 text-white opacity-0 peer-checked:opacity-100 transition-opacity"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                {indeterminate ? (
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={3}
-                                        d="M5 12h14"
-                                    />
-                                ) : (
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={3}
-                                        d="M5 13l4 4L19 7"
-                                    />
-                                )}
-                            </svg>
-                        </div>
+                            {indeterminate ? (
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={3}
+                                    d="M5 12h14"
+                                />
+                            ) : (
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={3}
+                                    d="M5 13l4 4L19 7"
+                                />
+                            )}
+                        </svg>
                     </div>
 
                     {/* Label text */}
