@@ -78,7 +78,7 @@ serve(async (req) => {
 
     // Build email payload
     const emailPayload: Record<string, unknown> = {
-      from: from || 'NDT Suite <notifications@matrixportal.io>',
+      from: from || 'NDT Suite <notifications@updates.matrixportal.io>',
       to: Array.isArray(to) ? to : [to],
       subject,
       html,
