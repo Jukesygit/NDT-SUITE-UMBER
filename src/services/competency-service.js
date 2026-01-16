@@ -820,6 +820,434 @@ class CompetencyService {
         if (error) throw error;
         return data || [];
     }
+
+    // ============================================================
+    // ADMIN: Category & Definition Management
+    // ============================================================
+
+    /**
+     * Check if current user is admin
+     * @private
+     */
+    _requireAdmin() {
+        const currentUser = authManager.getCurrentUser();
+        if (!currentUser) {
+            throw new Error('Not authenticated');
+        }
+        if (currentUser.role !== 'admin') {
+            throw new Error('Admin access required');
+        }
+        return currentUser;
+    }
+
+    /**
+     * Get all categories (including inactive) for admin view
+     * @param {boolean} includeInactive - Include inactive categories
+     */
+    async getAllCategories(includeInactive = true) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        let query = supabase
+            .from('competency_categories')
+            .select('*')
+            .order('display_order', { ascending: true });
+
+        if (!includeInactive) {
+            query = query.eq('is_active', true);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+        return data;
+    }
+
+    /**
+     * Create a new competency category (admin only)
+     * @param {object} data - Category data { name, description }
+     */
+    async createCategory(data) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        const currentUser = this._requireAdmin();
+
+        // Get max display_order for new category
+        const { data: existing } = await supabase
+            .from('competency_categories')
+            .select('display_order')
+            .order('display_order', { ascending: false })
+            .limit(1);
+
+        const maxOrder = existing?.[0]?.display_order ?? 0;
+
+        const { data: result, error } = await supabase
+            .from('competency_categories')
+            .insert({
+                name: data.name,
+                description: data.description || null,
+                display_order: maxOrder + 1,
+                is_active: true
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        logActivity({
+            userId: currentUser.id,
+            actionType: 'category_created',
+            actionCategory: 'admin',
+            description: `Created competency category: ${data.name}`,
+            entityType: 'competency_category',
+            entityId: result.id,
+            details: { name: data.name }
+        });
+
+        return result;
+    }
+
+    /**
+     * Update a competency category (admin only)
+     * @param {string} id - Category ID
+     * @param {object} data - Fields to update { name?, description?, is_active? }
+     */
+    async updateCategory(id, data) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        const currentUser = this._requireAdmin();
+
+        const updates = {};
+        if (data.name !== undefined) updates.name = data.name;
+        if (data.description !== undefined) updates.description = data.description;
+        if (data.is_active !== undefined) updates.is_active = data.is_active;
+
+        const { data: result, error } = await supabase
+            .from('competency_categories')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        logActivity({
+            userId: currentUser.id,
+            actionType: 'category_updated',
+            actionCategory: 'admin',
+            description: `Updated competency category: ${result.name}`,
+            entityType: 'competency_category',
+            entityId: id,
+            details: updates
+        });
+
+        return result;
+    }
+
+    /**
+     * Delete (deactivate) a competency category (admin only)
+     * @param {string} id - Category ID
+     * @param {boolean} hardDelete - Permanently delete if no definitions exist
+     */
+    async deleteCategory(id, hardDelete = false) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        const currentUser = this._requireAdmin();
+
+        // Check if category has definitions
+        const { data: definitions } = await supabase
+            .from('competency_definitions')
+            .select('id')
+            .eq('category_id', id)
+            .limit(1);
+
+        const hasDefinitions = definitions && definitions.length > 0;
+
+        if (hardDelete && !hasDefinitions) {
+            // Hard delete only if no definitions
+            const { error } = await supabase
+                .from('competency_categories')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+
+            logActivity({
+                userId: currentUser.id,
+                actionType: 'category_deleted',
+                actionCategory: 'admin',
+                description: 'Permanently deleted competency category',
+                entityType: 'competency_category',
+                entityId: id
+            });
+        } else {
+            // Soft delete - deactivate
+            await this.updateCategory(id, { is_active: false });
+        }
+
+        return { success: true, softDeleted: hasDefinitions || !hardDelete };
+    }
+
+    /**
+     * Reorder categories (admin only)
+     * @param {string[]} orderedIds - Array of category IDs in desired order
+     */
+    async reorderCategories(orderedIds) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        this._requireAdmin();
+
+        // Update each category's display_order based on array position
+        const updates = orderedIds.map((id, index) => ({
+            id,
+            display_order: index + 1
+        }));
+
+        for (const update of updates) {
+            const { error } = await supabase
+                .from('competency_categories')
+                .update({ display_order: update.display_order })
+                .eq('id', update.id);
+
+            if (error) throw error;
+        }
+
+        return { success: true };
+    }
+
+    /**
+     * Get all competency definitions (including inactive) for admin view
+     * @param {boolean} includeInactive - Include inactive definitions
+     * @param {string} categoryId - Optional category filter
+     */
+    async getAllDefinitions(includeInactive = true, categoryId = null) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        let query = supabase
+            .from('competency_definitions')
+            .select(`
+                *,
+                category:competency_categories(id, name)
+            `)
+            .order('display_order', { ascending: true });
+
+        if (!includeInactive) {
+            query = query.eq('is_active', true);
+        }
+
+        if (categoryId) {
+            query = query.eq('category_id', categoryId);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+        return data;
+    }
+
+    /**
+     * Create a new competency definition (admin only)
+     * @param {object} data - Definition data
+     */
+    async createDefinition(data) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        const currentUser = this._requireAdmin();
+
+        // Get max display_order within category
+        const { data: existing } = await supabase
+            .from('competency_definitions')
+            .select('display_order')
+            .eq('category_id', data.category_id)
+            .order('display_order', { ascending: false })
+            .limit(1);
+
+        const maxOrder = existing?.[0]?.display_order ?? 0;
+
+        const { data: result, error } = await supabase
+            .from('competency_definitions')
+            .insert({
+                name: data.name,
+                description: data.description || null,
+                category_id: data.category_id,
+                field_type: data.field_type || 'text',
+                requires_document: data.requires_document || false,
+                requires_approval: data.requires_approval || false,
+                display_order: maxOrder + 1,
+                is_active: true
+            })
+            .select(`
+                *,
+                category:competency_categories(id, name)
+            `)
+            .single();
+
+        if (error) throw error;
+
+        logActivity({
+            userId: currentUser.id,
+            actionType: 'definition_created',
+            actionCategory: 'admin',
+            description: `Created competency type: ${data.name}`,
+            entityType: 'competency_definition',
+            entityId: result.id,
+            details: { name: data.name, category_id: data.category_id, field_type: data.field_type }
+        });
+
+        return result;
+    }
+
+    /**
+     * Update a competency definition (admin only)
+     * @param {string} id - Definition ID
+     * @param {object} data - Fields to update
+     */
+    async updateDefinition(id, data) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        const currentUser = this._requireAdmin();
+
+        const updates = {};
+        if (data.name !== undefined) updates.name = data.name;
+        if (data.description !== undefined) updates.description = data.description;
+        if (data.category_id !== undefined) updates.category_id = data.category_id;
+        if (data.field_type !== undefined) updates.field_type = data.field_type;
+        if (data.requires_document !== undefined) updates.requires_document = data.requires_document;
+        if (data.requires_approval !== undefined) updates.requires_approval = data.requires_approval;
+        if (data.is_active !== undefined) updates.is_active = data.is_active;
+
+        const { data: result, error } = await supabase
+            .from('competency_definitions')
+            .update(updates)
+            .eq('id', id)
+            .select(`
+                *,
+                category:competency_categories(id, name)
+            `)
+            .single();
+
+        if (error) throw error;
+
+        logActivity({
+            userId: currentUser.id,
+            actionType: 'definition_updated',
+            actionCategory: 'admin',
+            description: `Updated competency type: ${result.name}`,
+            entityType: 'competency_definition',
+            entityId: id,
+            details: updates
+        });
+
+        return result;
+    }
+
+    /**
+     * Delete (deactivate) a competency definition (admin only)
+     * @param {string} id - Definition ID
+     * @param {boolean} hardDelete - Permanently delete if no employee records exist
+     */
+    async deleteDefinition(id, hardDelete = false) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        const currentUser = this._requireAdmin();
+
+        // Check if definition has employee competencies
+        const { data: employeeCompetencies } = await supabase
+            .from('employee_competencies')
+            .select('id')
+            .eq('competency_id', id)
+            .limit(1);
+
+        const hasEmployeeRecords = employeeCompetencies && employeeCompetencies.length > 0;
+
+        if (hardDelete && !hasEmployeeRecords) {
+            // Hard delete only if no employee records
+            const { error } = await supabase
+                .from('competency_definitions')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+
+            logActivity({
+                userId: currentUser.id,
+                actionType: 'definition_deleted',
+                actionCategory: 'admin',
+                description: 'Permanently deleted competency type',
+                entityType: 'competency_definition',
+                entityId: id
+            });
+        } else {
+            // Soft delete - deactivate
+            await this.updateDefinition(id, { is_active: false });
+        }
+
+        return { success: true, softDeleted: hasEmployeeRecords || !hardDelete };
+    }
+
+    /**
+     * Reorder definitions within a category (admin only)
+     * @param {string} categoryId - Category ID
+     * @param {string[]} orderedIds - Array of definition IDs in desired order
+     */
+    async reorderDefinitions(categoryId, orderedIds) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        this._requireAdmin();
+
+        // Update each definition's display_order based on array position
+        const updates = orderedIds.map((id, index) => ({
+            id,
+            display_order: index + 1
+        }));
+
+        for (const update of updates) {
+            const { error } = await supabase
+                .from('competency_definitions')
+                .update({ display_order: update.display_order })
+                .eq('id', update.id)
+                .eq('category_id', categoryId);
+
+            if (error) throw error;
+        }
+
+        return { success: true };
+    }
+
+    /**
+     * Get usage count for a definition (how many employees have this cert)
+     * @param {string} definitionId - Definition ID
+     */
+    async getDefinitionUsageCount(definitionId) {
+        if (!isSupabaseConfigured()) {
+            throw new Error('Supabase not configured');
+        }
+
+        const { count, error } = await supabase
+            .from('employee_competencies')
+            .select('*', { count: 'exact', head: true })
+            .eq('competency_id', definitionId);
+
+        if (error) throw error;
+        return count || 0;
+    }
 }
 
 export default new CompetencyService();

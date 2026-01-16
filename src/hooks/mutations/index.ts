@@ -10,6 +10,24 @@ export {
     useUploadCompetencyDocument,
 } from './useCompetencyMutations';
 
+// Competency Definition Admin mutations (categories & definitions)
+export {
+    useCreateCategory,
+    useUpdateCategory,
+    useDeleteCategory,
+    useReorderCategories,
+    useCreateDefinition,
+    useUpdateDefinition,
+    useDeleteDefinition,
+    useReorderDefinitions,
+} from './useCompetencyDefinitionMutations';
+export type {
+    CategoryData,
+    CategoryUpdateData,
+    DefinitionData,
+    DefinitionUpdateData,
+} from './useCompetencyDefinitionMutations';
+
 // Personnel mutations
 export {
     useUpdatePerson,

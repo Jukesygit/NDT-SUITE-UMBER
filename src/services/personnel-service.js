@@ -27,6 +27,12 @@ class PersonnelService {
                     organization_id,
                     avatar_url,
                     is_active,
+                    mobile_number,
+                    home_address,
+                    nearest_uk_train_station,
+                    date_of_birth,
+                    next_of_kin,
+                    next_of_kin_emergency_contact_number,
                     organizations(id, name)
                 `)
                 .order('username', { ascending: true }),

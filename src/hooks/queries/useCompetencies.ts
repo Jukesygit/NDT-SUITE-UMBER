@@ -17,6 +17,8 @@ export interface CompetencyDefinition {
     field_type: 'text' | 'date' | 'expiry_date' | 'boolean' | 'file' | 'number';
     category_id: string;
     category?: CompetencyCategory;
+    requires_document?: boolean;
+    requires_approval?: boolean;
     display_order: number;
     is_active: boolean;
 }
@@ -161,5 +163,45 @@ export function usePendingApprovals() {
         queryKey: ['competencies', 'pendingApprovals'],
         queryFn: () => competencyService.getPendingApprovals(),
         staleTime: 2 * 60 * 1000, // 2 minutes - approvals may change frequently
+    });
+}
+
+// ============================================================
+// Admin Query Hooks (includes inactive items)
+// ============================================================
+
+/**
+ * React Query hook for fetching all competency categories (including inactive)
+ * Used by admin UI to manage categories
+ */
+export function useAllCompetencyCategories(includeInactive: boolean = true) {
+    return useQuery<CompetencyCategory[]>({
+        queryKey: ['competencyCategories', 'admin', includeInactive],
+        queryFn: () => competencyService.getAllCategories(includeInactive),
+        staleTime: 5 * 60 * 1000, // 5 minutes
+    });
+}
+
+/**
+ * React Query hook for fetching all competency definitions (including inactive)
+ * Used by admin UI to manage definitions
+ */
+export function useAllCompetencyDefinitions(categoryId?: string, includeInactive: boolean = true) {
+    return useQuery<CompetencyDefinition[]>({
+        queryKey: ['competencyDefinitions', 'admin', categoryId, includeInactive],
+        queryFn: () => competencyService.getAllDefinitions(includeInactive, categoryId),
+        staleTime: 5 * 60 * 1000, // 5 minutes
+    });
+}
+
+/**
+ * React Query hook for fetching usage count for a definition
+ */
+export function useDefinitionUsageCount(definitionId: string | undefined) {
+    return useQuery<number>({
+        queryKey: ['competencyDefinitions', 'usage', definitionId],
+        queryFn: () => competencyService.getDefinitionUsageCount(definitionId!),
+        enabled: !!definitionId,
+        staleTime: 5 * 60 * 1000, // 5 minutes
     });
 }

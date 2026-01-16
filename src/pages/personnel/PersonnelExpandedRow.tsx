@@ -677,6 +677,15 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                 </div>
                                 <span className="glass-badge">{person.role}</span>
                             </div>
+                            <DisplayField label="Mobile Number" value={person.mobile_number || '-'} />
+                            <DisplayField
+                                label="Date of Birth"
+                                value={person.date_of_birth ? new Date(person.date_of_birth).toLocaleDateString('en-GB') : '-'}
+                            />
+                            <DisplayField label="Home Address" value={person.home_address || '-'} />
+                            <DisplayField label="Nearest UK Train Station" value={person.nearest_uk_train_station || '-'} />
+                            <DisplayField label="Next of Kin" value={person.next_of_kin || '-'} />
+                            <DisplayField label="Emergency Contact" value={person.next_of_kin_emergency_contact_number || '-'} />
                         </>
                     )}
                 </div>
