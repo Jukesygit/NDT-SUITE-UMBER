@@ -9,9 +9,12 @@ import { useCompetencyDefinitions, useCompetencyCategories } from '../../hooks/q
 import type { CompetencyDefinition, CompetencyCategory } from '../../hooks/queries/useCompetencies';
 import { Modal } from '../../components/ui';
 import { EditCompetencyModal, type CompetencyFormData } from '../profile/EditCompetencyModal';
+import { WitnessCheckModal, type WitnessCheckData } from '../../components/features/witness/WitnessCheckModal';
 
 // Utility imports - ES module
 import { requiresWitnessCheck } from '../../utils/competency-field-utils.js';
+// @ts-ignore - JS module without types
+import authManager from '../../auth-manager.js';
 
 // @ts-ignore - JS module without types
 import supabaseImport from '../../supabase-client.js';
@@ -105,7 +108,7 @@ function EditIcon({ size = 14 }: { size?: number }) {
 }
 
 /**
- * Witness check icon
+ * Witness check icon (displayed when witnessed)
  */
 function WitnessIcon() {
     return (
@@ -118,6 +121,32 @@ function WitnessIcon() {
                 fillRule="evenodd"
                 d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
                 clipRule="evenodd"
+            />
+        </svg>
+    );
+}
+
+/**
+ * Witness check button icon - clipboard with checkmark
+ * Green when witnessed, muted when not witnessed
+ */
+function WitnessCheckButtonIcon({ witnessed }: { witnessed: boolean }) {
+    return (
+        <svg
+            style={{
+                width: '14px',
+                height: '14px',
+                color: witnessed ? '#10b981' : 'rgba(255, 255, 255, 0.5)',
+            }}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+        >
+            <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
             />
         </svg>
     );
@@ -261,6 +290,9 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
     // Save error state
     const [saveError, setSaveError] = useState<string | null>(null);
 
+    // Witness check modal state
+    const [witnessingCompetency, setWitnessingCompetency] = useState<PersonCompetency | null>(null);
+
     // Add competency picker state
     const [showCompetencyPicker, setShowCompetencyPicker] = useState(false);
     const [addingCompetency, setAddingCompetency] = useState<CompetencyDefinition | null>(null);
@@ -363,6 +395,50 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
             },
         });
     }, []);
+
+    // Open witness check modal for a competency
+    const handleWitnessCheck = useCallback((comp: PersonCompetency) => {
+        setWitnessingCompetency(comp);
+    }, []);
+
+    // Save witness check from modal
+    const handleSaveWitnessCheck = useCallback(
+        async (data: WitnessCheckData) => {
+            if (!witnessingCompetency) return;
+
+            await updateCompetency.mutateAsync({
+                competencyId: witnessingCompetency.id,
+                personId: person.id,
+                data: {
+                    witness_checked: data.witness_checked,
+                    witnessed_by: data.witnessed_by,
+                    witnessed_at: data.witnessed_at,
+                    witness_notes: data.witness_notes,
+                },
+            });
+            setWitnessingCompetency(null);
+            onUpdate?.();
+        },
+        [witnessingCompetency, person.id, updateCompetency, onUpdate]
+    );
+
+    // Remove witness check
+    const handleRemoveWitnessCheck = useCallback(async () => {
+        if (!witnessingCompetency) return;
+
+        await updateCompetency.mutateAsync({
+            competencyId: witnessingCompetency.id,
+            personId: person.id,
+            data: {
+                witness_checked: false,
+                witnessed_by: null,
+                witnessed_at: null,
+                witness_notes: null,
+            },
+        });
+        setWitnessingCompetency(null);
+        onUpdate?.();
+    }, [witnessingCompetency, person.id, updateCompetency, onUpdate]);
 
     // Handle document upload for competency modal (editing existing)
     const handleDocumentUpload = useCallback(
@@ -1102,6 +1178,16 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                                         >
                                                             {status.label}
                                                         </span>
+                                                        {isAdmin && needsWitness && (
+                                                            <button
+                                                                onClick={() => handleWitnessCheck(comp)}
+                                                                className="btn-icon"
+                                                                style={{ padding: '2px' }}
+                                                                title={comp.witness_checked ? 'Update witness check' : 'Mark as witnessed'}
+                                                            >
+                                                                <WitnessCheckButtonIcon witnessed={!!comp.witness_checked} />
+                                                            </button>
+                                                        )}
                                                         {isAdmin && (
                                                             <button
                                                                 onClick={() => handleEditCompetency(comp)}
@@ -1389,6 +1475,29 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                     isSaving={updateCompetency.isPending}
                     onDocumentUpload={handleDocumentUpload}
                     isUploadingDocument={uploadDocument.isPending}
+                />
+            )}
+
+            {/* Witness Check Modal (Admin only) */}
+            {witnessingCompetency && (
+                <WitnessCheckModal
+                    isOpen={!!witnessingCompetency}
+                    onClose={() => setWitnessingCompetency(null)}
+                    competencyName={witnessingCompetency.competency?.name || 'Certification'}
+                    personName={person.username}
+                    existingWitnessData={{
+                        witness_checked: witnessingCompetency.witness_checked,
+                        witnessed_by: witnessingCompetency.witnessed_by,
+                        witnessed_at: witnessingCompetency.witnessed_at,
+                        witness_notes: witnessingCompetency.witness_notes,
+                    }}
+                    currentUser={{
+                        id: authManager.getCurrentUser()?.id || '',
+                        name: authManager.getCurrentUser()?.username || authManager.getCurrentUser()?.email || 'Unknown',
+                    }}
+                    onSave={handleSaveWitnessCheck}
+                    onRemove={handleRemoveWitnessCheck}
+                    isSaving={updateCompetency.isPending}
                 />
             )}
 

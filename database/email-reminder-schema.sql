@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS email_reminder_settings (
     manager_emails TEXT[] DEFAULT '{}',
     -- Sender configuration
     sender_email TEXT DEFAULT 'notifications@matrixportal.io',
-    sender_name TEXT DEFAULT 'NDT Suite',
+    sender_name TEXT DEFAULT 'Matrix Portal',
     -- Audit fields
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
