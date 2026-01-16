@@ -12,8 +12,9 @@ const RequestsTab = lazy(() => import('./tabs/RequestsTab'));
 const SharingTab = lazy(() => import('./tabs/SharingTab'));
 const ConfigurationTab = lazy(() => import('./tabs/ConfigurationTab'));
 const ActivityLogTab = lazy(() => import('./tabs/ActivityLogTab'));
+const CompetencyTypesTab = lazy(() => import('./tabs/CompetencyTypesTab'));
 
-type TabType = 'overview' | 'organizations' | 'users' | 'assets' | 'requests' | 'sharing' | 'configuration' | 'activity';
+type TabType = 'overview' | 'organizations' | 'users' | 'assets' | 'requests' | 'sharing' | 'configuration' | 'competency-types' | 'activity';
 
 interface Tab {
     id: TabType;
@@ -28,6 +29,7 @@ const tabs: Tab[] = [
     { id: 'requests', label: 'Requests' },
     { id: 'sharing', label: 'Sharing' },
     { id: 'configuration', label: 'Configuration' },
+    { id: 'competency-types', label: 'Competency Types' },
     { id: 'activity', label: 'Activity Log' },
 ];
 
@@ -74,6 +76,8 @@ export default function AdminPage() {
                 return <SharingTab />;
             case 'configuration':
                 return <ConfigurationTab />;
+            case 'competency-types':
+                return <CompetencyTypesTab />;
             case 'activity':
                 return <ActivityLogTab />;
             default:

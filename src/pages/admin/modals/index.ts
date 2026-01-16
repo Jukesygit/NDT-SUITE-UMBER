@@ -20,3 +20,9 @@ export { default as TransferAssetModal } from "./TransferAssetModal";
 // Share modals
 export { default as CreateShareModal } from "./CreateShareModal";
 export { default as EditShareModal } from "./EditShareModal";
+
+// Competency type modals (admin)
+export { default as CreateCategoryModal } from "./CreateCategoryModal";
+export { default as EditCategoryModal } from "./EditCategoryModal";
+export { default as CreateDefinitionModal } from "./CreateDefinitionModal";
+export { default as EditDefinitionModal } from "./EditDefinitionModal";

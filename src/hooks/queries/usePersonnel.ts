@@ -50,6 +50,13 @@ export interface Person {
     organizations?: Organization;
     competencies?: PersonCompetency[];
     avatar_url?: string;
+    // Personal details
+    mobile_number?: string;
+    home_address?: string;
+    nearest_uk_train_station?: string;
+    date_of_birth?: string;
+    next_of_kin?: string;
+    next_of_kin_emergency_contact_number?: string;
 }
 
 export interface CompetencyStats {
