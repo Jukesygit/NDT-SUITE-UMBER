@@ -38,6 +38,7 @@ interface PersonEditData {
     date_of_birth: string;
     next_of_kin: string;
     next_of_kin_emergency_contact_number: string;
+    vantage_number: string;
 }
 
 /**
@@ -239,6 +240,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
         date_of_birth: person.date_of_birth || '',
         next_of_kin: person.next_of_kin || '',
         next_of_kin_emergency_contact_number: person.next_of_kin_emergency_contact_number || '',
+        vantage_number: person.vantage_number || '',
     });
 
     // Competency editing modal state
@@ -324,6 +326,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
             date_of_birth: person.date_of_birth || '',
             next_of_kin: person.next_of_kin || '',
             next_of_kin_emergency_contact_number: person.next_of_kin_emergency_contact_number || '',
+            vantage_number: person.vantage_number || '',
         });
         setEditingPerson(true);
     }, [person]);
@@ -808,6 +811,28 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                     style={{ marginTop: '4px' }}
                                 />
                             </div>
+                            <div>
+                                <div
+                                    style={{
+                                        fontSize: '12px',
+                                        color: 'rgba(255, 255, 255, 0.5)',
+                                        marginBottom: '4px',
+                                        textTransform: 'uppercase',
+                                        fontWeight: '600',
+                                    }}
+                                >
+                                    Vantage Number
+                                </div>
+                                <input
+                                    type="text"
+                                    className="glass-input"
+                                    value={personEditData.vantage_number}
+                                    onChange={(e) =>
+                                        setPersonEditData({ ...personEditData, vantage_number: e.target.value })
+                                    }
+                                    style={{ marginTop: '4px' }}
+                                />
+                            </div>
                         </>
                     ) : (
                         <>
@@ -837,6 +862,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                             <DisplayField label="Nearest UK Train Station" value={person.nearest_uk_train_station || '-'} />
                             <DisplayField label="Next of Kin" value={person.next_of_kin || '-'} />
                             <DisplayField label="Emergency Contact" value={person.next_of_kin_emergency_contact_number || '-'} />
+                            <DisplayField label="Vantage Number" value={person.vantage_number || '-'} />
                         </>
                     )}
                 </div>

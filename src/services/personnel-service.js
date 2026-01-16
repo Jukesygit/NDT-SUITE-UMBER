@@ -33,6 +33,7 @@ class PersonnelService {
                     date_of_birth,
                     next_of_kin,
                     next_of_kin_emergency_contact_number,
+                    vantage_number,
                     organizations(id, name)
                 `)
                 .order('username', { ascending: true }),

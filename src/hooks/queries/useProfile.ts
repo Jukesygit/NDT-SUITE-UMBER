@@ -24,6 +24,7 @@ export interface Profile {
     next_of_kin: string | null;
     next_of_kin_emergency_contact_number: string | null;
     date_of_birth: string | null;
+    vantage_number: string | null;
     avatar_url: string | null;
     role: string;
     organization_id: string | null;

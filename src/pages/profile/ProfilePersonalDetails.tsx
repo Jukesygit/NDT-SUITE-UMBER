@@ -15,6 +15,7 @@ export interface ProfileFormData {
     next_of_kin: string;
     next_of_kin_emergency_contact_number: string;
     date_of_birth: string;
+    vantage_number: string;
 }
 
 interface ProfilePersonalDetailsProps {
@@ -259,6 +260,20 @@ export function ProfilePersonalDetails({
                         label="Emergency Contact Number"
                         value={data.next_of_kin_emergency_contact_number}
                     />
+                )}
+
+                {/* Vantage Number */}
+                {isEditing ? (
+                    <FormField
+                        label="Vantage Number"
+                        type="text"
+                        placeholder="Enter Vantage number"
+                        value={formData.vantage_number}
+                        onChange={(e) => updateField('vantage_number', e.target.value)}
+                        containerClassName="mb-0"
+                    />
+                ) : (
+                    <DisplayField label="Vantage Number" value={data.vantage_number} />
                 )}
             </div>
 

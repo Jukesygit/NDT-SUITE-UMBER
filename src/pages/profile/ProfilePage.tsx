@@ -263,6 +263,7 @@ export default function ProfilePage() {
         next_of_kin: profileQuery.data?.next_of_kin || '',
         next_of_kin_emergency_contact_number: profileQuery.data?.next_of_kin_emergency_contact_number || '',
         date_of_birth: profileQuery.data?.date_of_birth || '',
+        vantage_number: profileQuery.data?.vantage_number || '',
     };
 
     // Loading state
