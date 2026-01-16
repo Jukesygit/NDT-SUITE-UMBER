@@ -62,12 +62,16 @@ export const FormCheckbox = forwardRef<HTMLInputElement, FormCheckboxProps>(
             className = '',
             id,
             disabled,
+            checked,
             ...props
         },
         ref
     ) => {
         // Generate ID if not provided
         const fieldId = id || `checkbox-${label?.toLowerCase().replace(/\s+/g, '-')}`;
+
+        // Use checked prop to determine visual state (more reliable than CSS peer)
+        const isChecked = checked === true;
 
         // Internal ref for indeterminate state
         const internalRef = useRef<HTMLInputElement | null>(null);
@@ -105,28 +109,29 @@ export const FormCheckbox = forwardRef<HTMLInputElement, FormCheckboxProps>(
                             type="checkbox"
                             id={fieldId}
                             disabled={disabled}
+                            checked={checked}
                             aria-invalid={!!error}
                             aria-describedby={error ? `${fieldId}-error` : undefined}
-                            className={`
-                                peer sr-only
-                                ${className}
-                            `}
+                            className={`sr-only ${className}`}
                             {...props}
                         />
-                        {/* Checkbox background */}
+                        {/* Checkbox background - use isChecked for styling */}
                         <div
                             className={`
                                 w-5 h-5 rounded
                                 border-2 transition-all duration-200
                                 ${error ? 'border-red-500/50' : 'border-white/20'}
-                                peer-checked:bg-blue-500 peer-checked:border-blue-500
-                                peer-focus:ring-2 peer-focus:ring-blue-500/30
-                                peer-disabled:opacity-50
+                                ${isChecked ? 'bg-blue-500 border-blue-500' : ''}
+                                ${disabled ? 'opacity-50' : ''}
                             `}
                         />
-                        {/* Checkmark - positioned as sibling so peer-checked works */}
+                        {/* Checkmark - show when checked */}
                         <svg
-                            className="absolute top-1 left-1 w-3 h-3 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none"
+                            className={`
+                                absolute top-1 left-1 w-3 h-3 text-white
+                                transition-opacity pointer-events-none
+                                ${isChecked ? 'opacity-100' : 'opacity-0'}
+                            `}
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"
