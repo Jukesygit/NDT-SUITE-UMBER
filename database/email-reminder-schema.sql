@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS email_reminder_settings (
     -- Manager emails to CC on all reminders
     manager_emails TEXT[] DEFAULT '{}',
     -- Sender configuration
-    sender_email TEXT DEFAULT 'notifications@matrixportal.io',
+    sender_email TEXT DEFAULT 'notifications@updates.matrixportal.io',
     sender_name TEXT DEFAULT 'Matrix Portal',
     -- Audit fields
     created_at TIMESTAMPTZ DEFAULT NOW(),
