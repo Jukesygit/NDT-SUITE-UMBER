@@ -57,6 +57,7 @@ export interface Person {
     date_of_birth?: string;
     next_of_kin?: string;
     next_of_kin_emergency_contact_number?: string;
+    vantage_number?: string;
 }
 
 export interface CompetencyStats {
