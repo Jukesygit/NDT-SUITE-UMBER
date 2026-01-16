@@ -228,41 +228,54 @@ export async function sendNotificationEmails(
 
     await supabase.from('notification_email_recipients').insert(recipientEntries);
 
-    // Send emails using Promise.allSettled (handles individual failures gracefully)
-    const emailPromises = recipients.map(async (recipient) => {
-        try {
-            // Use raw HTML if template provided, otherwise wrap in default template
-            const html = isHtmlTemplate ? body : generateNotificationEmailHtml(body, recipient.username);
-            await sendEmail({ to: recipient.email, subject, html });
+    // Send emails in batches to avoid rate limiting
+    const BATCH_SIZE = 2; // Send 2 emails at a time
+    const DELAY_MS = 1000; // Wait 1 second between batches
 
-            // Update individual recipient status
-            await supabase
-                .from('notification_email_recipients')
-                .update({ status: 'sent', sent_at: new Date().toISOString() })
-                .eq('notification_id', logEntry.id)
-                .eq('recipient_id', recipient.user_id);
+    const allResults: { success: boolean; recipientId: string; error?: string }[] = [];
 
-            return { success: true, recipientId: recipient.user_id };
-        } catch (error: unknown) {
-            const errorMessage =
-                error instanceof Error ? error.message : 'Unknown error';
+    for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+        const batch = recipients.slice(i, i + BATCH_SIZE);
 
-            // Update individual recipient status with error
-            await supabase
-                .from('notification_email_recipients')
-                .update({ status: 'failed', error_message: errorMessage })
-                .eq('notification_id', logEntry.id)
-                .eq('recipient_id', recipient.user_id);
+        const batchPromises = batch.map(async (recipient) => {
+            try {
+                // Use raw HTML if template provided, otherwise wrap in default template
+                const html = isHtmlTemplate ? body : generateNotificationEmailHtml(body, recipient.username);
+                await sendEmail({ to: recipient.email, subject, html });
 
-            return { success: false, recipientId: recipient.user_id, error: errorMessage };
+                // Update individual recipient status
+                await supabase
+                    .from('notification_email_recipients')
+                    .update({ status: 'sent', sent_at: new Date().toISOString() })
+                    .eq('notification_id', logEntry.id)
+                    .eq('recipient_id', recipient.user_id);
+
+                return { success: true, recipientId: recipient.user_id };
+            } catch (error: unknown) {
+                const errorMessage =
+                    error instanceof Error ? error.message : 'Unknown error';
+
+                // Update individual recipient status with error
+                await supabase
+                    .from('notification_email_recipients')
+                    .update({ status: 'failed', error_message: errorMessage })
+                    .eq('notification_id', logEntry.id)
+                    .eq('recipient_id', recipient.user_id);
+
+                return { success: false, recipientId: recipient.user_id, error: errorMessage };
+            }
+        });
+
+        const batchResults = await Promise.all(batchPromises);
+        allResults.push(...batchResults);
+
+        // Delay between batches (except for the last batch)
+        if (i + BATCH_SIZE < recipients.length) {
+            await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
         }
-    });
+    }
 
-    const results = await Promise.allSettled(emailPromises);
-
-    const successful = results.filter(
-        (r) => r.status === 'fulfilled' && (r.value as { success: boolean }).success
-    ).length;
+    const successful = allResults.filter((r) => r.success).length;
     const failed = recipients.length - successful;
 
     // Update notification log with results
