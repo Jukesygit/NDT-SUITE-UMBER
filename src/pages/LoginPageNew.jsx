@@ -114,11 +114,10 @@ function LoginPageNew() {
             setTimeout(() => sessionStorage.removeItem(PASSWORD_RESET_KEY), 2000);
           });
       } else if (event === 'SIGNED_IN') {
-        // Only navigate away if NOT in password reset mode
-        // Check both the initial value and current sessionStorage
+        // Don't navigate here - let the isAuthenticated check in useEffect handle it
+        // This ensures AuthContext has updated before we try to navigate
         if (!currentPasswordResetMode && mode !== 'update-password') {
-          console.log('SIGNED_IN: Not in password reset mode, redirecting to home');
-          navigate('/');
+          console.log('SIGNED_IN: Auth context will handle redirect');
         } else {
           console.log('SIGNED_IN: In password reset mode, staying on login page');
         }
@@ -150,9 +149,11 @@ function LoginPageNew() {
           // Handle both string errors and object errors
           const errorMsg = typeof result.error === 'string' ? result.error : (result.error?.message || 'Login failed');
           setError(errorMsg);
-        } else {
-          navigate('/');
+          setIsLoading(false);
         }
+        // Don't navigate here and keep loading state - let the isAuthenticated useEffect handle redirect
+        // This ensures AuthContext has updated before we try to navigate
+        return;
       } else if (mode === 'register') {
         const result = await authManager.signUp(email, password);
         if (result.error) {
