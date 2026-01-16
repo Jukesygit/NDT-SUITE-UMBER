@@ -93,14 +93,19 @@ export const FormCheckbox = forwardRef<HTMLInputElement, FormCheckboxProps>(
             }
         };
 
+        // Handle click on the visual checkbox area
+        const handleClick = () => {
+            if (!disabled && internalRef.current) {
+                internalRef.current.click();
+            }
+        };
+
         return (
             <div className={`mb-4 ${containerClassName}`}>
-                <label
-                    htmlFor={fieldId}
-                    className={`
-                        flex items-start gap-3 cursor-pointer
-                        ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
-                    `}
+                <div
+                    className={`flex items-start gap-3 cursor-pointer ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    onClick={handleClick}
+                    role="presentation"
                 >
                     {/* Custom checkbox */}
                     <div className="relative flex-shrink-0 mt-0.5">
@@ -112,60 +117,51 @@ export const FormCheckbox = forwardRef<HTMLInputElement, FormCheckboxProps>(
                             checked={checked}
                             aria-invalid={!!error}
                             aria-describedby={error ? `${fieldId}-error` : undefined}
-                            className={`sr-only ${className}`}
+                            className="absolute opacity-0 w-0 h-0"
                             {...props}
                         />
-                        {/* Checkbox background - use isChecked for styling */}
+                        {/* Checkbox background */}
                         <div
-                            className={`
-                                w-5 h-5 rounded
-                                border-2 transition-all duration-200
-                                ${error ? 'border-red-500/50' : 'border-white/20'}
-                                ${isChecked ? 'bg-blue-500 border-blue-500' : ''}
-                                ${disabled ? 'opacity-50' : ''}
-                            `}
-                        />
-                        {/* Checkmark - show when checked */}
-                        <svg
-                            className={`
-                                absolute top-1 left-1 w-3 h-3 text-white
-                                transition-opacity pointer-events-none
-                                ${isChecked ? 'opacity-100' : 'opacity-0'}
-                            `}
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
+                            className={`w-5 h-5 rounded border-2 transition-all duration-200 ${
+                                error ? 'border-red-500/50' : isChecked ? 'bg-blue-500 border-blue-500' : 'border-white/20'
+                            }`}
                         >
-                            {indeterminate ? (
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={3}
-                                    d="M5 12h14"
-                                />
-                            ) : (
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={3}
-                                    d="M5 13l4 4L19 7"
-                                />
+                            {/* Checkmark */}
+                            {isChecked && (
+                                <svg
+                                    className="w-full h-full text-white p-0.5"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    {indeterminate ? (
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={3}
+                                            d="M5 12h14"
+                                        />
+                                    ) : (
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={3}
+                                            d="M5 13l4 4L19 7"
+                                        />
+                                    )}
+                                </svg>
                             )}
-                        </svg>
+                        </div>
                     </div>
 
                     {/* Label text */}
-                    <div className="flex-1">
-                        <span className="text-sm text-white/80">
-                            {label}
-                        </span>
+                    <label htmlFor={fieldId} className="flex-1 cursor-pointer">
+                        <span className="text-sm text-white/80">{label}</span>
                         {helperText && (
-                            <p className="text-xs text-white/40 mt-0.5">
-                                {helperText}
-                            </p>
+                            <p className="text-xs text-white/40 mt-0.5">{helperText}</p>
                         )}
-                    </div>
-                </label>
+                    </label>
+                </div>
 
                 {/* Error message */}
                 {error && (
