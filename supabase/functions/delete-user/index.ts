@@ -30,14 +30,43 @@ serve(async (req) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    // First delete the profile (this may fail if already deleted, that's ok)
+    // Clean up related data that might have foreign key constraints
+    // These use SET NULL or CASCADE but some might block deletion
+    const cleanupTables = [
+      { table: 'activity_log', column: 'user_id' },
+      { table: 'competency_comments', column: 'created_by' },
+      { table: 'password_reset_codes', column: 'user_id' },
+    ]
+
+    for (const { table, column } of cleanupTables) {
+      try {
+        await supabaseAdmin.from(table).delete().eq(column, userId)
+      } catch (e) {
+        console.warn(`Could not clean up ${table}:`, e)
+      }
+    }
+
+    // Nullify references in other tables
+    const nullifyTables = [
+      { table: 'personnel', column: 'witnessed_by' },
+    ]
+
+    for (const { table, column } of nullifyTables) {
+      try {
+        await supabaseAdmin.from(table).update({ [column]: null }).eq(column, userId)
+      } catch (e) {
+        console.warn(`Could not nullify ${table}.${column}:`, e)
+      }
+    }
+
+    // Delete the profile
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .delete()
       .eq('id', userId)
 
     if (profileError) {
-      console.warn('Profile deletion warning (may already be deleted):', profileError)
+      console.warn('Profile deletion warning:', profileError)
     }
 
     // Then delete the auth user
