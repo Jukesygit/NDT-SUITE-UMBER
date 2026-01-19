@@ -1002,28 +1002,22 @@ class AuthManager {
         if (this.useSupabase) {
             console.log('Attempting to delete user from Supabase:', userId);
 
-            // Delete profile (can't delete auth user without service role key)
-            // Just delete the profile - the auth user will remain but won't be able to access anything
-            const { data, error } = await supabase
-                .from('profiles')
-                .delete()
-                .eq('id', userId)
-                .select();
-
-            console.log('Supabase delete response - data:', data, 'error:', error);
+            // Use Edge Function to delete both auth user and profile
+            const { data, error } = await supabase.functions.invoke('delete-user', {
+                body: { userId }
+            });
 
             if (error) {
-                console.error('Delete error:', error);
+                console.error('Delete user edge function error:', error);
                 return { success: false, error: error.message };
             }
 
-            // Check if any rows were actually deleted
-            if (!data || data.length === 0) {
-                console.warn('No rows were deleted. User may not exist or RLS policy prevented deletion.');
-                return { success: false, error: 'Unable to delete user. Check permissions and RLS policies.' };
+            if (data?.error) {
+                console.error('Delete user error:', data.error);
+                return { success: false, error: data.error };
             }
 
-            console.log('User deleted successfully:', data);
+            console.log('User deleted successfully:', userId);
             return { success: true };
         } else {
             const index = this.authData.users.findIndex(u => u.id === userId);
