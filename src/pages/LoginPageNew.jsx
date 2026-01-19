@@ -229,20 +229,21 @@ function LoginPageNew() {
         }
 
         // Check if we have a session (the code should have been exchanged for a session)
-        const { data: { session } } = await supabase.auth.getSession();
+        let { data: { session } } = await supabase.auth.getSession();
         if (!session) {
           // Try to exchange the code if it's still in the URL
           const params = new URLSearchParams(window.location.search);
           const code = params.get('code');
           if (code) {
             console.log('No session found, attempting to exchange code...');
-            const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+            const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
             if (exchangeError) {
               console.error('Code exchange failed:', exchangeError);
               setError('Your password reset link has expired. Please request a new one.');
               setIsLoading(false);
               return;
             }
+            session = exchangeData?.session;
           } else {
             setError('Your password reset session has expired. Please request a new password reset link.');
             setIsLoading(false);
@@ -250,16 +251,29 @@ function LoginPageNew() {
           }
         }
 
-        // Update the password - use a longer timeout (30s) for slow connections
+        // Use Edge Function to update password AND confirm email
+        // This is necessary because clicking the reset link proves email ownership
         try {
-          const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+          const { data, error: updateError } = await supabase.functions.invoke('update-password-confirm-email', {
+            body: {
+              newPassword,
+              accessToken: session?.access_token
+            }
+          });
 
           if (updateError) {
             setError('Error updating password: ' + updateError.message);
+          } else if (data?.error) {
+            setError('Error updating password: ' + data.error);
           } else {
-            // Success! The USER_UPDATED event handler will take care of UI updates
-            // This else block is a fallback in case the event doesn't fire
-            console.log('updateUser promise resolved successfully');
+            // Success - show message and redirect to login
+            console.log('Password updated successfully via Edge Function');
+            setSuccessMessage(data?.message || 'Password updated successfully. You can now sign in.');
+            setNewPassword('');
+            setConfirmPassword('');
+            // Sign out the recovery session and redirect to login
+            await supabase.auth.signOut();
+            setMode('login');
           }
         } catch (updateErr) {
           console.error('Password update error:', updateErr);
