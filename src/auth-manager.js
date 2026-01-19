@@ -315,6 +315,11 @@ class AuthManager {
             if (data.user) {
                 await this.loadUserProfile(data.user.id);
 
+                if (!this.currentUser) {
+                    await supabase.auth.signOut();
+                    return { success: false, error: 'User profile not found. Please contact an administrator.' };
+                }
+
                 if (!this.currentUser.isActive) {
                     await supabase.auth.signOut();
                     return { success: false, error: 'Account is not active' };
