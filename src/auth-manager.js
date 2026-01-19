@@ -875,8 +875,37 @@ class AuthManager {
         }
     }
 
+    // Sync auth users with profiles table
+    async syncUsers() {
+        if (!this.useSupabase) {
+            return { success: true, message: 'Sync not needed in local mode' };
+        }
+
+        try {
+            const { data, error } = await supabase.functions.invoke('sync-users');
+
+            if (error) {
+                console.error('Sync users error:', error);
+                return { success: false, error: error.message };
+            }
+
+            if (data?.error) {
+                return { success: false, error: data.error };
+            }
+
+            console.log('Users synced:', data);
+            return { success: true, ...data };
+        } catch (err) {
+            console.error('Sync users error:', err);
+            return { success: false, error: err.message };
+        }
+    }
+
     async getUsers() {
         if (this.useSupabase) {
+            // Sync users first to ensure profiles exist for all auth users
+            await this.syncUsers();
+
             let query = supabase
                 .from('profiles')
                 .select('*, organizations(*)');
