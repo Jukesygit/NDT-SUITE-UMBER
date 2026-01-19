@@ -821,31 +821,33 @@ class AuthManager {
             // Ensure organization_id is a valid UUID string or null
             const orgId = userData.organizationId ? String(userData.organizationId) : null;
 
-            // Create auth user using signUp (admin.createUser requires service role key)
-            const { data: authData, error: authError } = await supabase.auth.signUp({
-                email: userData.email,
-                password: userData.password,
-                options: {
-                    data: {
-                        username: userData.username,
-                        role: userData.role || 'user',
-                        organization_id: orgId
-                    },
-                    emailRedirectTo: window.location.origin
+            // Use Edge Function to create user with admin API
+            // This pre-confirms email and ensures profile trigger fires correctly
+            const { data, error } = await supabase.functions.invoke('create-user', {
+                body: {
+                    email: userData.email,
+                    username: userData.username,
+                    password: userData.password,
+                    role: userData.role || 'viewer',
+                    organization_id: orgId
                 }
             });
 
-            if (authError) {
-                console.error('Supabase signUp error:', authError);
-                return { success: false, error: authError.message };
+            if (error) {
+                console.error('Create user edge function error:', error);
+                return { success: false, error: error.message };
             }
 
-            if (!authData.user) {
+            if (data?.error) {
+                console.error('Create user error:', data.error);
+                return { success: false, error: data.error };
+            }
+
+            if (!data?.user) {
                 return { success: false, error: 'User creation failed - no user returned' };
             }
 
-            // Profile is automatically created via trigger
-            return { success: true, user: { id: authData.user.id, ...userData } };
+            return { success: true, user: data.user };
         } else {
             // Check if username already exists
             if (this.authData.users.find(u => u.username === userData.username)) {
