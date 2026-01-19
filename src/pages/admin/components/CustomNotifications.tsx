@@ -4,7 +4,7 @@
 
 import { useState, useMemo } from 'react';
 import { usePersonnel, useOrganizations } from '../../../hooks/queries/usePersonnel';
-import { useSendNotification } from '../../../hooks/mutations/useNotificationMutations';
+import { useSendNotification, type EmailProgress } from '../../../hooks/mutations/useNotificationMutations';
 import { PersonnelSelector } from './PersonnelSelector';
 import { FormField, FormTextarea, ConfirmDialog } from '../../../components/ui';
 import type { Person } from '../../../hooks/queries/usePersonnel';
@@ -142,6 +142,9 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
     // Success message state
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+    // Progress tracking state
+    const [progress, setProgress] = useState<EmailProgress | null>(null);
+
     // Filter personnel
     const filteredPersonnel = useMemo(() => {
         return personnel.filter((person: Person) => {
@@ -187,6 +190,9 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
     const handleSend = async () => {
         if (!isValid) return;
 
+        // Reset progress
+        setProgress(null);
+
         try {
             const result = await sendNotification.mutateAsync({
                 subject: subject.trim(),
@@ -203,7 +209,11 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
                     searchTerm: searchTerm || undefined,
                 },
                 isHtmlTemplate: useHtmlTemplate,
+                onProgress: setProgress,
             });
+
+            // Clear progress
+            setProgress(null);
 
             // Show success message
             setSuccessMessage(
@@ -225,6 +235,7 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
             onSuccess?.();
         } catch (error) {
             console.error('Failed to send notification:', error);
+            setProgress(null);
         }
     };
 
@@ -343,6 +354,50 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
                         }}
                     >
                         {successMessage}
+                    </div>
+                )}
+
+                {/* Progress indicator */}
+                {progress && (
+                    <div
+                        style={{
+                            padding: '16px',
+                            background: 'rgba(59, 130, 246, 0.1)',
+                            border: '1px solid rgba(59, 130, 246, 0.3)',
+                            borderRadius: '8px',
+                            marginBottom: '16px',
+                        }}
+                    >
+                        <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ color: '#60a5fa', fontWeight: 500, fontSize: '14px' }}>
+                                Sending email {progress.current} of {progress.total}
+                            </span>
+                            <span style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '13px' }}>
+                                {progress.successCount} sent{progress.failCount > 0 ? `, ${progress.failCount} failed` : ''}
+                            </span>
+                        </div>
+                        <div
+                            style={{
+                                height: '8px',
+                                background: 'rgba(255, 255, 255, 0.1)',
+                                borderRadius: '4px',
+                                overflow: 'hidden',
+                                marginBottom: '8px',
+                            }}
+                        >
+                            <div
+                                style={{
+                                    height: '100%',
+                                    width: `${(progress.current / progress.total) * 100}%`,
+                                    background: 'linear-gradient(90deg, #3b82f6, #60a5fa)',
+                                    borderRadius: '4px',
+                                    transition: 'width 0.3s ease',
+                                }}
+                            />
+                        </div>
+                        <div style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '12px' }}>
+                            Currently sending to: {progress.currentRecipient}
+                        </div>
                     </div>
                 )}
 
