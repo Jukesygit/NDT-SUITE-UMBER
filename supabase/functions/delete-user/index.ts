@@ -31,29 +31,49 @@ serve(async (req) => {
     )
 
     // Clean up related data that might have foreign key constraints
-    // These use SET NULL or CASCADE but some might block deletion
-    const cleanupTables = [
+    // Delete records where user is the owner
+    const deleteFromTables = [
       { table: 'activity_log', column: 'user_id' },
       { table: 'competency_comments', column: 'created_by' },
       { table: 'password_reset_codes', column: 'user_id' },
+      { table: 'user_competencies', column: 'user_id' },
+      { table: 'competency_history', column: 'user_id' },
+      { table: 'user_asset_access', column: 'user_id' },
+      { table: 'asset_access_requests', column: 'user_id' },
+      { table: 'shared_assets', column: 'shared_by' },
+      { table: 'email_reminder_log', column: 'user_id' },
+      { table: 'notification_emails', column: 'sent_by' },
     ]
 
-    for (const { table, column } of cleanupTables) {
+    for (const { table, column } of deleteFromTables) {
       try {
-        await supabaseAdmin.from(table).delete().eq(column, userId)
+        const { error } = await supabaseAdmin.from(table).delete().eq(column, userId)
+        if (error) console.warn(`Delete from ${table} warning:`, error.message)
       } catch (e) {
         console.warn(`Could not clean up ${table}:`, e)
       }
     }
 
-    // Nullify references in other tables
+    // Nullify references in tables where user is a reference (not owner)
     const nullifyTables = [
       { table: 'personnel', column: 'witnessed_by' },
+      { table: 'user_competencies', column: 'verified_by' },
+      { table: 'competency_history', column: 'changed_by' },
+      { table: 'assets', column: 'created_by' },
+      { table: 'user_asset_access', column: 'granted_by' },
+      { table: 'asset_access_requests', column: 'approved_by' },
+      { table: 'asset_access_requests', column: 'rejected_by' },
+      { table: 'account_requests', column: 'approved_by' },
+      { table: 'account_requests', column: 'rejected_by' },
+      { table: 'inspections', column: 'inspector_id' },
+      { table: 'notification_emails', column: 'recipient_id' },
+      { table: 'email_reminder_settings', column: 'updated_by' },
     ]
 
     for (const { table, column } of nullifyTables) {
       try {
-        await supabaseAdmin.from(table).update({ [column]: null }).eq(column, userId)
+        const { error } = await supabaseAdmin.from(table).update({ [column]: null }).eq(column, userId)
+        if (error) console.warn(`Nullify ${table}.${column} warning:`, error.message)
       } catch (e) {
         console.warn(`Could not nullify ${table}.${column}:`, e)
       }
