@@ -36,7 +36,7 @@ serve(async (req) => {
       { table: 'activity_log', column: 'user_id' },
       { table: 'competency_comments', column: 'created_by' },
       { table: 'password_reset_codes', column: 'user_id' },
-      { table: 'user_competencies', column: 'user_id' },
+      { table: 'employee_competencies', column: 'user_id' },
       { table: 'competency_history', column: 'user_id' },
       { table: 'user_asset_access', column: 'user_id' },
       { table: 'asset_access_requests', column: 'user_id' },
@@ -57,7 +57,7 @@ serve(async (req) => {
     // Nullify references in tables where user is a reference (not owner)
     const nullifyTables = [
       { table: 'personnel', column: 'witnessed_by' },
-      { table: 'user_competencies', column: 'verified_by' },
+      { table: 'employee_competencies', column: 'verified_by' },
       { table: 'competency_history', column: 'changed_by' },
       { table: 'assets', column: 'created_by' },
       { table: 'user_asset_access', column: 'granted_by' },
@@ -65,9 +65,13 @@ serve(async (req) => {
       { table: 'asset_access_requests', column: 'rejected_by' },
       { table: 'account_requests', column: 'approved_by' },
       { table: 'account_requests', column: 'rejected_by' },
+      { table: 'permission_requests', column: 'approved_by' },
+      { table: 'permission_requests', column: 'rejected_by' },
       { table: 'inspections', column: 'inspector_id' },
       { table: 'notification_emails', column: 'recipient_id' },
       { table: 'email_reminder_settings', column: 'updated_by' },
+      { table: 'system_announcements', column: 'created_by' },
+      { table: 'system_announcements', column: 'updated_by' },
     ]
 
     for (const { table, column } of nullifyTables) {
