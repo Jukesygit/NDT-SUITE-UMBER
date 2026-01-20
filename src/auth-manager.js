@@ -975,15 +975,27 @@ class AuthManager {
         }
 
         if (this.useSupabase) {
-            const { data, error } = await supabase
+            // First, perform the update without returning data to avoid RLS issues
+            const { error: updateError } = await supabase
                 .from('profiles')
                 .update(updates)
-                .eq('id', userId)
-                .select()
-                .single();
+                .eq('id', userId);
 
-            if (error) {
-                return { success: false, error: error.message };
+            if (updateError) {
+                return { success: false, error: updateError.message };
+            }
+
+            // Then fetch the updated profile separately
+            const { data, error: fetchError } = await supabase
+                .from('profiles')
+                .select()
+                .eq('id', userId)
+                .maybeSingle();
+
+            if (fetchError) {
+                // Update succeeded but couldn't fetch - still return success
+                console.warn('Profile updated but could not fetch result:', fetchError.message);
+                return { success: true, user: { id: userId, ...updates } };
             }
 
             // Update current user if updating self
@@ -991,7 +1003,7 @@ class AuthManager {
                 await this.loadUserProfile(userId);
             }
 
-            return { success: true, user: data };
+            return { success: true, user: data || { id: userId, ...updates } };
         } else {
             Object.assign(user, updates);
             await this.saveAuthData();
