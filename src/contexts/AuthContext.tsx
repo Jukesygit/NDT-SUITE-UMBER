@@ -5,7 +5,7 @@
  * Designed to support future route guards (Option 4).
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import authManager from '../auth-manager.js';
 import { clearQueryCache } from '../lib/query-client';
 
@@ -77,6 +77,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const [user, setUser] = useState<AuthUser | null>(null);
     const [profile, setProfile] = useState<AuthProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const isInitializedRef = useRef(false); // Track if auth has fully initialized (ref for event handlers)
 
     // Load auth state from authManager
     const loadAuthState = useCallback(() => {
@@ -100,11 +101,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 if (mounted) {
                     loadAuthState();
                     setIsLoading(false);
+                    isInitializedRef.current = true;
+                    console.log('AuthContext: Initialization complete');
                 }
             } catch (error) {
                 console.error('AuthContext: Failed to initialize auth:', error);
                 if (mounted) {
                     setIsLoading(false);
+                    isInitializedRef.current = true; // Still mark as initialized to unblock
                 }
             }
         };
@@ -140,6 +144,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Listen for auth errors (dispatched by query-client on 401/403)
         const handleAuthError = async () => {
             if (!mounted) return;
+
+            // Skip auth error handling during initialization - let init complete first
+            if (!isInitializedRef.current) {
+                console.log('AuthContext: Skipping auth error during initialization');
+                return;
+            }
 
             console.warn('AuthContext: Auth error detected, attempting to refresh session...');
 
@@ -177,6 +187,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // This catches cases where the session expired but no API call triggered the error
         const sessionCheckInterval = setInterval(async () => {
             if (!mounted) return;
+
+            // Skip if auth hasn't initialized yet
+            if (!isInitializedRef.current) return;
 
             const currentUser = authManager.getCurrentUser();
             if (!currentUser) return; // Not logged in, skip check
