@@ -975,27 +975,38 @@ class AuthManager {
         }
 
         if (this.useSupabase) {
-            // First, perform the update without returning data to avoid RLS issues
-            const { error: updateError } = await supabase
+            // Perform the update and select the result to verify it worked
+            const { data: updatedRows, error: updateError } = await supabase
                 .from('profiles')
                 .update(updates)
-                .eq('id', userId);
+                .eq('id', userId)
+                .select();
 
             if (updateError) {
                 return { success: false, error: updateError.message };
             }
 
-            // Then fetch the updated profile separately
-            const { data, error: fetchError } = await supabase
-                .from('profiles')
-                .select()
-                .eq('id', userId)
-                .maybeSingle();
+            // Check if any rows were actually updated (RLS may silently block)
+            if (!updatedRows || updatedRows.length === 0) {
+                console.error('Update affected 0 rows - RLS policy may have blocked the operation');
+                return {
+                    success: false,
+                    error: 'Unable to update user. You may not have permission to modify this user.'
+                };
+            }
 
-            if (fetchError) {
-                // Update succeeded but couldn't fetch - still return success
-                console.warn('Profile updated but could not fetch result:', fetchError.message);
-                return { success: true, user: { id: userId, ...updates } };
+            const data = updatedRows[0];
+
+            // Verify the update actually applied by checking a key field
+            if (updates.role && data.role !== updates.role) {
+                console.error('Update appeared to succeed but role was not changed:', {
+                    expected: updates.role,
+                    actual: data.role
+                });
+                return {
+                    success: false,
+                    error: 'Unable to update user role. Database policy may have blocked this change.'
+                };
             }
 
             // Update current user if updating self
@@ -1003,7 +1014,7 @@ class AuthManager {
                 await this.loadUserProfile(userId);
             }
 
-            return { success: true, user: data || { id: userId, ...updates } };
+            return { success: true, user: data };
         } else {
             Object.assign(user, updates);
             await this.saveAuthData();
