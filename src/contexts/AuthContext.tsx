@@ -7,6 +7,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import authManager from '../auth-manager.js';
+import { clearQueryCache } from '../lib/query-client';
 
 // Types matching auth-manager
 export interface AuthUser {
@@ -130,15 +131,75 @@ export function AuthProvider({ children }: AuthProviderProps) {
             if (mounted) {
                 setUser(null);
                 setProfile(null);
+                // Clear React Query cache to prevent stale data on next login
+                clearQueryCache();
             }
         };
         window.addEventListener('userLoggedOut', handleLogout);
+
+        // Listen for auth errors (dispatched by query-client on 401/403)
+        const handleAuthError = async () => {
+            if (!mounted) return;
+
+            console.warn('AuthContext: Auth error detected, attempting to refresh session...');
+
+            // Try to get current session via authManager (handles Supabase internally)
+            try {
+                const session = await authManager.getSession();
+
+                if (!session) {
+                    // Session is invalid, log the user out
+                    console.warn('AuthContext: Session invalid, logging out');
+                    await authManager.logout();
+                    setUser(null);
+                    setProfile(null);
+                    clearQueryCache();
+                    // Redirect to login
+                    window.location.href = '/login';
+                } else {
+                    // Session is still valid, just reload auth state
+                    console.log('AuthContext: Session still valid, reloading state');
+                    loadAuthState();
+                }
+            } catch (err) {
+                console.error('AuthContext: Failed to refresh session:', err);
+                // Force logout on error
+                await authManager.logout();
+                setUser(null);
+                setProfile(null);
+                clearQueryCache();
+                window.location.href = '/login';
+            }
+        };
+        window.addEventListener('authError', handleAuthError);
+
+        // Periodic session validation (every 5 minutes)
+        // This catches cases where the session expired but no API call triggered the error
+        const sessionCheckInterval = setInterval(async () => {
+            if (!mounted) return;
+
+            const currentUser = authManager.getCurrentUser();
+            if (!currentUser) return; // Not logged in, skip check
+
+            try {
+                const session = await authManager.getSession();
+
+                if (!session) {
+                    console.warn('AuthContext: Session check failed, session may have expired');
+                    handleAuthError();
+                }
+            } catch (err) {
+                console.warn('AuthContext: Session check error:', err);
+            }
+        }, 5 * 60 * 1000); // Check every 5 minutes
 
         return () => {
             mounted = false;
             if (unsubscribe) unsubscribe();
             window.removeEventListener('userLoggedIn', handleLogin);
             window.removeEventListener('userLoggedOut', handleLogout);
+            window.removeEventListener('authError', handleAuthError);
+            clearInterval(sessionCheckInterval);
         };
     }, [loadAuthState]);
 
@@ -167,14 +228,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
         await authManager.logout();
         setUser(null);
         setProfile(null);
+        // Clear React Query cache to prevent stale data on next login
+        clearQueryCache();
     }, []);
 
-    // Refresh auth state
+    // Refresh auth state - checks current session and reloads state
     const refreshAuth = useCallback(async () => {
         setIsLoading(true);
         try {
-            await authManager.getSession();
+            // Check if session is still valid via authManager
+            const session = await authManager.getSession();
+
+            if (!session) {
+                console.warn('AuthContext: Session refresh failed - no valid session');
+                // Session is invalid, trigger logout
+                await authManager.logout();
+                setUser(null);
+                setProfile(null);
+                clearQueryCache();
+                return;
+            }
+
+            // Session is valid, reload auth state
             loadAuthState();
+        } catch (err) {
+            console.error('AuthContext: Failed to refresh auth:', err);
         } finally {
             setIsLoading(false);
         }
