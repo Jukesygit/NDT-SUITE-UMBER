@@ -141,9 +141,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
         };
         window.addEventListener('userLoggedOut', handleLogout);
 
+        // Track if we're currently handling an auth error to prevent duplicate handling
+        let isHandlingError = false;
+
         // Listen for auth errors (dispatched by query-client on 401/403)
         const handleAuthError = async () => {
             if (!mounted) return;
+
+            // Prevent duplicate error handling
+            if (isHandlingError) {
+                console.log('AuthContext: Already handling auth error, skipping');
+                return;
+            }
 
             // Skip auth error handling during initialization - let init complete first
             if (!isInitializedRef.current) {
@@ -151,19 +160,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 return;
             }
 
+            isHandlingError = true;
             console.warn('AuthContext: Auth error detected, attempting to refresh session...');
 
-            // Try to get current session via authManager (handles Supabase internally)
             try {
+                // First, try to refresh the session token (not just check if it exists)
+                const refreshedSession = await authManager.refreshSession();
+
+                if (refreshedSession) {
+                    // Session was successfully refreshed
+                    console.log('AuthContext: Session refreshed successfully');
+                    loadAuthState();
+                    // Invalidate queries to refetch with new token
+                    const { invalidateAllQueries } = await import('../lib/query-client');
+                    invalidateAllQueries();
+                    isHandlingError = false;
+                    return;
+                }
+
+                // Refresh failed, try to get current session
                 const session = await authManager.getSession();
 
                 if (!session) {
                     // Session is invalid, log the user out
-                    console.warn('AuthContext: Session invalid, logging out');
+                    console.warn('AuthContext: Session expired, logging out');
                     await authManager.logout();
                     setUser(null);
                     setProfile(null);
                     clearQueryCache();
+                    // Show user-friendly notification
+                    alert('Your session has expired. Please log in again.');
                     // Redirect to login
                     window.location.href = '/login';
                 } else {
@@ -178,12 +204,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 setUser(null);
                 setProfile(null);
                 clearQueryCache();
+                alert('Your session has expired. Please log in again.');
                 window.location.href = '/login';
+            } finally {
+                // Reset after a delay to allow for potential rapid errors
+                setTimeout(() => {
+                    isHandlingError = false;
+                }, 2000);
             }
         };
         window.addEventListener('authError', handleAuthError);
 
-        // Periodic session validation (every 5 minutes)
+        // Periodic session validation (every 4 minutes - before typical 5 min token expiry)
         // This catches cases where the session expired but no API call triggered the error
         const sessionCheckInterval = setInterval(async () => {
             if (!mounted) return;
@@ -195,6 +227,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
             if (!currentUser) return; // Not logged in, skip check
 
             try {
+                // First try to proactively refresh the session to prevent expiration
+                const refreshedSession = await authManager.refreshSession();
+
+                if (refreshedSession) {
+                    console.log('AuthContext: Session proactively refreshed');
+                    return;
+                }
+
+                // If refresh failed, check if session exists
                 const session = await authManager.getSession();
 
                 if (!session) {
@@ -204,7 +245,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             } catch (err) {
                 console.warn('AuthContext: Session check error:', err);
             }
-        }, 5 * 60 * 1000); // Check every 5 minutes
+        }, 4 * 60 * 1000); // Check every 4 minutes (before typical token expiry)
 
         return () => {
             mounted = false;

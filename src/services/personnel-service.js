@@ -62,6 +62,7 @@ class PersonnelService {
                         description,
                         field_type,
                         category_id,
+                        is_active,
                         competency_categories(
                             id,
                             name,
@@ -69,6 +70,7 @@ class PersonnelService {
                         )
                     )
                 `)
+                .eq('competency_definitions.is_active', true)
         ]);
 
         if (profilesResult.error) throw profilesResult.error;
@@ -327,7 +329,7 @@ class PersonnelService {
 
         if (personError) throw personError;
 
-        // Get competencies with definitions and categories
+        // Get competencies with definitions and categories (only active definitions)
         const { data: competencies, error: compError } = await supabase
             .from('employee_competencies')
             .select(`
@@ -351,13 +353,15 @@ class PersonnelService {
                     requires_document,
                     requires_approval,
                     category_id,
+                    is_active,
                     competency_categories(
                         id,
                         name
                     )
                 )
             `)
-            .eq('user_id', userId);
+            .eq('user_id', userId)
+            .eq('competency_definitions.is_active', true);
 
         if (compError) throw compError;
 
