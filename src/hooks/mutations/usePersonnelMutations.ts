@@ -73,14 +73,50 @@ export function useUpdatePerson() {
             personId: string;
             data: UpdatePersonData;
         }): Promise<Person> => {
+            // Clean the data: convert empty strings to null for optional fields
+            // This prevents PostgreSQL errors for DATE fields and ensures clean data
+            const cleanedData: Record<string, unknown> = {};
+
+            for (const [key, value] of Object.entries(data)) {
+                // Convert empty strings to null for nullable fields
+                if (value === '' || value === undefined) {
+                    cleanedData[key] = null;
+                } else {
+                    cleanedData[key] = value;
+                }
+            }
+
+            // Ensure date_of_birth is properly formatted or null
+            if (cleanedData.date_of_birth && typeof cleanedData.date_of_birth === 'string') {
+                // Validate date format (should be YYYY-MM-DD)
+                const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+                if (!dateRegex.test(cleanedData.date_of_birth as string)) {
+                    // Try to parse and reformat the date
+                    const parsed = new Date(cleanedData.date_of_birth as string);
+                    if (isNaN(parsed.getTime())) {
+                        cleanedData.date_of_birth = null;
+                    } else {
+                        cleanedData.date_of_birth = parsed.toISOString().split('T')[0];
+                    }
+                }
+            }
+
             const { data: updated, error } = await supabase
                 .from('profiles')
-                .update(data)
+                .update(cleanedData)
                 .eq('id', personId)
                 .select('*, organizations(*)')
                 .single();
 
-            if (error) throw error;
+            if (error) {
+                // Provide more helpful error message
+                console.error('Profile update error:', error);
+                if (error.code === '42703') {
+                    // Column does not exist
+                    throw new Error(`Database schema error: A required column is missing. Please contact support.`);
+                }
+                throw error;
+            }
             return updated;
         },
         onSuccess: (_, variables) => {
