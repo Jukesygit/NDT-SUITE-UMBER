@@ -22,6 +22,16 @@ interface UploadCompetencyDocumentResult {
     name: string;
 }
 
+// Timeout wrapper for async operations
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
+    return Promise.race([
+        promise,
+        new Promise<T>((_, reject) =>
+            setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+        )
+    ]);
+}
+
 async function uploadCompetencyDocument(params: UploadCompetencyDocumentParams): Promise<UploadCompetencyDocumentResult> {
     const { userId, competencyName, file } = params;
 
@@ -42,15 +52,28 @@ async function uploadCompetencyDocument(params: UploadCompetencyDocumentParams):
     const fileName = `${userId}/${competencySlug}_${Date.now()}.${fileExt}`;
     const filePath = `competency-documents/${fileName}`;
 
-    const { error: uploadError } = await supabase.storage
+    // Upload with 60 second timeout to prevent indefinite hanging
+    const uploadPromise = supabase.storage
         .from('documents')
         .upload(filePath, file, {
             cacheControl: '3600',
             upsert: true
         });
 
-    if (uploadError) {
-        throw uploadError;
+    try {
+        const { error: uploadError } = await withTimeout(
+            uploadPromise,
+            60000, // 60 second timeout
+            'Upload timed out. Please check your connection and try again.'
+        );
+
+        if (uploadError) {
+            console.error('Supabase upload error:', uploadError);
+            throw new Error(uploadError.message || 'Failed to upload document');
+        }
+    } catch (error) {
+        console.error('Upload failed:', error);
+        throw error;
     }
 
     // Return the storage path (not a URL) - signed URLs are generated when viewing
