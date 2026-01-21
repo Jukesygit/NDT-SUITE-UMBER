@@ -88,6 +88,13 @@ function createLoginHTML() {
             caret-color: #ffffff !important;
         }
 
+        /* Placeholder styling */
+        #username::placeholder, #password::placeholder,
+        #req-username::placeholder, #req-email::placeholder, #req-message::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+            opacity: 1;
+        }
+
         /* Select dropdown fix */
         #req-organization, #req-role {
             -webkit-text-fill-color: #ffffff !important;
@@ -184,22 +191,13 @@ function createLoginHTML() {
                 <!-- Login Form -->
                 <form id="login-form">
                     <!-- Email Input -->
-                    <div style="margin-bottom: 24px; position: relative">
-                        <input type="text" id="username" autocomplete="username" required style="width: 100%; padding: 16px 16px 16px 48px; font-size: 15px; color: #fff; background-color: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; outline: none; box-sizing: border-box; transition: all 0.3s">
-                        <label id="username-label" style="position: absolute; left: 48px; top: 50%; transform: translateY(-50%); font-size: 15px; color: rgba(255,255,255,0.5); transition: all 0.3s; pointer-events: none; font-weight: 500">Email Address</label>
-                        <svg id="username-icon" width="20" height="20" viewBox="0 0 20 20" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); opacity: 0.5; transition: opacity 0.3s">
-                            <path d="M2 4h16v12H2V4zm0 1l8 5 8-5M2 5v10" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/>
-                        </svg>
+                    <div style="margin-bottom: 24px">
+                        <input type="text" id="username" autocomplete="username" required placeholder="Email Address" style="width: 100%; padding: 16px; font-size: 15px; color: #fff; background-color: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; outline: none; box-sizing: border-box; transition: border-color 0.3s, box-shadow 0.3s">
                     </div>
 
                     <!-- Password Input -->
-                    <div style="margin-bottom: 20px; position: relative">
-                        <input type="password" id="password" autocomplete="current-password" required style="width: 100%; padding: 16px 16px 16px 48px; font-size: 15px; color: #fff; background-color: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; outline: none; box-sizing: border-box; transition: all 0.3s">
-                        <label id="password-label" style="position: absolute; left: 48px; top: 50%; transform: translateY(-50%); font-size: 15px; color: rgba(255,255,255,0.5); transition: all 0.3s; pointer-events: none; font-weight: 500">Password</label>
-                        <svg id="password-icon" width="20" height="20" viewBox="0 0 20 20" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); opacity: 0.5; transition: opacity 0.3s">
-                            <rect x="4" y="8" width="12" height="9" rx="1" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/>
-                            <path d="M7 8V6a3 3 0 016 0v2" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/>
-                        </svg>
+                    <div style="margin-bottom: 20px">
+                        <input type="password" id="password" autocomplete="current-password" required placeholder="Password" style="width: 100%; padding: 16px; font-size: 15px; color: #fff; background-color: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; outline: none; box-sizing: border-box; transition: border-color 0.3s, box-shadow 0.3s">
                     </div>
 
                     <!-- Remember Me Checkbox -->
@@ -301,10 +299,6 @@ function cacheDom() {
         username: q('#username'),
         password: q('#password'),
         rememberMe: q('#remember-me'),
-        usernameLabel: q('#username-label'),
-        passwordLabel: q('#password-label'),
-        usernameIcon: q('#username-icon'),
-        passwordIcon: q('#password-icon'),
         errorMessage: q('#error-message'),
         submitBtn: q('#submit-btn'),
         submitText: q('#submit-text'),
@@ -323,71 +317,21 @@ function cacheDom() {
 
 
 function addInputAnimations() {
-    // Function to update label position and style
-    const updateLabelState = (input, label, icon, isFocused) => {
-        const hasValue = input.value.length > 0;
-        const shouldFloat = isFocused || hasValue;
+    // Simple focus/blur styling for inputs
+    const addFocusStyle = (input) => {
+        input.addEventListener('focus', () => {
+            input.style.borderColor = 'var(--accent-primary)';
+            input.style.boxShadow = '0 0 0 3px var(--accent-primary-subtle), 0 0 20px var(--accent-primary-glow)';
+        });
 
-        if (shouldFloat) {
-            label.style.top = '6px';
-            label.style.transform = 'translateY(0)';
-            label.style.fontSize = '11px';
-            label.style.color = isFocused ? 'var(--accent-primary)' : 'rgba(255,255,255,0.5)';
-        } else {
-            label.style.top = '50%';
-            label.style.transform = 'translateY(-50%)';
-            label.style.fontSize = '15px';
-            label.style.color = 'rgba(255,255,255,0.5)';
-        }
-
-        // Update input border and shadow
-        if (isFocused) {
-            input.style.border = '1px solid var(--accent-primary)';
-            input.style.boxShadow = `0 0 0 3px var(--accent-primary-subtle), 0 0 20px var(--accent-primary-glow)`;
-        } else {
-            input.style.border = '1px solid rgba(255,255,255,0.1)';
+        input.addEventListener('blur', () => {
+            input.style.borderColor = 'rgba(255,255,255,0.1)';
             input.style.boxShadow = 'none';
-        }
-
-        // Update icon
-        icon.style.opacity = isFocused ? '1' : '0.5';
+        });
     };
 
-    // Username input animations
-    dom.username.addEventListener('focus', () => {
-        updateLabelState(dom.username, dom.usernameLabel, dom.usernameIcon, true);
-        const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--accent-primary');
-        dom.usernameIcon.querySelector('path').setAttribute('stroke', primaryColor);
-    });
-
-    dom.username.addEventListener('blur', () => {
-        updateLabelState(dom.username, dom.usernameLabel, dom.usernameIcon, false);
-        dom.usernameIcon.querySelector('path').setAttribute('stroke', 'rgba(255,255,255,0.5)');
-    });
-
-    dom.username.addEventListener('input', () => {
-        updateLabelState(dom.username, dom.usernameLabel, dom.usernameIcon, true);
-    });
-
-    // Password input animations
-    dom.password.addEventListener('focus', () => {
-        updateLabelState(dom.password, dom.passwordLabel, dom.passwordIcon, true);
-        const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--accent-primary');
-        dom.passwordIcon.querySelectorAll('rect, path').forEach(el => {
-            el.setAttribute('stroke', primaryColor);
-        });
-    });
-
-    dom.password.addEventListener('blur', () => {
-        updateLabelState(dom.password, dom.passwordLabel, dom.passwordIcon, false);
-        dom.passwordIcon.querySelectorAll('rect, path').forEach(el => {
-            el.setAttribute('stroke', 'rgba(255,255,255,0.5)');
-        });
-    });
-
-    dom.password.addEventListener('input', () => {
-        updateLabelState(dom.password, dom.passwordLabel, dom.passwordIcon, true);
-    });
+    addFocusStyle(dom.username);
+    addFocusStyle(dom.password);
 }
 
 async function handleLogin(e) {
@@ -561,43 +505,7 @@ export default {
         if (rememberedUsername) {
             dom.username.value = rememberedUsername;
             dom.rememberMe.checked = true;
-            // Trigger label animation
-            dom.usernameLabel.style.top = '6px';
-            dom.usernameLabel.style.transform = 'translateY(0)';
-            dom.usernameLabel.style.fontSize = '11px';
         }
-
-        // Check for autofilled values and adjust labels accordingly
-        // Browser autofill happens after page load, so we need to check with a delay
-        setTimeout(() => {
-            if (dom.username.value) {
-                dom.usernameLabel.style.top = '6px';
-                dom.usernameLabel.style.transform = 'translateY(0)';
-                dom.usernameLabel.style.fontSize = '11px';
-            }
-            if (dom.password.value) {
-                dom.passwordLabel.style.top = '6px';
-                dom.passwordLabel.style.transform = 'translateY(0)';
-                dom.passwordLabel.style.fontSize = '11px';
-            }
-        }, 100);
-
-        // Also listen for animation start events (triggered by Chrome autofill)
-        dom.username.addEventListener('animationstart', (e) => {
-            if (e.animationName === 'onAutoFillStart') {
-                dom.usernameLabel.style.top = '6px';
-                dom.usernameLabel.style.transform = 'translateY(0)';
-                dom.usernameLabel.style.fontSize = '11px';
-            }
-        });
-
-        dom.password.addEventListener('animationstart', (e) => {
-            if (e.animationName === 'onAutoFillStart') {
-                dom.passwordLabel.style.top = '6px';
-                dom.passwordLabel.style.transform = 'translateY(0)';
-                dom.passwordLabel.style.fontSize = '11px';
-            }
-        });
     },
 
     destroy: () => {
