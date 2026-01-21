@@ -2,10 +2,14 @@
  * EditCompetencyModal - Modal for adding/editing competencies
  */
 
-import { useState, useCallback, useEffect, ChangeEvent } from 'react';
+import { useState, useCallback, useEffect, ChangeEvent, DragEvent } from 'react';
 import { Modal, FormField, FormTextarea } from '../../components/ui';
 import { RandomMatrixSpinner } from '../../components/MatrixSpinners';
 import type { CompetencyDefinition } from './CompetencyCard';
+
+// Valid file types for competency documents
+const VALID_FILE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export interface CompetencyFormData {
     competency_id: string;
@@ -146,6 +150,9 @@ export function EditCompetencyModal({
         definition,
     });
 
+    // Drag-and-drop state
+    const [isDragging, setIsDragging] = useState(false);
+
     // Sync form state when modal opens with new definition/initialData
     useEffect(() => {
         if (isOpen) {
@@ -174,22 +181,20 @@ export function EditCompetencyModal({
         setFormData((prev) => ({ ...prev, [field]: value }));
     }, []);
 
-    // Handle document upload
-    const handleDocumentChange = useCallback(
-        async (e: ChangeEvent<HTMLInputElement>) => {
-            const file = e.target.files?.[0];
-            console.log('[EditCompetencyModal] handleDocumentChange called', { file: file?.name, hasUploadFn: !!onDocumentUpload });
+    // Process and upload a file (shared by click and drag-and-drop)
+    const processFile = useCallback(
+        async (file: File) => {
+            console.log('[EditCompetencyModal] processFile called', { file: file?.name, hasUploadFn: !!onDocumentUpload });
             if (!file || !onDocumentUpload) return;
 
             // Validate file type
-            const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
-            if (!validTypes.includes(file.type)) {
+            if (!VALID_FILE_TYPES.includes(file.type)) {
                 alert('Please upload a PDF or image file');
                 return;
             }
 
             // Validate file size (max 10MB)
-            if (file.size > 10 * 1024 * 1024) {
+            if (file.size > MAX_FILE_SIZE) {
                 alert('File must be less than 10MB');
                 return;
             }
@@ -214,6 +219,46 @@ export function EditCompetencyModal({
         },
         [onDocumentUpload]
     );
+
+    // Handle document upload via file input
+    const handleDocumentChange = useCallback(
+        async (e: ChangeEvent<HTMLInputElement>) => {
+            const file = e.target.files?.[0];
+            if (file) {
+                await processFile(file);
+            }
+            // Reset input to allow re-selecting the same file
+            e.target.value = '';
+        },
+        [processFile]
+    );
+
+    // Drag-and-drop handlers
+    const handleDrop = useCallback(
+        async (e: DragEvent<HTMLLabelElement>) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDragging(false);
+
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                await processFile(file);
+            }
+        },
+        [processFile]
+    );
+
+    const handleDragOver = useCallback((e: DragEvent<HTMLLabelElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+    }, []);
+
+    const handleDragLeave = useCallback((e: DragEvent<HTMLLabelElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+    }, []);
 
     // Remove document
     const handleRemoveDocument = useCallback(() => {
@@ -387,20 +432,29 @@ export function EditCompetencyModal({
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 padding: '20px',
-                                border: '2px dashed rgba(255, 255, 255, 0.2)',
+                                border: isDragging
+                                    ? '2px solid var(--accent-primary)'
+                                    : '2px dashed rgba(255, 255, 255, 0.2)',
                                 borderRadius: '8px',
                                 cursor: isUploadingDocument ? 'wait' : 'pointer',
                                 transition: 'all 0.2s ease',
-                                background: 'rgba(255, 255, 255, 0.02)',
+                                background: isDragging
+                                    ? 'rgba(59, 130, 246, 0.1)'
+                                    : 'rgba(255, 255, 255, 0.02)',
                             }}
                             onMouseEnter={(e) => {
-                                if (!isUploadingDocument) {
+                                if (!isUploadingDocument && !isDragging) {
                                     e.currentTarget.style.borderColor = 'var(--accent-primary)';
                                 }
                             }}
                             onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                                if (!isDragging) {
+                                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                                }
                             }}
+                            onDrop={handleDrop}
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
                         >
                             {isUploadingDocument ? (
                                 <>
@@ -416,12 +470,12 @@ export function EditCompetencyModal({
                                     <UploadIcon />
                                     <span
                                         style={{
-                                            color: 'rgba(255, 255, 255, 0.6)',
+                                            color: isDragging ? 'var(--accent-primary)' : 'rgba(255, 255, 255, 0.6)',
                                             fontSize: '13px',
                                             textAlign: 'center',
                                         }}
                                     >
-                                        Click to upload certificate
+                                        {isDragging ? 'Drop file here' : 'Drag & drop or click to upload'}
                                     </span>
                                     <span
                                         style={{

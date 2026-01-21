@@ -1,13 +1,21 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { Spinner } from './LoadingStates';
 
 function ProtectedRoute({ requireAdmin, requireElevatedAccess, children }) {
     const location = useLocation();
     const { isAuthenticated, isAdmin, hasElevatedAccess, isLoading } = useAuth();
 
-    // Show nothing while loading (AuthProvider will handle the loading state)
+    // Show centered spinner while auth state is loading
     if (isLoading) {
-        return null;
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center">
+                    <Spinner size="lg" />
+                    <p className="mt-4 text-secondary text-sm">Verifying session...</p>
+                </div>
+            </div>
+        );
     }
 
     // Check if user is logged in

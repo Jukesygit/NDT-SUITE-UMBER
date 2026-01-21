@@ -1295,14 +1295,52 @@ class AuthManager {
         return this.useSupabase;
     }
 
-    // Get current session
-    async getSession() {
+    // Get current session with timeout to prevent hanging
+    async getSession(timeoutMs = 10000) {
         if (this.useSupabase) {
-            const { data: { session } } = await supabase.auth.getSession();
-            return session;
+            // Wrap getSession in a timeout to prevent indefinite hanging
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Session check timed out')), timeoutMs);
+            });
+
+            try {
+                const sessionPromise = supabase.auth.getSession();
+                const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
+                return session;
+            } catch (error) {
+                console.error('getSession error:', error.message);
+                // Return null on timeout - will trigger logout flow
+                return null;
+            }
         } else {
             // For local mode, return a mock session if user is logged in
             return this.currentUser ? { user: this.currentUser } : null;
+        }
+    }
+
+    // Attempt to refresh the session token
+    async refreshSession(timeoutMs = 10000) {
+        if (!this.useSupabase) {
+            return this.currentUser ? { user: this.currentUser } : null;
+        }
+
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Session refresh timed out')), timeoutMs);
+        });
+
+        try {
+            const refreshPromise = supabase.auth.refreshSession();
+            const { data: { session }, error } = await Promise.race([refreshPromise, timeoutPromise]);
+
+            if (error) {
+                console.warn('Session refresh failed:', error.message);
+                return null;
+            }
+
+            return session;
+        } catch (error) {
+            console.error('Session refresh error:', error.message);
+            return null;
         }
     }
 

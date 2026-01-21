@@ -93,15 +93,17 @@ class CompetencyService {
                 witness_notes,
                 created_at,
                 updated_at,
-                competency:competency_definitions(
+                competency:competency_definitions!inner(
                     id,
                     name,
                     description,
                     field_type,
+                    is_active,
                     category:competency_categories(id, name)
                 )
             `)
             .eq('user_id', userId)
+            .eq('competency_definitions.is_active', true)
             .order('created_at', { ascending: false });
 
         if (error) throw error;
