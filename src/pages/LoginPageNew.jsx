@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authManager from '../auth-manager.js';
 import supabase from '../supabase-client.js';
@@ -61,6 +61,7 @@ function LoginPageNew() {
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [mode, setMode] = useState(getInitialMode); // 'login', 'register', 'reset', 'verify-code', 'update-password'
+  const isRedirectingRef = useRef(false); // Track if we're in the process of redirecting
 
   useEffect(() => {
     // Check if we're in password reset mode (from sessionStorage)
@@ -156,7 +157,16 @@ function LoginPageNew() {
         // This bypasses React Router and forces a full page reload,
         // which ensures AuthContext properly initializes with the new session
         console.log('Login successful, redirecting to home...');
-        window.location.href = '/';
+        // Mark that we're redirecting to prevent finally block from clearing isLoading
+        isRedirectingRef.current = true;
+        // Use setTimeout to ensure all pending state updates and event handlers complete
+        // before triggering the navigation. This prevents race conditions where the
+        // redirect gets blocked by ongoing JavaScript execution.
+        setTimeout(() => {
+          window.location.replace('/');
+        }, 100);
+        // Keep isLoading true while redirect is pending - don't let finally clear it
+        // The page will reload anyway, so we want to keep showing "Processing..."
         return;
       } else if (mode === 'register') {
         const result = await authManager.signUp(email, password);
@@ -287,7 +297,11 @@ function LoginPageNew() {
     } catch (err) {
       setError(err.message || 'An error occurred');
     } finally {
-      setIsLoading(false);
+      // Don't clear isLoading if we're in the process of redirecting
+      // This keeps the "Processing..." spinner visible until the page reloads
+      if (!isRedirectingRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 
