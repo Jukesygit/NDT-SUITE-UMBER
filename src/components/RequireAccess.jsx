@@ -1,5 +1,6 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { Spinner } from './LoadingStates';
 
 /**
  * Component-level access control wrapper.
@@ -14,9 +15,16 @@ import { useAuth } from '../contexts/AuthContext';
 function RequireAccess({ requireAdmin, requireElevatedAccess, children }) {
     const { isAdmin, hasElevatedAccess, isLoading } = useAuth();
 
-    // Show nothing while auth is loading
+    // Show spinner while auth is loading (instead of blank screen)
     if (isLoading) {
-        return null;
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <div className="text-center">
+                    <Spinner size="lg" />
+                    <p className="mt-4 text-gray-400 text-sm">Checking permissions...</p>
+                </div>
+            </div>
+        );
     }
 
     // Check admin requirement

@@ -7,7 +7,9 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import authManager from '../auth-manager.js';
-import { clearQueryCache } from '../lib/query-client';
+import { clearQueryCache, invalidateStaleQueries } from '../lib/query-client';
+import { sessionManager } from '../lib/session-manager';
+import { showToast } from '../utils/toast';
 
 // Types matching auth-manager
 export interface AuthUser {
@@ -102,6 +104,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
                     loadAuthState();
                     setIsLoading(false);
                     isInitializedRef.current = true;
+                    // Initialize session manager if user is already logged in
+                    if (authManager.isLoggedIn()) {
+                        sessionManager.initialize();
+                    }
                     console.log('AuthContext: Initialization complete');
                 }
             } catch (error) {
@@ -126,6 +132,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const handleLogin = () => {
             if (mounted) {
                 loadAuthState();
+                // Initialize session manager for proactive refresh
+                sessionManager.initialize();
             }
         };
         window.addEventListener('userLoggedIn', handleLogin);
@@ -133,6 +141,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Listen for logout events
         const handleLogout = () => {
             if (mounted) {
+                // Stop session manager
+                sessionManager.stop();
                 setUser(null);
                 setProfile(null);
                 // Clear React Query cache to prevent stale data on next login
@@ -141,119 +151,58 @@ export function AuthProvider({ children }: AuthProviderProps) {
         };
         window.addEventListener('userLoggedOut', handleLogout);
 
-        // Track if we're currently handling an auth error to prevent duplicate handling
-        let isHandlingError = false;
-
-        // Listen for auth errors (dispatched by query-client on 401/403)
-        const handleAuthError = async () => {
+        // Subscribe to session manager events (handles all session refresh coordination)
+        const unsubscribeSessionManager = sessionManager.onSessionChange((event) => {
             if (!mounted) return;
 
-            // Prevent duplicate error handling
-            if (isHandlingError) {
-                console.log('AuthContext: Already handling auth error, skipping');
-                return;
+            if (event.type === 'refreshed') {
+                console.log('AuthContext: Session refreshed via session manager');
+                loadAuthState();
+                // Invalidate stale queries (not all - prevents thundering herd)
+                invalidateStaleQueries();
+            } else if (event.type === 'expired') {
+                console.warn('AuthContext: Session expired, logging out');
+                // Handle graceful logout with toast instead of blocking alert
+                handleGracefulLogout();
             }
+        });
 
-            // Skip auth error handling during initialization - let init complete first
-            if (!isInitializedRef.current) {
-                console.log('AuthContext: Skipping auth error during initialization');
-                return;
-            }
-
-            isHandlingError = true;
-            console.warn('AuthContext: Auth error detected, attempting to refresh session...');
-
-            try {
-                // First, try to refresh the session token (not just check if it exists)
-                const refreshedSession = await authManager.refreshSession();
-
-                if (refreshedSession) {
-                    // Session was successfully refreshed
-                    console.log('AuthContext: Session refreshed successfully');
-                    loadAuthState();
-                    // Invalidate queries to refetch with new token
-                    const { invalidateAllQueries } = await import('../lib/query-client');
-                    invalidateAllQueries();
-                    isHandlingError = false;
-                    return;
-                }
-
-                // Refresh failed, try to get current session
-                const session = await authManager.getSession();
-
-                if (!session) {
-                    // Session is invalid, log the user out
-                    console.warn('AuthContext: Session expired, logging out');
-                    await authManager.logout();
-                    setUser(null);
-                    setProfile(null);
-                    clearQueryCache();
-                    // Show user-friendly notification
-                    alert('Your session has expired. Please log in again.');
-                    // Redirect to login
-                    window.location.href = '/login';
-                } else {
-                    // Session is still valid, just reload auth state
-                    console.log('AuthContext: Session still valid, reloading state');
-                    loadAuthState();
-                }
-            } catch (err) {
-                console.error('AuthContext: Failed to refresh session:', err);
-                // Force logout on error
-                await authManager.logout();
-                setUser(null);
-                setProfile(null);
-                clearQueryCache();
-                alert('Your session has expired. Please log in again.');
+        // Graceful logout handler with non-blocking notification
+        const handleGracefulLogout = async () => {
+            // Stop session manager
+            sessionManager.stop();
+            // Clear state
+            await authManager.logout();
+            setUser(null);
+            setProfile(null);
+            clearQueryCache();
+            // Show non-blocking notification
+            showToast({
+                type: 'warning',
+                message: 'Your session has expired. Redirecting to login...',
+                duration: 3000
+            });
+            // Redirect after a short delay
+            setTimeout(() => {
                 window.location.href = '/login';
-            } finally {
-                // Reset after a delay to allow for potential rapid errors
-                setTimeout(() => {
-                    isHandlingError = false;
-                }, 2000);
-            }
+            }, 2000);
         };
-        window.addEventListener('authError', handleAuthError);
 
-        // Periodic session validation (every 4 minutes - before typical 5 min token expiry)
-        // This catches cases where the session expired but no API call triggered the error
-        const sessionCheckInterval = setInterval(async () => {
-            if (!mounted) return;
-
-            // Skip if auth hasn't initialized yet
-            if (!isInitializedRef.current) return;
-
-            const currentUser = authManager.getCurrentUser();
-            if (!currentUser) return; // Not logged in, skip check
-
-            try {
-                // First try to proactively refresh the session to prevent expiration
-                const refreshedSession = await authManager.refreshSession();
-
-                if (refreshedSession) {
-                    console.log('AuthContext: Session proactively refreshed');
-                    return;
-                }
-
-                // If refresh failed, check if session exists
-                const session = await authManager.getSession();
-
-                if (!session) {
-                    console.warn('AuthContext: Session check failed, session may have expired');
-                    handleAuthError();
-                }
-            } catch (err) {
-                console.warn('AuthContext: Session check error:', err);
-            }
-        }, 4 * 60 * 1000); // Check every 4 minutes (before typical token expiry)
+        // Listen for legacy authError events (in case any component still dispatches them)
+        // Delegate to session manager for coordinated handling
+        const handleAuthErrorLegacy = () => {
+            if (!mounted || !isInitializedRef.current) return;
+            sessionManager.reportAuthError(new Error('Legacy auth error event'));
+        };
+        window.addEventListener('authError', handleAuthErrorLegacy);
 
         return () => {
             mounted = false;
             if (unsubscribe) unsubscribe();
+            if (unsubscribeSessionManager) unsubscribeSessionManager();
             window.removeEventListener('userLoggedIn', handleLogin);
             window.removeEventListener('userLoggedOut', handleLogout);
-            window.removeEventListener('authError', handleAuthError);
-            clearInterval(sessionCheckInterval);
+            window.removeEventListener('authError', handleAuthErrorLegacy);
         };
     }, [loadAuthState]);
 
@@ -279,6 +228,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     // Logout action
     const logout = useCallback(async () => {
+        // Stop session manager first
+        sessionManager.stop();
         await authManager.logout();
         setUser(null);
         setProfile(null);

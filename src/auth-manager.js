@@ -100,11 +100,24 @@ class AuthManager {
     }
 
     async initializeSupabase() {
-        // Check for existing session
-        const { data: { session } } = await supabase.auth.getSession();
+        const INIT_TIMEOUT = 10000; // 10 seconds
 
-        if (session?.user) {
-            await this.loadUserProfile(session.user.id);
+        // Wrap getSession in a timeout to prevent indefinite hanging during init
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Supabase initialization timed out')), INIT_TIMEOUT)
+        );
+
+        try {
+            // Check for existing session with timeout
+            const sessionPromise = supabase.auth.getSession();
+            const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
+
+            if (session?.user) {
+                await this.loadUserProfile(session.user.id);
+            }
+        } catch (error) {
+            console.error('initializeSupabase session check error:', error.message);
+            // Allow app to continue - user will be prompted to login
         }
 
         // Listen for auth state changes
