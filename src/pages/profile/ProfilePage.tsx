@@ -114,18 +114,12 @@ export default function ProfilePage() {
             if (!user?.id || !editingCompetency?.definition?.name) {
                 throw new Error('User or competency not available');
             }
-            return new Promise((resolve, reject) => {
-                uploadDocumentMutation.mutate(
-                    {
-                        userId: user.id,
-                        competencyName: editingCompetency.definition?.name || 'certificate',
-                        file,
-                    },
-                    {
-                        onSuccess: (result) => resolve(result),
-                        onError: (error) => reject(error),
-                    }
-                );
+            // Use mutateAsync instead of wrapping mutate in a Promise
+            // This avoids stale callback issues when the component re-renders during upload
+            return uploadDocumentMutation.mutateAsync({
+                userId: user.id,
+                competencyName: editingCompetency.definition?.name || 'certificate',
+                file,
             });
         },
         [user?.id, editingCompetency?.definition?.name, uploadDocumentMutation]

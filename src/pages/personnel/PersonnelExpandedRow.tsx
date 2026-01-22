@@ -450,25 +450,15 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                 console.error('Competency name not available for edit', { editingCompetency });
                 throw new Error('Competency not available');
             }
-            return new Promise((resolve, reject) => {
-                uploadDocument.mutate(
-                    {
-                        userId: person.id,
-                        competencyName: competencyName,
-                        file,
-                    },
-                    {
-                        onSuccess: (result) => {
-                            console.log('Edit upload success', result);
-                            resolve(result);
-                        },
-                        onError: (error) => {
-                            console.error('Edit upload error', error);
-                            reject(error);
-                        },
-                    }
-                );
+            // Use mutateAsync instead of wrapping mutate in a Promise
+            // This avoids stale callback issues when the component re-renders during upload
+            const result = await uploadDocument.mutateAsync({
+                userId: person.id,
+                competencyName: competencyName,
+                file,
             });
+            console.log('Edit upload success', result);
+            return result;
         },
         [person.id, editingCompetency?.definition?.name, uploadDocument]
     );
@@ -515,18 +505,12 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                 throw new Error('Competency not available');
             }
 
-            return new Promise((resolve, reject) => {
-                uploadDocument.mutate(
-                    {
-                        userId: person.id,
-                        competencyName: competencyName,
-                        file,
-                    },
-                    {
-                        onSuccess: (result) => resolve(result),
-                        onError: (error) => reject(error),
-                    }
-                );
+            // Use mutateAsync instead of wrapping mutate in a Promise
+            // This avoids stale callback issues when the component re-renders during upload
+            return uploadDocument.mutateAsync({
+                userId: person.id,
+                competencyName: competencyName,
+                file,
             });
         },
         [person.id, addingCompetency?.name, uploadDocument]
