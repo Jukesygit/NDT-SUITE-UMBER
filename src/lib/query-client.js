@@ -1,43 +1,30 @@
 import { QueryClient } from '@tanstack/react-query';
-import { isAuthError, handleAuthError } from './auth-error-handler.js';
-
-// Track if we're currently handling an auth error to prevent loops
-let isHandlingAuthError = false;
+import { isAuthError } from './auth-error-handler.js';
+import { sessionManager } from './session-manager';
 
 /**
  * Global error handler for queries
- * Detects auth errors and triggers logout flow
+ * Delegates auth errors to the centralized session manager
+ * (Session manager handles deduplication internally - no flag needed here)
  */
 function handleQueryError(error) {
-    if (isHandlingAuthError) return;
+    if (!isAuthError(error)) return;
 
-    if (isAuthError(error)) {
-        isHandlingAuthError = true;
-        console.warn('[QueryClient] Auth error detected in query:', error.message || error);
-        handleAuthError();
-
-        // Reset flag after delay
-        setTimeout(() => {
-            isHandlingAuthError = false;
-        }, 5000);
-    }
+    console.warn('[QueryClient] Auth error detected in query:', error.message || error);
+    // Delegate to session manager - it handles deduplication and coordination
+    sessionManager.reportAuthError(error);
 }
 
 /**
  * Global error handler for mutations
+ * Delegates auth errors to the centralized session manager
  */
 function handleMutationError(error) {
-    if (isHandlingAuthError) return;
+    if (!isAuthError(error)) return;
 
-    if (isAuthError(error)) {
-        isHandlingAuthError = true;
-        console.warn('[QueryClient] Auth error detected in mutation:', error.message || error);
-        handleAuthError();
-
-        setTimeout(() => {
-            isHandlingAuthError = false;
-        }, 5000);
-    }
+    console.warn('[QueryClient] Auth error detected in mutation:', error.message || error);
+    // Delegate to session manager - it handles deduplication and coordination
+    sessionManager.reportAuthError(error);
 }
 
 /**
@@ -79,7 +66,30 @@ export function clearQueryCache() {
 }
 
 /**
- * Invalidate all queries - call when session is refreshed
+ * Invalidate stale queries - call when session is refreshed
+ * Only invalidates queries that are in error state or have stale data
+ * This prevents the "thundering herd" problem of refetching everything at once
+ */
+export function invalidateStaleQueries() {
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+
+    queryClient.invalidateQueries({
+        predicate: (query) => {
+            // Invalidate queries that:
+            // 1. Are in error state (likely auth errors)
+            // 2. Have stale data (older than 5 minutes)
+            const isError = query.state.status === 'error';
+            const isStale = query.state.dataUpdatedAt < fiveMinutesAgo;
+            return isError || isStale;
+        }
+    });
+
+    console.log('[QueryClient] Stale queries invalidated');
+}
+
+/**
+ * Invalidate all queries - use sparingly, prefer invalidateStaleQueries
+ * @deprecated Use invalidateStaleQueries instead for better performance
  */
 export function invalidateAllQueries() {
     queryClient.invalidateQueries();

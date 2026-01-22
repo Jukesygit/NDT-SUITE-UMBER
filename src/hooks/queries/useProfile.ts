@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { useAuth } from '../../contexts/AuthContext';
 
 // ES module imports
 // @ts-ignore - JS module without types
@@ -105,9 +106,13 @@ async function fetchCurrentProfile(): Promise<Profile> {
  * const { data: profile, isLoading, error } = useCurrentProfile();
  */
 export function useCurrentProfile() {
+    const { isAuthenticated, isLoading: authLoading } = useAuth();
+
     return useQuery({
         queryKey: ['profile', 'current'],
         queryFn: fetchCurrentProfile,
         staleTime: 5 * 60 * 1000, // 5 minutes
+        // Guard: Don't run until auth is confirmed to prevent "Not authenticated" errors
+        enabled: isAuthenticated && !authLoading,
     });
 }
