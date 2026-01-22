@@ -152,13 +152,22 @@ function LoginPageNew() {
           setIsLoading(false);
           return;
         }
-        // Login succeeded - navigate to home
-        // Give AuthContext a moment to update, then navigate
-        // (The useEffect will also navigate if isAuthenticated becomes true first)
-        console.log('Login successful, navigating to home...');
+        // Login succeeded - let useEffect handle navigation when isAuthenticated updates
+        // Don't use setTimeout here as it races with AuthContext state update,
+        // causing ProtectedRoute to redirect back to login before auth is ready
+        console.log('Login successful, waiting for auth state to update...');
+
+        // Safety net: if navigation hasn't happened in 3 seconds, something went wrong
+        // This handles edge cases where AuthContext fails to update
         setTimeout(() => {
-          navigate('/');
-        }, 100);
+          // Check if we're still on the login page (this callback won't run if unmounted)
+          // Use a hard redirect as a last resort - this bypasses React Router
+          // and ensures the page fully reloads, picking up the new auth state
+          if (window.location.pathname === '/login') {
+            console.warn('Login fallback: Auth state update timeout, forcing hard redirect...');
+            window.location.href = '/';
+          }
+        }, 3000);
         return;
       } else if (mode === 'register') {
         const result = await authManager.signUp(email, password);
