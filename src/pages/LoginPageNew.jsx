@@ -150,9 +150,15 @@ function LoginPageNew() {
           const errorMsg = typeof result.error === 'string' ? result.error : (result.error?.message || 'Login failed');
           setError(errorMsg);
           setIsLoading(false);
+          return;
         }
-        // Don't navigate here and keep loading state - let the isAuthenticated useEffect handle redirect
-        // This ensures AuthContext has updated before we try to navigate
+        // Login succeeded - navigate to home
+        // Give AuthContext a moment to update, then navigate
+        // (The useEffect will also navigate if isAuthenticated becomes true first)
+        console.log('Login successful, navigating to home...');
+        setTimeout(() => {
+          navigate('/');
+        }, 100);
         return;
       } else if (mode === 'register') {
         const result = await authManager.signUp(email, password);
