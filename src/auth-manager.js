@@ -356,6 +356,13 @@ class AuthManager {
                     description: `User ${this.currentUser.username || email} logged in successfully`,
                 });
 
+                // Dispatch userLoggedIn event immediately to update AuthContext
+                // This ensures the React auth state updates before login() returns
+                // (onAuthStateChange also dispatches this, but asynchronously)
+                window.dispatchEvent(new CustomEvent('userLoggedIn', {
+                    detail: { user: this.currentUser }
+                }));
+
                 return { success: true, user: this.currentUser };
             }
 
