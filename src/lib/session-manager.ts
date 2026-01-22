@@ -9,7 +9,8 @@
  */
 
 import authManager from '../auth-manager.js';
-import { queryClient } from './query-client';
+// Note: Do NOT import queryClient here - it creates a circular dependency
+// Query invalidation is handled by AuthContext which subscribes to session events
 
 // Configuration constants
 const SESSION_CONFIG = {
@@ -250,27 +251,6 @@ class SessionManager {
                 console.error('[SessionManager] Subscriber error:', error);
             }
         });
-    }
-
-    /**
-     * Invalidate only stale queries (prevents thundering herd)
-     * Call this after successful session refresh
-     */
-    invalidateStaleQueries(): void {
-        const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-
-        queryClient.invalidateQueries({
-            predicate: (query) => {
-                // Invalidate queries that:
-                // 1. Are in error state (likely auth errors)
-                // 2. Have stale data (older than 5 minutes)
-                const isError = query.state.status === 'error';
-                const isStale = query.state.dataUpdatedAt < fiveMinutesAgo;
-                return isError || isStale;
-            }
-        });
-
-        console.log('[SessionManager] Stale queries invalidated');
     }
 
     /**
