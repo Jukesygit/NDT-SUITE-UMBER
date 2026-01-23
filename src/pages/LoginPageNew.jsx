@@ -153,20 +153,22 @@ function LoginPageNew() {
           setIsLoading(false);
           return;
         }
-        // Login succeeded - use hard redirect to ensure clean state
-        // This bypasses React Router and forces a full page reload,
-        // which ensures AuthContext properly initializes with the new session
-        console.log('Login successful, redirecting to home...');
+        // Login succeeded - navigate to home
+        console.log('Login successful, navigating to home...');
         // Mark that we're redirecting to prevent finally block from clearing isLoading
         isRedirectingRef.current = true;
-        // Use setTimeout to ensure all pending state updates and event handlers complete
-        // before triggering the navigation. This prevents race conditions where the
-        // redirect gets blocked by ongoing JavaScript execution.
+        // Use React Router navigation first (faster, no page reload)
+        navigate('/');
+        // Also schedule a hard redirect as fallback in case React Router navigation fails
+        // This ensures the user gets to the home page even if there's a timing issue
         setTimeout(() => {
-          window.location.replace('/');
-        }, 100);
-        // Keep isLoading true while redirect is pending - don't let finally clear it
-        // The page will reload anyway, so we want to keep showing "Processing..."
+          // Only redirect if we're still on the login page
+          if (window.location.pathname === '/login') {
+            console.log('Fallback: forcing hard redirect to home...');
+            window.location.href = '/';
+          }
+        }, 1000);
+        // Keep isLoading true while redirect is pending
         return;
       } else if (mode === 'register') {
         const result = await authManager.signUp(email, password);
