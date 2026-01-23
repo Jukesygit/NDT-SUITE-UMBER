@@ -115,9 +115,14 @@ export function ExpiryRemindersSettings() {
     // Handle single-user send
     const handleSendToUser = async () => {
         if (!selectedUserId) return;
-        await sendToUserMutation.mutateAsync(selectedUserId);
-        setSingleUserConfirmOpen(false);
-        setSelectedUserId('');
+        try {
+            const result = await sendToUserMutation.mutateAsync(selectedUserId);
+            alert(`Result: ${JSON.stringify(result, null, 2)}`);
+            setSingleUserConfirmOpen(false);
+            setSelectedUserId('');
+        } catch (error) {
+            alert(`Error: ${error instanceof Error ? error.message : String(error)}`);
+        }
     };
 
     return (
