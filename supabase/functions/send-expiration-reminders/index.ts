@@ -284,6 +284,17 @@ serve(async (req) => {
       )
     }
 
+    // Parse request body for optional targetUserId (single-user mode)
+    let targetUserId: string | null = null
+    if (req.method === 'POST') {
+      try {
+        const body = await req.json()
+        targetUserId = body?.targetUserId || null
+      } catch {
+        // No body or invalid JSON - continue with normal mode
+      }
+    }
+
     // Create Supabase client with service role for full access
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
@@ -303,8 +314,8 @@ serve(async (req) => {
 
     const settings: ReminderSettings = settingsData
 
-    // Check if reminders are enabled
-    if (!settings.is_enabled) {
+    // Check if reminders are enabled (skip for single-user mode)
+    if (!settings.is_enabled && !targetUserId) {
       return new Response(
         JSON.stringify({ message: 'Email reminders are disabled', sent: 0 }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -319,7 +330,133 @@ serve(async (req) => {
       error?: string
     }> = []
 
-    // Process each threshold
+    // Single-user mode: send to specific user regardless of threshold
+    if (targetUserId) {
+      console.log(`Single-user mode: sending to user ${targetUserId}`)
+
+      // Fetch user profile
+      const { data: userProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, username, email')
+        .eq('id', targetUserId)
+        .single()
+
+      if (profileError || !userProfile) {
+        return new Response(
+          JSON.stringify({ error: 'User not found', details: profileError }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Fetch user's expiring competencies (within 6 months)
+      const { data: competenciesData, error: compError } = await supabase
+        .from('employee_competencies')
+        .select(`
+          id,
+          expiry_date,
+          competency_definitions!inner (
+            name
+          )
+        `)
+        .eq('user_id', targetUserId)
+        .eq('status', 'active')
+        .not('expiry_date', 'is', null)
+        .lte('expiry_date', new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+
+      if (compError) {
+        return new Response(
+          JSON.stringify({ error: 'Failed to fetch competencies', details: compError }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (!competenciesData || competenciesData.length === 0) {
+        return new Response(
+          JSON.stringify({
+            message: 'No expiring competencies found for this user',
+            sent: 0,
+            failed: 0
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Transform competencies to expected format
+      const competencies: Competency[] = competenciesData.map(c => {
+        const expiryDate = new Date(c.expiry_date)
+        const now = new Date()
+        const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+        return {
+          competency_id: c.id,
+          name: (c.competency_definitions as { name: string }).name,
+          expiry_date: c.expiry_date,
+          days_until_expiry: daysUntilExpiry
+        }
+      }).sort((a, b) => a.days_until_expiry - b.days_until_expiry)
+
+      const senderFrom = `${settings.sender_name} <${settings.sender_email}>`
+
+      // Generate subject line
+      const urgentCount = competencies.filter(c => c.days_until_expiry <= 30).length
+      const subject = urgentCount > 0
+        ? `Action Required: ${competencies.length} certification(s) expiring soon`
+        : `Reminder: ${competencies.length} certification(s) require attention`
+
+      // Generate email HTML
+      const html = generateConsolidatedEmail(
+        userProfile.username || userProfile.email.split('@')[0],
+        competencies,
+        APP_URL
+      )
+
+      // Send the email
+      const emailResult = await sendEmail(
+        userProfile.email,
+        subject,
+        html,
+        senderFrom,
+        settings.manager_emails.length > 0 ? settings.manager_emails : undefined
+      )
+
+      // Log the result with threshold=-1 to indicate manual single send
+      const competencyIds = competencies.map(c => c.competency_id)
+
+      const { error: logError } = await supabase
+        .from('email_reminder_log')
+        .insert({
+          user_id: targetUserId,
+          threshold_months: -1, // -1 indicates manual single-user send
+          competency_ids: competencyIds,
+          email_sent_to: userProfile.email,
+          managers_cc: settings.manager_emails,
+          status: emailResult.success ? 'sent' : 'failed',
+          error_message: emailResult.error || null
+        })
+
+      if (logError) {
+        console.error('Error logging reminder:', logError)
+      }
+
+      results.push({
+        threshold: -1,
+        user: userProfile.username,
+        email: userProfile.email,
+        status: emailResult.success ? 'sent' : 'failed',
+        error: emailResult.error
+      })
+
+      return new Response(
+        JSON.stringify({
+          message: emailResult.success ? 'Reminder sent successfully' : 'Failed to send reminder',
+          sent: emailResult.success ? 1 : 0,
+          failed: emailResult.success ? 0 : 1,
+          details: results
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Normal mode: process each threshold
     for (const threshold of settings.thresholds_months) {
       console.log(`Processing threshold: ${threshold} months`)
 

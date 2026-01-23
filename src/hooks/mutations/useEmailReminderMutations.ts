@@ -8,6 +8,7 @@ import emailReminderService, {
     type UpdateSettingsData,
     type TriggerRemindersResult,
     type SendTestReminderResult,
+    sendExpiryReminderToUser,
 } from '../../services/email-reminder-service';
 
 /**
@@ -45,5 +46,21 @@ export function useTriggerExpirationReminders() {
 export function useSendTestReminder() {
     return useMutation<SendTestReminderResult, Error, { userId: string; email: string }>({
         mutationFn: ({ userId, email }) => emailReminderService.sendTestReminder(userId, email),
+    });
+}
+
+/**
+ * Hook to send expiry reminder to a specific user
+ * Useful for testing or sending targeted reminders
+ */
+export function useSendExpiryReminderToUser() {
+    const queryClient = useQueryClient();
+
+    return useMutation<TriggerRemindersResult, Error, string>({
+        mutationFn: (userId: string) => sendExpiryReminderToUser(userId),
+        onSuccess: () => {
+            // Invalidate logs after sending reminder
+            queryClient.invalidateQueries({ queryKey: ['email-reminder-logs'] });
+        },
     });
 }
