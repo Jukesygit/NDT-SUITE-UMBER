@@ -203,11 +203,16 @@ export async function triggerExpirationReminders(): Promise<TriggerRemindersResu
  * Useful for testing or sending targeted reminders
  */
 export async function sendExpiryReminderToUser(userId: string): Promise<TriggerRemindersResult> {
+    console.log('[sendExpiryReminderToUser] Starting for userId:', userId);
+
     const { data: { session } } = await supabase!.auth.getSession();
 
     if (!session) {
+        console.error('[sendExpiryReminderToUser] No session found');
         throw new Error('User must be authenticated to send reminders');
     }
+
+    console.log('[sendExpiryReminderToUser] Making request to:', `${SUPABASE_URL}/functions/v1/send-expiration-reminders`);
 
     const response = await fetch(`${SUPABASE_URL}/functions/v1/send-expiration-reminders`, {
         method: 'POST',
@@ -218,7 +223,10 @@ export async function sendExpiryReminderToUser(userId: string): Promise<TriggerR
         body: JSON.stringify({ targetUserId: userId }),
     });
 
+    console.log('[sendExpiryReminderToUser] Response status:', response.status);
+
     const data = await response.json();
+    console.log('[sendExpiryReminderToUser] Response data:', data);
 
     if (!response.ok) {
         throw new Error(data.error || 'Failed to send reminder');

@@ -512,12 +512,29 @@ export function ExpiryRemindersSettings() {
                                 style={{
                                     padding: '12px',
                                     borderRadius: '8px',
-                                    background: 'rgba(34, 197, 94, 0.1)',
-                                    border: '1px solid rgba(34, 197, 94, 0.3)',
+                                    background:
+                                        sendToUserMutation.data?.sent > 0
+                                            ? 'rgba(34, 197, 94, 0.1)'
+                                            : 'rgba(251, 191, 36, 0.1)',
+                                    border:
+                                        sendToUserMutation.data?.sent > 0
+                                            ? '1px solid rgba(34, 197, 94, 0.3)'
+                                            : '1px solid rgba(251, 191, 36, 0.3)',
                                 }}
                             >
-                                <p style={{ fontSize: '14px', color: '#22c55e' }}>
-                                    Reminder sent successfully!
+                                <p
+                                    style={{
+                                        fontSize: '14px',
+                                        color:
+                                            sendToUserMutation.data?.sent > 0
+                                                ? '#22c55e'
+                                                : '#fbbf24',
+                                    }}
+                                >
+                                    {sendToUserMutation.data?.message ||
+                                        (sendToUserMutation.data?.sent > 0
+                                            ? 'Reminder sent successfully!'
+                                            : 'No email sent')}
                                 </p>
                             </div>
                         )}
