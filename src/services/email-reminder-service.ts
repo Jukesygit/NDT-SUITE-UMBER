@@ -199,6 +199,35 @@ export async function triggerExpirationReminders(): Promise<TriggerRemindersResu
 }
 
 /**
+ * Send expiry reminder to a specific user
+ * Useful for testing or sending targeted reminders
+ */
+export async function sendExpiryReminderToUser(userId: string): Promise<TriggerRemindersResult> {
+    const { data: { session } } = await supabase!.auth.getSession();
+
+    if (!session) {
+        throw new Error('User must be authenticated to send reminders');
+    }
+
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/send-expiration-reminders`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ targetUserId: userId }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(data.error || 'Failed to send reminder');
+    }
+
+    return data as TriggerRemindersResult;
+}
+
+/**
  * Send a test reminder email to a specific user
  */
 export async function sendTestReminder(userId: string, email: string): Promise<SendTestReminderResult> {
@@ -262,5 +291,6 @@ export default {
     updateEmailReminderSettings,
     getEmailReminderLogs,
     triggerExpirationReminders,
+    sendExpiryReminderToUser,
     sendTestReminder,
 };
