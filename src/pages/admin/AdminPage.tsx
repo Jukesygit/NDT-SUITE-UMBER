@@ -14,8 +14,9 @@ const ConfigurationTab = lazy(() => import('./tabs/ConfigurationTab'));
 const ActivityLogTab = lazy(() => import('./tabs/ActivityLogTab'));
 const CompetencyTypesTab = lazy(() => import('./tabs/CompetencyTypesTab'));
 const NotificationsTab = lazy(() => import('./tabs/NotificationsTab'));
+const UKASComplianceTab = lazy(() => import('./tabs/UKASComplianceTab'));
 
-type TabType = 'overview' | 'organizations' | 'users' | 'assets' | 'requests' | 'sharing' | 'notifications' | 'configuration' | 'competency-types' | 'activity';
+type TabType = 'overview' | 'organizations' | 'users' | 'assets' | 'requests' | 'sharing' | 'notifications' | 'configuration' | 'competency-types' | 'activity' | 'ukas-compliance';
 
 interface Tab {
     id: TabType;
@@ -33,6 +34,7 @@ const tabs: Tab[] = [
     { id: 'configuration', label: 'Configuration' },
     { id: 'competency-types', label: 'Competency Types' },
     { id: 'activity', label: 'Activity Log' },
+    { id: 'ukas-compliance', label: 'UKAS Compliance' },
 ];
 
 export default function AdminPage() {
@@ -84,6 +86,8 @@ export default function AdminPage() {
                 return <CompetencyTypesTab />;
             case 'activity':
                 return <ActivityLogTab />;
+            case 'ukas-compliance':
+                return <UKASComplianceTab />;
             default:
                 return <OverviewTab />;
         }
