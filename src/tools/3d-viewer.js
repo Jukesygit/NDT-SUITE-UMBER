@@ -10,187 +10,228 @@ const MAX_LAYERS = 8;
 let domElements = {};
 
 const HTML = `
-<div id="ui-container">
-    <div class="control-panel">
-        <div class="panel-header" data-target="upload-content">
-            <h3 class="font-bold text-lg">File Management</h3>
-            <svg class="arrow-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+<div id="ui-container" class="viewer3d-ui">
+    <!-- File Management Panel -->
+    <div class="viewer3d-panel glass-panel">
+        <div class="viewer3d-panel-header" data-target="upload-content">
+            <span class="viewer3d-panel-title">File Management</span>
+            <svg class="viewer3d-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 9l6 6 6-6"/>
             </svg>
         </div>
-        <div id="upload-content" class="panel-content">
-            <label for="model-upload" class="upload-label">Choose an .obj File</label>
-            <input type="file" id="model-upload" class="hidden" accept=".obj" aria-label="Upload 3D model file">
-            <span id="model-file-name" class="text-sm text-gray-600 mt-1 block">Default Cylinder</span>
-            <button id="export-to-hub-btn" class="action-btn mt-4 w-full">Export to Hub</button>
-        </div>
-    </div>
-    
-    <div class="control-panel">
-        <div class="panel-header" data-target="layers-content">
-            <h3 class="font-bold text-lg">Layers</h3>
-            <svg class="arrow-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-            </svg>
-        </div>
-        <div id="layers-content" class="panel-content">
-            <div id="layer-list" class="flex flex-col gap-2"></div>
-            <div class="flex gap-2 mt-4">
-                <button id="add-layer-btn" class="action-btn flex-1">Upload Image</button>
-                <button id="pick-scan-btn" class="action-btn flex-1">Pick from Scans</button>
-            </div>
-            <input type="file" id="texture-upload" class="hidden" accept="image/png" aria-label="Upload texture image">
-        </div>
-    </div>
-    
-    <div id="controls-wrapper" class="hidden">
-        <div class="control-panel">
-            <div class="panel-header" data-target="gizmo-content">
-                <h3 class="font-bold text-lg">Gizmo Mode</h3>
-                <svg class="arrow-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-            </div>
-            <div id="gizmo-content" class="panel-content flex gap-2">
-                <button id="translate-btn" class="mode-btn active">Translate</button>
-                <button id="rotate-btn" class="mode-btn">Rotate</button>
-            </div>
-        </div>
-        
-        <div class="control-panel">
-            <div class="panel-header" data-target="model-rotation-content">
-                <h3 class="font-bold text-lg">Model Rotation</h3>
-                <svg class="arrow-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-            </div>
-            <div id="model-rotation-content" class="panel-content">
-                <div>
-                    <label for="model-rotate-x">Rotate X (°)</label>
-                    <div class="flex items-center gap-2">
-                        <button data-action="dec-model-rotate-x" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Decrease X rotation">-</button>
-                        <input type="range" id="model-rotate-x" min="-180" max="180" step="1" value="0" class="flex-grow">
-                        <button data-action="inc-model-rotate-x" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Increase X rotation">+</button>
-                        <input type="number" id="model-rotate-x-value" min="-180" max="180" step="1" value="0" class="w-20 px-2 py-1 border rounded">
-                    </div>
-                </div>
-                <div class="mt-2">
-                    <label for="model-rotate-y">Rotate Y (°)</label>
-                    <div class="flex items-center gap-2">
-                        <button data-action="dec-model-rotate-y" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Decrease Y rotation">-</button>
-                        <input type="range" id="model-rotate-y" min="-180" max="180" step="1" value="0" class="flex-grow">
-                        <button data-action="inc-model-rotate-y" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Increase Y rotation">+</button>
-                        <input type="number" id="model-rotate-y-value" min="-180" max="180" step="1" value="0" class="w-20 px-2 py-1 border rounded">
-                    </div>
-                </div>
-                <div class="mt-2">
-                    <label for="model-rotate-z">Rotate Z (°)</label>
-                    <div class="flex items-center gap-2">
-                        <button data-action="dec-model-rotate-z" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Decrease Z rotation">-</button>
-                        <input type="range" id="model-rotate-z" min="-180" max="180" step="1" value="0" class="flex-grow">
-                        <button data-action="inc-model-rotate-z" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Increase Z rotation">+</button>
-                        <input type="number" id="model-rotate-z-value" min="-180" max="180" step="1" value="0" class="w-20 px-2 py-1 border rounded">
-                    </div>
-                </div>
-                <button id="reset-model-rotation-btn" class="w-full mt-4 bg-gray-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors">Reset Rotation</button>
-            </div>
-        </div>
-
-        <div class="control-panel">
-            <div class="panel-header" data-target="lighting-content">
-                <h3 class="font-bold text-lg">Lighting Controls</h3>
-                <svg class="arrow-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-            </div>
-            <div id="lighting-content" class="panel-content">
-                <div><label for="light-intensity">Brightness</label><input type="range" id="light-intensity" min="0" max="3" step="0.1" value="1.5"></div>
-                <div class="mt-2"><label for="light-azimuth">Azimuth</label><input type="range" id="light-azimuth" min="0" max="360" step="1" value="45"></div>
-                <div class="mt-2"><label for="light-elevation">Elevation</label><input type="range" id="light-elevation" min="0" max="180" step="1" value="45"></div>
-                <div class="mt-2"><label for="light-distance">Distance</label><input type="range" id="light-distance" min="20" max="500" step="1" value="500"></div>
-            </div>
-        </div>
-
-        <div class="control-panel">
-            <div class="panel-header" data-target="texture-content">
-                <h3 class="font-bold text-lg">Texture Controls</h3>
-                <svg class="arrow-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-            </div>
-            <div id="texture-content" class="panel-content">
-                <div>
-                    <label class="mb-1">Projection Axis</label>
-                    <div class="flex gap-2">
-                        <button id="axis-x-btn" class="mode-btn w-1/3">X</button>
-                        <button id="axis-y-btn" class="mode-btn w-1/3">Y</button>
-                        <button id="axis-z-btn" class="mode-btn w-1/3 active">Z</button>
-                    </div>
-                </div>
-                <div class="mt-2">
-                    <label for="offset-u">Offset (Circumference)</label>
-                    <div class="flex items-center gap-2">
-                        <button data-action="dec-offset-u" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Decrease circumference offset">-</button>
-                        <input type="range" id="offset-u" min="-1" max="1" step="0.01" value="0" class="flex-grow">
-                        <button data-action="inc-offset-u" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Increase circumference offset">+</button>
-                        <input type="number" id="offset-u-value" min="-1" max="1" step="0.001" value="0" class="w-20 px-2 py-1 border rounded">
-                    </div>
-                </div>
-                <div class="mt-2">
-                    <label for="offset-v">Offset (Length)</label>
-                    <div class="flex items-center gap-2">
-                        <button data-action="dec-offset-v" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Decrease length offset">-</button>
-                        <input type="range" id="offset-v" min="-1" max="1" step="0.01" value="0" class="flex-grow">
-                        <button data-action="inc-offset-v" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Increase length offset">+</button>
-                        <input type="number" id="offset-v-value" min="-1" max="1" step="0.001" value="0" class="w-20 px-2 py-1 border rounded">
-                    </div>
-                </div>
-                <div class="mt-2">
-                    <label for="uniform-scale">Scale (Coverage)</label>
-                    <div class="flex items-center gap-2">
-                        <button data-action="dec-scale" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Decrease scale">-</button>
-                        <input type="range" id="uniform-scale" min="0.01" max="2" step="0.01" value="1" class="flex-grow">
-                        <button data-action="inc-scale" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Increase scale">+</button>
-                        <input type="number" id="uniform-scale-value" min="0.01" max="2" step="0.001" value="1" class="w-20 px-2 py-1 border rounded">
-                    </div>
-                </div>
-                <div class="mt-2">
-                    <label for="rotation">Rotation</label>
-                    <div class="flex items-center gap-2">
-                        <button data-action="dec-rotation" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Decrease rotation">-</button>
-                        <input type="range" id="rotation" min="-3.141" max="3.141" step="0.01" value="0" class="flex-grow">
-                        <button data-action="inc-rotation" class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" aria-label="Increase rotation">+</button>
-                        <input type="number" id="rotation-value" min="-3.141" max="3.141" step="0.001" value="0" class="w-20 px-2 py-1 border rounded">
-                    </div>
-                </div>
-                <div class="mt-4 flex gap-2">
-                    <button id="flip-x-btn" class="mode-btn w-1/2">Flip H</button>
-                    <button id="flip-y-btn" class="mode-btn w-1/2">Flip V</button>
-                </div>
-                <div class="mt-2"><label for="clamp-min">Projection Start</label><input type="range" id="clamp-min" min="-0.5" max="1.5" step="0.01" value="0.15"></div>
-                <div class="mt-2"><label for="clamp-max">Projection End</label><input type="range" id="clamp-max" min="-0.5" max="1.5" step="0.01" value="0.85"></div>
-                <button id="reset-controls-btn" class="w-full mt-4 bg-gray-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors">Reset All</button>
-            </div>
-        </div>
-    </div>
-</div>
-<div id="renderer-container" class="w-full h-full"></div>
-<div id="message-box" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 bg-red-500 text-white py-2 px-5 rounded-lg shadow-xl transition-opacity duration-300">
-    <p id="message-text"></p>
-</div>
-<div id="scan-picker-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] flex flex-col">
-        <div class="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
-            <h3 class="text-xl font-bold text-gray-900 dark:text-white">Select Scan Image</h3>
-            <button id="close-picker-btn" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300" aria-label="Close scan picker">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
+        <div id="upload-content" class="viewer3d-panel-content">
+            <label for="model-upload" class="viewer3d-btn viewer3d-btn-primary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+                Choose .obj File
+            </label>
+            <input type="file" id="model-upload" class="viewer3d-hidden" accept=".obj" aria-label="Upload 3D model file">
+            <div id="model-file-name" class="viewer3d-file-name">Default Cylinder</div>
+            <button id="export-to-hub-btn" class="viewer3d-btn viewer3d-btn-secondary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M16 12l-4 4-4-4M12 16V4"/></svg>
+                Export to Hub
             </button>
         </div>
-        <div id="scan-picker-content" class="flex-1 overflow-y-auto p-4">
-            <!-- Content will be populated dynamically -->
+    </div>
+
+    <!-- Layers Panel -->
+    <div class="viewer3d-panel glass-panel">
+        <div class="viewer3d-panel-header" data-target="layers-content">
+            <span class="viewer3d-panel-title">Layers</span>
+            <svg class="viewer3d-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 9l6 6 6-6"/>
+            </svg>
         </div>
+        <div id="layers-content" class="viewer3d-panel-content">
+            <div id="layer-list" class="viewer3d-layer-list"></div>
+            <div class="viewer3d-btn-group">
+                <button id="add-layer-btn" class="viewer3d-btn viewer3d-btn-primary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+                    Upload
+                </button>
+                <button id="pick-scan-btn" class="viewer3d-btn viewer3d-btn-secondary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    From Scans
+                </button>
+            </div>
+            <input type="file" id="texture-upload" class="viewer3d-hidden" accept="image/png" aria-label="Upload texture image">
+        </div>
+    </div>
+
+    <!-- Controls (shown when layer selected) -->
+    <div id="controls-wrapper" class="viewer3d-hidden">
+        <!-- Gizmo Mode -->
+        <div class="viewer3d-panel glass-panel">
+            <div class="viewer3d-panel-header" data-target="gizmo-content">
+                <span class="viewer3d-panel-title">Gizmo Mode</span>
+                <svg class="viewer3d-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 9l6 6 6-6"/>
+                </svg>
+            </div>
+            <div id="gizmo-content" class="viewer3d-panel-content">
+                <div class="viewer3d-toggle-group">
+                    <button id="translate-btn" class="viewer3d-toggle active">Translate</button>
+                    <button id="rotate-btn" class="viewer3d-toggle">Rotate</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Model Rotation -->
+        <div class="viewer3d-panel glass-panel">
+            <div class="viewer3d-panel-header" data-target="model-rotation-content">
+                <span class="viewer3d-panel-title">Model Rotation</span>
+                <svg class="viewer3d-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 9l6 6 6-6"/>
+                </svg>
+            </div>
+            <div id="model-rotation-content" class="viewer3d-panel-content">
+                <div class="viewer3d-control-group">
+                    <label class="viewer3d-label">Rotate X (°)</label>
+                    <div class="viewer3d-slider-row">
+                        <button data-action="dec-model-rotate-x" class="viewer3d-step-btn" aria-label="Decrease">−</button>
+                        <input type="range" id="model-rotate-x" min="-180" max="180" step="1" value="0" class="viewer3d-slider">
+                        <button data-action="inc-model-rotate-x" class="viewer3d-step-btn" aria-label="Increase">+</button>
+                        <input type="number" id="model-rotate-x-value" min="-180" max="180" step="1" value="0" class="viewer3d-number-input">
+                    </div>
+                </div>
+                <div class="viewer3d-control-group">
+                    <label class="viewer3d-label">Rotate Y (°)</label>
+                    <div class="viewer3d-slider-row">
+                        <button data-action="dec-model-rotate-y" class="viewer3d-step-btn" aria-label="Decrease">−</button>
+                        <input type="range" id="model-rotate-y" min="-180" max="180" step="1" value="0" class="viewer3d-slider">
+                        <button data-action="inc-model-rotate-y" class="viewer3d-step-btn" aria-label="Increase">+</button>
+                        <input type="number" id="model-rotate-y-value" min="-180" max="180" step="1" value="0" class="viewer3d-number-input">
+                    </div>
+                </div>
+                <div class="viewer3d-control-group">
+                    <label class="viewer3d-label">Rotate Z (°)</label>
+                    <div class="viewer3d-slider-row">
+                        <button data-action="dec-model-rotate-z" class="viewer3d-step-btn" aria-label="Decrease">−</button>
+                        <input type="range" id="model-rotate-z" min="-180" max="180" step="1" value="0" class="viewer3d-slider">
+                        <button data-action="inc-model-rotate-z" class="viewer3d-step-btn" aria-label="Increase">+</button>
+                        <input type="number" id="model-rotate-z-value" min="-180" max="180" step="1" value="0" class="viewer3d-number-input">
+                    </div>
+                </div>
+                <button id="reset-model-rotation-btn" class="viewer3d-btn viewer3d-btn-ghost">Reset Rotation</button>
+            </div>
+        </div>
+
+        <!-- Lighting Controls -->
+        <div class="viewer3d-panel glass-panel">
+            <div class="viewer3d-panel-header" data-target="lighting-content">
+                <span class="viewer3d-panel-title">Lighting</span>
+                <svg class="viewer3d-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 9l6 6 6-6"/>
+                </svg>
+            </div>
+            <div id="lighting-content" class="viewer3d-panel-content">
+                <div class="viewer3d-control-group">
+                    <label class="viewer3d-label">Brightness</label>
+                    <input type="range" id="light-intensity" min="0" max="3" step="0.1" value="1.5" class="viewer3d-slider">
+                </div>
+                <div class="viewer3d-control-group">
+                    <label class="viewer3d-label">Azimuth</label>
+                    <input type="range" id="light-azimuth" min="0" max="360" step="1" value="45" class="viewer3d-slider">
+                </div>
+                <div class="viewer3d-control-group">
+                    <label class="viewer3d-label">Elevation</label>
+                    <input type="range" id="light-elevation" min="0" max="180" step="1" value="45" class="viewer3d-slider">
+                </div>
+                <div class="viewer3d-control-group">
+                    <label class="viewer3d-label">Distance</label>
+                    <input type="range" id="light-distance" min="20" max="500" step="1" value="500" class="viewer3d-slider">
+                </div>
+            </div>
+        </div>
+
+        <!-- Texture Controls -->
+        <div class="viewer3d-panel glass-panel">
+            <div class="viewer3d-panel-header" data-target="texture-content">
+                <span class="viewer3d-panel-title">Texture Controls</span>
+                <svg class="viewer3d-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 9l6 6 6-6"/>
+                </svg>
+            </div>
+            <div id="texture-content" class="viewer3d-panel-content">
+                <div class="viewer3d-control-group">
+                    <label class="viewer3d-label">Projection Axis</label>
+                    <div class="viewer3d-toggle-group viewer3d-toggle-group-3">
+                        <button id="axis-x-btn" class="viewer3d-toggle">X</button>
+                        <button id="axis-y-btn" class="viewer3d-toggle">Y</button>
+                        <button id="axis-z-btn" class="viewer3d-toggle active">Z</button>
+                    </div>
+                </div>
+                <div class="viewer3d-control-group">
+                    <label class="viewer3d-label">Offset (Circumference)</label>
+                    <div class="viewer3d-slider-row">
+                        <button data-action="dec-offset-u" class="viewer3d-step-btn" aria-label="Decrease">−</button>
+                        <input type="range" id="offset-u" min="-1" max="1" step="0.01" value="0" class="viewer3d-slider">
+                        <button data-action="inc-offset-u" class="viewer3d-step-btn" aria-label="Increase">+</button>
+                        <input type="number" id="offset-u-value" min="-1" max="1" step="0.001" value="0" class="viewer3d-number-input">
+                    </div>
+                </div>
+                <div class="viewer3d-control-group">
+                    <label class="viewer3d-label">Offset (Length)</label>
+                    <div class="viewer3d-slider-row">
+                        <button data-action="dec-offset-v" class="viewer3d-step-btn" aria-label="Decrease">−</button>
+                        <input type="range" id="offset-v" min="-1" max="1" step="0.01" value="0" class="viewer3d-slider">
+                        <button data-action="inc-offset-v" class="viewer3d-step-btn" aria-label="Increase">+</button>
+                        <input type="number" id="offset-v-value" min="-1" max="1" step="0.001" value="0" class="viewer3d-number-input">
+                    </div>
+                </div>
+                <div class="viewer3d-control-group">
+                    <label class="viewer3d-label">Scale</label>
+                    <div class="viewer3d-slider-row">
+                        <button data-action="dec-scale" class="viewer3d-step-btn" aria-label="Decrease">−</button>
+                        <input type="range" id="uniform-scale" min="0.01" max="2" step="0.01" value="1" class="viewer3d-slider">
+                        <button data-action="inc-scale" class="viewer3d-step-btn" aria-label="Increase">+</button>
+                        <input type="number" id="uniform-scale-value" min="0.01" max="2" step="0.001" value="1" class="viewer3d-number-input">
+                    </div>
+                </div>
+                <div class="viewer3d-control-group">
+                    <label class="viewer3d-label">Rotation</label>
+                    <div class="viewer3d-slider-row">
+                        <button data-action="dec-rotation" class="viewer3d-step-btn" aria-label="Decrease">−</button>
+                        <input type="range" id="rotation" min="-3.141" max="3.141" step="0.01" value="0" class="viewer3d-slider">
+                        <button data-action="inc-rotation" class="viewer3d-step-btn" aria-label="Increase">+</button>
+                        <input type="number" id="rotation-value" min="-3.141" max="3.141" step="0.001" value="0" class="viewer3d-number-input">
+                    </div>
+                </div>
+                <div class="viewer3d-toggle-group">
+                    <button id="flip-x-btn" class="viewer3d-toggle">Flip H</button>
+                    <button id="flip-y-btn" class="viewer3d-toggle">Flip V</button>
+                </div>
+                <div class="viewer3d-control-group">
+                    <label class="viewer3d-label">Projection Start</label>
+                    <input type="range" id="clamp-min" min="-0.5" max="1.5" step="0.01" value="0.15" class="viewer3d-slider">
+                </div>
+                <div class="viewer3d-control-group">
+                    <label class="viewer3d-label">Projection End</label>
+                    <input type="range" id="clamp-max" min="-0.5" max="1.5" step="0.01" value="0.85" class="viewer3d-slider">
+                </div>
+                <button id="reset-controls-btn" class="viewer3d-btn viewer3d-btn-ghost">Reset All</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="renderer-container"></div>
+
+<!-- Message Toast -->
+<div id="message-box" class="viewer3d-toast viewer3d-hidden">
+    <p id="message-text"></p>
+</div>
+
+<!-- Scan Picker Modal -->
+<div id="scan-picker-modal" class="viewer3d-modal viewer3d-hidden">
+    <div class="viewer3d-modal-backdrop"></div>
+    <div class="viewer3d-modal-content glass-panel">
+        <div class="viewer3d-modal-header">
+            <h3 class="viewer3d-modal-title">Select Scan Image</h3>
+            <button id="close-picker-btn" class="viewer3d-modal-close" aria-label="Close">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+        <div id="scan-picker-content" class="viewer3d-modal-body"></div>
     </div>
 </div>
 `;
@@ -393,25 +434,55 @@ function cacheDomElements() {
         modelRotateYValue: query('#model-rotate-y-value'),
         modelRotateZValue: query('#model-rotate-z-value'),
         resetModelRotationBtn: query('#reset-model-rotation-btn'),
-        panelHeaders: container.querySelectorAll('.panel-header')
+        panelHeaders: container.querySelectorAll('.viewer3d-panel-header')
     };
 }
 
 function doInit() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f0f0);
-    
+
     const { rendererContainer } = domElements;
+
+    // Get container dimensions - try multiple methods
+    let width = rendererContainer.clientWidth;
+    let height = rendererContainer.clientHeight;
+
+    // Try getBoundingClientRect if clientWidth/Height are 0
+    if (width === 0 || height === 0) {
+        const rect = rendererContainer.getBoundingClientRect();
+        width = rect.width;
+        height = rect.height;
+    }
+
+    // Try parent container dimensions
+    if (width === 0 || height === 0) {
+        width = container.clientWidth;
+        height = container.clientHeight;
+    }
+
+    // Final fallback: use window dimensions and set explicit size on renderer container
+    if (width === 0 || height === 0) {
+        console.warn('3D Viewer: Container still has 0 dimensions in doInit, using window size');
+        width = window.innerWidth;
+        height = window.innerHeight - 140; // Account for header + banner
+        // Set explicit dimensions on the renderer container
+        rendererContainer.style.width = width + 'px';
+        rendererContainer.style.height = height + 'px';
+    }
+
+    console.log(`3D Viewer: Initializing with dimensions ${width}x${height}`);
+
     camera = new THREE.PerspectiveCamera(
         75,
-        rendererContainer.clientWidth / rendererContainer.clientHeight,
+        width / height,
         0.1,
         1000
     );
     camera.position.set(0, 15, 50);
-    
+
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-    renderer.setSize(rendererContainer.clientWidth, rendererContainer.clientHeight);
+    renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     rendererContainer.appendChild(renderer.domElement);
@@ -604,7 +675,7 @@ function selectLayer(layer) {
     scene.add(layer.transformTarget);
     updateControlsToLayerState();
     updateLayerList();
-    domElements.controlsWrapper.classList.remove('hidden');
+    domElements.controlsWrapper.classList.remove('viewer3d-hidden');
     requestRender();
 }
 
@@ -619,7 +690,7 @@ function deleteLayer(layerToDelete) {
             selectLayer(selectedLayer);
         } else {
             transformControls.detach();
-            domElements.controlsWrapper.classList.add('hidden');
+            domElements.controlsWrapper.classList.add('viewer3d-hidden');
         }
     }
     updateLayerList();
@@ -631,14 +702,25 @@ function updateLayerList() {
     domElements.layerList.innerHTML = '';
     layers.forEach(layer => {
         const item = document.createElement('div');
-        item.className = 'layer-item';
+        item.className = 'viewer3d-layer-item';
         if (layer === selectedLayer) item.classList.add('selected');
         item.innerHTML = `
-            <span class="flex-grow truncate">${layer.fileName}</span>
-            <button data-action="visible" class="p-1 rounded-md hover:bg-gray-300" aria-label="${layer.visible ? 'Hide layer' : 'Show layer'}">${layer.visible ? '👁️' : '🙈'}</button>
-            <button data-action="delete" class="p-1 rounded-md hover:bg-red-200 text-red-600" aria-label="Delete layer ${layer.fileName}">✕</button>
+            <span class="viewer3d-layer-name">${layer.fileName}</span>
+            <div class="viewer3d-layer-actions">
+                <button data-action="visible" class="viewer3d-layer-btn" aria-label="${layer.visible ? 'Hide layer' : 'Show layer'}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        ${layer.visible
+                            ? '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>'
+                            : '<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'
+                        }
+                    </svg>
+                </button>
+                <button data-action="delete" class="viewer3d-layer-btn" aria-label="Delete layer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                </button>
+            </div>
         `;
-        item.addEventListener('click', (e) => !e.target.dataset.action && selectLayer(layer));
+        item.addEventListener('click', (e) => !e.target.closest('[data-action]') && selectLayer(layer));
         item.querySelector('[data-action="visible"]').addEventListener('click', () => {
             layer.visible = !layer.visible;
             layer.needsUpdate = true;
@@ -1197,9 +1279,9 @@ function addEventListeners() {
     domElements.panelHeaders.forEach(header => {
         header.addEventListener('click', () => {
             const content = container.querySelector('#' + header.dataset.target);
-            const arrow = header.querySelector('.arrow-icon');
+            const chevron = header.querySelector('.viewer3d-chevron');
             content.classList.toggle('collapsed');
-            arrow.classList.toggle('collapsed');
+            if (chevron) chevron.classList.toggle('collapsed');
         });
     });
 }
@@ -1273,19 +1355,33 @@ function resetModelRotation() {
 
 function onWindowResize() {
     if (!renderer || !camera || !domElements.rendererContainer) return;
-    camera.aspect = domElements.rendererContainer.clientWidth / domElements.rendererContainer.clientHeight;
+
+    // Get dimensions with fallback
+    let width = domElements.rendererContainer.clientWidth;
+    let height = domElements.rendererContainer.clientHeight;
+
+    // Skip resize if dimensions are 0 (container hidden or not ready)
+    if (width === 0 || height === 0) {
+        console.warn('3D Viewer: Skipping resize, container has 0 dimensions');
+        return;
+    }
+
+    camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    renderer.setSize(domElements.rendererContainer.clientWidth, domElements.rendererContainer.clientHeight);
+    renderer.setSize(width, height);
     requestRender();
 }
 
 function showMessage(text, type = 'info') {
     domElements.messageText.textContent = text;
-    domElements.messageBox.className = `fixed bottom-5 left-1/2 -translate-x-1/2 text-white py-2 px-5 rounded-lg shadow-xl transition-opacity duration-300 opacity-100 ${
-        type === 'error' ? 'bg-red-500' : 'bg-blue-500'
-    }`;
+    const typeClass = type === 'error' ? 'viewer3d-toast-error' : type === 'success' ? 'viewer3d-toast-success' : '';
+    domElements.messageBox.className = `viewer3d-toast ${typeClass}`;
+    domElements.messageBox.style.opacity = '1';
     setTimeout(() => {
-        domElements.messageBox.classList.replace('opacity-100', 'opacity-0');
+        domElements.messageBox.style.opacity = '0';
+        setTimeout(() => {
+            domElements.messageBox.classList.add('viewer3d-hidden');
+        }, 300);
     }, 3000);
 }
 
@@ -1367,11 +1463,11 @@ async function showScanPicker() {
         });
     });
 
-    domElements.scanPickerModal.classList.remove('hidden');
+    domElements.scanPickerModal.classList.remove('viewer3d-hidden');
 }
 
 function closeScanPicker() {
-    domElements.scanPickerModal.classList.add('hidden');
+    domElements.scanPickerModal.classList.add('viewer3d-hidden');
 }
 
 function loadTextureFromDataURL(dataURL, fileName) {
@@ -1422,7 +1518,7 @@ async function restoreState(state) {
         layers = [];
         selectedLayer = null;
         transformControls.detach();
-        domElements.controlsWrapper.classList.add('hidden');
+        domElements.controlsWrapper.classList.add('viewer3d-hidden');
 
         // Restore model
         if (state.modelData) {
@@ -1546,6 +1642,44 @@ function handleLoad3DProjectEvent(event) {
     }
 }
 
+// Helper to wait for container to have valid dimensions
+function waitForDimensions(element, maxAttempts = 100) {
+    return new Promise((resolve) => {
+        let attempts = 0;
+
+        function check() {
+            attempts++;
+
+            // Try both clientWidth/Height and getBoundingClientRect
+            let width = element.clientWidth;
+            let height = element.clientHeight;
+
+            // getBoundingClientRect is more reliable for absolute positioned elements
+            if (width === 0 || height === 0) {
+                const rect = element.getBoundingClientRect();
+                width = rect.width;
+                height = rect.height;
+            }
+
+            if (width > 0 && height > 0) {
+                console.log(`3D Viewer: Container ready with dimensions ${width}x${height} after ${attempts} attempts`);
+                resolve({ width, height });
+            } else if (attempts >= maxAttempts) {
+                // Fallback to window dimensions if container never gets size
+                const fallbackWidth = window.innerWidth;
+                const fallbackHeight = window.innerHeight - 140; // Account for header + banner
+                console.warn(`3D Viewer: Container dimensions not ready after ${attempts} attempts, using fallback ${fallbackWidth}x${fallbackHeight}`);
+                resolve({ width: fallbackWidth, height: fallbackHeight, fallback: true });
+            } else {
+                requestAnimationFrame(check);
+            }
+        }
+
+        // Start checking on next frame to allow layout to settle
+        requestAnimationFrame(check);
+    });
+}
+
 export default {
     init: async (toolContainer) => {
         container = toolContainer;
@@ -1566,7 +1700,23 @@ export default {
         TransformControls = transformControlsModule.TransformControls;
         OBJLoader = objLoaderModule.OBJLoader;
 
+        // Wait for the tool container (parent) to have valid dimensions before initializing Three.js
+        // The renderer-container is absolutely positioned, so it inherits size from parent
+        const dims = await waitForDimensions(container);
+
+        // If we got fallback dimensions, set them explicitly on the renderer container
+        if (dims.fallback) {
+            domElements.rendererContainer.style.width = dims.width + 'px';
+            domElements.rendererContainer.style.height = dims.height + 'px';
+        }
+
         doInit();
+
+        // Trigger a resize after a short delay to handle late CSS application
+        setTimeout(() => {
+            onWindowResize();
+            console.log('3D Viewer: Delayed resize triggered');
+        }, 100);
 
         // Listen for 3D model loading events from data hub
         window.addEventListener('load3DModel', handleLoad3DModelEvent);

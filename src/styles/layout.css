@@ -255,6 +255,27 @@
   margin: 0 auto;
 }
 
+/* When containing a tool container (3D viewer, etc.), ensure full height propagation */
+.main:has(.tool-container) {
+  padding: 0;
+  overflow: hidden;
+  height: calc(100vh - 80px); /* Explicit viewport height minus header */
+}
+
+.main__container:has(.tool-container) {
+  max-width: none;
+  height: 100%;
+}
+
+/* Fallback for browsers that don't support :has() - target viewer-3d directly */
+.main__container > .tool-container.viewer-3d {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
 /* ==========================================
    PAGE HEADER
    ========================================== */
