@@ -193,7 +193,7 @@ function generateConsolidatedEmail(
                         <td style="padding: 30px 40px; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.08);">
                             <p style="margin: 0 0 8px; font-size: 13px; color: #525252;">
                                 Need help? Contact support at
-                                <a href="mailto:support@matrixinspectionservices.com" style="color: #60a5fa; text-decoration: none;">support@matrixinspectionservices.com</a>
+                                <a href="mailto:jonas@matrixinspectionservices.com" style="color: #60a5fa; text-decoration: none;">jonas@matrixinspectionservices.com</a>
                             </p>
                             <p style="margin: 8px 0 0; font-size: 12px; color: #404040;">
                                 &copy; ${new Date().getFullYear()} Matrix Inspection Services. All rights reserved.
