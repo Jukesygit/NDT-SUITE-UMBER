@@ -201,169 +201,527 @@ input[type="file"]::file-selector-button:hover {
   background: var(--surface-base);
 }
 
-/* 3D Viewer specific styles */
-#tool-3dview,
+/* ==========================================
+   3D VIEWER - COMPLETE REDESIGN
+   Using glassmorphic design system
+   ========================================== */
+
+/* Container */
 .tool-container.viewer-3d {
   position: relative;
   padding: 0;
   overflow: hidden;
-  height: 100%;
-  min-height: calc(100vh - 80px);
+  height: calc(100vh - 140px);
+  min-height: 500px;
+  background: var(--surface-base);
 }
 
-#tool-3dview #ui-container,
-.tool-container #ui-container {
+/* Renderer Canvas Container */
+#renderer-container {
   position: absolute;
-  top: var(--spacing-6);
-  left: var(--spacing-6);
-  z-index: var(--z-dropdown);
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+}
+
+#renderer-container canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* UI Container */
+.viewer3d-ui {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 10;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-4);
-  max-height: calc(100vh - 120px);
+  gap: 12px;
+  max-height: calc(100vh - 180px);
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.2) transparent;
 }
 
-#tool-3dview .control-panel,
-.tool-container .control-panel {
-  background: var(--surface-elevated);
-  backdrop-filter: blur(var(--blur-md));
-  padding: var(--spacing-6);
-  border-radius: var(--radius-xl);
-  border: var(--border-width-thin) solid var(--border-subtle);
-  box-shadow: var(--shadow-lg);
-  width: 300px;
+.viewer3d-ui::-webkit-scrollbar {
+  width: 6px;
 }
 
-#tool-3dview .panel-header,
-.tool-container .panel-header {
-  cursor: pointer;
+.viewer3d-ui::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.viewer3d-ui::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 3px;
+}
+
+/* Panels */
+.viewer3d-panel {
+  width: 280px;
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(20, 25, 35, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+.viewer3d-panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: var(--text-primary);
-  font-weight: var(--font-semibold);
-  font-size: var(--text-lg);
+  cursor: pointer;
+  user-select: none;
 }
 
-#tool-3dview .panel-content,
-.tool-container .panel-content {
-  margin-top: var(--spacing-4);
-  transition: max-height var(--transition-normal), opacity var(--transition-normal);
+.viewer3d-panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: 0.01em;
+}
+
+.viewer3d-chevron {
+  width: 16px;
+  height: 16px;
+  color: rgba(255, 255, 255, 0.6);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.viewer3d-chevron.collapsed {
+  transform: rotate(-90deg);
+}
+
+.viewer3d-panel-content {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: all 0.2s ease;
   max-height: 1000px;
   opacity: 1;
   overflow: hidden;
 }
 
-#tool-3dview .panel-content.collapsed,
-.tool-container .panel-content.collapsed {
+.viewer3d-panel-content.collapsed {
   max-height: 0;
   opacity: 0;
   margin-top: 0;
 }
 
-#tool-3dview .arrow-icon,
-.tool-container .arrow-icon {
-  transition: transform var(--transition-normal);
+/* Utility Classes */
+.viewer3d-hidden {
+  display: none !important;
 }
 
-#tool-3dview .arrow-icon.collapsed,
-.tool-container .arrow-icon.collapsed {
-  transform: rotate(-90deg);
-}
-
-#tool-3dview .upload-label,
-#tool-3dview .action-btn,
-.tool-container .upload-label,
-.tool-container .action-btn {
-  cursor: pointer;
-  padding: var(--spacing-3) var(--spacing-5);
-  background: var(--interactive-default);
-  color: var(--text-inverse);
-  border-radius: var(--radius-md);
-  font-weight: var(--font-medium);
-  font-size: var(--text-base);
-  transition: all var(--transition-fast);
-  display: inline-block;
-  text-align: center;
-  width: 100%;
+/* Buttons */
+.viewer3d-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 8px;
   border: none;
-}
-
-#tool-3dview .upload-label:hover,
-#tool-3dview .action-btn:hover,
-.tool-container .upload-label:hover,
-.tool-container .action-btn:hover {
-  background: var(--interactive-hover);
-  box-shadow: var(--shadow-primary);
-}
-
-#tool-3dview .mode-btn,
-.tool-container .mode-btn {
-  padding: var(--spacing-3) var(--spacing-4);
-  border-radius: var(--radius-md);
-  border: var(--border-width-thin) solid var(--border-default);
-  background: var(--surface-raised);
-  color: var(--text-secondary);
-  font-weight: var(--font-medium);
-  transition: all var(--transition-fast);
   cursor: pointer;
+  transition: all 0.15s ease;
+  width: 100%;
+  text-decoration: none;
 }
 
-#tool-3dview .mode-btn:hover,
-.tool-container .mode-btn:hover {
-  background: var(--surface-hover);
-  color: var(--text-primary);
-  border-color: var(--border-strong);
+.viewer3d-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
-#tool-3dview .mode-btn.active,
-.tool-container .mode-btn.active {
-  background: rgba(59, 130, 246, 0.15);
-  color: var(--color-primary-300);
-  border-color: rgba(59, 130, 246, 0.3);
+.viewer3d-btn-primary {
+  background: linear-gradient(135deg, rgba(100, 150, 255, 0.9), rgba(120, 170, 255, 0.9));
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(100, 150, 255, 0.25);
 }
 
-#tool-3dview .layer-item,
-.tool-container .layer-item {
+.viewer3d-btn-primary:hover {
+  background: linear-gradient(135deg, rgba(120, 170, 255, 0.95), rgba(140, 190, 255, 0.95));
+  box-shadow: 0 4px 16px rgba(100, 150, 255, 0.35);
+  transform: translateY(-1px);
+}
+
+.viewer3d-btn-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.viewer3d-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.viewer3d-btn-ghost {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.viewer3d-btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.viewer3d-btn-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* Toggle Buttons */
+.viewer3d-toggle-group {
+  display: flex;
+  gap: 6px;
+}
+
+.viewer3d-toggle-group-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+
+.viewer3d-toggle {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.viewer3d-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.viewer3d-toggle.active {
+  background: rgba(100, 150, 255, 0.2);
+  color: rgba(150, 190, 255, 1);
+  border-color: rgba(100, 150, 255, 0.4);
+}
+
+/* Form Controls */
+.viewer3d-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.viewer3d-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.viewer3d-slider-row {
   display: flex;
   align-items: center;
-  gap: var(--spacing-3);
-  padding: var(--spacing-3);
-  border: 2px solid transparent;
-  border-radius: var(--radius-md);
+  gap: 6px;
+}
+
+.viewer3d-slider {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.viewer3d-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  background: linear-gradient(135deg, rgba(100, 150, 255, 1), rgba(130, 180, 255, 1));
+  border-radius: 50%;
   cursor: pointer;
-  transition: all var(--transition-fast);
-  color: var(--text-secondary);
+  box-shadow: 0 2px 6px rgba(100, 150, 255, 0.4);
+  transition: transform 0.1s ease;
 }
 
-#tool-3dview .layer-item:hover,
-.tool-container .layer-item:hover {
-  background: var(--surface-hover);
-  color: var(--text-primary);
+.viewer3d-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
 }
 
-#tool-3dview .layer-item.selected,
-.tool-container .layer-item.selected {
-  border-color: var(--interactive-default);
-  background: rgba(59, 130, 246, 0.1);
-  color: var(--text-primary);
+.viewer3d-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: linear-gradient(135deg, rgba(100, 150, 255, 1), rgba(130, 180, 255, 1));
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 6px rgba(100, 150, 255, 0.4);
 }
 
-#renderer-container {
+.viewer3d-step-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  flex-shrink: 0;
+}
+
+.viewer3d-step-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.viewer3d-step-btn:active {
+  transform: scale(0.95);
+}
+
+.viewer3d-number-input {
+  width: 56px;
+  padding: 4px 6px;
+  font-size: 11px;
+  font-family: inherit;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.viewer3d-number-input:focus {
+  outline: none;
+  border-color: rgba(100, 150, 255, 0.5);
+}
+
+/* File Name Display */
+.viewer3d-file-name {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 8px 0;
+  text-align: center;
+}
+
+/* Layer List */
+.viewer3d-layer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.viewer3d-layer-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.viewer3d-layer-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.viewer3d-layer-item.selected {
+  background: rgba(100, 150, 255, 0.1);
+  border-color: rgba(100, 150, 255, 0.3);
+}
+
+.viewer3d-layer-name {
+  flex: 1;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewer3d-layer-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.viewer3d-layer-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.5);
+  transition: all 0.1s ease;
+}
+
+.viewer3d-layer-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.viewer3d-layer-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Toast Messages */
+.viewer3d-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  background: rgba(20, 25, 35, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  transition: opacity 0.3s ease;
+}
+
+.viewer3d-toast p {
+  margin: 0;
+  font-size: 13px;
+  color: #ffffff;
+}
+
+.viewer3d-toast.viewer3d-toast-error {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.viewer3d-toast.viewer3d-toast-success {
+  border-color: rgba(34, 197, 94, 0.4);
+  background: rgba(34, 197, 94, 0.15);
+}
+
+/* Modal */
+.viewer3d-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.viewer3d-modal-backdrop {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+}
+
+.viewer3d-modal-content {
+  position: relative;
+  width: 90%;
+  max-width: 800px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(20, 25, 35, 0.95);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 48px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.viewer3d-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.viewer3d-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+}
+
+.viewer3d-modal-close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.6);
+  transition: all 0.15s ease;
+}
+
+.viewer3d-modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.viewer3d-modal-close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.viewer3d-modal-body {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .viewer3d-ui {
+    top: 8px;
+    left: 8px;
+    right: 8px;
+  }
+
+  .viewer3d-panel {
+    width: 100%;
+  }
 }
 
 #tool-3dview #renderer-container canvas,
 .tool-container #renderer-container canvas {
   display: block;
-  width: 100%;
-  height: 100%;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* ==========================================
