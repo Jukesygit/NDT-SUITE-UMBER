@@ -198,7 +198,7 @@ class GlobalStyleEnforcer {
                     } catch (e) {
                         console.warn('Error enforcing styles:', e);
                     }
-                }, 100);
+                }, 300);
             });
 
             // Start observing when DOM is ready
@@ -207,7 +207,7 @@ class GlobalStyleEnforcer {
                     childList: true,
                     subtree: true,
                     attributes: true,
-                    attributeFilter: ['class', 'style']
+                    attributeFilter: ['class']
                 });
             }
         } catch (error) {

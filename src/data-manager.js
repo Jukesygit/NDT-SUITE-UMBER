@@ -144,18 +144,100 @@ class DataManager {
 
     async saveToStorage() {
         try {
-            await indexedDB.saveData(this.data);
+            // OPTIMIZATION: Deep clone the data to avoid modifying the in-memory state
+            // and strip heavy fields (scans.data, scans.heatmapOnly) before saving to main blob.
+            // These heavy fields are saved to separate isolated records.
+            const dataToSave = JSON.parse(JSON.stringify(this.data));
+            const promises = [];
+
+            // Walk the tree to find scans and offload heavy data
+            Object.values(dataToSave).forEach(orgData => {
+                if (!orgData.assets) return;
+                
+                orgData.assets.forEach(asset => {
+                    if (!asset.vessels) return;
+                    
+                    asset.vessels.forEach(vessel => {
+                        if (!vessel.scans) return;
+                        
+                        vessel.scans.forEach(scan => {
+                            // Identify heavy fields
+                            if (scan.data || scan.heatmapOnly) {
+                                const heavyData = {
+                                    id: scan.id,
+                                    data: scan.data,
+                                    heatmapOnly: scan.heatmapOnly
+                                };
+
+                                // Queue save for heavy data
+                                promises.push(indexedDB.saveItem(`scan_blob_${scan.id}`, heavyData));
+
+                                // Strip from main blob
+                                scan.data = null;
+                                scan.heatmapOnly = null;
+                                scan._hasOffloadedData = true; // Marker
+                            }
+                        });
+                    });
+                });
+            });
+
+            // Save the stripped main blob
+            promises.push(indexedDB.saveData(dataToSave));
 
             // Mark that data has changed and needs sync
             if (authManager.isLoggedIn()) {
                 syncService.markPendingChanges();
             }
 
+            await Promise.all(promises);
             return true;
         } catch (error) {
             console.error('Error saving data to storage:', error);
             return false;
         }
+    }
+
+    /**
+     * Load full data for a scan if it was offloaded
+     * @param {string} scanId 
+     */
+    async loadScanBlob(scanId) {
+        try {
+            const heavyData = await indexedDB.loadItem(`scan_blob_${scanId}`);
+            if (heavyData) {
+                // Find the scan in memory and update it
+                const scan = this.findScanById(scanId);
+                if (scan) {
+                    if (heavyData.data) scan.data = heavyData.data;
+                    if (heavyData.heatmapOnly) scan.heatmapOnly = heavyData.heatmapOnly;
+                    delete scan._hasOffloadedData;
+                    return true;
+                }
+            }
+            return false;
+        } catch (error) {
+            console.error(`Error loading scan blob for ${scanId}:`, error);
+            return false;
+        }
+    }
+
+    findScanById(scanId) {
+        // Helper to find a scan across all orgs/assets/vessels
+        for (const orgId in this.data) {
+            const orgData = this.data[orgId];
+            if (!orgData.assets) continue;
+            
+            for (const asset of orgData.assets) {
+                if (!asset.vessels) continue;
+                for (const vessel of asset.vessels) {
+                    if (!vessel.scans) continue;
+                    const scan = vessel.scans.find(s => s.id === scanId);
+                    if (scan) return scan;
+                }
+            }
+        }
+        return null;
     }
 
     // Get current organization data

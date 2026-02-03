@@ -1285,8 +1285,24 @@ class AuthManager {
     // Storage (local fallback only)
     async loadAuthData() {
         try {
+            // FAST PATH: Try to load isolated auth data first
+            const isolatedData = await indexedDB.loadItem(AUTH_STORE_KEY);
+            if (isolatedData) {
+                return isolatedData;
+            }
+
+            // FALLBACK: Load from monolithic store (slow, but needed for migration)
+            console.log('Migrating auth data from legacy store...');
             const data = await indexedDB.loadData();
-            return data[AUTH_STORE_KEY] || null;
+            const legacyAuthData = data[AUTH_STORE_KEY];
+
+            if (legacyAuthData) {
+                // Copy to isolated store for next time
+                await indexedDB.saveItem(AUTH_STORE_KEY, legacyAuthData);
+                return legacyAuthData;
+            }
+
+            return null;
         } catch (error) {
             console.error('Error loading auth data:', error);
             return null;
@@ -1295,9 +1311,12 @@ class AuthManager {
 
     async saveAuthData() {
         try {
-            const data = await indexedDB.loadData();
-            data[AUTH_STORE_KEY] = this.authData;
-            await indexedDB.saveData(data);
+            // FAST PATH: Save to isolated store
+            await indexedDB.saveItem(AUTH_STORE_KEY, this.authData);
+            
+            // Note: We don't update the monolithic store here to save time.
+            // This might cause drift if something reads ONLY loadData(), 
+            // but AuthManager is the source of truth for auth.
             return true;
         } catch (error) {
             console.error('Error saving auth data:', error);
@@ -1344,13 +1363,16 @@ class AuthManager {
             return this.currentUser ? { user: this.currentUser } : null;
         }
 
+        let timeoutId;
         const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Session refresh timed out')), timeoutMs);
+            timeoutId = setTimeout(() => reject(new Error('Session refresh timed out')), timeoutMs);
         });
 
         try {
             const refreshPromise = supabase.auth.refreshSession();
             const { data: { session }, error } = await Promise.race([refreshPromise, timeoutPromise]);
+            
+            clearTimeout(timeoutId);
 
             if (error) {
                 console.warn('Session refresh failed:', error.message);
@@ -1359,6 +1381,7 @@ class AuthManager {
 
             return session;
         } catch (error) {
+            clearTimeout(timeoutId);
             console.error('Session refresh error:', error.message);
             return null;
         }

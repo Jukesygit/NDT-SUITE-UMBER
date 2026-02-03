@@ -1281,6 +1281,17 @@ class SyncService {
      */
     async uploadScan(scan, vesselId, assetId, orgId) {
         try {
+            // REHYDRATION: Check if heavy data is offloaded
+            if (scan._hasOffloadedData || (!scan.data && !scan.heatmapOnly)) {
+                // Try to load from blob storage
+                const heavyData = await indexedDB.loadItem(`scan_blob_${scan.id}`);
+                if (heavyData) {
+                    console.log(`[SYNC-SERVICE] Rehydrated scan ${scan.id} from blob storage`);
+                    if (heavyData.data) scan.data = heavyData.data;
+                    if (heavyData.heatmapOnly) scan.heatmapOnly = heavyData.heatmapOnly;
+                }
+            }
+
             // Check if scan already exists with timeout
             const { data: existing, error: checkError } = await supabase
                 .from('scans')
