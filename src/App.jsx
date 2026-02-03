@@ -189,6 +189,9 @@ function App() {
                             {/* This prevents Layout remount when navigating between tabs */}
                             <Route element={<ProtectedRoute />}>
                                 <Route element={<Layout />}>
+                                            {/* Data Hub temporarily disabled - redirect to profile */}
+                                    <Route path="/" element={<Navigate to="/profile" replace />} />
+                                    {/* Data Hub routes - uncomment to re-enable
                                     <Route path="/" element={
                                         <ErrorBoundary>
                                             <DataHubPage />
@@ -209,6 +212,7 @@ function App() {
                                             <InspectionPage />
                                         </ErrorBoundary>
                                     } />
+                                    */}
                                     <Route path="/profile" element={
                                         <ErrorBoundary>
                                             <ProfilePage />
