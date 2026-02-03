@@ -89,6 +89,15 @@ export default function ProfilePage() {
             );
             container.appendChild(header);
         }
+
+        // Cleanup function to remove header and stop animations
+        return () => {
+            if (container) {
+                while (container.firstChild) {
+                    container.removeChild(container.firstChild);
+                }
+            }
+        };
     }, []);
 
     // Handle avatar upload

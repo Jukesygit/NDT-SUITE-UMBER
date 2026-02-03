@@ -87,18 +87,19 @@ export default function ImageUploadDialog({
     const handleUpload = async () => {
         if (files.length === 0) return;
 
+        let progressInterval: ReturnType<typeof setInterval> | null = null;
+
         try {
             setIsUploading(true);
             setUploadProgress(0);
 
             // Simulate progress updates
-            const progressInterval = setInterval(() => {
+            progressInterval = setInterval(() => {
                 setUploadProgress(prev => Math.min(prev + 10, 90));
             }, 200);
 
             await onUpload(files.map(f => f.file));
 
-            clearInterval(progressInterval);
             setUploadProgress(100);
 
             // Clean up previews
@@ -113,6 +114,7 @@ export default function ImageUploadDialog({
             console.error('Upload failed:', error);
             alert('Failed to upload images. Please try again.');
         } finally {
+            if (progressInterval) clearInterval(progressInterval);
             setIsUploading(false);
             setUploadProgress(0);
         }

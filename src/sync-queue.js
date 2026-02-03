@@ -60,13 +60,25 @@ class SyncQueue {
             // Don't save large scan data to localStorage to avoid quota errors
             // Scans are handled by syncService separately
             const queueToSave = this.queue.filter(item => item.operation.table !== 'scans');
+            
+            // Check approximate size before saving to avoid blocking main thread with huge stringify
+            // or hitting quota limits
+            if (queueToSave.length > 100) {
+                 console.warn('[SYNC-QUEUE] Queue too large, truncating oldest operations for storage safety');
+                 // Keep only the newest 100 operations to prevent storage issues
+                 queueToSave.splice(0, queueToSave.length - 100);
+            }
+
             localStorage.setItem('ndt_sync_queue', JSON.stringify(queueToSave));
         } catch (error) {
             console.error('[SYNC-QUEUE] Error saving queue:', error);
             // If still fails, clear the queue to prevent app from breaking
             try {
-                localStorage.removeItem('ndt_sync_queue');
-                console.warn('[SYNC-QUEUE] Cleared queue due to storage quota');
+                // If quota exceeded, we might need to clear it
+                if (error.name === 'QuotaExceededError' || error.message.includes('quota')) {
+                    localStorage.removeItem('ndt_sync_queue');
+                    console.warn('[SYNC-QUEUE] Cleared queue due to storage quota');
+                }
             } catch (e) {
                 // Ignore
             }
