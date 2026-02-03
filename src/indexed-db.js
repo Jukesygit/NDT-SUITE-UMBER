@@ -144,6 +144,42 @@ class IndexedDBWrapper {
             return false;
         }
     }
+
+    // Save a single item directly to the store
+    async saveItem(key, value) {
+        await this.ensureInitialized();
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([STORE_NAME], 'readwrite');
+            const objectStore = transaction.objectStore(STORE_NAME);
+            const request = objectStore.put({
+                id: key,
+                timestamp: Date.now(),
+                value: value // Store as value to distinguish from legacy data wrapper
+            });
+            
+            request.onsuccess = () => resolve(true);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    // Load a single item directly from the store
+    async loadItem(key) {
+        await this.ensureInitialized();
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([STORE_NAME], 'readonly');
+            const objectStore = transaction.objectStore(STORE_NAME);
+            const request = objectStore.get(key);
+
+            request.onsuccess = () => {
+                const result = request.result;
+                if (!result) return resolve(null);
+                
+                // Handle both new {value: ...} format and legacy raw objects if any
+                resolve(result.value !== undefined ? result.value : result.data);
+            };
+            request.onerror = () => reject(request.error);
+        });
+    }
 }
 
 // Create singleton instance
