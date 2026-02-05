@@ -1,9 +1,10 @@
 // Edge Function to sync Supabase Auth users with profiles table
 // Creates missing profiles for auth users and removes orphaned profiles
+// SECURITY: Requires admin authentication
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
+import { requireAdmin } from '../_shared/auth.ts'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -11,17 +12,17 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    )
+    // SECURITY: Require admin authentication
+    const { auth, errorResponse: authError } = await requireAdmin(req)
+    if (authError) return authError
+
+    const supabaseAdmin = auth.supabaseAdmin!
 
     // Get all auth users
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers()
+    const { data: authData, error: authError2 } = await supabaseAdmin.auth.admin.listUsers()
 
-    if (authError) {
-      return errorResponse(req, 'Failed to fetch auth users', 500, authError)
+    if (authError2) {
+      return errorResponse(req, 'Failed to fetch auth users', 500, authError2)
     }
 
     const authUsers = authData?.users || []

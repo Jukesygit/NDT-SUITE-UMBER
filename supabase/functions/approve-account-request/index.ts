@@ -1,9 +1,10 @@
 // Edge Function to handle account request approvals
 // Uses admin auth to create user accounts
+// SECURITY: Requires admin authentication
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
+import { requireAdmin } from '../_shared/auth.ts'
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -12,28 +13,25 @@ serve(async (req) => {
   }
 
   try {
+    // SECURITY: Require admin authentication
+    const { auth, errorResponse: authError } = await requireAdmin(req)
+    if (authError) return authError
+
+    const supabaseAdmin = auth.supabaseAdmin!
+
     // Parse request body
-    const { request_id, approved_by_user_id } = await req.json()
+    const { request_id } = await req.json()
+
+    // Use authenticated user's ID as approver (not from request body - prevents spoofing)
+    const approved_by_user_id = auth.user!.id
 
     console.log('Received approval request:', { request_id, approved_by_user_id })
 
     // Validate required fields
-    if (!request_id || !approved_by_user_id) {
+    if (!request_id) {
       console.error('Missing required fields')
-      return errorResponse(req, 'Missing required fields', 400)
+      return errorResponse(req, 'Missing required field: request_id', 400)
     }
-
-    // Create Supabase client with service role
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
 
     // Fetch the account request
     const { data: request, error: fetchError } = await supabaseAdmin
@@ -46,6 +44,11 @@ serve(async (req) => {
 
     if (fetchError || !request) {
       return errorResponse(req, 'Request not found', 404, fetchError)
+    }
+
+    // Check if request is still pending
+    if (request.status !== 'pending') {
+      return errorResponse(req, `Request has already been ${request.status}`, 400)
     }
 
     // Check if user already exists
@@ -89,7 +92,7 @@ serve(async (req) => {
       })
 
       // Create user account using admin auth
-      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      const { data: authData, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email: request.email,
         password: tempPassword,
         email_confirm: true,
@@ -100,14 +103,14 @@ serve(async (req) => {
         }
       })
 
-      console.log('User creation result:', { success: !!authData?.user?.id, error: !!authError })
+      console.log('User creation result:', { success: !!authData?.user?.id, error: !!createError })
 
-      if (authError) {
+      if (createError) {
         return errorResponse(
           req,
           'Failed to create user. Please try again.',
           400,
-          authError
+          createError
         )
       }
 
