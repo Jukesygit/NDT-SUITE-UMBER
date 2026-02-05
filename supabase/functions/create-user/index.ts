@@ -1,10 +1,11 @@
 // Edge Function to create a single user with admin API
 // This ensures email is pre-confirmed and profile trigger fires correctly
+// SECURITY: Requires admin authentication
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import { validatePassword } from '../_shared/password-validation.ts'
+import { requireAdmin } from '../_shared/auth.ts'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -12,6 +13,12 @@ serve(async (req) => {
   }
 
   try {
+    // SECURITY: Require admin authentication
+    const { auth, errorResponse: authError } = await requireAdmin(req)
+    if (authError) return authError
+
+    const supabaseAdmin = auth.supabaseAdmin!
+
     const { email, username, password, role, organization_id } = await req.json()
 
     // Validate required fields
@@ -25,13 +32,6 @@ serve(async (req) => {
       return errorResponse(req, passwordValidation.error || 'Invalid password', 400)
     }
 
-    // Create Supabase admin client
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    )
-
     // Check if user already exists
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
     const existingUser = existingUsers?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase())
@@ -41,7 +41,7 @@ serve(async (req) => {
     }
 
     // Create auth user with admin API - this pre-confirms email and triggers profile creation
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    const { data: authData, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
@@ -52,13 +52,13 @@ serve(async (req) => {
       }
     })
 
-    if (authError) {
+    if (createError) {
       // SECURITY: Log detailed error but return generic message
       return errorResponse(
         req,
         'Failed to create user. Please try again.',
         500,
-        authError
+        createError
       )
     }
 

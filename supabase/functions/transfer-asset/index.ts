@@ -1,9 +1,10 @@
 // Edge Function to transfer assets between organizations
 // This uses the service role to bypass RLS restrictions
+// SECURITY: Requires authentication and verifies user is in SYSTEM org
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
+import { requireAuth } from '../_shared/auth.ts'
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -12,25 +13,22 @@ serve(async (req) => {
   }
 
   try {
+    // SECURITY: Require authentication
+    const { auth, errorResponse: authError } = await requireAuth(req)
+    if (authError) return authError
+
+    const supabaseAdmin = auth.supabaseAdmin!
+
     // Parse request body
-    const { asset_id, target_organization_id, user_id } = await req.json()
+    const { asset_id, target_organization_id } = await req.json()
+
+    // Use authenticated user's ID (not from request body - prevents spoofing)
+    const user_id = auth.user!.id
 
     // Validate required fields
-    if (!asset_id || !target_organization_id || !user_id) {
-      return errorResponse(req, 'Missing required fields: asset_id, target_organization_id, user_id', 400)
+    if (!asset_id || !target_organization_id) {
+      return errorResponse(req, 'Missing required fields: asset_id, target_organization_id', 400)
     }
-
-    // Create Supabase admin client with service role (bypasses RLS)
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
 
     // Verify user is in SYSTEM organization
     const { data: userProfile, error: profileError } = await supabaseAdmin

@@ -271,10 +271,35 @@ serve(async (req) => {
   }
 
   try {
-    // This function should be called with service role key (from pg_cron or admin)
+    // SECURITY: Verify caller is authorized
+    // Option 1: Cron secret header (for scheduled jobs)
+    const cronSecret = Deno.env.get('CRON_SECRET')
+    const providedCronSecret = req.headers.get('x-cron-secret')
+    const isCronJob = cronSecret && providedCronSecret === cronSecret
+
+    // Option 2: Admin user authentication
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return errorResponse(req, 'Missing authorization header', 401)
+    let isAdminUser = false
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.replace('Bearer ', '')
+      const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+      const { data: { user } } = await supabaseAuth.auth.getUser(token)
+
+      if (user) {
+        const { data: profile } = await supabaseAuth
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+
+        isAdminUser = profile?.role === 'admin'
+      }
+    }
+
+    // Reject if neither cron secret nor admin auth
+    if (!isCronJob && !isAdminUser) {
+      return errorResponse(req, 'Unauthorized - admin access or cron secret required', 401)
     }
 
     // Parse request body for optional targetUserId (single-user mode)

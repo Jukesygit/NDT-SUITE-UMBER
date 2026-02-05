@@ -1,9 +1,10 @@
 // Edge Function to delete a user from both auth and profiles
 // This ensures complete user deletion using admin API
+// SECURITY: Requires admin authentication
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
+import { requireAdmin } from '../_shared/auth.ts'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -11,17 +12,22 @@ serve(async (req) => {
   }
 
   try {
+    // SECURITY: Require admin authentication
+    const { auth, errorResponse: authError } = await requireAdmin(req)
+    if (authError) return authError
+
+    const supabaseAdmin = auth.supabaseAdmin!
+
     const { userId } = await req.json()
 
     if (!userId) {
       return errorResponse(req, 'User ID is required', 400)
     }
 
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    )
+    // SECURITY: Prevent admin from deleting themselves
+    if (userId === auth.user!.id) {
+      return errorResponse(req, 'Cannot delete your own account', 400)
+    }
 
     // Clean up related data that might have foreign key constraints
     // Delete records where user is the owner
@@ -87,15 +93,15 @@ serve(async (req) => {
     }
 
     // Then delete the auth user
-    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId)
+    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId)
 
-    if (authError) {
+    if (deleteError) {
       // SECURITY: Log detailed error but return generic message
       return errorResponse(
         req,
         'Failed to delete user. Please try again.',
         500,
-        authError
+        deleteError
       )
     }
 

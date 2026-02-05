@@ -1,9 +1,10 @@
 // Edge Function to bulk create user accounts from a list of user data
+// SECURITY: Requires admin authentication
 // Deploy with: supabase functions deploy bulk-create-users
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
+import { requireAdmin } from '../_shared/auth.ts'
 
 interface UserToCreate {
   email: string
@@ -18,6 +19,12 @@ serve(async (req) => {
   }
 
   try {
+    // SECURITY: Require admin authentication
+    const { auth, errorResponse: authError } = await requireAdmin(req)
+    if (authError) return authError
+
+    const supabaseAdmin = auth.supabaseAdmin!
+
     const { users, send_password_reset = true } = await req.json() as {
       users: UserToCreate[]
       send_password_reset?: boolean
@@ -27,12 +34,10 @@ serve(async (req) => {
       return errorResponse(req, 'No users provided. Expected array of {email, username, role, organization_id?}', 400)
     }
 
-    // Create Supabase admin client
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    )
+    // SECURITY: Limit bulk creation to prevent abuse
+    if (users.length > 50) {
+      return errorResponse(req, 'Maximum 50 users per bulk operation', 400)
+    }
 
     const results: Array<{ email: string; success: boolean; error?: string; user_id?: string }> = []
 
@@ -66,7 +71,7 @@ serve(async (req) => {
         const tempPassword = crypto.randomUUID()
 
         // Create auth user - trigger will auto-create profile
-        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        const { data: authData, error: createError } = await supabaseAdmin.auth.admin.createUser({
           email: user.email,
           password: tempPassword,
           email_confirm: true, // Pre-verify email
@@ -77,14 +82,14 @@ serve(async (req) => {
           }
         })
 
-        if (authError) {
+        if (createError) {
           results.push({
             email: user.email,
             success: false,
             // SECURITY: Don't expose detailed error messages
             error: 'Failed to create user'
           })
-          console.error(`Error creating user ${user.email}:`, authError)
+          console.error(`Error creating user ${user.email}:`, createError)
           continue
         }
 
