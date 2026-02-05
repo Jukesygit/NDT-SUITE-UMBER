@@ -3,16 +3,12 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return handleCorsPreflightRequest(req)
   }
 
   try {
@@ -21,44 +17,29 @@ serve(async (req) => {
 
     // Validate required fields
     if (!username || !email || !organization_id || !requested_role) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Missing required fields', 400)
     }
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid email format' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Invalid email format', 400)
     }
 
-    // Validate requested_role is one of the allowed values
-    const allowedRoles = ['admin', 'manager', 'org_admin', 'editor', 'viewer']
-    if (!allowedRoles.includes(requested_role)) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid role' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+    // SECURITY: Only allow non-privileged roles for self-registration
+    const allowedSelfServiceRoles = ['editor', 'viewer']
+    if (!allowedSelfServiceRoles.includes(requested_role)) {
+      return errorResponse(req, 'Invalid role for account request', 400)
     }
 
     // Validate username length
     if (username.length < 3 || username.length > 50) {
-      return new Response(
-        JSON.stringify({ error: 'Username must be between 3 and 50 characters' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Username must be between 3 and 50 characters', 400)
     }
 
     // Validate message length (if provided)
     if (message && message.length > 500) {
-      return new Response(
-        JSON.stringify({ error: 'Message too long (max 500 characters)' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Message too long (max 500 characters)', 400)
     }
 
     // Create Supabase client with service role (bypasses RLS)
@@ -87,18 +68,24 @@ serve(async (req) => {
       .single()
 
     if (error) {
-      throw error
+      // SECURITY: Log detailed error but return generic message
+      return errorResponse(
+        req,
+        'Failed to submit account request. Please try again.',
+        500,
+        error
+      )
     }
 
-    return new Response(
-      JSON.stringify({ success: true, request: data }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse(req, { success: true, request: data })
 
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    // SECURITY: Generic error message, log details server-side
+    return errorResponse(
+      req,
+      'An unexpected error occurred. Please try again.',
+      500,
+      error
     )
   }
 })

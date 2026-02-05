@@ -3,25 +3,18 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return handleCorsPreflightRequest(req)
   }
 
   try {
     const { userId } = await req.json()
 
     if (!userId) {
-      return new Response(
-        JSON.stringify({ error: 'User ID is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'User ID is required', 400)
     }
 
     const supabaseAdmin = createClient(
@@ -97,25 +90,26 @@ serve(async (req) => {
     const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId)
 
     if (authError) {
-      console.error('Error deleting auth user:', authError)
-      return new Response(
-        JSON.stringify({ error: authError.message }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      // SECURITY: Log detailed error but return generic message
+      return errorResponse(
+        req,
+        'Failed to delete user. Please try again.',
+        500,
+        authError
       )
     }
 
     console.log('User deleted successfully:', userId)
 
-    return new Response(
-      JSON.stringify({ success: true, message: 'User deleted successfully' }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse(req, { success: true, message: 'User deleted successfully' })
 
   } catch (error) {
-    console.error('Unexpected error in delete-user:', error)
-    return new Response(
-      JSON.stringify({ error: error.message || 'An unexpected error occurred' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    // SECURITY: Generic error message, log details server-side
+    return errorResponse(
+      req,
+      'An unexpected error occurred. Please try again.',
+      500,
+      error
     )
   }
 })

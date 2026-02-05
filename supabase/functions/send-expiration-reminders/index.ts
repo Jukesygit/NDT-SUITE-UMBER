@@ -3,11 +3,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
@@ -271,17 +267,14 @@ async function sendEmail(
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return handleCorsPreflightRequest(req)
   }
 
   try {
     // This function should be called with service role key (from pg_cron or admin)
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Missing authorization header', 401)
     }
 
     // Parse request body for optional targetUserId (single-user mode)
@@ -305,21 +298,14 @@ serve(async (req) => {
       .single()
 
     if (settingsError) {
-      console.error('Error fetching settings:', settingsError)
-      return new Response(
-        JSON.stringify({ error: 'Failed to fetch reminder settings', details: settingsError }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Failed to fetch reminder settings', 500, settingsError)
     }
 
     const settings: ReminderSettings = settingsData
 
     // Check if reminders are enabled (skip for single-user mode)
     if (!settings.is_enabled && !targetUserId) {
-      return new Response(
-        JSON.stringify({ message: 'Email reminders are disabled', sent: 0 }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return jsonResponse(req, { message: 'Email reminders are disabled', sent: 0 })
     }
 
     const results: Array<{
@@ -342,10 +328,7 @@ serve(async (req) => {
         .single()
 
       if (profileError || !userProfile) {
-        return new Response(
-          JSON.stringify({ error: 'User not found', details: profileError }),
-          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+        return errorResponse(req, 'User not found', 404, profileError)
       }
 
       // Fetch user's expiring competencies (within 6 months)
@@ -364,21 +347,15 @@ serve(async (req) => {
         .lte('expiry_date', new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
 
       if (compError) {
-        return new Response(
-          JSON.stringify({ error: 'Failed to fetch competencies', details: compError }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+        return errorResponse(req, 'Failed to fetch competencies', 500, compError)
       }
 
       if (!competenciesData || competenciesData.length === 0) {
-        return new Response(
-          JSON.stringify({
-            message: 'No expiring competencies found for this user',
-            sent: 0,
-            failed: 0
-          }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+        return jsonResponse(req, {
+          message: 'No expiring competencies found for this user',
+          sent: 0,
+          failed: 0
+        })
       }
 
       // Transform competencies to expected format
@@ -446,15 +423,12 @@ serve(async (req) => {
         error: emailResult.error
       })
 
-      return new Response(
-        JSON.stringify({
-          message: emailResult.success ? 'Reminder sent successfully' : 'Failed to send reminder',
-          sent: emailResult.success ? 1 : 0,
-          failed: emailResult.success ? 0 : 1,
-          details: results
-        }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return jsonResponse(req, {
+        message: emailResult.success ? 'Reminder sent successfully' : 'Failed to send reminder',
+        sent: emailResult.success ? 1 : 0,
+        failed: emailResult.success ? 0 : 1,
+        details: results
+      })
     }
 
     // Normal mode: process each threshold
@@ -540,21 +514,20 @@ serve(async (req) => {
 
     console.log(`Completed: ${sentCount} sent, ${failedCount} failed`)
 
-    return new Response(
-      JSON.stringify({
-        message: 'Reminder job completed',
-        sent: sentCount,
-        failed: failedCount,
-        details: results
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse(req, {
+      message: 'Reminder job completed',
+      sent: sentCount,
+      failed: failedCount,
+      details: results
+    })
 
   } catch (error) {
-    console.error('Error in send-expiration-reminders:', error)
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    // SECURITY: Generic error message, log details server-side
+    return errorResponse(
+      req,
+      'An unexpected error occurred. Please try again.',
+      500,
+      error
     )
   }
 })

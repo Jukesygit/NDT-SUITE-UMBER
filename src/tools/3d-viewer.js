@@ -704,22 +704,35 @@ function updateLayerList() {
         const item = document.createElement('div');
         item.className = 'viewer3d-layer-item';
         if (layer === selectedLayer) item.classList.add('selected');
-        item.innerHTML = `
-            <span class="viewer3d-layer-name">${layer.fileName}</span>
-            <div class="viewer3d-layer-actions">
-                <button data-action="visible" class="viewer3d-layer-btn" aria-label="${layer.visible ? 'Hide layer' : 'Show layer'}">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        ${layer.visible
-                            ? '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>'
-                            : '<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'
-                        }
-                    </svg>
-                </button>
-                <button data-action="delete" class="viewer3d-layer-btn" aria-label="Delete layer">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-                </button>
-            </div>
-        `;
+        // SECURITY: Build layer item safely without innerHTML to prevent XSS
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'viewer3d-layer-name';
+        nameSpan.textContent = layer.fileName; // textContent auto-escapes
+        item.appendChild(nameSpan);
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'viewer3d-layer-actions';
+
+        const visibleBtn = document.createElement('button');
+        visibleBtn.dataset.action = 'visible';
+        visibleBtn.className = 'viewer3d-layer-btn';
+        visibleBtn.setAttribute('aria-label', layer.visible ? 'Hide layer' : 'Show layer');
+        visibleBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            ${layer.visible
+                ? '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>'
+                : '<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'
+            }
+        </svg>`;
+        actionsDiv.appendChild(visibleBtn);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.dataset.action = 'delete';
+        deleteBtn.className = 'viewer3d-layer-btn';
+        deleteBtn.setAttribute('aria-label', 'Delete layer');
+        deleteBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>';
+        actionsDiv.appendChild(deleteBtn);
+
+        item.appendChild(actionsDiv);
         item.addEventListener('click', (e) => !e.target.closest('[data-action]') && selectLayer(layer));
         item.querySelector('[data-action="visible"]').addEventListener('click', () => {
             layer.visible = !layer.visible;
@@ -1073,8 +1086,12 @@ async function exportToHub() {
         const name = prompt('Enter asset name:');
         if (name) {
             const asset = await dataManager.createAsset(name);
-            assetSelect.innerHTML += `<option value="${asset.id}" selected>${asset.name}</option>`;
-            assetSelect.value = asset.id;
+            // SECURITY: Use DOM API instead of innerHTML to prevent XSS
+            const option = document.createElement('option');
+            option.value = asset.id;
+            option.textContent = asset.name;
+            option.selected = true;
+            assetSelect.appendChild(option);
             assetSelect.dispatchEvent(new Event('change'));
         }
     });
@@ -1089,8 +1106,12 @@ async function exportToHub() {
         const name = prompt('Enter vessel name:');
         if (name) {
             const vessel = await dataManager.createVessel(assetId, name);
-            vesselSelect.innerHTML += `<option value="${vessel.id}" selected>${vessel.name}</option>`;
-            vesselSelect.value = vessel.id;
+            // SECURITY: Use DOM API instead of innerHTML to prevent XSS
+            const option = document.createElement('option');
+            option.value = vessel.id;
+            option.textContent = vessel.name;
+            option.selected = true;
+            vesselSelect.appendChild(option);
         }
     });
 

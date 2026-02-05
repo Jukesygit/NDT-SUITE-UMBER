@@ -3,11 +3,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 
@@ -23,17 +19,14 @@ interface EmailRequest {
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return handleCorsPreflightRequest(req)
   }
 
   try {
     // Verify the user is authenticated
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Missing authorization header', 401)
     }
 
     // Create Supabase client to verify the user
@@ -50,10 +43,7 @@ serve(async (req) => {
     // Get the user to verify they're authenticated
     const { data: { user }, error: userError } = await supabase.auth.getUser()
     if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Unauthorized', 401)
     }
 
     // Parse request body
@@ -61,19 +51,13 @@ serve(async (req) => {
 
     // Validate required fields
     if (!to || !subject || !html) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields: to, subject, html' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Missing required fields: to, subject, html', 400)
     }
 
     // Validate Resend API key is configured
     if (!RESEND_API_KEY) {
       console.error('RESEND_API_KEY not configured')
-      return new Response(
-        JSON.stringify({ error: 'Email service not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Email service not configured', 500)
     }
 
     // Build email payload
@@ -107,23 +91,24 @@ serve(async (req) => {
     const resendData = await resendResponse.json()
 
     if (!resendResponse.ok) {
-      console.error('Resend API error:', resendData)
-      return new Response(
-        JSON.stringify({ error: 'Failed to send email', details: resendData }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      // SECURITY: Log detailed error but return generic message
+      return errorResponse(
+        req,
+        'Failed to send email. Please try again.',
+        500,
+        resendData
       )
     }
 
-    return new Response(
-      JSON.stringify({ success: true, id: resendData.id }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse(req, { success: true, id: resendData.id })
 
   } catch (error) {
-    console.error('Error sending email:', error)
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    // SECURITY: Generic error message, log details server-side
+    return errorResponse(
+      req,
+      'An unexpected error occurred. Please try again.',
+      500,
+      error
     )
   }
 })

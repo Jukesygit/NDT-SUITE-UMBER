@@ -594,8 +594,12 @@ async function exportToHub() {
         const name = prompt('Enter asset name:');
         if (name) {
             const asset = await dataManager.createAsset(name);
-            assetSelect.innerHTML += `<option value="${asset.id}" selected>${asset.name}</option>`;
-            assetSelect.value = asset.id;
+            // SECURITY: Use DOM API instead of innerHTML to prevent XSS
+            const assetOption = document.createElement('option');
+            assetOption.value = asset.id;
+            assetOption.textContent = asset.name;
+            assetOption.selected = true;
+            assetSelect.appendChild(assetOption);
             assetSelect.dispatchEvent(new Event('change'));
         }
     });
@@ -610,8 +614,12 @@ async function exportToHub() {
         const name = prompt('Enter vessel name:');
         if (name) {
             const vessel = await dataManager.createVessel(assetId, name);
-            vesselSelect.innerHTML += `<option value="${vessel.id}" selected>${vessel.name}</option>`;
-            vesselSelect.value = vessel.id;
+            // SECURITY: Use DOM API instead of innerHTML to prevent XSS
+            const vesselOption = document.createElement('option');
+            vesselOption.value = vessel.id;
+            vesselOption.textContent = vessel.name;
+            vesselOption.selected = true;
+            vesselSelect.appendChild(vesselOption);
         }
     });
 

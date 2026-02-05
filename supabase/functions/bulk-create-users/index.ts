@@ -3,11 +3,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 
 interface UserToCreate {
   email: string
@@ -18,7 +14,7 @@ interface UserToCreate {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return handleCorsPreflightRequest(req)
   }
 
   try {
@@ -28,10 +24,7 @@ serve(async (req) => {
     }
 
     if (!users || !Array.isArray(users) || users.length === 0) {
-      return new Response(
-        JSON.stringify({ error: 'No users provided. Expected array of {email, username, role, organization_id?}' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'No users provided. Expected array of {email, username, role, organization_id?}', 400)
     }
 
     // Create Supabase admin client
@@ -69,7 +62,7 @@ serve(async (req) => {
           continue
         }
 
-        // Generate temporary password (user will reset via email)
+        // SECURITY: Generate cryptographically secure temporary password
         const tempPassword = crypto.randomUUID()
 
         // Create auth user - trigger will auto-create profile
@@ -88,8 +81,10 @@ serve(async (req) => {
           results.push({
             email: user.email,
             success: false,
-            error: authError.message
+            // SECURITY: Don't expose detailed error messages
+            error: 'Failed to create user'
           })
+          console.error(`Error creating user ${user.email}:`, authError)
           continue
         }
 
@@ -101,7 +96,7 @@ serve(async (req) => {
           })
 
           if (resetError) {
-            console.warn(`Created user ${user.email} but failed to generate reset link:`, resetError)
+            console.warn(`Created user but failed to generate reset link`)
           }
         }
 
@@ -115,27 +110,27 @@ serve(async (req) => {
         results.push({
           email: user.email,
           success: false,
-          error: err.message
+          error: 'Unexpected error creating user'
         })
+        console.error(`Unexpected error creating user ${user.email}:`, err)
       }
     }
 
     const successCount = results.filter(r => r.success).length
     const failCount = results.filter(r => !r.success).length
 
-    return new Response(
-      JSON.stringify({
-        message: `Created ${successCount} users, ${failCount} failed`,
-        results
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse(req, {
+      message: `Created ${successCount} users, ${failCount} failed`,
+      results
+    })
 
   } catch (error) {
-    console.error('Unexpected error:', error)
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    // SECURITY: Generic error message, log details server-side
+    return errorResponse(
+      req,
+      'An unexpected error occurred. Please try again.',
+      500,
+      error
     )
   }
 })

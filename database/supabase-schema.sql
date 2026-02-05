@@ -100,7 +100,7 @@ CREATE POLICY "Only admins can delete organizations"
     );
 
 -- RLS Policies for profiles
--- Users can view their own profile and admins/org_admins can view users in their org
+-- Users can view their own profile and admins/managers/org_admins can view users in their org
 CREATE POLICY "Users can view profiles"
     ON profiles FOR SELECT
     USING (
@@ -111,6 +111,7 @@ CREATE POLICY "Users can view profiles"
             WHERE p.id = auth.uid()
             AND (
                 p.role = 'admin'
+                OR p.role = 'manager'
                 OR (p.role = 'org_admin' AND p.organization_id = profiles.organization_id)
             )
         )
@@ -122,7 +123,7 @@ CREATE POLICY "Users can update own profile"
     USING (id = auth.uid())
     WITH CHECK (id = auth.uid());
 
--- Admins and org_admins can create users
+-- Admins, managers, and org_admins can create users
 CREATE POLICY "Admins can create users"
     ON profiles FOR INSERT
     WITH CHECK (
@@ -131,12 +132,13 @@ CREATE POLICY "Admins can create users"
             WHERE id = auth.uid()
             AND (
                 role = 'admin'
+                OR role = 'manager'
                 OR (role = 'org_admin' AND organization_id = profiles.organization_id)
             )
         )
     );
 
--- Admins and org_admins can delete users in their org
+-- Admins, managers, and org_admins can delete users in their org
 CREATE POLICY "Admins can delete users"
     ON profiles FOR DELETE
     USING (
@@ -146,6 +148,7 @@ CREATE POLICY "Admins can delete users"
             WHERE p.id = auth.uid()
             AND (
                 p.role = 'admin'
+                OR p.role = 'manager'
                 OR (p.role = 'org_admin' AND p.organization_id = profiles.organization_id)
             )
         )
@@ -157,7 +160,7 @@ CREATE POLICY "Anyone can create account requests"
     ON account_requests FOR INSERT
     WITH CHECK (true);
 
--- Admins and org_admins can view requests
+-- Admins, managers, and org_admins can view requests
 CREATE POLICY "Admins can view account requests"
     ON account_requests FOR SELECT
     USING (
@@ -166,12 +169,13 @@ CREATE POLICY "Admins can view account requests"
             WHERE id = auth.uid()
             AND (
                 role = 'admin'
+                OR role = 'manager'
                 OR (role = 'org_admin' AND organization_id = account_requests.organization_id)
             )
         )
     );
 
--- Admins and org_admins can update requests
+-- Admins, managers, and org_admins can update requests
 CREATE POLICY "Admins can update account requests"
     ON account_requests FOR UPDATE
     USING (
@@ -180,6 +184,7 @@ CREATE POLICY "Admins can update account requests"
             WHERE id = auth.uid()
             AND (
                 role = 'admin'
+                OR role = 'manager'
                 OR (role = 'org_admin' AND organization_id = account_requests.organization_id)
             )
         )

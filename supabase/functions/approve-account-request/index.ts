@@ -3,16 +3,12 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return handleCorsPreflightRequest(req)
   }
 
   try {
@@ -24,10 +20,7 @@ serve(async (req) => {
     // Validate required fields
     if (!request_id || !approved_by_user_id) {
       console.error('Missing required fields')
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Missing required fields', 400)
     }
 
     // Create Supabase client with service role
@@ -49,14 +42,10 @@ serve(async (req) => {
       .eq('id', request_id)
       .single()
 
-    console.log('Fetched request:', { request, fetchError })
+    console.log('Fetched request:', { request: !!request, fetchError: !!fetchError })
 
     if (fetchError || !request) {
-      console.error('Request not found:', fetchError)
-      return new Response(
-        JSON.stringify({ error: 'Request not found', details: fetchError?.message }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Request not found', 404, fetchError)
     }
 
     // Check if user already exists
@@ -66,7 +55,7 @@ serve(async (req) => {
     let userId: string
 
     if (existingUser) {
-      console.log('User already exists, updating metadata:', existingUser.id)
+      console.log('User already exists, updating metadata')
       userId = existingUser.id
 
       // Update user metadata
@@ -82,24 +71,21 @@ serve(async (req) => {
       )
 
       if (updateError) {
-        console.error('Error updating user metadata:', updateError)
-        return new Response(
-          JSON.stringify({
-            error: `Failed to update existing user: ${updateError.message}`,
-            details: updateError
-          }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        return errorResponse(
+          req,
+          'Failed to update existing user. Please try again.',
+          400,
+          updateError
         )
       }
     } else {
-      // Generate temporary password
+      // SECURITY: Generate cryptographically secure temporary password
       const tempPassword = crypto.randomUUID()
 
       console.log('Creating user with data:', {
         email: request.email,
         username: request.username,
-        role: request.requested_role,
-        organization_id: request.organization_id
+        role: request.requested_role
       })
 
       // Create user account using admin auth
@@ -114,26 +100,20 @@ serve(async (req) => {
         }
       })
 
-      console.log('User creation result:', { authData: authData?.user?.id, authError })
+      console.log('User creation result:', { success: !!authData?.user?.id, error: !!authError })
 
       if (authError) {
-        console.error('Auth error:', authError)
-        return new Response(
-          JSON.stringify({
-            error: `Failed to create user: ${authError.message}`,
-            details: authError,
-            code: authError.code || authError.status
-          }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        return errorResponse(
+          req,
+          'Failed to create user. Please try again.',
+          400,
+          authError
         )
       }
 
       if (!authData?.user) {
         console.error('No user data returned from auth.admin.createUser')
-        return new Response(
-          JSON.stringify({ error: 'Failed to create user: No user data returned' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+        return errorResponse(req, 'Failed to create user. Please try again.', 500)
       }
 
       userId = authData.user.id
@@ -155,22 +135,21 @@ serve(async (req) => {
 
     console.log('Account approval completed successfully')
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: existingUser
-          ? 'Account approved successfully. User profile has been updated.'
-          : 'Account created successfully. You can now send the user a password reset link via the Supabase dashboard or have them use "Forgot Password" on the login page.',
-        user_id: userId
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse(req, {
+      success: true,
+      message: existingUser
+        ? 'Account approved successfully. User profile has been updated.'
+        : 'Account created successfully. You can now send the user a password reset link via the Supabase dashboard or have them use "Forgot Password" on the login page.',
+      user_id: userId
+    })
 
   } catch (error) {
-    console.error('Unexpected error:', error)
-    return new Response(
-      JSON.stringify({ error: error.message, stack: error.stack }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    // SECURITY: Generic error message, log details server-side
+    return errorResponse(
+      req,
+      'An unexpected error occurred. Please try again.',
+      500,
+      error
     )
   }
 })

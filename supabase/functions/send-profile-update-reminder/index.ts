@@ -3,11 +3,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 
@@ -142,17 +138,14 @@ interface SendResult {
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return handleCorsPreflightRequest(req)
   }
 
   try {
     // Verify the user is authenticated and is an admin
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Missing authorization header', 401)
     }
 
     // Create Supabase client with service role for querying all users
@@ -175,10 +168,7 @@ serve(async (req) => {
     // Get the user to verify they're authenticated
     const { data: { user }, error: userError } = await supabaseUser.auth.getUser()
     if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Unauthorized', 401)
     }
 
     // Check if user is admin
@@ -189,10 +179,7 @@ serve(async (req) => {
       .single()
 
     if (profile?.role !== 'admin') {
-      return new Response(
-        JSON.stringify({ error: 'Only admins can send bulk emails' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Only admins can send bulk emails', 403)
     }
 
     // Parse optional request body for filtering
@@ -205,10 +192,7 @@ serve(async (req) => {
 
     // Validate Resend API key
     if (!RESEND_API_KEY) {
-      return new Response(
-        JSON.stringify({ error: 'Email service not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Email service not configured', 500)
     }
 
     // Get all active users with emails
@@ -226,29 +210,20 @@ serve(async (req) => {
     const { data: users, error: usersError } = await query
 
     if (usersError) {
-      return new Response(
-        JSON.stringify({ error: 'Failed to fetch users', details: usersError }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Failed to fetch users', 500, usersError)
     }
 
     if (!users || users.length === 0) {
-      return new Response(
-        JSON.stringify({ error: 'No users found to send to' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'No users found to send to', 404)
     }
 
     // Dry run - just return who would receive emails
     if (body.dryRun) {
-      return new Response(
-        JSON.stringify({
-          dryRun: true,
-          totalRecipients: users.length,
-          recipients: users.map(u => ({ email: u.email, username: u.username }))
-        }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return jsonResponse(req, {
+        dryRun: true,
+        totalRecipients: users.length,
+        recipients: users.map(u => ({ email: u.email, username: u.username }))
+      })
     }
 
     // Send emails to all users
@@ -299,22 +274,21 @@ serve(async (req) => {
     const successful = results.filter(r => r.success).length
     const failed = results.filter(r => !r.success)
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        totalRecipients: users.length,
-        successful,
-        failed: failed.length,
-        failedDetails: failed.length > 0 ? failed : undefined
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse(req, {
+      success: true,
+      totalRecipients: users.length,
+      successful,
+      failed: failed.length,
+      failedDetails: failed.length > 0 ? failed : undefined
+    })
 
   } catch (error) {
-    console.error('Error sending bulk emails:', error)
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    // SECURITY: Generic error message, log details server-side
+    return errorResponse(
+      req,
+      'An unexpected error occurred. Please try again.',
+      500,
+      error
     )
   }
 })
