@@ -3,17 +3,15 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 
-// Generate a 6-digit code
+// SECURITY: Generate a cryptographically secure 6-digit code
 function generateCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString()
+  const array = new Uint32Array(1)
+  crypto.getRandomValues(array)
+  return (100000 + (array[0] % 900000)).toString()
 }
 
 // Email template for reset code
@@ -92,7 +90,7 @@ function getEmailHtml(code: string): string {
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return handleCorsPreflightRequest(req)
   }
 
   try {
@@ -100,10 +98,7 @@ serve(async (req) => {
 
     // Validate email
     if (!email || typeof email !== 'string') {
-      return new Response(
-        JSON.stringify({ error: 'Email is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Email is required', 400)
     }
 
     const normalizedEmail = email.toLowerCase().trim()
@@ -125,22 +120,22 @@ serve(async (req) => {
 
     if (userError) {
       console.error('Error checking user:', userError)
-      // Don't reveal if user exists or not for security
-      return new Response(
-        JSON.stringify({ success: true, message: 'If an account exists with this email, a reset code has been sent.' }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      // SECURITY: Don't reveal if user exists or not
+      return jsonResponse(req, {
+        success: true,
+        message: 'If an account exists with this email, a reset code has been sent.'
+      })
     }
 
     const userExists = users?.users?.some(u => u.email?.toLowerCase() === normalizedEmail)
 
     if (!userExists) {
-      // Don't reveal that user doesn't exist - security best practice
-      console.log('User not found, returning success anyway:', normalizedEmail)
-      return new Response(
-        JSON.stringify({ success: true, message: 'If an account exists with this email, a reset code has been sent.' }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      // SECURITY: Don't reveal that user doesn't exist
+      console.log('User not found, returning success anyway')
+      return jsonResponse(req, {
+        success: true,
+        message: 'If an account exists with this email, a reset code has been sent.'
+      })
     }
 
     // Rate limiting: Check for recent codes sent to this email
@@ -153,10 +148,7 @@ serve(async (req) => {
       .limit(1)
 
     if (recentCodes && recentCodes.length > 0) {
-      return new Response(
-        JSON.stringify({ error: 'Please wait 1 minute before requesting another code.' }),
-        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Please wait 1 minute before requesting another code.', 429)
     }
 
     // Generate code and expiration (15 minutes)
@@ -180,20 +172,18 @@ serve(async (req) => {
       })
 
     if (insertError) {
-      console.error('Error storing reset code:', insertError)
-      return new Response(
-        JSON.stringify({ error: 'Failed to generate reset code. Please try again.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return errorResponse(
+        req,
+        'Failed to generate reset code. Please try again.',
+        500,
+        insertError
       )
     }
 
     // Send email via Resend
     if (!RESEND_API_KEY) {
       console.error('RESEND_API_KEY not configured')
-      return new Response(
-        JSON.stringify({ error: 'Email service not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Email service not configured', 500)
     }
 
     const resendResponse = await fetch('https://api.resend.com/emails', {
@@ -213,7 +203,6 @@ serve(async (req) => {
     const resendData = await resendResponse.json()
 
     if (!resendResponse.ok) {
-      console.error('Resend API error:', resendData)
       // Clean up the code since email failed
       await supabaseAdmin
         .from('password_reset_codes')
@@ -221,27 +210,28 @@ serve(async (req) => {
         .eq('email', normalizedEmail)
         .eq('code', code)
 
-      return new Response(
-        JSON.stringify({ error: 'Failed to send reset code email. Please try again.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return errorResponse(
+        req,
+        'Failed to send reset code email. Please try again.',
+        500,
+        resendData
       )
     }
 
-    console.log('Reset code sent successfully to:', normalizedEmail)
+    console.log('Reset code sent successfully')
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: 'If an account exists with this email, a reset code has been sent.'
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse(req, {
+      success: true,
+      message: 'If an account exists with this email, a reset code has been sent.'
+    })
 
   } catch (error) {
-    console.error('Error in send-reset-code:', error)
-    return new Response(
-      JSON.stringify({ error: 'An unexpected error occurred. Please try again.' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    // SECURITY: Generic error message, log details server-side
+    return errorResponse(
+      req,
+      'An unexpected error occurred. Please try again.',
+      500,
+      error
     )
   }
 })

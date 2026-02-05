@@ -265,23 +265,28 @@ class AuthManager {
 
         await this.saveAuthData();
 
-        // Store the temporary password securely for first-time setup display
-        // This will be shown once in the UI and then cleared
+        // SECURITY: Never store plaintext passwords, even in dev mode
+        // For first-time setup, display credentials securely via console only
         if (process.env.NODE_ENV === 'development') {
-            // Store encrypted in sessionStorage for one-time display only
+            // Store only a flag indicating first setup (no sensitive data)
             sessionStorage.setItem('_ndt_first_setup', JSON.stringify({
                 username: 'admin',
-                tempPassword: tempPassword, // Only in memory briefly for first login
+                isFirstSetup: true,
                 showOnce: true
             }));
+            // SECURITY: Console output is acceptable for local dev only
+            // This will be visible only to the developer running the app locally
             console.log('====================================');
-            console.log('LOCAL DEVELOPMENT MODE');
+            console.log('LOCAL DEVELOPMENT MODE - FIRST TIME SETUP');
             console.log('Default admin account created');
             console.log('Username: admin');
-            console.log('Check login page for temporary password (shown once)');
+            console.log('Password: ' + tempPassword);
+            console.log('IMPORTANT: Change this password immediately after first login');
             console.log('====================================');
         } else {
-            console.log('Default admin account created.');
+            // SECURITY: In production, never log credentials
+            // Admin must use proper password reset flow
+            console.log('Default admin account created. Use password reset to set credentials.');
         }
     }
 
@@ -321,21 +326,26 @@ class AuthManager {
             }
 
             if (error) {
+                // SECURITY: Log detailed error for debugging but return generic message
+                // to prevent information disclosure (e.g., "user not found" vs "wrong password")
                 console.error('AuthManager: Login error:', error.message);
-                return { success: false, error: error.message };
+                return { success: false, error: 'Invalid email or password' };
             }
 
             if (data.user) {
                 await this.loadUserProfile(data.user.id);
 
                 if (!this.currentUser) {
+                    // SECURITY: Log the issue but return generic error to prevent enumeration
+                    console.error('AuthManager: User authenticated but profile not found');
                     await supabase.auth.signOut();
-                    return { success: false, error: 'User profile not found. Please contact an administrator.' };
+                    return { success: false, error: 'Invalid email or password' };
                 }
 
                 if (!this.currentUser.isActive) {
+                    // SECURITY: Use generic message to prevent account enumeration
                     await supabase.auth.signOut();
-                    return { success: false, error: 'Account is not active' };
+                    return { success: false, error: 'Invalid email or password' };
                 }
 
                 // Reset rate limiter on successful login

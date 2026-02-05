@@ -3,16 +3,13 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
+import { validatePassword } from '../_shared/password-validation.ts'
 
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return handleCorsPreflightRequest(req)
   }
 
   try {
@@ -20,31 +17,21 @@ serve(async (req) => {
 
     // Validate inputs
     if (!email || typeof email !== 'string') {
-      return new Response(
-        JSON.stringify({ error: 'Email is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Email is required', 400)
     }
 
     if (!code || typeof code !== 'string') {
-      return new Response(
-        JSON.stringify({ error: 'Reset code is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Reset code is required', 400)
     }
 
     if (!newPassword || typeof newPassword !== 'string') {
-      return new Response(
-        JSON.stringify({ error: 'New password is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'New password is required', 400)
     }
 
-    if (newPassword.length < 6) {
-      return new Response(
-        JSON.stringify({ error: 'Password must be at least 6 characters' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+    // SECURITY: Validate password against policy (12 chars + complexity)
+    const passwordValidation = validatePassword(newPassword, { email })
+    if (!passwordValidation.valid) {
+      return errorResponse(req, passwordValidation.error || 'Invalid password', 400)
     }
 
     const normalizedEmail = email.toLowerCase().trim()
@@ -72,20 +59,15 @@ serve(async (req) => {
       .single()
 
     if (fetchError || !resetCode) {
-      console.log('Reset code not found or already used:', { email: normalizedEmail, error: fetchError })
-      return new Response(
-        JSON.stringify({ error: 'Invalid or expired reset code. Please request a new one.' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      // SECURITY: Don't log email in production to prevent PII exposure
+      console.log('Reset code not found or already used')
+      return errorResponse(req, 'Invalid or expired reset code. Please request a new one.', 400)
     }
 
     // Check if code has expired
     if (new Date(resetCode.expires_at) < new Date()) {
-      console.log('Reset code expired:', { email: normalizedEmail, expires_at: resetCode.expires_at })
-      return new Response(
-        JSON.stringify({ error: 'Reset code has expired. Please request a new one.' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      console.log('Reset code expired')
+      return errorResponse(req, 'Reset code has expired. Please request a new one.', 400)
     }
 
     // Check max attempts
@@ -96,37 +78,34 @@ serve(async (req) => {
         .update({ used_at: new Date().toISOString() })
         .eq('id', resetCode.id)
 
-      return new Response(
-        JSON.stringify({ error: 'Too many failed attempts. Please request a new code.' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Too many failed attempts. Please request a new code.', 400)
     }
 
     // Find the user
     const { data: users, error: userError } = await supabaseAdmin.auth.admin.listUsers()
 
     if (userError) {
-      console.error('Error fetching users:', userError)
-      return new Response(
-        JSON.stringify({ error: 'Failed to verify user. Please try again.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      // SECURITY: Log detailed error but return generic message
+      return errorResponse(
+        req,
+        'Failed to verify user. Please try again.',
+        500,
+        userError
       )
     }
 
     const user = users?.users?.find(u => u.email?.toLowerCase() === normalizedEmail)
 
     if (!user) {
-      console.error('User not found:', normalizedEmail)
+      console.error('User not found for reset code')
       // Increment attempts
       await supabaseAdmin
         .from('password_reset_codes')
         .update({ attempts: resetCode.attempts + 1 })
         .eq('id', resetCode.id)
 
-      return new Response(
-        JSON.stringify({ error: 'Invalid reset code. Please try again.' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      // SECURITY: Generic error to prevent user enumeration
+      return errorResponse(req, 'Invalid reset code. Please try again.', 400)
     }
 
     // Update the user's password AND confirm their email (since receiving the code proves ownership)
@@ -139,10 +118,12 @@ serve(async (req) => {
     )
 
     if (updateError) {
-      console.error('Error updating password:', updateError)
-      return new Response(
-        JSON.stringify({ error: 'Failed to update password. Please try again.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      // SECURITY: Log detailed error but return generic message
+      return errorResponse(
+        req,
+        'Failed to update password. Please try again.',
+        500,
+        updateError
       )
     }
 
@@ -152,21 +133,20 @@ serve(async (req) => {
       .update({ used_at: new Date().toISOString() })
       .eq('id', resetCode.id)
 
-    console.log('Password updated successfully for:', normalizedEmail)
+    console.log('Password updated successfully')
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: 'Password updated successfully. You can now sign in with your new password.'
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse(req, {
+      success: true,
+      message: 'Password updated successfully. You can now sign in with your new password.'
+    })
 
   } catch (error) {
-    console.error('Error in verify-reset-code:', error)
-    return new Response(
-      JSON.stringify({ error: 'An unexpected error occurred. Please try again.' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    // SECURITY: Generic error message, log details server-side
+    return errorResponse(
+      req,
+      'An unexpected error occurred. Please try again.',
+      500,
+      error
     )
   }
 })

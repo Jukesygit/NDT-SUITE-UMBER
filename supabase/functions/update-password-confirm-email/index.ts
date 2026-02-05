@@ -3,39 +3,29 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
+import { validatePassword } from '../_shared/password-validation.ts'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return handleCorsPreflightRequest(req)
   }
 
   try {
     const { newPassword, accessToken } = await req.json()
 
     if (!newPassword || typeof newPassword !== 'string') {
-      return new Response(
-        JSON.stringify({ error: 'New password is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'New password is required', 400)
     }
 
-    if (newPassword.length < 6) {
-      return new Response(
-        JSON.stringify({ error: 'Password must be at least 6 characters' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+    // SECURITY: Validate password against policy (12 chars + complexity)
+    const passwordValidation = validatePassword(newPassword)
+    if (!passwordValidation.valid) {
+      return errorResponse(req, passwordValidation.error || 'Invalid password', 400)
     }
 
     if (!accessToken || typeof accessToken !== 'string') {
-      return new Response(
-        JSON.stringify({ error: 'Access token is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Access token is required', 400)
     }
 
     // Create Supabase client with user's access token to verify identity
@@ -56,10 +46,12 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabaseUser.auth.getUser()
 
     if (userError || !user) {
-      console.error('Error getting user from token:', userError)
-      return new Response(
-        JSON.stringify({ error: 'Invalid or expired session. Please request a new password reset.' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      // SECURITY: Log detailed error but return generic message
+      return errorResponse(
+        req,
+        'Invalid or expired session. Please request a new password reset.',
+        401,
+        userError
       )
     }
 
@@ -84,28 +76,29 @@ serve(async (req) => {
     )
 
     if (updateError) {
-      console.error('Error updating password:', updateError)
-      return new Response(
-        JSON.stringify({ error: 'Failed to update password. Please try again.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      // SECURITY: Log detailed error but return generic message
+      return errorResponse(
+        req,
+        'Failed to update password. Please try again.',
+        500,
+        updateError
       )
     }
 
-    console.log('Password updated and email confirmed for user:', user.email)
+    console.log('Password updated and email confirmed for user')
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: 'Password updated successfully. You can now sign in.'
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse(req, {
+      success: true,
+      message: 'Password updated successfully. You can now sign in.'
+    })
 
   } catch (error) {
-    console.error('Error in update-password-confirm-email:', error)
-    return new Response(
-      JSON.stringify({ error: 'An unexpected error occurred. Please try again.' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    // SECURITY: Generic error message, log details server-side
+    return errorResponse(
+      req,
+      'An unexpected error occurred. Please try again.',
+      500,
+      error
     )
   }
 })

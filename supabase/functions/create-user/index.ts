@@ -3,15 +3,12 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
+import { validatePassword } from '../_shared/password-validation.ts'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return handleCorsPreflightRequest(req)
   }
 
   try {
@@ -19,17 +16,13 @@ serve(async (req) => {
 
     // Validate required fields
     if (!email || !username || !password) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields: email, username, password' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Missing required fields: email, username, password', 400)
     }
 
-    if (password.length < 6) {
-      return new Response(
-        JSON.stringify({ error: 'Password must be at least 6 characters' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+    // SECURITY: Validate password against policy (12 chars + complexity)
+    const passwordValidation = validatePassword(password, { email, username })
+    if (!passwordValidation.valid) {
+      return errorResponse(req, passwordValidation.error || 'Invalid password', 400)
     }
 
     // Create Supabase admin client
@@ -44,10 +37,7 @@ serve(async (req) => {
     const existingUser = existingUsers?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase())
 
     if (existingUser) {
-      return new Response(
-        JSON.stringify({ error: 'A user with this email already exists' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'A user with this email already exists', 400)
     }
 
     // Create auth user with admin API - this pre-confirms email and triggers profile creation
@@ -63,41 +53,39 @@ serve(async (req) => {
     })
 
     if (authError) {
-      console.error('Error creating user:', authError)
-      return new Response(
-        JSON.stringify({ error: authError.message }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      // SECURITY: Log detailed error but return generic message
+      return errorResponse(
+        req,
+        'Failed to create user. Please try again.',
+        500,
+        authError
       )
     }
 
     if (!authData?.user) {
-      return new Response(
-        JSON.stringify({ error: 'User creation failed - no user returned' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'User creation failed. Please try again.', 500)
     }
 
     console.log('User created successfully:', email)
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        user: {
-          id: authData.user.id,
-          email: authData.user.email,
-          username,
-          role: role || 'viewer',
-          organization_id: organization_id || null
-        }
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse(req, {
+      success: true,
+      user: {
+        id: authData.user.id,
+        email: authData.user.email,
+        username,
+        role: role || 'viewer',
+        organization_id: organization_id || null
+      }
+    })
 
   } catch (error) {
-    console.error('Unexpected error in create-user:', error)
-    return new Response(
-      JSON.stringify({ error: error.message || 'An unexpected error occurred' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    // SECURITY: Generic error message, log details server-side
+    return errorResponse(
+      req,
+      'An unexpected error occurred. Please try again.',
+      500,
+      error
     )
   }
 })

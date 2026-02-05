@@ -229,9 +229,17 @@ export async function getActivityLogs(
         query = query.lte('created_at', filters.endDate);
     }
     if (filters.searchQuery) {
-        query = query.or(
-            `description.ilike.%${filters.searchQuery}%,user_name.ilike.%${filters.searchQuery}%,entity_name.ilike.%${filters.searchQuery}%`
-        );
+        // SECURITY: Sanitize search query to prevent SQL injection via Supabase filter operators
+        // Only allow alphanumeric characters, spaces, and basic punctuation
+        const sanitizedQuery = filters.searchQuery
+            .replace(/[^a-zA-Z0-9\s\-_.,@]/g, '')
+            .trim();
+
+        if (sanitizedQuery.length > 0) {
+            query = query.or(
+                `description.ilike.%${sanitizedQuery}%,user_name.ilike.%${sanitizedQuery}%,entity_name.ilike.%${sanitizedQuery}%`
+            );
+        }
     }
 
     // Pagination

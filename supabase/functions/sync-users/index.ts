@@ -3,15 +3,11 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return handleCorsPreflightRequest(req)
   }
 
   try {
@@ -25,11 +21,7 @@ serve(async (req) => {
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers()
 
     if (authError) {
-      console.error('Error fetching auth users:', authError)
-      return new Response(
-        JSON.stringify({ error: 'Failed to fetch auth users' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Failed to fetch auth users', 500, authError)
     }
 
     const authUsers = authData?.users || []
@@ -40,15 +32,10 @@ serve(async (req) => {
       .select('id, email')
 
     if (profilesError) {
-      console.error('Error fetching profiles:', profilesError)
-      return new Response(
-        JSON.stringify({ error: 'Failed to fetch profiles' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return errorResponse(req, 'Failed to fetch profiles', 500, profilesError)
     }
 
     const profileIds = new Set((profiles || []).map(p => p.id))
-    const authUserIds = new Set(authUsers.map(u => u.id))
 
     const results = {
       authUsersCount: authUsers.length,
@@ -78,48 +65,29 @@ serve(async (req) => {
           })
 
         if (insertError) {
-          console.error('Error creating profile for', authUser.email, ':', insertError)
-          results.errors.push(`Failed to create profile for ${authUser.email}: ${insertError.message}`)
+          // SECURITY: Don't expose email in error messages
+          console.error('Error creating profile:', insertError)
+          results.errors.push(`Failed to create profile for user`)
         } else {
-          console.log('Created profile for:', authUser.email)
-          results.createdProfiles.push(authUser.email || authUser.id)
+          console.log('Created profile for user:', authUser.id)
+          results.createdProfiles.push(authUser.id)
         }
       }
     }
 
-    // Optionally: Remove orphaned profiles (profiles without auth users)
-    // Uncomment if you want to auto-delete orphaned profiles
-    /*
-    for (const profile of (profiles || [])) {
-      if (!authUserIds.has(profile.id)) {
-        const { error: deleteError } = await supabaseAdmin
-          .from('profiles')
-          .delete()
-          .eq('id', profile.id)
-
-        if (deleteError) {
-          results.errors.push(`Failed to delete orphaned profile ${profile.email}: ${deleteError.message}`)
-        } else {
-          results.deletedOrphanedProfiles.push(profile.email || profile.id)
-        }
-      }
-    }
-    */
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: `Sync complete. Created ${results.createdProfiles.length} profiles.`,
-        ...results
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse(req, {
+      success: true,
+      message: `Sync complete. Created ${results.createdProfiles.length} profiles.`,
+      ...results
+    })
 
   } catch (error) {
-    console.error('Unexpected error in sync-users:', error)
-    return new Response(
-      JSON.stringify({ error: error.message || 'An unexpected error occurred' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    // SECURITY: Generic error message, log details server-side
+    return errorResponse(
+      req,
+      'An unexpected error occurred. Please try again.',
+      500,
+      error
     )
   }
 })
