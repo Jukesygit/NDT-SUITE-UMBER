@@ -8,8 +8,12 @@
 // Example: "https://yourdomain.com,https://www.yourdomain.com"
 const ALLOWED_ORIGINS_ENV = Deno.env.get('ALLOWED_ORIGINS') || '';
 
-// Default allowed origins (update these for your production domain)
+// Default allowed origins - includes production and development
 const DEFAULT_ALLOWED_ORIGINS = [
+    // Production domains
+    'https://www.matrixportal.io',
+    'https://matrixportal.io',
+    // Development domains
     'http://localhost:3000',
     'http://localhost:5173',
     'http://localhost:5174',

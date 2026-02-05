@@ -206,8 +206,29 @@ function LoginPageNew() {
           return;
         }
 
-        if (newPassword.length < 6) {
-          setError('Password must be at least 6 characters');
+        // Validate password meets server requirements (must match password-validation.ts)
+        if (newPassword.length < 12) {
+          setError('Password must be at least 12 characters');
+          setIsLoading(false);
+          return;
+        }
+        if (!/[A-Z]/.test(newPassword)) {
+          setError('Password must contain at least one uppercase letter');
+          setIsLoading(false);
+          return;
+        }
+        if (!/[a-z]/.test(newPassword)) {
+          setError('Password must contain at least one lowercase letter');
+          setIsLoading(false);
+          return;
+        }
+        if (!/[0-9]/.test(newPassword)) {
+          setError('Password must contain at least one number');
+          setIsLoading(false);
+          return;
+        }
+        if (!/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(newPassword)) {
+          setError('Password must contain at least one special character (!@#$%^&*)');
           setIsLoading(false);
           return;
         }
@@ -238,8 +259,29 @@ function LoginPageNew() {
           return;
         }
 
-        if (newPassword.length < 6) {
-          setError('Password must be at least 6 characters');
+        // Validate password meets server requirements (must match password-validation.ts)
+        if (newPassword.length < 12) {
+          setError('Password must be at least 12 characters');
+          setIsLoading(false);
+          return;
+        }
+        if (!/[A-Z]/.test(newPassword)) {
+          setError('Password must contain at least one uppercase letter');
+          setIsLoading(false);
+          return;
+        }
+        if (!/[a-z]/.test(newPassword)) {
+          setError('Password must contain at least one lowercase letter');
+          setIsLoading(false);
+          return;
+        }
+        if (!/[0-9]/.test(newPassword)) {
+          setError('Password must contain at least one number');
+          setIsLoading(false);
+          return;
+        }
+        if (!/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(newPassword)) {
+          setError('Password must contain at least one special character (!@#$%^&*)');
           setIsLoading(false);
           return;
         }
@@ -432,10 +474,11 @@ function LoginPageNew() {
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="••••••••"
                     required
-                    minLength={6}
+                    minLength={12}
                     autoComplete="new-password"
                     disabled={isLoading}
                   />
+                  <p className="text-xs text-tertiary mt-1">Min 12 chars with uppercase, lowercase, number & special char</p>
                 </div>
 
                 <div className="input-group">
@@ -450,7 +493,7 @@ function LoginPageNew() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
                     required
-                    minLength={6}
+                    minLength={12}
                     autoComplete="new-password"
                     disabled={isLoading}
                   />
@@ -473,10 +516,11 @@ function LoginPageNew() {
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="••••••••"
                     required
-                    minLength={6}
+                    minLength={12}
                     autoComplete="new-password"
                     disabled={isLoading}
                   />
+                  <p className="text-xs text-tertiary mt-1">Min 12 chars with uppercase, lowercase, number & special char</p>
                 </div>
 
                 <div className="input-group">
@@ -491,7 +535,7 @@ function LoginPageNew() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
                     required
-                    minLength={6}
+                    minLength={12}
                     autoComplete="new-password"
                     disabled={isLoading}
                   />
