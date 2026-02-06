@@ -86,23 +86,3 @@ export {
     useImportConfig,
 } from './useConfigMutations';
 
-// Data Hub mutations (assets & vessels)
-export {
-    useCreateAsset,
-    useUpdateAsset,
-    useDeleteAsset,
-    useCreateVessel,
-    useUpdateVessel,
-    useDeleteVessel,
-} from './useDataHubMutations';
-
-// Inspection mutations (scans, strakes, images)
-export {
-    useDeleteScan,
-    useUpdateScan,
-    useDeleteVesselImage,
-    useRenameVesselImage,
-    useCreateStrake,
-    useUpdateStrake,
-    useDeleteStrake,
-} from './useInspectionMutations';

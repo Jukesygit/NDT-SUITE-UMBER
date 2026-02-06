@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { Upload, File, Check, Trash2, Layers, ChevronDown, ChevronRight, Send, Link2 } from 'lucide-react';
+import { Upload, File, Check, Trash2, Layers, ChevronDown, ChevronRight } from 'lucide-react';
 import { CscanData } from './types';
 
 interface FilePanelProps {
@@ -11,9 +11,6 @@ interface FilePanelProps {
   onSelectionChange: (selected: Set<string>) => void;
   onCreateComposite?: () => void;
   onClearFiles?: () => void;
-  onExportToHub?: (scans: CscanData[]) => void;
-  onBatchExportToHub?: (scans: CscanData[]) => void;
-  onAssignToStrake?: (scans: CscanData[]) => void;
 }
 
 const FilePanel: React.FC<FilePanelProps> = ({
@@ -24,10 +21,7 @@ const FilePanel: React.FC<FilePanelProps> = ({
   onFileUpload,
   onSelectionChange,
   onCreateComposite,
-  onClearFiles,
-  onExportToHub,
-  onBatchExportToHub,
-  onAssignToStrake
+  onClearFiles
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -262,24 +256,6 @@ const FilePanel: React.FC<FilePanelProps> = ({
       {/* Action Buttons */}
       {files.length > 0 && (
         <div className="p-3 border-t border-gray-700 space-y-2">
-          {/* Single Export - Show when exactly one file is selected or one file is current */}
-          {(selectedFiles.size === 1 || (selectedFiles.size === 0 && currentFileId)) && (
-            <button
-              onClick={() => {
-                const scanToExport = selectedFiles.size === 1
-                  ? files.find(f => selectedFiles.has(f.id))
-                  : files.find(f => f.id === currentFileId);
-                if (scanToExport && onExportToHub) {
-                  onExportToHub([scanToExport]);
-                }
-              }}
-              className="w-full px-3 py-1.5 bg-orange-600 text-white text-xs rounded hover:bg-orange-700 transition-colors flex items-center justify-center gap-1"
-            >
-              <Send className="w-3 h-3" />
-              Send to Hub
-            </button>
-          )}
-
           {/* Composite Button */}
           {files.length >= 2 && (
             <button
@@ -289,38 +265,6 @@ const FilePanel: React.FC<FilePanelProps> = ({
               {selectedFiles.size > 1
                 ? `Create Composite (${selectedFiles.size} selected)`
                 : `Create Composite (All ${files.length} files)`}
-            </button>
-          )}
-
-          {/* Batch Export - Show when multiple files selected */}
-          {selectedFiles.size > 1 && (
-            <button
-              onClick={() => {
-                const scansToExport = files.filter(f => selectedFiles.has(f.id));
-                if (onBatchExportToHub) {
-                  onBatchExportToHub(scansToExport);
-                }
-              }}
-              className="w-full px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
-            >
-              <Send className="w-3 h-3" />
-              Batch Export ({selectedFiles.size} files)
-            </button>
-          )}
-
-          {/* Assign to Strake - Show when files selected */}
-          {selectedFiles.size > 0 && (
-            <button
-              onClick={() => {
-                const scansToAssign = files.filter(f => selectedFiles.has(f.id));
-                if (onAssignToStrake) {
-                  onAssignToStrake(scansToAssign);
-                }
-              }}
-              className="w-full px-3 py-1.5 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1"
-            >
-              <Link2 className="w-3 h-3" />
-              Assign to Strake ({selectedFiles.size})
             </button>
           )}
         </div>

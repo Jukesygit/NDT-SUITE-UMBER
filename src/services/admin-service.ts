@@ -5,8 +5,6 @@
 
 import { supabase } from '../supabase-client.js';
 import authManager from '../auth-manager.js';
-import dataManager from '../data-manager.js';
-import sharingManager from '../sharing-manager.js';
 import adminConfig from '../admin-config.js';
 import { logActivity } from './activity-log-service';
 import type { Organization, Profile } from '../types/database.types.js';
@@ -175,7 +173,6 @@ class AdminService {
   async getDashboardStats(): Promise<AdminDashboardStats> {
     try {
       await authManager.ensureInitialized();
-      await dataManager.ensureInitialized();
 
       // Get organizations
       const organizations = await authManager.getOrganizations();
@@ -184,29 +181,22 @@ class AdminService {
       // Get users
       const users = await authManager.getUsers();
 
-      // Get data stats
-      const dataStats = dataManager.getStats();
-
       // Get pending requests
       const accountRequests = await authManager.getPendingAccountRequests();
       const permissionRequests = await this.getPermissionRequests();
       const pendingPermissions = permissionRequests.filter(req => req.status === 'pending');
 
-      // Get shares
-      const shares = await sharingManager.getAllShares();
-
-      // Build recent activity (placeholder - can be enhanced later)
       const recentActivity: ActivityItem[] = [];
 
       return {
         totalOrganizations: filteredOrgs.length,
         totalUsers: users.length,
-        totalAssets: dataStats.totalAssets,
-        totalVessels: dataStats.totalVessels,
-        totalScans: dataStats.totalScans,
+        totalAssets: 0,
+        totalVessels: 0,
+        totalScans: 0,
         pendingAccountRequests: accountRequests.length,
         pendingPermissionRequests: pendingPermissions.length,
-        activeShares: shares.length,
+        activeShares: 0,
         recentActivity,
       };
     } catch (error) {
@@ -242,18 +232,14 @@ class AdminService {
    */
   async getOrganizationsWithStats(): Promise<OrganizationStats[]> {
     const organizations = await this.getOrganizations();
-    const allOrgStats = await dataManager.getAllOrganizationStats();
 
-    return organizations.map((org: Organization) => {
-      const stats = allOrgStats.find((s: { organizationId: string; organizationName: string; totalAssets: number; totalVessels: number; totalScans: number }) => s.organizationId === org.id);
-      return {
-        organization: org,
-        userCount: 0, // TODO: Get user count per org
-        assetCount: stats?.totalAssets || 0,
-        vesselCount: stats?.totalVessels || 0,
-        scanCount: stats?.totalScans || 0,
-      };
-    });
+    return organizations.map((org: Organization) => ({
+      organization: org,
+      userCount: 0,
+      assetCount: 0,
+      vesselCount: 0,
+      scanCount: 0,
+    }));
   }
 
   /**
@@ -595,7 +581,7 @@ class AdminService {
    * Get all assets across organizations
    */
   async getAssets() {
-    return dataManager.getAssets();
+    return [];
   }
 
   /**
@@ -641,29 +627,15 @@ class AdminService {
   /**
    * Transfer an asset to another organization
    */
-  async transferAsset(assetId: string, targetOrgId: string): Promise<ServiceResult> {
-    try {
-      await dataManager.transferAsset(assetId, targetOrgId);
-      return { success: true };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
+  async transferAsset(_assetId: string, _targetOrgId: string): Promise<ServiceResult> {
+    return { success: false, error: 'Asset management has been removed' };
   }
 
   /**
    * Bulk transfer assets to another organization
    */
-  async bulkTransferAssets(assetIds: string[], targetOrgId: string): Promise<ServiceResult> {
-    try {
-      const result = await dataManager.bulkTransferAssets(assetIds, targetOrgId);
-      return {
-        success: true,
-        data: result,
-        message: `Transferred ${result.success.length} assets. Failed: ${result.failed.length}`,
-      };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
+  async bulkTransferAssets(_assetIds: string[], _targetOrgId: string): Promise<ServiceResult> {
+    return { success: false, error: 'Asset management has been removed' };
   }
 
   // ==========================================================================
@@ -674,61 +646,55 @@ class AdminService {
    * Get all shares
    */
   async getShares(): Promise<Share[]> {
-    return await sharingManager.getAllShares();
+    return [];
   }
 
   /**
    * Get all access requests
    */
   async getAccessRequests(): Promise<AccessRequest[]> {
-    return await sharingManager.getPendingAccessRequests();
+    return [];
   }
 
   /**
    * Create a new share
    */
-  async createShare(data: {
+  async createShare(_data: {
     assetId: string;
     vesselId?: string | null;
     scanId?: string | null;
     sharedWithOrganizationId: string;
     permission: 'view' | 'edit';
   }): Promise<ServiceResult<Share>> {
-    return await (sharingManager as any).shareAsset({
-      assetId: data.assetId,
-      vesselId: data.vesselId ?? null,
-      scanId: data.scanId ?? null,
-      sharedWithOrganizationId: data.sharedWithOrganizationId,
-      permission: data.permission,
-    }) as ServiceResult<Share>;
+    return { success: false, error: 'Sharing has been removed' };
   }
 
   /**
    * Update share permissions
    */
-  async updateShare(id: string, permission: 'view' | 'edit'): Promise<ServiceResult<Share>> {
-    return await sharingManager.updateSharePermission(id, permission) as ServiceResult<Share>;
+  async updateShare(_id: string, _permission: 'view' | 'edit'): Promise<ServiceResult<Share>> {
+    return { success: false, error: 'Sharing has been removed' };
   }
 
   /**
    * Delete a share
    */
-  async deleteShare(id: string): Promise<ServiceResult> {
-    return await sharingManager.removeShare(id) as ServiceResult;
+  async deleteShare(_id: string): Promise<ServiceResult> {
+    return { success: false, error: 'Sharing has been removed' };
   }
 
   /**
    * Approve an access request
    */
-  async approveAccessRequest(id: string): Promise<ServiceResult> {
-    return await sharingManager.approveAccessRequest(id) as ServiceResult;
+  async approveAccessRequest(_id: string): Promise<ServiceResult> {
+    return { success: false, error: 'Sharing has been removed' };
   }
 
   /**
    * Reject an access request
    */
-  async rejectAccessRequest(id: string, reason?: string): Promise<ServiceResult> {
-    return await sharingManager.rejectAccessRequest(id, reason || '') as ServiceResult;
+  async rejectAccessRequest(_id: string, _reason?: string): Promise<ServiceResult> {
+    return { success: false, error: 'Sharing has been removed' };
   }
 
   // ==========================================================================

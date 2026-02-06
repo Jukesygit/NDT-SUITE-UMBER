@@ -74,30 +74,6 @@ export {
     configKeys,
 } from './useAdminConfig';
 
-// Data Hub queries
-export {
-    useDataHubOrganizations,
-    useAssetsByOrg,
-    useVesselsByAsset,
-    useVesselDetails,
-    useVesselInspections,
-    useInspection,
-    useVesselScans,
-    useVesselStrakes,
-    useVesselImages,
-    dataHubKeys,
-    inspectionKeys,
-} from './useDataHub';
-export type {
-    AssetWithCounts,
-    Vessel,
-    VesselWithCounts,
-    Inspection,
-    Scan,
-    Strake,
-    VesselImage,
-} from './useDataHub';
-
 // Activity Log queries
 export {
     useActivityLogs,

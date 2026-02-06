@@ -1,25 +1,12 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import authManager from '../auth-manager.js';
-import syncStatus from './sync-status.js';
 import { LogoGradientShift } from './MatrixLogoAnimated';
 import { NotificationBell } from './NotificationBell';
 import { AnnouncementBanner } from './AnnouncementBanner';
 
 // Navigation configuration
 const navigationConfig = [
-  // Data Hub temporarily disabled - uncomment to re-enable
-  // {
-  //   id: 'home',
-  //   path: '/',
-  //   label: 'Data Hub',
-  //   icon: (
-  //     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-  //       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-  //         d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-  //     </svg>
-  //   )
-  // },
   {
     id: 'personnel',
     path: '/personnel',
@@ -48,30 +35,6 @@ const navigationConfig = [
         path: '/cscan',
         label: 'C-Scan Visualizer',
         description: 'Ultrasonic inspection data visualization'
-      },
-      {
-        id: 'pec',
-        path: '/pec',
-        label: 'PEC Visualizer',
-        description: 'Pulsed Eddy Current heatmaps'
-      },
-      {
-        id: '3d',
-        path: '/3d',
-        label: '3D Viewer',
-        description: 'Advanced 3D model viewing'
-      },
-      {
-        id: 'nii',
-        path: '/nii',
-        label: 'Coverage Calculator',
-        description: 'Inspection coverage estimates'
-      },
-      {
-        id: 'tofd',
-        path: '/tofd',
-        label: 'TOFD Calculator',
-        description: 'Time-of-Flight calculations'
       }
     ]
   },
@@ -123,11 +86,6 @@ function LayoutNew() {
       if (unsubscribe) unsubscribe();
       window.removeEventListener('userLoggedIn', checkAccess);
     };
-  }, []);
-
-  useEffect(() => {
-    const element = syncStatus.create();
-    return () => syncStatus.remove();
   }, []);
 
   // Check if any tools submenu item is active

@@ -7,7 +7,6 @@ import './styles/main.css';
 import { initTheme } from './theme.js';
 import { initializeTheme } from './themes.js';
 import authManager from './auth-manager.js';
-import syncService from './sync-service.js';
 import { AnimatedBackground } from './animated-background.js';
 import { initGlobalStyleEnforcer } from './utils/globalStyleEnforcer.js';
 
@@ -28,25 +27,10 @@ import LoginPage from './pages/LoginPageNew.jsx';
 import { RandomMatrixSpinner } from './components/MatrixSpinners';
 
 // Lazy load pages for code splitting
-const ProfilePage = lazy(() => import('./pages/profile/ProfilePage.tsx')); // Primary - modernized with React Query
-const DataHubPage = lazy(() => import('./pages/data-hub/index.tsx'));
-const TofdCalculatorPage = lazy(() => import('./pages/TofdCalculatorPage.jsx'));
+const ProfilePage = lazy(() => import('./pages/profile/ProfilePage.tsx'));
 const CscanVisualizerPage = lazy(() => import('./pages/CscanVisualizerPage.jsx'));
-const PecVisualizerPage = lazy(() => import('./pages/PecVisualizerPage.jsx'));
-const Viewer3DPage = lazy(() => import('./pages/Viewer3DPage.jsx'));
-const NiiCalculatorPage = lazy(() => import('./pages/NiiCalculatorPage.jsx'));
-const PersonnelPage = lazy(() => import('./pages/personnel/PersonnelPage.tsx')); // Modernized - uses React Query
-const LogoDemo = lazy(() => import('./pages/LogoDemo.tsx'));
-const LogoAnimatedDemo = lazy(() => import('./pages/LogoAnimatedDemo.tsx'));
-
-// Legacy pages (kept for reference/fallback)
-const ProfilePageLegacy = lazy(() => import('./pages/ProfilePageNew.jsx'));
+const PersonnelPage = lazy(() => import('./pages/personnel/PersonnelPage.tsx'));
 const AdminPageNew = lazy(() => import('./pages/admin/index.tsx'));
-const AdminStyleDemo = lazy(() => import('./pages/admin/StyleDemo.tsx'));
-
-// Data Hub pages
-const VesselOverviewPage = lazy(() => import('./pages/data-hub/VesselOverviewPage.tsx'));
-const InspectionPage = lazy(() => import('./pages/data-hub/InspectionPage.tsx'));
 
 
 // Suspense wrapper that keys by route to prevent stuck loading states
@@ -180,72 +164,19 @@ function App() {
                             {/* Public route - LoginPage handles its own redirect logic */}
                             <Route path="/login" element={<LoginPage />} />
 
-                            {/* Demo routes - remove after testing */}
-                            <Route path="/logo-demo" element={<LogoDemo />} />
-                            <Route path="/logo-animated" element={<LogoAnimatedDemo />} />
-                            <Route path="/admin-style-demo" element={<AdminStyleDemo />} />
-
                             {/* All protected routes share a SINGLE Layout instance */}
                             {/* This prevents Layout remount when navigating between tabs */}
                             <Route element={<ProtectedRoute />}>
                                 <Route element={<Layout />}>
-                                            {/* Data Hub temporarily disabled - redirect to profile */}
                                     <Route path="/" element={<Navigate to="/profile" replace />} />
-                                    {/* Data Hub routes - uncomment to re-enable
-                                    <Route path="/" element={
-                                        <ErrorBoundary>
-                                            <DataHubPage />
-                                        </ErrorBoundary>
-                                    } />
-                                    <Route path="/vessel/:assetId/:vesselId" element={
-                                        <ErrorBoundary>
-                                            <VesselOverviewPage />
-                                        </ErrorBoundary>
-                                    } />
-                                    <Route path="/inspection/:assetId/:vesselId/:inspectionId" element={
-                                        <ErrorBoundary>
-                                            <InspectionPage />
-                                        </ErrorBoundary>
-                                    } />
-                                    <Route path="/inspection/:assetId/:vesselId" element={
-                                        <ErrorBoundary>
-                                            <InspectionPage />
-                                        </ErrorBoundary>
-                                    } />
-                                    */}
                                     <Route path="/profile" element={
                                         <ErrorBoundary>
                                             <ProfilePage />
                                         </ErrorBoundary>
                                     } />
-                                    <Route path="/profile-legacy" element={
-                                        <ErrorBoundary>
-                                            <ProfilePageLegacy />
-                                        </ErrorBoundary>
-                                    } />
-                                    <Route path="/tofd" element={
-                                        <ErrorBoundary>
-                                            <TofdCalculatorPage />
-                                        </ErrorBoundary>
-                                    } />
                                     <Route path="/cscan" element={
                                         <ErrorBoundary>
                                             <CscanVisualizerPage />
-                                        </ErrorBoundary>
-                                    } />
-                                    <Route path="/pec" element={
-                                        <ErrorBoundary>
-                                            <PecVisualizerPage />
-                                        </ErrorBoundary>
-                                    } />
-                                    <Route path="/3d" element={
-                                        <ErrorBoundary>
-                                            <Viewer3DPage />
-                                        </ErrorBoundary>
-                                    } />
-                                    <Route path="/nii" element={
-                                        <ErrorBoundary>
-                                            <NiiCalculatorPage />
                                         </ErrorBoundary>
                                     } />
                                     {/* Personnel route - requires elevated access (admin or manager) */}

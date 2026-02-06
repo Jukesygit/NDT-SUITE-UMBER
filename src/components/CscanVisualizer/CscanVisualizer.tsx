@@ -6,15 +6,12 @@ import {
   ChevronRight,
   Layers,
   Grid3x3,
-  Send,
   Loader2
 } from 'lucide-react';
 import CanvasViewport from './CanvasViewport';
 import FilePanel from './FilePanel';
 import ToolBar from './ToolBar';
 import StatsPanel from './StatsPanel';
-import ExportToHubModal from './ExportToHubModal';
-import AssignStrakeModal from './AssignStrakeModal';
 import CsvRepairModal from './CsvRepairModal';
 import { CscanData, Tool, DisplaySettings } from './types';
 import { createComposite } from './utils/fileParser';
@@ -43,13 +40,8 @@ const CscanVisualizer: React.FC = () => {
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   // Modal state
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [showAssignStrakeModal, setShowAssignStrakeModal] = useState(false);
   const [showRepairModal, setShowRepairModal] = useState(false);
-  const [scansForExport, setScansForExport] = useState<CscanData[]>([]);
-  const [scansForStrakeAssign, setScansForStrakeAssign] = useState<CscanData[]>([]);
   const [pendingScans, setPendingScans] = useState<CscanData[]>([]);
-  const [isBatchExport, setIsBatchExport] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Export progress state
@@ -345,32 +337,6 @@ const CscanVisualizer: React.FC = () => {
     }
   }, [scanData, displaySettings]);
 
-  const handleExportToHub = useCallback((scans: CscanData[]) => {
-    setScansForExport(scans);
-    setIsBatchExport(false);
-    setShowExportModal(true);
-  }, []);
-
-  const handleBatchExportToHub = useCallback((scans: CscanData[]) => {
-    setScansForExport(scans);
-    setIsBatchExport(true);
-    setShowExportModal(true);
-  }, []);
-
-  const handleAssignToStrake = useCallback((scans: CscanData[]) => {
-    setScansForStrakeAssign(scans);
-    setShowAssignStrakeModal(true);
-  }, []);
-
-  const handleExportComplete = useCallback((success: boolean, message: string) => {
-    setStatusMessage({ type: success ? 'success' : 'error', message });
-    setTimeout(() => setStatusMessage(null), 5000);
-  }, []);
-
-  const generateThumbnail = useCallback(async (_scan: CscanData): Promise<{ full: string; heatmapOnly: string } | null> => {
-    return null;
-  }, []);
-
   const dataMin = scanData?.stats?.min ?? 0;
   const dataMax = scanData?.stats?.max ?? 100;
 
@@ -447,9 +413,6 @@ const CscanVisualizer: React.FC = () => {
               onSelectionChange={setSelectedScans}
               onCreateComposite={handleCreateComposite}
               onClearFiles={handleClearFiles}
-              onExportToHub={handleExportToHub}
-              onBatchExportToHub={handleBatchExportToHub}
-              onAssignToStrake={handleAssignToStrake}
             />
           </div>
 
@@ -495,15 +458,6 @@ const CscanVisualizer: React.FC = () => {
 
         {/* RIGHT TOOLBAR - floating overlay */}
         <div className="absolute right-0 top-0 bottom-0 w-12 z-20 border-l border-gray-700 flex flex-col items-center py-4 space-y-4" style={{ backgroundColor: '#1f2937' }}>
-          <button
-            onClick={() => scanData && handleExportToHub([scanData])}
-            className="p-2 hover:bg-gray-700 rounded transition-colors"
-            title="Send to Hub"
-            disabled={!scanData}
-          >
-            <Send className={`w-4 h-4 ${scanData ? 'text-orange-400' : 'text-gray-600'}`} />
-          </button>
-
           <div className="relative">
             <button
               onClick={() => setShowExportMenu(!showExportMenu)}
@@ -650,24 +604,6 @@ const CscanVisualizer: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* Export to Hub Modal */}
-      <ExportToHubModal
-        isOpen={showExportModal}
-        onClose={() => setShowExportModal(false)}
-        scans={scansForExport}
-        isBatch={isBatchExport}
-        onExportComplete={handleExportComplete}
-        generateThumbnail={generateThumbnail}
-      />
-
-      {/* Assign to Strake Modal */}
-      <AssignStrakeModal
-        isOpen={showAssignStrakeModal}
-        onClose={() => setShowAssignStrakeModal(false)}
-        scans={scansForStrakeAssign}
-        onAssignComplete={handleExportComplete}
-      />
 
       {/* CSV Repair Modal */}
       <CsvRepairModal
