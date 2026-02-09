@@ -231,7 +231,7 @@ export interface CompetencyComment {
   created_at: string;                   // ISO timestamp
   updated_at: string;                   // ISO timestamp
   mentioned_users: string[] | null;     // Array of user UUIDs
-  attachments: any[] | null;            // JSON array of attachment metadata
+  attachments: Record<string, unknown>[] | null;            // JSON array of attachment metadata
 }
 
 /**
@@ -244,7 +244,7 @@ export interface CompetencyCommentInsert {
   is_pinned?: boolean;
   created_by?: string | null;
   mentioned_users?: string[] | null;
-  attachments?: any[] | null;
+  attachments?: Record<string, unknown>[] | null;
 }
 
 /**
@@ -255,7 +255,7 @@ export interface CompetencyCommentUpdate {
   comment_type?: 'general' | 'expiry_update' | 'renewal_in_progress' | 'renewal_completed' | 'unable_to_renew' | 'escalation';
   is_pinned?: boolean;
   mentioned_users?: string[] | null;
-  attachments?: any[] | null;
+  attachments?: Record<string, unknown>[] | null;
 }
 
 /**

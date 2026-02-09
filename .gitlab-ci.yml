@@ -1,0 +1,53 @@
+stages:
+  - install
+  - quality
+  - build
+
+default:
+  image: node:18-alpine
+
+cache:
+  key:
+    files:
+      - package-lock.json
+  paths:
+    - node_modules/
+
+install:
+  stage: install
+  script:
+    - npm ci
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_COMMIT_BRANCH =~ /^(main|master|dev)$/
+
+lint:
+  stage: quality
+  script:
+    - npm run lint
+  needs: [install]
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_COMMIT_BRANCH =~ /^(main|master|dev)$/
+
+typecheck:
+  stage: quality
+  script:
+    - npx tsc --noEmit
+  needs: [install]
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_COMMIT_BRANCH =~ /^(main|master|dev)$/
+
+build:
+  stage: build
+  script:
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 week
+  needs: [lint, typecheck]
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_COMMIT_BRANCH =~ /^(main|master|dev)$/

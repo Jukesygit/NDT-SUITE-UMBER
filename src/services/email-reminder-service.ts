@@ -203,50 +203,36 @@ export async function triggerExpirationReminders(): Promise<TriggerRemindersResu
  * Useful for testing or sending targeted reminders
  */
 export async function sendExpiryReminderToUser(userId: string): Promise<TriggerRemindersResult> {
-    console.log('[sendExpiryReminderToUser] Starting for userId:', userId);
+    const { data: { session } } = await supabase!.auth.getSession();
 
-    try {
-        const { data: { session } } = await supabase!.auth.getSession();
-
-        if (!session) {
-            console.error('[sendExpiryReminderToUser] No session found');
-            throw new Error('User must be authenticated to send reminders');
-        }
-
-        const url = `${SUPABASE_URL}/functions/v1/send-expiration-reminders`;
-        console.log('[sendExpiryReminderToUser] Making request to:', url);
-
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({ targetUserId: userId }),
-        });
-
-        console.log('[sendExpiryReminderToUser] Response status:', response.status);
-
-        let data;
-        try {
-            data = await response.json();
-            console.log('[sendExpiryReminderToUser] Response data:', data);
-        } catch (parseError) {
-            console.error('[sendExpiryReminderToUser] Failed to parse response:', parseError);
-            throw new Error(`HTTP ${response.status}: Failed to parse response`);
-        }
-
-        if (!response.ok) {
-            const errorMsg = data?.error || data?.message || `HTTP ${response.status}`;
-            console.error('[sendExpiryReminderToUser] Request failed:', errorMsg);
-            throw new Error(errorMsg);
-        }
-
-        return data as TriggerRemindersResult;
-    } catch (error) {
-        console.error('[sendExpiryReminderToUser] Error:', error);
-        throw error;
+    if (!session) {
+        throw new Error('User must be authenticated to send reminders');
     }
+
+    const url = `${SUPABASE_URL}/functions/v1/send-expiration-reminders`;
+
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ targetUserId: userId }),
+    });
+
+    let data;
+    try {
+        data = await response.json();
+    } catch (parseError) {
+        throw new Error(`HTTP ${response.status}: Failed to parse response`);
+    }
+
+    if (!response.ok) {
+        const errorMsg = data?.error || data?.message || `HTTP ${response.status}`;
+        throw new Error(errorMsg);
+    }
+
+    return data as TriggerRemindersResult;
 }
 
 /**

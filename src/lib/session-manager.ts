@@ -71,7 +71,6 @@ class SessionManager {
 
         this.initialized = true;
         this.startProactiveRefresh();
-        console.log('[SessionManager] Initialized');
     }
 
     /**
@@ -81,7 +80,6 @@ class SessionManager {
         this.stopProactiveRefresh();
         this.initialized = false;
         this.resetBackoff();
-        console.log('[SessionManager] Stopped');
     }
 
     /**
@@ -99,8 +97,7 @@ class SessionManager {
      * Report an auth error from a query/mutation
      * This will trigger a coordinated refresh attempt
      */
-    async reportAuthError(error: Error): Promise<RefreshResult> {
-        console.log('[SessionManager] Auth error reported:', error.message);
+    async reportAuthError(_error: Error): Promise<RefreshResult> {
         return this.coordinatedRefresh();
     }
 
@@ -111,14 +108,12 @@ class SessionManager {
     async coordinatedRefresh(): Promise<RefreshResult> {
         // If already refreshing, return the existing promise (deduplication)
         if (this.isRefreshing && this.currentRefreshPromise) {
-            console.log('[SessionManager] Refresh already in progress, waiting...');
             return this.currentRefreshPromise;
         }
 
         // Check debounce - don't refresh too frequently
         const timeSinceLastAttempt = Date.now() - this.lastRefreshAttempt;
         if (timeSinceLastAttempt < SESSION_CONFIG.DEBOUNCE_DELAY_MS) {
-            console.log('[SessionManager] Debouncing refresh, too soon since last attempt');
             return { success: true, reason: 'refreshed' }; // Assume recent refresh is still valid
         }
 
@@ -147,7 +142,6 @@ class SessionManager {
 
         while (attempts < SESSION_CONFIG.MAX_RETRY_ATTEMPTS) {
             attempts++;
-            console.log(`[SessionManager] Refresh attempt ${attempts}/${SESSION_CONFIG.MAX_RETRY_ATTEMPTS}`);
 
             try {
                 // Call auth-manager's refresh (already has timeout built in)
@@ -157,15 +151,11 @@ class SessionManager {
                     // Success!
                     this.resetBackoff();
                     this.emit({ type: 'refreshed', timestamp: Date.now() });
-                    console.log('[SessionManager] Session refreshed successfully');
                     return { success: true, reason: 'refreshed' };
                 }
 
-                // No session returned - might be expired
-                console.warn('[SessionManager] Refresh returned no session');
-
             } catch (error) {
-                console.error(`[SessionManager] Refresh attempt ${attempts} failed:`, error);
+                // Refresh attempt failed, will retry if attempts remain
             }
 
             // If we have more attempts, wait with backoff
@@ -180,14 +170,12 @@ class SessionManager {
         // Check if we still have a valid session (maybe it was refreshed by Supabase internally)
         const existingSession = await authManager.getSession(5000);
         if (existingSession) {
-            console.log('[SessionManager] Found valid session despite refresh failures');
             this.resetBackoff();
             this.emit({ type: 'refreshed', timestamp: Date.now() });
             return { success: true, reason: 'refreshed' };
         }
 
         // Session is truly expired
-        console.error('[SessionManager] Session expired after all retry attempts');
         this.emit({ type: 'expired', timestamp: Date.now() });
         return { success: false, reason: 'expired' };
     }
@@ -196,7 +184,6 @@ class SessionManager {
      * Wait with exponential backoff
      */
     private async waitWithBackoff(): Promise<void> {
-        console.log(`[SessionManager] Waiting ${this.currentBackoffMs}ms before retry`);
         await new Promise(resolve => setTimeout(resolve, this.currentBackoffMs));
         this.currentBackoffMs = Math.min(
             this.currentBackoffMs * SESSION_CONFIG.BACKOFF_MULTIPLIER,
@@ -222,11 +209,8 @@ class SessionManager {
             // Only refresh if user is logged in
             if (!authManager.isLoggedIn()) return;
 
-            console.log('[SessionManager] Proactive refresh check');
             await this.coordinatedRefresh();
         }, SESSION_CONFIG.PROACTIVE_REFRESH_INTERVAL);
-
-        console.log(`[SessionManager] Proactive refresh started (every ${SESSION_CONFIG.PROACTIVE_REFRESH_INTERVAL / 1000}s)`);
     }
 
     /**
@@ -236,7 +220,6 @@ class SessionManager {
         if (this.refreshInterval) {
             clearInterval(this.refreshInterval);
             this.refreshInterval = null;
-            console.log('[SessionManager] Proactive refresh stopped');
         }
     }
 

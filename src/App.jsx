@@ -4,39 +4,25 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { queryClient } from './lib/query-client';
 import './styles/main.css';
-import { initTheme } from './theme.js';
 import { initializeTheme } from './themes.js';
 import authManager from './auth-manager.js';
 import { AnimatedBackground } from './animated-background.js';
-import { initGlobalStyleEnforcer } from './utils/globalStyleEnforcer.js';
-
-// Auth context - provides reactive auth state to all components
 import { AuthProvider } from './contexts/AuthContext';
-
-// Import error boundaries
 import GlobalErrorBoundary from './components/GlobalErrorBoundary.jsx';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
-
-// Import core components (always needed)
 import Layout from './components/LayoutNew.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import RequireAccess from './components/RequireAccess.jsx';
 import LoginPage from './pages/LoginPageNew.jsx';
-
-// Import the Matrix logo loader
 import { RandomMatrixSpinner } from './components/MatrixSpinners';
 
-// Lazy load pages for code splitting
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage.tsx'));
 const CscanVisualizerPage = lazy(() => import('./pages/CscanVisualizerPage.jsx'));
 const PersonnelPage = lazy(() => import('./pages/personnel/PersonnelPage.tsx'));
-const AdminPageNew = lazy(() => import('./pages/admin/index.tsx'));
+const AdminPage = lazy(() => import('./pages/admin/index.tsx'));
 
-
-// Suspense wrapper that keys by route to prevent stuck loading states
 function SuspenseRoutes({ children, fallback }) {
     const location = useLocation();
-    // Use pathname as key to force fresh Suspense state on navigation
     return (
         <Suspense key={location.pathname} fallback={fallback}>
             {children}
@@ -44,82 +30,66 @@ function SuspenseRoutes({ children, fallback }) {
     );
 }
 
-// Background manager component
 function BackgroundManager() {
     const location = useLocation();
 
     useEffect(() => {
-        // Only show animated background on login page
-        if (location.pathname === '/login') {
-            const canvas = document.createElement('canvas');
-            canvas.id = 'app-background-canvas';
-            canvas.style.position = 'fixed';
-            canvas.style.top = '0';
-            canvas.style.left = '0';
-            canvas.style.width = '100%';
-            canvas.style.height = '100%';
-            canvas.style.zIndex = '0';
-            canvas.style.pointerEvents = 'none';
-            document.body.appendChild(canvas);
+        if (location.pathname !== '/login') return;
 
-            const bg = new AnimatedBackground(canvas, {
-                particleCount: 30,
-                waveIntensity: 0.3,
-                vertexDensity: 40
-            });
-            bg.start();
+        const canvas = document.createElement('canvas');
+        canvas.id = 'app-background-canvas';
+        Object.assign(canvas.style, {
+            position: 'fixed',
+            top: '0',
+            left: '0',
+            width: '100%',
+            height: '100%',
+            zIndex: '0',
+            pointerEvents: 'none',
+        });
+        document.body.appendChild(canvas);
 
-            return () => {
-                bg.stop();
-                if (canvas.parentElement) {
-                    canvas.parentElement.removeChild(canvas);
-                }
-            };
-        }
+        const bg = new AnimatedBackground(canvas, {
+            particleCount: 30,
+            waveIntensity: 0.3,
+            vertexDensity: 40,
+        });
+        bg.start();
+
+        return () => {
+            bg.stop();
+            canvas.remove();
+        };
     }, [location.pathname]);
 
     return null;
 }
 
+const PageLoader = () => (
+    <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
+        <div className="flex flex-col items-center gap-6">
+            <RandomMatrixSpinner size={200} />
+            <div className="text-base text-gray-400 font-medium animate-pulse">Loading...</div>
+        </div>
+    </div>
+);
+
 function App() {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        // Initialize old theme system
-        initTheme();
-
-        // Initialize new color theme system (defaults to Cyber Teal)
         initializeTheme();
 
-        // Initialize global style enforcer after DOM is ready
-        setTimeout(() => {
-            initGlobalStyleEnforcer();
-        }, 100);
-
-        // Wait for auth manager to initialize before rendering
         const initApp = async () => {
             try {
-                console.log('App: Initializing...');
-
-                // Add timeout to prevent infinite loading (increased to 15s for cold starts)
-                const timeoutPromise = new Promise((_, reject) =>
+                const timeout = new Promise((_, reject) =>
                     setTimeout(() => reject(new Error('Initialization timeout')), 15000)
                 );
-
-                const initPromise = authManager.initPromise || Promise.resolve();
-
                 await Promise.race([
-                    initPromise,
-                    timeoutPromise
-                ]).catch(err => {
-                    console.warn('App initialization error or timeout:', err);
-                });
-
-                console.log('App: Initialization complete');
-            } catch (error) {
-                console.error('App initialization failed:', error);
+                    authManager.initPromise || Promise.resolve(),
+                    timeout,
+                ]).catch(() => {});
             } finally {
-                console.log('App: Setting loading to false');
                 setIsLoading(false);
             }
         };
@@ -138,70 +108,35 @@ function App() {
         );
     }
 
-    // Loading component for lazy loaded pages
-    const PageLoader = () => (
-        <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
-            <div className="flex flex-col items-center gap-6">
-                <RandomMatrixSpinner size={200} />
-                <div className="text-base text-gray-400 font-medium animate-pulse">Loading...</div>
-            </div>
-        </div>
-    );
-
     return (
         <QueryClientProvider client={queryClient}>
             <AuthProvider>
                 <GlobalErrorBoundary>
-                    <BrowserRouter
-                        future={{
-                            v7_startTransition: true,
-                            v7_relativeSplatPath: true
-                        }}
-                    >
-                    <BackgroundManager />
-                    <SuspenseRoutes fallback={<PageLoader />}>
-                        <Routes>
-                            {/* Public route - LoginPage handles its own redirect logic */}
-                            <Route path="/login" element={<LoginPage />} />
-
-                            {/* All protected routes share a SINGLE Layout instance */}
-                            {/* This prevents Layout remount when navigating between tabs */}
-                            <Route element={<ProtectedRoute />}>
-                                <Route element={<Layout />}>
-                                    <Route path="/" element={<Navigate to="/profile" replace />} />
-                                    <Route path="/profile" element={
-                                        <ErrorBoundary>
-                                            <ProfilePage />
-                                        </ErrorBoundary>
-                                    } />
-                                    <Route path="/cscan" element={
-                                        <ErrorBoundary>
-                                            <CscanVisualizerPage />
-                                        </ErrorBoundary>
-                                    } />
-                                    {/* Personnel route - requires elevated access (admin or manager) */}
-                                    <Route path="/personnel" element={
-                                        <RequireAccess requireElevatedAccess>
-                                            <ErrorBoundary>
-                                                <PersonnelPage />
-                                            </ErrorBoundary>
-                                        </RequireAccess>
-                                    } />
-                                    {/* Admin route - requires admin role */}
-                                    <Route path="/admin" element={
-                                        <RequireAccess requireAdmin>
-                                            <ErrorBoundary>
-                                                <AdminPageNew />
-                                            </ErrorBoundary>
-                                        </RequireAccess>
-                                    } />
+                    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                        <BackgroundManager />
+                        <SuspenseRoutes fallback={<PageLoader />}>
+                            <Routes>
+                                <Route path="/login" element={<LoginPage />} />
+                                <Route element={<ProtectedRoute />}>
+                                    <Route element={<Layout />}>
+                                        <Route path="/" element={<Navigate to="/profile" replace />} />
+                                        <Route path="/profile" element={<ErrorBoundary><ProfilePage /></ErrorBoundary>} />
+                                        <Route path="/cscan" element={<ErrorBoundary><CscanVisualizerPage /></ErrorBoundary>} />
+                                        <Route path="/personnel" element={
+                                            <RequireAccess requireElevatedAccess>
+                                                <ErrorBoundary><PersonnelPage /></ErrorBoundary>
+                                            </RequireAccess>
+                                        } />
+                                        <Route path="/admin" element={
+                                            <RequireAccess requireAdmin>
+                                                <ErrorBoundary><AdminPage /></ErrorBoundary>
+                                            </RequireAccess>
+                                        } />
+                                    </Route>
                                 </Route>
-                            </Route>
-
-                            {/* Catch all - redirect to home */}
-                            <Route path="*" element={<Navigate to="/" replace />} />
-                        </Routes>
-                    </SuspenseRoutes>
+                                <Route path="*" element={<Navigate to="/" replace />} />
+                            </Routes>
+                        </SuspenseRoutes>
                     </BrowserRouter>
                 </GlobalErrorBoundary>
             </AuthProvider>

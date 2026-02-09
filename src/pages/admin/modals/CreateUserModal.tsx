@@ -165,8 +165,8 @@ export function CreateUserModal({ isOpen, onClose }: CreateUserModalProps) {
             } else {
                 setErrors({ api: result.error || 'Failed to create user' });
             }
-        } catch (error: any) {
-            setErrors({ api: error.message || 'An unexpected error occurred' });
+        } catch (error: unknown) {
+            setErrors({ api: error instanceof Error ? error.message : 'An unexpected error occurred' });
         }
     };
 

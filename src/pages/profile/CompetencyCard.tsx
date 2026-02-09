@@ -210,14 +210,12 @@ export function CompetencyCard({
                     .createSignedUrl(competency.document_url, 3600); // 1 hour expiry
 
                 if (error) {
-                    console.error('Failed to get signed URL:', error);
                     setResolvedDocumentUrl(null);
                     return;
                 }
 
                 setResolvedDocumentUrl(data.signedUrl);
-            } catch (err) {
-                console.error('Error resolving document URL:', err);
+            } catch {
                 setResolvedDocumentUrl(null);
             }
         }
@@ -467,7 +465,6 @@ export function CompetencyCard({
                                     borderRadius: '8px',
                                 }}
                                 onError={(e) => {
-                                    console.error('Failed to load certificate image:', resolvedDocumentUrl);
                                     // Hide broken image and show fallback
                                     const target = e.target as HTMLImageElement;
                                     target.style.display = 'none';

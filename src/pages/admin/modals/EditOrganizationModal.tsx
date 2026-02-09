@@ -96,8 +96,8 @@ export function EditOrganizationModal({ isOpen, onClose, organization }: EditOrg
             } else {
                 setErrors({ api: result.error || 'Failed to update organization' });
             }
-        } catch (error: any) {
-            setErrors({ api: error.message || 'An unexpected error occurred' });
+        } catch (error: unknown) {
+            setErrors({ api: error instanceof Error ? error.message : 'An unexpected error occurred' });
         }
     };
 

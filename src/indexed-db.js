@@ -17,13 +17,11 @@ class IndexedDBWrapper {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
 
             request.onerror = () => {
-                console.error('IndexedDB error:', request.error);
                 reject(request.error);
             };
 
             request.onsuccess = () => {
                 this.db = request.result;
-                console.log('IndexedDB initialized successfully');
                 resolve(this.db);
             };
 
@@ -34,7 +32,6 @@ class IndexedDBWrapper {
                 if (!db.objectStoreNames.contains(STORE_NAME)) {
                     const objectStore = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
                     objectStore.createIndex('timestamp', 'timestamp', { unique: false });
-                    console.log('Object store created');
                 }
             };
         });
@@ -123,7 +120,6 @@ class IndexedDBWrapper {
             }
             return false;
         } catch (error) {
-            console.error('Error importing data:', error);
             return false;
         }
     }
@@ -135,12 +131,10 @@ class IndexedDBWrapper {
             if (localData) {
                 const parsed = JSON.parse(localData);
                 await this.saveData(parsed);
-                console.log('Data migrated from localStorage to IndexedDB');
                 return true;
             }
             return false;
         } catch (error) {
-            console.error('Error migrating from localStorage:', error);
             return false;
         }
     }

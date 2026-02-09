@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { createModernHeader } from '../../components/modern-header.js';
+import { PageHeader } from '../../components/ui';
 
 // React Query hooks
 import { useProfile } from '../../hooks/queries/useProfile';
@@ -72,34 +72,6 @@ export default function ProfilePage() {
     const deleteCompetencyMutation = useDeleteCompetency();
     const uploadDocumentMutation = useUploadCompetencyDocument();
 
-    // Header setup
-    useEffect(() => {
-        const container = document.getElementById('profile-header');
-        if (container && container.children.length === 0) {
-            const header = createModernHeader(
-                'Profile Settings',
-                'Manage your profile, competencies, and personal information',
-                {
-                    showParticles: true,
-                    particleCount: 20,
-                    gradientColors: ['#34d399', '#60a5fa'],
-                    height: '100px',
-                    showLogo: false,
-                }
-            );
-            container.appendChild(header);
-        }
-
-        // Cleanup function to remove header and stop animations
-        return () => {
-            if (container) {
-                while (container.firstChild) {
-                    container.removeChild(container.firstChild);
-                }
-            }
-        };
-    }, []);
-
     // Handle avatar upload
     const handleAvatarUpload = useCallback(
         (file: File) => {
@@ -108,7 +80,6 @@ export default function ProfilePage() {
                 { userId: user.id, file },
                 {
                     onError: (error) => {
-                        console.error('Avatar upload failed:', error);
                         alert(error instanceof Error ? error.message : 'Failed to upload avatar. Please try again.');
                     },
                 }
@@ -157,8 +128,7 @@ export default function ProfilePage() {
                     onSuccess: () => {
                         setIsEditingProfile(false);
                     },
-                    onError: (error) => {
-                        console.error('Failed to update profile:', error);
+                    onError: () => {
                     },
                 }
             );
@@ -202,8 +172,7 @@ export default function ProfilePage() {
                         onSuccess: () => {
                             setEditingCompetency(null);
                         },
-                        onError: (error) => {
-                            console.error('Failed to create competency:', error);
+                        onError: () => {
                             alert('Failed to save competency. Please try again.');
                         },
                     }
@@ -219,8 +188,7 @@ export default function ProfilePage() {
                         onSuccess: () => {
                             setEditingCompetency(null);
                         },
-                        onError: (error) => {
-                            console.error('Failed to update competency:', error);
+                        onError: () => {
                             alert('Failed to save competency. Please try again.');
                         },
                     }
@@ -245,8 +213,7 @@ export default function ProfilePage() {
             deleteCompetencyMutation.mutate(
                 { competencyId: competency.id, userId: user.id },
                 {
-                    onError: (error) => {
-                        console.error('Failed to delete competency:', error);
+                    onError: () => {
                         alert('Failed to delete competency. Please try again.');
                     },
                 }
@@ -293,8 +260,10 @@ export default function ProfilePage() {
 
     return (
         <div className="h-full flex flex-col overflow-hidden">
-            {/* Header */}
-            <div id="profile-header" style={{ flexShrink: 0 }} />
+            <PageHeader
+                title="Profile Settings"
+                subtitle="Manage your profile, competencies, and personal information"
+            />
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto glass-scrollbar p-6">

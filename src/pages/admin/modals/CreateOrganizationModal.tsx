@@ -76,8 +76,8 @@ export function CreateOrganizationModal({ isOpen, onClose }: CreateOrganizationM
             } else {
                 setErrors({ api: result.error || 'Failed to create organization' });
             }
-        } catch (error: any) {
-            setErrors({ api: error.message || 'An unexpected error occurred' });
+        } catch (error: unknown) {
+            setErrors({ api: error instanceof Error ? error.message : 'An unexpected error occurred' });
         }
     };
 

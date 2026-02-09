@@ -1,5 +1,4 @@
 // Admin Dashboard Type Definitions
-// Types for the admin dashboard migration from legacy tools to modern React components
 
 // ============================================================================
 // Organization Types
@@ -16,13 +15,8 @@ export interface Organization {
 
 export interface OrganizationStats extends Organization {
   userCount?: number;
-  assetCount?: number;
-  scanCount?: number;
   organizationId: string;
   organizationName: string;
-  totalAssets: number;
-  totalVessels: number;
-  totalScans: number;
 }
 
 // ============================================================================
@@ -98,70 +92,6 @@ export interface PermissionRequest {
 }
 
 // ============================================================================
-// Asset Types
-// ============================================================================
-
-export interface Vessel {
-  id: string;
-  name: string;
-  scans?: Scan[];
-}
-
-export interface Scan {
-  id: string;
-  name: string;
-}
-
-export interface AdminAsset {
-  id: string;
-  name: string;
-  organization_id: string;
-  organizationId?: string; // Legacy field
-  vessels?: Vessel[];
-  created_at: string;
-  createdAt?: string; // Legacy field
-}
-
-// ============================================================================
-// Share Types
-// ============================================================================
-
-export type ShareType = 'asset' | 'vessel' | 'scan';
-export type SharePermission = 'view' | 'edit';
-
-export interface AssetShare {
-  id: string;
-  asset_id: string;
-  vessel_id?: string | null;
-  scan_id?: string | null;
-  share_type: ShareType;
-  owner_organization_id: string;
-  shared_with_organization_id: string;
-  permission: SharePermission;
-  created_at: string;
-  owner_org?: {
-    name: string;
-  };
-  shared_with_org?: {
-    name: string;
-  };
-}
-
-export interface AccessRequest {
-  request_id: string;
-  user_id: string;
-  username: string;
-  user_email: string;
-  user_org_name: string;
-  asset_id: string;
-  vessel_id?: string | null;
-  scan_id?: string | null;
-  requested_permission: SharePermission;
-  message?: string;
-  created_at: string;
-}
-
-// ============================================================================
 // Configuration Types
 // ============================================================================
 
@@ -195,7 +125,6 @@ export type ConfigMetadata = Record<ConfigListName, ConfigListMetadata>;
 export interface AdminDashboardStats {
   organizationCount: number;
   userCount: number;
-  assetCount: number;
   pendingRequestCount: number;
   organizations: OrganizationStats[];
   recentUsers: AdminUser[];
@@ -229,24 +158,6 @@ export interface UpdateUserData {
   is_active?: boolean;
 }
 
-export interface ShareAssetData {
-  assetId: string;
-  vesselId?: string | null;
-  scanId?: string | null;
-  sharedWithOrganizationId: string;
-  permission: SharePermission;
-}
-
-export interface TransferAssetData {
-  assetId: string;
-  targetOrganizationId: string;
-}
-
-export interface BulkTransferData {
-  assetIds: string[];
-  targetOrganizationId: string;
-}
-
 // ============================================================================
 // View State Types
 // ============================================================================
@@ -255,9 +166,7 @@ export type AdminView =
   | 'overview'
   | 'organizations'
   | 'users'
-  | 'assets'
   | 'requests'
-  | 'sharing'
   | 'configuration';
 
 export interface AdminViewState {
@@ -265,5 +174,4 @@ export interface AdminViewState {
   searchQuery?: string;
   filterRole?: UserRole;
   filterOrganization?: string;
-  selectedAssets?: string[];
 }

@@ -10,7 +10,6 @@ import { sessionManager } from './session-manager';
 function handleQueryError(error) {
     if (!isAuthError(error)) return;
 
-    console.warn('[QueryClient] Auth error detected in query:', error.message || error);
     // Delegate to session manager - it handles deduplication and coordination
     sessionManager.reportAuthError(error);
 }
@@ -22,7 +21,6 @@ function handleQueryError(error) {
 function handleMutationError(error) {
     if (!isAuthError(error)) return;
 
-    console.warn('[QueryClient] Auth error detected in mutation:', error.message || error);
     // Delegate to session manager - it handles deduplication and coordination
     sessionManager.reportAuthError(error);
 }
@@ -62,7 +60,6 @@ queryClient.getQueryCache().config.onError = handleQueryError;
  */
 export function clearQueryCache() {
     queryClient.clear();
-    console.log('[QueryClient] Cache cleared');
 }
 
 /**
@@ -83,8 +80,6 @@ export function invalidateStaleQueries() {
             return isError || isStale;
         }
     });
-
-    console.log('[QueryClient] Stale queries invalidated');
 }
 
 /**
@@ -93,5 +88,4 @@ export function invalidateStaleQueries() {
  */
 export function invalidateAllQueries() {
     queryClient.invalidateQueries();
-    console.log('[QueryClient] All queries invalidated');
 }

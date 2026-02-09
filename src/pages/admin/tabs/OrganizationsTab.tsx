@@ -210,24 +210,10 @@ function OrganizationCard({ org, userCount, onClick, onEdit, onDelete }: Organiz
                 {org.organization.name}
             </h3>
 
-            {/* Stats grid */}
-            <div className="grid grid-cols-2 gap-4" style={{ marginBottom: '16px' }}>
-                <div>
-                    <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.5)' }}>Users</p>
-                    <p style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>{userCount}</p>
-                </div>
-                <div>
-                    <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.5)' }}>Assets</p>
-                    <p style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>{org.assetCount || 0}</p>
-                </div>
-                <div>
-                    <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.5)' }}>Vessels</p>
-                    <p style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>{org.vesselCount || 0}</p>
-                </div>
-                <div>
-                    <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.5)' }}>Scans</p>
-                    <p style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>{org.scanCount || 0}</p>
-                </div>
+            {/* Stats */}
+            <div style={{ marginBottom: '16px' }}>
+                <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.5)' }}>Users</p>
+                <p style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>{userCount}</p>
             </div>
 
             {/* Created date */}
@@ -265,8 +251,6 @@ export default function OrganizationsTab() {
 
         if (result.success) {
             setDeletingOrg(null);
-        } else {
-            console.error('Failed to delete organization:', result.error);
         }
     };
 

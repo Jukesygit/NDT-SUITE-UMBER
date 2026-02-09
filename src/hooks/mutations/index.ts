@@ -60,22 +60,6 @@ export {
     useRejectPermissionRequest,
 } from './useRequestMutations';
 
-// Asset transfer mutations
-export {
-    useTransferAsset,
-    useBulkTransferAssets,
-    useAdminCreateAsset,
-} from './useAssetTransferMutations';
-
-// Share mutations
-export {
-    useCreateShare,
-    useUpdateShare,
-    useDeleteShare,
-    useApproveAccessRequest,
-    useRejectAccessRequest,
-} from './useShareMutations';
-
 // Configuration mutations
 export {
     useAddConfigItem,

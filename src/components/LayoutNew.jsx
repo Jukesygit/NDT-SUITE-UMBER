@@ -98,9 +98,7 @@ function LayoutNew() {
     // Navigate immediately for instant feedback
     navigate('/login', { replace: true });
     // Then cleanup in background (non-blocking)
-    authManager.logout().catch(error => {
-      console.error('LayoutNew: Error during logout cleanup:', error);
-    });
+    authManager.logout().catch(() => {});
   };
 
   // Filter navigation based on user role

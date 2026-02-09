@@ -40,44 +40,22 @@ class EnvironmentConfig {
         if (supabase.url && supabase.anonKey) {
             // Validate URL format
             try {
-                const url = new URL(supabase.url);
-                if (!url.hostname.includes('supabase')) {
-                    console.warn('Warning: Supabase URL does not appear to be valid');
-                }
+                new URL(supabase.url);
 
                 // Check for placeholder values
                 if (supabase.url === 'your_supabase_project_url' ||
                     supabase.anonKey === 'your_supabase_anon_key') {
-                    console.error('Error: Supabase credentials contain placeholder values');
-                    console.info('Please copy .env.example to .env and add your actual credentials');
                     supabase.isConfigured = false;
                 } else {
                     supabase.isConfigured = true;
                 }
             } catch (error) {
-                console.error('Error: Invalid Supabase URL format', error);
                 supabase.isConfigured = false;
             }
         } else {
-            if (this.config.app.isProduction) {
-                console.error('Error: Supabase credentials are required in production');
-                console.info('Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file');
-            } else {
-                console.info('Info: Running in local mode (Supabase not configured)');
-            }
             supabase.isConfigured = false;
         }
 
-        // Additional security checks for production
-        if (this.config.app.isProduction) {
-            if (this.config.security.enableLocalAuth) {
-                console.warn('Warning: Local authentication is enabled in production. This should be disabled.');
-            }
-
-            if (!this.config.app.url || this.config.app.url === window.location.origin) {
-                console.warn('Warning: VITE_APP_URL should be explicitly set in production');
-            }
-        }
     }
 
     /**

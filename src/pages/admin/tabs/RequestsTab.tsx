@@ -114,17 +114,11 @@ export default function RequestsTab() {
 
     // Handle approve actions
     const handleApproveAccount = async (id: string) => {
-        const result = await approveAccount.mutateAsync(id);
-        if (!result.success) {
-            console.error('Failed to approve account request:', result.error);
-        }
+        await approveAccount.mutateAsync(id);
     };
 
     const handleApprovePermission = async (id: string) => {
-        const result = await approvePermission.mutateAsync(id);
-        if (!result.success) {
-            console.error('Failed to approve permission request:', result.error);
-        }
+        await approvePermission.mutateAsync(id);
     };
 
     // Handle reject confirmation
@@ -137,15 +131,11 @@ export default function RequestsTab() {
             const result = await rejectAccount.mutateAsync({ id, reason: reason || undefined });
             if (result.success) {
                 setRejectingRequest(null);
-            } else {
-                console.error('Failed to reject account request:', result.error);
             }
         } else {
             const result = await rejectPermission.mutateAsync({ id, reason: reason || undefined });
             if (result.success) {
                 setRejectingRequest(null);
-            } else {
-                console.error('Failed to reject permission request:', result.error);
             }
         }
     };

@@ -14,7 +14,6 @@ import type {
   ProgressMessage,
   ParseCompleteMessage,
   CompositeCompleteMessage,
-  ErrorMessage
 } from './efficientTypes';
 import { toLegacyFormat } from './efficientTypes';
 import type { CscanData } from '../types';
@@ -69,7 +68,6 @@ class CscanWorkerManager {
    */
   private initWorker(): void {
     if (typeof Worker === 'undefined') {
-      console.warn('Web Workers not supported, will use main thread fallback');
       return;
     }
 
@@ -94,7 +92,6 @@ class CscanWorkerManager {
       this.worker.onmessage = this.handleMessage.bind(this);
       this.worker.onerror = this.handleError.bind(this);
     } catch (error) {
-      console.error('Failed to initialize worker:', error);
       this.worker = null;
     }
   }
@@ -150,8 +147,6 @@ class CscanWorkerManager {
       }
 
       case 'ERROR': {
-        const { message, filename } = payload as ErrorMessage['payload'];
-        console.error(`Worker error${filename ? ` (${filename})` : ''}:`, message);
         // Don't reject - errors for individual files shouldn't stop the batch
         break;
       }
@@ -162,7 +157,6 @@ class CscanWorkerManager {
    * Handle worker errors
    */
   private handleError(error: ErrorEvent): void {
-    console.error('Worker error:', error);
     this.pendingResolvers.forEach(({ reject }) => {
       reject(new Error(`Worker error: ${error.message}`));
     });
@@ -284,12 +278,10 @@ class CscanWorkerManager {
     // Check if we have the scans cached
     const missingIds = scanIds.filter(id => !this.scanCache.has(id));
     if (missingIds.length > 0) {
-      console.warn('Some scans not in cache, falling back to legacy composite');
       return null;
     }
 
     if (!this.worker) {
-      console.warn('Worker not available, use legacy composite');
       return null;
     }
 
@@ -316,12 +308,10 @@ class CscanWorkerManager {
     const { onProgress } = options;
 
     if (scans.length < 2) {
-      console.warn('Need at least 2 scans for composite');
       return null;
     }
 
     if (!this.worker) {
-      console.warn('Worker not available');
       return null;
     }
 

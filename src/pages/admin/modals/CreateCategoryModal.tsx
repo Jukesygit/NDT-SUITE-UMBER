@@ -48,8 +48,8 @@ export function CreateCategoryModal({ isOpen, onClose }: CreateCategoryModalProp
             setDescription('');
             setErrors({});
             onClose();
-        } catch (error: any) {
-            setErrors({ api: error.message || 'Failed to create category' });
+        } catch (error: unknown) {
+            setErrors({ api: error instanceof Error ? error.message : 'Failed to create category' });
         }
     };
 

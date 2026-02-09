@@ -109,8 +109,6 @@ export function useUpdatePerson() {
                 .single();
 
             if (error) {
-                // Provide more helpful error message
-                console.error('Profile update error:', error);
                 if (error.code === '42703') {
                     // Column does not exist
                     throw new Error(`Database schema error: A required column is missing. Please contact support.`);
@@ -259,7 +257,6 @@ export async function exportPersonnelToCSV(personnel: Person[]): Promise<void> {
         a.click();
         URL.revokeObjectURL(url);
     } catch (error) {
-        console.error('Error exporting:', error);
         throw error;
     }
 }

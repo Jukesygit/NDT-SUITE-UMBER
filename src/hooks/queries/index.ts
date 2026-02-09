@@ -54,19 +54,6 @@ export {
     requestKeys,
 } from './useAccountRequests';
 
-// Admin queries - Assets
-export {
-    useAdminAssets,
-    assetKeys,
-} from './useAdminAssets';
-
-// Admin queries - Asset Sharing
-export {
-    useAssetShares,
-    useAccessRequests,
-    shareKeys,
-} from './useAssetShares';
-
 // Admin queries - Configuration
 export {
     useAdminConfig,

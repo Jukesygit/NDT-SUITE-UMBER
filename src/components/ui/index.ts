@@ -35,6 +35,9 @@ export type { Column, SortDirection, DataTableProps } from './DataTable';
 export { Modal, useModal, ConfirmDialog } from './Modal';
 export type { ModalProps, ModalSize, ConfirmDialogProps } from './Modal';
 
+// Page layout
+export { PageHeader } from './PageHeader';
+
 // Form components
 export { FormField, FormSelect, FormTextarea, FormCheckbox, useFormField } from './Form';
 export type {

@@ -52,8 +52,6 @@ export function downsampleForDisplay(
   const newWidth = Math.ceil(originalWidth / scale);
   const newHeight = Math.ceil(originalHeight / scale);
 
-  console.log(`Downsampling from ${originalWidth}x${originalHeight} to ${newWidth}x${newHeight} (scale: ${scale}x)`);
-
   // Create downsampled arrays
   const newData: (number | null)[][] = [];
   const newXAxis: number[] = [];

@@ -27,12 +27,6 @@ const UsersIcon = () => (
     </svg>
 );
 
-const CubeIcon = () => (
-    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-    </svg>
-);
-
 const ClockIcon = () => (
     <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -67,11 +61,9 @@ export default function OverviewTab() {
     // Calculate pending requests total
     const pendingRequests = (stats?.pendingAccountRequests || 0) + (stats?.pendingPermissionRequests || 0);
 
-    // Get top 5 organizations by asset count (filter out any malformed entries)
+    // Get top 5 organizations (filter out any malformed entries)
     const topOrganizations = safeOrganizations
         .filter(org => org && org.organization && org.organization.id)
-        .slice()
-        .sort((a, b) => (b.assetCount || 0) - (a.assetCount || 0))
         .slice(0, 5);
 
     // Get recent users (last 5, filter out malformed entries)
@@ -94,12 +86,6 @@ export default function OverviewTab() {
                     value={stats?.totalUsers || 0}
                     icon={<UsersIcon />}
                     variant="success"
-                />
-                <StatCard
-                    label="Total Assets"
-                    value={stats?.totalAssets || 0}
-                    icon={<CubeIcon />}
-                    variant="primary"
                 />
                 <StatCard
                     label="Pending Requests"
@@ -170,7 +156,7 @@ export default function OverviewTab() {
                                             fontSize: '12px',
                                             color: 'rgba(255, 255, 255, 0.5)'
                                         }}>
-                                            {org.assetCount || 0} assets · {org.scanCount || 0} scans
+                                            {org.userCount || 0} users
                                         </p>
                                     </div>
                                 </div>

@@ -311,7 +311,6 @@ export const themes = {
 export function applyTheme(themeId) {
     const theme = themes[themeId];
     if (!theme) {
-        console.error(`Theme "${themeId}" not found. Using default.`);
         return;
     }
 
@@ -325,7 +324,6 @@ export function applyTheme(themeId) {
     // Apply background gradient
     document.body.style.background = `linear-gradient(135deg, ${theme.colors['bg-dark-1']} 0%, ${theme.colors['bg-dark-2']} 50%, ${theme.colors['bg-dark-3']} 100%)`;
 
-    console.log(`Theme applied: ${theme.name}`);
 }
 
 // Get current theme from localStorage

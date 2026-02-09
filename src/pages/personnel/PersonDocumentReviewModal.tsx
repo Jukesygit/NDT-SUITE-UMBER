@@ -137,8 +137,7 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
             try {
                 const url = await competencyService.getDocumentUrl(currentCompetency.document_url);
                 setDocumentUrl(url);
-            } catch (error) {
-                console.error('Failed to load document:', error);
+            } catch {
                 setDocumentError('Failed to load document');
             } finally {
                 setLoadingDocument(false);
@@ -213,8 +212,7 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
         try {
             await approveMutation.mutateAsync({ competencyId: currentCompetency.id });
             advanceToNext();
-        } catch (error) {
-            console.error('Failed to approve:', error);
+        } catch {
             alert('Failed to approve document. Please try again.');
         } finally {
             setSubmitting(false);
@@ -231,8 +229,7 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
         try {
             await rejectMutation.mutateAsync({ competencyId: currentCompetency.id, reason: comment });
             advanceToNext();
-        } catch (error) {
-            console.error('Failed to reject:', error);
+        } catch {
             alert('Failed to reject document. Please try again.');
         } finally {
             setSubmitting(false);
@@ -249,8 +246,7 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
         try {
             await requestChangesMutation.mutateAsync({ competencyId: currentCompetency.id, comment });
             advanceToNext();
-        } catch (error) {
-            console.error('Failed to request changes:', error);
+        } catch {
             alert('Failed to request changes. Please try again.');
         } finally {
             setSubmitting(false);

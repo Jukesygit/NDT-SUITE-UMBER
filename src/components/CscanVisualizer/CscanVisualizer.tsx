@@ -111,7 +111,6 @@ const CscanVisualizer: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Error processing files:', error);
       setProcessingProgress(null);
       setStatusMessage({
         type: 'error',
@@ -163,7 +162,6 @@ const CscanVisualizer: React.FC = () => {
       : processedScans;
 
     if (scansToComposite.length < 2) {
-      console.warn('Need at least 2 scans to create composite');
       return;
     }
 
@@ -225,7 +223,6 @@ const CscanVisualizer: React.FC = () => {
         setTimeout(() => setStatusMessage(null), 4000);
       } else {
         // Last resort: legacy composite (only if worker unavailable)
-        console.warn('Worker unavailable, using legacy composite');
         const composite = createComposite(scansToComposite);
         if (composite) {
           // Also replace source scans in legacy path
@@ -243,11 +240,9 @@ const CscanVisualizer: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Error creating composite:', error);
       setProcessingProgress(null);
 
       // Last resort fallback to legacy composite
-      console.warn('Error in worker, using legacy composite');
       const composite = createComposite(scansToComposite);
       if (composite) {
         const compositeSourceIds = new Set(scansToComposite.map(s => s.id));
@@ -302,7 +297,7 @@ const CscanVisualizer: React.FC = () => {
         document.body.removeChild(link);
       }
     } catch (error) {
-      console.error('Error exporting image:', error);
+      // Export failed silently
     }
     setShowExportMenu(false);
   }, [scanData]);
@@ -330,7 +325,6 @@ const CscanVisualizer: React.FC = () => {
         setTimeout(() => setStatusMessage(null), 5000);
       }
     } catch (error) {
-      console.error('Error exporting heatmap:', error);
       setExportProgress(null);
       setStatusMessage({ type: 'error', message: 'Export failed - image may be too large' });
       setTimeout(() => setStatusMessage(null), 5000);

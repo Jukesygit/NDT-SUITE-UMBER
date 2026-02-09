@@ -5,8 +5,8 @@
  * Uses React Query for data fetching and extracted components
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { createModernHeader } from '../../components/modern-header.js';
+import { useState, useCallback, useMemo } from 'react';
+import { PageHeader } from '../../components/ui';
 
 // React Query hooks
 import {
@@ -152,24 +152,6 @@ export default function PersonnelPage() {
     const expiringQuery = useExpiringCompetencies(30);
     const pendingApprovalsQuery = usePendingApprovals();
 
-    // Header setup
-    useEffect(() => {
-        const container = document.getElementById('personnel-header');
-        if (container && container.children.length === 0) {
-            const header = createModernHeader(
-                'Personnel Management',
-                'Manage employee competencies, certifications, and training records',
-                {
-                    showParticles: true,
-                    particleCount: 25,
-                    gradientColors: ['#10b981', '#3b82f6'],
-                    height: '100px',
-                    showLogo: false,
-                }
-            );
-            container.appendChild(header);
-        }
-    }, []);
 
     // Handle sort
     const handleSort = useCallback((column: string) => {
@@ -235,7 +217,7 @@ export default function PersonnelPage() {
     if (!isSupabaseConfigured()) {
         return (
             <div className="h-full flex flex-col">
-                <div id="personnel-header" />
+                <PageHeader title="Personnel Management" subtitle="Manage employee competencies, certifications, and training records" />
                 <div className="flex-1 flex items-center justify-center">
                     <div className="glass-card" style={{ padding: '32px', textAlign: 'center' }}>
                         <p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
@@ -251,7 +233,7 @@ export default function PersonnelPage() {
     if (personnelQuery.isLoading) {
         return (
             <div className="h-full flex flex-col">
-                <div id="personnel-header" style={{ flexShrink: 0 }} />
+                <PageHeader title="Personnel Management" subtitle="Manage employee competencies, certifications, and training records" />
                 <div className="flex-1 flex items-center justify-center">
                     <PageSpinner message="Loading personnel data..." />
                 </div>
@@ -263,7 +245,7 @@ export default function PersonnelPage() {
     if (personnelQuery.error) {
         return (
             <div className="h-full flex flex-col">
-                <div id="personnel-header" style={{ flexShrink: 0 }} />
+                <PageHeader title="Personnel Management" subtitle="Manage employee competencies, certifications, and training records" />
                 <div className="flex-1 flex items-center justify-center p-6">
                     <ErrorDisplay
                         error={personnelQuery.error}
@@ -278,7 +260,7 @@ export default function PersonnelPage() {
     return (
         <div className="h-full flex flex-col overflow-hidden">
             {/* Header */}
-            <div id="personnel-header" style={{ flexShrink: 0 }} />
+            <PageHeader title="Personnel Management" subtitle="Manage employee competencies, certifications, and training records" />
 
             {/* Navigation Tabs */}
             <div

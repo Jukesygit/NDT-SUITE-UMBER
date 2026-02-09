@@ -140,7 +140,6 @@ class AdminConfig {
                 await this.saveConfig();
             }
         } catch (error) {
-            console.error('Error initializing admin config:', error);
             this.config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
         }
     }
@@ -156,7 +155,6 @@ class AdminConfig {
             await indexedDB.saveData(data);
             return { success: true };
         } catch (error) {
-            console.error('Error saving config:', error);
             return { success: false, error: error.message };
         }
     }
@@ -275,7 +273,6 @@ class AdminConfig {
             await this.saveConfig();
             return { success: true };
         } catch (error) {
-            console.error('Error importing config:', error);
             return { success: false, error: 'Failed to parse JSON' };
         }
     }

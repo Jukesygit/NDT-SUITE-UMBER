@@ -124,8 +124,8 @@ export function EditUserModal({ isOpen, onClose, user }: EditUserModalProps) {
             } else {
                 setErrors({ api: result.error || 'Failed to update user' });
             }
-        } catch (error: any) {
-            setErrors({ api: error.message || 'An unexpected error occurred' });
+        } catch (error: unknown) {
+            setErrors({ api: error instanceof Error ? error.message : 'An unexpected error occurred' });
         }
     };
 

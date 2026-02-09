@@ -34,8 +34,7 @@ class GlobalErrorBoundary extends React.Component {
     }
 
     reportErrorToService(error, errorInfo) {
-        // TODO: Integrate with error tracking service
-        // Example: Sentry, LogRocket, etc.
+        // Placeholder — integrate with Sentry or similar when ready.
         const errorData = {
             message: error.toString(),
             stack: error.stack,
@@ -55,7 +54,6 @@ class GlobalErrorBoundary extends React.Component {
             }
             localStorage.setItem('app_errors', JSON.stringify(errors));
         } catch (e) {
-            console.error('Failed to store error:', e);
         }
     }
 

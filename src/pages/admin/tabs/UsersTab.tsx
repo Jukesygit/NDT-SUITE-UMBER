@@ -150,9 +150,6 @@ export default function UsersTab() {
 
         if (result.success) {
             setDeletingUser(null);
-        } else {
-            // Error is handled by the mutation
-            console.error('Delete failed:', result.error);
         }
     };
 

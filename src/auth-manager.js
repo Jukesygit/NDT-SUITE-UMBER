@@ -81,18 +81,13 @@ class AuthManager {
     async initialize() {
         try {
             if (this.useSupabase) {
-                console.log('Initializing with Supabase backend');
                 await this.initializeSupabase();
             } else {
-                console.log('Initializing with local storage (Supabase not configured)');
                 await this.initializeLocal();
             }
-            console.log('Auth manager initialized');
         } catch (error) {
-            console.error('Error initializing auth manager:', error);
             // Fallback to local if Supabase fails
             if (this.useSupabase) {
-                console.log('Falling back to local storage');
                 this.useSupabase = false;
                 await this.initializeLocal();
             }
@@ -116,24 +111,19 @@ class AuthManager {
                 await this.loadUserProfile(session.user.id);
             }
         } catch (error) {
-            console.error('initializeSupabase session check error:', error.message);
             // Allow app to continue - user will be prompted to login
         }
 
         // Listen for auth state changes
         supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log('Auth state changed:', event, session);
-
             if (event === 'PASSWORD_RECOVERY') {
                 // User clicked password reset link
                 // Don't show modal here - LoginPageNew handles this via React state
                 // Just dispatch an event so other components can react if needed
-                console.log('PASSWORD_RECOVERY event received - password reset flow active');
                 window.dispatchEvent(new CustomEvent('passwordRecoveryMode', { detail: { active: true } }));
                 return; // Don't proceed with normal sign-in flow
             } else if (event === 'SIGNED_IN') {
                 // User signed in (either via login or email confirmation)
-                console.log('User signed in, loading profile...');
                 await this.loadUserProfile(session.user.id);
 
                 // Trigger login event to refresh UI
@@ -142,7 +132,6 @@ class AuthManager {
                 }));
             } else if (event === 'USER_UPDATED') {
                 // User data updated (e.g., password changed)
-                console.log('User updated');
                 if (session?.user) {
                     await this.loadUserProfile(session.user.id);
                 }
@@ -152,7 +141,6 @@ class AuthManager {
                 this.currentProfile = null;
             } else if (session?.user && !this.currentUser) {
                 // Catch-all: if we have a session but no current user, load profile
-                console.log('Session exists, loading profile...');
                 await this.loadUserProfile(session.user.id);
             }
         });
@@ -185,12 +173,10 @@ class AuthManager {
             .single();
 
         if (profileError) {
-            console.error('Error loading profile:', profileError);
             return;
         }
 
         if (!profile) {
-            console.error('Profile not found for user:', userId);
             return;
         }
 
@@ -274,19 +260,6 @@ class AuthManager {
                 isFirstSetup: true,
                 showOnce: true
             }));
-            // SECURITY: Console output is acceptable for local dev only
-            // This will be visible only to the developer running the app locally
-            console.log('====================================');
-            console.log('LOCAL DEVELOPMENT MODE - FIRST TIME SETUP');
-            console.log('Default admin account created');
-            console.log('Username: admin');
-            console.log('Password: ' + tempPassword);
-            console.log('IMPORTANT: Change this password immediately after first login');
-            console.log('====================================');
-        } else {
-            // SECURITY: In production, never log credentials
-            // Admin must use proper password reset flow
-            console.log('Default admin account created. Use password reset to set credentials.');
         }
     }
 
@@ -310,7 +283,6 @@ class AuthManager {
         }
 
         if (this.useSupabase) {
-            console.log('AuthManager: Attempting Supabase login for:', email);
             let data, error;
             try {
                 const response = await supabase.auth.signInWithPassword({
@@ -319,16 +291,11 @@ class AuthManager {
                 });
                 data = response.data;
                 error = response.error;
-                console.log('AuthManager: Supabase response received', { hasData: !!data, hasError: !!error });
             } catch (fetchError) {
-                console.error('AuthManager: Network/fetch error during login:', fetchError);
                 return { success: false, error: 'Unable to connect to authentication service. Please check your internet connection or try again later.' };
             }
 
             if (error) {
-                // SECURITY: Log detailed error for debugging but return generic message
-                // to prevent information disclosure (e.g., "user not found" vs "wrong password")
-                console.error('AuthManager: Login error:', error.message);
                 return { success: false, error: 'Invalid email or password' };
             }
 
@@ -336,8 +303,6 @@ class AuthManager {
                 await this.loadUserProfile(data.user.id);
 
                 if (!this.currentUser) {
-                    // SECURITY: Log the issue but return generic error to prevent enumeration
-                    console.error('AuthManager: User authenticated but profile not found');
                     await supabase.auth.signOut();
                     return { success: false, error: 'Invalid email or password' };
                 }
@@ -467,10 +432,7 @@ class AuthManager {
 
         if (this.useSupabase) {
             // Sign out from current device only (faster than global)
-            const { error } = await supabase.auth.signOut({ scope: 'local' });
-            if (error) {
-                console.error('AuthManager: Supabase signOut error:', error);
-            }
+            await supabase.auth.signOut({ scope: 'local' });
         } else {
             sessionStorage.removeItem('currentUser');
             window.dispatchEvent(new CustomEvent('authStateChange', {
@@ -490,7 +452,6 @@ class AuthManager {
                 });
 
                 if (error) {
-                    console.error('Send reset code error:', error);
                     return { success: false, error: { message: error.message || 'Failed to send reset code' } };
                 }
 
@@ -500,7 +461,6 @@ class AuthManager {
 
                 return { success: true, data, useCodeFlow: true };
             } catch (err) {
-                console.error('Password reset error:', err);
                 return { success: false, error: { message: err.message || 'Failed to send password reset code' } };
             }
         } else {
@@ -527,7 +487,6 @@ class AuthManager {
             });
 
             if (error) {
-                console.error('Verify reset code error:', error);
                 return { success: false, error: { message: error.message || 'Failed to verify reset code' } };
             }
 
@@ -537,7 +496,6 @@ class AuthManager {
 
             return { success: true, message: data?.message };
         } catch (err) {
-            console.error('Verify reset code error:', err);
             return { success: false, error: { message: err.message || 'Failed to verify reset code' } };
         }
     }
@@ -709,7 +667,6 @@ class AuthManager {
                 .order('name');
 
             if (error) {
-                console.error('Error fetching organizations:', error);
                 return [];
             }
 
@@ -733,7 +690,6 @@ class AuthManager {
     async getOrganization(organizationId) {
         // Guard against undefined/null organization IDs
         if (!organizationId) {
-            console.warn('getOrganization called with invalid ID:', organizationId);
             return null;
         }
 
@@ -745,7 +701,6 @@ class AuthManager {
                 .single();
 
             if (error) {
-                console.error('Error fetching organization:', error);
                 return null;
             }
 
@@ -864,12 +819,10 @@ class AuthManager {
             });
 
             if (error) {
-                console.error('Create user edge function error:', error);
                 return { success: false, error: error.message };
             }
 
             if (data?.error) {
-                console.error('Create user error:', data.error);
                 return { success: false, error: data.error };
             }
 
@@ -915,7 +868,6 @@ class AuthManager {
             const { data, error } = await supabase.functions.invoke('sync-users');
 
             if (error) {
-                console.error('Sync users error:', error);
                 return { success: false, error: error.message };
             }
 
@@ -923,10 +875,8 @@ class AuthManager {
                 return { success: false, error: data.error };
             }
 
-            console.log('Users synced:', data);
             return { success: true, ...data };
         } catch (err) {
-            console.error('Sync users error:', err);
             return { success: false, error: err.message };
         }
     }
@@ -948,7 +898,6 @@ class AuthManager {
             const { data, error } = await query;
 
             if (error) {
-                console.error('Error fetching users:', error);
                 return [];
             }
 
@@ -977,7 +926,6 @@ class AuthManager {
                 .single();
 
             if (error) {
-                console.error('Error fetching user:', error);
                 return null;
             }
 
@@ -1018,7 +966,6 @@ class AuthManager {
 
             // Check if any rows were actually updated (RLS may silently block)
             if (!updatedRows || updatedRows.length === 0) {
-                console.error('Update affected 0 rows - RLS policy may have blocked the operation');
                 return {
                     success: false,
                     error: 'Unable to update user. You may not have permission to modify this user.'
@@ -1029,10 +976,6 @@ class AuthManager {
 
             // Verify the update actually applied by checking a key field
             if (updates.role && data.role !== updates.role) {
-                console.error('Update appeared to succeed but role was not changed:', {
-                    expected: updates.role,
-                    actual: data.role
-                });
                 return {
                     success: false,
                     error: 'Unable to update user role. Database policy may have blocked this change.'
@@ -1082,24 +1025,19 @@ class AuthManager {
         }
 
         if (this.useSupabase) {
-            console.log('Attempting to delete user from Supabase:', userId);
-
             // Use Edge Function to delete both auth user and profile
             const { data, error } = await supabase.functions.invoke('delete-user', {
                 body: { userId }
             });
 
             if (error) {
-                console.error('Delete user edge function error:', error);
                 return { success: false, error: error.message };
             }
 
             if (data?.error) {
-                console.error('Delete user error:', data.error);
                 return { success: false, error: data.error };
             }
 
-            console.log('User deleted successfully:', userId);
             return { success: true };
         } else {
             const index = this.authData.users.findIndex(u => u.id === userId);
@@ -1129,18 +1067,15 @@ class AuthManager {
                 });
 
                 if (error) {
-                    console.error('Account request submission error:', error);
                     return { success: false, error: error.message };
                 }
 
                 if (data?.error) {
-                    console.error('Edge function returned error:', data.error);
                     return { success: false, error: data.error };
                 }
 
                 return { success: true, request: data?.request };
             } catch (err) {
-                console.error('Failed to submit account request:', err);
                 return { success: false, error: err.message || 'Failed to submit request' };
             }
         } else{
@@ -1181,7 +1116,6 @@ class AuthManager {
             const { data, error } = await query;
 
             if (error) {
-                console.error('Error fetching account requests:', error);
                 return [];
             }
 
@@ -1201,8 +1135,6 @@ class AuthManager {
         if (this.useSupabase) {
             try {
                 // Use Edge Function to handle approval with service role permissions
-                console.log('Approving account request:', requestId);
-
                 const { data, error } = await supabase.functions.invoke('approve-account-request', {
                     body: {
                         request_id: requestId,
@@ -1211,25 +1143,20 @@ class AuthManager {
                 });
 
                 if (error) {
-                    console.error('Account approval error:', error);
                     return { success: false, error: error.message || JSON.stringify(error) };
                 }
 
                 if (data?.error) {
-                    console.error('Edge function returned error:', data);
                     const errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
                     const details = data.details ? ` Details: ${JSON.stringify(data.details)}` : '';
                     return { success: false, error: errorMsg + details };
                 }
-
-                console.log('Account approved successfully:', data);
 
                 return {
                     success: true,
                     message: data?.message || 'Account created successfully. User will receive an email to set their password.'
                 };
             } catch (err) {
-                console.error('Failed to approve account request:', err);
                 return { success: false, error: err.message || 'Failed to approve request' };
             }
         } else {
@@ -1302,7 +1229,6 @@ class AuthManager {
             }
 
             // FALLBACK: Load from monolithic store (slow, but needed for migration)
-            console.log('Migrating auth data from legacy store...');
             const data = await indexedDB.loadData();
             const legacyAuthData = data[AUTH_STORE_KEY];
 
@@ -1314,7 +1240,6 @@ class AuthManager {
 
             return null;
         } catch (error) {
-            console.error('Error loading auth data:', error);
             return null;
         }
     }
@@ -1329,7 +1254,6 @@ class AuthManager {
             // but AuthManager is the source of truth for auth.
             return true;
         } catch (error) {
-            console.error('Error saving auth data:', error);
             return false;
         }
     }
@@ -1357,7 +1281,6 @@ class AuthManager {
                 const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
                 return session;
             } catch (error) {
-                console.error('getSession error:', error.message);
                 // Return null on timeout - will trigger logout flow
                 return null;
             }
@@ -1385,14 +1308,12 @@ class AuthManager {
             clearTimeout(timeoutId);
 
             if (error) {
-                console.warn('Session refresh failed:', error.message);
                 return null;
             }
 
             return session;
         } catch (error) {
             clearTimeout(timeoutId);
-            console.error('Session refresh error:', error.message);
             return null;
         }
     }
@@ -1444,7 +1365,6 @@ class AuthManager {
             });
 
             if (error) {
-                console.error('Bulk create users error:', error);
                 return { success: false, error: error.message };
             }
 
@@ -1458,7 +1378,6 @@ class AuthManager {
                 results: data?.results || []
             };
         } catch (err) {
-            console.error('Failed to bulk create users:', err);
             return { success: false, error: err.message };
         }
     }

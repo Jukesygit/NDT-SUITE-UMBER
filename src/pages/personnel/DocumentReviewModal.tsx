@@ -95,8 +95,7 @@ export function DocumentReviewModal({ approval, onClose, onActionComplete }: Doc
             try {
                 const url = await competencyService.getDocumentUrl(approval.document_url);
                 setDocumentUrl(url);
-            } catch (error) {
-                console.error('Failed to load document:', error);
+            } catch {
                 setDocumentError('Failed to load document');
             } finally {
                 setLoadingDocument(false);
@@ -131,8 +130,7 @@ export function DocumentReviewModal({ approval, onClose, onActionComplete }: Doc
         try {
             await approveMutation.mutateAsync({ competencyId: approval.id });
             onActionComplete();
-        } catch (error) {
-            console.error('Failed to approve:', error);
+        } catch {
             alert('Failed to approve document. Please try again.');
         } finally {
             setSubmitting(false);
@@ -148,8 +146,7 @@ export function DocumentReviewModal({ approval, onClose, onActionComplete }: Doc
         try {
             await rejectMutation.mutateAsync({ competencyId: approval.id, reason: comment });
             onActionComplete();
-        } catch (error) {
-            console.error('Failed to reject:', error);
+        } catch {
             alert('Failed to reject document. Please try again.');
         } finally {
             setSubmitting(false);
@@ -165,8 +162,7 @@ export function DocumentReviewModal({ approval, onClose, onActionComplete }: Doc
         try {
             await requestChangesMutation.mutateAsync({ competencyId: approval.id, comment });
             onActionComplete();
-        } catch (error) {
-            console.error('Failed to request changes:', error);
+        } catch {
             alert('Failed to request changes. Please try again.');
         } finally {
             setSubmitting(false);

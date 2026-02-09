@@ -233,8 +233,7 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
             setTimeout(() => setSuccessMessage(null), 5000);
 
             onSuccess?.();
-        } catch (error) {
-            console.error('Failed to send notification:', error);
+        } catch {
             setProgress(null);
         }
     };

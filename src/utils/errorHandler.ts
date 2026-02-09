@@ -82,9 +82,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 /**
  * Main error handler function
  */
-export function handleError(error: any): void {
-  console.error('Error handled:', error);
-
+export function handleError(error: unknown): void {
   // Determine error type and severity
   const errorInfo = classifyError(error);
 
@@ -103,13 +101,15 @@ export function handleError(error: any): void {
 /**
  * Classify error and determine type/severity
  */
-function classifyError(error: any): {
+interface ClassifiedError {
   type: ErrorType;
   severity: ErrorSeverity;
   message: string;
-  details?: any;
+  details?: unknown;
   recoverable: boolean;
-} {
+}
+
+function classifyError(error: unknown): ClassifiedError {
   // Already classified AppError
   if (error instanceof AppError) {
     return {
@@ -121,86 +121,7 @@ function classifyError(error: any): {
     };
   }
 
-  // Network errors
-  if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-    return {
-      type: ErrorType.NETWORK,
-      severity: ErrorSeverity.LOW,
-      message: ERROR_MESSAGES.TIMEOUT,
-      recoverable: true,
-    };
-  }
-
-  if (!navigator.onLine) {
-    return {
-      type: ErrorType.NETWORK,
-      severity: ErrorSeverity.LOW,
-      message: ERROR_MESSAGES.OFFLINE,
-      recoverable: true,
-    };
-  }
-
-  // HTTP status based errors
-  if (error.response) {
-    const status = error.response.status;
-    const data = error.response.data;
-
-    switch (status) {
-      case 400:
-        return {
-          type: ErrorType.VALIDATION,
-          severity: ErrorSeverity.LOW,
-          message: data?.message || ERROR_MESSAGES.INVALID_INPUT,
-          details: data,
-          recoverable: true,
-        };
-
-      case 401:
-        return {
-          type: ErrorType.AUTH,
-          severity: ErrorSeverity.MEDIUM,
-          message: ERROR_MESSAGES.UNAUTHORIZED,
-          recoverable: false,
-        };
-
-      case 403:
-        return {
-          type: ErrorType.PERMISSION,
-          severity: ErrorSeverity.MEDIUM,
-          message: ERROR_MESSAGES.UNAUTHORIZED,
-          recoverable: false,
-        };
-
-      case 404:
-        return {
-          type: ErrorType.NOT_FOUND,
-          severity: ErrorSeverity.LOW,
-          message: 'Requested resource not found.',
-          recoverable: true,
-        };
-
-      case 500:
-      case 502:
-      case 503:
-        return {
-          type: ErrorType.SERVER,
-          severity: ErrorSeverity.HIGH,
-          message: ERROR_MESSAGES.SERVER_ERROR,
-          recoverable: true,
-        };
-
-      default:
-        return {
-          type: ErrorType.UNKNOWN,
-          severity: ErrorSeverity.MEDIUM,
-          message: data?.message || ERROR_MESSAGES.UNKNOWN_ERROR,
-          details: data,
-          recoverable: true,
-        };
-    }
-  }
-
-  // JavaScript errors
+  // JavaScript runtime errors
   if (error instanceof TypeError || error instanceof ReferenceError) {
     return {
       type: ErrorType.CLIENT,
@@ -213,94 +134,74 @@ function classifyError(error: any): {
     };
   }
 
-  // Default
+  if (!navigator.onLine) {
+    return {
+      type: ErrorType.NETWORK,
+      severity: ErrorSeverity.LOW,
+      message: ERROR_MESSAGES.OFFLINE,
+      recoverable: true,
+    };
+  }
+
+  // Standard Error instances
+  if (error instanceof Error) {
+    if (error.message?.includes('timeout')) {
+      return {
+        type: ErrorType.NETWORK,
+        severity: ErrorSeverity.LOW,
+        message: ERROR_MESSAGES.TIMEOUT,
+        recoverable: true,
+      };
+    }
+
+    return {
+      type: ErrorType.UNKNOWN,
+      severity: ErrorSeverity.MEDIUM,
+      message: error.message || ERROR_MESSAGES.UNKNOWN_ERROR,
+      recoverable: true,
+    };
+  }
+
+  // Default for non-Error values
   return {
     type: ErrorType.UNKNOWN,
     severity: ErrorSeverity.MEDIUM,
-    message: error.message || ERROR_MESSAGES.UNKNOWN_ERROR,
+    message: ERROR_MESSAGES.UNKNOWN_ERROR,
     recoverable: true,
   };
 }
 
 /**
- * Log error based on severity
+ * Log error based on severity.
+ * Placeholder — wire up structured logging when ready.
  */
-function logError(errorInfo: any): void {
-  const logData = {
-    ...errorInfo,
-    timestamp: new Date().toISOString(),
-    userAgent: navigator.userAgent,
-    url: window.location.href,
-  };
-
-  switch (errorInfo.severity) {
-    case ErrorSeverity.CRITICAL:
-    case ErrorSeverity.HIGH:
-      console.error('Critical Error:', logData);
-      break;
-    case ErrorSeverity.MEDIUM:
-      console.warn('Warning:', logData);
-      break;
-    case ErrorSeverity.LOW:
-      console.info('Info:', logData);
-      break;
-  }
+function logError(_errorInfo: ClassifiedError): void {
+  // No-op until a structured logging service is configured
 }
 
 /**
- * Show notification to user
- * TODO: Integrate with a toast/notification system when available
+ * Show notification to user.
+ * Placeholder — integrate with a toast/notification library when ready.
  */
-function notifyUser(errorInfo: any): void {
-  const notificationType =
-    errorInfo.severity === ErrorSeverity.CRITICAL || errorInfo.severity === ErrorSeverity.HIGH
-      ? 'error'
-      : errorInfo.severity === ErrorSeverity.MEDIUM
-      ? 'warning'
-      : 'info';
-
-  // Log to console for now - can be integrated with a toast system later
-  console.warn(`[${notificationType.toUpperCase()}] ${errorInfo.message}`);
+function notifyUser(_errorInfo: unknown): void {
+  // No-op until a toast system is wired up
 }
 
 /**
- * Report error to external service
+ * Report error to external service.
+ * Placeholder — integrate with Sentry, LogRocket, or similar when ready.
  */
-function reportError(errorInfo: any): void {
-  // TODO: Implement error reporting service
-  // Example: Sentry, LogRocket, Rollbar
-
-  const reportData = {
-    ...errorInfo,
-    timestamp: new Date().toISOString(),
-    browser: {
-      userAgent: navigator.userAgent,
-      language: navigator.language,
-      platform: navigator.platform,
-    },
-    page: {
-      url: window.location.href,
-      referrer: document.referrer,
-    },
-    user: 'anonymous', // TODO: Get user ID from auth context when needed
-  };
-
-  // Send to error reporting service
-  // fetch('/api/errors', { method: 'POST', body: JSON.stringify(reportData) });
-
-  // Log in development
-  if (process.env.NODE_ENV === 'development') {
-    console.log('Error report:', reportData);
-  }
+function reportError(_errorInfo: unknown): void {
+  // No-op until an error reporting service is configured
 }
 
 /**
  * Create error handler for async functions
  */
-export function createAsyncHandler<T extends (...args: any[]) => Promise<any>>(
+export function createAsyncHandler<T extends (...args: unknown[]) => Promise<unknown>>(
   fn: T,
   options?: {
-    fallbackValue?: any;
+    fallbackValue?: unknown;
     showNotification?: boolean;
     rethrow?: boolean;
   }
@@ -326,7 +227,6 @@ export function createAsyncHandler<T extends (...args: any[]) => Promise<any>>(
 export function setupGlobalErrorHandlers(): void {
   // Handle unhandled promise rejections
   window.addEventListener('unhandledrejection', (event) => {
-    console.error('Unhandled promise rejection:', event.reason);
     handleError(new AppError(
       'An unexpected error occurred',
       ErrorType.CLIENT,
@@ -337,7 +237,6 @@ export function setupGlobalErrorHandlers(): void {
 
   // Handle global errors
   window.addEventListener('error', (event) => {
-    console.error('Global error:', event.error);
     handleError(new AppError(
       event.error?.message || 'An unexpected error occurred',
       ErrorType.CLIENT,

@@ -176,7 +176,6 @@ export function detectSQLInjection(input) {
 
     for (const pattern of SQL_INJECTION_PATTERNS) {
         if (pattern.test(input)) {
-            console.warn('Potential SQL injection detected:', input);
             return true;
         }
     }
@@ -196,7 +195,6 @@ export function detectXSS(input) {
 
     for (const pattern of XSS_PATTERNS) {
         if (pattern.test(input)) {
-            console.warn('Potential XSS attack detected:', input);
             return true;
         }
     }

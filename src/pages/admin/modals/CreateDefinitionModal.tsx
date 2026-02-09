@@ -77,8 +77,8 @@ export function CreateDefinitionModal({ isOpen, onClose, categories }: CreateDef
             setRequiresApproval(false);
             setErrors({});
             onClose();
-        } catch (error: any) {
-            setErrors({ api: error.message || 'Failed to create certification type' });
+        } catch (error: unknown) {
+            setErrors({ api: error instanceof Error ? error.message : 'Failed to create certification type' });
         }
     };
 

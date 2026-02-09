@@ -127,7 +127,6 @@ export interface LogActivityParams {
 export async function logActivity(params: LogActivityParams): Promise<void> {
     try {
         if (!supabase) {
-            console.warn('Activity log: Supabase not configured');
             return;
         }
 
@@ -148,12 +147,10 @@ export async function logActivity(params: LogActivityParams): Promise<void> {
             p_user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
         }).then(({ error }: { error: { message: string } | null }) => {
             if (error) {
-                console.error('Activity log error:', error.message);
             }
         });
     } catch (error) {
         // Silently fail - activity logging should never break the app
-        console.error('Activity log error:', error);
     }
 }
 

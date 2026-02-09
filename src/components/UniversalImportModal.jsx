@@ -8,8 +8,6 @@ import { RandomMatrixSpinner } from './MatrixSpinners';
 let XLSX = null;
 
 export default function UniversalImportModal({ onClose, onComplete }) {
-    console.log('UniversalImportModal component loaded');
-    console.log('UniversalImportModal props:', { onClose, onComplete });
     const [file, setFile] = useState(null);
     const [parseData, setParseData] = useState(null);
     const [importing, setImporting] = useState(false);
@@ -186,7 +184,6 @@ export default function UniversalImportModal({ onClose, onComplete }) {
 
                 processExcelData(jsonData);
             } catch (error) {
-                console.error('Error parsing Excel file:', error);
                 setErrors([`Failed to parse Excel file: ${error.message}`]);
             }
         };
@@ -230,9 +227,6 @@ export default function UniversalImportModal({ onClose, onComplete }) {
                 headers[col] = null;
             }
         }
-
-        console.log('Found headers:', headers.filter(h => h).length, 'columns');
-        console.log('Sample headers:', headers.slice(0, 15));
 
         // Process data rows - each employee takes 3 rows
         const dataRows = [];
@@ -306,16 +300,6 @@ export default function UniversalImportModal({ onClose, onComplete }) {
             }
         }
 
-        console.log('Processed Excel data:', dataRows.length, 'employees');
-        console.log('Sample row keys:', dataRows[0] ? Object.keys(dataRows[0]).slice(0, 20) : 'No data');
-        console.log('Sample NDT fields in first row:');
-        if (dataRows[0]) {
-            const ndtFields = Object.keys(dataRows[0]).filter(k => k.includes('9712') || k.includes('PCN'));
-            ndtFields.forEach(field => {
-                console.log(`  ${field}:`, dataRows[0][field]);
-            });
-        }
-
         setParseData({
             headers: headers.filter(h => h),
             rows: dataRows
@@ -328,8 +312,6 @@ export default function UniversalImportModal({ onClose, onComplete }) {
             header: false,
             skipEmptyLines: true,
             complete: (results) => {
-                console.log('Raw CSV data:', results);
-
                 if (results.data.length < 5) {
                     setErrors(['CSV file does not have enough rows']);
                     return;
@@ -458,11 +440,6 @@ export default function UniversalImportModal({ onClose, onComplete }) {
                 definitionMap[def.name] = def;
             });
 
-            console.log('Total competency definitions loaded:', definitions.length);
-            console.log('NDT definitions:', definitions.filter(d => d.name.includes('9712')).map(d => d.name));
-            console.log('Plant/API definitions:', definitions.filter(d => d.name.includes('API') || d.name.includes('CSWIP')).map(d => d.name));
-            console.log('Management definitions:', definitions.filter(d => d.name.includes('ISO')).map(d => d.name));
-
             // Get default organization
             const orgs = await authManager.getOrganizations();
             const defaultOrg = orgs.find(org => org.name !== 'SYSTEM') || orgs[0];
@@ -496,7 +473,6 @@ export default function UniversalImportModal({ onClose, onComplete }) {
 
                     if (existingUser) {
                         userId = existingUser.id;
-                        console.log(`Using existing user: ${employeeName} (${userId})`);
                     } else {
                         // Create new user
                         try {
@@ -514,7 +490,6 @@ export default function UniversalImportModal({ onClose, onComplete }) {
                             }
 
                             userId = createResult.user.id;
-                            console.log(`Created new user: ${employeeName} (${userId})`);
 
                             // Wait longer for user creation to complete and avoid rate limits
                             await new Promise(resolve => setTimeout(resolve, 3000));
@@ -539,8 +514,6 @@ export default function UniversalImportModal({ onClose, onComplete }) {
                     // Import competencies for this user
                     const competenciesToCreate = [];
 
-                    console.log(`Processing competencies for ${employeeName}:`, Object.keys(row).length, 'fields in row');
-
                     for (const [csvColumn, defName] of Object.entries(FIELD_MAPPING)) {
                         const value = row[csvColumn];
 
@@ -554,7 +527,6 @@ export default function UniversalImportModal({ onClose, onComplete }) {
 
                             const definition = definitionMap[defName];
                             if (!definition) {
-                                console.warn(`No definition found for: ${defName}`);
                                 continue;
                             }
 
@@ -579,7 +551,6 @@ export default function UniversalImportModal({ onClose, onComplete }) {
 
                             const definition = definitionMap[defName];
                             if (!definition) {
-                                console.warn(`No definition found for: ${defName}`);
                                 continue;
                             }
 
@@ -615,21 +586,11 @@ export default function UniversalImportModal({ onClose, onComplete }) {
 
                     // Batch create competencies
                     if (competenciesToCreate.length > 0) {
-                        console.log(`Creating ${competenciesToCreate.length} competencies for ${employeeName}`);
-                        console.log('Sample competencies:', competenciesToCreate.slice(0, 3).map(c => ({
-                            name: definitions.find(d => d.id === c.competency_id)?.name,
-                            value: c.value,
-                            issuing_body: c.issuing_body,
-                            certificate_number: c.certificate_number
-                        })));
                         await competencyService.bulkCreateCompetencies(competenciesToCreate);
-                    } else {
-                        console.warn(`No competencies to create for ${employeeName}`);
                     }
 
                     successfulImports++;
                 } catch (error) {
-                    console.error(`Error importing ${employeeName}:`, error);
                     importErrors.push(`Row ${i + 1} (${employeeName}): ${error.message}`);
                 }
             }
@@ -638,15 +599,12 @@ export default function UniversalImportModal({ onClose, onComplete }) {
             setErrors(importErrors);
             setStage('complete');
         } catch (error) {
-            console.error('Import failed:', error);
             setErrors([`Fatal error: ${error.message}`]);
             setStage('complete');
         } finally {
             setImporting(false);
         }
     };
-
-    console.log('UniversalImportModal rendering, stage:', stage);
 
     return (
         <div className="modal" style={{ display: 'flex', position: 'fixed', inset: 0, zIndex: 9999 }}>

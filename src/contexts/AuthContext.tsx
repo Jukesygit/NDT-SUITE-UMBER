@@ -108,10 +108,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
                     if (authManager.isLoggedIn()) {
                         sessionManager.initialize();
                     }
-                    console.log('AuthContext: Initialization complete');
                 }
             } catch (error) {
-                console.error('AuthContext: Failed to initialize auth:', error);
                 if (mounted) {
                     setIsLoading(false);
                     isInitializedRef.current = true; // Still mark as initialized to unblock
@@ -156,12 +154,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
             if (!mounted) return;
 
             if (event.type === 'refreshed') {
-                console.log('AuthContext: Session refreshed via session manager');
                 loadAuthState();
                 // Invalidate stale queries (not all - prevents thundering herd)
                 invalidateStaleQueries();
             } else if (event.type === 'expired') {
-                console.warn('AuthContext: Session expired, logging out');
                 // Handle graceful logout with toast instead of blocking alert
                 handleGracefulLogout();
             }
@@ -245,7 +241,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
             const session = await authManager.getSession();
 
             if (!session) {
-                console.warn('AuthContext: Session refresh failed - no valid session');
                 // Session is invalid, trigger logout
                 await authManager.logout();
                 setUser(null);
@@ -257,7 +252,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
             // Session is valid, reload auth state
             loadAuthState();
         } catch (err) {
-            console.error('AuthContext: Failed to refresh auth:', err);
         } finally {
             setIsLoading(false);
         }

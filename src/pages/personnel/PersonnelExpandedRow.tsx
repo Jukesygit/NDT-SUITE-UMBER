@@ -320,14 +320,12 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                     .createSignedUrl(viewingCompetency.document_url, 3600); // 1 hour expiry
 
                 if (error) {
-                    console.error('Failed to get signed URL:', error);
                     setResolvedDocumentUrl(null);
                     return;
                 }
 
                 setResolvedDocumentUrl(data.signedUrl);
-            } catch (err) {
-                console.error('Error resolving document URL:', err);
+            } catch {
                 setResolvedDocumentUrl(null);
             }
         }
@@ -377,7 +375,6 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
             setEditingPerson(false);
             onUpdate?.();
         } catch (error: unknown) {
-            console.error('Failed to update person:', error);
             const errorMessage = error instanceof Error ? error.message : 'Failed to save changes. Please try again.';
             setSaveError(errorMessage);
         }
@@ -444,21 +441,17 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
     const handleDocumentUpload = useCallback(
         async (file: File): Promise<{ url: string; name: string }> => {
             const competencyName = editingCompetency?.definition?.name;
-            console.log('handleDocumentUpload (edit) called', { competencyName, personId: person.id, fileName: file.name });
 
             if (!competencyName) {
-                console.error('Competency name not available for edit', { editingCompetency });
                 throw new Error('Competency not available');
             }
             // Use mutateAsync instead of wrapping mutate in a Promise
             // This avoids stale callback issues when the component re-renders during upload
-            const result = await uploadDocument.mutateAsync({
+            return uploadDocument.mutateAsync({
                 userId: person.id,
                 competencyName: competencyName,
                 file,
             });
-            console.log('Edit upload success', result);
-            return result;
         },
         [person.id, editingCompetency?.definition?.name, uploadDocument]
     );

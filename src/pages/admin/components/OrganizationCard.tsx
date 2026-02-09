@@ -13,34 +13,19 @@ interface Organization {
 interface OrganizationCardProps {
     organization: Organization;
     userCount: number;
-    assetCount: number;
-    scanCount: number;
     onEdit: () => void;
     onDelete: () => void;
 }
 
 /**
  * OrganizationCard - Displays organization info with menu for actions
- *
- * @example
- * <OrganizationCard
- *     organization={org}
- *     userCount={5}
- *     assetCount={10}
- *     scanCount={25}
- *     onEdit={() => handleEdit(org.id)}
- *     onDelete={() => handleDelete(org.id)}
- * />
  */
 export function OrganizationCard({
     organization,
     userCount,
-    assetCount,
-    scanCount,
     onEdit: _onEdit,
     onDelete: _onDelete,
 }: OrganizationCardProps) {
-    // Note: onEdit and onDelete are passed to parent's menu handler
     void _onEdit;
     void _onDelete;
     const createdDate = new Date(organization.createdAt).toLocaleDateString('en-US', {
@@ -71,25 +56,13 @@ export function OrganizationCard({
                 </button>
             </div>
 
-            {/* Stats grid */}
-            <div className="grid grid-cols-3 gap-4 mb-4">
+            {/* Stats */}
+            <div className="mb-4">
                 <div className="text-center">
                     <div className="flex items-center justify-center mb-1">
                         <StatusBadge variant="vessel">{userCount}</StatusBadge>
                     </div>
                     <p className="text-xs text-gray-600 dark:text-gray-400">Users</p>
-                </div>
-                <div className="text-center">
-                    <div className="flex items-center justify-center mb-1">
-                        <StatusBadge variant="asset">{assetCount}</StatusBadge>
-                    </div>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Assets</p>
-                </div>
-                <div className="text-center">
-                    <div className="flex items-center justify-center mb-1">
-                        <StatusBadge variant="scan">{scanCount}</StatusBadge>
-                    </div>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Scans</p>
                 </div>
             </div>
 

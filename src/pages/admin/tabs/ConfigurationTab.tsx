@@ -233,8 +233,7 @@ export default function ConfigurationTab() {
             if (fileInputRef.current) {
                 fileInputRef.current.value = '';
             }
-        } catch (error) {
-            console.error('Error reading import file:', error);
+        } catch {
         }
     };
 

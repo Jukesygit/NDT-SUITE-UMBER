@@ -209,8 +209,6 @@ export async function exportHeatmapToBlob(
   const zMax = typeof displaySettings.range.max === 'number' ? displaySettings.range.max : statsMax;
   const zRange = zMax - zMin || 1; // Avoid division by zero
 
-  console.log(`Export using range: ${zMin.toFixed(2)} - ${zMax.toFixed(2)}`);
-
   onProgress?.(2, 'Allocating pixel buffer...');
 
   // Allocate pixel buffer (RGBA format)
@@ -218,13 +216,10 @@ export async function exportHeatmapToBlob(
   const pixelCount = width * height;
   const bytesNeeded = pixelCount * 4;
 
-  console.log(`Allocating ${(bytesNeeded / 1024 / 1024).toFixed(1)} MB for ${width}x${height} image`);
-
   let pixels: Uint8Array;
   try {
     pixels = new Uint8Array(bytesNeeded);
   } catch (e) {
-    console.error('Failed to allocate pixel buffer - image too large for available memory');
     onProgress?.(0, 'Error: Image too large for available memory');
     return null;
   }
@@ -284,7 +279,6 @@ export async function exportHeatmapToBlob(
       channels: 4 // RGBA
     });
   } catch (e) {
-    console.error('Failed to encode PNG:', e);
     onProgress?.(0, 'Error: Failed to encode PNG');
     return null;
   }
@@ -298,8 +292,6 @@ export async function exportHeatmapToBlob(
   pixels = null as any;
 
   onProgress?.(100, 'Export complete');
-
-  console.log(`Exported ${width}x${height} image (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
 
   return blob;
 }
@@ -333,7 +325,6 @@ export async function exportAndDownloadHeatmap(
     const blob = await exportHeatmapToBlob({ data, displaySettings, onProgress });
 
     if (!blob) {
-      console.error('Failed to generate heatmap blob');
       return false;
     }
 
@@ -344,7 +335,6 @@ export async function exportAndDownloadHeatmap(
     downloadBlob(blob, filename);
     return true;
   } catch (error) {
-    console.error('Error exporting heatmap:', error);
     return false;
   }
 }

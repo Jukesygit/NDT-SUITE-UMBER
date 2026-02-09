@@ -88,8 +88,8 @@ export function EditDefinitionModal({ isOpen, onClose, definition, categories }:
             });
             setErrors({});
             onClose();
-        } catch (error: any) {
-            setErrors({ api: error.message || 'Failed to update certification type' });
+        } catch (error: unknown) {
+            setErrors({ api: error instanceof Error ? error.message : 'Failed to update certification type' });
         }
     };
 

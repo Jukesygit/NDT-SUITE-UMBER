@@ -31,7 +31,6 @@ export async function hashPassword(password) {
         const salt = await bcrypt.genSalt(SALT_ROUNDS);
         return await bcrypt.hash(password, salt);
     } catch (error) {
-        console.error('Error hashing password:', error);
         throw new Error('Failed to hash password');
     }
 }
@@ -50,7 +49,6 @@ export async function verifyPassword(password, hash) {
     try {
         return await bcrypt.compare(password, hash);
     } catch (error) {
-        console.error('Error verifying password:', error);
         return false;
     }
 }
@@ -179,7 +177,6 @@ export function encryptData(data, key) {
     try {
         return CryptoJS.AES.encrypt(JSON.stringify(data), key).toString();
     } catch (error) {
-        console.error('Encryption error:', error);
         throw new Error('Failed to encrypt data');
     }
 }
@@ -200,7 +197,6 @@ export function decryptData(encryptedData, key) {
         const decrypted = bytes.toString(CryptoJS.enc.Utf8);
         return JSON.parse(decrypted);
     } catch (error) {
-        console.error('Decryption error:', error);
         throw new Error('Failed to decrypt data');
     }
 }

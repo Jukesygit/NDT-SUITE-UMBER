@@ -398,8 +398,6 @@ class CompetencyService {
 
         // If the function doesn't exist, fallback to a query
         if (error && error.message?.includes('function')) {
-            console.warn(`${functionName} function not found, using fallback query`);
-
             const futureDate = new Date();
             futureDate.setDate(futureDate.getDate() + daysThreshold);
 

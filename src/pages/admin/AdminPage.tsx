@@ -1,22 +1,18 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
-import { createModernHeader } from '../../components/modern-header.js';
-import { SectionSpinner } from '../../components/ui';
+import { useState, lazy, Suspense } from 'react';
+import { PageHeader, SectionSpinner } from '../../components/ui';
 import { useAccountRequests, usePermissionRequests } from '../../hooks/queries';
 
-// Lazy load tab components
 const OverviewTab = lazy(() => import('./tabs/OverviewTab'));
 const OrganizationsTab = lazy(() => import('./tabs/OrganizationsTab'));
 const UsersTab = lazy(() => import('./tabs/UsersTab'));
-const AssetsTab = lazy(() => import('./tabs/AssetsTab'));
 const RequestsTab = lazy(() => import('./tabs/RequestsTab'));
-const SharingTab = lazy(() => import('./tabs/SharingTab'));
 const ConfigurationTab = lazy(() => import('./tabs/ConfigurationTab'));
 const ActivityLogTab = lazy(() => import('./tabs/ActivityLogTab'));
 const CompetencyTypesTab = lazy(() => import('./tabs/CompetencyTypesTab'));
 const NotificationsTab = lazy(() => import('./tabs/NotificationsTab'));
 const UKASComplianceTab = lazy(() => import('./tabs/UKASComplianceTab'));
 
-type TabType = 'overview' | 'organizations' | 'users' | 'assets' | 'requests' | 'sharing' | 'notifications' | 'configuration' | 'competency-types' | 'activity' | 'ukas-compliance';
+type TabType = 'overview' | 'organizations' | 'users' | 'requests' | 'notifications' | 'configuration' | 'competency-types' | 'activity' | 'ukas-compliance';
 
 interface Tab {
     id: TabType;
@@ -27,9 +23,7 @@ const tabs: Tab[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'organizations', label: 'Organizations' },
     { id: 'users', label: 'Users' },
-    { id: 'assets', label: 'Assets' },
     { id: 'requests', label: 'Requests' },
-    { id: 'sharing', label: 'Sharing' },
     { id: 'notifications', label: 'Notifications' },
     { id: 'configuration', label: 'Configuration' },
     { id: 'competency-types', label: 'Competency Types' },
@@ -40,72 +34,39 @@ const tabs: Tab[] = [
 export default function AdminPage() {
     const [activeTab, setActiveTab] = useState<TabType>('overview');
 
-    // Fetch pending requests for badge count
     const { data: accountRequests = [] } = useAccountRequests();
     const { data: permissionRequests = [] } = usePermissionRequests();
     const pendingCount = accountRequests.length + permissionRequests.length;
 
-    // Initialize the modern header
-    useEffect(() => {
-        const container = document.getElementById('admin-header');
-        if (container && container.children.length === 0) {
-            const header = createModernHeader(
-                'Admin Dashboard',
-                'Manage organizations, users, assets, and system configuration',
-                {
-                    showParticles: true,
-                    particleCount: 25,
-                    gradientColors: ['#8b5cf6', '#3b82f6'], // Purple to blue
-                    height: '100px',
-                    showLogo: false
-                }
-            );
-            container.appendChild(header);
-        }
-    }, []);
-
     const renderTabContent = () => {
         switch (activeTab) {
-            case 'overview':
-                return <OverviewTab />;
-            case 'organizations':
-                return <OrganizationsTab />;
-            case 'users':
-                return <UsersTab />;
-            case 'assets':
-                return <AssetsTab />;
-            case 'requests':
-                return <RequestsTab />;
-            case 'sharing':
-                return <SharingTab />;
-            case 'notifications':
-                return <NotificationsTab />;
-            case 'configuration':
-                return <ConfigurationTab />;
-            case 'competency-types':
-                return <CompetencyTypesTab />;
-            case 'activity':
-                return <ActivityLogTab />;
-            case 'ukas-compliance':
-                return <UKASComplianceTab />;
-            default:
-                return <OverviewTab />;
+            case 'overview': return <OverviewTab />;
+            case 'organizations': return <OrganizationsTab />;
+            case 'users': return <UsersTab />;
+            case 'requests': return <RequestsTab />;
+            case 'notifications': return <NotificationsTab />;
+            case 'configuration': return <ConfigurationTab />;
+            case 'competency-types': return <CompetencyTypesTab />;
+            case 'activity': return <ActivityLogTab />;
+            case 'ukas-compliance': return <UKASComplianceTab />;
+            default: return <OverviewTab />;
         }
     };
 
     return (
         <div className="h-full flex flex-col overflow-hidden">
-            {/* Header */}
-            <div id="admin-header" style={{ flexShrink: 0 }}></div>
+            <PageHeader
+                title="Admin Dashboard"
+                subtitle="Manage organizations, users, and system configuration"
+            />
 
-            {/* Navigation Tabs - matching Personnel Management style */}
             <div
                 className="glass-panel"
                 style={{
                     borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
                     borderRadius: 0,
                     flexShrink: 0,
-                    padding: 0
+                    padding: 0,
                 }}
             >
                 <div className="flex px-6">
@@ -138,7 +99,6 @@ export default function AdminPage() {
                 </div>
             </div>
 
-            {/* Content Area - matching Personnel Management style */}
             <div className="flex-1 overflow-y-auto glass-scrollbar p-6">
                 <Suspense
                     key={activeTab}

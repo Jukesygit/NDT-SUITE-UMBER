@@ -30,14 +30,6 @@ const GENERIC_ERROR_MESSAGES = {
  * @returns {Error} Sanitized error safe to return to client
  */
 export function sanitizeDbError(error, serviceName, operation) {
-    // Log the full error for server-side debugging
-    console.error(`${serviceName}.${operation} error:`, {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint
-    });
-
     // Return generic message to client
     const genericMessage = GENERIC_ERROR_MESSAGES[operation] || 'An error occurred';
     return new Error(genericMessage);

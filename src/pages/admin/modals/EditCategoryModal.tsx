@@ -61,8 +61,8 @@ export function EditCategoryModal({ isOpen, onClose, category }: EditCategoryMod
             });
             setErrors({});
             onClose();
-        } catch (error: any) {
-            setErrors({ api: error.message || 'Failed to update category' });
+        } catch (error: unknown) {
+            setErrors({ api: error instanceof Error ? error.message : 'Failed to update category' });
         }
     };
 

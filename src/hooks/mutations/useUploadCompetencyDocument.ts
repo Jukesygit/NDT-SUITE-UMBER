@@ -68,11 +68,9 @@ async function uploadCompetencyDocument(params: UploadCompetencyDocumentParams):
         );
 
         if (uploadError) {
-            console.error('Supabase upload error:', uploadError);
             throw new Error(uploadError.message || 'Failed to upload document');
         }
     } catch (error) {
-        console.error('Upload failed:', error);
         throw error;
     }
 

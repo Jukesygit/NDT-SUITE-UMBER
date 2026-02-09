@@ -49,8 +49,6 @@ export function isAuthError(error) {
  * This is called when we detect an auth error that can't be recovered
  */
 export async function handleAuthError() {
-    console.warn('Auth error detected - session may have expired');
-
     // Dispatch event to notify the app of auth failure
     window.dispatchEvent(new CustomEvent('authError', {
         detail: { reason: 'session_expired' }
@@ -74,7 +72,6 @@ export function createQueryErrorHandler(onAuthError) {
 
         if (isAuthError(error)) {
             isHandlingAuthError = true;
-            console.warn('React Query detected auth error:', error.message || error);
 
             if (onAuthError) {
                 onAuthError(error);

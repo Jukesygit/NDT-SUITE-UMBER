@@ -17,14 +17,12 @@ const getInitialMode = () => {
 
     // Check for explicit type=recovery parameter (our redirect URL includes this)
     if (params.get('type') === 'recovery') {
-      console.log('Initial mode: update-password (type=recovery parameter detected)');
       sessionStorage.setItem(PASSWORD_RESET_KEY, 'true');
       return 'update-password';
     }
 
     // Check hash-based recovery (older Supabase flow)
     if (hash && hash.includes('type=recovery')) {
-      console.log('Initial mode: update-password (recovery token in hash)');
       sessionStorage.setItem(PASSWORD_RESET_KEY, 'true');
       return 'update-password';
     }
@@ -32,7 +30,6 @@ const getInitialMode = () => {
     // Check for code parameter WITH type=recovery (PKCE flow - both may be present)
     // Note: We no longer assume any code param is password reset - it could be email confirmation
     if (params.get('code') && params.get('type') === 'recovery') {
-      console.log('Initial mode: update-password (code + recovery type detected)');
       sessionStorage.setItem(PASSWORD_RESET_KEY, 'true');
       return 'update-password';
     }
@@ -41,7 +38,6 @@ const getInitialMode = () => {
     // The sessionStorage flag is only used to prevent redirects during the password update flow,
     // not to determine the initial mode. Clear any stale flag.
     if (sessionStorage.getItem(PASSWORD_RESET_KEY) === 'true') {
-      console.log('Clearing stale password reset flag from sessionStorage');
       sessionStorage.removeItem(PASSWORD_RESET_KEY);
     }
   }
@@ -73,7 +69,6 @@ function LoginPageNew() {
 
     // Listen for password recovery event from auth-manager
     const handlePasswordRecovery = () => {
-      console.log('passwordRecoveryMode event received');
       sessionStorage.setItem(PASSWORD_RESET_KEY, 'true');
       setMode('update-password');
     };
@@ -81,13 +76,10 @@ function LoginPageNew() {
 
     // Listen for Supabase auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Login page auth event:', event);
-
       // Re-check sessionStorage in case it was set by another handler
       const currentPasswordResetMode = sessionStorage.getItem(PASSWORD_RESET_KEY) === 'true';
 
       if (event === 'PASSWORD_RECOVERY') {
-        console.log('PASSWORD_RECOVERY event received');
         sessionStorage.setItem(PASSWORD_RESET_KEY, 'true');
         setMode('update-password');
         // Clean up URL but keep type=recovery for page reloads
@@ -96,7 +88,6 @@ function LoginPageNew() {
         window.history.replaceState(null, '', url.toString());
       } else if (event === 'USER_UPDATED' && currentPasswordResetMode) {
         // Password was updated successfully - this fires faster than the promise resolves
-        console.log('USER_UPDATED: Password update confirmed, switching to login');
         window.history.replaceState(null, '', window.location.pathname);
         setSuccessMessage('Password updated successfully! You can now sign in with your new password.');
         setNewPassword('');
@@ -106,28 +97,24 @@ function LoginPageNew() {
         // Sign out and THEN clear the password reset flag (prevents redirect while still logged in)
         supabase.auth.signOut()
           .then(() => {
-            console.log('Sign out complete, clearing password reset flag');
             sessionStorage.removeItem(PASSWORD_RESET_KEY);
           })
-          .catch(err => {
-            console.log('Sign out error:', err);
-            // Clear flag anyway after a delay to prevent stuck state
+          .catch(() => {
             setTimeout(() => sessionStorage.removeItem(PASSWORD_RESET_KEY), 2000);
           });
       } else if (event === 'SIGNED_IN') {
         // Don't navigate here - let the isAuthenticated check in useEffect handle it
         // This ensures AuthContext has updated before we try to navigate
         if (!currentPasswordResetMode && mode !== 'update-password') {
-          console.log('SIGNED_IN: Auth context will handle redirect');
+          // Auth context will handle redirect
         } else {
-          console.log('SIGNED_IN: In password reset mode, staying on login page');
+          // In password reset mode, staying on login page
         }
       }
     });
 
     // Only redirect if logged in and NOT in password reset mode
     if (isAuthenticated && !isPasswordResetMode && mode !== 'update-password') {
-      console.log('User already logged in, redirecting to home');
       navigate('/');
     }
 
@@ -154,7 +141,6 @@ function LoginPageNew() {
           return;
         }
         // Login succeeded - navigate to home
-        console.log('Login successful, navigating to home...');
         // Mark that we're redirecting to prevent finally block from clearing isLoading
         isRedirectingRef.current = true;
         // Use React Router navigation first (faster, no page reload)
@@ -164,7 +150,6 @@ function LoginPageNew() {
         setTimeout(() => {
           // Only redirect if we're still on the login page
           if (window.location.pathname === '/login') {
-            console.log('Fallback: forcing hard redirect to home...');
             window.location.href = '/';
           }
         }, 1000);
@@ -293,10 +278,8 @@ function LoginPageNew() {
           const params = new URLSearchParams(window.location.search);
           const code = params.get('code');
           if (code) {
-            console.log('No session found, attempting to exchange code...');
             const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
             if (exchangeError) {
-              console.error('Code exchange failed:', exchangeError);
               setError('Your password reset link has expired. Please request a new one.');
               setIsLoading(false);
               return;
@@ -325,7 +308,6 @@ function LoginPageNew() {
             setError('Error updating password: ' + data.error);
           } else {
             // Success - show message and redirect to login
-            console.log('Password updated successfully via Edge Function');
             setSuccessMessage(data?.message || 'Password updated successfully. You can now sign in.');
             setNewPassword('');
             setConfirmPassword('');
@@ -334,7 +316,6 @@ function LoginPageNew() {
             setMode('login');
           }
         } catch (updateErr) {
-          console.error('Password update error:', updateErr);
           setError('Error updating password: ' + (updateErr.message || 'Unknown error'));
         }
       }
@@ -676,11 +657,9 @@ function LoginPageNew() {
                     // Sign out and THEN clear flag (prevents redirect while still logged in)
                     supabase.auth.signOut()
                       .then(() => {
-                        console.log('Sign out complete, clearing password reset flag');
                         sessionStorage.removeItem(PASSWORD_RESET_KEY);
                       })
-                      .catch(err => {
-                        console.log('Sign out error:', err);
+                      .catch(() => {
                         setTimeout(() => sessionStorage.removeItem(PASSWORD_RESET_KEY), 2000);
                       });
                   }}

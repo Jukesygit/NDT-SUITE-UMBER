@@ -516,11 +516,9 @@ class PersonnelService {
 
                 // Only throw if it's an error other than "function doesn't exist"
                 if (rpcError && !rpcError.message?.includes('function') && !rpcError.code?.includes('42883')) {
-                    console.warn('Failed to update issued date (created_at):', rpcError.message);
                 }
             } catch (err) {
                 // Silently fail if the RPC function doesn't exist
-                console.warn('RPC function update_competency_created_at not available:', err);
             }
         }
 
@@ -580,11 +578,9 @@ class PersonnelService {
 
                 // Only throw if it's an error other than "function doesn't exist"
                 if (rpcError && !rpcError.message?.includes('function') && !rpcError.code?.includes('42883')) {
-                    console.warn('Failed to update issued date (created_at):', rpcError.message);
                 }
             } catch (err) {
                 // Silently fail if the RPC function doesn't exist
-                console.warn('RPC function update_competency_created_at not available:', err);
             }
         }
 

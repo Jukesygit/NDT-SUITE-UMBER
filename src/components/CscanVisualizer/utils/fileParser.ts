@@ -294,7 +294,7 @@ export const processFiles = async (
         onProgress(i + 1, files.length);
       }
     } catch (error) {
-      console.error(`Error processing file ${files[i].name}:`, error);
+      // Skip files that fail to parse
     }
   }
 

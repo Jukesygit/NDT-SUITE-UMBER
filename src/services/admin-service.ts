@@ -17,18 +17,14 @@ import type { UserRole } from '../types/auth.types.js';
 export interface AdminDashboardStats {
   totalOrganizations: number;
   totalUsers: number;
-  totalAssets: number;
-  totalVessels: number;
-  totalScans: number;
   pendingAccountRequests: number;
   pendingPermissionRequests: number;
-  activeShares: number;
   recentActivity: ActivityItem[];
 }
 
 export interface ActivityItem {
   id: string;
-  type: 'user_created' | 'organization_created' | 'asset_created' | 'share_created' | 'request_approved';
+  type: 'user_created' | 'organization_created' | 'request_approved';
   description: string;
   timestamp: Date;
   userId?: string;
@@ -38,9 +34,6 @@ export interface ActivityItem {
 export interface OrganizationStats {
   organization: Organization;
   userCount: number;
-  assetCount: number;
-  vesselCount: number;
-  scanCount: number;
 }
 
 export interface CreateUserData {
@@ -87,33 +80,6 @@ export interface PermissionRequest {
     username: string;
     email: string;
   };
-}
-
-export interface Share {
-  id: string;
-  owner_organization_id: string;
-  shared_with_organization_id: string;
-  asset_id: string;
-  vessel_id?: string;
-  scan_id?: string;
-  share_type: 'asset' | 'vessel' | 'scan';
-  permission: 'view' | 'edit';
-  created_at: string;
-  shared_by?: string;
-}
-
-export interface AccessRequest {
-  id: string;
-  user_id: string;
-  user_organization_id: string;
-  owner_organization_id: string;
-  asset_id: string;
-  vessel_id?: string;
-  scan_id?: string;
-  requested_permission: 'view' | 'edit';
-  message?: string;
-  status: 'pending' | 'approved' | 'rejected';
-  created_at: string;
 }
 
 export interface ConfigMetadata {
@@ -191,25 +157,16 @@ class AdminService {
       return {
         totalOrganizations: filteredOrgs.length,
         totalUsers: users.length,
-        totalAssets: 0,
-        totalVessels: 0,
-        totalScans: 0,
         pendingAccountRequests: accountRequests.length,
         pendingPermissionRequests: pendingPermissions.length,
-        activeShares: 0,
         recentActivity,
       };
     } catch (error) {
-      console.error('Error getting dashboard stats:', error);
       return {
         totalOrganizations: 0,
         totalUsers: 0,
-        totalAssets: 0,
-        totalVessels: 0,
-        totalScans: 0,
         pendingAccountRequests: 0,
         pendingPermissionRequests: 0,
-        activeShares: 0,
         recentActivity: [],
       };
     }
@@ -236,9 +193,6 @@ class AdminService {
     return organizations.map((org: Organization) => ({
       organization: org,
       userCount: 0,
-      assetCount: 0,
-      vesselCount: 0,
-      scanCount: 0,
     }));
   }
 
@@ -352,7 +306,7 @@ class AdminService {
    */
   async updateUser(id: string, data: UpdateUserData): Promise<ServiceResult<Profile>> {
     // Map UpdateUserData to authManager format
-    const updates: any = {};
+    const updates: Record<string, string | boolean | undefined> = {};
 
     if (data.username !== undefined) updates.username = data.username;
     if (data.email !== undefined) updates.email = data.email;
@@ -479,7 +433,6 @@ class AdminService {
         .order('created_at', { ascending: false });
 
       if (reqError) {
-        console.error('Error fetching permission requests:', reqError);
         return [];
       }
 
@@ -499,12 +452,11 @@ class AdminService {
       // Map profiles to requests
       const profileMap = new Map(profiles?.map((p: { id: string; username: string; email: string }) => [p.id, p]) || []);
 
-      return requests.map((req: { user_id: string; [key: string]: any }) => ({
+      return requests.map((req: { user_id: string; [key: string]: unknown }) => ({
         ...req,
         profiles: profileMap.get(req.user_id) || undefined,
       }));
     } catch (error) {
-      console.error('Error fetching permission requests:', error);
       return [];
     }
   }
@@ -535,8 +487,8 @@ class AdminService {
       });
 
       return { success: true, data };
-    } catch (error: any) {
-      return { success: false, error: error.message };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'An unexpected error occurred' };
     }
   }
 
@@ -568,133 +520,9 @@ class AdminService {
       });
 
       return { success: true, data };
-    } catch (error: any) {
-      return { success: false, error: error.message };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'An unexpected error occurred' };
     }
-  }
-
-  // ==========================================================================
-  // ASSETS
-  // ==========================================================================
-
-  /**
-   * Get all assets across organizations
-   */
-  async getAssets() {
-    return [];
-  }
-
-  /**
-   * Create an asset for a specific organization (admin only)
-   * Inserts directly into Supabase for immediate availability in Data Hub
-   */
-  async createAssetForOrg(orgId: string, name: string): Promise<ServiceResult> {
-    if (!authManager.isUsingSupabase()) {
-      return { success: false, error: 'Supabase not configured' };
-    }
-
-    try {
-      const user = authManager.getCurrentUser();
-      if (!user) {
-        return { success: false, error: 'User not authenticated' };
-      }
-
-      // Generate ID matching existing pattern
-      const id = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-      // Insert directly into Supabase for immediate availability
-      const { data: asset, error } = await supabase!
-        .from('assets')
-        .insert({
-          id,
-          name,
-          organization_id: orgId,
-          created_by: user.id,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        return { success: false, error: error.message };
-      }
-
-      return { success: true, data: asset };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  }
-
-  /**
-   * Transfer an asset to another organization
-   */
-  async transferAsset(_assetId: string, _targetOrgId: string): Promise<ServiceResult> {
-    return { success: false, error: 'Asset management has been removed' };
-  }
-
-  /**
-   * Bulk transfer assets to another organization
-   */
-  async bulkTransferAssets(_assetIds: string[], _targetOrgId: string): Promise<ServiceResult> {
-    return { success: false, error: 'Asset management has been removed' };
-  }
-
-  // ==========================================================================
-  // SHARING
-  // ==========================================================================
-
-  /**
-   * Get all shares
-   */
-  async getShares(): Promise<Share[]> {
-    return [];
-  }
-
-  /**
-   * Get all access requests
-   */
-  async getAccessRequests(): Promise<AccessRequest[]> {
-    return [];
-  }
-
-  /**
-   * Create a new share
-   */
-  async createShare(_data: {
-    assetId: string;
-    vesselId?: string | null;
-    scanId?: string | null;
-    sharedWithOrganizationId: string;
-    permission: 'view' | 'edit';
-  }): Promise<ServiceResult<Share>> {
-    return { success: false, error: 'Sharing has been removed' };
-  }
-
-  /**
-   * Update share permissions
-   */
-  async updateShare(_id: string, _permission: 'view' | 'edit'): Promise<ServiceResult<Share>> {
-    return { success: false, error: 'Sharing has been removed' };
-  }
-
-  /**
-   * Delete a share
-   */
-  async deleteShare(_id: string): Promise<ServiceResult> {
-    return { success: false, error: 'Sharing has been removed' };
-  }
-
-  /**
-   * Approve an access request
-   */
-  async approveAccessRequest(_id: string): Promise<ServiceResult> {
-    return { success: false, error: 'Sharing has been removed' };
-  }
-
-  /**
-   * Reject an access request
-   */
-  async rejectAccessRequest(_id: string, _reason?: string): Promise<ServiceResult> {
-    return { success: false, error: 'Sharing has been removed' };
   }
 
   // ==========================================================================
@@ -798,13 +626,11 @@ class AdminService {
         .maybeSingle();
 
       if (error) {
-        console.error('Error fetching announcement:', error);
         return null;
       }
 
       return data as SystemAnnouncement | null;
     } catch (error) {
-      console.error('Error fetching announcement:', error);
       return null;
     }
   }
@@ -875,8 +701,8 @@ class AdminService {
       }
 
       return { success: true, data: result as SystemAnnouncement };
-    } catch (error: any) {
-      return { success: false, error: error.message };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'An unexpected error occurred' };
     }
   }
 
@@ -899,8 +725,8 @@ class AdminService {
       }
 
       return { success: true };
-    } catch (error: any) {
-      return { success: false, error: error.message };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'An unexpected error occurred' };
     }
   }
 }

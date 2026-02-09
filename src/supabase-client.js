@@ -35,13 +35,9 @@ if (environmentConfig.isSupabaseConfigured()) {
             }
         });
 
-        console.log('Supabase client initialized successfully');
     } catch (error) {
-        console.error('Failed to initialize Supabase client:', error);
         supabase = null;
     }
-} else {
-    console.info('Supabase not configured - running in local mode');
 }
 
 // Export the client (will be null if not configured)

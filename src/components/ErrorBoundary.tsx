@@ -52,20 +52,8 @@ class ErrorBoundary extends Component<Props, State> {
     }
   }
 
-  logErrorToService(error: Error, errorInfo: ErrorInfo) {
-    // Implement error reporting service integration here
-    // Example: Sentry, LogRocket, Rollbar, etc.
-    const errorData = {
-      message: error.message,
-      stack: error.stack,
-      componentStack: errorInfo.componentStack,
-      timestamp: new Date().toISOString(),
-      userAgent: navigator.userAgent,
-      url: window.location.href,
-    };
-
-    // TODO: Send to error reporting service
-    console.error('Error logged:', errorData);
+  logErrorToService(_error: Error, _errorInfo: ErrorInfo) {
+    // Placeholder — integrate with Sentry or similar when ready.
   }
 
   handleReset = () => {
