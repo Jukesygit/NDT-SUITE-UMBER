@@ -2,8 +2,8 @@
 // Keeps API key secure server-side
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
+import { requireOrgAdmin } from '../_shared/auth.ts'
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 
@@ -11,7 +11,6 @@ interface EmailRequest {
   to: string | string[]
   subject: string
   html: string
-  from?: string
   cc?: string | string[]
   replyTo?: string
 }
@@ -23,31 +22,12 @@ serve(async (req) => {
   }
 
   try {
-    // Verify the user is authenticated
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return errorResponse(req, 'Missing authorization header', 401)
-    }
-
-    // Create Supabase client to verify the user
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: authHeader },
-        },
-      }
-    )
-
-    // Get the user to verify they're authenticated
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      return errorResponse(req, 'Unauthorized', 401)
-    }
+    // SECURITY: Require org_admin or admin role to send emails
+    const { auth, errorResponse: authError } = await requireOrgAdmin(req)
+    if (authError) return authError
 
     // Parse request body
-    const { to, subject, html, from, cc, replyTo }: EmailRequest = await req.json()
+    const { to, subject, html, cc, replyTo }: EmailRequest = await req.json()
 
     // Validate required fields
     if (!to || !subject || !html) {
@@ -60,9 +40,9 @@ serve(async (req) => {
       return errorResponse(req, 'Email service not configured', 500)
     }
 
-    // Build email payload
+    // Build email payload — SECURITY: from is always hardcoded server-side
     const emailPayload: Record<string, unknown> = {
-      from: from || 'NDT Suite <notifications@updates.matrixportal.io>',
+      from: 'NDT Suite <notifications@updates.matrixportal.io>',
       to: Array.isArray(to) ? to : [to],
       subject,
       html,

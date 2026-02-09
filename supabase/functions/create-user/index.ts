@@ -32,13 +32,20 @@ serve(async (req) => {
       return errorResponse(req, passwordValidation.error || 'Invalid password', 400)
     }
 
-    // Check if user already exists
-    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
-    const existingUser = existingUsers?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase())
+    // Check if user already exists using targeted lookup (not listUsers which has pagination issues)
+    const { data: existingProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('email', email.toLowerCase())
+      .single()
 
-    if (existingUser) {
+    if (existingProfile) {
       return errorResponse(req, 'A user with this email already exists', 400)
     }
+
+    // SECURITY: Validate role against allowlist at runtime (TypeScript types are not enforced at runtime)
+    const VALID_ROLES = ['admin', 'org_admin', 'editor', 'viewer']
+    const validatedRole = VALID_ROLES.includes(role) ? role : 'viewer'
 
     // Create auth user with admin API - this pre-confirms email and triggers profile creation
     const { data: authData, error: createError } = await supabaseAdmin.auth.admin.createUser({
@@ -47,7 +54,7 @@ serve(async (req) => {
       email_confirm: true,
       user_metadata: {
         username,
-        role: role || 'viewer',
+        role: validatedRole,
         organization_id: organization_id || null
       }
     })
@@ -66,7 +73,18 @@ serve(async (req) => {
       return errorResponse(req, 'User creation failed. Please try again.', 500)
     }
 
-    console.log('User created successfully:', email)
+    // SECURITY: The handle_new_user trigger always sets role='viewer'.
+    // Set the actual requested role via a direct profile update using service_role.
+    if (validatedRole !== 'viewer') {
+      const { error: roleError } = await supabaseAdmin
+        .from('profiles')
+        .update({ role: validatedRole })
+        .eq('id', authData.user.id)
+
+      if (roleError) {
+        console.error('Failed to set user role:', roleError.message)
+      }
+    }
 
     return jsonResponse(req, {
       success: true,
@@ -74,7 +92,7 @@ serve(async (req) => {
         id: authData.user.id,
         email: authData.user.email,
         username,
-        role: role || 'viewer',
+        role: validatedRole,
         organization_id: organization_id || null
       }
     })

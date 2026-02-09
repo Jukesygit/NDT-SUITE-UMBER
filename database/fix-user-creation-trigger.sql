@@ -18,7 +18,7 @@ BEGIN
         NEW.id,
         COALESCE(NEW.raw_user_meta_data->>'username', split_part(NEW.email, '@', 1)),
         NEW.email,
-        COALESCE(NEW.raw_user_meta_data->>'role', 'viewer'),
+        'viewer',  -- SECURITY: Always default to viewer. Only admin Edge Functions should set elevated roles.
         org_id
     );
     RETURN NEW;
@@ -28,4 +28,4 @@ EXCEPTION
         RAISE WARNING 'Failed to create profile for user %: %', NEW.id, SQLERRM;
         RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;

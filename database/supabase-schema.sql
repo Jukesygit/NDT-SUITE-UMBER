@@ -199,12 +199,12 @@ BEGIN
         NEW.id,
         COALESCE(NEW.raw_user_meta_data->>'username', split_part(NEW.email, '@', 1)),
         NEW.email,
-        COALESCE(NEW.raw_user_meta_data->>'role', 'viewer'),
+        'viewer',  -- SECURITY: Always default to viewer. Only admin Edge Functions should set elevated roles.
         (NEW.raw_user_meta_data->>'organization_id')::UUID
     );
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- Trigger to create profile on signup
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;

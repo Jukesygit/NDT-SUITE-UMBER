@@ -115,19 +115,19 @@ serve(async (req) => {
       }
     )
 
-    // Check if user exists in auth.users
-    const { data: users, error: userError } = await supabaseAdmin.auth.admin.listUsers()
+    // Check if user exists using targeted lookup (not listUsers which has pagination issues)
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('email', normalizedEmail)
+      .single()
 
-    if (userError) {
-      console.error('Error checking user:', userError)
+    if (profileError) {
       // SECURITY: Don't reveal if user exists or not
-      return jsonResponse(req, {
-        success: true,
-        message: 'If an account exists with this email, a reset code has been sent.'
-      })
+      // Fall through to the !userExists check below
     }
 
-    const userExists = users?.users?.some(u => u.email?.toLowerCase() === normalizedEmail)
+    const userExists = !!profile
 
     if (!userExists) {
       // SECURITY: Don't reveal that user doesn't exist

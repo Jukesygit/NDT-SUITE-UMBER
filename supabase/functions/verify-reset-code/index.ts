@@ -49,28 +49,23 @@ serve(async (req) => {
       }
     )
 
-    // Find the reset code
+    // SECURITY FIX: Look up the most recent unused, unexpired code for this EMAIL only
+    // (do NOT filter by code value — we must increment attempts on every wrong guess)
     const { data: resetCode, error: fetchError } = await supabaseAdmin
       .from('password_reset_codes')
       .select('*')
       .eq('email', normalizedEmail)
-      .eq('code', normalizedCode)
       .is('used_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
       .single()
 
     if (fetchError || !resetCode) {
-      // SECURITY: Don't log email in production to prevent PII exposure
-      console.log('Reset code not found or already used')
       return errorResponse(req, 'Invalid or expired reset code. Please request a new one.', 400)
     }
 
-    // Check if code has expired
-    if (new Date(resetCode.expires_at) < new Date()) {
-      console.log('Reset code expired')
-      return errorResponse(req, 'Reset code has expired. Please request a new one.', 400)
-    }
-
-    // Check max attempts
+    // Check max attempts BEFORE comparing the code
     if (resetCode.attempts >= resetCode.max_attempts) {
       // Mark as used to prevent further attempts
       await supabaseAdmin
@@ -81,36 +76,31 @@ serve(async (req) => {
       return errorResponse(req, 'Too many failed attempts. Please request a new code.', 400)
     }
 
-    // Find the user
-    const { data: users, error: userError } = await supabaseAdmin.auth.admin.listUsers()
-
-    if (userError) {
-      // SECURITY: Log detailed error but return generic message
-      return errorResponse(
-        req,
-        'Failed to verify user. Please try again.',
-        500,
-        userError
-      )
-    }
-
-    const user = users?.users?.find(u => u.email?.toLowerCase() === normalizedEmail)
-
-    if (!user) {
-      console.error('User not found for reset code')
-      // Increment attempts
+    // SECURITY FIX: Compare the submitted code against the stored code
+    // Increment attempt counter on EVERY failed comparison
+    if (resetCode.code !== normalizedCode) {
       await supabaseAdmin
         .from('password_reset_codes')
         .update({ attempts: resetCode.attempts + 1 })
         .eq('id', resetCode.id)
 
-      // SECURITY: Generic error to prevent user enumeration
+      return errorResponse(req, 'Invalid or expired reset code. Please request a new one.', 400)
+    }
+
+    // Code matches — find the user using targeted lookup instead of listing all users
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('email', normalizedEmail)
+      .single()
+
+    if (profileError || !profile) {
       return errorResponse(req, 'Invalid reset code. Please try again.', 400)
     }
 
     // Update the user's password AND confirm their email (since receiving the code proves ownership)
     const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-      user.id,
+      profile.id,
       {
         password: newPassword,
         email_confirm: true  // Auto-confirm email since they received the reset code
@@ -118,7 +108,6 @@ serve(async (req) => {
     )
 
     if (updateError) {
-      // SECURITY: Log detailed error but return generic message
       return errorResponse(
         req,
         'Failed to update password. Please try again.',
@@ -133,15 +122,12 @@ serve(async (req) => {
       .update({ used_at: new Date().toISOString() })
       .eq('id', resetCode.id)
 
-    console.log('Password updated successfully')
-
     return jsonResponse(req, {
       success: true,
       message: 'Password updated successfully. You can now sign in with your new password.'
     })
 
   } catch (error) {
-    // SECURITY: Generic error message, log details server-side
     return errorResponse(
       req,
       'An unexpected error occurred. Please try again.',

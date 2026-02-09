@@ -51,27 +51,32 @@ serve(async (req) => {
       return errorResponse(req, `Request has already been ${request.status}`, 400)
     }
 
-    // Check if user already exists
-    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
-    const existingUser = existingUsers?.users?.find(u => u.email === request.email)
+    // SECURITY: Validate role against allowlist at runtime
+    const VALID_ROLES = ['admin', 'org_admin', 'editor', 'viewer']
+    const validatedRole = VALID_ROLES.includes(request.requested_role) ? request.requested_role : 'viewer'
+
+    // Check if user already exists using targeted lookup (not listUsers which has pagination issues)
+    const { data: existingProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('email', request.email.toLowerCase())
+      .single()
+    const existingUser = !!existingProfile
 
     let userId: string
 
     if (existingUser) {
-      console.log('User already exists, updating metadata')
-      userId = existingUser.id
+      userId = existingProfile!.id
 
-      // Update user metadata
-      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-        userId,
-        {
-          user_metadata: {
-            username: request.username,
-            role: request.requested_role,
-            organization_id: request.organization_id
-          }
-        }
-      )
+      // Update profile directly with validated role
+      const { error: updateError } = await supabaseAdmin
+        .from('profiles')
+        .update({
+          username: request.username,
+          role: validatedRole,
+          organization_id: request.organization_id
+        })
+        .eq('id', userId)
 
       if (updateError) {
         return errorResponse(
@@ -85,12 +90,6 @@ serve(async (req) => {
       // SECURITY: Generate cryptographically secure temporary password
       const tempPassword = crypto.randomUUID()
 
-      console.log('Creating user with data:', {
-        email: request.email,
-        username: request.username,
-        role: request.requested_role
-      })
-
       // Create user account using admin auth
       const { data: authData, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email: request.email,
@@ -98,12 +97,10 @@ serve(async (req) => {
         email_confirm: true,
         user_metadata: {
           username: request.username,
-          role: request.requested_role,
+          role: validatedRole,
           organization_id: request.organization_id
         }
       })
-
-      console.log('User creation result:', { success: !!authData?.user?.id, error: !!createError })
 
       if (createError) {
         return errorResponse(
@@ -120,6 +117,15 @@ serve(async (req) => {
       }
 
       userId = authData.user.id
+
+      // SECURITY: The handle_new_user trigger always sets role='viewer'.
+      // Set the actual requested role via a direct profile update using service_role.
+      if (validatedRole !== 'viewer') {
+        await supabaseAdmin
+          .from('profiles')
+          .update({ role: validatedRole })
+          .eq('id', userId)
+      }
     }
 
     // Update request status
