@@ -20,6 +20,7 @@ const ProfilePage = lazy(() => import('./pages/profile/ProfilePage.tsx'));
 const CscanVisualizerPage = lazy(() => import('./pages/CscanVisualizerPage.jsx'));
 const PersonnelPage = lazy(() => import('./pages/personnel/PersonnelPage.tsx'));
 const AdminPage = lazy(() => import('./pages/admin/index.tsx'));
+const VesselModelerPage = lazy(() => import('./pages/VesselModelerPage.tsx'));
 
 function SuspenseRoutes({ children, fallback }) {
     const location = useLocation();
@@ -122,6 +123,7 @@ function App() {
                                         <Route path="/" element={<Navigate to="/profile" replace />} />
                                         <Route path="/profile" element={<ErrorBoundary><ProfilePage /></ErrorBoundary>} />
                                         <Route path="/cscan" element={<ErrorBoundary><CscanVisualizerPage /></ErrorBoundary>} />
+                                        <Route path="/vessel-modeler" element={<ErrorBoundary><VesselModelerPage /></ErrorBoundary>} />
                                         <Route path="/personnel" element={
                                             <RequireAccess requireElevatedAccess>
                                                 <ErrorBoundary><PersonnelPage /></ErrorBoundary>

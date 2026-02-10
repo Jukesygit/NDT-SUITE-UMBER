@@ -35,6 +35,12 @@ const navigationConfig = [
         path: '/cscan',
         label: 'C-Scan Visualizer',
         description: 'Ultrasonic inspection data visualization'
+      },
+      {
+        id: 'vessel-modeler',
+        path: '/vessel-modeler',
+        label: 'Vessel Modeler',
+        description: '3D pressure vessel modeling from GA drawings'
       }
     ]
   },

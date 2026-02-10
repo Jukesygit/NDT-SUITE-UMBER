@@ -37,6 +37,8 @@
     /* Paths */
     "baseUrl": "./src",
     "paths": {
+      "three": ["../node_modules/@types/three"],
+      "three/*": ["../node_modules/@types/three/*"],
       "@/*": ["*"],
       "@components/*": ["components/*"],
       "@utils/*": ["utils/*"],

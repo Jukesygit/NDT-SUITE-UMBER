@@ -1,0 +1,833 @@
+/* ========================================
+   VESSEL MODELER - Component Styles
+   Uses .viewer3d-* classes from main.css where possible
+   ======================================== */
+
+/* Sidebar panel */
+.vm-sidebar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 340px;
+    z-index: 20;
+    background: rgba(20, 25, 35, 0.92);
+    backdrop-filter: blur(16px);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    transition: transform 0.3s ease;
+}
+
+.vm-sidebar.collapsed {
+    transform: translateX(-100%);
+}
+
+.vm-sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.vm-sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.vm-sidebar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+}
+
+/* Sidebar sections */
+.vm-section {
+    padding: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.vm-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 0;
+}
+
+.vm-section-header:hover .vm-section-title {
+    color: var(--color-primary-400, #60a5fa);
+}
+
+.vm-section-title {
+    margin: 0;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.55);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.vm-section-content {
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.2s ease;
+    max-height: 2000px;
+    opacity: 1;
+    margin-top: 10px;
+}
+
+.vm-section.collapsed .vm-section-content {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+}
+
+.vm-section.collapsed .vm-chevron {
+    transform: rotate(-90deg);
+}
+
+.vm-chevron {
+    transition: transform 0.2s ease;
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 0.75rem;
+}
+
+/* Form controls */
+.vm-control-group {
+    margin-bottom: 10px;
+}
+
+.vm-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.55);
+    margin-bottom: 4px;
+}
+
+.vm-val-display {
+    color: var(--color-primary-400, #60a5fa);
+    font-family: var(--font-mono, monospace);
+    font-size: 0.8rem;
+}
+
+.vm-input {
+    width: 100%;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    color: white;
+    box-sizing: border-box;
+    font-size: 0.85rem;
+}
+
+.vm-input:focus {
+    outline: none;
+    border-color: var(--color-primary-500, #3b82f6);
+}
+
+.vm-select {
+    width: 100%;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    color: white;
+    box-sizing: border-box;
+    font-size: 0.85rem;
+}
+
+.vm-slider {
+    width: 100%;
+    -webkit-appearance: none;
+    background: transparent;
+    margin: 4px 0;
+}
+
+.vm-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    height: 16px;
+    width: 16px;
+    border-radius: 50%;
+    background: var(--color-primary-500, #3b82f6);
+    cursor: pointer;
+    margin-top: -6px;
+}
+
+.vm-slider::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 4px;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 2px;
+}
+
+.vm-slider-input-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.vm-slider-input-row .vm-slider {
+    flex: 1;
+}
+
+.vm-slider-input-row .vm-input {
+    width: 80px;
+    flex-shrink: 0;
+}
+
+/* Form rows */
+.vm-form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+/* Toggle group */
+.vm-toggle-group {
+    display: flex;
+    gap: 4px;
+}
+
+.vm-toggle-btn {
+    flex: 1;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 500;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.vm-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.vm-toggle-btn.active {
+    background: var(--color-primary-500, #3b82f6);
+    color: #000;
+    border-color: var(--color-primary-500, #3b82f6);
+}
+
+/* Buttons */
+.vm-btn {
+    width: 100%;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s;
+    font-size: 0.85rem;
+}
+
+.vm-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.vm-btn-primary {
+    background: var(--color-primary-500, #3b82f6);
+    color: #000;
+}
+
+.vm-btn-primary:hover {
+    background: var(--color-primary-400, #60a5fa);
+}
+
+.vm-btn-success {
+    background: var(--color-success, #22c55e);
+    color: #000;
+}
+
+.vm-btn-success:hover {
+    background: #16a34a;
+}
+
+.vm-btn-danger {
+    background: var(--color-danger, #ef4444);
+    color: #fff;
+}
+
+.vm-btn-danger:hover {
+    background: #dc2626;
+}
+
+.vm-btn-icon {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    padding: 4px;
+}
+
+.vm-btn-icon:hover {
+    color: var(--color-danger, #ef4444);
+}
+
+/* Nozzle / Saddle / Texture list items */
+.vm-list-item {
+    background: rgba(255, 255, 255, 0.04);
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    border-left: 3px solid var(--color-danger, #ef4444);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.vm-list-item.selected {
+    border-left-color: var(--color-primary-400, #60a5fa);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.vm-list-item.saddle {
+    border-left-color: #2244ff;
+}
+
+.vm-list-item.texture {
+    border-left-color: #9b59b6;
+}
+
+.vm-list-item-info {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.vm-list-item-info strong {
+    color: white;
+}
+
+/* Nozzle library grid */
+.vm-library-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+.vm-library-item {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    padding: 8px 4px;
+    text-align: center;
+    cursor: grab;
+    transition: all 0.2s;
+    font-size: 0.85rem;
+}
+
+.vm-library-item:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: var(--color-primary-500, #3b82f6);
+}
+
+.vm-library-item:active {
+    cursor: grabbing;
+}
+
+.vm-library-item .size-label {
+    font-weight: bold;
+    color: var(--color-primary-400, #60a5fa);
+}
+
+.vm-library-item .size-mm {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+/* Drop zone */
+.vm-drop-zone {
+    border: 2px dashed rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: rgba(255, 255, 255, 0.02);
+    margin-bottom: 10px;
+}
+
+.vm-drop-zone:hover,
+.vm-drop-zone.dragover {
+    border-color: var(--color-primary-500, #3b82f6);
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.vm-drop-zone .drop-text {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.vm-drop-zone .drop-sub {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.3);
+    margin-top: 5px;
+}
+
+/* Quick action buttons (floating) */
+.vm-quick-actions {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 20;
+    display: flex;
+    gap: 8px;
+}
+
+.vm-quick-btn {
+    background: rgba(20, 25, 35, 0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.vm-quick-btn:hover {
+    background: rgba(30, 35, 50, 0.95);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Toggle sidebar button */
+.vm-toggle-sidebar {
+    position: absolute;
+    top: 10px;
+    left: 350px;
+    z-index: 15;
+    background: rgba(20, 25, 35, 0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    padding: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: left 0.3s ease;
+}
+
+.vm-toggle-sidebar.sidebar-collapsed {
+    left: 10px;
+}
+
+/* Lock controls */
+.vm-lock-controls {
+    position: absolute;
+    top: 10px;
+    left: 400px;
+    z-index: 15;
+    background: rgba(20, 25, 35, 0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 4px 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: left 0.3s ease;
+}
+
+.vm-lock-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.6);
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s;
+    font-size: 0.75rem;
+}
+
+.vm-lock-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+    color: white;
+}
+
+.vm-lock-btn.locked {
+    background: var(--color-primary-500, #3b82f6);
+    color: #000;
+    border-color: var(--color-primary-500, #3b82f6);
+}
+
+/* Status bar */
+.vm-status-bar {
+    height: 28px;
+    background: rgba(20, 25, 35, 0.95);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.45);
+    flex-shrink: 0;
+}
+
+/* Loader overlay */
+.vm-loader {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 30;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    text-align: center;
+    padding: 20px;
+}
+
+.vm-loader .spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(255, 255, 255, 0.15);
+    border-top: 4px solid var(--color-primary-500, #3b82f6);
+    border-radius: 50%;
+    animation: vm-spin 1s linear infinite;
+    margin-bottom: 15px;
+}
+
+@keyframes vm-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.vm-loader .status-text {
+    color: var(--color-primary-400, #60a5fa);
+    font-family: var(--font-mono, monospace);
+    margin-bottom: 5px;
+}
+
+.vm-loader .status-detail {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.8rem;
+}
+
+/* Edit mode form styling */
+.vm-form.edit-mode {
+    background: rgba(59, 130, 246, 0.08);
+    margin: -15px;
+    padding: 15px;
+    border-radius: 4px;
+}
+
+.vm-form-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.vm-form-buttons .vm-btn {
+    flex: 1;
+}
+
+/* Drag preview */
+.vm-drag-preview {
+    position: fixed;
+    pointer-events: none;
+    z-index: 1000;
+    background: rgba(59, 130, 246, 0.9);
+    color: #000;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-weight: bold;
+    display: none;
+    transform: translate(-50%, -50%);
+}
+
+/* Interaction hint */
+.vm-hint {
+    position: absolute;
+    bottom: 36px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.5);
+    color: rgba(255, 255, 255, 0.5);
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Texture controls */
+.vm-texture-import {
+    border: 2px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 15px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: rgba(255, 255, 255, 0.02);
+    margin-top: 10px;
+}
+
+.vm-texture-import:hover,
+.vm-texture-import.dragover {
+    border-color: #9b59b6;
+    background: rgba(155, 89, 182, 0.08);
+}
+
+/* ========================================
+   SCREENSHOT MODE
+   ======================================== */
+
+/* Full-screen overlay */
+.vm-screenshot-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(10, 12, 20, 0.98);
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header with toolbar + close button */
+.vm-screenshot-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: rgba(20, 25, 35, 0.95);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+}
+
+.vm-screenshot-close {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.7);
+    border-radius: 6px;
+    padding: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.vm-screenshot-close:hover {
+    background: var(--color-danger, #ef4444);
+    color: white;
+    border-color: var(--color-danger, #ef4444);
+}
+
+/* Canvas area */
+.vm-screenshot-canvas-area {
+    flex: 1;
+    overflow: auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 16px;
+}
+
+.vm-screenshot-canvas-wrapper {
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    max-width: 100%;
+    max-height: 100%;
+}
+
+.vm-screenshot-viewport-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.vm-screenshot-annotation-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+}
+
+/* Footer with export controls */
+.vm-screenshot-footer {
+    padding: 8px 12px;
+    background: rgba(20, 25, 35, 0.95);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+}
+
+.vm-screenshot-export-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+/* ---- Toolbar styles ---- */
+
+.vm-screenshot-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex: 1;
+}
+
+.vm-toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.vm-toolbar-label {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    margin-right: 2px;
+}
+
+.vm-toolbar-buttons {
+    display: flex;
+    gap: 2px;
+}
+
+.vm-toolbar-btn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.7);
+    border-radius: 4px;
+    padding: 5px 7px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    transition: all 0.15s;
+}
+
+.vm-toolbar-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: white;
+}
+
+.vm-toolbar-btn.active {
+    background: var(--color-primary-500, #3b82f6);
+    color: #000;
+    border-color: var(--color-primary-500, #3b82f6);
+}
+
+.vm-toolbar-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.vm-toolbar-btn-sm {
+    padding: 3px 6px;
+    font-size: 0.7rem;
+}
+
+.vm-toolbar-btn-accent {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+.vm-toolbar-btn-accent:hover {
+    background: rgba(59, 130, 246, 0.3);
+}
+
+.vm-toolbar-separator {
+    width: 1px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.12);
+    margin: 0 4px;
+}
+
+.vm-toolbar-color {
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    padding: 0;
+    cursor: pointer;
+    background: none;
+}
+
+.vm-toolbar-color::-webkit-color-swatch-wrapper {
+    padding: 2px;
+}
+
+.vm-toolbar-color::-webkit-color-swatch {
+    border: none;
+    border-radius: 2px;
+}
+
+.vm-toolbar-slider {
+    width: 60px;
+    -webkit-appearance: none;
+    background: transparent;
+}
+
+.vm-toolbar-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    height: 12px;
+    width: 12px;
+    border-radius: 50%;
+    background: var(--color-primary-500, #3b82f6);
+    cursor: pointer;
+    margin-top: -4px;
+}
+
+.vm-toolbar-slider::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 4px;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 2px;
+}
+
+.vm-toolbar-value {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.5);
+    font-family: var(--font-mono, monospace);
+    min-width: 28px;
+}
+
+.vm-toolbar-select {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    color: white;
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    cursor: pointer;
+}

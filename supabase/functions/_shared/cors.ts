@@ -3,17 +3,17 @@
  * SECURITY: Restricts CORS to specific allowed origins instead of wildcard
  */
 
-// Get allowed origins from environment variable or use defaults
-// Set ALLOWED_ORIGINS in your Supabase project settings as comma-separated list
+// Override allowed origins via environment variable (comma-separated)
 // Example: "https://yourdomain.com,https://www.yourdomain.com"
 const ALLOWED_ORIGINS_ENV = Deno.env.get('ALLOWED_ORIGINS') || '';
 
-// Default allowed origins - includes production and development
+// Allowed origins — localhost is safe to include because Edge Functions
+// still require JWT auth; CORS only prevents unwanted browser requests
 const DEFAULT_ALLOWED_ORIGINS = [
-    // Production domains
+    // Production
     'https://www.matrixportal.io',
     'https://matrixportal.io',
-    // Development domains
+    // Local development
     'http://localhost:3000',
     'http://localhost:5173',
     'http://localhost:5174',
@@ -21,7 +21,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
     'http://127.0.0.1:5174',
 ];
 
-// Parse environment variable or use defaults
+// Build the allowed origins list
 const ALLOWED_ORIGINS: string[] = ALLOWED_ORIGINS_ENV
     ? ALLOWED_ORIGINS_ENV.split(',').map(origin => origin.trim())
     : DEFAULT_ALLOWED_ORIGINS;
@@ -33,10 +33,8 @@ const ALLOWED_ORIGINS: string[] = ALLOWED_ORIGINS_ENV
 export function getCorsHeaders(req: Request): Record<string, string> {
     const origin = req.headers.get('origin') || '';
 
-    // Check if origin is in allowed list
-    const isAllowed = ALLOWED_ORIGINS.includes(origin) ||
-        // Also allow if ALLOWED_ORIGINS contains '*' (for development only)
-        ALLOWED_ORIGINS.includes('*');
+    // Check if origin is in allowed list (no wildcard support)
+    const isAllowed = ALLOWED_ORIGINS.includes(origin);
 
     return {
         'Access-Control-Allow-Origin': isAllowed ? origin : '',
