@@ -19,7 +19,7 @@ install:
     - npm ci
   rules:
     - if: $CI_MERGE_REQUEST_IID
-    - if: $CI_COMMIT_BRANCH =~ /^(main|master|dev)$/
+    - if: $CI_COMMIT_BRANCH =~ /^(main|master|dev|dev-refactor)$/
 
 lint:
   stage: quality
@@ -28,7 +28,7 @@ lint:
   needs: [install]
   rules:
     - if: $CI_MERGE_REQUEST_IID
-    - if: $CI_COMMIT_BRANCH =~ /^(main|master|dev)$/
+    - if: $CI_COMMIT_BRANCH =~ /^(main|master|dev|dev-refactor)$/
 
 typecheck:
   stage: quality
@@ -37,7 +37,7 @@ typecheck:
   needs: [install]
   rules:
     - if: $CI_MERGE_REQUEST_IID
-    - if: $CI_COMMIT_BRANCH =~ /^(main|master|dev)$/
+    - if: $CI_COMMIT_BRANCH =~ /^(main|master|dev|dev-refactor)$/
 
 build:
   stage: build
