@@ -690,7 +690,114 @@
     flex-wrap: wrap;
 }
 
-/* ---- Toolbar styles ---- */
+/* ---- Floating Annotation Toolbar (vertical, on-canvas) ---- */
+
+.vm-annotation-toolbar {
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 5;
+    background: rgba(20, 25, 35, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 10px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    backdrop-filter: blur(10px);
+}
+
+.vm-ann-tool-btn {
+    width: 40px;
+    height: 40px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.6);
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.vm-ann-tool-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: white;
+    border-color: var(--color-primary-400, #60a5fa);
+}
+
+.vm-ann-tool-btn.active {
+    background: var(--color-primary-500, #3b82f6);
+    color: #000;
+    border-color: var(--color-primary-500, #3b82f6);
+}
+
+.vm-ann-tool-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.vm-ann-tool-btn-danger {
+    border-color: rgba(239, 68, 68, 0.4);
+    color: rgba(239, 68, 68, 0.8);
+}
+
+.vm-ann-tool-btn-danger:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: var(--color-danger, #ef4444);
+    color: var(--color-danger, #ef4444);
+}
+
+.vm-ann-divider {
+    width: 28px;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.12);
+    margin: 2px auto;
+}
+
+.vm-ann-color-picker {
+    width: 34px;
+    height: 34px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    padding: 0;
+    cursor: pointer;
+    background: none;
+    margin: 0 auto;
+}
+
+.vm-ann-color-picker::-webkit-color-swatch-wrapper {
+    padding: 3px;
+}
+
+.vm-ann-color-picker::-webkit-color-swatch {
+    border: none;
+    border-radius: 3px;
+}
+
+/* ---- Dimension Input Modal ---- */
+
+.vm-dimension-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.vm-dimension-modal {
+    background: rgba(20, 25, 35, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 20px;
+    min-width: 300px;
+}
+
+/* ---- Legacy toolbar styles (kept for compatibility) ---- */
 
 .vm-screenshot-toolbar {
     display: flex;

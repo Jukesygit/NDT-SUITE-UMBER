@@ -13,8 +13,9 @@ import {
     type VesselCallbacks,
 } from './types';
 import type { ExtractionResult } from './engine/drawing-parser';
+import { loadTextureFromData } from './engine/texture-manager';
 import './vessel-modeler.css';
-import type * as THREE from 'three';
+import * as THREE from 'three';
 
 const DrawingImportModal = lazy(() => import('./DrawingImportModal'));
 const ScreenshotMode = lazy(() => import('./ScreenshotMode'));
@@ -220,11 +221,47 @@ export default function VesselModeler() {
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = async (e) => {
             try {
                 const projectData = JSON.parse(e.target?.result as string);
                 if (!projectData.vessel || !projectData.version) {
                     throw new Error('Invalid project file format');
+                }
+
+                // Dispose existing textures before loading new ones
+                for (const key of Object.keys(textureObjectsRef.current)) {
+                    textureObjectsRef.current[Number(key)].dispose();
+                }
+                textureObjectsRef.current = {};
+
+                // Reconstruct Three.js textures from saved base64 imageData
+                const renderer = viewportRef.current?.getRenderer();
+                const loadedTextures: TextureConfig[] = [];
+                const savedTextures = projectData.textures || [];
+
+                if (renderer && savedTextures.length > 0) {
+                    for (const texData of savedTextures) {
+                        if (!texData.imageData) continue;
+                        try {
+                            const result = await loadTextureFromData(texData.imageData, renderer);
+                            textureObjectsRef.current[Number(texData.id)] = result.texture;
+                            loadedTextures.push({
+                                id: texData.id,
+                                name: texData.name || 'Untitled',
+                                imageData: texData.imageData,
+                                pos: texData.pos ?? 0,
+                                angle: texData.angle ?? 90,
+                                scaleX: texData.scaleX ?? texData.scale ?? 1.0,
+                                scaleY: texData.scaleY ?? texData.scale ?? 1.0,
+                                rotation: texData.rotation || 0,
+                                flipH: texData.flipH || false,
+                                flipV: texData.flipV || false,
+                                aspectRatio: result.aspectRatio,
+                            });
+                        } catch {
+                            // Skip textures that fail to load
+                        }
+                    }
                 }
 
                 const newState: VesselState = {
@@ -236,21 +273,20 @@ export default function VesselModeler() {
                     saddles: (projectData.saddles || []).map((s: any) =>
                         typeof s === 'number' ? { pos: s, color: '#2244ff' } : { pos: s.pos, color: s.color || '#2244ff' }
                     ),
-                    textures: projectData.textures || [],
+                    textures: loadedTextures,
                     hasModel: true,
                     visuals: { ...DEFAULT_VESSEL_STATE.visuals, ...(projectData.visuals || {}) },
                 };
 
                 // Update next texture ID to avoid conflicts
-                const maxId = newState.textures.reduce((max: number, t: TextureConfig) => Math.max(max, Number(t.id) || 0), 0);
+                const maxId = loadedTextures.reduce((max: number, t: TextureConfig) => Math.max(max, Number(t.id) || 0), 0);
                 nextTextureIdRef.current = maxId + 1;
 
                 setVesselState(newState);
+                setTextureObjectsVersion(v => v + 1);
                 setSelectedNozzleIndex(-1);
                 setSelectedSaddleIndex(-1);
                 setSelectedTextureId(-1);
-
-                // TODO: Load texture images from project data into Three.js textures
             } catch (error: any) {
                 alert('Error loading project: ' + error.message);
             }
@@ -285,6 +321,105 @@ export default function VesselModeler() {
         setSelectedTextureId(-1);
     }, []);
 
+    // --- Nozzle library drag-and-drop onto 3D canvas ---
+    const handleNozzleDragOver = useCallback((e: React.DragEvent) => {
+        if (e.dataTransfer.types.includes('application/x-nozzle-pipe')) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+        }
+    }, []);
+
+    const SCALE = 0.001; // Matches vessel-geometry scale
+
+    const handleNozzleDrop = useCallback((e: React.DragEvent) => {
+        const data = e.dataTransfer.getData('application/x-nozzle-pipe');
+        if (!data) return;
+        e.preventDefault();
+
+        const pipe = JSON.parse(data);
+        const cam = viewportRef.current?.getCamera();
+        const rendererEl = viewportRef.current?.getRenderer()?.domElement;
+        const sceneManager = viewportRef.current?.getSceneManager();
+        if (!cam || !rendererEl || !sceneManager) return;
+
+        const vesselGroup = sceneManager.getVesselGroup();
+        if (!vesselGroup) return;
+
+        // Raycast from drop position
+        const rect = rendererEl.getBoundingClientRect();
+        const mouse = new THREE.Vector2(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -((e.clientY - rect.top) / rect.height) * 2 + 1
+        );
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mouse, cam);
+
+        // Find shell meshes to intersect
+        const shells: THREE.Object3D[] = [];
+        vesselGroup.traverse((child: THREE.Object3D) => {
+            if (child.userData.isShell) shells.push(child);
+        });
+        const intersects = raycaster.intersectObjects(shells);
+
+        if (intersects.length > 0) {
+            const point = intersects[0].point;
+            const isVertical = vesselState.orientation === 'vertical';
+
+            // Calculate position from intersection point
+            let newPos = isVertical
+                ? (point.y / SCALE) + (vesselState.length / 2)
+                : (point.x / SCALE) + (vesselState.length / 2);
+            const headDepth = vesselState.id / (2 * vesselState.headRatio);
+            newPos = Math.max(-headDepth, Math.min(vesselState.length + headDepth, newPos));
+
+            // Calculate angle from intersection
+            let rad = isVertical
+                ? Math.atan2(point.z, point.x)
+                : Math.atan2(point.y, point.z);
+            let deg = (rad * 180) / Math.PI;
+            if (deg < 0) deg += 360;
+
+            // Find a unique name
+            let nozzleNum = vesselState.nozzles.length + 1;
+            let name = 'N' + nozzleNum;
+            while (vesselState.nozzles.some(n => n.name === name)) {
+                nozzleNum++;
+                name = 'N' + nozzleNum;
+            }
+
+            const defaultProj = (vesselState.id / 2) + 200;
+
+            addNozzle({
+                name,
+                pos: Math.round(newPos),
+                proj: defaultProj,
+                angle: Math.round(deg),
+                size: pipe.id,
+                flangeOD: pipe.flangeOD,
+                flangeThk: pipe.flangeThk,
+                pipeOD: pipe.od,
+            });
+        } else {
+            // Dropped on canvas but missed the vessel - add at center
+            let nozzleNum = vesselState.nozzles.length + 1;
+            let name = 'N' + nozzleNum;
+            while (vesselState.nozzles.some(n => n.name === name)) {
+                nozzleNum++;
+                name = 'N' + nozzleNum;
+            }
+            addNozzle({
+                name,
+                pos: vesselState.length / 2,
+                proj: pipe.od * 2,
+                angle: 90,
+                size: pipe.id,
+                flangeOD: pipe.flangeOD,
+                flangeThk: pipe.flangeThk,
+                pipeOD: pipe.od,
+            });
+        }
+    }, [vesselState, addNozzle]);
+
     // --- Hint text ---
     const getHintText = () => {
         const locked = [];
@@ -300,7 +435,11 @@ export default function VesselModeler() {
     return (
         <div className="h-full w-full flex flex-col overflow-hidden" style={{ background: '#111111' }}>
             {/* Main content area */}
-            <div className="flex-1 relative overflow-hidden">
+            <div
+                className="flex-1 relative overflow-hidden"
+                onDragOver={handleNozzleDragOver}
+                onDrop={handleNozzleDrop}
+            >
                 {/* Three.js viewport (z-0) */}
                 <ThreeViewport
                     ref={viewportRef}

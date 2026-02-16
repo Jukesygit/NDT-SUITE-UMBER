@@ -1,17 +1,20 @@
 // =============================================================================
-// AnnotationToolbar - Drawing tools for Screenshot Mode annotation overlay
+// AnnotationToolbar - Vertical floating toolbar for Screenshot Mode annotations
+// =============================================================================
+// Matches the original standalone viewer's on-canvas annotation toolbar:
+// vertical layout, floating on the left side of the canvas area.
 // =============================================================================
 
 import {
+  Hand,
   MousePointer2,
+  X,
+  Type,
   ArrowUpRight,
-  Minus,
   Square,
   Circle,
-  Type,
   Ruler,
   Pen,
-  Stamp,
   Undo2,
   Trash2,
 } from 'lucide-react';
@@ -21,33 +24,33 @@ import type { AnnotationTool } from './types';
 // Types
 // ---------------------------------------------------------------------------
 
+/** Extended tool type: null = pan, 'select' = select/move, or an AnnotationTool */
+export type ToolbarTool = AnnotationTool | 'select' | null;
+
 interface AnnotationToolbarProps {
-  currentTool: AnnotationTool | null;
-  onSelectTool: (tool: AnnotationTool | null) => void;
+  currentTool: ToolbarTool;
+  onSelectTool: (tool: ToolbarTool) => void;
   currentColor: string;
   onColorChange: (color: string) => void;
-  lineWidth: number;
-  onLineWidthChange: (width: number) => void;
-  fontSize: number;
-  onFontSizeChange: (size: number) => void;
+  selectedAnnotationId: string | null;
+  onDeleteSelected: () => void;
   onUndo: () => void;
   onClearAll: () => void;
   canUndo: boolean;
 }
 
 // ---------------------------------------------------------------------------
-// Tool definitions
+// Drawing tool definitions (matching original: text, arrow, rect, ellipse,
+// dimension, freehand — no line or stamp in toolbar)
 // ---------------------------------------------------------------------------
 
-const TOOLS: Array<{ key: AnnotationTool; label: string; Icon: typeof Minus }> = [
-  { key: 'arrow',     label: 'Arrow',     Icon: ArrowUpRight },
-  { key: 'line',      label: 'Line',      Icon: Minus },
-  { key: 'rect',      label: 'Rectangle', Icon: Square },
-  { key: 'circle',    label: 'Circle',    Icon: Circle },
-  { key: 'text',      label: 'Text',      Icon: Type },
-  { key: 'dimension', label: 'Dimension', Icon: Ruler },
-  { key: 'freehand',  label: 'Freehand',  Icon: Pen },
-  { key: 'stamp',     label: 'Stamp',     Icon: Stamp },
+const DRAW_TOOLS: Array<{ key: AnnotationTool; label: string; Icon: typeof ArrowUpRight }> = [
+  { key: 'text',      label: 'Text Label',     Icon: Type },
+  { key: 'arrow',     label: 'Arrow',           Icon: ArrowUpRight },
+  { key: 'rect',      label: 'Rectangle',       Icon: Square },
+  { key: 'circle',    label: 'Ellipse',         Icon: Circle },
+  { key: 'dimension', label: 'Dimension Line',  Icon: Ruler },
+  { key: 'freehand',  label: 'Freehand Draw',   Icon: Pen },
 ];
 
 // ---------------------------------------------------------------------------
@@ -59,112 +62,87 @@ export default function AnnotationToolbar({
   onSelectTool,
   currentColor,
   onColorChange,
-  lineWidth,
-  onLineWidthChange,
-  fontSize,
-  onFontSizeChange,
+  selectedAnnotationId,
+  onDeleteSelected,
   onUndo,
   onClearAll,
   canUndo,
 }: AnnotationToolbarProps) {
   return (
-    <div className="vm-screenshot-toolbar">
-      {/* Pan (deselect tool) */}
-      <div className="vm-toolbar-group">
+    <div className="vm-annotation-toolbar">
+      {/* Pan / Rotate View */}
+      <button
+        className={`vm-ann-tool-btn ${currentTool === null ? 'active' : ''}`}
+        onClick={() => onSelectTool(null)}
+        title="Pan / Rotate View"
+      >
+        <Hand size={18} />
+      </button>
+
+      {/* Select / Move */}
+      <button
+        className={`vm-ann-tool-btn ${currentTool === 'select' ? 'active' : ''}`}
+        onClick={() => onSelectTool('select')}
+        title="Select / Move"
+      >
+        <MousePointer2 size={18} />
+      </button>
+
+      {/* Delete Selected (only visible when annotation selected) */}
+      {selectedAnnotationId && (
         <button
-          className={`vm-toolbar-btn ${currentTool === null ? 'active' : ''}`}
-          onClick={() => onSelectTool(null)}
-          title="Pan / Select"
+          className="vm-ann-tool-btn vm-ann-tool-btn-danger"
+          onClick={onDeleteSelected}
+          title="Delete Selected (Del)"
         >
-          <MousePointer2 size={16} />
+          <X size={18} />
         </button>
-
-        <div className="vm-toolbar-separator" />
-
-        {/* Drawing tools */}
-        <div className="vm-toolbar-buttons">
-          {TOOLS.map(({ key, label, Icon }) => (
-            <button
-              key={key}
-              className={`vm-toolbar-btn ${currentTool === key ? 'active' : ''}`}
-              onClick={() => onSelectTool(currentTool === key ? null : key)}
-              title={label}
-            >
-              <Icon size={16} />
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="vm-toolbar-separator" />
-
-      {/* Color picker */}
-      <div className="vm-toolbar-group">
-        <span className="vm-toolbar-label">Color</span>
-        <input
-          type="color"
-          value={currentColor}
-          onChange={(e) => onColorChange(e.target.value)}
-          className="vm-toolbar-color"
-          title="Annotation color"
-        />
-      </div>
-
-      {/* Line width */}
-      <div className="vm-toolbar-group">
-        <span className="vm-toolbar-label">Width</span>
-        <input
-          type="number"
-          min={1}
-          max={10}
-          value={lineWidth}
-          onChange={(e) => onLineWidthChange(Number(e.target.value))}
-          className="vm-input"
-          style={{ width: 48 }}
-          title="Line width"
-        />
-      </div>
-
-      {/* Font size (shown only when text tool active) */}
-      {currentTool === 'text' && (
-        <div className="vm-toolbar-group">
-          <span className="vm-toolbar-label">Size</span>
-          <input
-            type="number"
-            min={10}
-            max={72}
-            value={fontSize}
-            onChange={(e) => onFontSizeChange(Number(e.target.value))}
-            className="vm-input"
-            style={{ width: 52 }}
-            title="Font size"
-          />
-        </div>
       )}
 
-      <div className="vm-toolbar-separator" />
+      <div className="vm-ann-divider" />
+
+      {/* Drawing tools */}
+      {DRAW_TOOLS.map(({ key, label, Icon }) => (
+        <button
+          key={key}
+          className={`vm-ann-tool-btn ${currentTool === key ? 'active' : ''}`}
+          onClick={() => onSelectTool(currentTool === key ? null : key)}
+          title={label}
+        >
+          <Icon size={18} />
+        </button>
+      ))}
+
+      <div className="vm-ann-divider" />
+
+      {/* Color picker */}
+      <input
+        type="color"
+        value={currentColor}
+        onChange={(e) => onColorChange(e.target.value)}
+        className="vm-ann-color-picker"
+        title="Annotation Color"
+      />
+
+      <div className="vm-ann-divider" />
 
       {/* Undo / Clear */}
-      <div className="vm-toolbar-group">
-        <div className="vm-toolbar-buttons">
-          <button
-            className="vm-toolbar-btn"
-            onClick={onUndo}
-            disabled={!canUndo}
-            title="Undo last annotation"
-          >
-            <Undo2 size={16} />
-          </button>
-          <button
-            className="vm-toolbar-btn"
-            onClick={onClearAll}
-            disabled={!canUndo}
-            title="Clear all annotations"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      </div>
+      <button
+        className="vm-ann-tool-btn"
+        onClick={onUndo}
+        disabled={!canUndo}
+        title="Undo Last"
+      >
+        <Undo2 size={18} />
+      </button>
+      <button
+        className="vm-ann-tool-btn"
+        onClick={onClearAll}
+        disabled={!canUndo}
+        title="Clear All"
+      >
+        <Trash2 size={18} />
+      </button>
     </div>
   );
 }

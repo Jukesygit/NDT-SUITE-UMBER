@@ -182,19 +182,23 @@ class CompetencyService {
             .upsert(competencyData, {
                 onConflict: 'user_id,competency_id'
             })
-            .select()
+            .select('*, competency:competency_definitions(name)')
             .single();
 
         if (error) throw error;
 
+        const competencyName = result.competency?.name || 'Unknown';
+        const isNew = result.created_at === result.updated_at;
+
         // Log competency activity
         logActivity({
             userId,
-            actionType: result.created_at === result.updated_at ? 'competency_created' : 'competency_updated',
+            actionType: isNew ? 'competency_created' : 'competency_updated',
             actionCategory: 'competency',
-            description: `${result.created_at === result.updated_at ? 'Created' : 'Updated'} competency`,
+            description: `${isNew ? 'Created' : 'Updated'} competency: ${competencyName}`,
             entityType: 'competency',
             entityId: result.id,
+            entityName: competencyName,
             details: { competencyId, value: data.value, hasDocument: !!data.documentUrl },
         });
 
@@ -210,6 +214,15 @@ class CompetencyService {
             throw new Error('Supabase not configured');
         }
 
+        // Fetch the competency name before deleting
+        const { data: existing } = await supabase
+            .from('employee_competencies')
+            .select('competency:competency_definitions(name)')
+            .eq('id', competencyId)
+            .single();
+
+        const competencyName = existing?.competency?.name || 'Unknown';
+
         const { error } = await supabase
             .from('employee_competencies')
             .delete()
@@ -221,9 +234,10 @@ class CompetencyService {
         logActivity({
             actionType: 'competency_deleted',
             actionCategory: 'competency',
-            description: 'Deleted competency',
+            description: `Deleted competency: ${competencyName}`,
             entityType: 'competency',
             entityId: competencyId,
+            entityName: competencyName,
         });
 
         return true;
@@ -259,18 +273,21 @@ class CompetencyService {
             .from('employee_competencies')
             .update(updateData)
             .eq('id', competencyId)
-            .select()
+            .select('*, competency:competency_definitions(name)')
             .single();
 
         if (error) throw error;
+
+        const competencyName = data.competency?.name || 'Unknown';
 
         // Log competency approval/rejection
         logActivity({
             actionType: approved ? 'competency_approved' : 'competency_rejected',
             actionCategory: 'competency',
-            description: `${approved ? 'Approved' : 'Rejected'} competency${reason ? `: ${reason}` : ''}`,
+            description: `${approved ? 'Approved' : 'Rejected'} competency: ${competencyName}${reason ? ` — ${reason}` : ''}`,
             entityType: 'competency',
             entityId: competencyId,
+            entityName: competencyName,
             details: { approved, reason },
         });
 
@@ -371,10 +388,24 @@ class CompetencyService {
                 verified_at: new Date().toISOString()
             })
             .eq('id', competencyId)
-            .select()
+            .select('*, competency:competency_definitions(name)')
             .single();
 
         if (error) throw error;
+
+        const competencyName = data.competency?.name || 'Unknown';
+
+        // Log changes requested activity
+        logActivity({
+            actionType: 'competency_rejected',
+            actionCategory: 'competency',
+            description: `Requested changes on competency: ${competencyName} — ${comment}`,
+            entityType: 'competency',
+            entityId: competencyId,
+            entityName: competencyName,
+            details: { action: 'changes_requested', comment },
+        });
+
         return data;
     }
 

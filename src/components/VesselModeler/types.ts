@@ -149,6 +149,10 @@ export interface Annotation {
   icon?: string;
   /** Stamp background color */
   bgColor?: string;
+  /** Custom dimension value (e.g., "1500") */
+  value?: string;
+  /** Dimension unit (mm, in, m, ft) */
+  unit?: string;
 }
 
 export interface ScreenshotResolution {
@@ -349,24 +353,20 @@ export interface PipeSize {
 }
 
 export const PIPE_SIZES: PipeSize[] = [
-  { nps: '1/2"',  od: 21.3,   id: 15.8,   flangeOD: 89,   flangeThk: 11 },
-  { nps: '3/4"',  od: 26.7,   id: 20.9,   flangeOD: 98,   flangeThk: 13 },
-  { nps: '1"',    od: 33.4,   id: 26.6,   flangeOD: 108,  flangeThk: 14 },
-  { nps: '1-1/4"', od: 42.2,  id: 35.1,   flangeOD: 117,  flangeThk: 16 },
-  { nps: '1-1/2"', od: 48.3,  id: 40.9,   flangeOD: 127,  flangeThk: 17 },
-  { nps: '2"',    od: 60.3,   id: 52.5,   flangeOD: 152,  flangeThk: 19 },
-  { nps: '2-1/2"', od: 73.0,  id: 62.7,   flangeOD: 178,  flangeThk: 22 },
+  { nps: '2"',    od: 60.3,   id: 52.5,   flangeOD: 152,  flangeThk: 22 },
   { nps: '3"',    od: 88.9,   id: 77.9,   flangeOD: 190,  flangeThk: 24 },
   { nps: '4"',    od: 114.3,  id: 102.3,  flangeOD: 229,  flangeThk: 24 },
   { nps: '6"',    od: 168.3,  id: 154.1,  flangeOD: 279,  flangeThk: 25 },
   { nps: '8"',    od: 219.1,  id: 202.7,  flangeOD: 343,  flangeThk: 29 },
   { nps: '10"',   od: 273.1,  id: 254.5,  flangeOD: 406,  flangeThk: 30 },
-  { nps: '12"',   od: 323.9,  id: 304.8,  flangeOD: 483,  flangeThk: 32 },
-  { nps: '14"',   od: 355.6,  id: 336.6,  flangeOD: 533,  flangeThk: 35 },
-  { nps: '16"',   od: 406.4,  id: 387.4,  flangeOD: 597,  flangeThk: 37 },
-  { nps: '18"',   od: 457.2,  id: 438.2,  flangeOD: 635,  flangeThk: 40 },
-  { nps: '20"',   od: 508.0,  id: 489.0,  flangeOD: 699,  flangeThk: 43 },
-  { nps: '24"',   od: 609.6,  id: 590.6,  flangeOD: 813,  flangeThk: 48 },
+  { nps: '12"',   od: 323.9,  id: 303.2,  flangeOD: 483,  flangeThk: 32 },
+  { nps: '14"',   od: 355.6,  id: 333.4,  flangeOD: 533,  flangeThk: 35 },
+  { nps: '16"',   od: 406.4,  id: 381.0,  flangeOD: 597,  flangeThk: 37 },
+  { nps: '18"',   od: 457.2,  id: 428.7,  flangeOD: 635,  flangeThk: 40 },
+  { nps: '20"',   od: 508.0,  id: 477.8,  flangeOD: 699,  flangeThk: 43 },
+  { nps: '24"',   od: 609.6,  id: 574.6,  flangeOD: 813,  flangeThk: 48 },
+  { nps: '30"',   od: 762.0,  id: 723.9,  flangeOD: 978,  flangeThk: 54 },
+  { nps: '36"',   od: 914.4,  id: 876.3,  flangeOD: 1143, flangeThk: 60 },
 ];
 
 /**

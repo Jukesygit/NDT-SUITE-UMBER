@@ -5,18 +5,13 @@ const VesselModeler = lazy(() => import('../components/VesselModeler/VesselModel
 
 /**
  * VesselModelerPage - Full-bleed page wrapper for the 3D Vessel Modeler tool
- * Uses negative margins to break out of the layout container (same pattern as CscanVisualizerPage)
+ * Uses .tool-container class to trigger full-width layout (removes padding and max-width constraints)
  */
 function VesselModelerPage() {
     return (
         <div
-            className="vessel-modeler-page-wrapper"
-            style={{
-                margin: 'calc(-1 * var(--spacing-8, 2rem))',
-                width: 'calc(100% + 2 * var(--spacing-8, 2rem))',
-                height: 'calc(100vh - var(--header-height, 4rem))',
-                maxWidth: 'none',
-            }}
+            className="tool-container vessel-modeler-page-wrapper"
+            style={{ height: 'calc(100vh - var(--header-height, 4rem))' }}
         >
             <Suspense fallback={<PageSpinner message="Loading Vessel Modeler..." />}>
                 <VesselModeler />

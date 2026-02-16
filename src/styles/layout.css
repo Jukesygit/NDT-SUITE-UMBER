@@ -259,7 +259,6 @@
 .main:has(.tool-container) {
   padding: 0;
   overflow: hidden;
-  height: calc(100vh - 80px); /* Explicit viewport height minus header */
 }
 
 .main__container:has(.tool-container) {

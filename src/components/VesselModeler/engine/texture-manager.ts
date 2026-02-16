@@ -416,6 +416,53 @@ export function loadTextureFromFile(
 }
 
 // ---------------------------------------------------------------------------
+// Texture Loading from Project Data (base64 imageData → THREE.Texture)
+// ---------------------------------------------------------------------------
+
+/**
+ * Recreate a THREE.Texture from a base64 data URL (used when loading a saved
+ * project). Matches the same texture settings as loadTextureFromFile.
+ *
+ * @param imageData - Base64 data URL string (e.g. "data:image/png;base64,...")
+ * @param renderer  - The active WebGLRenderer (used for max anisotropy)
+ * @returns Promise with the THREE.Texture and calculated aspectRatio
+ */
+export function loadTextureFromData(
+  imageData: string,
+  renderer: THREE.WebGLRenderer,
+): Promise<{ texture: THREE.Texture; aspectRatio: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+
+    img.onerror = () => {
+      reject(new Error('Failed to load texture from saved data'));
+    };
+
+    img.onload = () => {
+      const texture = new THREE.Texture(img);
+
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.generateMipmaps = true;
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+
+      const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+      texture.anisotropy = maxAnisotropy;
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.needsUpdate = true;
+
+      resolve({
+        texture,
+        aspectRatio: img.width / img.height,
+      });
+    };
+
+    img.src = imageData;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Texture Disposal
 // ---------------------------------------------------------------------------
 

@@ -251,14 +251,23 @@ function NozzleSection({
 
     return (
         <Section title="Nozzles">
-            {/* Library grid */}
+            {/* Library grid - drag onto 3D canvas or click to add */}
+            <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', margin: '0 0 8px 0' }}>
+                Drag a nozzle size onto the vessel
+            </p>
             <div className="vm-library-grid" style={{ marginBottom: 10 }}>
-                {PIPE_SIZES.slice(0, 12).map(p => (
+                {PIPE_SIZES.map(p => (
                     <div
                         key={p.nps}
                         className="vm-library-item"
+                        draggable
+                        onDragStart={(e) => {
+                            e.dataTransfer.setData('application/x-nozzle-pipe', JSON.stringify(p));
+                            e.dataTransfer.effectAllowed = 'copy';
+                        }}
                         onClick={() => addFromLibrary(p.id)}
-                        title={`Add ${p.nps} nozzle (${p.od}mm OD)`}
+                        title={`Drag or click to add ${p.nps} nozzle (${p.od}mm OD)`}
+                        style={{ userSelect: 'none' }}
                     >
                         <div className="size-label">{p.nps}</div>
                         <div className="size-mm">{p.od}mm</div>

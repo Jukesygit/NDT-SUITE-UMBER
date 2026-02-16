@@ -3,6 +3,11 @@
 // =============================================================================
 // Handles screenshot capture from the Three.js viewport, rendering annotation
 // overlays onto a 2D canvas, and exporting the final composited image.
+//
+// Key difference from earlier version: uses a **temporary WebGLRenderer** for
+// export (matching the original standalone tool) so the live renderer and
+// animation loop are never disturbed, and the 3D scene is always captured.
+// Also includes logo compositing for branding.
 // =============================================================================
 
 import * as THREE from 'three';
@@ -27,6 +32,24 @@ export interface ScreenshotOptions {
   title: string;
   description: string;
 }
+
+// ---------------------------------------------------------------------------
+// Logo Preloader
+// ---------------------------------------------------------------------------
+
+let logoImage: HTMLImageElement | null = null;
+
+(function preloadLogo() {
+  const img = new Image();
+  img.onload = () => {
+    logoImage = img;
+  };
+  img.onerror = () => {
+    logoImage = null;
+  };
+  // Vite serves public/ at the root; the logo file is at public/assets/matrix-logo.png
+  img.src = new URL('/assets/matrix-logo.png', window.location.origin).href;
+})();
 
 // ---------------------------------------------------------------------------
 // Lighting Presets
@@ -159,12 +182,14 @@ export function applyViewPreset(
 /**
  * Render all annotations onto a 2D canvas context.
  * Clears the context first, then draws every annotation.
+ * Optionally highlights the selected annotation with a dashed border.
  */
 export function renderAnnotations(
   ctx: CanvasRenderingContext2D,
   annotations: Annotation[],
   width: number,
-  height: number
+  height: number,
+  selectedAnnotationId?: string | null
 ): void {
   ctx.clearRect(0, 0, width, height);
 
@@ -177,7 +202,241 @@ export function renderAnnotations(
     ctx.lineCap = 'round';
     drawAnnotation(ctx, ann);
     ctx.restore();
+
+    // Draw selection highlight
+    if (selectedAnnotationId && ann.id === selectedAnnotationId) {
+      drawSelectionHighlight(ctx, ann);
+    }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Resize Handles
+// ---------------------------------------------------------------------------
+
+export type HandlePosition = 'tl' | 'tr' | 'bl' | 'br' | 'start' | 'end';
+
+export interface ResizeHandle {
+  pos: HandlePosition;
+  x: number;
+  y: number;
+}
+
+const HANDLE_SIZE = 7;
+const HANDLE_HIT_RADIUS = 8;
+
+/** Get resize handle positions for an annotation. */
+export function getResizeHandles(ann: Annotation): ResizeHandle[] {
+  switch (ann.type) {
+    case 'rect':
+    case 'circle': {
+      if (ann.points.length < 2) return [];
+      const [p0, p1] = ann.points;
+      return [
+        { pos: 'tl', x: Math.min(p0.x, p1.x), y: Math.min(p0.y, p1.y) },
+        { pos: 'tr', x: Math.max(p0.x, p1.x), y: Math.min(p0.y, p1.y) },
+        { pos: 'bl', x: Math.min(p0.x, p1.x), y: Math.max(p0.y, p1.y) },
+        { pos: 'br', x: Math.max(p0.x, p1.x), y: Math.max(p0.y, p1.y) },
+      ];
+    }
+    case 'arrow':
+    case 'line':
+    case 'dimension': {
+      if (ann.points.length < 2) return [];
+      return [
+        { pos: 'start', x: ann.points[0].x, y: ann.points[0].y },
+        { pos: 'end', x: ann.points[1].x, y: ann.points[1].y },
+      ];
+    }
+    case 'stamp': {
+      if (ann.points.length < 1) return [];
+      const p = ann.points[0];
+      const w = ann.width ?? 80;
+      const h = ann.height ?? 32;
+      return [
+        { pos: 'tl', x: p.x, y: p.y },
+        { pos: 'tr', x: p.x + w, y: p.y },
+        { pos: 'bl', x: p.x, y: p.y + h },
+        { pos: 'br', x: p.x + w, y: p.y + h },
+      ];
+    }
+    case 'text': {
+      if (ann.points.length < 1) return [];
+      const p = ann.points[0];
+      const fontSize = ann.fontSize ?? 16;
+      const textW = (ann.text?.length ?? 4) * fontSize * 0.6;
+      return [
+        { pos: 'br', x: p.x + textW, y: p.y + fontSize },
+      ];
+    }
+    default:
+      return [];
+  }
+}
+
+/** Check if a point hits a resize handle. Returns the handle or null. */
+export function hitTestHandles(
+  ann: Annotation,
+  x: number,
+  y: number
+): ResizeHandle | null {
+  const handles = getResizeHandles(ann);
+  for (const h of handles) {
+    if (Math.hypot(x - h.x, y - h.y) < HANDLE_HIT_RADIUS) return h;
+  }
+  return null;
+}
+
+/** Get the fixed point (opposite corner) for a resize operation. */
+export function getResizeFixedPoint(
+  ann: Annotation,
+  handlePos: HandlePosition
+): { x: number; y: number } {
+  switch (ann.type) {
+    case 'rect':
+    case 'circle': {
+      if (ann.points.length < 2) return ann.points[0] || { x: 0, y: 0 };
+      const [p0, p1] = ann.points;
+      const tl = { x: Math.min(p0.x, p1.x), y: Math.min(p0.y, p1.y) };
+      const br = { x: Math.max(p0.x, p1.x), y: Math.max(p0.y, p1.y) };
+      switch (handlePos) {
+        case 'tl': return br;
+        case 'tr': return { x: tl.x, y: br.y };
+        case 'bl': return { x: br.x, y: tl.y };
+        case 'br': return tl;
+        default: return tl;
+      }
+    }
+    case 'arrow':
+    case 'line':
+    case 'dimension':
+      if (ann.points.length < 2) return ann.points[0] || { x: 0, y: 0 };
+      return handlePos === 'start' ? ann.points[1] : ann.points[0];
+    case 'stamp': {
+      const p = ann.points[0] || { x: 0, y: 0 };
+      const w = ann.width ?? 80;
+      const h = ann.height ?? 32;
+      switch (handlePos) {
+        case 'tl': return { x: p.x + w, y: p.y + h };
+        case 'tr': return { x: p.x, y: p.y + h };
+        case 'bl': return { x: p.x + w, y: p.y };
+        case 'br': return { x: p.x, y: p.y };
+        default: return p;
+      }
+    }
+    case 'text':
+      return ann.points[0] || { x: 0, y: 0 };
+    default:
+      return ann.points[0] || { x: 0, y: 0 };
+  }
+}
+
+/** Apply a resize operation to an annotation. */
+export function applyResize(
+  ann: Annotation,
+  handlePos: HandlePosition,
+  fixed: { x: number; y: number },
+  mouse: { x: number; y: number }
+): Annotation {
+  switch (ann.type) {
+    case 'rect':
+    case 'circle':
+      return { ...ann, points: [fixed, mouse] };
+    case 'arrow':
+    case 'line':
+    case 'dimension':
+      if (handlePos === 'start') {
+        return { ...ann, points: [mouse, ann.points[1]] };
+      }
+      return { ...ann, points: [ann.points[0], mouse] };
+    case 'stamp': {
+      const newX = Math.min(fixed.x, mouse.x);
+      const newY = Math.min(fixed.y, mouse.y);
+      const newW = Math.abs(mouse.x - fixed.x);
+      const newH = Math.abs(mouse.y - fixed.y);
+      return {
+        ...ann,
+        points: [{ x: newX, y: newY }],
+        width: Math.max(20, newW),
+        height: Math.max(15, newH),
+      };
+    }
+    case 'text': {
+      const origin = ann.points[0];
+      const newSize = Math.max(8, Math.round(mouse.y - origin.y));
+      return { ...ann, fontSize: newSize };
+    }
+    default:
+      return ann;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Selection Highlight & Resize Handles Drawing
+// ---------------------------------------------------------------------------
+
+/** Draw a selection highlight (dashed border + resize handles) around the annotation. */
+function drawSelectionHighlight(
+  ctx: CanvasRenderingContext2D,
+  ann: Annotation
+): void {
+  ctx.save();
+  ctx.strokeStyle = '#4db8ff';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 4]);
+
+  const pad = 6;
+  const bounds = getAnnotationBounds(ann);
+  if (bounds) {
+    ctx.strokeRect(
+      bounds.x - pad,
+      bounds.y - pad,
+      bounds.w + pad * 2,
+      bounds.h + pad * 2
+    );
+  }
+
+  // Draw resize handles
+  ctx.setLineDash([]);
+  const handles = getResizeHandles(ann);
+  const hs = HANDLE_SIZE;
+  for (const h of handles) {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(h.x - hs / 2, h.y - hs / 2, hs, hs);
+    ctx.strokeStyle = '#4db8ff';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(h.x - hs / 2, h.y - hs / 2, hs, hs);
+  }
+
+  ctx.restore();
+}
+
+/** Get bounding box of an annotation for selection highlight. */
+function getAnnotationBounds(
+  ann: Annotation
+): { x: number; y: number; w: number; h: number } | null {
+  if (ann.points.length === 0) return null;
+
+  if (ann.type === 'stamp') {
+    const p = ann.points[0];
+    return { x: p.x, y: p.y, w: ann.width ?? 80, h: ann.height ?? 32 };
+  }
+
+  if (ann.type === 'text') {
+    const p = ann.points[0];
+    const fontSize = ann.fontSize ?? 16;
+    const w = (ann.text?.length ?? 4) * fontSize * 0.6;
+    return { x: p.x, y: p.y, w, h: fontSize };
+  }
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of ann.points) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }
 
 /** Draw a single annotation shape onto the canvas. */
@@ -271,7 +530,7 @@ function drawCircle(ctx: CanvasRenderingContext2D, ann: Annotation): void {
   const rx = Math.abs(p1.x - p0.x) / 2;
   const ry = Math.abs(p1.y - p0.y) / 2;
   ctx.beginPath();
-  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, cy, Math.max(rx, 1), Math.max(ry, 1), 0, 0, Math.PI * 2);
   ctx.stroke();
 }
 
@@ -315,10 +574,12 @@ function drawDimension(ctx: CanvasRenderingContext2D, ann: Annotation): void {
   ctx.lineTo(end.x - nx * capLen, end.y - ny * capLen);
   ctx.stroke();
 
-  // Centered distance label
+  // Centered label: use custom value/unit if provided, otherwise pixel distance
   const midX = (start.x + end.x) / 2;
   const midY = (start.y + end.y) / 2;
-  const label = `${Math.round(len)}px`;
+  const label = ann.value
+    ? `${ann.value} ${ann.unit || 'mm'}`
+    : `${Math.round(len)}px`;
   ctx.font = '12px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
@@ -381,18 +642,21 @@ function drawFreehand(ctx: CanvasRenderingContext2D, ann: Annotation): void {
 }
 
 // ---------------------------------------------------------------------------
-// Screenshot Capture
+// Screenshot Capture (using temporary renderer - matches original)
 // ---------------------------------------------------------------------------
 
 /**
- * Capture a screenshot from the Three.js renderer with annotations composited.
+ * Capture a screenshot by creating a **temporary WebGLRenderer** (matching
+ * the original standalone tool's approach). This avoids disturbing the live
+ * renderer/animation loop and ensures the 3D scene is always captured.
  *
- * 1. Creates an offscreen canvas at `width * multiplier` resolution.
- * 2. Sets background color if not 'current'.
- * 3. Renders the scene to an offscreen renderer.
- * 4. Draws annotation overlay on top.
- * 5. Adds title/description text if provided.
- * 6. Returns a data URL (png or jpeg).
+ * 1. Creates a fresh temp renderer at target resolution.
+ * 2. Clones the camera with the correct aspect ratio.
+ * 3. Optionally overrides scene background.
+ * 4. Renders the scene into the temp renderer.
+ * 5. Composites onto an offscreen canvas: background → 3D scene → annotations → report helpers → logo.
+ * 6. Disposes the temp renderer.
+ * 7. Returns a data URL.
  */
 export function captureScreenshot(
   renderer: THREE.WebGLRenderer,
@@ -404,16 +668,15 @@ export function captureScreenshot(
   const { multiplier, background, format, jpegQuality, title, description } =
     options;
 
-  // Store original state
+  // Compute base dimensions from the live renderer
   const originalSize = renderer.getSize(new THREE.Vector2());
-  const originalPixelRatio = renderer.getPixelRatio();
+  const baseWidth = originalSize.x;
+  const baseHeight = originalSize.y;
+  const finalWidth = Math.round(baseWidth * multiplier);
+  const finalHeight = Math.round(baseHeight * multiplier);
+
+  // Store and override scene background
   const originalBackground = scene.background;
-
-  // Compute target resolution
-  const targetWidth = Math.round(originalSize.x * multiplier);
-  const targetHeight = Math.round(originalSize.y * multiplier);
-
-  // Apply background override
   if (background && background !== 'current') {
     if (background === 'transparent') {
       scene.background = null;
@@ -422,97 +685,145 @@ export function captureScreenshot(
     }
   }
 
-  // Temporarily resize renderer
-  renderer.setPixelRatio(1);
-  renderer.setSize(targetWidth, targetHeight, false);
-  camera.aspect = targetWidth / targetHeight;
-  camera.updateProjectionMatrix();
+  // Create temporary renderer (fresh WebGL context — never disturbs live renderer)
+  const tempRenderer = new THREE.WebGLRenderer({
+    antialias: true,
+    preserveDrawingBuffer: true,
+    alpha: background === 'transparent',
+  });
+  tempRenderer.setSize(finalWidth, finalHeight);
 
-  // Render one frame
-  renderer.render(scene, camera);
+  // Clone camera with correct aspect ratio
+  const tempCamera = camera.clone();
+  tempCamera.aspect = finalWidth / finalHeight;
+  tempCamera.updateProjectionMatrix();
+
+  // Render scene into temp renderer
+  tempRenderer.render(scene, tempCamera);
 
   // Create offscreen compositing canvas
   const offscreen = document.createElement('canvas');
-  offscreen.width = targetWidth;
-  offscreen.height = targetHeight;
+  offscreen.width = finalWidth;
+  offscreen.height = finalHeight;
   const ctx = offscreen.getContext('2d');
   if (!ctx) {
-    // Restore and bail
-    restoreRenderer(renderer, camera, originalSize, originalPixelRatio, originalBackground, scene);
+    scene.background = originalBackground;
+    tempRenderer.dispose();
     return '';
   }
 
-  // If background is specified and not 'current', fill first
+  // Fill background if not transparent
   if (background && background !== 'current' && background !== 'transparent') {
     ctx.fillStyle = background;
-    ctx.fillRect(0, 0, targetWidth, targetHeight);
+    ctx.fillRect(0, 0, finalWidth, finalHeight);
+  } else if (!background || background === 'current') {
+    ctx.fillStyle = '#111111';
+    ctx.fillRect(0, 0, finalWidth, finalHeight);
   }
 
-  // Copy rendered scene pixels
-  ctx.drawImage(renderer.domElement, 0, 0, targetWidth, targetHeight);
+  // Copy rendered 3D scene pixels
+  ctx.drawImage(tempRenderer.domElement, 0, 0);
 
-  // Draw annotations overlay (scaled up by multiplier)
+  // Scale factor for annotation compositing
+  const scaleX = finalWidth / baseWidth;
+  const scaleY = finalHeight / baseHeight;
+
+  // Draw annotations overlay (scaled to match resolution)
   ctx.save();
-  ctx.scale(multiplier, multiplier);
-  renderAnnotations(ctx, annotations, originalSize.x, originalSize.y);
+  ctx.scale(scaleX, scaleY);
+  // Render annotations without selection highlight for export
+  for (const ann of annotations) {
+    ctx.save();
+    ctx.strokeStyle = ann.color;
+    ctx.fillStyle = ann.color;
+    ctx.lineWidth = ann.lineWidth;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    drawAnnotation(ctx, ann);
+    ctx.restore();
+  }
   ctx.restore();
 
-  // Add title at top-left with shadow
-  if (title) {
-    ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-    ctx.shadowBlur = 4;
-    ctx.shadowOffsetX = 1;
-    ctx.shadowOffsetY = 1;
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `bold ${24 * multiplier}px sans-serif`;
-    ctx.textBaseline = 'top';
-    ctx.fillText(title, 16 * multiplier, 16 * multiplier);
-    ctx.restore();
-  }
+  // Draw report helpers (title, description, logo)
+  drawReportHelpers(ctx, title, description, finalWidth, finalHeight, scaleX);
 
-  // Add description below title
-  if (description) {
-    ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-    ctx.shadowBlur = 3;
-    ctx.shadowOffsetX = 1;
-    ctx.shadowOffsetY = 1;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-    ctx.font = `${16 * multiplier}px sans-serif`;
-    ctx.textBaseline = 'top';
-    const yOffset = title ? 44 * multiplier : 16 * multiplier;
-    ctx.fillText(description, 16 * multiplier, yOffset);
-    ctx.restore();
-  }
+  // Restore original scene background
+  scene.background = originalBackground;
+
+  // Dispose temporary renderer (free WebGL context)
+  tempRenderer.dispose();
 
   // Generate data URL
   const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
   const quality = format === 'jpeg' ? jpegQuality / 100 : undefined;
-  const dataUrl = offscreen.toDataURL(mimeType, quality);
-
-  // Restore original renderer state
-  restoreRenderer(renderer, camera, originalSize, originalPixelRatio, originalBackground, scene);
-
-  // Re-render at original size so the live viewport is not left blank
-  renderer.render(scene, camera);
-
-  return dataUrl;
+  return offscreen.toDataURL(mimeType, quality);
 }
 
-function restoreRenderer(
-  renderer: THREE.WebGLRenderer,
-  camera: THREE.PerspectiveCamera,
-  originalSize: THREE.Vector2,
-  originalPixelRatio: number,
-  originalBackground: THREE.Color | THREE.Texture | THREE.CubeTexture | null,
-  scene: THREE.Scene
+// ---------------------------------------------------------------------------
+// Report Helpers (title, description, logo) — matches original
+// ---------------------------------------------------------------------------
+
+function drawReportHelpers(
+  ctx: CanvasRenderingContext2D,
+  title: string,
+  description: string,
+  width: number,
+  height: number,
+  scale: number
 ): void {
-  renderer.setPixelRatio(originalPixelRatio);
-  renderer.setSize(originalSize.x, originalSize.y, false);
-  camera.aspect = originalSize.x / originalSize.y;
-  camera.updateProjectionMatrix();
-  scene.background = originalBackground;
+  const s = scale;
+
+  // Title: centered with semi-transparent background box
+  if (title) {
+    const fontSize = Math.round(36 * s);
+    ctx.font = `bold ${fontSize}px Arial`;
+    ctx.textAlign = 'center';
+    const titleMetrics = ctx.measureText(title);
+    const boxHeight = Math.round(60 * s);
+    const boxPadding = Math.round(30 * s);
+    const topOffset = Math.round(22 * s);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(
+      width / 2 - titleMetrics.width / 2 - boxPadding,
+      topOffset,
+      titleMetrics.width + boxPadding * 2,
+      boxHeight
+    );
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(title, width / 2, topOffset + boxHeight * 0.7);
+  }
+
+  // Description: centered with slightly lighter background box below title
+  if (description) {
+    const fontSize = Math.round(24 * s);
+    ctx.font = `${fontSize}px Arial`;
+    ctx.textAlign = 'center';
+    const descMetrics = ctx.measureText(description);
+    const boxHeight = Math.round(45 * s);
+    const boxPadding = Math.round(22 * s);
+    const topOffset = Math.round(90 * s);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(
+      width / 2 - descMetrics.width / 2 - boxPadding,
+      topOffset,
+      descMetrics.width + boxPadding * 2,
+      boxHeight
+    );
+    ctx.fillStyle = '#dddddd';
+    ctx.fillText(description, width / 2, topOffset + boxHeight * 0.67);
+  }
+
+  // Logo: bottom-right corner (matching original)
+  if (logoImage) {
+    const maxLogoHeight = Math.round(90 * s);
+    const logoScale = maxLogoHeight / logoImage.naturalHeight;
+    const logoWidth = logoImage.naturalWidth * logoScale;
+    const logoHeight = maxLogoHeight;
+    const padding = Math.round(22 * s);
+    const logoX = width - logoWidth - padding;
+    const logoY = height - logoHeight - padding;
+    ctx.drawImage(logoImage, logoX, logoY, logoWidth, logoHeight);
+  }
 }
 
 // ---------------------------------------------------------------------------
