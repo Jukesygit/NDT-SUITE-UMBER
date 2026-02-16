@@ -102,6 +102,7 @@ export function validatePasswordStrength(password) {
     }
 
     // Check for special characters
+    // eslint-disable-next-line no-useless-escape
     if (PASSWORD_REQUIREMENTS.requireSpecialChars && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
         errors.push('Password must contain at least one special character');
     } else {

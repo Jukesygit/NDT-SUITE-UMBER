@@ -287,7 +287,7 @@ export default function ScreenshotMode({
         originalLightsRef.current = [];
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   // -------------------------------------------------------------------
@@ -314,7 +314,7 @@ export default function ScreenshotMode({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [selectedAnnotationId]);
 
   // -------------------------------------------------------------------

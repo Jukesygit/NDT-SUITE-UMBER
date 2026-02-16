@@ -125,6 +125,7 @@ describe('Security Module', () => {
             expect(/[A-Z]/.test(password)).toBe(true); // uppercase
             expect(/[a-z]/.test(password)).toBe(true); // lowercase
             expect(/\d/.test(password)).toBe(true); // numbers
+            // eslint-disable-next-line no-useless-escape
             expect(/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(password)).toBe(true); // special
         });
     });

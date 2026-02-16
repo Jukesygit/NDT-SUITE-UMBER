@@ -60,18 +60,14 @@ async function uploadCompetencyDocument(params: UploadCompetencyDocumentParams):
             upsert: true
         });
 
-    try {
-        const { error: uploadError } = await withTimeout(
-            uploadPromise,
-            60000, // 60 second timeout
-            'Upload timed out. Please check your connection and try again.'
-        );
+    const { error: uploadError } = await withTimeout(
+        uploadPromise,
+        60000, // 60 second timeout
+        'Upload timed out. Please check your connection and try again.'
+    );
 
-        if (uploadError) {
-            throw new Error(uploadError.message || 'Failed to upload document');
-        }
-    } catch (error) {
-        throw error;
+    if (uploadError) {
+        throw new Error(uploadError.message || 'Failed to upload document');
     }
 
     // Return the storage path (not a URL) - signed URLs are generated when viewing

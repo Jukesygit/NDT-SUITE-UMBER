@@ -21,6 +21,7 @@ export default [
       globals: {
         ...globals.browser,
         ...globals.es2021,
+        ...globals.node,
       },
       parserOptions: {
         ecmaFeatures: { jsx: true },
@@ -35,7 +36,23 @@ export default [
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/ban-ts-comment': ['warn', { 'ts-ignore': 'allow-with-description' }],
       'no-unused-vars': 'off',
+    },
+  },
+  {
+    files: ['src/test/**/*.{js,ts}'],
+    languageOptions: {
+      globals: {
+        vi: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
+        afterEach: 'readonly',
+        beforeEach: 'readonly',
+        describe: 'readonly',
+        it: 'readonly',
+        expect: 'readonly',
+      },
     },
   },
   {

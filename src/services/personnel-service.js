@@ -516,6 +516,7 @@ class PersonnelService {
 
                 // Only throw if it's an error other than "function doesn't exist"
                 if (rpcError && !rpcError.message?.includes('function') && !rpcError.code?.includes('42883')) {
+                    // intentionally empty - non-critical RPC errors are silently ignored
                 }
             } catch (err) {
                 // Silently fail if the RPC function doesn't exist
@@ -578,6 +579,7 @@ class PersonnelService {
 
                 // Only throw if it's an error other than "function doesn't exist"
                 if (rpcError && !rpcError.message?.includes('function') && !rpcError.code?.includes('42883')) {
+                    // intentionally empty - non-critical RPC errors are silently ignored
                 }
             } catch (err) {
                 // Silently fail if the RPC function doesn't exist

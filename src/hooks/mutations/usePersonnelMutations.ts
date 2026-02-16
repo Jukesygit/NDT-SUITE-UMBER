@@ -247,16 +247,12 @@ export function useAddPersonCompetency() {
  * This is not a mutation but a utility function
  */
 export async function exportPersonnelToCSV(personnel: Person[]): Promise<void> {
-    try {
-        const csv = await personnelService.exportPersonnelToCSV(personnel);
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `personnel-competencies-${new Date().toISOString().split('T')[0]}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
-    } catch (error) {
-        throw error;
-    }
+    const csv = await personnelService.exportPersonnelToCSV(personnel);
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `personnel-competencies-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
 }

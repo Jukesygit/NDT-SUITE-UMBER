@@ -252,6 +252,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             // Session is valid, reload auth state
             loadAuthState();
         } catch (err) {
+            // intentionally empty - auth refresh failure is handled by finally block
         } finally {
             setIsLoading(false);
         }

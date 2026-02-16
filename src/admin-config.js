@@ -262,7 +262,7 @@ class AdminConfig {
             // Validate that imported data has the expected structure
             const requiredKeys = Object.keys(DEFAULT_CONFIG);
             const hasAllKeys = requiredKeys.every(key =>
-                imported.hasOwnProperty(key) && Array.isArray(imported[key])
+                Object.hasOwn(imported, key) && Array.isArray(imported[key])
             );
 
             if (!hasAllKeys) {

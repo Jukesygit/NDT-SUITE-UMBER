@@ -54,6 +54,7 @@ class GlobalErrorBoundary extends React.Component {
             }
             localStorage.setItem('app_errors', JSON.stringify(errors));
         } catch (e) {
+            // intentionally empty - localStorage errors are non-critical
         }
     }
 

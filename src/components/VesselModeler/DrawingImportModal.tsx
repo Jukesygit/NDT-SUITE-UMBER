@@ -101,8 +101,8 @@ export default function DrawingImportModal({ isOpen, onClose, onApply }: Drawing
     } catch (err) { setError(err instanceof Error ? err.message : 'Failed to load file'); }
   }, []);
 
-  const onDrop = useCallback((e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.files[0] && handleFile(e.dataTransfer.files[0]); }, [handleFile]);
-  const onFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => { e.target.files?.[0] && handleFile(e.target.files[0]); e.target.value = ''; }, [handleFile]);
+  const onDrop = useCallback((e: React.DragEvent) => { e.preventDefault(); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); }, [handleFile]);
+  const onFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files?.[0]) handleFile(e.target.files[0]); e.target.value = ''; }, [handleFile]);
 
   // --- Image loading & auto-fit ---
   useEffect(() => {

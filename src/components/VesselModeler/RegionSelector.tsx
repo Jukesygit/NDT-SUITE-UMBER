@@ -82,7 +82,7 @@ export default function RegionSelector({
       redraw();
     };
     img.src = imageDataUrl;
-  }, [imageDataUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [imageDataUrl]);  
 
   // Resize canvas to fill container
   useEffect(() => {
@@ -97,7 +97,7 @@ export default function RegionSelector({
     });
     observer.observe(container);
     return () => observer.disconnect();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);  
 
   // ---------------------------------------------------------------------------
   // Drawing
@@ -210,7 +210,7 @@ export default function RegionSelector({
       currentRef.current = pos;
       setIsDrawing(true);
     },
-    [], // eslint-disable-line react-hooks/exhaustive-deps
+    [],  
   );
 
   const handleMouseMove = useCallback(
@@ -227,7 +227,7 @@ export default function RegionSelector({
       currentRef.current = canvasCoords(e);
       redraw();
     },
-    [isPanning, isDrawing, redraw], // eslint-disable-line react-hooks/exhaustive-deps
+    [isPanning, isDrawing, redraw],  
   );
 
   const handleMouseUp = useCallback(
@@ -262,7 +262,7 @@ export default function RegionSelector({
 
       onRegionsChange({ ...regions, [activeTool]: newRegion });
     },
-    [isDrawing, isPanning, activeTool, regions, onRegionsChange, zoom, pan], // eslint-disable-line react-hooks/exhaustive-deps
+    [isDrawing, isPanning, activeTool, regions, onRegionsChange, zoom, pan],  
   );
 
   const handleWheel = useCallback(

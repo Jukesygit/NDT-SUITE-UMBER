@@ -163,7 +163,7 @@ function parseSingleFile(buffer: ArrayBuffer, filename: string): EfficientCscanD
   const lines = text.split(/\r?\n/);
 
   let xAxisArr: number[] = [];
-  let yAxisArr: number[] = [];
+  const yAxisArr: number[] = [];
   const metadata: Record<string, unknown> = {};
   let dataStartIndex = -1;
 

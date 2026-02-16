@@ -234,6 +234,7 @@ export default function ConfigurationTab() {
                 fileInputRef.current.value = '';
             }
         } catch {
+            // intentionally empty - import errors are handled by the mutation
         }
     };
 

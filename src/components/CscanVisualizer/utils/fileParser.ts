@@ -103,8 +103,8 @@ export const parseCscanFile = async (file: File): Promise<CscanData> => {
   const lines = text.split(/\r?\n/);
 
   let xAxis: number[] = [];
-  let yAxis: number[] = [];
-  let data: (number | null)[][] = [];
+  const yAxis: number[] = [];
+  const data: (number | null)[][] = [];
   const metadata: Record<string, any> = {};
   let dataStartIndex = -1;
 
@@ -197,7 +197,7 @@ const parseGenericFormat = async (
   void _text; // Reserved for future use
   let xAxis: number[] = [];
   let yAxis: number[] = [];
-  let data: (number | null)[][] = [];
+  const data: (number | null)[][] = [];
   const metadata: Record<string, any> = {};
 
   // Filter empty lines

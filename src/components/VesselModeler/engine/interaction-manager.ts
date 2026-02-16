@@ -252,7 +252,7 @@ export class InteractionManager {
       newPos = Math.max(-headDepth, Math.min(state.length + headDepth, newPos));
 
       // Calculate angle in degrees around the circumference
-      let rad = isVertical
+      const rad = isVertical
         ? Math.atan2(point.z, point.x)
         : Math.atan2(point.y, point.z);
       let deg = (rad * 180) / Math.PI;

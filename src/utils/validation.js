@@ -16,7 +16,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 const SQL_INJECTION_PATTERNS = [
     /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|CREATE|ALTER|EXEC|EXECUTE|SCRIPT|JAVASCRIPT)\b)/gi,
     /(--|#|\/\*|\*\/|;|\||&&|\|\|)/g,
-    /('|(\')|"|(\")|(\\x27)|(\\x22))/g
+    /('|(')|"|(")|(\\x27)|(\\x22))/g
 ];
 
 // XSS patterns to detect
@@ -58,6 +58,7 @@ export function sanitizeString(input, options = {}) {
 
     // Remove control characters
     if (options.removeControlChars !== false) {
+        // eslint-disable-next-line no-control-regex
         sanitized = sanitized.replace(/[\x00-\x1F\x7F]/g, '');
     }
 

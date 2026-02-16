@@ -212,6 +212,7 @@ function LoginPageNew() {
           setIsLoading(false);
           return;
         }
+        // eslint-disable-next-line no-useless-escape
         if (!/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(newPassword)) {
           setError('Password must contain at least one special character (!@#$%^&*)');
           setIsLoading(false);
@@ -265,6 +266,7 @@ function LoginPageNew() {
           setIsLoading(false);
           return;
         }
+        // eslint-disable-next-line no-useless-escape
         if (!/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(newPassword)) {
           setError('Password must contain at least one special character (!@#$%^&*)');
           setIsLoading(false);

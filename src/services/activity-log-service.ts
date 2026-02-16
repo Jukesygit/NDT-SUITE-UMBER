@@ -147,6 +147,7 @@ export async function logActivity(params: LogActivityParams): Promise<void> {
             p_user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
         }).then(({ error }: { error: { message: string } | null }) => {
             if (error) {
+                // intentionally empty - activity logging errors are non-critical
             }
         });
     } catch (error) {
