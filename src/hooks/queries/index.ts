@@ -67,3 +67,16 @@ export {
     useActivityUsers,
     activityLogKeys,
 } from './useActivityLog';
+
+// Document Control queries
+export {
+    useDocuments,
+    useDocument,
+    useDocumentRevisions,
+    useDocumentCategories,
+    useAllDocumentCategories,
+    useDocumentsDueForReview,
+    useDocumentStats,
+    useDocumentReviewSchedule,
+    documentKeys,
+} from './useDocuments';

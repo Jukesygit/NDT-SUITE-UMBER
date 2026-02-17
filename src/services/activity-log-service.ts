@@ -20,7 +20,8 @@ export type ActionCategory =
     | 'competency'
     | 'admin'
     | 'asset'
-    | 'config';
+    | 'config'
+    | 'document';
 
 // Specific action types
 export type ActionType =
@@ -68,7 +69,16 @@ export type ActionType =
     | 'announcement_updated'
     // Sharing
     | 'share_created'
-    | 'share_deleted';
+    | 'share_deleted'
+    // Document Control
+    | 'controlled_document_created'
+    | 'controlled_document_updated'
+    | 'controlled_document_withdrawn'
+    | 'document_revision_created'
+    | 'document_submitted_for_review'
+    | 'document_revision_approved'
+    | 'document_revision_rejected'
+    | 'document_review_completed';
 
 export interface ActivityLogEntry {
     id: string;
@@ -186,6 +196,7 @@ export const competencyLogger = createActivityLogger('competency');
 export const adminLogger = createActivityLogger('admin');
 export const assetLogger = createActivityLogger('asset');
 export const configLogger = createActivityLogger('config');
+export const documentLogger = createActivityLogger('document');
 
 // ============================================================================
 // Activity Querying
@@ -319,6 +330,7 @@ export async function getActivityStats(since?: Date): Promise<Record<ActionCateg
         admin: 0,
         asset: 0,
         config: 0,
+        document: 0,
     };
 
     data?.forEach((row: { action_category: string }) => {
@@ -344,6 +356,7 @@ export default {
     adminLogger,
     assetLogger,
     configLogger,
+    documentLogger,
     getActivityLogs,
     getActivityUsers,
     getActivityStats,

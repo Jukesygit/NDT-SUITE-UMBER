@@ -70,3 +70,19 @@ export {
     useImportConfig,
 } from './useConfigMutations';
 
+// Document Control mutations
+export {
+    useCreateDocument,
+    useUpdateDocument,
+    useWithdrawDocument,
+    useCreateRevision,
+    useSubmitForReview,
+    useApproveRevision,
+    useRejectRevision,
+    useCompleteReviewNoChanges,
+    useCreateDocumentCategory,
+    useUpdateDocumentCategory,
+    useDeleteDocumentCategory,
+    useReorderDocumentCategories,
+} from './useDocumentMutations';
+

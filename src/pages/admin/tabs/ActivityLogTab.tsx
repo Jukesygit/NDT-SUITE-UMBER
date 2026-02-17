@@ -77,6 +77,7 @@ const CATEGORY_COLORS: Record<ActionCategory, { bg: string; text: string }> = {
     admin: { bg: 'rgba(251, 191, 36, 0.15)', text: '#fbbf24' },
     asset: { bg: 'rgba(56, 189, 248, 0.15)', text: '#38bdf8' },
     config: { bg: 'rgba(156, 163, 175, 0.15)', text: '#9ca3af' },
+    document: { bg: 'rgba(245, 158, 11, 0.15)', text: '#f59e0b' },
 };
 
 // Format action type for display
@@ -96,6 +97,7 @@ function formatCategory(category: ActionCategory): string {
         admin: 'Admin',
         asset: 'Asset',
         config: 'Config',
+        document: 'Document',
     };
     return labels[category] || category;
 }
