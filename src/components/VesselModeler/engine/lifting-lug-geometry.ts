@@ -16,6 +16,47 @@ import { SCALE } from './materials';
 // ---------------------------------------------------------------------------
 
 /**
+ * Curve the bottom face of a BoxGeometry to conform to a cylindrical shell.
+ *
+ * The box sits on the shell surface with its Y axis pointing outward (radial).
+ * Vertices along Z (circumferential) are pushed inward by the sagitta so the
+ * base wraps the cylinder:  offset = R - sqrt(R² - z²)
+ *
+ * @param geom   - BoxGeometry to modify in-place (needs Z subdivisions)
+ * @param R      - Shell radius in world units (mm * SCALE)
+ */
+function curveBaseToShell(geom: THREE.BufferGeometry, R: number): void {
+  const posAttr = geom.getAttribute('position') as THREE.BufferAttribute;
+  for (let i = 0; i < posAttr.count; i++) {
+    const z = posAttr.getZ(i);
+    const sagitta = R - Math.sqrt(Math.max(0, R * R - z * z));
+    // Shift vertex downward (toward shell centre) by sagitta amount
+    posAttr.setY(i, posAttr.getY(i) - sagitta);
+  }
+  posAttr.needsUpdate = true;
+  geom.computeVertexNormals();
+}
+
+/**
+ * Curve the bottom face of a CylinderGeometry base plate to conform to
+ * a cylindrical shell. Same sagitta logic as curveBaseToShell but applied
+ * using the XZ distance from axis for a circular base.
+ */
+function curveCylinderBaseToShell(geom: THREE.BufferGeometry, R: number): void {
+  const posAttr = geom.getAttribute('position') as THREE.BufferAttribute;
+  for (let i = 0; i < posAttr.count; i++) {
+    const z = posAttr.getZ(i);
+    const x = posAttr.getX(i);
+    // Use the circumferential distance (along Z for pad-eye, radial for cylinder)
+    const dist = Math.sqrt(x * x + z * z);
+    const sagitta = R - Math.sqrt(Math.max(0, R * R - dist * dist));
+    posAttr.setY(i, posAttr.getY(i) - sagitta);
+  }
+  posAttr.needsUpdate = true;
+  geom.computeVertexNormals();
+}
+
+/**
  * Build a pad-eye lifting lug as a THREE.Group.
  *
  * Modelled after real welded pad-eye lugs: a flat rectangular base plate
@@ -23,41 +64,44 @@ import { SCALE } from './materials';
  * top containing the shackle hole.
  *
  * Components (from shell surface outward along +Y):
- *   1. Base plate (flat rectangular pad on shell surface)
+ *   1. Base plate (curved rectangular pad conforming to shell surface)
  *   2. Vertical plate (tapered profile extruded to plate thickness,
  *      with shackle hole cut through the rounded top)
  */
 function createPadEyeLug(
   lug: LiftingLugConfig,
   material: THREE.MeshPhongMaterial,
+  vesselRadius: number,
 ): THREE.Group {
   const group = new THREE.Group();
   const size = findLiftingLugSize(lug.swl);
 
-  const width = (lug.width || size.width) * SCALE;
+  const width = (lug.width || size.width) * SCALE * 1.3;   // wider plate
   const height = (lug.height || size.height) * SCALE;
   const thickness = (lug.thickness || size.thickness) * SCALE;
   const holeDia = (lug.holeDiameter || size.holeDiameter) * SCALE;
   const baseDia = size.baseDiameter * SCALE;
 
-  // -- 1. Base plate (flat rectangular pad on shell surface) --
+  // -- 1. Base plate (curved rectangular pad conforming to shell) --
   // Long dimension along Z (circumferential), short along X (longitudinal)
+  // Use Z subdivisions so vertices can be curved to the shell radius.
   const baseThk = thickness * 0.5;
   const baseLong = baseDia;           // long dimension (circumferential)
   const baseShort = baseDia * 0.35;   // short dimension (longitudinal)
-  const baseGeom = new THREE.BoxGeometry(baseShort, baseThk, baseLong);
+  const baseGeom = new THREE.BoxGeometry(baseShort, baseThk, baseLong, 1, 1, 16);
+  const R = vesselRadius * SCALE;
+  if (R > 0) curveBaseToShell(baseGeom, R);
   const basePlate = new THREE.Mesh(baseGeom, material);
   basePlate.position.y = baseThk / 2;
   group.add(basePlate);
 
   // -- 2. Vertical plate (tapered profile with integrated eye hole) --
-  // Real pad eyes are roughly as wide as tall. Scale height down to match.
   // Profile built in XY then rotated 90° around Y so the plate face spans
   // the circumferential axis (Z in local lug space).
   const halfBase = width / 2;
   const rimThk = holeDia * 0.45;                 // material around the hole
   const earR = holeDia / 2 + rimThk;             // outer radius of the rounded top
-  const holeY = height * 0.5;                    // lower profile to match real proportions
+  const holeY = height * 0.42;                   // shorter profile
 
   const plateShape = new THREE.Shape();
   plateShape.moveTo(-halfBase, 0);                // bottom-left
@@ -101,6 +145,7 @@ function createPadEyeLug(
 function createTrunnionLug(
   lug: LiftingLugConfig,
   material: THREE.MeshPhongMaterial,
+  vesselRadius: number,
 ): THREE.Group {
   const group = new THREE.Group();
   const size = findLiftingLugSize(lug.swl);
@@ -111,9 +156,11 @@ function createTrunnionLug(
   const pinDia = (lug.holeDiameter || size.holeDiameter) * SCALE;
   const baseDia = size.baseDiameter * SCALE;
 
-  // -- 1. Base plate --
+  // -- 1. Base plate (curved to conform to shell) --
   const baseThk = wallThk * 0.6;
   const baseGeom = new THREE.CylinderGeometry(baseDia / 2, baseDia / 2, baseThk, 32);
+  const R = vesselRadius * SCALE;
+  if (R > 0) curveCylinderBaseToShell(baseGeom, R);
   const basePlate = new THREE.Mesh(baseGeom, material);
   basePlate.position.y = baseThk / 2;
   group.add(basePlate);
@@ -158,16 +205,18 @@ function createTrunnionLug(
  * Positioning and orientation on the vessel is handled by the caller
  * (vessel-geometry.ts) using quaternion rotation, identical to nozzles.
  *
- * @param lug      - Lifting lug configuration
- * @param material - Material to apply to all sub-meshes
+ * @param lug          - Lifting lug configuration
+ * @param material     - Material to apply to all sub-meshes
+ * @param vesselRadius - Vessel inner radius in mm (used to curve base plate)
  * @returns A THREE.Group containing the complete lug geometry
  */
 export function createLiftingLug(
   lug: LiftingLugConfig,
   material: THREE.MeshPhongMaterial,
+  vesselRadius: number,
 ): THREE.Group {
   if (lug.style === 'trunnion') {
-    return createTrunnionLug(lug, material);
+    return createTrunnionLug(lug, material, vesselRadius);
   }
-  return createPadEyeLug(lug, material);
+  return createPadEyeLug(lug, material, vesselRadius);
 }

@@ -515,7 +515,7 @@ export function buildVesselScene(
   // -- Lifting Lugs -----------------------------------------------------------
   state.liftingLugs.forEach((lug, idx) => {
     const mat = idx === selectedLugIndex ? lugHighlightMaterial : lugMaterial;
-    const lugGroup = createLiftingLug(lug, mat);
+    const lugGroup = createLiftingLug(lug, mat, RADIUS);
 
     // Same position/orientation logic as nozzles (pos/angle on shell surface)
     let r_local = RADIUS;
