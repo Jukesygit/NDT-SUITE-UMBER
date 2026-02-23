@@ -10,6 +10,7 @@ import {
     type NozzleConfig,
     type SaddleConfig,
     type TextureConfig,
+    type LiftingLugConfig,
     type VesselCallbacks,
 } from './types';
 import type { ExtractionResult } from './engine/drawing-parser';
@@ -28,6 +29,7 @@ export default function VesselModeler() {
     const [selectedNozzleIndex, setSelectedNozzleIndex] = useState(-1);
     const [selectedSaddleIndex, setSelectedSaddleIndex] = useState(-1);
     const [selectedTextureId, setSelectedTextureId] = useState(-1);
+    const [selectedLugIndex, setSelectedLugIndex] = useState(-1);
 
     // UI state
     const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -40,6 +42,7 @@ export default function VesselModeler() {
     const [nozzlesLocked, setNozzlesLocked] = useState(false);
     const [saddlesLocked, setSaddlesLocked] = useState(false);
     const [texturesLocked, setTexturesLocked] = useState(false);
+    const [lugsLocked, setLugsLocked] = useState(false);
 
     // Three.js texture objects (imperative, not React state)
     const textureObjectsRef = useRef<Record<number, THREE.Texture>>({});
@@ -101,6 +104,30 @@ export default function VesselModeler() {
         setSelectedSaddleIndex(-1);
     }, []);
 
+    // --- Lifting lug handlers ---
+    const addLug = useCallback((lug: LiftingLugConfig) => {
+        setVesselState(prev => ({
+            ...prev,
+            liftingLugs: [...prev.liftingLugs, lug],
+            hasModel: true,
+        }));
+    }, []);
+
+    const updateLug = useCallback((index: number, updates: Partial<LiftingLugConfig>) => {
+        setVesselState(prev => ({
+            ...prev,
+            liftingLugs: prev.liftingLugs.map((l, i) => i === index ? { ...l, ...updates } : l),
+        }));
+    }, []);
+
+    const removeLug = useCallback((index: number) => {
+        setVesselState(prev => ({
+            ...prev,
+            liftingLugs: prev.liftingLugs.filter((_, i) => i !== index),
+        }));
+        setSelectedLugIndex(-1);
+    }, []);
+
     // --- Texture handlers ---
     const addTexture = useCallback((texture: TextureConfig, threeTexture: THREE.Texture) => {
         textureObjectsRef.current[Number(texture.id)] = threeTexture;
@@ -142,21 +169,31 @@ export default function VesselModeler() {
             setSelectedNozzleIndex(idx);
             setSelectedSaddleIndex(-1);
             setSelectedTextureId(-1);
+            setSelectedLugIndex(-1);
         },
         onSaddleSelected: (idx) => {
             setSelectedNozzleIndex(-1);
             setSelectedSaddleIndex(idx);
             setSelectedTextureId(-1);
+            setSelectedLugIndex(-1);
         },
         onTextureSelected: (id) => {
             setSelectedNozzleIndex(-1);
             setSelectedSaddleIndex(-1);
             setSelectedTextureId(id);
+            setSelectedLugIndex(-1);
+        },
+        onLugSelected: (idx) => {
+            setSelectedNozzleIndex(-1);
+            setSelectedSaddleIndex(-1);
+            setSelectedTextureId(-1);
+            setSelectedLugIndex(idx);
         },
         onDeselect: () => {
             setSelectedNozzleIndex(-1);
             setSelectedSaddleIndex(-1);
             setSelectedTextureId(-1);
+            setSelectedLugIndex(-1);
         },
         onNozzleMoved: (idx, pos, angle) => {
             updateNozzle(idx, { pos: Math.round(pos), angle: Math.round(angle) });
@@ -166,6 +203,9 @@ export default function VesselModeler() {
         },
         onTextureMoved: (id, pos, angle) => {
             updateTexture(id, { pos: Math.round(pos), angle: Math.round(angle) });
+        },
+        onLugMoved: (idx, pos, angle) => {
+            updateLug(idx, { pos: Math.round(pos), angle: Math.round(angle) });
         },
         onDragEnd: () => {
             // No-op, state is already updated per-move
@@ -186,6 +226,10 @@ export default function VesselModeler() {
             nozzles: vesselState.nozzles.map(n => ({
                 name: n.name, pos: n.pos, proj: n.proj,
                 angle: n.angle, size: n.size,
+            })),
+            liftingLugs: vesselState.liftingLugs.map(l => ({
+                name: l.name, pos: l.pos, angle: l.angle,
+                style: l.style, swl: l.swl,
             })),
             saddles: vesselState.saddles.map(s => ({
                 pos: s.pos, color: s.color || '#2244ff',
@@ -270,6 +314,7 @@ export default function VesselModeler() {
                     headRatio: projectData.vessel.headRatio || 2.0,
                     orientation: projectData.vessel.orientation || 'horizontal',
                     nozzles: projectData.nozzles || [],
+                    liftingLugs: projectData.liftingLugs || [],
                     saddles: (projectData.saddles || []).map((s: any) =>
                         typeof s === 'number' ? { pos: s, color: '#2244ff' } : { pos: s.pos, color: s.color || '#2244ff' }
                     ),
@@ -287,6 +332,7 @@ export default function VesselModeler() {
                 setSelectedNozzleIndex(-1);
                 setSelectedSaddleIndex(-1);
                 setSelectedTextureId(-1);
+                setSelectedLugIndex(-1);
             } catch (error: any) {
                 alert('Error loading project: ' + error.message);
             }
@@ -319,11 +365,13 @@ export default function VesselModeler() {
         setSelectedNozzleIndex(-1);
         setSelectedSaddleIndex(-1);
         setSelectedTextureId(-1);
+        setSelectedLugIndex(-1);
     }, []);
 
     // --- Nozzle library drag-and-drop onto 3D canvas ---
-    const handleNozzleDragOver = useCallback((e: React.DragEvent) => {
-        if (e.dataTransfer.types.includes('application/x-nozzle-pipe')) {
+    const handleDragOver = useCallback((e: React.DragEvent) => {
+        if (e.dataTransfer.types.includes('application/x-nozzle-pipe') ||
+            e.dataTransfer.types.includes('application/x-lifting-lug')) {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'copy';
         }
@@ -420,14 +468,91 @@ export default function VesselModeler() {
         }
     }, [vesselState, addNozzle]);
 
+    // --- Lifting lug drag-and-drop onto 3D canvas ---
+    const handleLugDrop = useCallback((e: React.DragEvent) => {
+        const data = e.dataTransfer.getData('application/x-lifting-lug');
+        if (!data) return;
+        e.preventDefault();
+
+        const lugData = JSON.parse(data);
+        const cam = viewportRef.current?.getCamera();
+        const rendererEl = viewportRef.current?.getRenderer()?.domElement;
+        const sceneManager = viewportRef.current?.getSceneManager();
+        if (!cam || !rendererEl || !sceneManager) return;
+
+        const vesselGroup = sceneManager.getVesselGroup();
+        if (!vesselGroup) return;
+
+        const rect = rendererEl.getBoundingClientRect();
+        const mouse = new THREE.Vector2(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -((e.clientY - rect.top) / rect.height) * 2 + 1
+        );
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mouse, cam);
+
+        const shells: THREE.Object3D[] = [];
+        vesselGroup.traverse((child: THREE.Object3D) => {
+            if (child.userData.isShell) shells.push(child);
+        });
+        const intersects = raycaster.intersectObjects(shells);
+
+        let newPos: number;
+        let deg: number;
+
+        if (intersects.length > 0) {
+            const point = intersects[0].point;
+            const isVertical = vesselState.orientation === 'vertical';
+            newPos = isVertical
+                ? (point.y / SCALE) + (vesselState.length / 2)
+                : (point.x / SCALE) + (vesselState.length / 2);
+            const headDepth = vesselState.id / (2 * vesselState.headRatio);
+            newPos = Math.max(-headDepth, Math.min(vesselState.length + headDepth, newPos));
+
+            const rad = isVertical
+                ? Math.atan2(point.z, point.x)
+                : Math.atan2(point.y, point.z);
+            deg = (rad * 180) / Math.PI;
+            if (deg < 0) deg += 360;
+        } else {
+            newPos = vesselState.length / 2;
+            deg = 90;
+        }
+
+        let lugNum = vesselState.liftingLugs.length + 1;
+        let name = 'L' + lugNum;
+        while (vesselState.liftingLugs.some(l => l.name === name)) {
+            lugNum++;
+            name = 'L' + lugNum;
+        }
+
+        addLug({
+            name,
+            pos: Math.round(newPos),
+            angle: Math.round(deg),
+            style: lugData.style || 'padEye',
+            swl: lugData.label,
+        });
+    }, [vesselState, addLug]);
+
+    // --- Combined drop handler ---
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        if (e.dataTransfer.types.includes('application/x-nozzle-pipe')) {
+            handleNozzleDrop(e);
+        } else if (e.dataTransfer.types.includes('application/x-lifting-lug')) {
+            handleLugDrop(e);
+        }
+    }, [handleNozzleDrop, handleLugDrop]);
+
     // --- Hint text ---
     const getHintText = () => {
         const locked = [];
         if (nozzlesLocked) locked.push('Nozzles');
+        if (lugsLocked) locked.push('Lugs');
         if (saddlesLocked) locked.push('Saddles');
         if (texturesLocked) locked.push('Textures');
 
-        if (locked.length === 3) return 'All Components Locked - Camera Only Mode';
+        if (locked.length === 4) return 'All Components Locked - Camera Only Mode';
         if (locked.length > 0) return `${locked.join(', ')} Locked | Other components can be repositioned`;
         return 'Drag from Library to Add | Click & Drag Nozzles, Supports, or Textures to Reposition';
     };
@@ -437,14 +562,15 @@ export default function VesselModeler() {
             {/* Main content area */}
             <div
                 className="flex-1 relative overflow-hidden"
-                onDragOver={handleNozzleDragOver}
-                onDrop={handleNozzleDrop}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
             >
                 {/* Three.js viewport (z-0) */}
                 <ThreeViewport
                     ref={viewportRef}
                     vesselState={vesselState}
                     selectedNozzleIndex={selectedNozzleIndex}
+                    selectedLugIndex={selectedLugIndex}
                     selectedSaddleIndex={selectedSaddleIndex}
                     selectedTextureId={selectedTextureId}
                     textureObjects={textureObjectsRef.current}
@@ -463,6 +589,11 @@ export default function VesselModeler() {
                         onUpdateNozzle={updateNozzle}
                         onRemoveNozzle={removeNozzle}
                         onSelectNozzle={setSelectedNozzleIndex}
+                        selectedLugIndex={selectedLugIndex}
+                        onAddLug={addLug}
+                        onUpdateLug={updateLug}
+                        onRemoveLug={removeLug}
+                        onSelectLug={setSelectedLugIndex}
                         onAddSaddle={addSaddle}
                         onUpdateSaddle={updateSaddle}
                         onRemoveSaddle={removeSaddle}
@@ -511,6 +642,14 @@ export default function VesselModeler() {
                     >
                         {texturesLocked ? <Lock size={12} /> : <Unlock size={12} />}
                         T
+                    </button>
+                    <button
+                        className={`vm-lock-btn ${lugsLocked ? 'locked' : ''}`}
+                        onClick={() => setLugsLocked(l => !l)}
+                        title={lugsLocked ? 'Unlock lifting lugs' : 'Lock lifting lugs'}
+                    >
+                        {lugsLocked ? <Lock size={12} /> : <Unlock size={12} />}
+                        L
                     </button>
                 </div>
 
