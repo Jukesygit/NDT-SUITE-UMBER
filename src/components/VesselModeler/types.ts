@@ -13,7 +13,7 @@ export type Orientation = 'horizontal' | 'vertical';
 
 export type MaterialKey = 'blue' | 'cs' | 'ss' | 'red';
 
-export type DragType = 'nozzle' | 'saddle' | 'texture';
+export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture';
 
 export type AnnotationTool =
   | 'arrow'
@@ -62,6 +62,45 @@ export interface NozzleConfig {
   pipeOD?: number;
 }
 
+export type LiftingLugStyle = 'padEye' | 'trunnion';
+
+export interface LiftingLugConfig {
+  name: string;
+  /** Distance from left tangent line in mm */
+  pos: number;
+  /** Degrees: 90 = Top, 270 = Bottom, 0 = Right, 180 = Left */
+  angle: number;
+  /** Lug style */
+  style: LiftingLugStyle;
+  /** Safe Working Load key (e.g. '1t', '5t') */
+  swl: string;
+  /** Optional plate width override in mm (pad eye) */
+  width?: number;
+  /** Optional plate height override in mm (pad eye) */
+  height?: number;
+  /** Optional plate thickness override in mm */
+  thickness?: number;
+  /** Optional hole diameter override in mm */
+  holeDiameter?: number;
+}
+
+export interface LiftingLugSize {
+  /** Display label */
+  label: string;
+  /** Safe Working Load in tonnes */
+  swlTonnes: number;
+  /** Plate width in mm (pad eye) or pipe OD (trunnion) */
+  width: number;
+  /** Plate height in mm (pad eye) or stub length (trunnion) */
+  height: number;
+  /** Plate / pipe thickness in mm */
+  thickness: number;
+  /** Hole diameter in mm */
+  holeDiameter: number;
+  /** Base plate diameter in mm */
+  baseDiameter: number;
+}
+
 export interface SaddleConfig {
   /** Distance from left tangent line in mm */
   pos: number;
@@ -100,6 +139,7 @@ export interface VesselState {
   headRatio: number;
   orientation: Orientation;
   nozzles: NozzleConfig[];
+  liftingLugs: LiftingLugConfig[];
   saddles: SaddleConfig[];
   textures: TextureConfig[];
   hasModel: boolean;
@@ -116,6 +156,7 @@ export interface DragState {
   selectedNozzleIdx: number;
   selectedSaddleIdx: number;
   selectedTextureIdx: number;
+  selectedLugIdx: number;
   /** THREE.Raycaster instance - typed as `any` to avoid hard Three.js dependency in types */
   raycaster: any;
   /** THREE.Vector2 instance - typed as `any` to avoid hard Three.js dependency in types */
@@ -124,6 +165,7 @@ export interface DragState {
   nozzlesLocked: boolean;
   saddlesLocked: boolean;
   texturesLocked: boolean;
+  lugsLocked: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -369,6 +411,19 @@ export const PIPE_SIZES: PipeSize[] = [
   { nps: '36"',   od: 914.4,  id: 876.3,  flangeOD: 1143, flangeThk: 60 },
 ];
 
+export const LIFTING_LUG_SIZES: LiftingLugSize[] = [
+  { label: '1t',  swlTonnes: 1,  width: 80,  height: 100, thickness: 12, holeDiameter: 25, baseDiameter: 120 },
+  { label: '2t',  swlTonnes: 2,  width: 100, height: 120, thickness: 16, holeDiameter: 30, baseDiameter: 150 },
+  { label: '5t',  swlTonnes: 5,  width: 120, height: 150, thickness: 20, holeDiameter: 35, baseDiameter: 180 },
+  { label: '10t', swlTonnes: 10, width: 150, height: 180, thickness: 25, holeDiameter: 42, baseDiameter: 220 },
+  { label: '20t', swlTonnes: 20, width: 180, height: 220, thickness: 32, holeDiameter: 50, baseDiameter: 260 },
+  { label: '50t', swlTonnes: 50, width: 220, height: 280, thickness: 40, holeDiameter: 65, baseDiameter: 320 },
+];
+
+export function findLiftingLugSize(swl: string): LiftingLugSize {
+  return LIFTING_LUG_SIZES.find(s => s.label === swl) || LIFTING_LUG_SIZES[0];
+}
+
 /**
  * Find the closest pipe size to a given bore ID (in mm).
  * Returns the PipeSize entry with the smallest absolute difference in `id`.
@@ -398,6 +453,7 @@ export const DEFAULT_VESSEL_STATE: VesselState = {
   headRatio: 2.0,
   orientation: 'horizontal',
   nozzles: [],
+  liftingLugs: [],
   saddles: [
     { pos: 1500, color: '#2244ff' },
     { pos: 6500, color: '#2244ff' },
@@ -422,6 +478,8 @@ export interface VesselCallbacks {
   onNozzleSelected?: (index: number) => void;
   onSaddleSelected?: (index: number) => void;
   onTextureSelected?: (id: number) => void;
+  onLugSelected?: (index: number) => void;
+  onLugMoved?: (index: number, newPos: number, newAngle: number) => void;
   onDeselect?: () => void;
   onDragEnd?: () => void;
 }
