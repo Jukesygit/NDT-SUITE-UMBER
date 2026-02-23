@@ -18,11 +18,14 @@ import { SCALE } from './materials';
 /**
  * Build a pad-eye lifting lug as a THREE.Group.
  *
+ * Modelled after real welded pad-eye lugs: a flat rectangular base plate
+ * with a single vertical plate that tapers from a wide base to a rounded
+ * top containing the shackle hole.
+ *
  * Components (from shell surface outward along +Y):
- *   1. Base plate (curved disc on shell surface)
- *   2. Vertical plate (flat box rising from base)
- *   3. Eye ring (torus at top of plate for shackle/hook)
- *   4. Gusset plates (2x triangular reinforcements on each side)
+ *   1. Base plate (flat rectangular pad on shell surface)
+ *   2. Vertical plate (tapered profile extruded to plate thickness,
+ *      with shackle hole cut through the rounded top)
  */
 function createPadEyeLug(
   lug: LiftingLugConfig,
@@ -37,53 +40,43 @@ function createPadEyeLug(
   const holeDia = (lug.holeDiameter || size.holeDiameter) * SCALE;
   const baseDia = size.baseDiameter * SCALE;
 
-  // -- 1. Base plate (flat cylinder on shell surface) --
-  const baseThk = thickness * 0.6;
-  const baseGeom = new THREE.CylinderGeometry(baseDia / 2, baseDia / 2, baseThk, 32);
+  // -- 1. Base plate (flat rectangular pad on shell surface) --
+  const baseThk = thickness * 0.5;
+  const baseLong = baseDia;           // long dimension (along plate width)
+  const baseShort = baseDia * 0.35;   // short dimension (plate thickness direction)
+  const baseGeom = new THREE.BoxGeometry(baseLong, baseThk, baseShort);
   const basePlate = new THREE.Mesh(baseGeom, material);
   basePlate.position.y = baseThk / 2;
   group.add(basePlate);
 
-  // -- 2. Vertical plate (the main lug body) --
-  const plateGeom = new THREE.BoxGeometry(thickness, height, width);
+  // -- 2. Vertical plate (tapered profile with integrated eye hole) --
+  // Profile shape in XY: wide at bottom, tapers inward, rounded top with hole.
+  // Extruded along Z by plate thickness.
+  const halfBase = width / 2;
+  const rimThk = holeDia * 0.45;                 // material around the hole
+  const earR = holeDia / 2 + rimThk;             // outer radius of the rounded top
+  const holeY = height;                           // Y of hole centre above base plate
+
+  const plateShape = new THREE.Shape();
+  plateShape.moveTo(-halfBase, 0);                // bottom-left
+  plateShape.lineTo(halfBase, 0);                 // bottom-right
+  plateShape.lineTo(earR, holeY);                 // taper right side up to ear
+  plateShape.absarc(0, holeY, earR, 0, Math.PI, false);  // semicircular top
+  plateShape.lineTo(-halfBase, 0);                // taper left side back down
+
+  // Cut the shackle hole
+  const holePath = new THREE.Path();
+  holePath.absarc(0, holeY, holeDia / 2, 0, Math.PI * 2, true);
+  plateShape.holes.push(holePath);
+
+  const plateGeom = new THREE.ExtrudeGeometry(plateShape, {
+    depth: thickness,
+    bevelEnabled: false,
+  });
   const plate = new THREE.Mesh(plateGeom, material);
-  plate.position.y = baseThk + height / 2;
+  // Centre the extrusion on Z axis, sit on top of base plate
+  plate.position.set(0, baseThk, -thickness / 2);
   group.add(plate);
-
-  // -- 3. Eye ring (torus at top of plate) --
-  const eyeOuterRadius = holeDia / 2 + thickness * 0.6;
-  const eyeTubeRadius = thickness * 0.55;
-  const eyeGeom = new THREE.TorusGeometry(eyeOuterRadius, eyeTubeRadius, 16, 32);
-  const eye = new THREE.Mesh(eyeGeom, material);
-  eye.position.y = baseThk + height + eyeOuterRadius * 0.3;
-  // Torus is built in XY plane, rotate to stand upright in XY
-  eye.rotation.x = Math.PI / 2;
-  group.add(eye);
-
-  // -- 4. Gusset plates (triangular reinforcement on each side) --
-  const gussetHeight = height * 0.5;
-  const gussetLength = width * 0.35;
-  const gussetThk = thickness * 0.5;
-
-  const gussetShape = new THREE.Shape();
-  gussetShape.moveTo(0, 0);
-  gussetShape.lineTo(gussetLength, 0);
-  gussetShape.lineTo(0, gussetHeight);
-  gussetShape.closePath();
-
-  const extrudeSettings = { depth: gussetThk, bevelEnabled: false };
-  const gussetGeom = new THREE.ExtrudeGeometry(gussetShape, extrudeSettings);
-
-  // Left gusset
-  const gussetL = new THREE.Mesh(gussetGeom, material);
-  gussetL.position.set(thickness / 2, baseThk, -gussetThk / 2);
-  group.add(gussetL);
-
-  // Right gusset (mirrored)
-  const gussetR = new THREE.Mesh(gussetGeom, material);
-  gussetR.position.set(-thickness / 2, baseThk, gussetThk / 2);
-  gussetR.rotation.y = Math.PI;
-  group.add(gussetR);
 
   return group;
 }
