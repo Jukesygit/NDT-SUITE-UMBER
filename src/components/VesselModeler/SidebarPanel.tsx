@@ -10,7 +10,7 @@ import type {
     MaterialKey,
     Orientation,
 } from './types';
-import { MATERIAL_PRESETS, PIPE_SIZES, LIFTING_LUG_SIZES, findClosestPipeSize, findLiftingLugSize } from './types';
+import { MATERIAL_PRESETS, PIPE_SIZES, LIFTING_LUG_SIZES, findClosestPipeSize } from './types';
 import { loadTextureFromFile } from './engine/texture-manager';
 import type * as THREE from 'three';
 
