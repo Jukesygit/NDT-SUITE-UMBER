@@ -21,7 +21,8 @@ class EnvironmentConfig {
                 environment: import.meta.env.MODE || 'development',
                 isDevelopment: import.meta.env.DEV || false,
                 isProduction: import.meta.env.PROD || false,
-                enableAnalytics: import.meta.env.VITE_ENABLE_ANALYTICS === 'true'
+                enableAnalytics: import.meta.env.VITE_ENABLE_ANALYTICS === 'true',
+                maintenanceMode: import.meta.env.VITE_MAINTENANCE_MODE === 'true'
             },
             security: {
                 // Security settings that should never be in client code
@@ -97,6 +98,14 @@ class EnvironmentConfig {
      */
     isProduction() {
         return this.config.app.isProduction;
+    }
+
+    /**
+     * Check if app is in maintenance mode (PII lockdown - tools only)
+     * @returns {boolean}
+     */
+    isMaintenanceMode() {
+        return this.config.app.maintenanceMode;
     }
 }
 

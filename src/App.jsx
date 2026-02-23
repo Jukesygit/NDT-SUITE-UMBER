@@ -16,6 +16,7 @@ import RequireAccess from './components/RequireAccess.jsx';
 import LoginPage from './pages/LoginPageNew.jsx';
 import PrivacyPolicyPage from './pages/legal/PrivacyPolicyPage.tsx';
 import { RandomMatrixSpinner } from './components/MatrixSpinners';
+import environmentConfig from './config/environment.js';
 
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage.tsx'));
 const CscanVisualizerPage = lazy(() => import('./pages/CscanVisualizerPage.jsx'));
@@ -77,6 +78,8 @@ const PageLoader = () => (
     </div>
 );
 
+const isMaintenanceMode = environmentConfig.isMaintenanceMode();
+
 function App() {
     const [isLoading, setIsLoading] = useState(true);
 
@@ -123,21 +126,32 @@ function App() {
                                 <Route path="/privacy" element={<PrivacyPolicyPage />} />
                                 <Route element={<ProtectedRoute />}>
                                     <Route element={<Layout />}>
-                                        <Route path="/" element={<Navigate to="/profile" replace />} />
-                                        <Route path="/profile" element={<ErrorBoundary><ProfilePage /></ErrorBoundary>} />
+                                        <Route path="/" element={<Navigate to={isMaintenanceMode ? "/cscan" : "/profile"} replace />} />
                                         <Route path="/cscan" element={<ErrorBoundary><CscanVisualizerPage /></ErrorBoundary>} />
                                         <Route path="/vessel-modeler" element={<ErrorBoundary><VesselModelerPage /></ErrorBoundary>} />
-                                        <Route path="/documents" element={<ErrorBoundary><DocumentsPage /></ErrorBoundary>} />
-                                        <Route path="/personnel" element={
-                                            <RequireAccess requireElevatedAccess>
-                                                <ErrorBoundary><PersonnelPage /></ErrorBoundary>
-                                            </RequireAccess>
-                                        } />
-                                        <Route path="/admin" element={
-                                            <RequireAccess requireAdmin>
-                                                <ErrorBoundary><AdminPage /></ErrorBoundary>
-                                            </RequireAccess>
-                                        } />
+                                        {isMaintenanceMode ? (
+                                            <>
+                                                <Route path="/profile" element={<Navigate to="/cscan" replace />} />
+                                                <Route path="/documents" element={<Navigate to="/cscan" replace />} />
+                                                <Route path="/personnel" element={<Navigate to="/cscan" replace />} />
+                                                <Route path="/admin" element={<Navigate to="/cscan" replace />} />
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Route path="/profile" element={<ErrorBoundary><ProfilePage /></ErrorBoundary>} />
+                                                <Route path="/documents" element={<ErrorBoundary><DocumentsPage /></ErrorBoundary>} />
+                                                <Route path="/personnel" element={
+                                                    <RequireAccess requireElevatedAccess>
+                                                        <ErrorBoundary><PersonnelPage /></ErrorBoundary>
+                                                    </RequireAccess>
+                                                } />
+                                                <Route path="/admin" element={
+                                                    <RequireAccess requireAdmin>
+                                                        <ErrorBoundary><AdminPage /></ErrorBoundary>
+                                                    </RequireAccess>
+                                                } />
+                                            </>
+                                        )}
                                     </Route>
                                 </Route>
                                 <Route path="*" element={<Navigate to="/" replace />} />

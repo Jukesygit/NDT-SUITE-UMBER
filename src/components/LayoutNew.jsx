@@ -1,9 +1,12 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import authManager from '../auth-manager.js';
+import environmentConfig from '../config/environment.js';
 import { LogoGradientShift } from './MatrixLogoAnimated';
 import { NotificationBell } from './NotificationBell';
 import { AnnouncementBanner } from './AnnouncementBanner';
+
+const isMaintenanceMode = environmentConfig.isMaintenanceMode();
 
 // Navigation configuration
 const navigationConfig = [
@@ -118,11 +121,9 @@ function LayoutNew() {
     authManager.logout().catch(() => {});
   };
 
-  // Filter navigation based on user role
-  // - adminOnly: Only visible to admin
-  // - requiresElevatedAccess: Visible to admin and manager
-  // - no flag: Visible to everyone (Data Hub, Tools, Profile)
+  // Filter navigation based on user role and maintenance mode
   const visibleNav = navigationConfig.filter(item => {
+    if (isMaintenanceMode) return item.isGroup;
     if (item.adminOnly) return isAdmin;
     if (item.requiresElevatedAccess) return hasElevatedAccess;
     return true;
@@ -133,7 +134,7 @@ function LayoutNew() {
       {/* Header */}
       <header className="header">
         <div className="header__container">
-          <Link to="/profile" className="header__brand">
+          <Link to={isMaintenanceMode ? "/cscan" : "/profile"} className="header__brand">
             <LogoGradientShift size={44} />
             <span>Matrix Portal</span>
           </Link>
@@ -203,7 +204,7 @@ function LayoutNew() {
           </nav>
 
           <div className="header__actions">
-            <NotificationBell />
+            {!isMaintenanceMode && <NotificationBell />}
             <button
               onClick={handleLogout}
               className="btn btn--ghost btn--sm"
@@ -219,8 +220,14 @@ function LayoutNew() {
         </div>
       </header>
 
-      {/* System Announcement Banner */}
-      <AnnouncementBanner />
+      {isMaintenanceMode ? (
+        <div className="px-5 py-2.5 text-center text-sm border-b"
+          style={{ background: 'linear-gradient(90deg, rgba(251,191,36,0.2), rgba(251,191,36,0.08))', borderLeft: '4px solid #f59e0b', color: '#fde047' }}>
+          Data features are temporarily unavailable. Tools remain fully functional.
+        </div>
+      ) : (
+        <AnnouncementBanner />
+      )}
 
       {/* Main Content */}
       <main className="main">
