@@ -111,6 +111,42 @@ export function createSaddleHighlightMaterial(): THREE.MeshPhongMaterial {
 }
 
 // ---------------------------------------------------------------------------
+// Lifting Lug Materials
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a material for lifting lugs.
+ * Uses a slightly warmer tone to distinguish from nozzles.
+ */
+export function createLugMaterial(
+  preset: MaterialKey = 'cs',
+): THREE.MeshPhongMaterial {
+  const p = MATERIAL_PRESETS[preset];
+  return new THREE.MeshPhongMaterial({
+    color: p.color,
+    emissive: p.emissive,
+    shininess: p.shininess,
+    side: THREE.FrontSide,
+    transparent: true,
+    opacity: 1.0,
+  });
+}
+
+/**
+ * Create a highlight material for the currently selected lifting lug.
+ */
+export function createLugHighlightMaterial(): THREE.MeshPhongMaterial {
+  return new THREE.MeshPhongMaterial({
+    color: 0xff8844,
+    emissive: 0x553311,
+    shininess: 80,
+    side: THREE.FrontSide,
+    transparent: true,
+    opacity: 1.0,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Preset Update Utility
 // ---------------------------------------------------------------------------
 
