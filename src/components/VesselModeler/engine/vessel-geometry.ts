@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { type VesselState, type TextureConfig } from '../types';
 import { SCALE } from './materials';
 import { createFlangedNozzle } from './nozzle-geometry';
+import { createLiftingLug } from './lifting-lug-geometry';
 
 // ---------------------------------------------------------------------------
 // Result interface
@@ -21,6 +22,7 @@ import { createFlangedNozzle } from './nozzle-geometry';
 export interface BuildSceneResult {
   vesselGroup: THREE.Group;
   nozzleMeshes: THREE.Object3D[];
+  lugMeshes: THREE.Object3D[];
   saddleMeshes: THREE.Mesh[];
   textureMeshes: THREE.Mesh[];
 }
@@ -320,14 +322,18 @@ export function buildVesselScene(
   shellMaterial: THREE.MeshPhongMaterial,
   nozzleMaterial: THREE.MeshPhongMaterial,
   nozzleHighlightMaterial: THREE.MeshPhongMaterial,
+  lugMaterial: THREE.MeshPhongMaterial,
+  lugHighlightMaterial: THREE.MeshPhongMaterial,
   saddleHighlightMaterial: THREE.MeshPhongMaterial,
   textureObjects: Record<number, THREE.Texture>,
   selectedNozzleIndex: number,
+  selectedLugIndex: number,
   selectedSaddleIndex: number,
   selectedTextureId: number,
 ): BuildSceneResult {
   const vesselGroup = new THREE.Group();
   const nozzleMeshes: THREE.Object3D[] = [];
+  const lugMeshes: THREE.Object3D[] = [];
   const saddleMeshes: THREE.Mesh[] = [];
   const textureMeshes: THREE.Mesh[] = [];
 
@@ -335,7 +341,7 @@ export function buildVesselScene(
   if (!state.hasModel) {
     const grid = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
     vesselGroup.add(grid);
-    return { vesselGroup, nozzleMeshes, saddleMeshes, textureMeshes };
+    return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes };
   }
 
   // -- Vessel dimensions ----------------------------------------------------
@@ -506,6 +512,92 @@ export function buildVesselScene(
     nozzleMeshes.push(nozzleGroup);
   });
 
+  // -- Lifting Lugs -----------------------------------------------------------
+  state.liftingLugs.forEach((lug, idx) => {
+    const mat = idx === selectedLugIndex ? lugHighlightMaterial : lugMaterial;
+    const lugGroup = createLiftingLug(lug, mat);
+
+    // Same position/orientation logic as nozzles (pos/angle on shell surface)
+    let r_local = RADIUS;
+    const normal = new THREE.Vector3();
+    const rad = (lug.angle * Math.PI) / 180;
+
+    if (isVertical) {
+      const y_global = (lug.pos - TAN_TAN / 2) * SCALE;
+
+      if (lug.pos < 0) {
+        const y_local = lug.pos;
+        const ratio = Math.min(1, Math.abs(y_local / HEAD_DEPTH));
+        r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
+        normal
+          .set(
+            r_local * Math.cos(rad) / (RADIUS * RADIUS),
+            y_local / (HEAD_DEPTH * HEAD_DEPTH),
+            r_local * Math.sin(rad) / (RADIUS * RADIUS),
+          )
+          .normalize();
+      } else if (lug.pos > TAN_TAN) {
+        const y_local = lug.pos - TAN_TAN;
+        const ratio = Math.min(1, Math.abs(y_local / HEAD_DEPTH));
+        r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
+        normal
+          .set(
+            r_local * Math.cos(rad) / (RADIUS * RADIUS),
+            y_local / (HEAD_DEPTH * HEAD_DEPTH),
+            r_local * Math.sin(rad) / (RADIUS * RADIUS),
+          )
+          .normalize();
+      } else {
+        normal.set(Math.cos(rad), 0, Math.sin(rad)).normalize();
+      }
+
+      const x = r_local * SCALE * Math.cos(rad);
+      const z = r_local * SCALE * Math.sin(rad);
+      lugGroup.position.set(x, y_global, z);
+    } else {
+      const x_global = (lug.pos - TAN_TAN / 2) * SCALE;
+
+      if (lug.pos < 0) {
+        const x_local = lug.pos;
+        const ratio = Math.min(1, Math.abs(x_local / HEAD_DEPTH));
+        r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
+        normal
+          .set(
+            x_local / (HEAD_DEPTH * HEAD_DEPTH),
+            r_local * Math.sin(rad) / (RADIUS * RADIUS),
+            r_local * Math.cos(rad) / (RADIUS * RADIUS),
+          )
+          .normalize();
+      } else if (lug.pos > TAN_TAN) {
+        const x_local = lug.pos - TAN_TAN;
+        const ratio = Math.min(1, Math.abs(x_local / HEAD_DEPTH));
+        r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
+        normal
+          .set(
+            x_local / (HEAD_DEPTH * HEAD_DEPTH),
+            r_local * Math.sin(rad) / (RADIUS * RADIUS),
+            r_local * Math.cos(rad) / (RADIUS * RADIUS),
+          )
+          .normalize();
+      } else {
+        normal.set(0, Math.sin(rad), Math.cos(rad)).normalize();
+      }
+
+      const y = r_local * SCALE * Math.sin(rad);
+      const z = r_local * SCALE * Math.cos(rad);
+      lugGroup.position.set(x_global, y, z);
+    }
+
+    // Orient lug normal to surface (same as nozzles)
+    const defaultDir = new THREE.Vector3(0, 1, 0);
+    const quaternion = new THREE.Quaternion().setFromUnitVectors(defaultDir, normal);
+    lugGroup.quaternion.copy(quaternion);
+
+    lugGroup.userData = { type: 'liftingLug', lugIdx: idx };
+    vesselGroup.add(lugGroup);
+    lugMeshes.push(lugGroup);
+  });
+
   // -- Saddles (only for horizontal vessels) --------------------------------
   if (!isVertical) {
     state.saddles.forEach((saddle, idx) => {
@@ -556,5 +648,5 @@ export function buildVesselScene(
     : -RADIUS * 1.5 * SCALE;
   vesselGroup.add(grid);
 
-  return { vesselGroup, nozzleMeshes, saddleMeshes, textureMeshes };
+  return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes };
 }
