@@ -3,6 +3,7 @@ import { ChevronDown, Plus, Trash2, ArrowLeftRight, ArrowUpDown, ImagePlus } fro
 import type {
     VesselState,
     NozzleConfig,
+    NozzleOrientationMode,
     SaddleConfig,
     TextureConfig,
     LiftingLugConfig,
@@ -351,6 +352,28 @@ function NozzleSection({
                                 value={sel.size}
                                 onChange={e => onUpdateNozzle(selectedNozzleIndex, { size: Number(e.target.value) })}
                             />
+                        </div>
+                    </div>
+                    <div className="vm-control-group">
+                        <div className="vm-label"><span>Orientation</span></div>
+                        <div className="vm-toggle-group">
+                            {([
+                                ['radial', 'Radial'],
+                                ['horizontal', 'Horiz'],
+                                ['vertical-up', '\u25B2'],
+                                ['vertical-down', '\u25BC'],
+                            ] as [NozzleOrientationMode, string][]).map(([mode, label]) => (
+                                <button
+                                    key={mode}
+                                    className={`vm-toggle-btn ${(sel.orientationMode || 'radial') === mode ? 'active' : ''}`}
+                                    onClick={() => onUpdateNozzle(selectedNozzleIndex, { orientationMode: mode })}
+                                    title={mode === 'radial' ? 'Radial (outward from center)' :
+                                           mode === 'horizontal' ? 'Horizontal (fixed axis)' :
+                                           mode === 'vertical-up' ? 'Vertical Up' : 'Vertical Down'}
+                                >
+                                    {label}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 </div>

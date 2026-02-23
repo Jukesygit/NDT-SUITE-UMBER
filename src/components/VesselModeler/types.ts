@@ -44,6 +44,8 @@ export type StampType = 'pass' | 'fail' | 'defect' | 'inspector' | 'date';
 // Core Vessel Interfaces
 // ---------------------------------------------------------------------------
 
+export type NozzleOrientationMode = 'radial' | 'horizontal' | 'vertical-up' | 'vertical-down';
+
 export interface NozzleConfig {
   name: string;
   /** Distance from left tangent line in mm */
@@ -54,6 +56,8 @@ export interface NozzleConfig {
   angle: number;
   /** Inside diameter in mm */
   size: number;
+  /** Pipe orientation mode: radial (default), horizontal, vertical-up, vertical-down */
+  orientationMode?: NozzleOrientationMode;
   /** Optional flange outside diameter override in mm */
   flangeOD?: number;
   /** Optional flange thickness override in mm */

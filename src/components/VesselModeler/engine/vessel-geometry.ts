@@ -501,6 +501,30 @@ export function buildVesselScene(
       nozzleGroup.position.set(x_global, y, z);
     }
 
+    // Override normal based on orientation mode (default is radial = no change)
+    const mode = n.orientationMode || 'radial';
+    if (mode === 'vertical-up') {
+      normal.set(0, 1, 0);
+    } else if (mode === 'vertical-down') {
+      normal.set(0, -1, 0);
+    } else if (mode === 'horizontal') {
+      // Project radial direction onto horizontal plane (zero out Y), normalize
+      // For vertical vessels: radial is in XZ plane, already horizontal
+      // For horizontal vessels: radial is in YZ plane, project to Z-only
+      if (isVertical) {
+        normal.set(Math.cos(rad), 0, Math.sin(rad)).normalize();
+      } else {
+        // Radial direction is (0, sin(rad), cos(rad)) - project to horizontal: (0, 0, cos(rad))
+        const horizZ = Math.cos(rad);
+        if (Math.abs(horizZ) < 0.001) {
+          // Edge case: nozzle at 90° or 270° - radial is pure vertical, fall back to radial
+          // normal stays as computed
+        } else {
+          normal.set(0, 0, horizZ > 0 ? 1 : -1);
+        }
+      }
+    }
+
     // Orient nozzle to be normal to surface
     // Nozzle is built along +Y axis, rotate to align with surface normal
     const defaultDir = new THREE.Vector3(0, 1, 0);
