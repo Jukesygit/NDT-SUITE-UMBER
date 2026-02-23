@@ -30,32 +30,42 @@ export default function RevisionHistory({ documentId, canManage, onApprove, onRe
     if (isLoading) return <SectionSpinner message="Loading revisions..." />;
 
     if (revisions.length === 0) {
-        return <p className="text-sm text-gray-500 text-center py-4">No revisions yet.</p>;
+        return (
+            <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.38)', textAlign: 'center', padding: '16px 0' }}>
+                No revisions yet.
+            </p>
+        );
     }
 
     return (
-        <div className="space-y-3">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {revisions.map((rev) => (
                 <div
                     key={rev.id}
-                    className="glass-panel p-4 rounded-lg"
-                    style={{ background: 'rgba(255, 255, 255, 0.03)' }}
+                    style={{
+                        padding: '16px 20px',
+                        background: 'rgba(30, 41, 59, 0.5)',
+                        border: '1px solid var(--glass-border)',
+                        borderRadius: '12px',
+                    }}
                 >
-                    <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                                <span className="font-mono text-sm font-medium text-gray-200">
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                <span style={{ fontFamily: 'monospace', fontSize: '14px', fontWeight: 500, color: 'rgba(255,255,255,0.95)' }}>
                                     Rev {rev.revision_number}
                                 </span>
                                 <DocumentStatusBadge status={rev.status} />
                                 {rev.is_review_only && (
-                                    <span className="text-xs text-blue-400">(review only)</span>
+                                    <span style={{ fontSize: '11px', color: 'rgba(147, 197, 253, 0.95)' }}>(review only)</span>
                                 )}
                             </div>
                             {rev.change_summary && (
-                                <p className="text-sm text-gray-400 mt-1">{rev.change_summary}</p>
+                                <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.55)', marginTop: '4px' }}>
+                                    {rev.change_summary}
+                                </p>
                             )}
-                            <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                            <div className="dc-doc-meta" style={{ marginTop: '8px' }}>
                                 <span>{new Date(rev.created_at).toLocaleDateString()}</span>
                                 <span>{rev.file_name}</span>
                                 {rev.file_size && (
@@ -63,24 +73,32 @@ export default function RevisionHistory({ documentId, canManage, onApprove, onRe
                                 )}
                             </div>
                             {rev.review_comments && (
-                                <div className="mt-2 p-2 rounded bg-yellow-500/10 border border-yellow-500/20">
-                                    <p className="text-xs text-yellow-400">
+                                <div style={{
+                                    marginTop: '8px',
+                                    padding: '8px 12px',
+                                    borderRadius: '8px',
+                                    background: 'rgba(251, 191, 36, 0.08)',
+                                    border: '1px solid rgba(251, 191, 36, 0.15)',
+                                }}>
+                                    <p style={{ fontSize: '12px', color: 'rgba(253, 224, 71, 0.95)' }}>
                                         Review: {rev.review_comments}
                                     </p>
                                     {rev.reviewer && (
-                                        <p className="text-xs text-gray-500 mt-0.5">
-                                            - {(rev.reviewer as { username: string }).username}, {rev.reviewed_at && new Date(rev.reviewed_at).toLocaleDateString()}
+                                        <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.38)', marginTop: '4px' }}>
+                                            &mdash; {(rev.reviewer as { username: string }).username}
+                                            {rev.reviewed_at && `, ${new Date(rev.reviewed_at).toLocaleDateString()}`}
                                         </p>
                                     )}
                                 </div>
                             )}
                         </div>
 
-                        <div className="flex items-center gap-2 flex-shrink-0">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                             <button
                                 onClick={() => handleDownload(rev)}
                                 disabled={downloadingId === rev.id}
-                                className="glass-btn text-xs px-3 py-1.5"
+                                className="dc-btn"
+                                style={{ padding: '6px 14px', fontSize: '12px' }}
                                 title="Download"
                             >
                                 {downloadingId === rev.id ? '...' : 'Download'}
@@ -89,7 +107,8 @@ export default function RevisionHistory({ documentId, canManage, onApprove, onRe
                             {canManage && rev.status === 'draft' && onSubmitForReview && (
                                 <button
                                     onClick={() => onSubmitForReview(rev)}
-                                    className="glass-btn glass-btn-primary text-xs px-3 py-1.5"
+                                    className="dc-btn primary"
+                                    style={{ padding: '6px 14px', fontSize: '12px' }}
                                 >
                                     Submit
                                 </button>
@@ -100,8 +119,13 @@ export default function RevisionHistory({ documentId, canManage, onApprove, onRe
                                     {onApprove && (
                                         <button
                                             onClick={() => onApprove(rev)}
-                                            className="glass-btn text-xs px-3 py-1.5"
-                                            style={{ color: '#22c55e', borderColor: 'rgba(34, 197, 94, 0.3)' }}
+                                            className="dc-btn"
+                                            style={{
+                                                padding: '6px 14px',
+                                                fontSize: '12px',
+                                                color: 'rgba(134, 239, 172, 0.95)',
+                                                borderColor: 'rgba(34, 197, 94, 0.3)',
+                                            }}
                                         >
                                             Approve
                                         </button>
@@ -109,8 +133,13 @@ export default function RevisionHistory({ documentId, canManage, onApprove, onRe
                                     {onReject && (
                                         <button
                                             onClick={() => onReject(rev)}
-                                            className="glass-btn text-xs px-3 py-1.5"
-                                            style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                                            className="dc-btn"
+                                            style={{
+                                                padding: '6px 14px',
+                                                fontSize: '12px',
+                                                color: 'rgba(252, 165, 165, 0.95)',
+                                                borderColor: 'rgba(239, 68, 68, 0.3)',
+                                            }}
                                         >
                                             Reject
                                         </button>

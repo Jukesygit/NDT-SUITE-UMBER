@@ -113,10 +113,10 @@ export default function CreateDocumentModal({ isOpen, onClose }: Props) {
 
     const footer = (
         <div className="flex justify-end gap-3">
-            <button onClick={onClose} disabled={isSubmitting} className="glass-btn">
+            <button onClick={onClose} disabled={isSubmitting} className="dc-btn">
                 Cancel
             </button>
-            <button onClick={handleSubmit} disabled={isSubmitting} className="glass-btn glass-btn-primary">
+            <button onClick={handleSubmit} disabled={isSubmitting} className="dc-btn primary">
                 {step === 'creating' ? 'Creating...' : step === 'uploading' ? 'Uploading...' : step === 'submitting' ? 'Submitting...' : 'Create Document'}
             </button>
         </div>

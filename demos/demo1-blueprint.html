@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Document Control — Blueprint</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0a1628;
+    --blueprint: #0f2a4a;
+    --grid: #1a3f6f;
+    --line: #2b5a94;
+    --accent: #4d9fff;
+    --cyan: #00e5ff;
+    --warn: #ff6b35;
+    --danger: #ff3d5a;
+    --paper: #e8dcc8;
+    --paper-dark: #d4c5aa;
+    --text: #c8ddf5;
+    --text-dim: #6a8bb5;
+    --success: #00e676;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Mono', monospace;
+    background: var(--blueprint);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Blueprint grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px),
+      linear-gradient(rgba(26,63,111,0.3) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(26,63,111,0.3) 1px, transparent 1px);
+    background-size: 80px 80px, 80px 80px, 16px 16px, 16px 16px;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.6;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at 30% 20%, rgba(77,159,255,0.08) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 80%, rgba(0,229,255,0.05) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app { position: relative; z-index: 1; }
+
+  /* ---- Header ---- */
+  .header {
+    padding: 32px 48px 24px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+  }
+
+  .header-left { display: flex; align-items: flex-end; gap: 24px; }
+
+  .logo-mark {
+    width: 48px; height: 48px;
+    border: 2px solid var(--accent);
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    color: var(--cyan);
+    position: relative;
+  }
+  .logo-mark::before {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border: 1px solid var(--line);
+  }
+
+  .header h1 {
+    font-family: 'Instrument Serif', serif;
+    font-weight: 400;
+    font-size: 32px;
+    letter-spacing: -0.5px;
+    color: #fff;
+    line-height: 1;
+  }
+  .header h1 span {
+    color: var(--accent);
+    font-style: italic;
+  }
+
+  .header-meta {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 12px;
+  }
+
+  /* ---- Buttons ---- */
+  .btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 10px 20px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .btn:hover {
+    border-color: var(--accent);
+    color: #fff;
+    box-shadow: 0 0 20px rgba(77,159,255,0.15);
+  }
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .btn-primary:hover {
+    background: #6db3ff;
+    box-shadow: 0 0 30px rgba(77,159,255,0.3);
+    color: var(--ink);
+  }
+
+  /* ---- Stats Strip ---- */
+  .stats-strip {
+    display: flex;
+    border-bottom: 1px solid var(--line);
+    animation: fadeIn 0.6s ease;
+  }
+
+  .stat-cell {
+    flex: 1;
+    padding: 24px 32px;
+    border-right: 1px solid var(--line);
+    position: relative;
+  }
+  .stat-cell:last-child { border-right: none; }
+
+  .stat-cell::before {
+    content: '';
+    position: absolute;
+    top: 12px;
+    left: 20px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+  }
+
+  .stat-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+
+  .stat-value {
+    font-family: 'Instrument Serif', serif;
+    font-size: 36px;
+    color: #fff;
+    line-height: 1;
+  }
+
+  .stat-cell.warn .stat-value { color: var(--warn); }
+  .stat-cell.danger .stat-value { color: var(--danger); }
+  .stat-cell.success .stat-value { color: var(--success); }
+
+  /* ---- Tabs ---- */
+  .tab-bar {
+    display: flex;
+    padding: 0 48px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .tab {
+    padding: 16px 28px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active {
+    color: var(--cyan);
+    border-color: var(--cyan);
+  }
+
+  /* ---- Toolbar ---- */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 48px;
+    gap: 16px;
+  }
+
+  .search-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--line);
+    padding: 8px 16px;
+    min-width: 320px;
+    transition: border-color 0.2s;
+  }
+  .search-box:focus-within { border-color: var(--accent); }
+
+  .search-box svg { width: 16px; height: 16px; stroke: var(--text-dim); }
+
+  .search-box input {
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+    width: 100%;
+    letter-spacing: 0.5px;
+  }
+  .search-box input::placeholder { color: var(--text-dim); }
+
+  .filter-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .filter-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 8px 14px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .filter-btn:hover { border-color: var(--accent); color: var(--text); }
+  .filter-btn.active { border-color: var(--cyan); color: var(--cyan); }
+
+  /* ---- Table ---- */
+  .table-container {
+    padding: 0 48px 48px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  thead th {
+    text-align: left;
+    padding: 12px 16px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    font-weight: 400;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid rgba(43,90,148,0.3);
+    transition: background 0.15s;
+    cursor: pointer;
+    animation: rowSlide 0.4s ease both;
+  }
+  tbody tr:nth-child(1) { animation-delay: 0.05s; }
+  tbody tr:nth-child(2) { animation-delay: 0.1s; }
+  tbody tr:nth-child(3) { animation-delay: 0.15s; }
+  tbody tr:nth-child(4) { animation-delay: 0.2s; }
+  tbody tr:nth-child(5) { animation-delay: 0.25s; }
+  tbody tr:nth-child(6) { animation-delay: 0.3s; }
+  tbody tr:nth-child(7) { animation-delay: 0.35s; }
+  tbody tr:nth-child(8) { animation-delay: 0.4s; }
+
+  tbody tr:hover {
+    background: rgba(77,159,255,0.06);
+  }
+
+  tbody td {
+    padding: 16px;
+    vertical-align: top;
+  }
+
+  .doc-number {
+    font-weight: 500;
+    color: var(--cyan);
+    letter-spacing: 1px;
+    font-size: 12px;
+  }
+
+  .doc-title {
+    color: #fff;
+    font-family: 'Instrument Serif', serif;
+    font-size: 16px;
+    margin-bottom: 2px;
+  }
+
+  .doc-desc {
+    color: var(--text-dim);
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  /* ---- Badges ---- */
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    border: 1px solid;
+  }
+  .badge-approved { color: var(--success); border-color: var(--success); }
+  .badge-draft { color: var(--text-dim); border-color: var(--text-dim); }
+  .badge-review { color: var(--warn); border-color: var(--warn); }
+  .badge-withdrawn { color: var(--danger); border-color: var(--danger); }
+
+  .category-tag {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--accent);
+    padding: 2px 8px;
+    border-left: 2px solid var(--accent);
+  }
+
+  .review-date { font-size: 12px; }
+  .review-date.overdue { color: var(--danger); }
+  .review-date.soon { color: var(--warn); }
+  .review-date.ok { color: var(--text-dim); }
+
+  .owner-name { font-size: 12px; color: var(--text); }
+
+  .rev-num {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-weight: 300;
+  }
+
+  /* ---- Side Panel ---- */
+  .layout {
+    display: flex;
+  }
+
+  .main-content { flex: 1; min-width: 0; }
+
+  .side-panel {
+    width: 340px;
+    border-left: 1px solid var(--line);
+    padding: 32px 28px;
+    background: rgba(10,22,40,0.4);
+    animation: slideIn 0.5s ease;
+  }
+
+  .panel-section {
+    margin-bottom: 32px;
+  }
+
+  .panel-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .review-item {
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(43,90,148,0.2);
+  }
+
+  .review-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+
+  .review-item-title {
+    font-size: 13px;
+    color: #fff;
+    font-family: 'Instrument Serif', serif;
+  }
+
+  .overdue-tag {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    padding: 2px 6px;
+    background: rgba(255,61,90,0.15);
+    color: var(--danger);
+    border: 1px solid rgba(255,61,90,0.3);
+  }
+
+  .due-soon-tag {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    padding: 2px 6px;
+    background: rgba(255,107,53,0.15);
+    color: var(--warn);
+    border: 1px solid rgba(255,107,53,0.3);
+  }
+
+  .review-item-meta {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .activity-item {
+    display: flex;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(43,90,148,0.2);
+  }
+
+  .activity-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 4px;
+    flex-shrink: 0;
+  }
+  .activity-dot.approve { background: var(--success); box-shadow: 0 0 8px rgba(0,230,118,0.4); }
+  .activity-dot.upload { background: var(--accent); box-shadow: 0 0 8px rgba(77,159,255,0.4); }
+  .activity-dot.review { background: var(--warn); box-shadow: 0 0 8px rgba(255,107,53,0.4); }
+
+  .activity-text { font-size: 12px; line-height: 1.5; }
+  .activity-text strong { color: #fff; font-weight: 500; }
+  .activity-time { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+
+  /* ---- Animations ---- */
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes rowSlide {
+    from { opacity: 0; transform: translateX(-12px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  /* ---- Scrollbar ---- */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--blueprint); }
+  ::-webkit-scrollbar-thumb { background: var(--line); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+  /* responsive */
+  @media (max-width: 1200px) {
+    .side-panel { display: none; }
+  }
+  @media (max-width: 768px) {
+    .header { padding: 20px 24px; flex-direction: column; align-items: flex-start; }
+    .stats-strip { flex-wrap: wrap; }
+    .stat-cell { min-width: 50%; }
+    .toolbar { padding: 16px 24px; flex-direction: column; }
+    .search-box { min-width: 100%; }
+    .table-container { padding: 0 16px 32px; overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <div class="logo-mark">DC</div>
+      <div>
+        <h1>Document <span>Control</span></h1>
+        <div class="header-meta">NDT Suite &mdash; Controlled Document Register</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn">Manage Categories</button>
+      <button class="btn btn-primary">+ New Document</button>
+    </div>
+  </div>
+
+  <!-- Stats Strip -->
+  <div class="stats-strip">
+    <div class="stat-cell">
+      <div class="stat-label">Total Documents</div>
+      <div class="stat-value">47</div>
+    </div>
+    <div class="stat-cell success">
+      <div class="stat-label">Approved</div>
+      <div class="stat-value">38</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-label">Under Review</div>
+      <div class="stat-value">6</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-label">Draft</div>
+      <div class="stat-value">3</div>
+    </div>
+    <div class="stat-cell warn">
+      <div class="stat-label">Due for Review</div>
+      <div class="stat-value">5</div>
+    </div>
+    <div class="stat-cell danger">
+      <div class="stat-label">Overdue</div>
+      <div class="stat-value">2</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-bar">
+    <div class="tab active">Document Register</div>
+    <div class="tab">Review Dashboard</div>
+  </div>
+
+  <div class="layout">
+    <div class="main-content">
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <div class="search-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input type="text" placeholder="Search by title or document number...">
+        </div>
+        <div class="filter-group">
+          <button class="filter-btn active">All</button>
+          <button class="filter-btn">Procedures</button>
+          <button class="filter-btn">Work Instructions</button>
+          <button class="filter-btn">Forms</button>
+          <button class="filter-btn">Policies</button>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Doc #</th>
+              <th>Title</th>
+              <th>Category</th>
+              <th>Status</th>
+              <th>Rev</th>
+              <th>Owner</th>
+              <th>Next Review</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="doc-number">PROC-001</span></td>
+              <td>
+                <div class="doc-title">Ultrasonic Testing Procedure</div>
+                <div class="doc-desc">General procedure for UT inspection per BS EN ISO 17640</div>
+              </td>
+              <td><span class="category-tag">Procedures</span></td>
+              <td><span class="badge badge-approved">Approved</span></td>
+              <td><span class="rev-num">Rev 4</span></td>
+              <td><span class="owner-name">J. Morrison</span></td>
+              <td><span class="review-date overdue">14 Jan 2026</span></td>
+            </tr>
+            <tr>
+              <td><span class="doc-number">PROC-002</span></td>
+              <td>
+                <div class="doc-title">Magnetic Particle Inspection</div>
+                <div class="doc-desc">MPI procedure for ferromagnetic materials</div>
+              </td>
+              <td><span class="category-tag">Procedures</span></td>
+              <td><span class="badge badge-approved">Approved</span></td>
+              <td><span class="rev-num">Rev 2</span></td>
+              <td><span class="owner-name">A. Chen</span></td>
+              <td><span class="review-date ok">08 Sep 2026</span></td>
+            </tr>
+            <tr>
+              <td><span class="doc-number">WI-014</span></td>
+              <td>
+                <div class="doc-title">Phased Array Scanner Setup</div>
+                <div class="doc-desc">Setup and calibration for Olympus OmniScan MX2</div>
+              </td>
+              <td><span class="category-tag">Work Instructions</span></td>
+              <td><span class="badge badge-review">Under Review</span></td>
+              <td><span class="rev-num">Rev 3</span></td>
+              <td><span class="owner-name">R. Patel</span></td>
+              <td><span class="review-date ok">—</span></td>
+            </tr>
+            <tr>
+              <td><span class="doc-number">POL-003</span></td>
+              <td>
+                <div class="doc-title">Health & Safety Policy</div>
+                <div class="doc-desc">Company H&S policy covering all operational activities</div>
+              </td>
+              <td><span class="category-tag">Policies</span></td>
+              <td><span class="badge badge-approved">Approved</span></td>
+              <td><span class="rev-num">Rev 7</span></td>
+              <td><span class="owner-name">S. Williams</span></td>
+              <td><span class="review-date soon">28 Feb 2026</span></td>
+            </tr>
+            <tr>
+              <td><span class="doc-number">FORM-008</span></td>
+              <td>
+                <div class="doc-title">UT Inspection Report Template</div>
+                <div class="doc-desc">Standardised report form for ultrasonic testing results</div>
+              </td>
+              <td><span class="category-tag">Forms</span></td>
+              <td><span class="badge badge-approved">Approved</span></td>
+              <td><span class="rev-num">Rev 2</span></td>
+              <td><span class="owner-name">J. Morrison</span></td>
+              <td><span class="review-date ok">15 Nov 2026</span></td>
+            </tr>
+            <tr>
+              <td><span class="doc-number">PROC-011</span></td>
+              <td>
+                <div class="doc-title">Radiographic Testing Procedure</div>
+                <div class="doc-desc">RT procedure for weld inspection per EN ISO 17636</div>
+              </td>
+              <td><span class="category-tag">Procedures</span></td>
+              <td><span class="badge badge-draft">Draft</span></td>
+              <td><span class="rev-num">Rev 1</span></td>
+              <td><span class="owner-name">M. Khan</span></td>
+              <td><span class="review-date ok">—</span></td>
+            </tr>
+            <tr>
+              <td><span class="doc-number">EXT-005</span></td>
+              <td>
+                <div class="doc-title">Client Spec — BP Offshore Welds</div>
+                <div class="doc-desc">BP specification for subsea weld inspection requirements</div>
+              </td>
+              <td><span class="category-tag">External</span></td>
+              <td><span class="badge badge-approved">Approved</span></td>
+              <td><span class="rev-num">Rev 1</span></td>
+              <td><span class="owner-name">A. Chen</span></td>
+              <td><span class="review-date overdue">03 Jan 2026</span></td>
+            </tr>
+            <tr>
+              <td><span class="doc-number">WI-022</span></td>
+              <td>
+                <div class="doc-title">TOFD Calibration Block Preparation</div>
+                <div class="doc-desc">Preparation and verification of TOFD calibration blocks</div>
+              </td>
+              <td><span class="category-tag">Work Instructions</span></td>
+              <td><span class="badge badge-review">Under Review</span></td>
+              <td><span class="rev-num">Rev 2</span></td>
+              <td><span class="owner-name">R. Patel</span></td>
+              <td><span class="review-date ok">—</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Side Panel -->
+    <div class="side-panel">
+      <div class="panel-section">
+        <div class="panel-title">Upcoming Reviews</div>
+        <div class="review-item">
+          <div class="review-item-header">
+            <span class="review-item-title">UT Procedure</span>
+            <span class="overdue-tag">34d Overdue</span>
+          </div>
+          <div class="review-item-meta">PROC-001 · J. Morrison</div>
+        </div>
+        <div class="review-item">
+          <div class="review-item-header">
+            <span class="review-item-title">BP Offshore Spec</span>
+            <span class="overdue-tag">45d Overdue</span>
+          </div>
+          <div class="review-item-meta">EXT-005 · A. Chen</div>
+        </div>
+        <div class="review-item">
+          <div class="review-item-header">
+            <span class="review-item-title">H&S Policy</span>
+            <span class="due-soon-tag">11d Left</span>
+          </div>
+          <div class="review-item-meta">POL-003 · S. Williams</div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-title">Recent Activity</div>
+        <div class="activity-item">
+          <div class="activity-dot approve"></div>
+          <div>
+            <div class="activity-text"><strong>Rev 4</strong> of PROC-001 approved</div>
+            <div class="activity-time">2 hours ago</div>
+          </div>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot upload"></div>
+          <div>
+            <div class="activity-text"><strong>Rev 3</strong> uploaded for WI-014</div>
+            <div class="activity-time">Yesterday</div>
+          </div>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot review"></div>
+          <div>
+            <div class="activity-text">TOFD Calibration submitted for review</div>
+            <div class="activity-time">2 days ago</div>
+          </div>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot approve"></div>
+          <div>
+            <div class="activity-text"><strong>Rev 7</strong> of H&S Policy approved</div>
+            <div class="activity-time">3 days ago</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

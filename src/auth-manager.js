@@ -316,13 +316,6 @@ class AuthManager {
                 // Reset rate limiter on successful login
                 loginRateLimiter.reset(email.toLowerCase());
 
-                // Handle remember me
-                if (rememberMe) {
-                    localStorage.setItem('rememberedUsername', email);
-                } else {
-                    localStorage.removeItem('rememberedUsername');
-                }
-
                 // Log successful login
                 logActivity({
                     userId: this.currentUser.id,
@@ -361,13 +354,6 @@ class AuthManager {
             if (user && bcrypt.compareSync(password, user.password)) {
                 this.currentUser = user;
                 sessionStorage.setItem('currentUser', JSON.stringify(user));
-
-                // Handle remember me
-                if (rememberMe) {
-                    localStorage.setItem('rememberedUsername', email);
-                } else {
-                    localStorage.removeItem('rememberedUsername');
-                }
 
                 // Dispatch auth state change event for local mode
                 window.dispatchEvent(new CustomEvent('authStateChange', {

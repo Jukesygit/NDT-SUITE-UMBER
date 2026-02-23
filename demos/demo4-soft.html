@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Document Control — Soft</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,400&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #faf9f7;
+    --surface: #ffffff;
+    --surface-warm: #f7f4ef;
+    --text: #2d2a26;
+    --text-secondary: #7a756c;
+    --text-muted: #b0a99e;
+    --border: #e8e3db;
+    --border-light: #f0ece5;
+    --primary: #6366f1;
+    --primary-soft: #eef2ff;
+    --primary-mid: #c7d2fe;
+    --success: #059669;
+    --success-soft: #ecfdf5;
+    --warn: #d97706;
+    --warn-soft: #fffbeb;
+    --danger: #dc2626;
+    --danger-soft: #fef2f2;
+    --purple: #7c3aed;
+    --purple-soft: #f5f3ff;
+    --radius: 16px;
+    --radius-sm: 10px;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.02);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.08);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Outfit', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 32px 40px;
+  }
+
+  /* ---- Header ---- */
+  .header-s {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 32px;
+  }
+
+  .header-left-s {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .logo-s {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, var(--primary), var(--purple));
+    display: grid;
+    place-items: center;
+    color: white;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 1px;
+    box-shadow: 0 4px 12px rgba(99,102,241,0.3);
+  }
+
+  .header-text-s h1 {
+    font-family: 'Fraunces', serif;
+    font-size: 28px;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--text);
+  }
+
+  .header-text-s p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    font-weight: 300;
+  }
+
+  .header-actions-s {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .btn-s {
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow-sm);
+  }
+  .btn-s:hover { border-color: var(--primary-mid); box-shadow: var(--shadow-md); }
+
+  .btn-s.primary {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+    box-shadow: 0 4px 12px rgba(99,102,241,0.25);
+  }
+  .btn-s.primary:hover {
+    background: #5558e6;
+    box-shadow: 0 6px 20px rgba(99,102,241,0.35);
+    transform: translateY(-1px);
+  }
+
+  /* ---- Stats Cards ---- */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 20px;
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-sm);
+    transition: all 0.25s ease;
+    animation: popIn 0.4s ease both;
+  }
+  .stat-card:nth-child(1) { animation-delay: 0s; }
+  .stat-card:nth-child(2) { animation-delay: 0.05s; }
+  .stat-card:nth-child(3) { animation-delay: 0.1s; }
+  .stat-card:nth-child(4) { animation-delay: 0.15s; }
+  .stat-card:nth-child(5) { animation-delay: 0.2s; }
+  .stat-card:nth-child(6) { animation-delay: 0.25s; }
+
+  .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+
+  .stat-card-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+
+  .stat-card-value {
+    font-family: 'Fraunces', serif;
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 2px;
+  }
+
+  .stat-card-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+
+  .stat-card.total .stat-card-icon { background: var(--primary-soft); }
+  .stat-card.total .stat-card-value { color: var(--primary); }
+
+  .stat-card.approved .stat-card-icon { background: var(--success-soft); }
+  .stat-card.approved .stat-card-value { color: var(--success); }
+
+  .stat-card.review .stat-card-icon { background: var(--purple-soft); }
+  .stat-card.review .stat-card-value { color: var(--purple); }
+
+  .stat-card.draft .stat-card-icon { background: var(--surface-warm); }
+  .stat-card.draft .stat-card-value { color: var(--text-secondary); }
+
+  .stat-card.due .stat-card-icon { background: var(--warn-soft); }
+  .stat-card.due .stat-card-value { color: var(--warn); }
+
+  .stat-card.overdue .stat-card-icon { background: var(--danger-soft); }
+  .stat-card.overdue .stat-card-value { color: var(--danger); }
+
+  /* ---- Main Layout ---- */
+  .main-layout {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 24px;
+  }
+
+  /* ---- Content Card ---- */
+  .content-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .card-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--surface-warm);
+    border-radius: var(--radius-sm);
+    padding: 4px;
+  }
+
+  .card-tab {
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .card-tab:hover { color: var(--text); }
+  .card-tab.active {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .search-s {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface-warm);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    padding: 8px 16px;
+    transition: all 0.2s;
+  }
+  .search-s:focus-within { border-color: var(--primary-mid); background: white; box-shadow: 0 0 0 3px var(--primary-soft); }
+
+  .search-s svg { width: 16px; height: 16px; stroke: var(--text-muted); flex-shrink: 0; }
+
+  .search-s input {
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    color: var(--text);
+    width: 180px;
+  }
+  .search-s input::placeholder { color: var(--text-muted); }
+
+  /* Filters */
+  .filter-row {
+    display: flex;
+    gap: 6px;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border-light);
+    flex-wrap: wrap;
+  }
+
+  .filter-chip {
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .filter-chip:hover { border-color: var(--primary); color: var(--primary); }
+  .filter-chip.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+  }
+
+  /* ---- Document Items ---- */
+  .doc-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border-light);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    animation: slideUp 0.35s ease both;
+  }
+  .doc-item:nth-child(1) { animation-delay: 0.05s; }
+  .doc-item:nth-child(2) { animation-delay: 0.1s; }
+  .doc-item:nth-child(3) { animation-delay: 0.12s; }
+  .doc-item:nth-child(4) { animation-delay: 0.14s; }
+  .doc-item:nth-child(5) { animation-delay: 0.16s; }
+  .doc-item:nth-child(6) { animation-delay: 0.18s; }
+  .doc-item:nth-child(7) { animation-delay: 0.2s; }
+  .doc-item:nth-child(8) { animation-delay: 0.22s; }
+
+  .doc-item:hover { background: var(--surface-warm); }
+  .doc-item:last-child { border-bottom: none; }
+
+  .doc-item-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: var(--primary-soft);
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+
+  .doc-item-icon svg {
+    width: 20px;
+    height: 20px;
+    stroke: var(--primary);
+    fill: none;
+    stroke-width: 1.5;
+  }
+
+  .doc-item-body { flex: 1; min-width: 0; }
+
+  .doc-item-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 2px;
+  }
+
+  .doc-item-title {
+    font-weight: 500;
+    font-size: 15px;
+  }
+
+  .doc-item-num {
+    font-size: 12px;
+    color: var(--primary);
+    font-weight: 500;
+    background: var(--primary-soft);
+    padding: 1px 8px;
+    border-radius: 6px;
+  }
+
+  .doc-item-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 300;
+  }
+
+  .doc-item-meta {
+    display: flex;
+    gap: 12px;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .doc-item-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .badge-s {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 20px;
+  }
+  .badge-s.approved { background: var(--success-soft); color: var(--success); }
+  .badge-s.draft { background: var(--surface-warm); color: var(--text-secondary); }
+  .badge-s.review { background: var(--purple-soft); color: var(--purple); }
+  .badge-s.withdrawn { background: var(--danger-soft); color: var(--danger); }
+
+  .badge-s::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .review-date-s {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+  .review-date-s.overdue {
+    color: var(--danger);
+    font-weight: 500;
+    background: var(--danger-soft);
+    padding: 2px 8px;
+    border-radius: 6px;
+  }
+  .review-date-s.soon {
+    color: var(--warn);
+    font-weight: 500;
+    background: var(--warn-soft);
+    padding: 2px 8px;
+    border-radius: 6px;
+  }
+
+  /* ---- Sidebar ---- */
+  .sidebar-s {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .sidebar-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-sm);
+    padding: 22px;
+  }
+
+  .sidebar-card-title {
+    font-family: 'Fraunces', serif;
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .sidebar-card-title .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+  .dot.red { background: var(--danger); box-shadow: 0 0 8px rgba(220,38,38,0.4); }
+  .dot.warn { background: var(--warn); box-shadow: 0 0 8px rgba(217,119,6,0.4); }
+
+  .review-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .review-list-item:last-child { border-bottom: none; }
+
+  .rli-title {
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 1px;
+  }
+
+  .rli-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .rli-tag {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .rli-tag.overdue { background: var(--danger-soft); color: var(--danger); }
+  .rli-tag.soon { background: var(--warn-soft); color: var(--warn); }
+
+  /* Activity */
+  .activity-s-item {
+    display: flex;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .activity-s-item:last-child { border-bottom: none; }
+
+  .as-dot {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .as-dot.approve { background: var(--success-soft); }
+  .as-dot.upload { background: var(--primary-soft); }
+  .as-dot.submit { background: var(--warn-soft); }
+
+  .as-text {
+    font-size: 13px;
+    line-height: 1.5;
+    font-weight: 300;
+  }
+  .as-text strong { font-weight: 600; }
+  .as-time {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+
+  /* Categories summary */
+  .cat-s-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .cat-s-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .cat-s-name {
+    font-size: 13px;
+    color: var(--text-secondary);
+    width: 110px;
+    flex-shrink: 0;
+  }
+
+  .cat-s-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--surface-warm);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .cat-s-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--primary), var(--purple));
+    transition: width 0.6s ease;
+  }
+
+  .cat-s-count {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    width: 24px;
+    text-align: right;
+  }
+
+  /* ---- Animations ---- */
+  @keyframes popIn {
+    from { opacity: 0; transform: scale(0.95) translateY(8px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 1200px) {
+    .main-layout { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 768px) {
+    .app { padding: 20px 16px; }
+    .stats-grid { grid-template-columns: repeat(3, 1fr); }
+    .header-s { flex-direction: column; gap: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Header -->
+  <div class="header-s">
+    <div class="header-left-s">
+      <div class="logo-s">DC</div>
+      <div class="header-text-s">
+        <h1>Document Control</h1>
+        <p>Manage controlled documents, versions, and review cycles</p>
+      </div>
+    </div>
+    <div class="header-actions-s">
+      <button class="btn-s">Manage Categories</button>
+      <button class="btn-s primary">+ New Document</button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-grid">
+    <div class="stat-card total">
+      <div class="stat-card-icon">&#128196;</div>
+      <div class="stat-card-value">47</div>
+      <div class="stat-card-label">Total Documents</div>
+    </div>
+    <div class="stat-card approved">
+      <div class="stat-card-icon">&#10003;</div>
+      <div class="stat-card-value">38</div>
+      <div class="stat-card-label">Approved</div>
+    </div>
+    <div class="stat-card review">
+      <div class="stat-card-icon">&#128269;</div>
+      <div class="stat-card-value">6</div>
+      <div class="stat-card-label">Under Review</div>
+    </div>
+    <div class="stat-card draft">
+      <div class="stat-card-icon">&#9998;</div>
+      <div class="stat-card-value">3</div>
+      <div class="stat-card-label">Draft</div>
+    </div>
+    <div class="stat-card due">
+      <div class="stat-card-icon">&#128337;</div>
+      <div class="stat-card-value">5</div>
+      <div class="stat-card-label">Due for Review</div>
+    </div>
+    <div class="stat-card overdue">
+      <div class="stat-card-icon">&#9888;</div>
+      <div class="stat-card-value">2</div>
+      <div class="stat-card-label">Overdue</div>
+    </div>
+  </div>
+
+  <div class="main-layout">
+    <!-- Content -->
+    <div class="content-card">
+      <div class="card-header">
+        <div class="card-tabs">
+          <button class="card-tab active">Document Register</button>
+          <button class="card-tab">Review Dashboard</button>
+        </div>
+        <div class="search-s">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input type="text" placeholder="Search documents...">
+        </div>
+      </div>
+
+      <div class="filter-row">
+        <button class="filter-chip active">All</button>
+        <button class="filter-chip">Procedures</button>
+        <button class="filter-chip">Work Instructions</button>
+        <button class="filter-chip">Forms & Templates</button>
+        <button class="filter-chip">Policies</button>
+        <button class="filter-chip">External</button>
+      </div>
+
+      <div class="doc-list-s">
+        <div class="doc-item">
+          <div class="doc-item-icon">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+          </div>
+          <div class="doc-item-body">
+            <div class="doc-item-row">
+              <span class="doc-item-title">Ultrasonic Testing Procedure</span>
+              <span class="doc-item-num">PROC-001</span>
+            </div>
+            <div class="doc-item-desc">General procedure for UT inspection per BS EN ISO 17640</div>
+            <div class="doc-item-meta">
+              <span>Procedures</span>
+              <span>Rev 4</span>
+              <span>J. Morrison</span>
+            </div>
+          </div>
+          <div class="doc-item-right">
+            <span class="badge-s approved">Approved</span>
+            <span class="review-date-s overdue">34d overdue</span>
+          </div>
+        </div>
+
+        <div class="doc-item">
+          <div class="doc-item-icon">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+          </div>
+          <div class="doc-item-body">
+            <div class="doc-item-row">
+              <span class="doc-item-title">Magnetic Particle Inspection</span>
+              <span class="doc-item-num">PROC-002</span>
+            </div>
+            <div class="doc-item-desc">MPI procedure for ferromagnetic materials</div>
+            <div class="doc-item-meta">
+              <span>Procedures</span>
+              <span>Rev 2</span>
+              <span>A. Chen</span>
+            </div>
+          </div>
+          <div class="doc-item-right">
+            <span class="badge-s approved">Approved</span>
+            <span class="review-date-s">08 Sep 2026</span>
+          </div>
+        </div>
+
+        <div class="doc-item">
+          <div class="doc-item-icon">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+          </div>
+          <div class="doc-item-body">
+            <div class="doc-item-row">
+              <span class="doc-item-title">Phased Array Scanner Setup</span>
+              <span class="doc-item-num">WI-014</span>
+            </div>
+            <div class="doc-item-desc">Setup and calibration for Olympus OmniScan MX2</div>
+            <div class="doc-item-meta">
+              <span>Work Instructions</span>
+              <span>Rev 3</span>
+              <span>R. Patel</span>
+            </div>
+          </div>
+          <div class="doc-item-right">
+            <span class="badge-s review">Under Review</span>
+          </div>
+        </div>
+
+        <div class="doc-item">
+          <div class="doc-item-icon">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+          </div>
+          <div class="doc-item-body">
+            <div class="doc-item-row">
+              <span class="doc-item-title">Health & Safety Policy</span>
+              <span class="doc-item-num">POL-003</span>
+            </div>
+            <div class="doc-item-desc">Company H&S policy covering all operational activities</div>
+            <div class="doc-item-meta">
+              <span>Policies</span>
+              <span>Rev 7</span>
+              <span>S. Williams</span>
+            </div>
+          </div>
+          <div class="doc-item-right">
+            <span class="badge-s approved">Approved</span>
+            <span class="review-date-s soon">11d left</span>
+          </div>
+        </div>
+
+        <div class="doc-item">
+          <div class="doc-item-icon">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+          </div>
+          <div class="doc-item-body">
+            <div class="doc-item-row">
+              <span class="doc-item-title">UT Inspection Report Template</span>
+              <span class="doc-item-num">FORM-008</span>
+            </div>
+            <div class="doc-item-desc">Standardised report form for ultrasonic testing results</div>
+            <div class="doc-item-meta">
+              <span>Forms & Templates</span>
+              <span>Rev 2</span>
+              <span>J. Morrison</span>
+            </div>
+          </div>
+          <div class="doc-item-right">
+            <span class="badge-s approved">Approved</span>
+            <span class="review-date-s">15 Nov 2026</span>
+          </div>
+        </div>
+
+        <div class="doc-item">
+          <div class="doc-item-icon">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+          </div>
+          <div class="doc-item-body">
+            <div class="doc-item-row">
+              <span class="doc-item-title">Radiographic Testing Procedure</span>
+              <span class="doc-item-num">PROC-011</span>
+            </div>
+            <div class="doc-item-desc">RT procedure for weld inspection per EN ISO 17636</div>
+            <div class="doc-item-meta">
+              <span>Procedures</span>
+              <span>Rev 1</span>
+              <span>M. Khan</span>
+            </div>
+          </div>
+          <div class="doc-item-right">
+            <span class="badge-s draft">Draft</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar-s">
+      <div class="sidebar-card">
+        <div class="sidebar-card-title"><span class="dot red"></span> Attention Required</div>
+        <div class="review-list-item">
+          <div>
+            <div class="rli-title">UT Procedure</div>
+            <div class="rli-meta">PROC-001 &middot; J. Morrison</div>
+          </div>
+          <span class="rli-tag overdue">34d overdue</span>
+        </div>
+        <div class="review-list-item">
+          <div>
+            <div class="rli-title">BP Offshore Spec</div>
+            <div class="rli-meta">EXT-005 &middot; A. Chen</div>
+          </div>
+          <span class="rli-tag overdue">45d overdue</span>
+        </div>
+        <div class="review-list-item">
+          <div>
+            <div class="rli-title">H&S Policy</div>
+            <div class="rli-meta">POL-003 &middot; S. Williams</div>
+          </div>
+          <span class="rli-tag soon">11d left</span>
+        </div>
+      </div>
+
+      <div class="sidebar-card">
+        <div class="sidebar-card-title">Categories</div>
+        <div class="cat-s-list">
+          <div class="cat-s-item">
+            <span class="cat-s-name">Procedures</span>
+            <div class="cat-s-bar"><div class="cat-s-fill" style="width:100%"></div></div>
+            <span class="cat-s-count">18</span>
+          </div>
+          <div class="cat-s-item">
+            <span class="cat-s-name">Work Inst.</span>
+            <div class="cat-s-bar"><div class="cat-s-fill" style="width:67%"></div></div>
+            <span class="cat-s-count">12</span>
+          </div>
+          <div class="cat-s-item">
+            <span class="cat-s-name">Forms</span>
+            <div class="cat-s-bar"><div class="cat-s-fill" style="width:50%"></div></div>
+            <span class="cat-s-count">9</span>
+          </div>
+          <div class="cat-s-item">
+            <span class="cat-s-name">Policies</span>
+            <div class="cat-s-bar"><div class="cat-s-fill" style="width:28%"></div></div>
+            <span class="cat-s-count">5</span>
+          </div>
+          <div class="cat-s-item">
+            <span class="cat-s-name">External</span>
+            <div class="cat-s-bar"><div class="cat-s-fill" style="width:17%"></div></div>
+            <span class="cat-s-count">3</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-card">
+        <div class="sidebar-card-title">Recent Activity</div>
+        <div class="activity-s-item">
+          <div class="as-dot approve">&#10003;</div>
+          <div>
+            <div class="as-text"><strong>Rev 4</strong> approved for PROC-001</div>
+            <div class="as-time">2 hours ago</div>
+          </div>
+        </div>
+        <div class="activity-s-item">
+          <div class="as-dot upload">&#8593;</div>
+          <div>
+            <div class="as-text"><strong>Rev 3</strong> uploaded for WI-014</div>
+            <div class="as-time">Yesterday</div>
+          </div>
+        </div>
+        <div class="activity-s-item">
+          <div class="as-dot submit">&#9654;</div>
+          <div>
+            <div class="as-text">TOFD Calibration submitted for review</div>
+            <div class="as-time">2 days ago</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

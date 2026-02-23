@@ -12,29 +12,18 @@ import { PersonDocumentReviewModal } from './PersonDocumentReviewModal';
 import { PersonAvatar } from './PersonAvatar';
 
 interface PersonnelTableProps {
-    /** Personnel data to display */
     personnel: Person[];
-    /** Get competency stats for a person */
     getCompetencyStats: (competencies: PersonCompetency[]) => CompetencyStats;
-    /** Current sort column */
     sortColumn: string;
-    /** Current sort direction */
     sortDirection: 'asc' | 'desc';
-    /** Sort change handler */
     onSort: (column: string) => void;
-    /** Whether user is admin */
     isAdmin: boolean;
-    /** Available organizations (for editing) */
     organizations: Organization[];
-    /** Callback when person is updated */
     onPersonUpdate?: () => void;
 }
 
 type SortableColumn = 'name' | 'org' | 'role' | 'total' | 'active' | 'expiring' | 'expired';
 
-/**
- * Sortable header cell
- */
 function SortableHeader({
     column,
     label,
@@ -54,94 +43,17 @@ function SortableHeader({
 
     return (
         <th
-            style={{
-                padding: '16px',
-                textAlign: align,
-                fontSize: '13px',
-                fontWeight: '600',
-                color: isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.7)',
-                textTransform: 'uppercase',
-                cursor: 'pointer',
-                userSelect: 'none',
-                transition: 'color 0.2s',
-            }}
+            className={`pm-table th ${isActive ? 'active' : ''} ${align === 'center' ? 'center' : ''} ${align === 'right' ? 'right' : ''}`}
             onClick={() => onSort(column)}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
-            onMouseLeave={(e) =>
-                (e.currentTarget.style.color = isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.7)')
-            }
         >
-            <div
-                style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    justifyContent: align === 'center' ? 'center' : 'flex-start',
-                }}
-            >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: align === 'center' ? 'center' : 'flex-start' }}>
                 {label}
-                {isActive && <span style={{ fontSize: '10px' }}>{sortDirection === 'asc' ? '▲' : '▼'}</span>}
+                {isActive && <span className="pm-sort-indicator">{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>}
             </div>
         </th>
     );
 }
 
-/**
- * Stat badge component
- */
-function StatBadge({ value, color }: { value: number; color: string }) {
-    return (
-        <span style={{ fontSize: '16px', fontWeight: '600', color }}>
-            {value}
-        </span>
-    );
-}
-
-/**
- * Chevron icon for expand/collapse
- */
-function ChevronIcon({ expanded }: { expanded: boolean }) {
-    return (
-        <svg
-            style={{
-                width: '16px',
-                height: '16px',
-                transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform 0.2s ease',
-            }}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-        >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-        </svg>
-    );
-}
-
-/**
- * Review/clipboard icon for pending document approvals
- */
-function ReviewIcon() {
-    return (
-        <svg
-            style={{ width: '16px', height: '16px' }}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-        >
-            <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-            />
-        </svg>
-    );
-}
-
-/**
- * PersonnelTable component
- */
 export function PersonnelTable({
     personnel,
     getCompetencyStats,
@@ -154,25 +66,21 @@ export function PersonnelTable({
 }: PersonnelTableProps) {
     const queryClient = useQueryClient();
     const [expandedPersonId, setExpandedPersonId] = useState<string | null>(null);
-    // State for the document review modal
     const [reviewingPerson, setReviewingPerson] = useState<Person | null>(null);
 
     const handleToggleExpand = useCallback((personId: string) => {
         setExpandedPersonId((prev) => (prev === personId ? null : personId));
     }, []);
 
-    // Open review modal for a person
     const handleOpenReview = useCallback((person: Person) => {
         setReviewingPerson(person);
     }, []);
 
-    // Close review modal and refresh data
     const handleCloseReview = useCallback(() => {
         setReviewingPerson(null);
         onPersonUpdate?.();
     }, [onPersonUpdate]);
 
-    // Prefetch person details when hovering over a row
     const handlePersonHover = useCallback((personId: string) => {
         queryClient.prefetchQuery({
             queryKey: personnelKeys.detail(personId),
@@ -180,102 +88,38 @@ export function PersonnelTable({
                 const report = await personnelService.getPersonnelComplianceReport(personId);
                 return report?.person || null;
             },
-            staleTime: 1 * 60 * 1000, // Match the hook's staleTime
+            staleTime: 1 * 60 * 1000,
         });
     }, [queryClient]);
 
     if (personnel.length === 0) {
         return (
-            <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
-                <div
-                    style={{
-                        padding: '48px',
-                        textAlign: 'center',
-                        color: 'rgba(255, 255, 255, 0.5)',
-                    }}
-                >
-                    No personnel found matching your filters
+            <div className="pm-table-card">
+                <div className="pm-empty">
+                    <div className="pm-empty-icon">
+                        <svg viewBox="0 0 24 24"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    </div>
+                    <div className="pm-empty-title">No personnel found</div>
+                    <div className="pm-empty-text">Try adjusting your search or filter criteria</div>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="pm-table-card">
             <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead
-                        style={{
-                            background: 'rgba(255, 255, 255, 0.05)',
-                            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                        }}
-                    >
+                <table className="pm-table">
+                    <thead>
                         <tr>
-                            <SortableHeader
-                                column="name"
-                                label="Name"
-                                sortColumn={sortColumn}
-                                sortDirection={sortDirection}
-                                onSort={onSort}
-                            />
-                            <SortableHeader
-                                column="org"
-                                label="Organization"
-                                sortColumn={sortColumn}
-                                sortDirection={sortDirection}
-                                onSort={onSort}
-                            />
-                            <SortableHeader
-                                column="role"
-                                label="Role"
-                                sortColumn={sortColumn}
-                                sortDirection={sortDirection}
-                                onSort={onSort}
-                            />
-                            <SortableHeader
-                                column="total"
-                                label="Total Certs"
-                                sortColumn={sortColumn}
-                                sortDirection={sortDirection}
-                                onSort={onSort}
-                                align="center"
-                            />
-                            <SortableHeader
-                                column="active"
-                                label="Active"
-                                sortColumn={sortColumn}
-                                sortDirection={sortDirection}
-                                onSort={onSort}
-                                align="center"
-                            />
-                            <SortableHeader
-                                column="expiring"
-                                label="Expiring"
-                                sortColumn={sortColumn}
-                                sortDirection={sortDirection}
-                                onSort={onSort}
-                                align="center"
-                            />
-                            <SortableHeader
-                                column="expired"
-                                label="Expired"
-                                sortColumn={sortColumn}
-                                sortDirection={sortDirection}
-                                onSort={onSort}
-                                align="center"
-                            />
-                            <th
-                                style={{
-                                    padding: '16px',
-                                    textAlign: 'right',
-                                    fontSize: '13px',
-                                    fontWeight: '600',
-                                    color: 'rgba(255, 255, 255, 0.7)',
-                                    textTransform: 'uppercase',
-                                }}
-                            >
-                                Actions
-                            </th>
+                            <SortableHeader column="name" label="Name" sortColumn={sortColumn} sortDirection={sortDirection} onSort={onSort} />
+                            <SortableHeader column="org" label="Organization" sortColumn={sortColumn} sortDirection={sortDirection} onSort={onSort} />
+                            <SortableHeader column="role" label="Role" sortColumn={sortColumn} sortDirection={sortDirection} onSort={onSort} />
+                            <SortableHeader column="total" label="Total" sortColumn={sortColumn} sortDirection={sortDirection} onSort={onSort} align="center" />
+                            <SortableHeader column="active" label="Active" sortColumn={sortColumn} sortDirection={sortDirection} onSort={onSort} align="center" />
+                            <SortableHeader column="expiring" label="Expiring" sortColumn={sortColumn} sortDirection={sortDirection} onSort={onSort} align="center" />
+                            <SortableHeader column="expired" label="Expired" sortColumn={sortColumn} sortDirection={sortDirection} onSort={onSort} align="center" />
+                            <th className="pm-table th no-sort right">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -285,137 +129,80 @@ export function PersonnelTable({
 
                             return (
                                 <React.Fragment key={person.id}>
-                                    {/* Main Row */}
                                     <tr
-                                        style={{
-                                            borderBottom: isExpanded
-                                                ? '1px solid rgba(59, 130, 246, 0.3)'
-                                                : '1px solid rgba(255, 255, 255, 0.05)',
-                                        }}
-                                        className="hover:bg-white/5 transition-colors"
+                                        className={`pm-table-row ${isExpanded ? 'expanded' : ''}`}
                                         onMouseEnter={() => handlePersonHover(person.id)}
                                     >
-                                        <td style={{ padding: '16px' }}>
-                                            <div
-                                                style={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '12px',
-                                                }}
-                                            >
+                                        <td className="pm-table td">
+                                            <div className="pm-person-cell">
                                                 <PersonAvatar
                                                     avatarUrl={person.avatar_url}
                                                     username={person.username}
                                                     size={48}
                                                 />
                                                 <div>
-                                                    <div
-                                                        style={{
-                                                            fontWeight: '600',
-                                                            color: '#ffffff',
-                                                            marginBottom: '4px',
-                                                        }}
-                                                    >
-                                                        {person.username}
-                                                    </div>
-                                                    <div
-                                                        style={{
-                                                            fontSize: '13px',
-                                                            color: 'rgba(255, 255, 255, 0.5)',
-                                                        }}
-                                                    >
-                                                        {person.email}
-                                                    </div>
+                                                    <div className="pm-person-name">{person.username}</div>
+                                                    <div className="pm-person-email">{person.email}</div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td style={{ padding: '16px', color: 'rgba(255, 255, 255, 0.7)' }}>
+                                        <td className="pm-table td">
                                             {person.organizations?.name || 'Unknown'}
                                         </td>
-                                        <td style={{ padding: '16px' }}>
-                                            <span className="glass-badge">{person.role}</span>
+                                        <td className="pm-table td">
+                                            <span className="pm-role-badge">{person.role}</span>
                                         </td>
-                                        <td style={{ padding: '16px', textAlign: 'center' }}>
-                                            <StatBadge value={stats.total} color="#ffffff" />
+                                        <td className="pm-table td center">
+                                            <span className="pm-cert-stat total">{stats.total}</span>
                                         </td>
-                                        <td style={{ padding: '16px', textAlign: 'center' }}>
-                                            <StatBadge value={stats.active} color="#10b981" />
+                                        <td className="pm-table td center">
+                                            <span className="pm-cert-stat active">{stats.active}</span>
                                         </td>
-                                        <td style={{ padding: '16px', textAlign: 'center' }}>
-                                            <StatBadge value={stats.expiring} color="#f59e0b" />
+                                        <td className="pm-table td center">
+                                            <span className="pm-cert-stat expiring">{stats.expiring}</span>
                                         </td>
-                                        <td style={{ padding: '16px', textAlign: 'center' }}>
-                                            <StatBadge value={stats.expired} color="#ef4444" />
+                                        <td className="pm-table td center">
+                                            <span className="pm-cert-stat expired">{stats.expired}</span>
                                         </td>
-                                        <td style={{ padding: '16px', textAlign: 'right' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
-                                                {/* Review Documents Button - only show for admins when there are pending approvals */}
+                                        <td className="pm-table td right">
+                                            <div className="pm-actions">
                                                 {isAdmin && (() => {
                                                     const pendingCount = getPendingApprovalCount(person.competencies || []);
                                                     if (pendingCount === 0) return null;
                                                     return (
                                                         <button
+                                                            className="pm-btn review sm"
                                                             onClick={() => handleOpenReview(person)}
-                                                            className="btn-secondary"
-                                                            style={{
-                                                                fontSize: '13px',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                gap: '6px',
-                                                                position: 'relative',
-                                                                padding: '8px 12px',
-                                                                background: 'rgba(251, 191, 36, 0.15)',
-                                                                borderColor: 'rgba(251, 191, 36, 0.4)',
-                                                                color: '#fbbf24',
-                                                            }}
                                                             title={`Review ${pendingCount} pending document${pendingCount > 1 ? 's' : ''}`}
                                                         >
-                                                            <ReviewIcon />
+                                                            <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
                                                             Review
-                                                            <span
-                                                                style={{
-                                                                    background: '#f59e0b',
-                                                                    color: '#000',
-                                                                    fontSize: '11px',
-                                                                    fontWeight: '700',
-                                                                    padding: '2px 6px',
-                                                                    borderRadius: '10px',
-                                                                    minWidth: '18px',
-                                                                    textAlign: 'center',
-                                                                }}
-                                                            >
-                                                                {pendingCount}
-                                                            </span>
+                                                            <span className="pm-review-count">{pendingCount}</span>
                                                         </button>
                                                     );
                                                 })()}
                                                 <button
+                                                    className="pm-btn primary sm"
                                                     onClick={() => handleToggleExpand(person.id)}
-                                                    className="btn-primary"
-                                                    style={{
-                                                        fontSize: '13px',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '8px',
-                                                    }}
                                                 >
-                                                    {isExpanded ? 'Hide Details' : 'View Details'}
-                                                    <ChevronIcon expanded={isExpanded} />
+                                                    {isExpanded ? 'Hide' : 'Details'}
+                                                    <svg
+                                                        viewBox="0 0 24 24"
+                                                        style={{
+                                                            transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                                                            transition: 'transform 0.2s ease',
+                                                        }}
+                                                    >
+                                                        <path d="M19 9l-7 7-7-7" />
+                                                    </svg>
                                                 </button>
                                             </div>
                                         </td>
                                     </tr>
 
-                                    {/* Expanded Row */}
                                     {isExpanded && (
                                         <tr>
-                                            <td
-                                                colSpan={8}
-                                                style={{
-                                                    padding: 0,
-                                                    borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-                                                }}
-                                            >
+                                            <td colSpan={8} style={{ padding: 0 }}>
                                                 <PersonnelExpandedRow
                                                     person={person}
                                                     isAdmin={isAdmin}
@@ -432,7 +219,6 @@ export function PersonnelTable({
                 </table>
             </div>
 
-            {/* Person Document Review Modal */}
             {reviewingPerson && (
                 <PersonDocumentReviewModal
                     isOpen={!!reviewingPerson}

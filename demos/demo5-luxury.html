@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Document Control — Luxury</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0c0b0a;
+    --surface: #161514;
+    --surface-hover: #1c1b19;
+    --surface-elevated: #201f1d;
+    --text: #e8e2d8;
+    --text-secondary: #8a8278;
+    --text-muted: #5a554d;
+    --border: #2a2825;
+    --border-light: #222120;
+    --gold: #c9a84c;
+    --gold-dim: #8a7432;
+    --gold-glow: rgba(201,168,76,0.12);
+    --emerald: #34d399;
+    --emerald-dim: rgba(52,211,153,0.12);
+    --ruby: #f87171;
+    --ruby-dim: rgba(248,113,113,0.12);
+    --amber: #fbbf24;
+    --amber-dim: rgba(251,191,36,0.12);
+    --violet: #a78bfa;
+    --violet-dim: rgba(167,139,250,0.12);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Subtle noise */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  .app-l {
+    max-width: 1480px;
+    margin: 0 auto;
+    padding: 0 48px;
+  }
+
+  /* ---- Header ---- */
+  .header-l {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 32px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .header-l-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .monogram {
+    width: 52px;
+    height: 52px;
+    border: 1px solid var(--gold);
+    display: grid;
+    place-items: center;
+    position: relative;
+  }
+  .monogram::before {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border: 1px solid var(--gold-dim);
+  }
+  .monogram span {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 20px;
+    font-weight: 300;
+    color: var(--gold);
+    letter-spacing: 2px;
+  }
+
+  .header-l-title h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 36px;
+    font-weight: 300;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    line-height: 1;
+    color: var(--text);
+  }
+  .header-l-title h1 em {
+    font-style: italic;
+    color: var(--gold);
+    font-weight: 400;
+  }
+
+  .header-l-subtitle {
+    font-size: 10px;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  .header-l-actions {
+    display: flex;
+    gap: 12px;
+  }
+
+  .btn-l {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 12px 24px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  .btn-l:hover {
+    border-color: var(--gold-dim);
+    color: var(--gold);
+  }
+  .btn-l.gold {
+    border-color: var(--gold);
+    color: var(--gold);
+    position: relative;
+  }
+  .btn-l.gold::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--gold);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .btn-l.gold:hover::before { opacity: 0.1; }
+
+  /* ---- Stats ---- */
+  .stats-l {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .stat-l {
+    padding: 28px 24px;
+    border-right: 1px solid var(--border);
+    text-align: center;
+    position: relative;
+    animation: fadeIn 0.5s ease both;
+  }
+  .stat-l:last-child { border-right: none; }
+  .stat-l:nth-child(1) { animation-delay: 0s; }
+  .stat-l:nth-child(2) { animation-delay: 0.06s; }
+  .stat-l:nth-child(3) { animation-delay: 0.12s; }
+  .stat-l:nth-child(4) { animation-delay: 0.18s; }
+  .stat-l:nth-child(5) { animation-delay: 0.24s; }
+  .stat-l:nth-child(6) { animation-delay: 0.3s; }
+
+  .stat-l::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 1px;
+    background: var(--gold);
+    transition: width 0.3s ease;
+  }
+  .stat-l:hover::after { width: 60%; }
+
+  .stat-l-num {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 44px;
+    font-weight: 300;
+    line-height: 1;
+    margin-bottom: 4px;
+    color: var(--text);
+  }
+
+  .stat-l-label {
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .stat-l.emerald .stat-l-num { color: var(--emerald); }
+  .stat-l.amber .stat-l-num { color: var(--amber); }
+  .stat-l.ruby .stat-l-num { color: var(--ruby); }
+  .stat-l.violet .stat-l-num { color: var(--violet); }
+
+  /* ---- Navigation ---- */
+  .nav-l {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .nav-l-tabs {
+    display: flex;
+  }
+
+  .nav-tab-l {
+    padding: 18px 32px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.3s ease;
+    border-right: 1px solid var(--border);
+  }
+  .nav-tab-l:hover { color: var(--text-secondary); }
+  .nav-tab-l.active {
+    color: var(--gold);
+    border-bottom-color: var(--gold);
+  }
+
+  .nav-l-tools {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  .search-l {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 24px;
+    border-left: 1px solid var(--border);
+    height: 56px;
+  }
+
+  .search-l svg {
+    width: 14px;
+    height: 14px;
+    stroke: var(--text-muted);
+  }
+
+  .search-l input {
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    color: var(--text);
+    width: 200px;
+    letter-spacing: 0.5px;
+  }
+  .search-l input::placeholder { color: var(--text-muted); }
+
+  .filter-l-group {
+    display: flex;
+    border-left: 1px solid var(--border);
+  }
+
+  .filter-l {
+    padding: 18px 18px;
+    font-family: 'Syne', sans-serif;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    border-right: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .filter-l:hover { color: var(--text-secondary); }
+  .filter-l.active { color: var(--gold); }
+
+  /* ---- Main Layout ---- */
+  .layout-l {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    min-height: 70vh;
+  }
+
+  .register-l {
+    border-right: 1px solid var(--border);
+  }
+
+  /* ---- Document Rows ---- */
+  .doc-row {
+    display: grid;
+    grid-template-columns: 100px 1fr 100px 110px 100px 120px;
+    align-items: center;
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--border-light);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    animation: rowFade 0.4s ease both;
+  }
+  .doc-row:nth-child(1) { animation-delay: 0.04s; }
+  .doc-row:nth-child(2) { animation-delay: 0.08s; }
+  .doc-row:nth-child(3) { animation-delay: 0.12s; }
+  .doc-row:nth-child(4) { animation-delay: 0.16s; }
+  .doc-row:nth-child(5) { animation-delay: 0.2s; }
+  .doc-row:nth-child(6) { animation-delay: 0.24s; }
+  .doc-row:nth-child(7) { animation-delay: 0.28s; }
+  .doc-row:nth-child(8) { animation-delay: 0.32s; }
+
+  .doc-row:hover {
+    background: var(--surface);
+  }
+  .doc-row:hover .doc-row-id { color: var(--gold); }
+
+  .doc-row-header {
+    display: grid;
+    grid-template-columns: 100px 1fr 100px 110px 100px 120px;
+    padding: 12px 28px;
+    border-bottom: 1px solid var(--border);
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+
+  .doc-row-id {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+    transition: color 0.2s;
+  }
+
+  .doc-row-main {
+    padding-right: 20px;
+  }
+
+  .doc-row-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 18px;
+    font-weight: 400;
+    line-height: 1.3;
+    margin-bottom: 2px;
+  }
+
+  .doc-row-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+
+  .doc-row-cat {
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .badge-l {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .badge-l::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+  .badge-l.approved { color: var(--emerald); }
+  .badge-l.approved::before { background: var(--emerald); box-shadow: 0 0 8px var(--emerald-dim); }
+  .badge-l.draft { color: var(--text-muted); }
+  .badge-l.draft::before { background: var(--text-muted); }
+  .badge-l.review { color: var(--violet); }
+  .badge-l.review::before { background: var(--violet); box-shadow: 0 0 8px var(--violet-dim); }
+
+  .doc-row-rev {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 16px;
+    font-weight: 300;
+    color: var(--text-secondary);
+    letter-spacing: 1px;
+  }
+
+  .doc-row-review {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+  .doc-row-review.overdue {
+    color: var(--ruby);
+    font-weight: 500;
+  }
+  .doc-row-review.soon {
+    color: var(--amber);
+    font-weight: 500;
+  }
+
+  /* ---- Sidebar ---- */
+  .sidebar-l {
+    padding: 0;
+  }
+
+  .sidebar-section-l {
+    padding: 28px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-heading-l {
+    font-size: 9px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+    font-weight: 600;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .sidebar-heading-l::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .alert-l {
+    padding: 16px 0;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .alert-l:last-child { border-bottom: none; }
+
+  .alert-l-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+
+  .alert-l-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 17px;
+    font-weight: 400;
+  }
+
+  .alert-l-tag {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 3px 10px;
+  }
+  .alert-l-tag.overdue {
+    background: var(--ruby-dim);
+    color: var(--ruby);
+  }
+  .alert-l-tag.soon {
+    background: var(--amber-dim);
+    color: var(--amber);
+  }
+
+  .alert-l-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  /* Activity */
+  .activity-l {
+    display: flex;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .activity-l:last-child { border-bottom: none; }
+
+  .al-line {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .al-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .al-dot.emerald { background: var(--emerald); box-shadow: 0 0 10px rgba(52,211,153,0.3); }
+  .al-dot.violet { background: var(--violet); box-shadow: 0 0 10px rgba(167,139,250,0.3); }
+  .al-dot.amber { background: var(--amber); box-shadow: 0 0 10px rgba(251,191,36,0.3); }
+
+  .al-thread {
+    width: 1px;
+    flex: 1;
+    background: var(--border);
+  }
+
+  .al-content {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    font-weight: 400;
+  }
+  .al-content strong {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .al-time {
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  /* Owner list */
+  .owner-l-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .owner-l-item:last-child { border-bottom: none; }
+
+  .owner-l-name {
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .owner-l-count {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 18px;
+    font-weight: 300;
+    color: var(--gold);
+  }
+
+  /* ---- Animations ---- */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes rowFade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* ---- Scrollbar ---- */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 1300px) {
+    .layout-l { grid-template-columns: 1fr; }
+    .register-l { border-right: none; }
+  }
+  @media (max-width: 900px) {
+    .app-l { padding: 0 20px; }
+    .stats-l { grid-template-columns: repeat(3, 1fr); }
+    .doc-row, .doc-row-header { grid-template-columns: 80px 1fr 100px; }
+    .doc-row-cat, .doc-row-rev, .doc-row-review { display: none; }
+    .header-l { flex-direction: column; gap: 16px; align-items: flex-start; }
+    .header-l-title h1 { font-size: 26px; letter-spacing: 2px; }
+  }
+</style>
+</head>
+<body>
+<div class="app-l">
+  <!-- Header -->
+  <div class="header-l">
+    <div class="header-l-left">
+      <div class="monogram"><span>DC</span></div>
+      <div class="header-l-title">
+        <h1>Document <em>Control</em></h1>
+        <div class="header-l-subtitle">NDT Suite &mdash; Controlled Document Register</div>
+      </div>
+    </div>
+    <div class="header-l-actions">
+      <button class="btn-l">Manage Categories</button>
+      <button class="btn-l gold">+ New Document</button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-l">
+    <div class="stat-l">
+      <div class="stat-l-num">47</div>
+      <div class="stat-l-label">Total</div>
+    </div>
+    <div class="stat-l emerald">
+      <div class="stat-l-num">38</div>
+      <div class="stat-l-label">Approved</div>
+    </div>
+    <div class="stat-l violet">
+      <div class="stat-l-num">6</div>
+      <div class="stat-l-label">In Review</div>
+    </div>
+    <div class="stat-l">
+      <div class="stat-l-num">3</div>
+      <div class="stat-l-label">Draft</div>
+    </div>
+    <div class="stat-l amber">
+      <div class="stat-l-num">5</div>
+      <div class="stat-l-label">Due Soon</div>
+    </div>
+    <div class="stat-l ruby">
+      <div class="stat-l-num">2</div>
+      <div class="stat-l-label">Overdue</div>
+    </div>
+  </div>
+
+  <!-- Nav -->
+  <div class="nav-l">
+    <div class="nav-l-tabs">
+      <div class="nav-tab-l active">Register</div>
+      <div class="nav-tab-l">Reviews</div>
+    </div>
+    <div class="nav-l-tools">
+      <div class="filter-l-group">
+        <button class="filter-l active">All</button>
+        <button class="filter-l">Proc</button>
+        <button class="filter-l">WI</button>
+        <button class="filter-l">Forms</button>
+        <button class="filter-l">Policy</button>
+        <button class="filter-l">Ext</button>
+      </div>
+      <div class="search-l">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" placeholder="Search documents...">
+      </div>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="layout-l">
+    <div class="register-l">
+      <div class="doc-row-header">
+        <span>Doc #</span>
+        <span>Title</span>
+        <span>Category</span>
+        <span>Status</span>
+        <span>Rev</span>
+        <span>Review</span>
+      </div>
+
+      <div class="doc-row">
+        <span class="doc-row-id">PROC-001</span>
+        <div class="doc-row-main">
+          <div class="doc-row-title">Ultrasonic Testing Procedure</div>
+          <div class="doc-row-desc">UT inspection per BS EN ISO 17640</div>
+        </div>
+        <span class="doc-row-cat">Procedures</span>
+        <span class="badge-l approved">Approved</span>
+        <span class="doc-row-rev">Rev 4</span>
+        <span class="doc-row-review overdue">14 Jan &mdash; 34d</span>
+      </div>
+
+      <div class="doc-row">
+        <span class="doc-row-id">PROC-002</span>
+        <div class="doc-row-main">
+          <div class="doc-row-title">Magnetic Particle Inspection</div>
+          <div class="doc-row-desc">MPI for ferromagnetic materials</div>
+        </div>
+        <span class="doc-row-cat">Procedures</span>
+        <span class="badge-l approved">Approved</span>
+        <span class="doc-row-rev">Rev 2</span>
+        <span class="doc-row-review">08 Sep 2026</span>
+      </div>
+
+      <div class="doc-row">
+        <span class="doc-row-id">WI-014</span>
+        <div class="doc-row-main">
+          <div class="doc-row-title">Phased Array Scanner Setup</div>
+          <div class="doc-row-desc">Olympus OmniScan MX2 calibration</div>
+        </div>
+        <span class="doc-row-cat">Work Inst</span>
+        <span class="badge-l review">Review</span>
+        <span class="doc-row-rev">Rev 3</span>
+        <span class="doc-row-review">&mdash;</span>
+      </div>
+
+      <div class="doc-row">
+        <span class="doc-row-id">POL-003</span>
+        <div class="doc-row-main">
+          <div class="doc-row-title">Health & Safety Policy</div>
+          <div class="doc-row-desc">All operational activities</div>
+        </div>
+        <span class="doc-row-cat">Policies</span>
+        <span class="badge-l approved">Approved</span>
+        <span class="doc-row-rev">Rev 7</span>
+        <span class="doc-row-review soon">28 Feb &mdash; 11d</span>
+      </div>
+
+      <div class="doc-row">
+        <span class="doc-row-id">FORM-008</span>
+        <div class="doc-row-main">
+          <div class="doc-row-title">UT Inspection Report Template</div>
+          <div class="doc-row-desc">Standardised report form for UT results</div>
+        </div>
+        <span class="doc-row-cat">Forms</span>
+        <span class="badge-l approved">Approved</span>
+        <span class="doc-row-rev">Rev 2</span>
+        <span class="doc-row-review">15 Nov 2026</span>
+      </div>
+
+      <div class="doc-row">
+        <span class="doc-row-id">PROC-011</span>
+        <div class="doc-row-main">
+          <div class="doc-row-title">Radiographic Testing Procedure</div>
+          <div class="doc-row-desc">Weld inspection per EN ISO 17636</div>
+        </div>
+        <span class="doc-row-cat">Procedures</span>
+        <span class="badge-l draft">Draft</span>
+        <span class="doc-row-rev">Rev 1</span>
+        <span class="doc-row-review">&mdash;</span>
+      </div>
+
+      <div class="doc-row">
+        <span class="doc-row-id">EXT-005</span>
+        <div class="doc-row-main">
+          <div class="doc-row-title">Client Spec &mdash; BP Offshore Welds</div>
+          <div class="doc-row-desc">Subsea weld inspection requirements</div>
+        </div>
+        <span class="doc-row-cat">External</span>
+        <span class="badge-l approved">Approved</span>
+        <span class="doc-row-rev">Rev 1</span>
+        <span class="doc-row-review overdue">03 Jan &mdash; 45d</span>
+      </div>
+
+      <div class="doc-row">
+        <span class="doc-row-id">WI-022</span>
+        <div class="doc-row-main">
+          <div class="doc-row-title">TOFD Calibration Block Preparation</div>
+          <div class="doc-row-desc">Verification of TOFD calibration blocks</div>
+        </div>
+        <span class="doc-row-cat">Work Inst</span>
+        <span class="badge-l review">Review</span>
+        <span class="doc-row-rev">Rev 2</span>
+        <span class="doc-row-review">&mdash;</span>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar-l">
+      <div class="sidebar-section-l">
+        <div class="sidebar-heading-l">Attention Required</div>
+        <div class="alert-l">
+          <div class="alert-l-top">
+            <span class="alert-l-title">Ultrasonic Testing Procedure</span>
+            <span class="alert-l-tag overdue">34d Over</span>
+          </div>
+          <div class="alert-l-meta">PROC-001 &middot; J. Morrison</div>
+        </div>
+        <div class="alert-l">
+          <div class="alert-l-top">
+            <span class="alert-l-title">BP Offshore Weld Spec</span>
+            <span class="alert-l-tag overdue">45d Over</span>
+          </div>
+          <div class="alert-l-meta">EXT-005 &middot; A. Chen</div>
+        </div>
+        <div class="alert-l">
+          <div class="alert-l-top">
+            <span class="alert-l-title">Health & Safety Policy</span>
+            <span class="alert-l-tag soon">11d Left</span>
+          </div>
+          <div class="alert-l-meta">POL-003 &middot; S. Williams</div>
+        </div>
+      </div>
+
+      <div class="sidebar-section-l">
+        <div class="sidebar-heading-l">Recent Activity</div>
+        <div class="activity-l">
+          <div class="al-line">
+            <div class="al-dot emerald"></div>
+            <div class="al-thread"></div>
+          </div>
+          <div>
+            <div class="al-content"><strong>Rev 4</strong> of PROC-001 approved</div>
+            <div class="al-time">2 hours ago</div>
+          </div>
+        </div>
+        <div class="activity-l">
+          <div class="al-line">
+            <div class="al-dot violet"></div>
+            <div class="al-thread"></div>
+          </div>
+          <div>
+            <div class="al-content"><strong>Rev 3</strong> uploaded for WI-014</div>
+            <div class="al-time">Yesterday</div>
+          </div>
+        </div>
+        <div class="activity-l">
+          <div class="al-line">
+            <div class="al-dot amber"></div>
+            <div class="al-thread"></div>
+          </div>
+          <div>
+            <div class="al-content">TOFD Calibration submitted for review</div>
+            <div class="al-time">2 days ago</div>
+          </div>
+        </div>
+        <div class="activity-l">
+          <div class="al-line">
+            <div class="al-dot emerald"></div>
+          </div>
+          <div>
+            <div class="al-content"><strong>Rev 7</strong> of H&S Policy approved</div>
+            <div class="al-time">3 days ago</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-section-l">
+        <div class="sidebar-heading-l">Document Owners</div>
+        <div class="owner-l-item">
+          <span class="owner-l-name">J. Morrison</span>
+          <span class="owner-l-count">14</span>
+        </div>
+        <div class="owner-l-item">
+          <span class="owner-l-name">R. Patel</span>
+          <span class="owner-l-count">11</span>
+        </div>
+        <div class="owner-l-item">
+          <span class="owner-l-name">A. Chen</span>
+          <span class="owner-l-count">9</span>
+        </div>
+        <div class="owner-l-item">
+          <span class="owner-l-name">S. Williams</span>
+          <span class="owner-l-count">7</span>
+        </div>
+        <div class="owner-l-item">
+          <span class="owner-l-name">M. Khan</span>
+          <span class="owner-l-count">6</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

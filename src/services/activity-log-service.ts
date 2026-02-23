@@ -67,6 +67,10 @@ export type ActionType =
     | 'config_updated'
     | 'announcement_created'
     | 'announcement_updated'
+    // GDPR / Privacy
+    | 'pii_revealed'
+    | 'data_exported'
+    | 'account_deleted'
     // Sharing
     | 'share_created'
     | 'share_deleted'

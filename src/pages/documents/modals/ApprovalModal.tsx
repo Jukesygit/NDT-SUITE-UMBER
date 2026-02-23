@@ -47,13 +47,13 @@ export default function ApprovalModal({ isOpen, onClose, revision, action }: Pro
 
     const footer = (
         <div className="flex justify-end gap-3">
-            <button onClick={onClose} disabled={isSubmitting} className="glass-btn">
+            <button onClick={onClose} disabled={isSubmitting} className="dc-btn">
                 Cancel
             </button>
             <button
                 onClick={handleSubmit}
                 disabled={isSubmitting}
-                className="glass-btn"
+                className="dc-btn"
                 style={{
                     color: isApprove ? '#22c55e' : '#ef4444',
                     borderColor: isApprove ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)',

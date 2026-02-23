@@ -100,37 +100,12 @@ export function ProfileAvatar({
     };
 
     return (
-        <div
-            style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '24px',
-                marginBottom: '24px',
-                paddingBottom: '24px',
-                borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-            }}
-        >
+        <div className="pf-avatar-section">
             {/* Avatar Circle */}
-            <div style={{ position: 'relative' }}>
-                <div
-                    style={{
-                        width: '120px',
-                        height: '120px',
-                        borderRadius: '50%',
-                        overflow: 'hidden',
-                        border: '3px solid rgba(255, 255, 255, 0.2)',
-                        background: 'linear-gradient(135deg, rgba(52, 211, 153, 0.2), rgba(96, 165, 250, 0.2))',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                    }}
-                >
+            <div className="pf-avatar-wrapper">
+                <div className="pf-avatar-circle">
                     {avatarUrl ? (
-                        <img
-                            src={avatarUrl}
-                            alt="Profile"
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        />
+                        <img src={avatarUrl} alt="Profile" />
                     ) : (
                         <UserIcon />
                     )}
@@ -138,20 +113,7 @@ export function ProfileAvatar({
 
                 {/* Upload Overlay */}
                 {isUploading && (
-                    <div
-                        style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            width: '120px',
-                            height: '120px',
-                            borderRadius: '50%',
-                            background: 'rgba(0, 0, 0, 0.7)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                        }}
-                    >
+                    <div className="pf-avatar-overlay">
                         <RandomMatrixSpinner size={40} />
                     </div>
                 )}
@@ -159,29 +121,12 @@ export function ProfileAvatar({
 
             {/* User Info & Upload Button */}
             <div>
-                <h3
-                    style={{
-                        fontSize: '20px',
-                        fontWeight: '600',
-                        color: '#ffffff',
-                        margin: '0 0 8px 0',
-                    }}
-                >
-                    {username}
-                </h3>
-                <p
-                    style={{
-                        fontSize: '14px',
-                        color: 'rgba(255, 255, 255, 0.6)',
-                        margin: '0 0 12px 0',
-                    }}
-                >
-                    {email}
-                </p>
+                <h3 className="pf-avatar-name">{username}</h3>
+                <p className="pf-avatar-email">{email}</p>
 
                 {onUpload && (
                     <label
-                        className="btn btn--secondary btn--sm"
+                        className="pf-btn sm"
                         style={{
                             cursor: disabled || isUploading ? 'not-allowed' : 'pointer',
                             display: 'inline-flex',

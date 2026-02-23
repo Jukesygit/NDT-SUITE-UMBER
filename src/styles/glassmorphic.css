@@ -84,11 +84,15 @@
     --text-dim: rgba(255, 255, 255, 0.55);
     --text-accent: rgba(150, 180, 255, 1);
 
-    /* Background Colors */
-    --bg-dark-1: #2a2a35;
-    --bg-dark-2: #35353f;
-    --bg-dark-3: #2d2d38;
+    /* Background Colors (demo4-dark aligned) */
+    --bg-dark-1: #0a0e1a;
+    --bg-dark-2: #111827;
+    --bg-dark-3: #1e293b;
     --bg-dark-overlay: rgba(0, 0, 0, 0.6);
+
+    /* Card Colors (demo4-dark aligned) */
+    --card-bg: rgba(30, 41, 59, 0.85);
+    --card-border: rgba(100, 150, 255, 0.3);
 
     /* Transitions - Smooth & Professional */
     --transition-fast: 0.12s cubic-bezier(0.4, 0, 0.2, 1);
@@ -167,18 +171,15 @@
     }
 }
 
-/* Glassmorphic Card - Refined & Professional */
+/* Glassmorphic Card - demo4-dark aligned */
 .glass-card {
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    background: linear-gradient(135deg,
-        rgba(255,255,255,0.08) 0%,
-        rgba(255,255,255,0.04) 100%),
-        var(--card-bg, rgba(30, 41, 59, 0.9));
-    border: 1px solid var(--card-border, rgba(255, 255, 255, 0.15));
-    border-radius: 12px;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3),
-                0 0 0 1px var(--card-border, rgba(255, 255, 255, 0.05)) inset;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    background: var(--card-bg);
+    border: 1px solid var(--glass-border);
+    border-top: 1px solid var(--glass-border-top);
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
     transition: all var(--transition-base);
     position: relative;
     overflow: hidden;
@@ -186,12 +187,9 @@
 
 .glass-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35),
-                0 0 0 1px var(--card-border, rgba(255, 255, 255, 0.08)) inset;
-    border-color: var(--card-border, rgba(255, 255, 255, 0.2));
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.2);
+    border-color: rgba(100, 150, 255, 0.2);
 }
-
-/* Shimmer effect removed for cleaner look */
 
 /* Glassmorphic Panel - Refined */
 .glass-panel {

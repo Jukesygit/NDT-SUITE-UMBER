@@ -6,6 +6,7 @@ import { useState, useCallback, useEffect, ChangeEvent, DragEvent } from 'react'
 import { Modal, FormField, FormTextarea } from '../../components/ui';
 import { RandomMatrixSpinner } from '../../components/MatrixSpinners';
 import type { CompetencyDefinition } from './CompetencyCard';
+import './profile.css';
 
 // Valid file types for competency documents
 const VALID_FILE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
@@ -297,7 +298,7 @@ export function EditCompetencyModal({
                         {!isNew && onDelete && (
                             <button
                                 onClick={onDelete}
-                                className="btn btn--danger"
+                                className="pf-btn danger"
                                 disabled={isSaving || isDeleting}
                             >
                                 {isDeleting ? 'Deleting...' : 'Delete'}
@@ -308,14 +309,14 @@ export function EditCompetencyModal({
                     <div style={{ display: 'flex', gap: '8px' }}>
                         <button
                             onClick={handleClose}
-                            className="btn btn--secondary"
+                            className="pf-btn"
                             disabled={isSaving || isDeleting}
                         >
                             Cancel
                         </button>
                         <button
                             onClick={handleSave}
-                            className="btn btn--primary"
+                            className="pf-btn primary"
                             disabled={isSaving || isDeleting}
                         >
                             {isSaving ? 'Saving...' : isNew ? 'Add Certification' : 'Save Changes'}
@@ -356,90 +357,28 @@ export function EditCompetencyModal({
 
                 {/* Document Upload */}
                 <div>
-                    <label
-                        style={{
-                            display: 'block',
-                            fontSize: '13px',
-                            fontWeight: '500',
-                            color: 'rgba(255, 255, 255, 0.6)',
-                            marginBottom: '6px',
-                        }}
-                    >
+                    <span className="pf-display-label" style={{ marginBottom: '6px', display: 'block' }}>
                         Certificate Document
-                        <span
-                            style={{
-                                fontSize: '11px',
-                                fontWeight: '400',
-                                marginLeft: '8px',
-                                color: 'rgba(255, 255, 255, 0.4)',
-                            }}
-                        >
+                        <span style={{ fontSize: '11px', fontWeight: '400', marginLeft: '8px', color: 'rgba(255, 255, 255, 0.3)' }}>
                             (PDF or image - max 10MB)
                         </span>
-                    </label>
+                    </span>
 
                     {formData.document_name ? (
-                        <div
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '12px',
-                                padding: '12px 16px',
-                                background: 'rgba(16, 185, 129, 0.1)',
-                                border: '1px solid rgba(16, 185, 129, 0.3)',
-                                borderRadius: '8px',
-                            }}
-                        >
+                        <div className="pf-document-row">
                             <DocumentIcon />
-                            <span
-                                style={{
-                                    flex: 1,
-                                    color: '#ffffff',
-                                    fontSize: '14px',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                }}
-                            >
-                                {formData.document_name}
-                            </span>
+                            <span className="pf-document-name">{formData.document_name}</span>
                             <button
                                 type="button"
                                 onClick={handleRemoveDocument}
-                                className="btn-icon"
-                                style={{ padding: '4px', color: '#ef4444' }}
+                                className="pf-document-remove"
                             >
                                 <CloseIcon />
                             </button>
                         </div>
                     ) : (
                         <label
-                            style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                padding: '20px',
-                                border: isDragging
-                                    ? '2px solid var(--accent-primary)'
-                                    : '2px dashed rgba(255, 255, 255, 0.2)',
-                                borderRadius: '8px',
-                                cursor: isUploadingDocument ? 'wait' : 'pointer',
-                                transition: 'all 0.2s ease',
-                                background: isDragging
-                                    ? 'rgba(59, 130, 246, 0.1)'
-                                    : 'rgba(255, 255, 255, 0.02)',
-                            }}
-                            onMouseEnter={(e) => {
-                                if (!isUploadingDocument && !isDragging) {
-                                    e.currentTarget.style.borderColor = 'var(--accent-primary)';
-                                }
-                            }}
-                            onMouseLeave={(e) => {
-                                if (!isDragging) {
-                                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                                }
-                            }}
+                            className={`pf-upload-zone${isDragging ? ' dragging' : ''}${isUploadingDocument ? ' uploading' : ''}`}
                             onDrop={handleDrop}
                             onDragOver={handleDragOver}
                             onDragLeave={handleDragLeave}
@@ -449,31 +388,15 @@ export function EditCompetencyModal({
                                     <div style={{ marginBottom: '8px' }}>
                                         <RandomMatrixSpinner size={32} />
                                     </div>
-                                    <span style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '13px' }}>
-                                        Uploading...
-                                    </span>
+                                    <span className="pf-upload-text">Uploading...</span>
                                 </>
                             ) : (
                                 <>
                                     <UploadIcon />
-                                    <span
-                                        style={{
-                                            color: isDragging ? 'var(--accent-primary)' : 'rgba(255, 255, 255, 0.6)',
-                                            fontSize: '13px',
-                                            textAlign: 'center',
-                                        }}
-                                    >
+                                    <span className="pf-upload-text">
                                         {isDragging ? 'Drop file here' : 'Drag & drop or click to upload'}
                                     </span>
-                                    <span
-                                        style={{
-                                            color: 'rgba(255, 255, 255, 0.4)',
-                                            fontSize: '11px',
-                                            marginTop: '4px',
-                                        }}
-                                    >
-                                        PDF or image of your certificate
-                                    </span>
+                                    <span className="pf-upload-hint">PDF or image of your certificate</span>
                                 </>
                             )}
                             <input

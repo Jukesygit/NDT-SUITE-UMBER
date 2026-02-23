@@ -50,8 +50,8 @@ export default function EditDocumentModal({ isOpen, onClose, document: doc }: Pr
 
     const footer = (
         <div className="flex justify-end gap-3">
-            <button onClick={onClose} disabled={updateDoc.isPending} className="glass-btn">Cancel</button>
-            <button onClick={handleSubmit} disabled={updateDoc.isPending} className="glass-btn glass-btn-primary">
+            <button onClick={onClose} disabled={updateDoc.isPending} className="dc-btn">Cancel</button>
+            <button onClick={handleSubmit} disabled={updateDoc.isPending} className="dc-btn primary">
                 {updateDoc.isPending ? 'Saving...' : 'Save Changes'}
             </button>
         </div>

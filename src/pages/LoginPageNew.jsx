@@ -673,6 +673,25 @@ function LoginPageNew() {
               </div>
             )}
           </div>
+
+          {/* Privacy Policy Link - always visible, GDPR Art. 13/14 */}
+          <div style={{
+            textAlign: 'center',
+            paddingTop: '16px',
+            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+            marginTop: '8px',
+          }}>
+            <a
+              href="/privacy"
+              style={{
+                color: 'var(--text-tertiary, #6b7280)',
+                fontSize: '12px',
+                textDecoration: 'none',
+              }}
+            >
+              Privacy Policy
+            </a>
+          </div>
         </div>
       </div>
 

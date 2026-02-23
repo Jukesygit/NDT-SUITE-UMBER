@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Document Control — Brutalist</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f0f0e8;
+    --black: #111;
+    --white: #f0f0e8;
+    --red: #e03020;
+    --green: #18804a;
+    --yellow: #e8a800;
+    --blue: #2040d0;
+    --grey: #888;
+    --border: #111;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg);
+    color: var(--black);
+    min-height: 100vh;
+  }
+
+  /* ---- HEADER ---- */
+  .header {
+    background: var(--black);
+    color: var(--white);
+    padding: 20px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .header-title {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 42px;
+    text-transform: uppercase;
+    line-height: 1;
+    letter-spacing: -1px;
+  }
+  .header-title span {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 300;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 6px;
+    color: var(--grey);
+    margin-top: 4px;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn-b {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 12px 24px;
+    border: 3px solid var(--white);
+    background: transparent;
+    color: var(--white);
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+  .btn-b:hover { background: var(--white); color: var(--black); }
+  .btn-b.primary {
+    background: var(--red);
+    border-color: var(--red);
+    color: var(--white);
+  }
+  .btn-b.primary:hover { background: #ff4030; border-color: #ff4030; }
+
+  /* ---- STATS ---- */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    border-bottom: 3px solid var(--black);
+  }
+
+  .stat-b {
+    padding: 20px;
+    border-right: 3px solid var(--black);
+    text-align: center;
+  }
+  .stat-b:last-child { border-right: none; }
+
+  .stat-b-value {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 48px;
+    line-height: 1;
+  }
+
+  .stat-b-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--grey);
+    margin-top: 4px;
+    font-weight: 500;
+  }
+
+  .stat-b.red .stat-b-value { color: var(--red); }
+  .stat-b.green .stat-b-value { color: var(--green); }
+  .stat-b.yellow .stat-b-value { color: var(--yellow); }
+
+  /* ---- TICKER STRIP ---- */
+  .ticker {
+    background: var(--red);
+    color: var(--white);
+    padding: 8px 0;
+    overflow: hidden;
+    border-bottom: 3px solid var(--black);
+  }
+
+  .ticker-inner {
+    display: flex;
+    gap: 48px;
+    white-space: nowrap;
+    animation: scroll 20s linear infinite;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+
+  @keyframes scroll {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  /* ---- TABS ---- */
+  .tabs-b {
+    display: flex;
+    border-bottom: 3px solid var(--black);
+  }
+
+  .tab-b {
+    padding: 14px 32px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    cursor: pointer;
+    border-right: 3px solid var(--black);
+    transition: all 0.1s;
+  }
+  .tab-b:hover { background: var(--black); color: var(--white); }
+  .tab-b.active {
+    background: var(--black);
+    color: var(--white);
+  }
+
+  /* ---- TOOLBAR ---- */
+  .toolbar-b {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    border-bottom: 3px solid var(--black);
+  }
+
+  .search-b {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    border-right: 3px solid var(--black);
+    padding: 0 16px;
+  }
+
+  .search-b input {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    border: none;
+    background: transparent;
+    outline: none;
+    padding: 14px 0;
+    width: 100%;
+    font-weight: 400;
+  }
+  .search-b input::placeholder { color: var(--grey); }
+
+  .filter-b {
+    padding: 14px 20px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    border-right: 3px solid var(--black);
+    transition: all 0.1s;
+    background: transparent;
+    color: var(--grey);
+    border-top: none;
+    border-bottom: none;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .filter-b:hover { background: var(--black); color: var(--white); }
+  .filter-b.active { background: var(--black); color: var(--white); }
+
+  /* ---- TABLE ---- */
+  .table-b {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .table-b thead th {
+    text-align: left;
+    padding: 12px 16px;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    font-weight: 700;
+    border-bottom: 3px solid var(--black);
+    background: var(--bg);
+    position: sticky;
+    top: 0;
+  }
+
+  .table-b tbody tr {
+    border-bottom: 1px solid #ccc;
+    transition: all 0.05s;
+    cursor: pointer;
+    animation: rowAppear 0.3s ease both;
+  }
+  .table-b tbody tr:nth-child(1) { animation-delay: 0s; }
+  .table-b tbody tr:nth-child(2) { animation-delay: 0.03s; }
+  .table-b tbody tr:nth-child(3) { animation-delay: 0.06s; }
+  .table-b tbody tr:nth-child(4) { animation-delay: 0.09s; }
+  .table-b tbody tr:nth-child(5) { animation-delay: 0.12s; }
+  .table-b tbody tr:nth-child(6) { animation-delay: 0.15s; }
+  .table-b tbody tr:nth-child(7) { animation-delay: 0.18s; }
+  .table-b tbody tr:nth-child(8) { animation-delay: 0.21s; }
+
+  .table-b tbody tr:hover {
+    background: var(--black);
+    color: var(--white);
+  }
+  .table-b tbody tr:hover .doc-id { color: var(--red); }
+  .table-b tbody tr:hover .badge-b { border-color: var(--white); color: var(--white); }
+  .table-b tbody tr:hover .badge-b.approved { border-color: #4aff8a; color: #4aff8a; }
+  .table-b tbody tr:hover .badge-b.review { border-color: var(--yellow); color: var(--yellow); }
+  .table-b tbody tr:hover .overdue-text { color: #ff6060; }
+
+  .table-b td {
+    padding: 16px;
+    vertical-align: top;
+  }
+
+  .doc-id {
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 1px;
+  }
+
+  .doc-name {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 15px;
+    text-transform: uppercase;
+    line-height: 1.3;
+    margin-bottom: 2px;
+  }
+
+  .doc-sub {
+    font-size: 11px;
+    color: var(--grey);
+    font-weight: 300;
+    line-height: 1.4;
+  }
+
+  .badge-b {
+    display: inline-block;
+    padding: 4px 10px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    border: 2px solid;
+  }
+  .badge-b.approved { border-color: var(--green); color: var(--green); }
+  .badge-b.draft { border-color: var(--grey); color: var(--grey); }
+  .badge-b.review { border-color: var(--yellow); color: var(--yellow); }
+  .badge-b.withdrawn { border-color: var(--red); color: var(--red); }
+
+  .overdue-text {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--red);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .soon-text {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--yellow);
+  }
+
+  .normal-text {
+    font-size: 11px;
+    color: var(--grey);
+    font-weight: 300;
+  }
+
+  .cat-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    padding: 2px 8px;
+    background: var(--black);
+    color: var(--white);
+    display: inline-block;
+  }
+
+  .rev-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+
+  /* ---- BOTTOM STRIP ---- */
+  .bottom-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    border-top: 3px solid var(--black);
+    margin-top: 0;
+  }
+
+  .bottom-section {
+    padding: 24px;
+    border-right: 3px solid var(--black);
+  }
+  .bottom-section:last-child { border-right: none; }
+
+  .bottom-heading {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 3px solid var(--black);
+  }
+
+  .overdue-card {
+    padding: 10px 0;
+    border-bottom: 1px solid #ccc;
+  }
+
+  .overdue-card-name {
+    font-weight: 700;
+    font-size: 13px;
+  }
+
+  .overdue-card-meta {
+    font-size: 10px;
+    color: var(--grey);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .overdue-card-badge {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--red);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .activity-b {
+    padding: 8px 0;
+    border-bottom: 1px solid #ccc;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .activity-b strong { font-weight: 700; }
+  .activity-b-time {
+    font-size: 9px;
+    color: var(--grey);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .cat-bar-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .cat-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .cat-bar-name {
+    width: 120px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .cat-bar-track {
+    flex: 1;
+    height: 24px;
+    background: #ddd;
+    position: relative;
+  }
+
+  .cat-bar-fill {
+    height: 100%;
+    background: var(--black);
+    transition: width 0.6s ease;
+  }
+
+  .cat-bar-count {
+    font-size: 12px;
+    font-weight: 700;
+    width: 30px;
+    text-align: right;
+  }
+
+  /* ---- Animations ---- */
+  @keyframes rowAppear {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 900px) {
+    .stats-row { grid-template-columns: repeat(3, 1fr); }
+    .bottom-strip { grid-template-columns: 1fr; }
+    .bottom-section { border-right: none; border-bottom: 3px solid var(--black); }
+    .header-title { font-size: 28px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-title">
+      DOC CTRL
+      <span>NDT Suite &mdash; Controlled Document Register</span>
+    </div>
+    <div class="header-actions">
+      <button class="btn-b">Categories</button>
+      <button class="btn-b primary">+ New Doc</button>
+    </div>
+  </div>
+
+  <!-- Ticker -->
+  <div class="ticker">
+    <div class="ticker-inner">
+      <span>&#9888; 2 Documents overdue for review</span>
+      <span>&bull;</span>
+      <span>PROC-001 — UT Procedure — 34 days overdue</span>
+      <span>&bull;</span>
+      <span>EXT-005 — BP Offshore Spec — 45 days overdue</span>
+      <span>&bull;</span>
+      <span>5 documents due for review within 90 days</span>
+      <span>&bull;</span>
+      <span>&#9888; 2 Documents overdue for review</span>
+      <span>&bull;</span>
+      <span>PROC-001 — UT Procedure — 34 days overdue</span>
+      <span>&bull;</span>
+      <span>EXT-005 — BP Offshore Spec — 45 days overdue</span>
+      <span>&bull;</span>
+      <span>5 documents due for review within 90 days</span>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-b">
+      <div class="stat-b-value">47</div>
+      <div class="stat-b-label">Total</div>
+    </div>
+    <div class="stat-b green">
+      <div class="stat-b-value">38</div>
+      <div class="stat-b-label">Approved</div>
+    </div>
+    <div class="stat-b">
+      <div class="stat-b-value">6</div>
+      <div class="stat-b-label">Review</div>
+    </div>
+    <div class="stat-b">
+      <div class="stat-b-value">3</div>
+      <div class="stat-b-label">Draft</div>
+    </div>
+    <div class="stat-b yellow">
+      <div class="stat-b-value">5</div>
+      <div class="stat-b-label">Due Soon</div>
+    </div>
+    <div class="stat-b red">
+      <div class="stat-b-value">2</div>
+      <div class="stat-b-label">Overdue</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs-b">
+    <div class="tab-b active">Register</div>
+    <div class="tab-b">Reviews</div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar-b">
+    <div class="search-b">
+      <input type="text" placeholder="SEARCH DOCUMENTS...">
+    </div>
+    <button class="filter-b active">All</button>
+    <button class="filter-b">Proc</button>
+    <button class="filter-b">WI</button>
+    <button class="filter-b">Forms</button>
+    <button class="filter-b">Policy</button>
+    <button class="filter-b">Ext</button>
+  </div>
+
+  <!-- Table -->
+  <table class="table-b">
+    <thead>
+      <tr>
+        <th>Doc #</th>
+        <th>Title</th>
+        <th>Category</th>
+        <th>Status</th>
+        <th>Rev</th>
+        <th>Owner</th>
+        <th>Review</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="doc-id">PROC-001</span></td>
+        <td>
+          <div class="doc-name">Ultrasonic Testing Procedure</div>
+          <div class="doc-sub">UT inspection per BS EN ISO 17640</div>
+        </td>
+        <td><span class="cat-label">Procedures</span></td>
+        <td><span class="badge-b approved">Approved</span></td>
+        <td><span class="rev-label">R4</span></td>
+        <td>J. Morrison</td>
+        <td><span class="overdue-text">14 Jan — 34d Over</span></td>
+      </tr>
+      <tr>
+        <td><span class="doc-id">PROC-002</span></td>
+        <td>
+          <div class="doc-name">Magnetic Particle Inspection</div>
+          <div class="doc-sub">MPI for ferromagnetic materials</div>
+        </td>
+        <td><span class="cat-label">Procedures</span></td>
+        <td><span class="badge-b approved">Approved</span></td>
+        <td><span class="rev-label">R2</span></td>
+        <td>A. Chen</td>
+        <td><span class="normal-text">08 Sep 2026</span></td>
+      </tr>
+      <tr>
+        <td><span class="doc-id">WI-014</span></td>
+        <td>
+          <div class="doc-name">Phased Array Scanner Setup</div>
+          <div class="doc-sub">Olympus OmniScan MX2 calibration</div>
+        </td>
+        <td><span class="cat-label">Work Inst</span></td>
+        <td><span class="badge-b review">Review</span></td>
+        <td><span class="rev-label">R3</span></td>
+        <td>R. Patel</td>
+        <td><span class="normal-text">—</span></td>
+      </tr>
+      <tr>
+        <td><span class="doc-id">POL-003</span></td>
+        <td>
+          <div class="doc-name">Health & Safety Policy</div>
+          <div class="doc-sub">All operational activities</div>
+        </td>
+        <td><span class="cat-label">Policies</span></td>
+        <td><span class="badge-b approved">Approved</span></td>
+        <td><span class="rev-label">R7</span></td>
+        <td>S. Williams</td>
+        <td><span class="soon-text">28 Feb — 11d</span></td>
+      </tr>
+      <tr>
+        <td><span class="doc-id">FORM-008</span></td>
+        <td>
+          <div class="doc-name">UT Inspection Report Template</div>
+          <div class="doc-sub">Standardised report form</div>
+        </td>
+        <td><span class="cat-label">Forms</span></td>
+        <td><span class="badge-b approved">Approved</span></td>
+        <td><span class="rev-label">R2</span></td>
+        <td>J. Morrison</td>
+        <td><span class="normal-text">15 Nov 2026</span></td>
+      </tr>
+      <tr>
+        <td><span class="doc-id">PROC-011</span></td>
+        <td>
+          <div class="doc-name">Radiographic Testing Procedure</div>
+          <div class="doc-sub">Weld inspection per EN ISO 17636</div>
+        </td>
+        <td><span class="cat-label">Procedures</span></td>
+        <td><span class="badge-b draft">Draft</span></td>
+        <td><span class="rev-label">R1</span></td>
+        <td>M. Khan</td>
+        <td><span class="normal-text">—</span></td>
+      </tr>
+      <tr>
+        <td><span class="doc-id">EXT-005</span></td>
+        <td>
+          <div class="doc-name">Client Spec — BP Offshore Welds</div>
+          <div class="doc-sub">Subsea weld inspection requirements</div>
+        </td>
+        <td><span class="cat-label">External</span></td>
+        <td><span class="badge-b approved">Approved</span></td>
+        <td><span class="rev-label">R1</span></td>
+        <td>A. Chen</td>
+        <td><span class="overdue-text">03 Jan — 45d Over</span></td>
+      </tr>
+      <tr>
+        <td><span class="doc-id">WI-022</span></td>
+        <td>
+          <div class="doc-name">TOFD Calibration Block Prep</div>
+          <div class="doc-sub">Verification of TOFD cal blocks</div>
+        </td>
+        <td><span class="cat-label">Work Inst</span></td>
+        <td><span class="badge-b review">Review</span></td>
+        <td><span class="rev-label">R2</span></td>
+        <td>R. Patel</td>
+        <td><span class="normal-text">—</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Bottom Strip -->
+  <div class="bottom-strip">
+    <div class="bottom-section">
+      <div class="bottom-heading">Overdue Reviews</div>
+      <div class="overdue-card">
+        <div class="overdue-card-name">Ultrasonic Testing Procedure</div>
+        <div class="overdue-card-meta">PROC-001 &middot; J. Morrison</div>
+        <div class="overdue-card-badge">34 Days Overdue</div>
+      </div>
+      <div class="overdue-card">
+        <div class="overdue-card-name">BP Offshore Weld Spec</div>
+        <div class="overdue-card-meta">EXT-005 &middot; A. Chen</div>
+        <div class="overdue-card-badge">45 Days Overdue</div>
+      </div>
+    </div>
+
+    <div class="bottom-section">
+      <div class="bottom-heading">Recent Activity</div>
+      <div class="activity-b">
+        <strong>Rev 4</strong> of PROC-001 approved
+        <div class="activity-b-time">2 hours ago</div>
+      </div>
+      <div class="activity-b">
+        <strong>Rev 3</strong> uploaded for WI-014
+        <div class="activity-b-time">Yesterday</div>
+      </div>
+      <div class="activity-b">
+        WI-022 submitted for review
+        <div class="activity-b-time">2 days ago</div>
+      </div>
+      <div class="activity-b">
+        <strong>Rev 7</strong> of POL-003 approved
+        <div class="activity-b-time">3 days ago</div>
+      </div>
+    </div>
+
+    <div class="bottom-section">
+      <div class="bottom-heading">By Category</div>
+      <div class="cat-bar-chart">
+        <div class="cat-bar-row">
+          <span class="cat-bar-name">Procedures</span>
+          <div class="cat-bar-track"><div class="cat-bar-fill" style="width:100%"></div></div>
+          <span class="cat-bar-count">18</span>
+        </div>
+        <div class="cat-bar-row">
+          <span class="cat-bar-name">Work Inst</span>
+          <div class="cat-bar-track"><div class="cat-bar-fill" style="width:67%"></div></div>
+          <span class="cat-bar-count">12</span>
+        </div>
+        <div class="cat-bar-row">
+          <span class="cat-bar-name">Forms</span>
+          <div class="cat-bar-track"><div class="cat-bar-fill" style="width:50%"></div></div>
+          <span class="cat-bar-count">9</span>
+        </div>
+        <div class="cat-bar-row">
+          <span class="cat-bar-name">Policies</span>
+          <div class="cat-bar-track"><div class="cat-bar-fill" style="width:28%"></div></div>
+          <span class="cat-bar-count">5</span>
+        </div>
+        <div class="cat-bar-row">
+          <span class="cat-bar-name">External</span>
+          <div class="cat-bar-track"><div class="cat-bar-fill" style="width:17%"></div></div>
+          <span class="cat-bar-count">3</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

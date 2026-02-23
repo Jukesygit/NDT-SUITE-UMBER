@@ -29,26 +29,27 @@ class GlobalErrorBoundary extends React.Component {
 
         // Report to error tracking service in production
         if (process.env.NODE_ENV === 'production') {
-            this.reportErrorToService(error, errorInfo);
+            this.reportErrorToService(error);
         }
     }
 
-    reportErrorToService(error, errorInfo) {
-        // Placeholder — integrate with Sentry or similar when ready.
+    reportErrorToService(error) {
+        // GDPR: componentStack excluded (can contain rendered PII from props).
+        // URL stripped to pathname only (query params may contain user IDs/emails).
         const errorData = {
             message: error.toString(),
             stack: error.stack,
-            componentStack: errorInfo.componentStack,
             timestamp: new Date().toISOString(),
-            url: window.location.href,
+            url: window.location.origin + window.location.pathname,
             userAgent: navigator.userAgent
         };
 
-        // For now, store in localStorage for debugging
+        // Store in localStorage for debugging with 7-day TTL
         try {
-            const errors = JSON.parse(localStorage.getItem('app_errors') || '[]');
+            const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+            const errors = JSON.parse(localStorage.getItem('app_errors') || '[]')
+                .filter((e) => e.timestamp && new Date(e.timestamp).getTime() > sevenDaysAgo);
             errors.push(errorData);
-            // Keep only last 10 errors
             if (errors.length > 10) {
                 errors.shift();
             }

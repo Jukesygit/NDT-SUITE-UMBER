@@ -96,16 +96,16 @@ export default function DocumentDetailModal({ isOpen, onClose, documentId, canMa
                     {/* Action buttons */}
                     <div className="flex gap-2">
                         {doc.current_revision && (
-                            <button onClick={handleDownloadCurrent} className="glass-btn glass-btn-primary text-sm">
+                            <button onClick={handleDownloadCurrent} className="dc-btn primary" style={{ fontSize: '13px' }}>
                                 Download Current Version
                             </button>
                         )}
                         {canManage && (
                             <>
-                                <button onClick={() => setShowRevisionModal(true)} className="glass-btn text-sm">
+                                <button onClick={() => setShowRevisionModal(true)} className="dc-btn" style={{ fontSize: '13px' }}>
                                     Upload New Revision
                                 </button>
-                                <button onClick={() => setShowEditModal(true)} className="glass-btn text-sm">
+                                <button onClick={() => setShowEditModal(true)} className="dc-btn" style={{ fontSize: '13px' }}>
                                     Edit Details
                                 </button>
                             </>

@@ -59,19 +59,9 @@ function EditIcon() {
  */
 function DisplayField({ label, value }: { label: string; value: string }) {
     return (
-        <div>
-            <label
-                style={{
-                    display: 'block',
-                    fontSize: '13px',
-                    fontWeight: '500',
-                    color: 'rgba(255, 255, 255, 0.6)',
-                    marginBottom: '6px',
-                }}
-            >
-                {label}
-            </label>
-            <div style={{ color: '#ffffff', fontSize: '15px' }}>{value || '-'}</div>
+        <div className="pf-display-field">
+            <span className="pf-display-label">{label}</span>
+            <div className="pf-display-value">{value || '-'}</div>
         </div>
     );
 }
@@ -126,23 +116,12 @@ export function ProfilePersonalDetails({
     };
 
     return (
-        <div className="glass-card" style={{ padding: '24px' }}>
+        <div>
             {/* Header */}
-            <div
-                style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: '20px',
-                    paddingBottom: '16px',
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                }}
-            >
-                <h2 style={{ fontSize: '18px', fontWeight: '600', color: '#ffffff', margin: 0 }}>
-                    Personal Details
-                </h2>
+            <div className="pf-section-header">
+                <h2 className="pf-section-title">Personal Details</h2>
                 {!isEditing && onEditToggle && (
-                    <button onClick={handleEditToggle} className="btn btn--secondary btn--sm">
+                    <button onClick={handleEditToggle} className="pf-btn sm">
                         <EditIcon />
                         Edit
                     </button>
@@ -150,19 +129,14 @@ export function ProfilePersonalDetails({
             </div>
 
             {/* Fields Grid */}
-            <div
-                style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                    gap: '16px',
-                }}
-            >
+            <div className="pf-field-grid">
                 {/* Mobile Number */}
                 {isEditing ? (
                     <FormField
                         label="Mobile Number"
                         type="tel"
                         placeholder="+44 7700 900000"
+                        autoComplete="off"
                         value={formData.mobile_number}
                         onChange={(e) => updateField('mobile_number', e.target.value)}
                         containerClassName="mb-0"
@@ -192,6 +166,7 @@ export function ProfilePersonalDetails({
                             label="Home Address"
                             type="text"
                             placeholder="Street, City, Postcode"
+                            autoComplete="off"
                             value={formData.home_address}
                             onChange={(e) => updateField('home_address', e.target.value)}
                             containerClassName="mb-0"
@@ -220,6 +195,7 @@ export function ProfilePersonalDetails({
                     <FormField
                         label="Date of Birth"
                         type="date"
+                        autoComplete="off"
                         value={formData.date_of_birth}
                         onChange={(e) => updateField('date_of_birth', e.target.value)}
                         containerClassName="mb-0"
@@ -237,6 +213,7 @@ export function ProfilePersonalDetails({
                         label="Next of Kin"
                         type="text"
                         placeholder="Emergency contact name"
+                        autoComplete="off"
                         value={formData.next_of_kin}
                         onChange={(e) => updateField('next_of_kin', e.target.value)}
                         containerClassName="mb-0"
@@ -251,6 +228,7 @@ export function ProfilePersonalDetails({
                         label="Emergency Contact Number"
                         type="tel"
                         placeholder="+44 7700 900000"
+                        autoComplete="off"
                         value={formData.next_of_kin_emergency_contact_number}
                         onChange={(e) => updateField('next_of_kin_emergency_contact_number', e.target.value)}
                         containerClassName="mb-0"
@@ -279,26 +257,17 @@ export function ProfilePersonalDetails({
 
             {/* Action Buttons (only in edit mode) */}
             {isEditing && (
-                <div
-                    style={{
-                        display: 'flex',
-                        gap: '12px',
-                        marginTop: '24px',
-                        paddingTop: '16px',
-                        borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-                        justifyContent: 'flex-end',
-                    }}
-                >
+                <div className="pf-action-bar">
                     <button
                         onClick={handleCancel}
-                        className="btn btn--secondary"
+                        className="pf-btn"
                         disabled={isSaving}
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleSave}
-                        className="btn btn--primary"
+                        className="pf-btn primary"
                         disabled={isSaving}
                     >
                         {isSaving ? 'Saving...' : 'Save Changes'}

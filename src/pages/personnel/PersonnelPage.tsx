@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { PageHeader } from '../../components/ui';
+import './personnel.css';
 
 // React Query hooks
 import {
@@ -17,8 +17,6 @@ import {
     type PersonCompetency,
 } from '../../hooks/queries/usePersonnel';
 import { useCompetencyDefinitions, useExpiringCompetencies, usePendingApprovals } from '../../hooks/queries/useCompetencies';
-import { exportPersonnelToCSV } from '../../hooks/mutations';
-
 // Components
 import { PageSpinner, ErrorDisplay } from '../../components/ui';
 import { PersonnelFilters, type CompetencyDefinition } from './PersonnelFilters';
@@ -30,9 +28,6 @@ import { PendingApprovalsView } from './PendingApprovalsView';
 import { useAuth } from '../../contexts/AuthContext';
 import { isSupabaseConfigured } from '../../supabase-client.js';
 import { filterOutPersonalDetails } from '../../utils/competency-field-utils.js';
-
-// Import modal
-import UniversalImportModal from '../../components/UniversalImportModal.jsx';
 
 type ViewType = 'directory' | 'expiring' | 'approvals';
 type SortColumn = 'name' | 'org' | 'role' | 'total' | 'active' | 'expiring' | 'expired';
@@ -138,10 +133,6 @@ export default function PersonnelPage() {
     const [sortColumn, setSortColumn] = useState<SortColumn>('name');
     const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
-    // Modal state
-    const [showImportModal, setShowImportModal] = useState(false);
-    const [importSuccess, setImportSuccess] = useState(false);
-
     // Auth - reactive via useAuth hook
     const { isAdmin } = useAuth();
 
@@ -151,7 +142,6 @@ export default function PersonnelPage() {
     const definitionsQuery = useCompetencyDefinitions();
     const expiringQuery = useExpiringCompetencies(30);
     const pendingApprovalsQuery = usePendingApprovals();
-
 
     // Handle sort
     const handleSort = useCallback((column: string) => {
@@ -164,33 +154,6 @@ export default function PersonnelPage() {
             return column as SortColumn;
         });
     }, []);
-
-    // Handle export
-    const handleExport = useCallback(async () => {
-        const filteredData = filterAndSortPersonnel(
-            personnelQuery.data || [],
-            searchTerm,
-            filterOrg,
-            filterRole,
-            filterCompetencies,
-            sortColumn,
-            sortDirection
-        );
-        try {
-            await exportPersonnelToCSV(filteredData);
-        } catch {
-            alert('Failed to export data');
-        }
-    }, [personnelQuery.data, searchTerm, filterOrg, filterRole, filterCompetencies, sortColumn, sortDirection]);
-
-    // Handle import complete
-    const handleImportComplete = useCallback(() => {
-        setShowImportModal(false);
-        setImportSuccess(true);
-        setView('directory');
-        personnelQuery.refetch();
-        setTimeout(() => setImportSuccess(false), 5000);
-    }, [personnelQuery]);
 
     // Get competency stats (filtered version)
     const getFilteredCompetencyStats = useCallback((competencies: PersonCompetency[]) => {
@@ -216,14 +179,22 @@ export default function PersonnelPage() {
     // Not configured state
     if (!isSupabaseConfigured()) {
         return (
-            <div className="h-full flex flex-col">
-                <PageHeader title="Personnel Management" subtitle="Manage employee competencies, certifications, and training records" />
-                <div className="flex-1 flex items-center justify-center">
-                    <div className="glass-card" style={{ padding: '32px', textAlign: 'center' }}>
-                        <p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                            Personnel management requires Supabase backend configuration.
-                        </p>
+            <div className="h-full overflow-y-auto glass-scrollbar" style={{ padding: '32px 40px' }}>
+                <div className="pm-header">
+                    <div className="pm-header-left">
+                        <div className="pm-logo">
+                            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                        </div>
+                        <div className="pm-header-text">
+                            <h1>Personnel Management</h1>
+                            <p>Manage employee competencies, certifications, and training records</p>
+                        </div>
                     </div>
+                </div>
+                <div className="pm-empty">
+                    <p className="pm-empty-text">Personnel management requires Supabase backend configuration.</p>
                 </div>
             </div>
         );
@@ -232,9 +203,21 @@ export default function PersonnelPage() {
     // Loading state
     if (personnelQuery.isLoading) {
         return (
-            <div className="h-full flex flex-col">
-                <PageHeader title="Personnel Management" subtitle="Manage employee competencies, certifications, and training records" />
-                <div className="flex-1 flex items-center justify-center">
+            <div className="h-full overflow-y-auto glass-scrollbar" style={{ padding: '32px 40px' }}>
+                <div className="pm-header">
+                    <div className="pm-header-left">
+                        <div className="pm-logo">
+                            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                        </div>
+                        <div className="pm-header-text">
+                            <h1>Personnel Management</h1>
+                            <p>Manage employee competencies, certifications, and training records</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="flex items-center justify-center" style={{ minHeight: '300px' }}>
                     <PageSpinner message="Loading personnel data..." />
                 </div>
             </div>
@@ -244,9 +227,21 @@ export default function PersonnelPage() {
     // Error state
     if (personnelQuery.error) {
         return (
-            <div className="h-full flex flex-col">
-                <PageHeader title="Personnel Management" subtitle="Manage employee competencies, certifications, and training records" />
-                <div className="flex-1 flex items-center justify-center p-6">
+            <div className="h-full overflow-y-auto glass-scrollbar" style={{ padding: '32px 40px' }}>
+                <div className="pm-header">
+                    <div className="pm-header-left">
+                        <div className="pm-logo">
+                            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                        </div>
+                        <div className="pm-header-text">
+                            <h1>Personnel Management</h1>
+                            <p>Manage employee competencies, certifications, and training records</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="flex items-center justify-center" style={{ minHeight: '300px' }}>
                     <ErrorDisplay
                         error={personnelQuery.error}
                         title="Failed to load personnel"
@@ -258,60 +253,48 @@ export default function PersonnelPage() {
     }
 
     return (
-        <div className="h-full flex flex-col overflow-hidden">
+        <div className="h-full overflow-y-auto glass-scrollbar" style={{ padding: '32px 40px' }}>
             {/* Header */}
-            <PageHeader title="Personnel Management" subtitle="Manage employee competencies, certifications, and training records" />
+            <div className="pm-header">
+                <div className="pm-header-left">
+                    <div className="pm-logo">
+                            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                        </div>
+                    <div className="pm-header-text">
+                        <h1>Personnel Management</h1>
+                        <p>Manage employee competencies, certifications, and training records</p>
+                    </div>
+                </div>
+            </div>
 
-            {/* Navigation Tabs */}
-            <div
-                className="glass-panel"
-                style={{
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: 0,
-                    flexShrink: 0,
-                    padding: 0,
-                }}
-            >
-                <div className="flex px-6">
+            {/* Tabs */}
+            <div style={{ marginBottom: '28px' }}>
+                <div className="pm-tabs">
                     <button
+                        className={`pm-tab ${view === 'directory' ? 'active' : ''}`}
                         onClick={() => setView('directory')}
-                        className="tab-btn px-4 py-3 text-sm font-medium border-b-2"
-                        style={{
-                            borderColor: view === 'directory' ? 'var(--accent-primary)' : 'transparent',
-                            color: view === 'directory' ? 'var(--accent-primary)' : 'rgba(255, 255, 255, 0.6)',
-                        }}
                     >
                         Personnel Directory
                     </button>
                     <button
+                        className={`pm-tab ${view === 'expiring' ? 'active' : ''}`}
                         onClick={() => setView('expiring')}
-                        className="tab-btn px-4 py-3 text-sm font-medium border-b-2"
-                        style={{
-                            borderColor: view === 'expiring' ? 'var(--accent-primary)' : 'transparent',
-                            color: view === 'expiring' ? 'var(--accent-primary)' : 'rgba(255, 255, 255, 0.6)',
-                        }}
                     >
                         Expiring Certifications
                         {(expiringQuery.data?.length || 0) > 0 && (
-                            <span className="ml-2 glass-badge badge-red text-xs">
-                                {expiringQuery.data?.length}
-                            </span>
+                            <span className="pm-tab-badge red">{expiringQuery.data?.length}</span>
                         )}
                     </button>
                     {isAdmin && (
                         <button
+                            className={`pm-tab ${view === 'approvals' ? 'active' : ''}`}
                             onClick={() => setView('approvals')}
-                            className="tab-btn px-4 py-3 text-sm font-medium border-b-2"
-                            style={{
-                                borderColor: view === 'approvals' ? 'var(--accent-primary)' : 'transparent',
-                                color: view === 'approvals' ? 'var(--accent-primary)' : 'rgba(255, 255, 255, 0.6)',
-                            }}
                         >
                             Pending Approvals
                             {(pendingApprovalsQuery.data?.length || 0) > 0 && (
-                                <span className="ml-2 glass-badge badge-yellow text-xs">
-                                    {pendingApprovalsQuery.data?.length}
-                                </span>
+                                <span className="pm-tab-badge yellow">{pendingApprovalsQuery.data?.length}</span>
                             )}
                         </button>
                     )}
@@ -319,156 +302,89 @@ export default function PersonnelPage() {
             </div>
 
             {/* Content Area */}
-            <div className="flex-1 overflow-y-auto glass-scrollbar p-6">
-                {view === 'directory' ? (
-                    <>
-                        {/* Stats Cards */}
-                        <div className="stats-compact" style={{ marginBottom: '24px' }}>
-                            <div className="stat-compact">
-                                <div className="stat-compact__icon stat-compact__icon--primary">
-                                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                    </svg>
-                                </div>
-                                <div className="stat-compact__content">
-                                    <div className="stat-compact__label">Total Personnel</div>
-                                    <div className="stat-compact__value">{filteredPersonnel.length}</div>
-                                </div>
+            {view === 'directory' ? (
+                <>
+                    {/* Stats Cards */}
+                    <div className="pm-stats-grid">
+                        <div className="pm-stat-card total">
+                            <div className="pm-stat-icon">
+                                <svg viewBox="0 0 24 24"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                             </div>
-
-                            <div className="stat-compact">
-                                <div className="stat-compact__icon stat-compact__icon--success">
-                                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                </div>
-                                <div className="stat-compact__content">
-                                    <div className="stat-compact__label">Active Certs</div>
-                                    <div className="stat-compact__value">
-                                        {filteredPersonnel.reduce((sum, p) => sum + getFilteredCompetencyStats(p.competencies || []).active, 0)}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="stat-compact">
-                                <div className="stat-compact__icon stat-compact__icon--warning">
-                                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                </div>
-                                <div className="stat-compact__content">
-                                    <div className="stat-compact__label">Expiring Soon</div>
-                                    <div className="stat-compact__value">
-                                        {filteredPersonnel.reduce((sum, p) => sum + getFilteredCompetencyStats(p.competencies || []).expiring, 0)}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="stat-compact">
-                                <div className="stat-compact__icon stat-compact__icon--danger">
-                                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                    </svg>
-                                </div>
-                                <div className="stat-compact__content">
-                                    <div className="stat-compact__label">Expired</div>
-                                    <div className="stat-compact__value">
-                                        {filteredPersonnel.reduce((sum, p) => sum + getFilteredCompetencyStats(p.competencies || []).expired, 0)}
-                                    </div>
-                                </div>
-                            </div>
+                            <div className="pm-stat-value">{filteredPersonnel.length}</div>
+                            <div className="pm-stat-label">Total Personnel</div>
                         </div>
 
-                        {/* Filters */}
-                        <PersonnelFilters
-                            searchTerm={searchTerm}
-                            onSearchChange={setSearchTerm}
-                            filterOrg={filterOrg}
-                            onOrgChange={setFilterOrg}
-                            filterRole={filterRole}
-                            onRoleChange={setFilterRole}
-                            filterCompetencies={filterCompetencies}
-                            onCompetenciesChange={setFilterCompetencies}
+                        <div className="pm-stat-card active">
+                            <div className="pm-stat-icon">
+                                <svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            </div>
+                            <div className="pm-stat-value">
+                                {filteredPersonnel.reduce((sum, p) => sum + getFilteredCompetencyStats(p.competencies || []).active, 0)}
+                            </div>
+                            <div className="pm-stat-label">Active Certs</div>
+                        </div>
+
+                        <div className="pm-stat-card expiring">
+                            <div className="pm-stat-icon">
+                                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+                            </div>
+                            <div className="pm-stat-value">
+                                {filteredPersonnel.reduce((sum, p) => sum + getFilteredCompetencyStats(p.competencies || []).expiring, 0)}
+                            </div>
+                            <div className="pm-stat-label">Expiring Soon</div>
+                        </div>
+
+                        <div className="pm-stat-card expired">
+                            <div className="pm-stat-icon">
+                                <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                            </div>
+                            <div className="pm-stat-value">
+                                {filteredPersonnel.reduce((sum, p) => sum + getFilteredCompetencyStats(p.competencies || []).expired, 0)}
+                            </div>
+                            <div className="pm-stat-label">Expired</div>
+                        </div>
+                    </div>
+
+                    {/* Filters */}
+                    <PersonnelFilters
+                        searchTerm={searchTerm}
+                        onSearchChange={setSearchTerm}
+                        filterOrg={filterOrg}
+                        onOrgChange={setFilterOrg}
+                        filterRole={filterRole}
+                        onRoleChange={setFilterRole}
+                        filterCompetencies={filterCompetencies}
+                        onCompetenciesChange={setFilterCompetencies}
+                        organizations={organizationsQuery.data || []}
+                        competencyDefinitions={(definitionsQuery.data as CompetencyDefinition[]) || []}
+                    />
+
+                    {/* Table */}
+                    <div style={{ marginTop: '16px' }}>
+                        <PersonnelTable
+                            personnel={filteredPersonnel}
+                            getCompetencyStats={getFilteredCompetencyStats}
+                            sortColumn={sortColumn}
+                            sortDirection={sortDirection}
+                            onSort={handleSort}
+                            isAdmin={isAdmin}
                             organizations={organizationsQuery.data || []}
-                            competencyDefinitions={(definitionsQuery.data as CompetencyDefinition[]) || []}
-                            onImport={() => setShowImportModal(true)}
-                            onExport={handleExport}
-                            canImport={isAdmin}
+                            onPersonUpdate={() => personnelQuery.refetch()}
                         />
-
-                        {/* Table */}
-                        <div style={{ marginTop: '16px' }}>
-                            <PersonnelTable
-                                personnel={filteredPersonnel}
-                                getCompetencyStats={getFilteredCompetencyStats}
-                                sortColumn={sortColumn}
-                                sortDirection={sortDirection}
-                                onSort={handleSort}
-                                isAdmin={isAdmin}
-                                organizations={organizationsQuery.data || []}
-                                onPersonUpdate={() => personnelQuery.refetch()}
-                            />
-                        </div>
-                    </>
-                ) : view === 'expiring' ? (
-                    <ExpiringView
-                        expiringCompetencies={(expiringQuery.data as ExpiringCompetency[]) || []}
-                        personnel={personnelQuery.data || []}
-                    />
-                ) : view === 'approvals' && isAdmin ? (
-                    <PendingApprovalsView
-                        pendingApprovals={pendingApprovalsQuery.data || []}
-                        onRefresh={() => pendingApprovalsQuery.refetch()}
-                    />
-                ) : null}
-            </div>
-
-            {/* Import Modal */}
-            {showImportModal && (
-                <UniversalImportModal
-                    onClose={() => setShowImportModal(false)}
-                    onComplete={handleImportComplete}
+                    </div>
+                </>
+            ) : view === 'expiring' ? (
+                <ExpiringView
+                    expiringCompetencies={(expiringQuery.data as ExpiringCompetency[]) || []}
+                    personnel={personnelQuery.data || []}
                 />
-            )}
+            ) : view === 'approvals' && isAdmin ? (
+                <PendingApprovalsView
+                    pendingApprovals={pendingApprovalsQuery.data || []}
+                    onRefresh={() => pendingApprovalsQuery.refetch()}
+                />
+            ) : null}
 
-            {/* Import Success Toast */}
-            {importSuccess && (
-                <div
-                    style={{
-                        position: 'fixed',
-                        top: '20px',
-                        right: '20px',
-                        zIndex: 9999,
-                        padding: '16px 24px',
-                        background: 'rgba(16, 185, 129, 0.95)',
-                        backdropFilter: 'blur(8px)',
-                        borderRadius: '12px',
-                        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-                        color: '#ffffff',
-                        fontSize: '15px',
-                        fontWeight: '600',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        animation: 'slideInRight 0.3s ease-out',
-                    }}
-                >
-                    <svg
-                        style={{ width: '24px', height: '24px' }}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                    </svg>
-                    Personnel imported successfully! Check the directory below.
-                </div>
-            )}
         </div>
     );
 }

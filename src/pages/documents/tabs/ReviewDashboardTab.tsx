@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { ErrorDisplay, SectionSpinner } from '../../../components/ui';
 import { useDocumentsDueForReview } from '../../../hooks/queries/useDocuments';
-import DocumentStats from '../components/DocumentStats';
 import ReviewCompleteModal from '../modals/ReviewCompleteModal';
 import DocumentDetailModal from '../modals/DocumentDetailModal';
 import type { ReviewDueDocument } from '../../../types/document-control';
@@ -17,27 +16,39 @@ export default function ReviewDashboardTab() {
     const dueSoon = reviewDocs.filter(d => !d.is_overdue);
 
     return (
-        <div className="space-y-6">
-            <DocumentStats />
-
+        <div style={{ padding: '24px' }}>
             {isLoading ? (
-                <SectionSpinner message="Loading review data..." />
+                <div className="flex items-center justify-center py-12">
+                    <SectionSpinner message="Loading review data..." />
+                </div>
             ) : reviewDocs.length === 0 ? (
-                <div className="glass-panel p-8 rounded-lg text-center">
-                    <svg className="w-12 h-12 text-green-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <h3 className="text-lg font-medium text-gray-200">All documents up to date</h3>
-                    <p className="text-sm text-gray-400 mt-1">No documents are due for review in the next 90 days.</p>
+                <div className="dc-empty">
+                    <div className="dc-empty-icon" style={{ color: '#22c55e' }}>
+                        <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                            <polyline points="22 4 12 14.01 9 11.01" />
+                        </svg>
+                    </div>
+                    <div className="dc-empty-title">All documents up to date</div>
+                    <div className="dc-empty-text">No documents are due for review in the next 90 days.</div>
                 </div>
             ) : (
-                <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                     {overdue.length > 0 && (
                         <div>
-                            <h3 className="text-sm font-medium text-red-400 mb-3 flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-red-400" />
-                                Overdue ({overdue.length})
-                            </h3>
+                            <div style={{
+                                fontSize: '13px',
+                                fontWeight: 600,
+                                marginBottom: '12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                            }}>
+                                <span className="dc-sidebar-dot red" />
+                                <span style={{ color: 'rgba(252, 165, 165, 0.95)' }}>
+                                    Overdue ({overdue.length})
+                                </span>
+                            </div>
                             <ReviewList
                                 items={overdue}
                                 onViewDocument={setDetailDocId}
@@ -48,10 +59,19 @@ export default function ReviewDashboardTab() {
 
                     {dueSoon.length > 0 && (
                         <div>
-                            <h3 className="text-sm font-medium text-yellow-400 mb-3 flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-yellow-400" />
-                                Due Soon ({dueSoon.length})
-                            </h3>
+                            <div style={{
+                                fontSize: '13px',
+                                fontWeight: 600,
+                                marginBottom: '12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                            }}>
+                                <span className="dc-sidebar-dot warn" />
+                                <span style={{ color: 'rgba(253, 224, 71, 0.95)' }}>
+                                    Due Soon ({dueSoon.length})
+                                </span>
+                            </div>
                             <ReviewList
                                 items={dueSoon}
                                 onViewDocument={setDetailDocId}
@@ -59,7 +79,7 @@ export default function ReviewDashboardTab() {
                             />
                         </div>
                     )}
-                </>
+                </div>
             )}
 
             {reviewDoc && (
@@ -93,41 +113,60 @@ function ReviewList({
     onCompleteReview: (doc: ReviewDueDocument) => void;
 }) {
     return (
-        <div className="space-y-2">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {items.map((item) => (
                 <div
                     key={item.document_id}
-                    className="glass-panel p-4 rounded-lg flex items-center justify-between gap-4"
-                    style={{ background: 'rgba(255, 255, 255, 0.03)' }}
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '16px',
+                        padding: '16px 20px',
+                        background: 'rgba(30, 41, 59, 0.5)',
+                        border: '1px solid var(--glass-border)',
+                        borderRadius: '12px',
+                        transition: 'all 0.2s',
+                    }}
                 >
-                    <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm text-[var(--accent-primary)]">{item.doc_number}</span>
-                            <span className="text-sm text-gray-200 truncate">{item.title}</span>
+                    <div className="dc-doc-icon">
+                        <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14,2 14,8 20,8" />
+                        </svg>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="dc-doc-row">
+                            <span className="dc-doc-title">{item.title}</span>
+                            <span className="dc-doc-num">{item.doc_number}</span>
                         </div>
-                        <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
+                        <div className="dc-doc-meta">
                             <span>{item.category_name}</span>
-                            <span>Owner: {item.owner_username}</span>
-                            <span className={item.is_overdue ? 'text-red-400 font-medium' : ''}>
+                            <span>{item.owner_username}</span>
+                            <span className={`dc-review-tag ${item.is_overdue ? 'overdue' : 'soon'}`}>
                                 {item.is_overdue
-                                    ? `${Math.abs(item.days_until_review)} days overdue`
-                                    : `Due in ${item.days_until_review} days`
+                                    ? `${Math.abs(item.days_until_review)}d overdue`
+                                    : `${item.days_until_review}d left`
                                 }
                             </span>
                         </div>
                     </div>
-
-                    <div className="flex gap-2 flex-shrink-0">
+                    <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                         <button
                             onClick={() => onViewDocument(item.document_id)}
-                            className="glass-btn text-xs px-3 py-1.5"
+                            className="dc-btn"
+                            style={{ padding: '6px 14px', fontSize: '12px' }}
                         >
                             View
                         </button>
                         <button
                             onClick={() => onCompleteReview(item)}
-                            className="glass-btn text-xs px-3 py-1.5"
-                            style={{ color: '#22c55e', borderColor: 'rgba(34, 197, 94, 0.3)' }}
+                            className="dc-btn"
+                            style={{
+                                padding: '6px 14px',
+                                fontSize: '12px',
+                                color: 'rgba(134, 239, 172, 0.95)',
+                                borderColor: 'rgba(34, 197, 94, 0.3)',
+                            }}
                         >
                             No Changes Needed
                         </button>

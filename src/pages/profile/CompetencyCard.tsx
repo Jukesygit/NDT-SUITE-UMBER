@@ -236,61 +236,23 @@ export function CompetencyCard({
     const documentType = getDocumentType(competency.document_url);
 
     return (
-        <div
-            className="glass-card"
-            style={{
-                padding: compact ? '16px' : '20px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-                transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-            }}
-            onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-            }}
-        >
+        <div className={`pf-competency-card${compact ? ' compact' : ''}`}>
             {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: '1 1 auto', minWidth: 0 }}>
+            <div className="pf-card-header">
+                <div className="pf-card-header-left">
                     <div
+                        className="pf-card-icon"
                         style={{
-                            width: '40px',
-                            height: '40px',
-                            borderRadius: '10px',
                             background: `linear-gradient(135deg, ${displayColor}20, ${displayColor}10)`,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
                             color: displayColor,
-                            flexShrink: 0,
                         }}
                     >
                         <CertificateIcon />
                     </div>
                     <div style={{ minWidth: 0, flex: '1 1 auto' }}>
-                        <h4
-                            style={{
-                                fontSize: '15px',
-                                fontWeight: '600',
-                                color: '#ffffff',
-                                margin: 0,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                            }}
-                        >
-                            {name}
-                        </h4>
+                        <h4 className="pf-card-title">{name}</h4>
                         {definition?.category && (
-                            <span
-                                style={{
-                                    fontSize: '12px',
-                                    color: 'rgba(255, 255, 255, 0.5)',
-                                }}
-                            >
+                            <span className="pf-card-category">
                                 {typeof definition.category === 'object'
                                     ? definition.category.name
                                     : definition.category}
@@ -303,16 +265,7 @@ export function CompetencyCard({
                 {onEdit && (
                     <button
                         onClick={() => onEdit(competency)}
-                        className="btn-icon"
-                        style={{
-                            padding: '8px',
-                            flexShrink: 0,
-                            width: '36px',
-                            height: '36px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                        }}
+                        className="pf-card-edit-btn"
                         title="Edit"
                     >
                         <EditIcon />
@@ -322,44 +275,29 @@ export function CompetencyCard({
 
             {/* Details */}
             {isCertification && (
-                <div
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(2, 1fr)',
-                        gap: '12px',
-                        fontSize: '13px',
-                    }}
-                >
+                <div className="pf-card-details">
                     {competency.certification_id && (
                         <div>
-                            <span style={{ color: 'rgba(255, 255, 255, 0.5)', display: 'block' }}>
-                                Certificate ID
-                            </span>
-                            <span style={{ color: '#ffffff' }}>{competency.certification_id}</span>
+                            <span className="pf-detail-label">Certificate ID</span>
+                            <span className="pf-detail-value">{competency.certification_id}</span>
                         </div>
                     )}
                     {competency.issuing_body && (
                         <div>
-                            <span style={{ color: 'rgba(255, 255, 255, 0.5)', display: 'block' }}>
-                                Issued By
-                            </span>
-                            <span style={{ color: '#ffffff' }}>{competency.issuing_body}</span>
+                            <span className="pf-detail-label">Issued By</span>
+                            <span className="pf-detail-value">{competency.issuing_body}</span>
                         </div>
                     )}
                     {competency.issued_date && (
                         <div>
-                            <span style={{ color: 'rgba(255, 255, 255, 0.5)', display: 'block' }}>
-                                Issued
-                            </span>
-                            <span style={{ color: '#ffffff' }}>{formatDate(competency.issued_date)}</span>
+                            <span className="pf-detail-label">Issued</span>
+                            <span className="pf-detail-value">{formatDate(competency.issued_date)}</span>
                         </div>
                     )}
                     {competency.expiry_date && (
                         <div>
-                            <span style={{ color: 'rgba(255, 255, 255, 0.5)', display: 'block' }}>
-                                Expires
-                            </span>
-                            <span style={{ color: expiryStatus.color, fontWeight: '500' }}>
+                            <span className="pf-detail-label">Expires</span>
+                            <span className="pf-detail-value" style={{ color: expiryStatus.color, fontWeight: '500' }}>
                                 {formatDate(competency.expiry_date)}
                             </span>
                         </div>
@@ -369,26 +307,12 @@ export function CompetencyCard({
 
             {/* Non-certification value display */}
             {!isCertification && competency.field_value && (
-                <div style={{ color: '#ffffff', fontSize: '14px' }}>{competency.field_value}</div>
+                <div className="pf-detail-value" style={{ fontSize: '14px' }}>{competency.field_value}</div>
             )}
 
             {/* Document Link */}
             {competency.document_url && (
-                <button
-                    onClick={() => setShowDocumentModal(true)}
-                    style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        color: '#60a5fa',
-                        fontSize: '13px',
-                        textDecoration: 'none',
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        padding: 0,
-                    }}
-                >
+                <button className="pf-doc-link" onClick={() => setShowDocumentModal(true)}>
                     <DocumentIcon />
                     View Certificate
                 </button>
@@ -396,39 +320,11 @@ export function CompetencyCard({
 
             {/* Status Badges - approval status takes priority over expiry status */}
             {approvalStatus.show ? (
-                <div
-                    style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '4px 10px',
-                        borderRadius: '9999px',
-                        background: `${approvalStatus.color}15`,
-                        border: `1px solid ${approvalStatus.color}30`,
-                        fontSize: '12px',
-                        fontWeight: '500',
-                        color: approvalStatus.color,
-                        alignSelf: 'flex-start',
-                    }}
-                >
+                <div className={`pf-badge ${competency.status === 'pending_approval' ? 'pending' : competency.status === 'changes_requested' ? 'changes-requested' : competency.status || ''}`}>
                     {approvalStatus.label}
                 </div>
             ) : competency.expiry_date && expiryStatus.status !== 'none' ? (
-                <div
-                    style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '4px 10px',
-                        borderRadius: '9999px',
-                        background: `${expiryStatus.color}15`,
-                        border: `1px solid ${expiryStatus.color}30`,
-                        fontSize: '12px',
-                        fontWeight: '500',
-                        color: expiryStatus.color,
-                        alignSelf: 'flex-start',
-                    }}
-                >
+                <div className={`pf-badge ${expiryStatus.status}`}>
                     {expiryStatus.status === 'expired' && 'Expired'}
                     {expiryStatus.status === 'expiring-soon' &&
                         `Expires in ${expiryStatus.daysUntil} days`}

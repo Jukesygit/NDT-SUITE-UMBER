@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Document Control — Editorial</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Libre+Franklin:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f0e8;
+    --bg-warm: #ede6d8;
+    --surface: #faf7f0;
+    --ink: #1a1610;
+    --ink-light: #5a5347;
+    --ink-muted: #8a8278;
+    --rule: #c8bfac;
+    --rule-light: #ddd6c6;
+    --accent: #b8432f;
+    --accent-light: #e8c4be;
+    --teal: #2a706a;
+    --teal-light: #d4e8e6;
+    --gold: #c4960a;
+    --gold-light: #f5ecd0;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Libre Franklin', sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* Grain overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  .app {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 48px;
+  }
+
+  /* ---- Masthead ---- */
+  .masthead {
+    padding: 40px 0 20px;
+    text-align: center;
+    border-bottom: 3px double var(--rule);
+  }
+
+  .masthead-top {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 6px;
+    color: var(--ink-muted);
+    margin-bottom: 12px;
+  }
+
+  .masthead h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 56px;
+    font-weight: 400;
+    letter-spacing: -1px;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .masthead h1 em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .masthead-sub {
+    font-size: 13px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--ink-light);
+    font-weight: 300;
+  }
+
+  .masthead-date {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--rule-light);
+    font-size: 11px;
+    color: var(--ink-muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  /* ---- Toolbar ---- */
+  .toolbar-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .toolbar-left { display: flex; align-items: center; gap: 20px; }
+
+  .section-label {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .pill-nav {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--rule);
+    border-radius: 24px;
+    overflow: hidden;
+  }
+
+  .pill-nav button {
+    font-family: 'Libre Franklin', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 8px 20px;
+    border: none;
+    background: transparent;
+    color: var(--ink-muted);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .pill-nav button:hover { color: var(--ink); }
+  .pill-nav button.active {
+    background: var(--ink);
+    color: var(--bg);
+  }
+
+  .toolbar-right { display: flex; gap: 12px; align-items: center; }
+
+  .search-ed {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--rule);
+    border-radius: 24px;
+    padding: 8px 20px;
+    transition: border-color 0.2s;
+  }
+  .search-ed:focus-within { border-color: var(--ink); }
+
+  .search-ed svg { width: 14px; height: 14px; stroke: var(--ink-muted); }
+
+  .search-ed input {
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: 'Libre Franklin', sans-serif;
+    font-size: 13px;
+    color: var(--ink);
+    width: 200px;
+  }
+  .search-ed input::placeholder { color: var(--ink-muted); }
+
+  .btn-ed {
+    font-family: 'Libre Franklin', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 10px 24px;
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: var(--bg);
+    border-radius: 24px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-ed:hover { background: var(--accent); border-color: var(--accent); }
+
+  /* ---- Stats Banner ---- */
+  .stats-banner {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    border-bottom: 1px solid var(--rule);
+    animation: fadeUp 0.5s ease;
+  }
+
+  .stat-ed {
+    padding: 24px 16px;
+    text-align: center;
+    border-right: 1px solid var(--rule-light);
+    position: relative;
+  }
+  .stat-ed:last-child { border-right: none; }
+
+  .stat-ed-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 40px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .stat-ed-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--ink-muted);
+    font-weight: 500;
+  }
+
+  .stat-ed.hl-red .stat-ed-num { color: var(--accent); }
+  .stat-ed.hl-teal .stat-ed-num { color: var(--teal); }
+  .stat-ed.hl-gold .stat-ed-num { color: var(--gold); }
+
+  /* ---- Main Grid ---- */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 0;
+    min-height: 60vh;
+  }
+
+  .register-col {
+    border-right: 1px solid var(--rule);
+    padding-right: 0;
+  }
+
+  /* ---- Category Filters ---- */
+  .category-bar {
+    display: flex;
+    gap: 8px;
+    padding: 20px 24px 20px 0;
+    flex-wrap: wrap;
+  }
+
+  .cat-chip {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 6px 16px;
+    border: 1px solid var(--rule);
+    background: transparent;
+    color: var(--ink-muted);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Libre Franklin', sans-serif;
+  }
+  .cat-chip:hover { border-color: var(--ink); color: var(--ink); }
+  .cat-chip.active {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--bg);
+  }
+
+  /* ---- Document Cards ---- */
+  .doc-list { padding-right: 24px; }
+
+  .doc-card {
+    display: grid;
+    grid-template-columns: 80px 1fr auto;
+    gap: 20px;
+    padding: 24px 0;
+    border-bottom: 1px solid var(--rule-light);
+    align-items: start;
+    cursor: pointer;
+    transition: background 0.15s;
+    animation: fadeUp 0.4s ease both;
+  }
+  .doc-card:nth-child(1) { animation-delay: 0s; }
+  .doc-card:nth-child(2) { animation-delay: 0.05s; }
+  .doc-card:nth-child(3) { animation-delay: 0.1s; }
+  .doc-card:nth-child(4) { animation-delay: 0.15s; }
+  .doc-card:nth-child(5) { animation-delay: 0.2s; }
+  .doc-card:nth-child(6) { animation-delay: 0.25s; }
+
+  .doc-card:hover { background: rgba(200,191,172,0.15); margin: 0 -12px; padding: 24px 12px; }
+
+  .doc-card-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    padding-top: 2px;
+  }
+
+  .doc-card-body h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    font-weight: 400;
+    margin-bottom: 4px;
+    line-height: 1.3;
+  }
+
+  .doc-card-body p {
+    font-size: 13px;
+    color: var(--ink-light);
+    margin-bottom: 10px;
+    line-height: 1.5;
+  }
+
+  .doc-card-meta {
+    display: flex;
+    gap: 16px;
+    font-size: 11px;
+    color: var(--ink-muted);
+  }
+
+  .doc-card-meta span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .doc-card-right {
+    text-align: right;
+    padding-top: 2px;
+  }
+
+  .ed-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    border-radius: 2px;
+  }
+  .ed-badge.approved { background: var(--teal-light); color: var(--teal); }
+  .ed-badge.draft { background: var(--rule-light); color: var(--ink-muted); }
+  .ed-badge.review { background: var(--gold-light); color: var(--gold); }
+  .ed-badge.withdrawn { background: var(--accent-light); color: var(--accent); }
+
+  .review-due {
+    font-size: 11px;
+    margin-top: 8px;
+    color: var(--ink-muted);
+  }
+  .review-due.overdue {
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .review-due.soon {
+    color: var(--gold);
+    font-weight: 500;
+  }
+
+  /* ---- Sidebar ---- */
+  .sidebar-col { padding: 0 0 0 32px; }
+
+  .sidebar-section {
+    padding: 24px 0;
+    border-bottom: 1px solid var(--rule-light);
+  }
+
+  .sidebar-heading {
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    font-style: italic;
+    color: var(--accent);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sidebar-heading::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--rule-light);
+  }
+
+  .review-alert {
+    padding: 14px 0;
+    border-bottom: 1px solid var(--rule-light);
+  }
+  .review-alert:last-child { border-bottom: none; }
+
+  .review-alert-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .review-alert h4 {
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    font-weight: 400;
+  }
+
+  .alert-tag {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 3px 8px;
+  }
+  .alert-tag.overdue { background: var(--accent-light); color: var(--accent); }
+  .alert-tag.soon { background: var(--gold-light); color: var(--gold); }
+
+  .review-alert-meta {
+    font-size: 11px;
+    color: var(--ink-muted);
+    margin-top: 2px;
+  }
+
+  /* Activity */
+  .activity-ed {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--rule-light);
+    display: flex;
+    gap: 12px;
+  }
+  .activity-ed:last-child { border-bottom: none; }
+
+  .act-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .act-icon.approve { background: var(--teal-light); color: var(--teal); }
+  .act-icon.upload { background: #e0deff; color: #5a52c4; }
+  .act-icon.submit { background: var(--gold-light); color: var(--gold); }
+
+  .act-text {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .act-text strong { font-weight: 600; }
+
+  .act-time {
+    font-size: 10px;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* Quick categories */
+  .cat-overview {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .cat-overview-item {
+    padding: 12px 14px;
+    border: 1px solid var(--rule-light);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .cat-overview-name {
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--ink-light);
+  }
+
+  .cat-overview-count {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  /* ---- Animations ---- */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 1200px) {
+    .main-grid { grid-template-columns: 1fr; }
+    .register-col { border-right: none; padding-right: 0; }
+    .sidebar-col { padding-left: 0; border-top: 2px solid var(--rule); }
+  }
+  @media (max-width: 768px) {
+    .app { padding: 0 20px; }
+    .masthead h1 { font-size: 36px; }
+    .stats-banner { grid-template-columns: repeat(3, 1fr); }
+    .doc-card { grid-template-columns: 60px 1fr; }
+    .doc-card-right { grid-column: 2; }
+    .toolbar-row { flex-direction: column; gap: 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Masthead -->
+  <div class="masthead">
+    <div class="masthead-top">NDT Suite</div>
+    <h1>Document <em>Control</em></h1>
+    <div class="masthead-sub">Controlled Document Register & Review Management</div>
+    <div class="masthead-date">Monday, 17 February 2026 &bull; 47 Controlled Documents</div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-banner">
+    <div class="stat-ed">
+      <div class="stat-ed-num">47</div>
+      <div class="stat-ed-label">Total</div>
+    </div>
+    <div class="stat-ed hl-teal">
+      <div class="stat-ed-num">38</div>
+      <div class="stat-ed-label">Approved</div>
+    </div>
+    <div class="stat-ed">
+      <div class="stat-ed-num">3</div>
+      <div class="stat-ed-label">Draft</div>
+    </div>
+    <div class="stat-ed hl-gold">
+      <div class="stat-ed-num">6</div>
+      <div class="stat-ed-label">In Review</div>
+    </div>
+    <div class="stat-ed hl-gold">
+      <div class="stat-ed-num">5</div>
+      <div class="stat-ed-label">Due Soon</div>
+    </div>
+    <div class="stat-ed hl-red">
+      <div class="stat-ed-num">2</div>
+      <div class="stat-ed-label">Overdue</div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar-row">
+    <div class="toolbar-left">
+      <span class="section-label">Register</span>
+      <div class="pill-nav">
+        <button class="active">Documents</button>
+        <button>Reviews</button>
+      </div>
+    </div>
+    <div class="toolbar-right">
+      <div class="search-ed">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" placeholder="Search documents...">
+      </div>
+      <button class="btn-ed">+ New Document</button>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <!-- Register Column -->
+    <div class="register-col">
+      <div class="category-bar">
+        <button class="cat-chip active">All</button>
+        <button class="cat-chip">Procedures</button>
+        <button class="cat-chip">Work Instructions</button>
+        <button class="cat-chip">Forms & Templates</button>
+        <button class="cat-chip">Policies</button>
+        <button class="cat-chip">External</button>
+      </div>
+
+      <div class="doc-list">
+        <div class="doc-card">
+          <div class="doc-card-num">PROC-001</div>
+          <div class="doc-card-body">
+            <h3>Ultrasonic Testing Procedure</h3>
+            <p>General procedure for UT inspection per BS EN ISO 17640</p>
+            <div class="doc-card-meta">
+              <span>Procedures</span>
+              <span>Rev 4</span>
+              <span>J. Morrison</span>
+            </div>
+          </div>
+          <div class="doc-card-right">
+            <span class="ed-badge approved">Approved</span>
+            <div class="review-due overdue">Overdue: 14 Jan</div>
+          </div>
+        </div>
+
+        <div class="doc-card">
+          <div class="doc-card-num">PROC-002</div>
+          <div class="doc-card-body">
+            <h3>Magnetic Particle Inspection</h3>
+            <p>MPI procedure for ferromagnetic materials</p>
+            <div class="doc-card-meta">
+              <span>Procedures</span>
+              <span>Rev 2</span>
+              <span>A. Chen</span>
+            </div>
+          </div>
+          <div class="doc-card-right">
+            <span class="ed-badge approved">Approved</span>
+            <div class="review-due">08 Sep 2026</div>
+          </div>
+        </div>
+
+        <div class="doc-card">
+          <div class="doc-card-num">WI-014</div>
+          <div class="doc-card-body">
+            <h3>Phased Array Scanner Setup</h3>
+            <p>Setup and calibration for Olympus OmniScan MX2</p>
+            <div class="doc-card-meta">
+              <span>Work Instructions</span>
+              <span>Rev 3</span>
+              <span>R. Patel</span>
+            </div>
+          </div>
+          <div class="doc-card-right">
+            <span class="ed-badge review">Under Review</span>
+          </div>
+        </div>
+
+        <div class="doc-card">
+          <div class="doc-card-num">POL-003</div>
+          <div class="doc-card-body">
+            <h3>Health & Safety Policy</h3>
+            <p>Company H&S policy covering all operational activities</p>
+            <div class="doc-card-meta">
+              <span>Policies</span>
+              <span>Rev 7</span>
+              <span>S. Williams</span>
+            </div>
+          </div>
+          <div class="doc-card-right">
+            <span class="ed-badge approved">Approved</span>
+            <div class="review-due soon">Due: 28 Feb</div>
+          </div>
+        </div>
+
+        <div class="doc-card">
+          <div class="doc-card-num">FORM-008</div>
+          <div class="doc-card-body">
+            <h3>UT Inspection Report Template</h3>
+            <p>Standardised report form for ultrasonic testing results</p>
+            <div class="doc-card-meta">
+              <span>Forms & Templates</span>
+              <span>Rev 2</span>
+              <span>J. Morrison</span>
+            </div>
+          </div>
+          <div class="doc-card-right">
+            <span class="ed-badge approved">Approved</span>
+            <div class="review-due">15 Nov 2026</div>
+          </div>
+        </div>
+
+        <div class="doc-card">
+          <div class="doc-card-num">PROC-011</div>
+          <div class="doc-card-body">
+            <h3>Radiographic Testing Procedure</h3>
+            <p>RT procedure for weld inspection per EN ISO 17636</p>
+            <div class="doc-card-meta">
+              <span>Procedures</span>
+              <span>Rev 1</span>
+              <span>M. Khan</span>
+            </div>
+          </div>
+          <div class="doc-card-right">
+            <span class="ed-badge draft">Draft</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar-col">
+      <div class="sidebar-section">
+        <div class="sidebar-heading">Attention Required</div>
+        <div class="review-alert">
+          <div class="review-alert-top">
+            <h4>Ultrasonic Testing Procedure</h4>
+            <span class="alert-tag overdue">34d Overdue</span>
+          </div>
+          <div class="review-alert-meta">PROC-001 &middot; Owner: J. Morrison</div>
+        </div>
+        <div class="review-alert">
+          <div class="review-alert-top">
+            <h4>BP Offshore Weld Spec</h4>
+            <span class="alert-tag overdue">45d Overdue</span>
+          </div>
+          <div class="review-alert-meta">EXT-005 &middot; Owner: A. Chen</div>
+        </div>
+        <div class="review-alert">
+          <div class="review-alert-top">
+            <h4>Health & Safety Policy</h4>
+            <span class="alert-tag soon">11d Left</span>
+          </div>
+          <div class="review-alert-meta">POL-003 &middot; Owner: S. Williams</div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-heading">Categories</div>
+        <div class="cat-overview">
+          <div class="cat-overview-item">
+            <span class="cat-overview-name">Procedures</span>
+            <span class="cat-overview-count">18</span>
+          </div>
+          <div class="cat-overview-item">
+            <span class="cat-overview-name">Work Inst.</span>
+            <span class="cat-overview-count">12</span>
+          </div>
+          <div class="cat-overview-item">
+            <span class="cat-overview-name">Forms</span>
+            <span class="cat-overview-count">9</span>
+          </div>
+          <div class="cat-overview-item">
+            <span class="cat-overview-name">Policies</span>
+            <span class="cat-overview-count">5</span>
+          </div>
+          <div class="cat-overview-item">
+            <span class="cat-overview-name">External</span>
+            <span class="cat-overview-count">3</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-heading">Recent Activity</div>
+        <div class="activity-ed">
+          <div class="act-icon approve">&#10003;</div>
+          <div>
+            <div class="act-text"><strong>Rev 4</strong> approved for PROC-001</div>
+            <div class="act-time">2 hours ago</div>
+          </div>
+        </div>
+        <div class="activity-ed">
+          <div class="act-icon upload">&#8593;</div>
+          <div>
+            <div class="act-text"><strong>Rev 3</strong> uploaded for WI-014</div>
+            <div class="act-time">Yesterday</div>
+          </div>
+        </div>
+        <div class="activity-ed">
+          <div class="act-icon submit">&#9654;</div>
+          <div>
+            <div class="act-text">TOFD Calibration submitted for review</div>
+            <div class="act-time">2 days ago</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

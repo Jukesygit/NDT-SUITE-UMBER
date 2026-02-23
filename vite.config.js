@@ -7,16 +7,7 @@ const generateNonce = () => crypto.randomBytes(16).toString('base64')
 
 export default defineConfig({
   plugins: [
-    react({
-      // Include JSX runtime for better compatibility
-      jsxRuntime: 'automatic',
-      // Ensure proper babel configuration
-      babel: {
-        plugins: [
-          ['@babel/plugin-transform-react-jsx', { runtime: 'automatic' }]
-        ]
-      }
-    })
+    react()
   ],
   resolve: {
     dedupe: ['react', 'react-dom', 'react-router-dom']

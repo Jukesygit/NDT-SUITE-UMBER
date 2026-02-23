@@ -14,6 +14,7 @@ import Layout from './components/LayoutNew.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import RequireAccess from './components/RequireAccess.jsx';
 import LoginPage from './pages/LoginPageNew.jsx';
+import PrivacyPolicyPage from './pages/legal/PrivacyPolicyPage.tsx';
 import { RandomMatrixSpinner } from './components/MatrixSpinners';
 
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage.tsx'));
@@ -119,6 +120,7 @@ function App() {
                         <SuspenseRoutes fallback={<PageLoader />}>
                             <Routes>
                                 <Route path="/login" element={<LoginPage />} />
+                                <Route path="/privacy" element={<PrivacyPolicyPage />} />
                                 <Route element={<ProtectedRoute />}>
                                     <Route element={<Layout />}>
                                         <Route path="/" element={<Navigate to="/profile" replace />} />

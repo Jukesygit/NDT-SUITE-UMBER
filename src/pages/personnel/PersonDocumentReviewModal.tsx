@@ -77,11 +77,9 @@ function ChevronRightIcon() {
  */
 function DetailRow({ label, value, highlight = false }: { label: string; value: string | null | undefined; highlight?: boolean }) {
     return (
-        <div style={{ marginBottom: '12px' }}>
-            <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                {label}
-            </div>
-            <div style={{ fontSize: '14px', color: highlight ? '#60a5fa' : '#ffffff', fontWeight: highlight ? '500' : '400' }}>
+        <div className="pm-display-field" style={{ marginBottom: '12px' }}>
+            <div className="pm-display-label">{label}</div>
+            <div className="pm-display-value" style={{ color: highlight ? '#60a5fa' : undefined, fontWeight: highlight ? '500' : undefined }}>
                 {value || 'Not specified'}
             </div>
         </div>
@@ -273,13 +271,12 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
 
     const modalContent = (
         <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6"
+            className="pm-modal-overlay"
             style={{ animation: 'fadeIn 0.15s ease-out' }}
         >
-            {/* Backdrop */}
+            {/* Backdrop click area */}
             <div
-                className="absolute inset-0 backdrop-blur-sm"
-                style={{ backgroundColor: 'rgba(0, 0, 0, 0.85)' }}
+                className="absolute inset-0"
                 onClick={submitting ? undefined : onClose}
                 aria-hidden="true"
             />
@@ -289,16 +286,16 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="review-modal-title"
-                className="relative w-full max-w-6xl bg-slate-900/95 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl"
+                className="pm-modal-panel relative w-full max-w-6xl"
                 style={{ animation: 'scaleIn 0.2s ease-out', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
             >
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-white/10" style={{ flexShrink: 0 }}>
+                <div className="pm-modal-header" style={{ flexShrink: 0 }}>
                     <div>
-                        <h2 id="review-modal-title" className="text-lg font-semibold text-white">
+                        <h2 id="review-modal-title" className="pm-modal-title">
                             Review Documents - {person.username}
                         </h2>
-                        <p style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px' }}>
+                        <p className="pm-display-label" style={{ marginTop: '2px', textTransform: 'none', letterSpacing: 'normal', fontSize: '13px' }}>
                             Reviewing {currentIndex + 1} of {pendingCompetencies.length} pending document{pendingCompetencies.length !== 1 ? 's' : ''}
                             {reviewedIds.size > 0 && (
                                 <span style={{ color: '#10b981', marginLeft: '8px' }}>
@@ -310,22 +307,22 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         {/* Navigation buttons */}
                         {pendingCompetencies.length > 1 && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginRight: '8px' }}>
+                            <div className="pm-review-nav" style={{ border: 'none', background: 'none', padding: '0', gap: '4px', marginRight: '8px' }}>
                                 <button
                                     onClick={handlePrevious}
                                     disabled={currentIndex === 0 || submitting}
-                                    className="p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30"
+                                    className="pm-modal-close disabled:opacity-30"
                                     aria-label="Previous document"
                                 >
                                     <ChevronLeftIcon />
                                 </button>
-                                <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)', padding: '0 4px' }}>
+                                <span className="pm-review-counter">
                                     {currentIndex + 1}/{pendingCompetencies.length}
                                 </span>
                                 <button
                                     onClick={handleNext}
                                     disabled={currentIndex === pendingCompetencies.length - 1 || submitting}
-                                    className="p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30"
+                                    className="pm-modal-close disabled:opacity-30"
                                     aria-label="Next document"
                                 >
                                     <ChevronRightIcon />
@@ -336,7 +333,7 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
                             type="button"
                             onClick={onClose}
                             disabled={submitting}
-                            className="p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors -mr-2 disabled:opacity-50"
+                            className="pm-modal-close disabled:opacity-50"
                             aria-label="Close modal"
                         >
                             <CloseIcon />
@@ -349,9 +346,7 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
                     {/* Left: Document Viewer */}
                     <div className="flex-1 border-r border-white/10 overflow-hidden flex flex-col" style={{ minWidth: 0 }}>
                         <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', flexShrink: 0 }}>
-                            <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                Document Preview
-                            </div>
+                            <div className="pm-display-label">Document Preview</div>
                             {currentCompetency?.document_name && (
                                 <div style={{ fontSize: '13px', color: '#60a5fa', marginTop: '4px' }}>
                                     {currentCompetency.document_name}
@@ -404,8 +399,8 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
                                             href={documentUrl}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="btn-glass"
-                                            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px' }}
+                                            className="pm-btn"
+                                            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                                         >
                                             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -422,7 +417,7 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
                     <div className="w-96 flex-shrink-0 overflow-y-auto flex flex-col">
                         {/* Competency Details */}
                         <div style={{ padding: '20px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                            <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '16px' }}>
+                            <div className="pm-display-label" style={{ marginBottom: '16px' }}>
                                 Competency Details
                             </div>
 
@@ -435,7 +430,7 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
 
                         {/* Entered Values */}
                         <div style={{ padding: '20px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                            <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '16px' }}>
+                            <div className="pm-display-label" style={{ marginBottom: '16px' }}>
                                 Entered Values
                             </div>
 
@@ -446,7 +441,7 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
                             <DetailRow label="Submitted" value={formatDate(currentCompetency?.created_at)} />
                             {currentCompetency?.notes && (
                                 <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px' }}>
-                                    <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)', marginBottom: '4px' }}>Notes</div>
+                                    <div className="pm-display-label" style={{ marginBottom: '4px' }}>Notes</div>
                                     <div style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.8)' }}>{currentCompetency.notes}</div>
                                 </div>
                             )}
@@ -454,7 +449,7 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
 
                         {/* Actions */}
                         <div style={{ padding: '20px', flex: 1 }}>
-                            <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '16px' }}>
+                            <div className="pm-display-label" style={{ marginBottom: '16px' }}>
                                 Actions
                             </div>
 
@@ -524,7 +519,7 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
                                                 onChange={(e) => setComment(e.target.value)}
                                                 placeholder="Please describe what changes are needed..."
                                                 rows={4}
-                                                className="glass-input w-full"
+                                                className="pm-review-textarea"
                                                 style={{ resize: 'none' }}
                                                 disabled={submitting}
                                             />
@@ -532,7 +527,7 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
                                                 <button
                                                     onClick={() => { setActiveAction(null); setComment(''); }}
                                                     disabled={submitting}
-                                                    className="flex-1 btn-glass py-2"
+                                                    className="pm-btn flex-1"
                                                 >
                                                     Cancel
                                                 </button>
@@ -561,7 +556,7 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
                                                 onChange={(e) => setComment(e.target.value)}
                                                 placeholder="Reason for rejection..."
                                                 rows={4}
-                                                className="glass-input w-full"
+                                                className="pm-review-textarea"
                                                 style={{ resize: 'none' }}
                                                 disabled={submitting}
                                             />
@@ -569,15 +564,14 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
                                                 <button
                                                     onClick={() => { setActiveAction(null); setComment(''); }}
                                                     disabled={submitting}
-                                                    className="flex-1 btn-glass py-2"
+                                                    className="pm-btn flex-1"
                                                 >
                                                     Cancel
                                                 </button>
                                                 <button
                                                     onClick={handleReject}
                                                     disabled={submitting || !comment.trim()}
-                                                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all disabled:opacity-50"
-                                                    style={{ background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', color: '#ffffff' }}
+                                                    className="pm-btn danger flex-1 flex items-center justify-center gap-2 disabled:opacity-50"
                                                 >
                                                     {submitting ? <Spinner /> : 'Reject'}
                                                 </button>

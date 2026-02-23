@@ -76,8 +76,8 @@ export default function CreateRevisionModal({ isOpen, onClose, documentId }: Pro
 
     const footer = (
         <div className="flex justify-end gap-3">
-            <button onClick={onClose} disabled={isSubmitting} className="glass-btn">Cancel</button>
-            <button onClick={handleSubmit} disabled={isSubmitting} className="glass-btn glass-btn-primary">
+            <button onClick={onClose} disabled={isSubmitting} className="dc-btn">Cancel</button>
+            <button onClick={handleSubmit} disabled={isSubmitting} className="dc-btn primary">
                 {isSubmitting ? 'Uploading...' : 'Create Revision'}
             </button>
         </div>

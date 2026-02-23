@@ -13,6 +13,8 @@ import { WitnessCheckModal, type WitnessCheckData } from '../../components/featu
 
 // Utility imports - ES module
 import { requiresWitnessCheck } from '../../utils/competency-field-utils.js';
+import { maskPhone, maskDateOfBirth, maskAddress, maskName } from '../../utils/pii-masking';
+import { logActivity } from '../../services/activity-log-service';
 // @ts-ignore - JS module without types
 import authManager from '../../auth-manager.js';
 
@@ -194,7 +196,7 @@ function formatDate(dateString?: string): string {
 /**
  * Get status color and label for a competency
  */
-function getCompetencyStatus(comp: PersonCompetency): { color: string; bgColor: string; label: string } {
+function getCompetencyStatus(comp: PersonCompetency): { color: string; bgColor: string; label: string; cssClass: string } {
     const isExpired =
         comp.status === 'expired' || (comp.expiry_date && new Date(comp.expiry_date) < new Date());
     const isExpiringSoon =
@@ -203,15 +205,15 @@ function getCompetencyStatus(comp: PersonCompetency): { color: string; bgColor: 
         Math.ceil((new Date(comp.expiry_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) <= 30;
 
     if (isExpired) {
-        return { color: '#ef4444', bgColor: 'rgba(239, 68, 68, 0.3)', label: 'Expired' };
+        return { color: '#ef4444', bgColor: 'rgba(239, 68, 68, 0.3)', label: 'Expired', cssClass: 'expired' };
     }
     if (isExpiringSoon) {
-        return { color: '#f59e0b', bgColor: 'rgba(245, 158, 11, 0.3)', label: 'Expiring' };
+        return { color: '#f59e0b', bgColor: 'rgba(245, 158, 11, 0.3)', label: 'Expiring', cssClass: 'expiring' };
     }
     if (comp.status === 'pending_approval') {
-        return { color: 'rgba(253, 224, 71, 1)', bgColor: 'rgba(251, 191, 36, 0.2)', label: 'Pending' };
+        return { color: 'rgba(253, 224, 71, 1)', bgColor: 'rgba(251, 191, 36, 0.2)', label: 'Pending', cssClass: 'pending_approval' };
     }
-    return { color: '#10b981', bgColor: 'rgba(16, 185, 129, 0.3)', label: 'Active' };
+    return { color: '#10b981', bgColor: 'rgba(16, 185, 129, 0.3)', label: 'Active', cssClass: 'active' };
 }
 
 /**
@@ -234,20 +236,80 @@ function groupByCategory(competencies: PersonCompetency[]): Record<string, Perso
  */
 function DisplayField({ label, value }: { label: string; value: string }) {
     return (
-        <div>
-            <div
-                style={{
-                    fontSize: '12px',
-                    color: 'rgba(255, 255, 255, 0.5)',
-                    marginBottom: '4px',
-                    textTransform: 'uppercase',
-                    fontWeight: '600',
-                    letterSpacing: '0.5px',
-                }}
-            >
-                {label}
+        <div className="pm-display-field">
+            <div className="pm-display-label">{label}</div>
+            <div className={`pm-display-value${!value || value === '-' ? ' muted' : ''}`}>{value || '-'}</div>
+        </div>
+    );
+}
+
+/**
+ * Masked PII field - shows masked value with reveal button.
+ * Logs PII reveal to activity log for GDPR compliance.
+ */
+function MaskedField({
+    label,
+    value,
+    maskedValue,
+    personId,
+    personName,
+}: {
+    label: string;
+    value: string;
+    maskedValue: string;
+    personId: string;
+    personName: string;
+}) {
+    const [revealed, setRevealed] = useState(false);
+
+    const handleReveal = () => {
+        if (revealed) {
+            setRevealed(false);
+            return;
+        }
+        setRevealed(true);
+        const currentUser = authManager.getCurrentUser();
+        logActivity({
+            userId: currentUser?.id,
+            actionType: 'pii_revealed',
+            actionCategory: 'admin',
+            description: `Revealed "${label}" for ${personName}`,
+            details: { field: label },
+            entityType: 'profile',
+            entityId: personId,
+            entityName: personName,
+        });
+    };
+
+    const displayValue = !value || value === '-' ? '-' : (revealed ? value : maskedValue);
+    const canReveal = value && value !== '-';
+
+    return (
+        <div className="pm-display-field">
+            <div className="pm-display-label">{label}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className={`pm-display-value${!value || value === '-' ? ' muted' : ''}`}>
+                    {displayValue}
+                </div>
+                {canReveal && (
+                    <button
+                        onClick={handleReveal}
+                        style={{
+                            background: 'none',
+                            border: '1px solid rgba(255,255,255,0.15)',
+                            borderRadius: '4px',
+                            color: 'var(--text-secondary, #9ca3af)',
+                            fontSize: '11px',
+                            padding: '2px 8px',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                        }}
+                        title={revealed ? 'Hide value' : 'Reveal value (logged for audit)'}
+                    >
+                        {revealed ? 'Hide' : 'Reveal'}
+                    </button>
+                )}
             </div>
-            <div style={{ fontSize: '14px', color: '#ffffff', fontWeight: '500' }}>{value || '-'}</div>
         </div>
     );
 }
@@ -588,28 +650,10 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
     const categories = Object.keys(competenciesByCategory).sort();
 
     return (
-        <div
-            style={{
-                background: 'rgba(59, 130, 246, 0.05)',
-                borderLeft: '4px solid var(--accent-primary)',
-                padding: '24px',
-                animation: 'slideDown 0.2s ease-out',
-            }}
-        >
+        <div className="pm-expanded">
             {/* Personal Information Section */}
-            <div style={{ marginBottom: '20px' }}>
-                <h4
-                    style={{
-                        fontSize: '16px',
-                        fontWeight: '600',
-                        color: '#ffffff',
-                        marginBottom: '12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        justifyContent: 'space-between',
-                    }}
-                >
+            <div className="pm-expanded-section" style={{ marginBottom: '20px' }}>
+                <h4 className="pm-expanded-title">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <UserIcon />
                         Personal Information
@@ -617,8 +661,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                     {isAdmin && !editingPerson && (
                         <button
                             onClick={handleEditPerson}
-                            className="btn btn--secondary btn--sm"
-                            style={{ fontSize: '12px', padding: '6px 12px' }}
+                            className="pm-btn sm"
                         >
                             <EditIcon />
                             Edit
@@ -626,78 +669,39 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                     )}
                 </h4>
 
-                <div
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-                        gap: '16px',
-                    }}
-                >
+                <div className="pm-field-grid">
                     {editingPerson ? (
                         <>
-                            <div>
-                                <div
-                                    style={{
-                                        fontSize: '12px',
-                                        color: 'rgba(255, 255, 255, 0.5)',
-                                        marginBottom: '4px',
-                                        textTransform: 'uppercase',
-                                        fontWeight: '600',
-                                    }}
-                                >
-                                    Username
-                                </div>
+                            <div className="pm-display-field">
+                                <div className="pm-display-label">Username</div>
                                 <input
                                     type="text"
-                                    className="glass-input"
+                                    className="pm-input"
                                     value={personEditData.username}
                                     onChange={(e) =>
                                         setPersonEditData({ ...personEditData, username: e.target.value })
                                     }
-                                    style={{ marginTop: '4px' }}
                                 />
                             </div>
-                            <div>
-                                <div
-                                    style={{
-                                        fontSize: '12px',
-                                        color: 'rgba(255, 255, 255, 0.5)',
-                                        marginBottom: '4px',
-                                        textTransform: 'uppercase',
-                                        fontWeight: '600',
-                                    }}
-                                >
-                                    Email
-                                </div>
+                            <div className="pm-display-field">
+                                <div className="pm-display-label">Email</div>
                                 <input
                                     type="email"
-                                    className="glass-input"
+                                    className="pm-input"
                                     value={personEditData.email}
                                     onChange={(e) =>
                                         setPersonEditData({ ...personEditData, email: e.target.value })
                                     }
-                                    style={{ marginTop: '4px' }}
                                 />
                             </div>
-                            <div>
-                                <div
-                                    style={{
-                                        fontSize: '12px',
-                                        color: 'rgba(255, 255, 255, 0.5)',
-                                        marginBottom: '4px',
-                                        textTransform: 'uppercase',
-                                        fontWeight: '600',
-                                    }}
-                                >
-                                    Organization
-                                </div>
+                            <div className="pm-display-field">
+                                <div className="pm-display-label">Organization</div>
                                 <select
-                                    className="glass-select"
+                                    className="pm-input"
                                     value={personEditData.organization_id}
                                     onChange={(e) =>
                                         setPersonEditData({ ...personEditData, organization_id: e.target.value })
                                     }
-                                    style={{ marginTop: '4px' }}
                                 >
                                     {organizations.map((org) => (
                                         <option key={org.id} value={org.id}>
@@ -706,25 +710,14 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                     ))}
                                 </select>
                             </div>
-                            <div>
-                                <div
-                                    style={{
-                                        fontSize: '12px',
-                                        color: 'rgba(255, 255, 255, 0.5)',
-                                        marginBottom: '4px',
-                                        textTransform: 'uppercase',
-                                        fontWeight: '600',
-                                    }}
-                                >
-                                    Role
-                                </div>
+                            <div className="pm-display-field">
+                                <div className="pm-display-label">Role</div>
                                 <select
-                                    className="glass-select"
+                                    className="pm-input"
                                     value={personEditData.role}
                                     onChange={(e) =>
                                         setPersonEditData({ ...personEditData, role: e.target.value })
                                     }
-                                    style={{ marginTop: '4px' }}
                                 >
                                     <option value="viewer">Viewer</option>
                                     <option value="editor">Editor</option>
@@ -732,158 +725,87 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                     <option value="admin">Admin</option>
                                 </select>
                             </div>
-                            <div>
-                                <div
-                                    style={{
-                                        fontSize: '12px',
-                                        color: 'rgba(255, 255, 255, 0.5)',
-                                        marginBottom: '4px',
-                                        textTransform: 'uppercase',
-                                        fontWeight: '600',
-                                    }}
-                                >
-                                    Mobile Number
-                                </div>
+                            <div className="pm-display-field">
+                                <div className="pm-display-label">Mobile Number</div>
                                 <input
                                     type="tel"
-                                    className="glass-input"
+                                    className="pm-input"
+                                    autoComplete="off"
                                     value={personEditData.mobile_number}
                                     onChange={(e) =>
                                         setPersonEditData({ ...personEditData, mobile_number: e.target.value })
                                     }
-                                    style={{ marginTop: '4px' }}
                                 />
                             </div>
-                            <div>
-                                <div
-                                    style={{
-                                        fontSize: '12px',
-                                        color: 'rgba(255, 255, 255, 0.5)',
-                                        marginBottom: '4px',
-                                        textTransform: 'uppercase',
-                                        fontWeight: '600',
-                                    }}
-                                >
-                                    Date of Birth
-                                </div>
+                            <div className="pm-display-field">
+                                <div className="pm-display-label">Date of Birth</div>
                                 <input
                                     type="date"
-                                    className="glass-input"
+                                    className="pm-input"
+                                    autoComplete="off"
                                     value={personEditData.date_of_birth}
                                     onChange={(e) =>
                                         setPersonEditData({ ...personEditData, date_of_birth: e.target.value })
                                     }
-                                    style={{ marginTop: '4px' }}
                                 />
                             </div>
-                            <div>
-                                <div
-                                    style={{
-                                        fontSize: '12px',
-                                        color: 'rgba(255, 255, 255, 0.5)',
-                                        marginBottom: '4px',
-                                        textTransform: 'uppercase',
-                                        fontWeight: '600',
-                                    }}
-                                >
-                                    Home Address
-                                </div>
+                            <div className="pm-display-field">
+                                <div className="pm-display-label">Home Address</div>
                                 <input
                                     type="text"
-                                    className="glass-input"
+                                    className="pm-input"
+                                    autoComplete="off"
                                     value={personEditData.home_address}
                                     onChange={(e) =>
                                         setPersonEditData({ ...personEditData, home_address: e.target.value })
                                     }
-                                    style={{ marginTop: '4px' }}
                                 />
                             </div>
-                            <div>
-                                <div
-                                    style={{
-                                        fontSize: '12px',
-                                        color: 'rgba(255, 255, 255, 0.5)',
-                                        marginBottom: '4px',
-                                        textTransform: 'uppercase',
-                                        fontWeight: '600',
-                                    }}
-                                >
-                                    Nearest UK Train Station
-                                </div>
+                            <div className="pm-display-field">
+                                <div className="pm-display-label">Nearest UK Train Station</div>
                                 <input
                                     type="text"
-                                    className="glass-input"
+                                    className="pm-input"
+                                    autoComplete="off"
                                     value={personEditData.nearest_uk_train_station}
                                     onChange={(e) =>
                                         setPersonEditData({ ...personEditData, nearest_uk_train_station: e.target.value })
                                     }
-                                    style={{ marginTop: '4px' }}
                                 />
                             </div>
-                            <div>
-                                <div
-                                    style={{
-                                        fontSize: '12px',
-                                        color: 'rgba(255, 255, 255, 0.5)',
-                                        marginBottom: '4px',
-                                        textTransform: 'uppercase',
-                                        fontWeight: '600',
-                                    }}
-                                >
-                                    Next of Kin
-                                </div>
+                            <div className="pm-display-field">
+                                <div className="pm-display-label">Next of Kin</div>
                                 <input
                                     type="text"
-                                    className="glass-input"
+                                    className="pm-input"
+                                    autoComplete="off"
                                     value={personEditData.next_of_kin}
                                     onChange={(e) =>
                                         setPersonEditData({ ...personEditData, next_of_kin: e.target.value })
                                     }
-                                    style={{ marginTop: '4px' }}
                                 />
                             </div>
-                            <div>
-                                <div
-                                    style={{
-                                        fontSize: '12px',
-                                        color: 'rgba(255, 255, 255, 0.5)',
-                                        marginBottom: '4px',
-                                        textTransform: 'uppercase',
-                                        fontWeight: '600',
-                                    }}
-                                >
-                                    Emergency Contact
-                                </div>
+                            <div className="pm-display-field">
+                                <div className="pm-display-label">Emergency Contact</div>
                                 <input
                                     type="tel"
-                                    className="glass-input"
+                                    className="pm-input"
+                                    autoComplete="off"
                                     value={personEditData.next_of_kin_emergency_contact_number}
                                     onChange={(e) =>
                                         setPersonEditData({ ...personEditData, next_of_kin_emergency_contact_number: e.target.value })
                                     }
-                                    style={{ marginTop: '4px' }}
                                 />
                             </div>
-                            <div>
-                                <div
-                                    style={{
-                                        fontSize: '12px',
-                                        color: 'rgba(255, 255, 255, 0.5)',
-                                        marginBottom: '4px',
-                                        textTransform: 'uppercase',
-                                        fontWeight: '600',
-                                    }}
-                                >
-                                    Vantage Number
-                                </div>
+                            <div className="pm-display-field">
+                                <div className="pm-display-label">Vantage Number</div>
                                 <input
                                     type="text"
-                                    className="glass-input"
+                                    className="pm-input"
                                     value={personEditData.vantage_number}
                                     onChange={(e) =>
                                         setPersonEditData({ ...personEditData, vantage_number: e.target.value })
                                     }
-                                    style={{ marginTop: '4px' }}
                                 />
                             </div>
                         </>
@@ -892,29 +814,16 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                             <DisplayField label="Username" value={person.username} />
                             <DisplayField label="Email" value={person.email} />
                             <DisplayField label="Organization" value={person.organizations?.name || 'Unknown'} />
-                            <div>
-                                <div
-                                    style={{
-                                        fontSize: '12px',
-                                        color: 'rgba(255, 255, 255, 0.5)',
-                                        marginBottom: '4px',
-                                        textTransform: 'uppercase',
-                                        fontWeight: '600',
-                                    }}
-                                >
-                                    Role
-                                </div>
-                                <span className="glass-badge">{person.role}</span>
+                            <div className="pm-display-field">
+                                <div className="pm-display-label">Role</div>
+                                <span className="pm-badge no-dot">{person.role}</span>
                             </div>
-                            <DisplayField label="Mobile Number" value={person.mobile_number || '-'} />
-                            <DisplayField
-                                label="Date of Birth"
-                                value={person.date_of_birth ? new Date(person.date_of_birth).toLocaleDateString('en-GB') : '-'}
-                            />
-                            <DisplayField label="Home Address" value={person.home_address || '-'} />
+                            <MaskedField label="Mobile Number" value={person.mobile_number || '-'} maskedValue={maskPhone(person.mobile_number)} personId={person.id} personName={person.username} />
+                            <MaskedField label="Date of Birth" value={person.date_of_birth ? new Date(person.date_of_birth).toLocaleDateString('en-GB') : '-'} maskedValue={maskDateOfBirth(person.date_of_birth)} personId={person.id} personName={person.username} />
+                            <MaskedField label="Home Address" value={person.home_address || '-'} maskedValue={maskAddress(person.home_address)} personId={person.id} personName={person.username} />
                             <DisplayField label="Nearest UK Train Station" value={person.nearest_uk_train_station || '-'} />
-                            <DisplayField label="Next of Kin" value={person.next_of_kin || '-'} />
-                            <DisplayField label="Emergency Contact" value={person.next_of_kin_emergency_contact_number || '-'} />
+                            <MaskedField label="Next of Kin" value={person.next_of_kin || '-'} maskedValue={maskName(person.next_of_kin)} personId={person.id} personName={person.username} />
+                            <MaskedField label="Emergency Contact" value={person.next_of_kin_emergency_contact_number || '-'} maskedValue={maskPhone(person.next_of_kin_emergency_contact_number)} personId={person.id} personName={person.username} />
                             <DisplayField label="Vantage Number" value={person.vantage_number || '-'} />
                         </>
                     )}
@@ -937,23 +846,17 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                 {saveError}
                             </div>
                         )}
-                        <div
-                            style={{
-                                display: 'flex',
-                                gap: '12px',
-                                justifyContent: 'flex-end',
-                            }}
-                        >
+                        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
                             <button
                                 onClick={handleCancelPersonEdit}
-                                className="btn btn--secondary btn--sm"
+                                className="pm-btn sm"
                                 disabled={updatePerson.isPending}
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleSavePerson}
-                                className="btn btn--primary btn--sm"
+                                className="pm-btn primary sm"
                                 disabled={updatePerson.isPending}
                             >
                                 {updatePerson.isPending ? 'Saving...' : 'Save Changes'}
@@ -973,19 +876,8 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
             />
 
             {/* Competencies Section */}
-            <div>
-                <h4
-                    style={{
-                        fontSize: '16px',
-                        fontWeight: '600',
-                        color: '#ffffff',
-                        marginBottom: '12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '8px',
-                    }}
-                >
+            <div className="pm-expanded-section">
+                <h4 className="pm-expanded-title">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <CertIcon />
                         Competencies & Certifications ({person.competencies?.length || 0})
@@ -993,8 +885,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                     {isAdmin && (
                         <button
                             onClick={() => setShowCompetencyPicker(true)}
-                            className="btn btn--primary btn--sm"
-                            style={{ fontSize: '12px', padding: '6px 12px' }}
+                            className="pm-btn primary sm"
                         >
                             <svg
                                 style={{ width: '12px', height: '12px', marginRight: '4px' }}
@@ -1010,30 +901,18 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                 </h4>
 
                 {!person.competencies || person.competencies.length === 0 ? (
-                    <div
-                        style={{
-                            padding: '32px',
-                            textAlign: 'center',
-                            color: 'rgba(255, 255, 255, 0.5)',
-                            background: 'rgba(255, 255, 255, 0.02)',
-                            borderRadius: '8px',
-                            border: '1px dashed rgba(255, 255, 255, 0.1)',
-                        }}
-                    >
-                        <svg
-                            style={{ width: '48px', height: '48px', margin: '0 auto 12px', opacity: 0.3 }}
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="2"
-                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                            />
-                        </svg>
-                        No competencies recorded
+                    <div className="pm-empty">
+                        <div className="pm-empty-icon">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2"
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                />
+                            </svg>
+                        </div>
+                        <div className="pm-empty-title">No competencies recorded</div>
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -1059,16 +938,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                         }}
                                     >
                                         {categoryName}
-                                        <span
-                                            style={{
-                                                fontSize: '11px',
-                                                fontWeight: '400',
-                                                color: 'rgba(255, 255, 255, 0.5)',
-                                                background: 'rgba(255, 255, 255, 0.05)',
-                                                padding: '2px 8px',
-                                                borderRadius: '12px',
-                                            }}
-                                        >
+                                        <span className="pm-badge no-dot" style={{ fontSize: '11px', padding: '2px 8px' }}>
                                             {competenciesByCategory[categoryName].length}
                                         </span>
                                     </h5>
@@ -1089,16 +959,15 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                         return (
                                             <div
                                                 key={comp.id}
+                                                className="pm-expanded-comp-item"
                                                 style={{
-                                                    padding: '10px 12px',
-                                                    background: 'rgba(255, 255, 255, 0.03)',
-                                                    borderRadius: '6px',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'stretch',
                                                     borderLeft: `3px solid ${status.color}`,
-                                                    border: `1px solid ${status.bgColor}`,
+                                                    borderColor: status.bgColor,
+                                                    borderLeftColor: status.color,
                                                     borderLeftWidth: '3px',
-                                                    transition: 'all 0.2s ease',
                                                 }}
-                                                className="hover:bg-white/5"
                                             >
                                                 {/* Header */}
                                                 <div
@@ -1120,13 +989,13 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                                         }}
                                                     >
                                                         <div
+                                                            className="pm-competency-name"
                                                             style={{
-                                                                fontWeight: '600',
-                                                                color: '#ffffff',
-                                                                fontSize: '13px',
                                                                 overflow: 'hidden',
                                                                 textOverflow: 'ellipsis',
                                                                 whiteSpace: 'nowrap',
+                                                                fontSize: '13px',
+                                                                marginBottom: 0,
                                                             }}
                                                             title={comp.competency?.name}
                                                         >
@@ -1136,23 +1005,8 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                                             <WitnessIcon />
                                                         )}
                                                     </div>
-                                                    <div
-                                                        style={{
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            gap: '4px',
-                                                            flexShrink: 0,
-                                                        }}
-                                                    >
-                                                        <span
-                                                            className="glass-badge"
-                                                            style={{
-                                                                background: status.bgColor,
-                                                                color: status.color,
-                                                                fontSize: '10px',
-                                                                padding: '2px 6px',
-                                                            }}
-                                                        >
+                                                    <div className="pm-competency-actions">
+                                                        <span className={`pm-badge ${status.cssClass}`} style={{ fontSize: '10px', padding: '2px 6px' }}>
                                                             {status.label}
                                                         </span>
                                                         {isAdmin && needsWitness && (
@@ -1191,13 +1045,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                                 </div>
 
                                                 {/* Competency Details */}
-                                                <div
-                                                    style={{
-                                                        fontSize: '11px',
-                                                        color: 'rgba(255, 255, 255, 0.6)',
-                                                        lineHeight: '1.4',
-                                                    }}
-                                                >
+                                                <div className="pm-competency-meta" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '2px', fontSize: '11px' }}>
                                                     {comp.issuing_body && (
                                                         <div>
                                                             <span style={{ color: 'rgba(255, 255, 255, 0.4)' }}>
@@ -1225,18 +1073,15 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                                     {comp.document_url && (
                                                             <button
                                                                 onClick={() => setViewingCompetency(comp)}
+                                                                className="pm-competency-doc"
                                                                 style={{
                                                                     display: 'inline-flex',
                                                                     alignItems: 'center',
                                                                     gap: '4px',
-                                                                    color: '#60a5fa',
-                                                                    fontSize: '11px',
-                                                                    textDecoration: 'none',
                                                                     background: 'none',
                                                                     border: 'none',
                                                                     cursor: 'pointer',
                                                                     padding: 0,
-                                                                    marginTop: '4px',
                                                                 }}
                                                             >
                                                                 <DocumentIcon />
@@ -1264,67 +1109,40 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                 >
                     {/* Certificate Details */}
                     <div style={{ marginBottom: '20px' }}>
-                        <div
-                            style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(2, 1fr)',
-                                gap: '16px',
-                                fontSize: '14px',
-                            }}
-                        >
+                        <div className="pm-field-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
                             {viewingCompetency.issuing_body && (
-                                <div>
-                                    <span style={{ color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '4px' }}>
-                                        Issued By
-                                    </span>
-                                    <span style={{ color: '#ffffff', fontWeight: '500' }}>
-                                        {viewingCompetency.issuing_body}
-                                    </span>
+                                <div className="pm-display-field">
+                                    <span className="pm-display-label">Issued By</span>
+                                    <span className="pm-display-value">{viewingCompetency.issuing_body}</span>
                                 </div>
                             )}
                             {viewingCompetency.certification_id && (
-                                <div>
-                                    <span style={{ color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '4px' }}>
-                                        Certificate ID
-                                    </span>
-                                    <span style={{ color: '#ffffff', fontWeight: '500' }}>
-                                        {viewingCompetency.certification_id}
-                                    </span>
+                                <div className="pm-display-field">
+                                    <span className="pm-display-label">Certificate ID</span>
+                                    <span className="pm-display-value">{viewingCompetency.certification_id}</span>
                                 </div>
                             )}
                             {viewingCompetency.created_at && (
-                                <div>
-                                    <span style={{ color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '4px' }}>
-                                        Issued Date
-                                    </span>
-                                    <span style={{ color: '#ffffff', fontWeight: '500' }}>
-                                        {formatDate(viewingCompetency.created_at)}
-                                    </span>
+                                <div className="pm-display-field">
+                                    <span className="pm-display-label">Issued Date</span>
+                                    <span className="pm-display-value">{formatDate(viewingCompetency.created_at)}</span>
                                 </div>
                             )}
                             {viewingCompetency.expiry_date && (
-                                <div>
-                                    <span style={{ color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '4px' }}>
-                                        Expiry Date
-                                    </span>
+                                <div className="pm-display-field">
+                                    <span className="pm-display-label">Expiry Date</span>
                                     <span
-                                        style={{
-                                            color: getCompetencyStatus(viewingCompetency).color,
-                                            fontWeight: '500',
-                                        }}
+                                        className="pm-display-value"
+                                        style={{ color: getCompetencyStatus(viewingCompetency).color }}
                                     >
                                         {formatDate(viewingCompetency.expiry_date)}
                                     </span>
                                 </div>
                             )}
                             {viewingCompetency.notes && (
-                                <div style={{ gridColumn: '1 / -1' }}>
-                                    <span style={{ color: 'rgba(255, 255, 255, 0.5)', display: 'block', marginBottom: '4px' }}>
-                                        Notes
-                                    </span>
-                                    <span style={{ color: '#ffffff' }}>
-                                        {viewingCompetency.notes}
-                                    </span>
+                                <div className="pm-display-field" style={{ gridColumn: '1 / -1' }}>
+                                    <span className="pm-display-label">Notes</span>
+                                    <span className="pm-display-value">{viewingCompetency.notes}</span>
                                 </div>
                             )}
                         </div>
@@ -1333,16 +1151,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                     {/* Document Preview */}
                     {viewingCompetency.document_url && (
                         <div style={{ minHeight: '300px' }}>
-                            <div
-                                style={{
-                                    fontSize: '12px',
-                                    color: 'rgba(255, 255, 255, 0.5)',
-                                    marginBottom: '12px',
-                                    textTransform: 'uppercase',
-                                    fontWeight: '600',
-                                    letterSpacing: '0.5px',
-                                }}
-                            >
+                            <div className="pm-display-label" style={{ marginBottom: '12px' }}>
                                 Certificate Document
                             </div>
                             {!resolvedDocumentUrl && (
@@ -1353,24 +1162,24 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                 </div>
                             )}
                             {resolvedDocumentUrl && getDocumentType(viewingCompetency.document_url) === 'image' && (
-                                <img
-                                    src={resolvedDocumentUrl}
-                                    alt={`${viewingCompetency.competency?.name || 'Certificate'}`}
-                                    style={{
-                                        width: '100%',
-                                        height: 'auto',
-                                        maxHeight: '50vh',
-                                        objectFit: 'contain',
-                                        borderRadius: '8px',
-                                        background: 'rgba(255, 255, 255, 0.05)',
-                                    }}
-                                    onError={(e) => {
-                                        const target = e.target as HTMLImageElement;
-                                        target.style.display = 'none';
-                                        const fallback = target.nextElementSibling as HTMLElement;
-                                        if (fallback) fallback.style.display = 'block';
-                                    }}
-                                />
+                                <div className="pm-doc-preview">
+                                    <img
+                                        src={resolvedDocumentUrl}
+                                        alt={`${viewingCompetency.competency?.name || 'Certificate'}`}
+                                        style={{
+                                            width: '100%',
+                                            height: 'auto',
+                                            maxHeight: '50vh',
+                                            objectFit: 'contain',
+                                        }}
+                                        onError={(e) => {
+                                            const target = e.target as HTMLImageElement;
+                                            target.style.display = 'none';
+                                            const fallback = target.nextElementSibling as HTMLElement;
+                                            if (fallback) fallback.style.display = 'block';
+                                        }}
+                                    />
+                                </div>
                             )}
                             {/* Fallback for failed image load */}
                             {resolvedDocumentUrl && getDocumentType(viewingCompetency.document_url) === 'image' && (
@@ -1382,7 +1191,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                         href={resolvedDocumentUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="btn btn--primary"
+                                        className="pm-btn primary"
                                     >
                                         Open Image in New Tab
                                     </a>
@@ -1409,7 +1218,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                         href={resolvedDocumentUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="btn btn--primary"
+                                        className="pm-btn primary"
                                     >
                                         Download Document
                                     </a>
@@ -1425,14 +1234,14 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                                 href={resolvedDocumentUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="btn btn--outline btn--sm"
+                                className="pm-btn sm"
                             >
                                 Open in New Tab
                             </a>
                         )}
                         <button
                             onClick={() => setViewingCompetency(null)}
-                            className="btn btn--primary btn--sm"
+                            className="pm-btn primary sm"
                         >
                             Close
                         </button>
@@ -1493,11 +1302,10 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                 <div style={{ marginBottom: '16px' }}>
                     <input
                         type="text"
-                        className="glass-input"
+                        className="pm-input"
                         placeholder="Search certifications..."
                         value={pickerSearchTerm}
                         onChange={(e) => setPickerSearchTerm(e.target.value)}
-                        style={{ width: '100%' }}
                     />
                 </div>
 
@@ -1505,7 +1313,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
                     <button
                         onClick={() => setPickerCategory('all')}
-                        className={pickerCategory === 'all' ? 'btn btn--primary btn--sm' : 'btn btn--secondary btn--sm'}
+                        className={pickerCategory === 'all' ? 'pm-btn primary sm' : 'pm-btn sm'}
                     >
                         All
                     </button>
@@ -1515,7 +1323,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                             <button
                                 key={cat.id}
                                 onClick={() => setPickerCategory(cat.id)}
-                                className={pickerCategory === cat.id ? 'btn btn--primary btn--sm' : 'btn btn--secondary btn--sm'}
+                                className={pickerCategory === cat.id ? 'pm-btn primary sm' : 'pm-btn sm'}
                             >
                                 {cat.name}
                             </button>
@@ -1523,7 +1331,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                 </div>
 
                 {/* Competency List */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }} className="glass-scrollbar">
+                <div className="pm-expanded-comp-list">
                     {((definitionsQuery.data as CompetencyDefinition[]) || [])
                         .filter((def) => {
                             // Filter out personal details
@@ -1548,34 +1356,19 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                             <div
                                 key={def.id}
                                 onClick={() => handleSelectCompetencyType(def)}
-                                style={{
-                                    padding: '14px 16px',
-                                    background: 'rgba(255, 255, 255, 0.03)',
-                                    borderRadius: '8px',
-                                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s ease',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center'
-                                }}
+                                className="pm-expanded-comp-item"
+                                style={{ cursor: 'pointer' }}
                                 onMouseEnter={(e) => {
-                                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
                                     e.currentTarget.style.borderColor = 'var(--accent-primary)';
                                 }}
                                 onMouseLeave={(e) => {
-                                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-                                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.04)';
                                 }}
                             >
                                 <div>
-                                    <div style={{ fontSize: '14px', fontWeight: '500', color: '#ffffff', marginBottom: '2px' }}>
-                                        {def.name}
-                                    </div>
+                                    <div className="pm-competency-name">{def.name}</div>
                                     {def.description && (
-                                        <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
-                                            {def.description}
-                                        </div>
+                                        <div className="pm-competency-meta">{def.description}</div>
                                     )}
                                 </div>
                                 <svg style={{ width: '18px', height: '18px', color: 'var(--accent-primary)', flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">

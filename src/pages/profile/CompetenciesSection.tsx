@@ -4,7 +4,7 @@
 
 import { useState, useMemo } from 'react';
 import { CompetencyCard, Competency, CompetencyDefinition } from './CompetencyCard';
-import { FormField, FormSelect, EmptyState } from '../../components/ui';
+import { FormSelect, EmptyState } from '../../components/ui';
 
 interface Category {
     id: string;
@@ -60,59 +60,17 @@ function PlusIcon() {
  */
 function SkeletonCard() {
     return (
-        <div
-            className="glass-card"
-            style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}
-        >
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                <div
-                    style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '10px',
-                        background: 'rgba(255, 255, 255, 0.1)',
-                    }}
-                    className="animate-pulse"
-                />
-                <div style={{ flex: 1 }}>
-                    <div
-                        style={{
-                            height: '16px',
-                            width: '60%',
-                            background: 'rgba(255, 255, 255, 0.1)',
-                            borderRadius: '4px',
-                            marginBottom: '6px',
-                        }}
-                        className="animate-pulse"
-                    />
-                    <div
-                        style={{
-                            height: '12px',
-                            width: '40%',
-                            background: 'rgba(255, 255, 255, 0.1)',
-                            borderRadius: '4px',
-                        }}
-                        className="animate-pulse"
-                    />
+        <div className="pf-skeleton-card">
+            <div className="pf-skeleton-row">
+                <div className="pf-skeleton-icon" />
+                <div className="pf-skeleton-lines">
+                    <div className="pf-skeleton-line" />
+                    <div className="pf-skeleton-line" />
                 </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div
-                    style={{
-                        height: '36px',
-                        background: 'rgba(255, 255, 255, 0.1)',
-                        borderRadius: '4px',
-                    }}
-                    className="animate-pulse"
-                />
-                <div
-                    style={{
-                        height: '36px',
-                        background: 'rgba(255, 255, 255, 0.1)',
-                        borderRadius: '4px',
-                    }}
-                    className="animate-pulse"
-                />
+            <div className="pf-skeleton-detail-grid">
+                <div className="pf-skeleton-detail" />
+                <div className="pf-skeleton-detail" />
             </div>
         </div>
     );
@@ -201,28 +159,15 @@ export function CompetenciesSection({
     }, [competencies, definitions]);
 
     return (
-        <div className="glass-card" style={{ padding: '24px' }}>
+        <div className="pf-content-card">
             {/* Header */}
-            <div
-                style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: '20px',
-                    paddingBottom: '16px',
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                }}
-            >
+            <div className="pf-section-header">
                 <div>
-                    <h2 style={{ fontSize: '18px', fontWeight: '600', color: '#ffffff', margin: 0 }}>
-                        Certifications & Qualifications
-                    </h2>
-                    <p style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.5)', margin: '4px 0 0 0' }}>
-                        {competencies.length} total certifications
-                    </p>
+                    <h2 className="pf-section-title">Certifications & Qualifications</h2>
+                    <p className="pf-section-subtitle">{competencies.length} total certifications</p>
                 </div>
                 {onAdd && (
-                    <button onClick={onAdd} className="btn btn--primary btn--sm">
+                    <button onClick={onAdd} className="pf-btn primary sm">
                         <PlusIcon />
                         Add Certification
                     </button>
@@ -230,23 +175,17 @@ export function CompetenciesSection({
             </div>
 
             {/* Filters */}
-            <div
-                style={{
-                    display: 'flex',
-                    gap: '12px',
-                    marginBottom: '20px',
-                    flexWrap: 'wrap',
-                }}
-            >
+            <div className="pf-filter-row">
                 {/* Search */}
                 <div style={{ flex: '1 1 250px', minWidth: '200px' }}>
-                    <FormField
-                        placeholder="Search certifications..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        leftIcon={<SearchIcon />}
-                        containerClassName="mb-0"
-                    />
+                    <div className="pf-search">
+                        <SearchIcon />
+                        <input
+                            placeholder="Search certifications..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
                 </div>
 
                 {/* Category Filter */}
@@ -265,13 +204,7 @@ export function CompetenciesSection({
 
             {/* Grid */}
             {isLoading ? (
-                <div
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                        gap: '16px',
-                    }}
-                >
+                <div className="pf-competency-grid">
                     {Array.from({ length: 6 }).map((_, i) => (
                         <SkeletonCard key={i} />
                     ))}
@@ -292,13 +225,7 @@ export function CompetenciesSection({
                     }
                 />
             ) : (
-                <div
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                        gap: '16px',
-                    }}
-                >
+                <div className="pf-competency-grid">
                     {filteredCompetencies.map((competency) => (
                         <CompetencyCard
                             key={competency.id}

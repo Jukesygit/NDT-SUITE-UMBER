@@ -2,6 +2,10 @@
 export { useUpdateProfile } from './useUpdateProfile';
 export { useUploadAvatar } from './useUploadAvatar';
 
+// GDPR mutations
+export { useExportMyData } from './useExportMyData';
+export { useDeleteMyAccount } from './useDeleteMyAccount';
+
 // Competency mutations
 export {
     useCreateCompetency,

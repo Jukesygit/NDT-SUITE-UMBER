@@ -12,69 +12,18 @@ export interface CompetencyDefinition {
 }
 
 interface PersonnelFiltersProps {
-    /** Current search term */
     searchTerm: string;
-    /** Update search term */
     onSearchChange: (value: string) => void;
-    /** Selected organization filter */
     filterOrg: string;
-    /** Update organization filter */
     onOrgChange: (value: string) => void;
-    /** Selected role filter */
     filterRole: string;
-    /** Update role filter */
     onRoleChange: (value: string) => void;
-    /** Selected competency IDs for filtering */
     filterCompetencies: string[];
-    /** Update competency filters */
     onCompetenciesChange: (ids: string[]) => void;
-    /** Available organizations */
     organizations: Organization[];
-    /** Available competency definitions */
     competencyDefinitions: CompetencyDefinition[];
-    /** Callback for import button */
-    onImport?: () => void;
-    /** Callback for export button */
-    onExport?: () => void;
-    /** Whether user can import */
-    canImport?: boolean;
 }
 
-/**
- * Upload icon
- */
-function UploadIcon() {
-    return (
-        <svg className="btn__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-            />
-        </svg>
-    );
-}
-
-/**
- * Download/export icon
- */
-function DownloadIcon() {
-    return (
-        <svg className="btn__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-            />
-        </svg>
-    );
-}
-
-/**
- * Group competencies by category
- */
 function groupByCategory(definitions: CompetencyDefinition[]): Record<string, CompetencyDefinition[]> {
     return definitions.reduce(
         (acc, def) => {
@@ -87,9 +36,6 @@ function groupByCategory(definitions: CompetencyDefinition[]): Record<string, Co
     );
 }
 
-/**
- * PersonnelFilters component
- */
 export function PersonnelFilters({
     searchTerm,
     onSearchChange,
@@ -101,21 +47,16 @@ export function PersonnelFilters({
     onCompetenciesChange,
     organizations,
     competencyDefinitions,
-    onImport,
-    onExport,
-    canImport = true,
 }: PersonnelFiltersProps) {
     const [showCompetencyDropdown, setShowCompetencyDropdown] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // Close dropdown when clicking outside
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
                 setShowCompetencyDropdown(false);
             }
         }
-
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
@@ -131,60 +72,54 @@ export function PersonnelFilters({
     };
 
     return (
-        <div className="filter-toolbar">
+        <div className="pm-filter-bar">
             {/* Search */}
-            <div className="filter-toolbar__section">
-                <div className="search-bar-enhanced">
+            <div className="pm-filter-section">
+                <div className="pm-search">
+                    <svg viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round">
+                        <circle cx="11" cy="11" r="8" />
+                        <path d="m21 21-4.35-4.35" />
+                    </svg>
                     <input
                         type="text"
-                        className="search-bar-enhanced__input"
-                        placeholder="Search personnel by name, email, or organization..."
+                        placeholder="Search by name or email..."
                         value={searchTerm}
                         onChange={(e) => onSearchChange(e.target.value)}
                     />
-                    <svg className="search-bar-enhanced__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
                     {searchTerm && (
-                        <button
-                            className="search-bar-enhanced__clear"
-                            onClick={() => onSearchChange('')}
-                        >
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                        <button className="pm-search-clear" onClick={() => onSearchChange('')}>
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                <path d="M18 6L6 18M6 6l12 12" />
                             </svg>
                         </button>
                     )}
                 </div>
             </div>
 
-            <div className="filter-toolbar__divider" />
+            <div className="pm-filter-divider" />
 
-            {/* Filters */}
-            <div className="filter-toolbar__section" style={{ flex: 'none' }}>
-                <label className="filter-toolbar__label">Organization:</label>
-                {/* Organization Filter */}
+            {/* Organization */}
+            <div className="pm-filter-section compact">
+                <label className="pm-filter-label">Organization</label>
                 <select
-                    className="filter-toolbar__select"
+                    className="pm-filter-select"
                     value={filterOrg}
                     onChange={(e) => onOrgChange(e.target.value)}
                 >
                     <option value="all">All Organizations</option>
                     {organizations.map((org) => (
-                        <option key={org.id} value={org.id}>
-                            {org.name}
-                        </option>
+                        <option key={org.id} value={org.id}>{org.name}</option>
                     ))}
                 </select>
             </div>
 
-            <div className="filter-toolbar__divider" />
+            <div className="pm-filter-divider" />
 
-            <div className="filter-toolbar__section" style={{ flex: 'none' }}>
-                <label className="filter-toolbar__label">Role:</label>
-                {/* Role Filter */}
+            {/* Role */}
+            <div className="pm-filter-section compact">
+                <label className="pm-filter-label">Role</label>
                 <select
-                    className="filter-toolbar__select"
+                    className="pm-filter-select"
                     value={filterRole}
                     onChange={(e) => onRoleChange(e.target.value)}
                 >
@@ -196,63 +131,37 @@ export function PersonnelFilters({
                 </select>
             </div>
 
-            <div className="filter-toolbar__section" style={{ flex: 'none', position: 'relative' }}>
-                <label className="filter-toolbar__label">Competencies:</label>
-                {/* Competency Filter Dropdown */}
+            {/* Competency Filter */}
+            <div className="pm-filter-section compact" style={{ position: 'relative' }}>
+                <label className="pm-filter-label">Competencies</label>
                 <div ref={dropdownRef} style={{ position: 'relative' }}>
                     <button
+                        className="pm-dropdown-trigger"
                         onClick={() => setShowCompetencyDropdown(!showCompetencyDropdown)}
-                        className="filter-toolbar__select"
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: '8px',
-                            minWidth: '200px',
-                            cursor: 'pointer',
-                            textAlign: 'left',
-                        }}
                     >
                         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {filterCompetencies.length === 0
                                 ? 'All Qualifications'
                                 : `${filterCompetencies.length} selected`}
                         </span>
-                        <svg style={{ width: '16px', height: '16px', flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                        <svg viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round">
+                            <path d="M19 9l-7 7-7-7" />
                         </svg>
                     </button>
 
                     {showCompetencyDropdown && (
                         <>
                             <div
-                                style={{
-                                    position: 'fixed',
-                                    inset: 0,
-                                    zIndex: 999
-                                }}
+                                style={{ position: 'fixed', inset: 0, zIndex: 999 }}
                                 onClick={() => setShowCompetencyDropdown(false)}
                             />
-                            <div
-                                className="glass-card"
-                                style={{
-                                    position: 'absolute',
-                                    top: 'calc(100% + 4px)',
-                                    left: 0,
-                                    minWidth: '300px',
-                                    maxWidth: '400px',
-                                    maxHeight: '400px',
-                                    overflowY: 'auto',
-                                    zIndex: 1000,
-                                    padding: '12px'
-                                }}
-                            >
+                            <div className="pm-dropdown">
                                 {filterCompetencies.length > 0 && (
-                                    <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                                    <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
                                         <button
+                                            className="pm-btn sm"
                                             onClick={() => onCompetenciesChange([])}
-                                            className="btn btn--secondary btn--sm"
-                                            style={{ width: '100%', fontSize: '12px' }}
+                                            style={{ width: '100%', justifyContent: 'center' }}
                                         >
                                             Clear All ({filterCompetencies.length})
                                         </button>
@@ -260,55 +169,20 @@ export function PersonnelFilters({
                                 )}
                                 {Object.entries(groupedCompetencies).map(([category, comps]) => (
                                     <div key={category} style={{ marginBottom: '16px' }}>
-                                        <div style={{
-                                            fontSize: '11px',
-                                            fontWeight: '700',
-                                            color: 'var(--accent-primary)',
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.5px',
-                                            marginBottom: '8px',
-                                            padding: '4px 8px',
-                                            background: 'rgba(var(--accent-primary-rgb, 59, 130, 246), 0.1)',
-                                            borderRadius: '4px'
-                                        }}>
-                                            {category}
-                                        </div>
+                                        <div className="pm-dropdown-category">{category}</div>
                                         {comps.map((comp) => {
                                             const isSelected = filterCompetencies.includes(comp.id);
                                             return (
                                                 <label
                                                     key={comp.id}
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '8px',
-                                                        padding: '8px',
-                                                        cursor: 'pointer',
-                                                        borderRadius: '6px',
-                                                        marginBottom: '4px',
-                                                        background: isSelected ? 'rgba(var(--accent-primary-rgb, 59, 130, 246), 0.15)' : 'transparent',
-                                                        transition: 'all 0.2s ease'
-                                                    }}
-                                                    className="hover:bg-white/5"
+                                                    className={`pm-dropdown-item ${isSelected ? 'selected' : ''}`}
                                                 >
                                                     <input
                                                         type="checkbox"
                                                         checked={isSelected}
                                                         onChange={() => handleCompetencyToggle(comp.id)}
-                                                        style={{
-                                                            cursor: 'pointer',
-                                                            width: '16px',
-                                                            height: '16px',
-                                                            flexShrink: 0,
-                                                        }}
                                                     />
-                                                    <span style={{
-                                                        fontSize: '13px',
-                                                        color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
-                                                        fontWeight: isSelected ? '600' : '400',
-                                                    }}>
-                                                        {comp.name}
-                                                    </span>
+                                                    <span>{comp.name}</span>
                                                 </label>
                                             );
                                         })}
@@ -320,23 +194,6 @@ export function PersonnelFilters({
                 </div>
             </div>
 
-            <div className="filter-toolbar__divider" />
-
-            {/* Actions */}
-            <div className="filter-toolbar__section" style={{ flex: 'none', justifyContent: 'flex-end' }}>
-                {canImport && onImport && (
-                    <button onClick={onImport} className="btn btn--primary btn--md">
-                        <UploadIcon />
-                        Import from File
-                    </button>
-                )}
-                {onExport && (
-                    <button onClick={onExport} className="btn btn--secondary btn--md">
-                        <DownloadIcon />
-                        Export to CSV
-                    </button>
-                )}
-            </div>
         </div>
     );
 }

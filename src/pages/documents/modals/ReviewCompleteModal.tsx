@@ -29,11 +29,11 @@ export default function ReviewCompleteModal({ isOpen, onClose, documentId, docNu
 
     const footer = (
         <div className="flex justify-end gap-3">
-            <button onClick={onClose} disabled={completeReview.isPending} className="glass-btn">Cancel</button>
+            <button onClick={onClose} disabled={completeReview.isPending} className="dc-btn">Cancel</button>
             <button
                 onClick={handleSubmit}
                 disabled={completeReview.isPending}
-                className="glass-btn"
+                className="dc-btn"
                 style={{ color: '#22c55e', borderColor: 'rgba(34, 197, 94, 0.3)' }}
             >
                 {completeReview.isPending ? 'Completing...' : 'Confirm Review Complete'}
