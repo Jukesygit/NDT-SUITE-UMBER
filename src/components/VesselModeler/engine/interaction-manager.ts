@@ -25,16 +25,18 @@ import { SCALE } from './materials';
 // Public Types
 // ---------------------------------------------------------------------------
 
-export type DragType = 'nozzle' | 'saddle' | 'texture' | null;
+export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | null;
 
 export interface InteractionCallbacks {
   onNozzleSelected: (index: number) => void;
   onSaddleSelected: (index: number) => void;
   onTextureSelected: (id: number) => void;
+  onLugSelected: (index: number) => void;
   onDeselect: () => void;
   onNozzleMoved: (index: number, pos: number, angle: number) => void;
   onSaddleMoved: (index: number, pos: number) => void;
   onTextureMoved: (id: number, pos: number, angle: number) => void;
+  onLugMoved: (index: number, pos: number, angle: number) => void;
   onDragEnd: () => void;
   onNeedRebuild: () => void;
 }
@@ -57,15 +59,18 @@ export class InteractionManager {
   private selectedNozzleIdx = -1;
   private selectedSaddleIdx = -1;
   private selectedTextureIdx = -1;
+  private selectedLugIdx = -1;
   private isDown = false;
 
   // Lock flags - public so the React layer can toggle them
   nozzlesLocked = false;
   saddlesLocked = false;
   texturesLocked = false;
+  lugsLocked = false;
 
   // External mesh references (updated by the rebuild cycle)
   nozzleMeshes: THREE.Object3D[] = [];
+  lugMeshes: THREE.Object3D[] = [];
   saddleMeshes: THREE.Mesh[] = [];
   textureMeshes: THREE.Mesh[] = [];
   vesselGroup: THREE.Group | null = null;
@@ -193,7 +198,26 @@ export class InteractionManager {
       }
     }
 
-    // ----- Priority 3: Saddle meshes ----- //
+    // ----- Priority 3: Lifting lug meshes (groups - recursive) ----- //
+    if (!this.lugsLocked && this.lugMeshes.length > 0) {
+      const lugHits = this.raycaster.intersectObjects(this.lugMeshes, true);
+      if (lugHits.length > 0) {
+        let obj: THREE.Object3D | null = lugHits[0].object;
+        let lugIdx: number | undefined;
+        while (obj) {
+          lugIdx = obj.userData.lugIdx as number | undefined;
+          if (lugIdx !== undefined) break;
+          obj = obj.parent;
+        }
+        if (lugIdx !== undefined) {
+          this.startDrag('liftingLug', -1, -1, -1, lugIdx);
+          this.callbacks.onLugSelected(lugIdx);
+          return;
+        }
+      }
+    }
+
+    // ----- Priority 4: Saddle meshes ----- //
     if (!this.saddlesLocked && this.saddleMeshes.length > 0) {
       const saddleHits = this.raycaster.intersectObjects(this.saddleMeshes, false);
       if (saddleHits.length > 0) {
@@ -211,6 +235,7 @@ export class InteractionManager {
     this.selectedNozzleIdx = -1;
     this.selectedSaddleIdx = -1;
     this.selectedTextureIdx = -1;
+    this.selectedLugIdx = -1;
     this.dragType = null;
     this.callbacks.onDeselect();
   }
@@ -231,7 +256,7 @@ export class InteractionManager {
 
     const state = this.vesselState;
 
-    if (this.dragType === 'nozzle' || this.dragType === 'texture') {
+    if (this.dragType === 'nozzle' || this.dragType === 'texture' || this.dragType === 'liftingLug') {
       // Raycast against the vessel shell to find the surface point
       const shellMeshes = this.getShellMeshes();
       if (shellMeshes.length === 0) return;
@@ -260,6 +285,8 @@ export class InteractionManager {
 
       if (this.dragType === 'nozzle') {
         this.callbacks.onNozzleMoved(this.selectedNozzleIdx, newPos, deg);
+      } else if (this.dragType === 'liftingLug') {
+        this.callbacks.onLugMoved(this.selectedLugIdx, newPos, deg);
       } else {
         this.callbacks.onTextureMoved(this.selectedTextureIdx, newPos, deg);
       }
@@ -308,10 +335,11 @@ export class InteractionManager {
    * controls so they don't fight the drag, and set state flags.
    */
   private startDrag(
-    type: 'nozzle' | 'saddle' | 'texture',
+    type: 'nozzle' | 'liftingLug' | 'saddle' | 'texture',
     nozzleIdx: number,
     saddleIdx: number,
     textureIdx: number,
+    lugIdx: number = -1,
   ): void {
     this.isDown = true;
     this.isDragging = true;
@@ -319,6 +347,7 @@ export class InteractionManager {
     this.selectedNozzleIdx = nozzleIdx;
     this.selectedSaddleIdx = saddleIdx;
     this.selectedTextureIdx = textureIdx;
+    this.selectedLugIdx = lugIdx;
 
     // Disable orbit controls during drag so panning doesn't interfere
     this.controls.enabled = false;
