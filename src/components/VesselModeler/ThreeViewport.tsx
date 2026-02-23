@@ -9,6 +9,8 @@ import {
     createNozzleMaterial,
     createHighlightMaterial,
     createSaddleHighlightMaterial,
+    createLugMaterial,
+    createLugHighlightMaterial,
 } from './engine/materials';
 import type * as THREE from 'three';
 
@@ -23,6 +25,7 @@ export interface ThreeViewportHandle {
 interface ThreeViewportProps {
     vesselState: VesselState;
     selectedNozzleIndex: number;
+    selectedLugIndex: number;
     selectedSaddleIndex: number;
     selectedTextureId: number;
     textureObjects: Record<number, THREE.Texture>;
@@ -30,7 +33,7 @@ interface ThreeViewportProps {
 }
 
 const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(function ThreeViewport(
-    { vesselState, selectedNozzleIndex, selectedSaddleIndex, selectedTextureId, textureObjects, callbacks },
+    { vesselState, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, textureObjects, callbacks },
     ref
 ) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -43,6 +46,8 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         nozzle: THREE.MeshPhongMaterial;
         nozzleHighlight: THREE.MeshPhongMaterial;
         saddleHighlight: THREE.MeshPhongMaterial;
+        lug: THREE.MeshPhongMaterial;
+        lugHighlight: THREE.MeshPhongMaterial;
     } | null>(null);
 
     // Track latest state for callbacks (avoid stale closures)
@@ -73,7 +78,9 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         const nozzle = createNozzleMaterial(vesselStateRef.current.visuals.material);
         const nozzleHighlight = createHighlightMaterial();
         const saddleHighlight = createSaddleHighlightMaterial();
-        materialsRef.current = { shell, nozzle, nozzleHighlight, saddleHighlight };
+        const lug = createLugMaterial(vesselStateRef.current.visuals.material);
+        const lugHighlight = createLugHighlightMaterial();
+        materialsRef.current = { shell, nozzle, nozzleHighlight, saddleHighlight, lug, lugHighlight };
 
         // Setup interaction manager
         const canvas = manager.getRenderer().domElement;
@@ -84,10 +91,12 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             vesselStateRef.current,
             {
                 onNozzleSelected: (idx) => callbacksRef.current.onNozzleSelected?.(idx),
+                onLugSelected: (idx) => callbacksRef.current.onLugSelected?.(idx),
                 onSaddleSelected: (idx) => callbacksRef.current.onSaddleSelected?.(idx),
                 onTextureSelected: (id) => callbacksRef.current.onTextureSelected?.(id),
                 onDeselect: () => callbacksRef.current.onDeselect?.(),
                 onNozzleMoved: (idx, pos, angle) => callbacksRef.current.onNozzleMoved?.(idx, pos, angle),
+                onLugMoved: (idx, pos, angle) => callbacksRef.current.onLugMoved?.(idx, pos, angle),
                 onSaddleMoved: (idx, pos) => callbacksRef.current.onSaddleMoved?.(idx, pos),
                 onTextureMoved: (id, pos, angle) => callbacksRef.current.onTextureMoved?.(id, pos, angle),
                 onDragEnd: () => callbacksRef.current.onDragEnd?.(),
@@ -110,6 +119,8 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
                 materialsRef.current.nozzle.dispose();
                 materialsRef.current.nozzleHighlight.dispose();
                 materialsRef.current.saddleHighlight.dispose();
+                materialsRef.current.lug.dispose();
+                materialsRef.current.lugHighlight.dispose();
                 materialsRef.current = null;
             }
 
@@ -140,9 +151,12 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             materials.shell,
             materials.nozzle,
             materials.nozzleHighlight,
+            materials.lug,
+            materials.lugHighlight,
             materials.saddleHighlight,
             textureObjects,
             selectedNozzleIndex,
+            selectedLugIndex,
             selectedSaddleIndex,
             selectedTextureId
         );
@@ -153,16 +167,17 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         // Update interaction manager mesh references
         if (interactionRef.current) {
             interactionRef.current.nozzleMeshes = result.nozzleMeshes;
+            interactionRef.current.lugMeshes = result.lugMeshes;
             interactionRef.current.saddleMeshes = result.saddleMeshes;
             interactionRef.current.textureMeshes = result.textureMeshes;
             interactionRef.current.vesselGroup = result.vesselGroup;
         }
-    }, [textureObjects, selectedNozzleIndex, selectedSaddleIndex, selectedTextureId]);
+    }, [textureObjects, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId]);
 
     // Rebuild when state changes
     useEffect(() => {
         rebuildScene();
-    }, [vesselState, selectedNozzleIndex, selectedSaddleIndex, selectedTextureId, textureObjects, rebuildScene]);
+    }, [vesselState, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, textureObjects, rebuildScene]);
 
     // Update interaction manager's vessel state reference
     useEffect(() => {
@@ -191,6 +206,11 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         materials.nozzle.opacity = nozzleOpacity;
         materials.nozzle.transparent = nozzleOpacity < 1.0;
         materials.nozzle.needsUpdate = true;
+
+        materials.lug.color.setHex(preset.color);
+        materials.lug.shininess = preset.shininess;
+        materials.lug.emissive.setHex(preset.emissive);
+        materials.lug.needsUpdate = true;
     }, [vesselState.visuals]);
 
     return (
