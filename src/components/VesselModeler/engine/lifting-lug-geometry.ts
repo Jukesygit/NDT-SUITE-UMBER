@@ -41,21 +41,23 @@ function createPadEyeLug(
   const baseDia = size.baseDiameter * SCALE;
 
   // -- 1. Base plate (flat rectangular pad on shell surface) --
+  // Long dimension along Z (circumferential), short along X (longitudinal)
   const baseThk = thickness * 0.5;
-  const baseLong = baseDia;           // long dimension (along plate width)
-  const baseShort = baseDia * 0.35;   // short dimension (plate thickness direction)
-  const baseGeom = new THREE.BoxGeometry(baseLong, baseThk, baseShort);
+  const baseLong = baseDia;           // long dimension (circumferential)
+  const baseShort = baseDia * 0.35;   // short dimension (longitudinal)
+  const baseGeom = new THREE.BoxGeometry(baseShort, baseThk, baseLong);
   const basePlate = new THREE.Mesh(baseGeom, material);
   basePlate.position.y = baseThk / 2;
   group.add(basePlate);
 
   // -- 2. Vertical plate (tapered profile with integrated eye hole) --
-  // Profile shape in XY: wide at bottom, tapers inward, rounded top with hole.
-  // Extruded along Z by plate thickness.
+  // Real pad eyes are roughly as wide as tall. Scale height down to match.
+  // Profile built in XY then rotated 90° around Y so the plate face spans
+  // the circumferential axis (Z in local lug space).
   const halfBase = width / 2;
   const rimThk = holeDia * 0.45;                 // material around the hole
   const earR = holeDia / 2 + rimThk;             // outer radius of the rounded top
-  const holeY = height;                           // Y of hole centre above base plate
+  const holeY = height * 0.5;                    // lower profile to match real proportions
 
   const plateShape = new THREE.Shape();
   plateShape.moveTo(-halfBase, 0);                // bottom-left
@@ -74,8 +76,10 @@ function createPadEyeLug(
     bevelEnabled: false,
   });
   const plate = new THREE.Mesh(plateGeom, material);
-  // Centre the extrusion on Z axis, sit on top of base plate
-  plate.position.set(0, baseThk, -thickness / 2);
+  // Rotate 90° around Y so plate face spans circumferential (Z) axis,
+  // then offset to centre thickness along X and sit on base plate.
+  plate.rotation.y = Math.PI / 2;
+  plate.position.set(-thickness / 2, baseThk, 0);
   group.add(plate);
 
   return group;
