@@ -4,8 +4,8 @@ import authManager from '../auth-manager.js';
 import competencyService from '../services/competency-service.js';
 import { RandomMatrixSpinner } from './MatrixSpinners';
 
-// XLSX will be dynamically imported when needed
-let XLSX = null;
+// ExcelJS will be dynamically imported when needed
+let ExcelJS = null;
 
 export default function UniversalImportModal({ onClose, onComplete }) {
     const [file, setFile] = useState(null);
@@ -153,34 +153,52 @@ export default function UniversalImportModal({ onClose, onComplete }) {
     };
 
     const parseExcelFile = async (uploadedFile) => {
-        // Dynamically import XLSX when needed
-        if (!XLSX) {
-            const xlsxModule = await import('xlsx');
-            XLSX = xlsxModule;
+        // Dynamically import ExcelJS when needed
+        if (!ExcelJS) {
+            const mod = await import('exceljs');
+            ExcelJS = mod.default || mod;
         }
 
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = async (e) => {
             try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
+                const buffer = e.target.result;
+                const workbook = new ExcelJS.Workbook();
+                await workbook.xlsx.load(buffer);
 
                 // Use the first sheet or the training matrix sheet
-                let worksheet;
-                let sheetName = workbook.SheetNames[0];
+                let worksheet = workbook.worksheets[0];
 
-                // Look for the main training sheet
-                for (const name of workbook.SheetNames) {
-                    if (name.includes('Training') && name.includes('Com')) {
-                        sheetName = name;
+                for (const ws of workbook.worksheets) {
+                    if (ws.name.includes('Training') && ws.name.includes('Com')) {
+                        worksheet = ws;
                         break;
                     }
                 }
 
-                worksheet = workbook.Sheets[sheetName];
-
-                // Convert to JSON with raw data (no headers)
-                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: null });
+                // Convert to array of arrays (matching previous xlsx sheet_to_json with header:1)
+                const jsonData = [];
+                worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+                    const rowValues = [];
+                    // ExcelJS rows are 1-indexed, column values start at index 1
+                    for (let col = 1; col <= worksheet.columnCount; col++) {
+                        const cell = row.getCell(col);
+                        let value = cell.value;
+                        // Handle ExcelJS date objects
+                        if (value instanceof Date) {
+                            // Convert to Excel serial number for compatibility with processExcelData
+                            value = Math.round((value.getTime() / 86400000) + 25569);
+                        } else if (value && typeof value === 'object' && value.result !== undefined) {
+                            // Handle formula cells - use the cached result
+                            value = value.result;
+                        } else if (value && typeof value === 'object' && value.text) {
+                            // Handle rich text cells
+                            value = value.text;
+                        }
+                        rowValues.push(value !== undefined && value !== null ? value : null);
+                    }
+                    jsonData.push(rowValues);
+                });
 
                 processExcelData(jsonData);
             } catch (error) {

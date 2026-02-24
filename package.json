@@ -46,9 +46,12 @@
     "prettier": "^3.6.2",
     "terser": "^5.44.1",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.55.0",
+    "typescript-eslint": "^8.56.1",
     "vite": "^5.0.0",
     "vitest": "^4.0.7"
+  },
+  "overrides": {
+    "minimatch": "^10.2.1"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.75.0",
@@ -73,6 +76,6 @@
     "react-router-dom": "^6.28.0",
     "tailwindcss": "^4.1.16",
     "three": "^0.164.1",
-    "xlsx": "^0.18.5"
+    "exceljs": "^4.4.0"
   }
 }
