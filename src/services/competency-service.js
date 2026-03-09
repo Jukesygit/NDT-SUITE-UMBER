@@ -91,6 +91,7 @@ class CompetencyService {
                 witnessed_by,
                 witnessed_at,
                 witness_notes,
+                level,
                 created_at,
                 updated_at,
                 competency:competency_definitions!inner(
@@ -170,6 +171,7 @@ class CompetencyService {
             document_name: data.documentName || null,
             notes: data.notes || null,
             status: status,
+            level: data.level || null,
             // Witness check fields
             witness_checked: data.witnessChecked || false,
             witnessed_by: data.witnessedBy || null,

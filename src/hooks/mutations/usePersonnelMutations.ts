@@ -45,6 +45,7 @@ export interface UpdateCompetencyData {
     document_url?: string | null;
     document_name?: string | null;
     status?: string | null;
+    level?: string | null;
 }
 
 export interface AddCompetencyData {
@@ -57,6 +58,7 @@ export interface AddCompetencyData {
     notes?: string;
     document_url?: string;
     document_name?: string;
+    level?: string;
 }
 
 /**

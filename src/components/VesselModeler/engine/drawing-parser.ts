@@ -30,7 +30,7 @@ export interface ExtractionResult {
     angle: number;
     size: number;
   }>;
-  saddles: Array<{ pos: number }>;
+  saddles: Array<{ pos: number; color?: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -57,8 +57,8 @@ export async function renderPdfPage(
 
   const page = await pdf.getPage(pageNum);
 
-  // Render at 2x scale for crisp detail in engineering drawings
-  const scale = 2.0;
+  // Render at 3x scale for maximum text clarity in engineering drawings
+  const scale = 3.0;
   const viewport = page.getViewport({ scale });
 
   const canvas = document.createElement('canvas');
@@ -215,7 +215,7 @@ ${regionDescriptions.join('\n')}
   "length": Number (Tan-Tan length in mm),
   "headRatio": Number (e.g., 2.0 for 2:1 Ellipsoidal),
   "orientation": "horizontal" or "vertical",
-  "saddles": [{"pos": Number}, ...] (pos = Distance from Left T/L),
+  "saddles": [{"pos": Number, "color": "#hex"}, ...] (pos = Distance from Left T/L, color = optional hex color),
   "nozzles": [
     {
       "name": String (exact tag),
@@ -239,12 +239,32 @@ ${regionDescriptions.join('\n')}
     throw new Error(`Gemini extraction failed: ${response.error}`);
   }
 
-  // Parse JSON - handle potential markdown fences in response
+  // Extract JSON from response — Gemini often wraps JSON in markdown fences
+  // or surrounds it with explanatory text despite being told not to
   const text = response.text.trim();
-  const jsonMatch =
+
+  let jsonStr: string | null = null;
+
+  // Try markdown fences first
+  const fenceMatch =
     text.match(/```json\s*([\s\S]*?)\s*```/) ||
     text.match(/```\s*([\s\S]*?)\s*```/);
-  const jsonStr = jsonMatch ? jsonMatch[1] : text;
+  if (fenceMatch) {
+    jsonStr = fenceMatch[1];
+  }
+
+  // Fall back to extracting the outermost { ... } block
+  if (!jsonStr) {
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start !== -1 && end > start) {
+      jsonStr = text.substring(start, end + 1);
+    }
+  }
+
+  if (!jsonStr) {
+    throw new Error(`No JSON found in Gemini response: ${text.slice(0, 200)}`);
+  }
 
   let parsed: unknown;
   try {
@@ -293,6 +313,7 @@ function validateExtractionResult(data: unknown): ExtractionResult {
             typeof s.pos === 'number'
               ? s.pos
               : length * (0.25 + idx * 0.5),
+          color: typeof s.color === 'string' ? s.color : '#2244ff',
         }))
     : [];
 

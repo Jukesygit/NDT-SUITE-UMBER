@@ -1192,7 +1192,88 @@
     .pm-field-grid { grid-template-columns: 1fr; }
 }
 
+/* ---- Quick Filters ---- */
+.pm-quick-filters {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+    padding: 10px 16px;
+    background: var(--card-bg, rgba(30, 41, 59, 0.5));
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    animation: pm-popIn 0.4s ease both;
+    animation-delay: 0.25s;
+}
+
+.pm-quick-filters-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.pm-quick-filters-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.pm-quick-filter-btn {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 14px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.pm-quick-filter-btn:hover {
+    border-color: rgba(100, 150, 255, 0.3);
+    background: rgba(100, 150, 255, 0.08);
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.pm-quick-filter-btn.active {
+    background: rgba(100, 150, 255, 0.2);
+    border-color: rgba(100, 150, 255, 0.5);
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 0 12px rgba(100, 150, 255, 0.15);
+}
+
+.pm-quick-filter-btn.active:hover {
+    background: rgba(100, 150, 255, 0.3);
+    border-color: rgba(100, 150, 255, 0.6);
+}
+
+.pm-quick-filter-clear {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.35);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-left: 4px;
+}
+
+.pm-quick-filter-clear:hover {
+    color: rgba(252, 165, 165, 0.95);
+    background: rgba(239, 68, 68, 0.08);
+}
+
 @media (max-width: 480px) {
     .pm-stats-grid { grid-template-columns: 1fr; }
     .pm-expanded-section { padding: 16px; }
+    .pm-quick-filters { flex-direction: column; align-items: flex-start; }
 }

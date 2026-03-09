@@ -17,6 +17,7 @@ interface CompetencyData {
     document_name?: string;
     notes?: string;
     field_value?: string;
+    level?: string;
 }
 
 interface CreateCompetencyParams {
@@ -51,6 +52,7 @@ export function useCreateCompetency() {
                 documentUrl: data.document_url,
                 documentName: data.document_name,
                 notes: data.notes,
+                level: data.level,
             });
         },
         onSuccess: (_, variables) => {
@@ -80,6 +82,7 @@ export function useUpdateCompetency() {
                 documentUrl: data.document_url,
                 documentName: data.document_name,
                 notes: data.notes,
+                level: data.level,
             });
         },
         onSuccess: (_, variables) => {

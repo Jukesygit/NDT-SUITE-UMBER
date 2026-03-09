@@ -3,7 +3,7 @@
  */
 
 import { useState, useCallback, useEffect, ChangeEvent, DragEvent } from 'react';
-import { Modal, FormField, FormTextarea } from '../../components/ui';
+import { Modal, FormField, FormTextarea, FormSelect } from '../../components/ui';
 import { RandomMatrixSpinner } from '../../components/MatrixSpinners';
 import type { CompetencyDefinition } from './CompetencyCard';
 import './profile.css';
@@ -21,6 +21,7 @@ export interface CompetencyFormData {
     document_url: string;
     document_name: string;
     notes: string;
+    level?: string;
     definition?: CompetencyDefinition;
 }
 
@@ -148,6 +149,7 @@ export function EditCompetencyModal({
         document_url: initialData?.document_url || '',
         document_name: initialData?.document_name || '',
         notes: initialData?.notes || '',
+        level: initialData?.level || '',
         definition,
     });
 
@@ -166,6 +168,7 @@ export function EditCompetencyModal({
                 document_url: initialData?.document_url || '',
                 document_name: initialData?.document_name || '',
                 notes: initialData?.notes || '',
+                level: initialData?.level || '',
                 definition,
             });
         }
@@ -274,11 +277,13 @@ export function EditCompetencyModal({
             document_url: '',
             document_name: '',
             notes: '',
+            level: '',
         });
         onClose();
     }, [onClose]);
 
     const showCertFields = shouldShowCertificationFields(definition);
+    const showLevelField = definition?.name?.toUpperCase().includes('IRATA');
     const title = isNew
         ? `Add ${definition?.name || 'Certification'}`
         : `Edit ${definition?.name || 'Certification'}`;
@@ -353,6 +358,22 @@ export function EditCompetencyModal({
                             containerClassName="mb-0"
                         />
                     </>
+                )}
+
+                {/* IRATA Level */}
+                {showLevelField && (
+                    <FormSelect
+                        label="IRATA Level"
+                        value={formData.level || ''}
+                        onChange={(e) => updateField('level', e.target.value)}
+                        placeholder="Select level..."
+                        options={[
+                            { value: 'L1', label: 'Level 1' },
+                            { value: 'L2', label: 'Level 2' },
+                            { value: 'L3', label: 'Level 3' },
+                        ]}
+                        containerClassName="mb-0"
+                    />
                 )}
 
                 {/* Document Upload */}

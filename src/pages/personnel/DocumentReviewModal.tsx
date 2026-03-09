@@ -128,8 +128,10 @@ export function DocumentReviewModal({ approval, onClose, onActionComplete }: Doc
         try {
             await approveMutation.mutateAsync({ competencyId: approval.id });
             onActionComplete();
-        } catch {
-            alert('Failed to approve document. Please try again.');
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error('Approve failed:', err);
+            alert(`Failed to approve document: ${msg}`);
         } finally {
             setSubmitting(false);
         }
@@ -144,8 +146,10 @@ export function DocumentReviewModal({ approval, onClose, onActionComplete }: Doc
         try {
             await rejectMutation.mutateAsync({ competencyId: approval.id, reason: comment });
             onActionComplete();
-        } catch {
-            alert('Failed to reject document. Please try again.');
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error('Reject failed:', err);
+            alert(`Failed to reject document: ${msg}`);
         } finally {
             setSubmitting(false);
         }
@@ -160,8 +164,10 @@ export function DocumentReviewModal({ approval, onClose, onActionComplete }: Doc
         try {
             await requestChangesMutation.mutateAsync({ competencyId: approval.id, comment });
             onActionComplete();
-        } catch {
-            alert('Failed to request changes. Please try again.');
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error('Request changes failed:', err);
+            alert(`Failed to request changes: ${msg}`);
         } finally {
             setSubmitting(false);
         }

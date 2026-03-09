@@ -5,7 +5,8 @@
  * Phases: Upload -> Region Selection + Extraction -> Apply
  */
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Upload, X, Check, Loader2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { Upload, X, Check, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { RandomMatrixSpinner } from '../MatrixSpinners';
 import type { RegionTool } from './types';
 import {
   renderPdfPage, cropRegion, extractVesselFromDrawing,
@@ -200,11 +201,19 @@ export default function DrawingImportModal({ isOpen, onClose, onApply }: Drawing
   const handleExtract = useCallback(async () => {
     if (!imageUrl || !regions.side) return;
     setError(null); setPhase('extracting');
+
+    // Defer heavy work so the browser can paint + start the spinner animation
+    await new Promise(r => setTimeout(r, 100));
+
     try {
       const { naturalWidth: cw, naturalHeight: ch } = imgRef.current!;
+
+      // Yield between each crop so the spinner keeps animating
       const cropped: string[] = [await cropRegion(imageUrl, regions.side, cw, ch)];
-      if (regions.end) cropped.push(await cropRegion(imageUrl, regions.end, cw, ch));
-      if (regions.table) cropped.push(await cropRegion(imageUrl, regions.table, cw, ch));
+      await new Promise(r => setTimeout(r, 0));
+      if (regions.end) { cropped.push(await cropRegion(imageUrl, regions.end, cw, ch)); await new Promise(r => setTimeout(r, 0)); }
+      if (regions.table) { cropped.push(await cropRegion(imageUrl, regions.table, cw, ch)); await new Promise(r => setTimeout(r, 0)); }
+
       setResult(await extractVesselFromDrawing(cropped)); setPhase('result');
     } catch (err) { setError(err instanceof Error ? err.message : 'Extraction failed'); setPhase('select'); }
   }, [imageUrl, regions]);
@@ -290,9 +299,9 @@ export default function DrawingImportModal({ isOpen, onClose, onApply }: Drawing
         {/* Extracting phase */}
         {phase === 'extracting' && (
           <div className="flex flex-col items-center justify-center flex-1 gap-4">
-            <Loader2 size={40} className="animate-spin text-blue-400" />
-            <div className="text-blue-400 font-mono">Analyzing drawing...</div>
-            <div className="text-white/50 text-sm">Gemini is extracting vessel dimensions. This may take up to 30 seconds.</div>
+            <RandomMatrixSpinner size={120} />
+            <div className="text-blue-400 font-mono mt-2">Analyzing drawing...</div>
+            <div className="text-white/50 text-sm">Extracting vessel dimensions and nozzle data. This may take up to 30 seconds.</div>
           </div>
         )}
 

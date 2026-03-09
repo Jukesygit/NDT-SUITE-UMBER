@@ -105,7 +105,7 @@ export function shouldShowCertificationFields(competency) {
         const certificationCategories = [
             'ndt certifications',
             'mandatory offshore training',
-            'onshore training',
+            'rope access',
             'plant, api and visual qualifications',
             'uav operations',
             'gwo training',

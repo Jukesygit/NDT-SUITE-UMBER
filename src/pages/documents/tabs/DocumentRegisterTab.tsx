@@ -3,9 +3,9 @@ import { ErrorDisplay } from '../../../components/ui';
 import { useDocuments } from '../../../hooks/queries/useDocuments';
 import type { Document, DocumentFilters as Filters } from '../../../types/document-control';
 import DocumentStatusBadge from '../components/DocumentStatusBadge';
+import DocumentDetailView from '../components/DocumentDetailView';
 import DocumentFilters from '../components/DocumentFilters';
 import CreateDocumentModal from '../modals/CreateDocumentModal';
-import DocumentDetailModal from '../modals/DocumentDetailModal';
 
 interface Props {
     canManage: boolean;
@@ -35,6 +35,17 @@ export default function DocumentRegisterTab({ canManage, search }: Props) {
     }, []);
 
     if (error) return <ErrorDisplay error={error} />;
+
+    // When a document is selected, show inline detail view
+    if (selectedDocId) {
+        return (
+            <DocumentDetailView
+                documentId={selectedDocId}
+                canManage={canManage}
+                onBack={() => setSelectedDocId(null)}
+            />
+        );
+    }
 
     const getReviewDateInfo = (dateStr: string | null) => {
         if (!dateStr) return null;
@@ -161,15 +172,6 @@ export default function DocumentRegisterTab({ canManage, search }: Props) {
                 <CreateDocumentModal
                     isOpen={showCreate}
                     onClose={() => setShowCreate(false)}
-                />
-            )}
-
-            {selectedDocId && (
-                <DocumentDetailModal
-                    isOpen={!!selectedDocId}
-                    onClose={() => setSelectedDocId(null)}
-                    documentId={selectedDocId}
-                    canManage={canManage}
                 />
             )}
         </>

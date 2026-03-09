@@ -68,11 +68,19 @@ function validateForm(data: FormData): FormErrors {
         errors.email = 'Please enter a valid email address';
     }
 
-    // Password validation
+    // Password validation (must match server-side policy in password-validation.ts)
     if (!data.password) {
         errors.password = 'Password is required';
-    } else if (data.password.length < 8) {
-        errors.password = 'Password must be at least 8 characters';
+    } else if (data.password.length < 12) {
+        errors.password = 'Password must be at least 12 characters';
+    } else if (!/[A-Z]/.test(data.password)) {
+        errors.password = 'Password must contain at least one uppercase letter';
+    } else if (!/[a-z]/.test(data.password)) {
+        errors.password = 'Password must contain at least one lowercase letter';
+    } else if (!/[0-9]/.test(data.password)) {
+        errors.password = 'Password must contain at least one number';
+    } else if (!/[!@#$%^&*()_+\-=[\]{}|;:,.<>?]/.test(data.password)) {
+        errors.password = 'Password must contain at least one special character (!@#$%^&*)';
     }
 
     // Organization validation
@@ -268,8 +276,8 @@ export function CreateUserModal({ isOpen, onClose }: CreateUserModalProps) {
                     onChange={(e) => handleChange('password', e.target.value)}
                     error={errors.password}
                     required
-                    placeholder="Minimum 8 characters"
-                    helperText="Password must be at least 8 characters long"
+                    placeholder="Minimum 12 characters"
+                    helperText="12+ chars with uppercase, lowercase, number, and special character"
                     autoComplete="new-password"
                 />
 

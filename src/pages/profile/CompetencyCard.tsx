@@ -37,6 +37,7 @@ export interface Competency {
     document_name?: string;
     notes?: string;
     field_value?: string;
+    level?: string;
     status?: 'active' | 'expired' | 'pending_approval' | 'rejected' | 'changes_requested';
 }
 
@@ -276,6 +277,12 @@ export function CompetencyCard({
             {/* Details */}
             {isCertification && (
                 <div className="pf-card-details">
+                    {competency.level && (
+                        <div>
+                            <span className="pf-detail-label">Level</span>
+                            <span className="pf-detail-value" style={{ fontWeight: '600' }}>{competency.level}</span>
+                        </div>
+                    )}
                     {competency.certification_id && (
                         <div>
                             <span className="pf-detail-label">Certificate ID</span>

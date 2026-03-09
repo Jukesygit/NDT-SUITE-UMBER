@@ -533,6 +533,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                     notes: data.notes || null,
                     document_url: data.document_url || null,
                     document_name: data.document_name || null,
+                    level: data.level || null,
                 },
                 // Pass previous document URL to detect new uploads (triggers pending_approval status)
                 previousDocumentUrl: editingCompetency.competency.document_url,
@@ -585,6 +586,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                 notes: data.notes || undefined,
                 document_url: data.document_url || undefined,
                 document_name: data.document_name || undefined,
+                level: data.level || undefined,
             });
             setAddingCompetency(null);
             onUpdate?.();
@@ -633,6 +635,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                       document_url: editingCompetency.competency.document_url || '',
                       document_name: editingCompetency.competency.document_name || '',
                       notes: editingCompetency.competency.notes || '',
+                      level: editingCompetency.competency.level || '',
                   }
                 : undefined,
         [
@@ -643,6 +646,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
             editingCompetency?.competency.document_url,
             editingCompetency?.competency.document_name,
             editingCompetency?.competency.notes,
+            editingCompetency?.competency.level,
         ]
     );
 
@@ -1046,6 +1050,14 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
 
                                                 {/* Competency Details */}
                                                 <div className="pm-competency-meta" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '2px', fontSize: '11px' }}>
+                                                    {comp.level && (
+                                                        <div>
+                                                            <span style={{ color: 'rgba(255, 255, 255, 0.4)' }}>
+                                                                Level:
+                                                            </span>{' '}
+                                                            <span style={{ fontWeight: '600' }}>{comp.level}</span>
+                                                        </div>
+                                                    )}
                                                     {comp.issuing_body && (
                                                         <div>
                                                             <span style={{ color: 'rgba(255, 255, 255, 0.4)' }}>
@@ -1110,6 +1122,12 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                     {/* Certificate Details */}
                     <div style={{ marginBottom: '20px' }}>
                         <div className="pm-field-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+                            {viewingCompetency.level && (
+                                <div className="pm-display-field">
+                                    <span className="pm-display-label">Level</span>
+                                    <span className="pm-display-value" style={{ fontWeight: '600' }}>{viewingCompetency.level}</span>
+                                </div>
+                            )}
                             {viewingCompetency.issuing_body && (
                                 <div className="pm-display-field">
                                     <span className="pm-display-label">Issued By</span>

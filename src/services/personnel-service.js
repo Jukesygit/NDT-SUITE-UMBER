@@ -56,6 +56,7 @@ class PersonnelService {
                     witnessed_by,
                     witnessed_at,
                     witness_notes,
+                    level,
                     competency_definitions!inner(
                         id,
                         name,

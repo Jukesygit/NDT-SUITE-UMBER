@@ -33,6 +33,50 @@ type ViewType = 'directory' | 'expiring' | 'approvals';
 type SortColumn = 'name' | 'org' | 'role' | 'total' | 'active' | 'expiring' | 'expired';
 type SortDirection = 'asc' | 'desc';
 
+/** Quick filter identifiers */
+export type QuickFilter = 'irata-l1' | 'irata-l2' | 'irata-l3' | 'paut-l2' | 'tofd-l2';
+
+/**
+ * Check if a person matches a quick filter (has in-date cert matching criteria)
+ */
+/**
+ * Check if a competency has an in-date expiry
+ */
+function hasValidExpiry(c: PersonCompetency, now: Date): boolean {
+    return !!c.expiry_date && new Date(c.expiry_date) >= now;
+}
+
+function matchesQuickFilter(person: Person, filter: QuickFilter): boolean {
+    const now = new Date();
+    const comps = person.competencies || [];
+
+    switch (filter) {
+        case 'irata-l1':
+        case 'irata-l2':
+        case 'irata-l3': {
+            const level = filter.replace('irata-', '').toUpperCase();
+            return comps.some(
+                (c) =>
+                    c.competency?.name?.toUpperCase().includes('IRATA') &&
+                    c.level === level &&
+                    hasValidExpiry(c, now)
+            );
+        }
+        case 'paut-l2':
+            return comps.some(
+                (c) =>
+                    c.competency?.name?.toUpperCase().includes('PAUT L2') &&
+                    hasValidExpiry(c, now)
+            );
+        case 'tofd-l2':
+            return comps.some(
+                (c) =>
+                    c.competency?.name?.toUpperCase().includes('TOFD L2') &&
+                    hasValidExpiry(c, now)
+            );
+    }
+}
+
 /**
  * Filter and sort personnel
  */
@@ -42,6 +86,7 @@ function filterAndSortPersonnel(
     filterOrg: string,
     filterRole: string,
     filterCompetencies: string[],
+    quickFilters: QuickFilter[],
     sortColumn: SortColumn,
     sortDirection: SortDirection
 ): Person[] {
@@ -66,7 +111,12 @@ function filterAndSortPersonnel(
                 )
             );
 
-        return matchesSearch && matchesOrg && matchesRole && matchesCompetencies;
+        // Quick filters - AND logic (person must match ALL active quick filters)
+        const matchesQuickFilters =
+            quickFilters.length === 0 ||
+            quickFilters.every((qf) => matchesQuickFilter(person, qf));
+
+        return matchesSearch && matchesOrg && matchesRole && matchesCompetencies && matchesQuickFilters;
     });
 
     // Sort
@@ -128,6 +178,7 @@ export default function PersonnelPage() {
     const [filterOrg, setFilterOrg] = useState('all');
     const [filterRole, setFilterRole] = useState('all');
     const [filterCompetencies, setFilterCompetencies] = useState<string[]>([]);
+    const [quickFilters, setQuickFilters] = useState<QuickFilter[]>([]);
 
     // Sort state
     const [sortColumn, setSortColumn] = useState<SortColumn>('name');
@@ -161,6 +212,13 @@ export default function PersonnelPage() {
         return getCompetencyStats(filtered);
     }, []);
 
+    // Toggle a quick filter on/off
+    const handleQuickFilterToggle = useCallback((filter: QuickFilter) => {
+        setQuickFilters((prev) =>
+            prev.includes(filter) ? prev.filter((f) => f !== filter) : [...prev, filter]
+        );
+    }, []);
+
     // Filtered personnel (memoized)
     const filteredPersonnel = useMemo(
         () =>
@@ -170,10 +228,11 @@ export default function PersonnelPage() {
                 filterOrg,
                 filterRole,
                 filterCompetencies,
+                quickFilters,
                 sortColumn,
                 sortDirection
             ),
-        [personnelQuery.data, searchTerm, filterOrg, filterRole, filterCompetencies, sortColumn, sortDirection]
+        [personnelQuery.data, searchTerm, filterOrg, filterRole, filterCompetencies, quickFilters, sortColumn, sortDirection]
     );
 
     // Not configured state
@@ -358,6 +417,38 @@ export default function PersonnelPage() {
                         organizations={organizationsQuery.data || []}
                         competencyDefinitions={(definitionsQuery.data as CompetencyDefinition[]) || []}
                     />
+
+                    {/* Quick Filters */}
+                    <div className="pm-quick-filters">
+                        <span className="pm-quick-filters-label">Quick Filters</span>
+                        <div className="pm-quick-filters-buttons">
+                            {([
+                                { id: 'irata-l1' as QuickFilter, label: 'IRATA L1' },
+                                { id: 'irata-l2' as QuickFilter, label: 'IRATA L2' },
+                                { id: 'irata-l3' as QuickFilter, label: 'IRATA L3' },
+                                { id: 'paut-l2' as QuickFilter, label: 'PAUT L2' },
+                                { id: 'tofd-l2' as QuickFilter, label: 'TOFD L2' },
+                            ]).map((filter) => (
+                                <button
+                                    type="button"
+                                    key={filter.id}
+                                    className={`pm-quick-filter-btn ${quickFilters.includes(filter.id) ? 'active' : ''}`}
+                                    onClick={() => handleQuickFilterToggle(filter.id)}
+                                >
+                                    {filter.label}
+                                </button>
+                            ))}
+                            {quickFilters.length > 0 && (
+                                <button
+                                    type="button"
+                                    className="pm-quick-filter-clear"
+                                    onClick={() => setQuickFilters([])}
+                                >
+                                    Clear
+                                </button>
+                            )}
+                        </div>
+                    </div>
 
                     {/* Table */}
                     <div style={{ marginTop: '16px' }}>

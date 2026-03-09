@@ -358,7 +358,7 @@ export default function VesselModeler() {
             })),
             saddles: result.saddles.map(s => ({
                 pos: s.pos,
-                color: '#2244ff',
+                color: s.color || '#2244ff',
             })),
             hasModel: true,
         }));
@@ -575,6 +575,10 @@ export default function VesselModeler() {
                     selectedTextureId={selectedTextureId}
                     textureObjects={textureObjectsRef.current}
                     callbacks={vesselCallbacks}
+                    nozzlesLocked={nozzlesLocked}
+                    saddlesLocked={saddlesLocked}
+                    texturesLocked={texturesLocked}
+                    lugsLocked={lugsLocked}
                 />
 
                 {/* Sidebar (z-20) */}

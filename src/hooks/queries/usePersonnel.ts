@@ -32,6 +32,7 @@ export interface PersonCompetency {
     witness_notes?: string;
     document_url?: string;
     document_name?: string;
+    level?: string;
     competency?: {
         id: string;
         name: string;

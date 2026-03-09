@@ -805,7 +805,10 @@ class AuthManager {
             });
 
             if (error) {
-                return { success: false, error: error.message };
+                // Extract the actual error from the edge function response body
+                // FunctionsHttpError stores the parsed JSON response in error.context
+                const errorMessage = error.context?.error || error.message;
+                return { success: false, error: errorMessage };
             }
 
             if (data?.error) {

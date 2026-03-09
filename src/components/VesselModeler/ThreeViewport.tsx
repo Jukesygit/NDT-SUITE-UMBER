@@ -30,10 +30,14 @@ interface ThreeViewportProps {
     selectedTextureId: number;
     textureObjects: Record<number, THREE.Texture>;
     callbacks: VesselCallbacks;
+    nozzlesLocked: boolean;
+    saddlesLocked: boolean;
+    texturesLocked: boolean;
+    lugsLocked: boolean;
 }
 
 const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(function ThreeViewport(
-    { vesselState, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, textureObjects, callbacks },
+    { vesselState, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, textureObjects, callbacks, nozzlesLocked, saddlesLocked, texturesLocked, lugsLocked },
     ref
 ) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -183,6 +187,16 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
     useEffect(() => {
         interactionRef.current?.updateVesselState(vesselState);
     }, [vesselState]);
+
+    // Sync lock flags to the interaction manager
+    useEffect(() => {
+        if (interactionRef.current) {
+            interactionRef.current.nozzlesLocked = nozzlesLocked;
+            interactionRef.current.saddlesLocked = saddlesLocked;
+            interactionRef.current.texturesLocked = texturesLocked;
+            interactionRef.current.lugsLocked = lugsLocked;
+        }
+    }, [nozzlesLocked, saddlesLocked, texturesLocked, lugsLocked]);
 
     // Update material visuals when visual settings change
     useEffect(() => {

@@ -1,0 +1,291 @@
+schemaname,tablename,policyname,permissive,roles,cmd,qual,with_check
+public,account_requests,Service role can create account requests,PERMISSIVE,{service_role},INSERT,null,true
+public,account_requests,account_requests_delete_new,PERMISSIVE,{authenticated},DELETE,(auth_is_admin() = true),null
+public,account_requests,account_requests_insert_new,PERMISSIVE,{public},INSERT,null,(status = 'pending'::text)
+public,account_requests,account_requests_select_new,PERMISSIVE,{public},SELECT,((auth_is_admin() = true) OR (auth_is_org_admin() = true)),null
+public,account_requests,account_requests_update_new,PERMISSIVE,{authenticated},UPDATE,((auth_is_admin() = true) OR (auth_is_org_admin() = true)),null
+public,activity_log,Admins can view all activity logs,PERMISSIVE,{authenticated},SELECT,"(EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::text))))",null
+public,activity_log,Authenticated users can log activity,PERMISSIVE,{authenticated},INSERT,null,"((auth.uid() IS NOT NULL) AND (EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.organization_id IS NOT NULL)))))"
+public,activity_log,Service role full access,PERMISSIVE,{service_role},ALL,true,true
+public,activity_log,Users can view own activity,PERMISSIVE,{authenticated},SELECT,(user_id = auth.uid()),null
+public,asset_access_requests,Admins can update asset access requests,PERMISSIVE,{public},UPDATE,"(EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND ((profiles.role = 'admin'::text) OR ((profiles.role = 'org_admin'::text) AND (profiles.organization_id = asset_access_requests.owner_organization_id))))))",null
+public,asset_access_requests,Authenticated users can create asset access requests,PERMISSIVE,{public},INSERT,null,"((auth.uid() = user_id) AND (auth.uid() IS NOT NULL) AND (user_organization_id IN ( SELECT profiles.organization_id
+   FROM profiles
+  WHERE (profiles.id = auth.uid()))))"
+public,asset_access_requests,Users can view relevant asset access requests,PERMISSIVE,{public},SELECT,"((user_id = auth.uid()) OR (EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND ((profiles.role = 'admin'::text) OR ((profiles.role = 'org_admin'::text) AND (profiles.organization_id = asset_access_requests.owner_organization_id)))))))",null
+public,assets,Editors can delete own org assets,PERMISSIVE,{public},DELETE,"(((organization_id = ( SELECT profiles.organization_id
+   FROM profiles
+  WHERE (profiles.id = auth.uid()))) AND (( SELECT profiles.role
+   FROM profiles
+  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['editor'::text, 'org_admin'::text, 'admin'::text]))) OR (( SELECT profiles.role
+   FROM profiles
+  WHERE (profiles.id = auth.uid())) = 'admin'::text))",null
+public,assets,Users can create assets in their org,PERMISSIVE,{public},INSERT,null,"(((organization_id = ( SELECT profiles.organization_id
+   FROM profiles
+  WHERE (profiles.id = auth.uid()))) AND (created_by = auth.uid())) OR ((( SELECT profiles.role
+   FROM profiles
+  WHERE (profiles.id = auth.uid())) = 'admin'::text) AND (created_by = auth.uid())))"
+public,assets,Users can update own org assets,PERMISSIVE,{public},UPDATE,"(((organization_id = ( SELECT profiles.organization_id
+   FROM profiles
+  WHERE (profiles.id = auth.uid()))) AND ((created_by = auth.uid()) OR (( SELECT profiles.role
+   FROM profiles
+  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['editor'::text, 'org_admin'::text, 'admin'::text])))) OR (( SELECT profiles.role
+   FROM profiles
+  WHERE (profiles.id = auth.uid())) = 'admin'::text))",null
+public,assets,Users can view accessible assets,PERMISSIVE,{public},SELECT,"((( SELECT profiles.organization_id
+   FROM profiles
+  WHERE (profiles.id = auth.uid())) IN ( SELECT organizations.id
+   FROM organizations
+  WHERE (organizations.name = ANY (ARRAY['SYSTEM'::text, 'Matrix'::text])))) OR (organization_id = ( SELECT profiles.organization_id
+   FROM profiles
+  WHERE (profiles.id = auth.uid()))) OR (id IN ( SELECT shared_assets.asset_id
+   FROM shared_assets
+  WHERE (shared_assets.shared_with_organization_id = ( SELECT profiles.organization_id
+           FROM profiles
+          WHERE (profiles.id = auth.uid()))))))",null
+public,competency_categories,Authenticated users can view competency categories,PERMISSIVE,{authenticated},SELECT,true,null
+public,competency_categories,Only admins can manage competency categories,PERMISSIVE,{authenticated},ALL,"(EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'org_admin'::text])))))",null
+public,competency_comments,Users can create competency comments,PERMISSIVE,{authenticated},INSERT,null,"(EXISTS ( SELECT 1
+   FROM employee_competencies ec
+  WHERE ((ec.id = competency_comments.employee_competency_id) AND ((ec.user_id = auth.uid()) OR (EXISTS ( SELECT 1
+           FROM profiles p
+          WHERE ((p.id = auth.uid()) AND ((p.role = 'admin'::text) OR ((p.role = 'org_admin'::text) AND (p.organization_id IN ( SELECT profiles.organization_id
+                   FROM profiles
+                  WHERE (profiles.id = ec.user_id))))))))))))"
+public,competency_comments,Users can delete own competency comments,PERMISSIVE,{authenticated},DELETE,"((created_by = auth.uid()) OR (EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'org_admin'::text]))))))",null
+public,competency_comments,Users can update own competency comments,PERMISSIVE,{authenticated},UPDATE,"((created_by = auth.uid()) OR (EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'org_admin'::text]))))))",null
+public,competency_comments,Users can view competency comments,PERMISSIVE,{authenticated},SELECT,"(EXISTS ( SELECT 1
+   FROM employee_competencies ec
+  WHERE ((ec.id = competency_comments.employee_competency_id) AND ((ec.user_id = auth.uid()) OR (EXISTS ( SELECT 1
+           FROM profiles p
+          WHERE ((p.id = auth.uid()) AND ((p.role = 'admin'::text) OR ((p.role = 'org_admin'::text) AND (p.organization_id IN ( SELECT profiles.organization_id
+                   FROM profiles
+                  WHERE (profiles.id = ec.user_id))))))))))))",null
+public,competency_definitions,competency_definitions_all_new,PERMISSIVE,{authenticated},ALL,((auth_is_admin() = true) OR (auth_is_org_admin() = true)),null
+public,competency_definitions,competency_definitions_select_new,PERMISSIVE,{authenticated},SELECT,true,null
+public,competency_history,Authenticated users with org can insert history,PERMISSIVE,{authenticated},INSERT,null,"((auth.uid() IS NOT NULL) AND (EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.organization_id IS NOT NULL)))))"
+public,competency_history,System can insert competency history,PERMISSIVE,{service_role},INSERT,null,true
+public,competency_history,competency_history_select_new,PERMISSIVE,{authenticated},SELECT,((user_id = auth.uid()) OR (auth_is_admin() = true) OR (auth_is_org_admin() = true)),null
+public,document_categories,Admins can manage document categories,PERMISSIVE,{authenticated},ALL,"(EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'org_admin'::text])))))",null
+public,document_categories,Authenticated users can view document categories,PERMISSIVE,{authenticated},SELECT,true,null
+public,document_review_schedule,Admins can manage review schedules in their org,PERMISSIVE,{authenticated},ALL,"(EXISTS ( SELECT 1
+   FROM (documents d
+     JOIN profiles p ON ((p.id = auth.uid())))
+  WHERE ((d.id = document_review_schedule.document_id) AND (d.organization_id = p.organization_id) AND (p.role = ANY (ARRAY['admin'::text, 'org_admin'::text])))))",null
+public,document_review_schedule,Admins can view review schedules in their org,PERMISSIVE,{authenticated},SELECT,"(EXISTS ( SELECT 1
+   FROM (documents d
+     JOIN profiles p ON ((p.id = auth.uid())))
+  WHERE ((d.id = document_review_schedule.document_id) AND (d.organization_id = p.organization_id) AND (p.role = ANY (ARRAY['admin'::text, 'org_admin'::text])))))",null
+public,document_revisions,Admins can create revisions in their org,PERMISSIVE,{authenticated},INSERT,null,"(EXISTS ( SELECT 1
+   FROM (documents d
+     JOIN profiles p ON ((p.id = auth.uid())))
+  WHERE ((d.id = document_revisions.document_id) AND (d.organization_id = p.organization_id) AND (p.role = ANY (ARRAY['admin'::text, 'org_admin'::text])))))"
+public,document_revisions,Admins can update revisions in their org,PERMISSIVE,{authenticated},UPDATE,"(EXISTS ( SELECT 1
+   FROM (documents d
+     JOIN profiles p ON ((p.id = auth.uid())))
+  WHERE ((d.id = document_revisions.document_id) AND (d.organization_id = p.organization_id) AND (p.role = ANY (ARRAY['admin'::text, 'org_admin'::text])))))",null
+public,document_revisions,Users can view approved revisions in their org,PERMISSIVE,{authenticated},SELECT,"((EXISTS ( SELECT 1
+   FROM documents d
+  WHERE ((d.id = document_revisions.document_id) AND (d.organization_id = ( SELECT profiles.organization_id
+           FROM profiles
+          WHERE (profiles.id = auth.uid())))))) AND ((status = 'approved'::text) OR (EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'org_admin'::text])))))))",null
+public,documents,Admins can create documents in their org,PERMISSIVE,{authenticated},INSERT,null,"((organization_id = ( SELECT profiles.organization_id
+   FROM profiles
+  WHERE (profiles.id = auth.uid()))) AND (EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'org_admin'::text]))))))"
+public,documents,Admins can delete documents in their org,PERMISSIVE,{authenticated},DELETE,"((organization_id = ( SELECT profiles.organization_id
+   FROM profiles
+  WHERE (profiles.id = auth.uid()))) AND (EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'org_admin'::text]))))))",null
+public,documents,Admins can update documents in their org,PERMISSIVE,{authenticated},UPDATE,"((organization_id = ( SELECT profiles.organization_id
+   FROM profiles
+  WHERE (profiles.id = auth.uid()))) AND (EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'org_admin'::text]))))))",null
+public,documents,Users can view approved documents in their org,PERMISSIVE,{authenticated},SELECT,"((organization_id = ( SELECT profiles.organization_id
+   FROM profiles
+  WHERE (profiles.id = auth.uid()))) AND ((status = 'approved'::text) OR (EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'org_admin'::text])))))))",null
+public,email_reminder_log,Only service role can insert reminder logs,PERMISSIVE,{service_role},INSERT,null,true
+public,email_reminder_log,Users can view their own reminder logs,PERMISSIVE,{authenticated},SELECT,"((user_id = auth.uid()) OR (EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::text)))))",null
+public,email_reminder_settings,Only admins can insert email reminder settings,PERMISSIVE,{authenticated},INSERT,null,"(EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::text))))"
+public,email_reminder_settings,Only admins can update email reminder settings,PERMISSIVE,{authenticated},UPDATE,"(EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::text))))",null
+public,email_reminder_settings,Only admins can view email reminder settings,PERMISSIVE,{authenticated},SELECT,"(EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::text))))",null
+public,employee_competencies,Users can delete own competencies,PERMISSIVE,{authenticated},DELETE,"((user_id = auth.uid()) OR (EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::text)))) OR (EXISTS ( SELECT 1
+   FROM (profiles p
+     JOIN profiles target ON ((target.id = employee_competencies.user_id)))
+  WHERE ((p.id = auth.uid()) AND (p.role = 'org_admin'::text) AND (p.organization_id = target.organization_id)))))",null
+public,employee_competencies,employee_competencies_delete_new,PERMISSIVE,{authenticated},DELETE,((auth_is_admin() = true) OR (auth_is_org_admin() = true)),null
+public,employee_competencies,employee_competencies_insert_new,PERMISSIVE,{authenticated},INSERT,null,((user_id = auth.uid()) OR (auth_is_admin() = true) OR (auth_is_org_admin() = true))
+public,employee_competencies,employee_competencies_select_new,PERMISSIVE,{authenticated},SELECT,((user_id = auth.uid()) OR (auth_is_admin() = true) OR (auth_is_org_admin() = true)),null
+public,employee_competencies,employee_competencies_update_new,PERMISSIVE,{authenticated},UPDATE,((user_id = auth.uid()) OR (auth_is_admin() = true) OR (auth_is_org_admin() = true)),((auth_is_admin() = true) OR (auth_is_org_admin() = true) OR ((user_id = auth.uid()) AND (status <> 'approved'::text)))
+public,inspections,Editors can delete inspections,PERMISSIVE,{public},DELETE,can_access_vessel(vessel_id),null
+public,inspections,Users can create inspections in accessible vessels,PERMISSIVE,{public},INSERT,null,can_access_vessel(vessel_id)
+public,inspections,Users can update inspections in own org,PERMISSIVE,{public},UPDATE,can_access_vessel(vessel_id),null
+public,inspections,Users can view inspections from accessible vessels,PERMISSIVE,{public},SELECT,"(vessel_id IN ( SELECT v.id
+   FROM (vessels v
+     JOIN assets a ON ((v.asset_id = a.id)))
+  WHERE (a.organization_id = ( SELECT profiles.organization_id
+           FROM profiles
+          WHERE (profiles.id = auth.uid())))))",null
+public,inspections,inspections_delete_policy,PERMISSIVE,{authenticated},DELETE,user_can_access_vessel(vessel_id),null
+public,inspections,inspections_insert_policy,PERMISSIVE,{authenticated},INSERT,null,user_can_access_vessel(vessel_id)
+public,inspections,inspections_select_policy,PERMISSIVE,{authenticated},SELECT,user_can_access_vessel(vessel_id),null
+public,inspections,inspections_update_policy,PERMISSIVE,{authenticated},UPDATE,user_can_access_vessel(vessel_id),user_can_access_vessel(vessel_id)
+public,notification_email_log,Admins can insert notification logs,PERMISSIVE,{authenticated},INSERT,null,"(EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::text))))"
+public,notification_email_log,Admins can update notification logs,PERMISSIVE,{authenticated},UPDATE,"(EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::text))))",null
+public,notification_email_log,Admins can view notification logs,PERMISSIVE,{authenticated},SELECT,"(EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::text))))",null
+public,notification_email_recipients,Admins can insert recipient logs,PERMISSIVE,{authenticated},INSERT,null,"(EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::text))))"
+public,notification_email_recipients,Admins can update recipient logs,PERMISSIVE,{authenticated},UPDATE,"(EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::text))))",null
+public,notification_email_recipients,Admins can view recipient logs,PERMISSIVE,{authenticated},SELECT,"(EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::text))))",null
+storage,objects,Admins can delete controlled documents,PERMISSIVE,{authenticated},DELETE,"((bucket_id = 'documents'::text) AND ((storage.foldername(name))[1] = 'controlled-documents'::text) AND (EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'org_admin'::text]))))))",null
+storage,objects,Admins can upload controlled documents,PERMISSIVE,{authenticated},INSERT,null,"((bucket_id = 'documents'::text) AND ((storage.foldername(name))[1] = 'controlled-documents'::text) AND (EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'org_admin'::text]))))))"
+storage,objects,Anyone can view avatars,PERMISSIVE,{public},SELECT,(bucket_id = 'avatars'::text),null
+storage,objects,Editors can delete 3D models,PERMISSIVE,{authenticated},DELETE,"((bucket_id = '3d-models'::text) AND ((storage.foldername(name))[1] IN ( SELECT (profiles.organization_id)::text AS organization_id
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['editor'::text, 'org_admin'::text, 'admin'::text]))))))",null
+storage,objects,Editors can delete scan data,PERMISSIVE,{authenticated},DELETE,"((bucket_id = 'scan-data'::text) AND ((storage.foldername(name))[1] IN ( SELECT (profiles.organization_id)::text AS organization_id
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['editor'::text, 'org_admin'::text, 'admin'::text]))))))",null
+storage,objects,Editors can delete scan images,PERMISSIVE,{authenticated},DELETE,"((bucket_id = 'scan-images'::text) AND ((storage.foldername(name))[1] IN ( SELECT (profiles.organization_id)::text AS organization_id
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['editor'::text, 'org_admin'::text, 'admin'::text]))))))",null
+storage,objects,Editors can delete vessel images,PERMISSIVE,{authenticated},DELETE,"((bucket_id = 'vessel-images'::text) AND ((storage.foldername(name))[1] IN ( SELECT (profiles.organization_id)::text AS organization_id
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['editor'::text, 'org_admin'::text, 'admin'::text]))))))",null
+storage,objects,Users can delete own avatar,PERMISSIVE,{authenticated},DELETE,((bucket_id = 'avatars'::text) AND ((storage.foldername(name))[1] = (auth.uid())::text)),null
+storage,objects,Users can delete their own competency documents,PERMISSIVE,{authenticated},DELETE,"((bucket_id = 'documents'::text) AND (((storage.foldername(name))[2] = (auth.uid())::text) OR (EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'org_admin'::text])))))))",null
+storage,objects,Users can update own avatar,PERMISSIVE,{authenticated},UPDATE,((bucket_id = 'avatars'::text) AND ((storage.foldername(name))[1] = (auth.uid())::text)),null
+storage,objects,Users can update own org 3D models,PERMISSIVE,{authenticated},UPDATE,"((bucket_id = '3d-models'::text) AND ((storage.foldername(name))[1] IN ( SELECT (profiles.organization_id)::text AS organization_id
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['editor'::text, 'org_admin'::text, 'admin'::text]))))))",null
+storage,objects,Users can update own org scan data,PERMISSIVE,{authenticated},UPDATE,"((bucket_id = 'scan-data'::text) AND ((storage.foldername(name))[1] IN ( SELECT (profiles.organization_id)::text AS organization_id
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['editor'::text, 'org_admin'::text, 'admin'::text]))))))",null
+storage,objects,Users can update own org scan images,PERMISSIVE,{authenticated},UPDATE,"((bucket_id = 'scan-images'::text) AND ((storage.foldername(name))[1] IN ( SELECT (profiles.organization_id)::text AS organization_id
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['editor'::text, 'org_admin'::text, 'admin'::text]))))))",null
+storage,objects,Users can update own org vessel images,PERMISSIVE,{authenticated},UPDATE,"((bucket_id = 'vessel-images'::text) AND ((storage.foldername(name))[1] IN ( SELECT (profiles.organization_id)::text AS organization_id
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['editor'::text, 'org_admin'::text, 'admin'::text]))))))",null
+storage,objects,Users can update their own competency documents,PERMISSIVE,{authenticated},UPDATE,((bucket_id = 'documents'::text) AND ((storage.foldername(name))[2] = (auth.uid())::text)),null
+storage,objects,Users can upload 3D models for own org vessels,PERMISSIVE,{authenticated},INSERT,null,"((bucket_id = '3d-models'::text) AND ((storage.foldername(name))[1] IN ( SELECT (profiles.organization_id)::text AS organization_id
+   FROM profiles
+  WHERE (profiles.id = auth.uid()))))"
+storage,objects,Users can upload own avatar,PERMISSIVE,{authenticated},INSERT,null,((bucket_id = 'avatars'::text) AND ((storage.foldername(name))[1] = (auth.uid())::text))
+storage,objects,Users can upload scan data for own org,PERMISSIVE,{authenticated},INSERT,null,"((bucket_id = 'scan-data'::text) AND ((storage.foldername(name))[1] IN ( SELECT (profiles.organization_id)::text AS organization_id
+   FROM profiles
+  WHERE (profiles.id = auth.uid()))))"
+storage,objects,Users can upload scan images for own org,PERMISSIVE,{authenticated},INSERT,null,"((bucket_id = 'scan-images'::text) AND ((storage.foldername(name))[1] IN ( SELECT (profiles.organization_id)::text AS organization_id
+   FROM profiles
+  WHERE (profiles.id = auth.uid()))))"
+storage,objects,Users can upload their own competency documents,PERMISSIVE,{authenticated},INSERT,null,"((bucket_id = 'documents'::text) AND ((storage.foldername(name))[1] = 'competency-documents'::text) AND (((storage.foldername(name))[2] = (auth.uid())::text) OR (EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::text)))) OR (EXISTS ( SELECT 1
+   FROM (profiles admin_profile
+     JOIN profiles target_profile ON ((admin_profile.organization_id = target_profile.organization_id)))
+  WHERE ((admin_profile.id = auth.uid()) AND (admin_profile.role = 'org_admin'::text) AND ((target_profile.id)::text = (storage.foldername(objects.name))[2]))))))"
+storage,objects,Users can upload vessel images for own org,PERMISSIVE,{authenticated},INSERT,null,"((bucket_id = 'vessel-images'::text) AND ((storage.foldername(name))[1] IN ( SELECT (profiles.organization_id)::text AS organization_id
+   FROM profiles
+  WHERE (profiles.id = auth.uid()))))"
+storage,objects,Users can view accessible 3D models,PERMISSIVE,{authenticated},SELECT,"((bucket_id = '3d-models'::text) AND (((storage.foldername(name))[1] IN ( SELECT (profiles.organization_id)::text AS organization_id
+   FROM profiles
+  WHERE (profiles.id = auth.uid()))) OR ((storage.foldername(name))[2] IN ( SELECT a.id
+   FROM (assets a
+     JOIN shared_assets sa ON ((a.id = sa.asset_id)))
+  WHERE (sa.shared_with_organization_id = ( SELECT profiles.organization_id
+           FROM profiles
+          WHERE (profiles.id = auth.uid())))))))",null
+storage,objects,Users can view accessible scan data,PERMISSIVE,{authenticated},SELECT,"((bucket_id = 'scan-data'::text) AND (((storage.foldername(name))[1] IN ( SELECT (profiles.organization_id)::text AS organization_id
+   FROM profiles
+  WHERE (profiles.id = auth.uid()))) OR ((storage.foldername(name))[2] IN ( SELECT a.id
+   FROM (assets a
+     JOIN shared_assets sa ON ((a.id = sa.asset_id)))
+  WHERE (sa.shared_with_organization_id = ( SELECT profiles.organization_id
+           FROM profiles
+          WHERE (profiles.id = auth.uid())))))))",null
+storage,objects,Users can view accessible scan images,PERMISSIVE,{authenticated},SELECT,"((bucket_id = 'scan-images'::text) AND (((storage.foldername(name))[1] IN ( SELECT (profiles.organization_id)::text AS organization_id
+   FROM profiles
+  WHERE (profiles.id = auth.uid()))) OR ((storage.foldername(name))[2] IN ( SELECT a.id
+   FROM (assets a
+     JOIN shared_assets sa ON ((a.id = sa.asset_id)))
+  WHERE (sa.shared_with_organization_id = ( SELECT profiles.organization_id
+           FROM profiles
+          WHERE (profiles.id = auth.uid())))))))",null
+storage,objects,Users can view accessible vessel images,PERMISSIVE,{authenticated},SELECT,"((bucket_id = 'vessel-images'::text) AND (((storage.foldername(name))[1] IN ( SELECT (profiles.organization_id)::text AS organization_id
+   FROM profiles
+  WHERE (profiles.id = auth.uid()))) OR ((storage.foldername(name))[2] IN ( SELECT a.id
+   FROM (assets a
+     JOIN shared_assets sa ON ((a.id = sa.asset_id)))
+  WHERE (sa.shared_with_organization_id = ( SELECT profiles.organization_id
+           FROM profiles
+          WHERE (profiles.id = auth.uid())))))))",null
+storage,objects,Users can view controlled documents,PERMISSIVE,{authenticated},SELECT,((bucket_id = 'documents'::text) AND ((storage.foldername(name))[1] = 'controlled-documents'::text)),null
+storage,objects,Users can view their own competency documents,PERMISSIVE,{authenticated},SELECT,"((bucket_id = 'documents'::text) AND (((storage.foldername(name))[2] = (auth.uid())::text) OR (EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::text)))) OR (EXISTS ( SELECT 1
+   FROM (profiles p1
+     JOIN profiles p2 ON ((p1.organization_id = p2.organization_id)))
+  WHERE ((p1.id = auth.uid()) AND (p1.role = 'org_admin'::text) AND ((p2.id)::text = (storage.foldername(objects.name))[2]))))))",null
+public,organizations,organizations_delete_new,PERMISSIVE,{authenticated},DELETE,(auth_is_admin() = true),null
+public,organizations,organizations_insert_new,PERMISSIVE,{authenticated},INSERT,null,(auth_is_admin() = true)
+public,organizations,organizations_select_new,PERMISSIVE,{authenticated},SELECT,true,null
+public,organizations,organizations_update_new,PERMISSIVE,{authenticated},UPDATE,((auth_is_admin() = true) OR ((auth_is_org_admin() = true) AND (id = auth_user_org_id()))),null
+public,password_reset_codes,Service role only - delete,PERMISSIVE,{service_role},DELETE,true,null
+public,password_reset_codes,Service role only - insert,PERMISSIVE,{service_role},INSERT,null,true
+public,password_reset_codes,Service role only - select,PERMISSIVE,{service_role},SELECT,true,null
+public,password_reset_codes,Service role only - update,PERMISSIVE,{service_role},UPDATE,true,null
+public,permission_requests,permission_requests_insert_new,PERMISSIVE,{authenticated},INSERT,null,(user_id = auth.uid())
+public,permission_requests,permission_requests_select_new,PERMISSIVE,{authenticated},SELECT,((user_id = auth.uid()) OR (auth_is_admin() = true) OR (auth_is_org_admin() = true)),null
+public,permission_requests,permission_requests_update_new,PERMISSIVE,{authenticated},UPDATE,((auth_is_admin() = true) OR (auth_is_org_admin() = true)),null
