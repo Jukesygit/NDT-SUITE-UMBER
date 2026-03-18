@@ -70,7 +70,7 @@ function curveCylinderBaseToShell(geom: THREE.BufferGeometry, R: number): void {
  */
 function createPadEyeLug(
   lug: LiftingLugConfig,
-  material: THREE.MeshPhongMaterial,
+  material: THREE.Material,
   vesselRadius: number,
 ): THREE.Group {
   const group = new THREE.Group();
@@ -144,7 +144,7 @@ function createPadEyeLug(
  */
 function createTrunnionLug(
   lug: LiftingLugConfig,
-  material: THREE.MeshPhongMaterial,
+  material: THREE.Material,
   vesselRadius: number,
 ): THREE.Group {
   const group = new THREE.Group();
@@ -212,7 +212,7 @@ function createTrunnionLug(
  */
 export function createLiftingLug(
   lug: LiftingLugConfig,
-  material: THREE.MeshPhongMaterial,
+  material: THREE.Material,
   vesselRadius: number,
 ): THREE.Group {
   if (lug.style === 'trunnion') {

@@ -13,7 +13,7 @@ export type Orientation = 'horizontal' | 'vertical';
 
 export type MaterialKey = 'blue' | 'cs' | 'ss' | 'red';
 
-export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture';
+export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | 'annotation' | 'inspectionImage' | 'weld';
 
 export type AnnotationTool =
   | 'arrow'
@@ -28,6 +28,21 @@ export type AnnotationTool =
 export type RegionTool = 'side' | 'end' | 'table';
 
 export type LightingPresetKey = 'studio' | 'flat' | 'highContrast' | 'dramatic';
+
+export type ScenePresetKey = 'dark' | 'light' | 'blueprint' | 'studioWhite';
+
+export interface ScenePreset {
+  name: string;
+  backgroundColor: string;
+  lighting: LightingPresetKey;
+}
+
+export const SCENE_PRESETS: Record<ScenePresetKey, ScenePreset> = {
+  dark:        { name: 'Dark',         backgroundColor: '#111111', lighting: 'studio' },
+  light:       { name: 'Light',        backgroundColor: '#e8e8e8', lighting: 'flat' },
+  blueprint:   { name: 'Blueprint',    backgroundColor: '#0a1628', lighting: 'highContrast' },
+  studioWhite: { name: 'Studio White', backgroundColor: '#f5f5f5', lighting: 'studio' },
+};
 
 export type ViewPresetKey =
   | 'front'
@@ -110,6 +125,24 @@ export interface SaddleConfig {
   pos: number;
   /** Hex color string */
   color: string;
+  /** Overall saddle height in mm (from base plate to vessel centerline). Defaults to vessel radius × 1.2 */
+  height?: number;
+}
+
+export type WeldType = 'circumferential' | 'longitudinal';
+
+export interface WeldConfig {
+  name: string;
+  /** Weld seam type */
+  type: WeldType;
+  /** For circ welds: axial position. For long welds: start position. mm from left tangent */
+  pos: number;
+  /** For longitudinal welds: end position in mm from left tangent */
+  endPos?: number;
+  /** For longitudinal welds: angle in degrees around circumference (90 = top) */
+  angle?: number;
+  /** Hex color string */
+  color: string;
 }
 
 export interface TextureConfig {
@@ -128,10 +161,145 @@ export interface TextureConfig {
   aspectRatio: number;
 }
 
+// ---------------------------------------------------------------------------
+// Annotation Shapes
+// ---------------------------------------------------------------------------
+
+export type AnnotationShapeType = 'circle' | 'rectangle';
+
+export interface AnnotationShapeConfig {
+  id: number;
+  name: string;
+  type: AnnotationShapeType;
+  /** Center position: mm from left tangent line */
+  pos: number;
+  /** Center angle: degrees around circumference (90 = top) */
+  angle: number;
+  /** Width in mm along vessel axis (diameter for circle) */
+  width: number;
+  /** Height in mm around circumference (= width for circle) */
+  height: number;
+  /** Outline color hex string */
+  color: string;
+  /** Outline thickness in mm */
+  lineWidth: number;
+  /** Whether to show the position label for this annotation */
+  showLabel: boolean;
+  /** Leader line length in mm (default 2000) */
+  leaderLength?: number;
+  /** Free-form label offset from shell contact [x, y, z] in world units. Overrides radial leaderLength when set. */
+  labelOffset?: [number, number, number];
+  /** Whether this annotation is visible in the 3D scene */
+  visible?: boolean;
+  /** Whether this annotation is locked (not draggable) */
+  locked?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Inspection Images
+// ---------------------------------------------------------------------------
+
+export interface InspectionImageConfig {
+  id: number;
+  name: string;
+  description?: string;
+  date?: string;
+  inspector?: string;
+  /** NDT method, e.g. "RT", "UT", "MT", "PT", "VT" */
+  method?: string;
+  /** Inspection result, e.g. "Pass", "Fail", "Requires Review" */
+  result?: string;
+  /** Base64-encoded image data (PNG/JPG) */
+  imageData: string;
+  /** Attachment point: mm from left tangent line */
+  pos: number;
+  /** Attachment point: degrees around circumference (90 = top) */
+  angle: number;
+  /** Leader line length in mm (default 2000) */
+  leaderLength?: number;
+  /** Free-form label offset from shell contact [x, y, z] in world units. Overrides radial leaderLength when set. */
+  labelOffset?: [number, number, number];
+  /** Whether this inspection image is visible in the 3D scene */
+  visible?: boolean;
+  /** Whether this inspection image is locked (not draggable) */
+  locked?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Coverage Rectangles
+// ---------------------------------------------------------------------------
+
+export interface CoverageRectConfig {
+  id: number;
+  name: string;
+  /** Center position: mm from left tangent line */
+  pos: number;
+  /** Center angle: degrees around circumference (90 = top) */
+  angle: number;
+  /** Width in mm along vessel axis */
+  width: number;
+  /** Height in mm around circumference */
+  height: number;
+  /** Outline color hex string */
+  color: string;
+  /** Outline thickness in mm */
+  lineWidth: number;
+  /** Whether to show semi-transparent fill */
+  filled: boolean;
+  /** Fill opacity (0-1) */
+  fillOpacity: number;
+  /** Per-item lock – prevents dragging when true */
+  locked?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Ruler Measurements
+// ---------------------------------------------------------------------------
+
+export interface RulerConfig {
+  id: number;
+  name: string;
+  /** Start position: mm from left tangent line */
+  startPos: number;
+  /** Start angle: degrees around circumference (90 = top) */
+  startAngle: number;
+  /** End position: mm from left tangent line */
+  endPos: number;
+  /** End angle: degrees around circumference (90 = top) */
+  endAngle: number;
+  /** Line color hex string */
+  color: string;
+  /** Whether to show the distance label */
+  showLabel: boolean;
+}
+
+export interface MeasurementConfig {
+  /** Which tangent line to measure axial distance from */
+  referenceTangent: 'left' | 'right';
+  /** CW or CCW direction for circumferential distance */
+  circumDirection: 'CW' | 'CCW';
+  /** Which end the observer views from (determines CW/CCW interpretation) */
+  viewFromEnd: 'left' | 'right';
+}
+
 export interface VisualSettings {
   material: MaterialKey;
   shellOpacity: number;
   nozzleOpacity: number;
+  /** Surface roughness override (0 = mirror, 1 = matte). null = use preset default */
+  roughness: number | null;
+  /** Metalness override (0 = dielectric, 1 = fully metallic). null = use preset default */
+  metalness: number | null;
+  /** Scene background color as hex string (e.g. '#111111') */
+  backgroundColor: string;
+  /** Whether to show a reference grid on the ground */
+  showGrid: boolean;
+  /** Whether to show XYZ axes helper */
+  showAxes: boolean;
+  /** Whether to use environment map for reflections */
+  useEnvironmentMap: boolean;
+  /** Whether to show N/S/E/W cardinal direction labels on the floor grid */
+  showCardinalDirections: boolean;
 }
 
 export interface VesselState {
@@ -145,7 +313,13 @@ export interface VesselState {
   nozzles: NozzleConfig[];
   liftingLugs: LiftingLugConfig[];
   saddles: SaddleConfig[];
+  welds: WeldConfig[];
   textures: TextureConfig[];
+  annotations: AnnotationShapeConfig[];
+  rulers: RulerConfig[];
+  coverageRects: CoverageRectConfig[];
+  inspectionImages: InspectionImageConfig[];
+  measurementConfig: MeasurementConfig;
   hasModel: boolean;
   visuals: VisualSettings;
 }
@@ -277,16 +451,17 @@ export interface RegionState {
 
 export interface MaterialPreset {
   color: number;
-  shininess: number;
   name: string;
   emissive: number;
+  roughness: number;
+  metalness: number;
 }
 
 export const MATERIAL_PRESETS: Record<MaterialKey, MaterialPreset> = {
-  blue: { color: 0x4db8ff, shininess: 60, name: 'Default Blue', emissive: 0x001133 },
-  cs:   { color: 0x555555, shininess: 30, name: 'Carbon Steel', emissive: 0x111111 },
-  ss:   { color: 0xeef1f5, shininess: 90, name: 'Stainless Steel', emissive: 0x222222 },
-  red:  { color: 0x803333, shininess: 20, name: 'Red Oxide', emissive: 0x220000 },
+  blue: { color: 0x4db8ff, name: 'Default Blue', emissive: 0x001133, roughness: 0.4, metalness: 0.6 },
+  cs:   { color: 0x555555, name: 'Carbon Steel', emissive: 0x111111, roughness: 0.6, metalness: 0.7 },
+  ss:   { color: 0xeef1f5, name: 'Stainless Steel', emissive: 0x222222, roughness: 0.2, metalness: 0.9 },
+  red:  { color: 0x803333, name: 'Red Oxide', emissive: 0x220000, roughness: 0.8, metalness: 0.3 },
 };
 
 // ---------------------------------------------------------------------------
@@ -462,12 +637,29 @@ export const DEFAULT_VESSEL_STATE: VesselState = {
     { pos: 1500, color: '#2244ff' },
     { pos: 6500, color: '#2244ff' },
   ],
+  welds: [],
   textures: [],
+  annotations: [],
+  rulers: [],
+  coverageRects: [],
+  inspectionImages: [],
+  measurementConfig: {
+    referenceTangent: 'left',
+    circumDirection: 'CW',
+    viewFromEnd: 'right',
+  },
   hasModel: true,
   visuals: {
     material: 'cs',
     shellOpacity: 1.0,
     nozzleOpacity: 1.0,
+    roughness: null,
+    metalness: null,
+    backgroundColor: '#111111',
+    showGrid: false,
+    showAxes: false,
+    useEnvironmentMap: false,
+    showCardinalDirections: false,
   },
 };
 
@@ -484,6 +676,22 @@ export interface VesselCallbacks {
   onTextureSelected?: (id: number) => void;
   onLugSelected?: (index: number) => void;
   onLugMoved?: (index: number, newPos: number, newAngle: number) => void;
+  onAnnotationSelected?: (id: number) => void;
+  onAnnotationMoved?: (id: number, newPos: number, newAngle: number) => void;
+  onAnnotationLabelOffsetChanged?: (id: number, offset: [number, number, number]) => void;
+  onAnnotationCreated?: (type: AnnotationShapeType, pos: number, angle: number, width: number, height: number) => void;
+  onAnnotationPreview?: (type: AnnotationShapeType, pos: number, angle: number, width: number, height: number) => void;
+  onRulerCreated?: (startPos: number, startAngle: number, endPos: number, endAngle: number) => void;
+  onRulerPreview?: (startPos: number, startAngle: number, endPos: number, endAngle: number) => void;
+  onCoverageRectCreated?: (pos: number, angle: number, width: number, height: number) => void;
+  onCoverageRectPreview?: (pos: number, angle: number, width: number, height: number) => void;
+  onCoverageRectSelected?: (id: number) => void;
+  onCoverageRectMoved?: (id: number, newPos: number, newAngle: number) => void;
+  onInspectionImageSelected?: (id: number) => void;
+  onInspectionImageMoved?: (id: number, newPos: number, newAngle: number) => void;
+  onInspectionImageLabelOffsetChanged?: (id: number, offset: [number, number, number]) => void;
+  onWeldSelected?: (index: number) => void;
+  onWeldMoved?: (index: number, newPos: number, newAngle: number) => void;
   onDeselect?: () => void;
   onDragEnd?: () => void;
 }

@@ -18,14 +18,14 @@
 
 import * as THREE from 'three';
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import type { VesselState } from '../types';
+import type { VesselState, AnnotationShapeType } from '../types';
 import { SCALE } from './materials';
 
 // ---------------------------------------------------------------------------
 // Public Types
 // ---------------------------------------------------------------------------
 
-export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | null;
+export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | 'annotation' | 'coverageRect' | 'inspectionImage' | 'weld' | null;
 
 export interface InteractionCallbacks {
   onNozzleSelected: (index: number) => void;
@@ -37,6 +37,20 @@ export interface InteractionCallbacks {
   onSaddleMoved: (index: number, pos: number) => void;
   onTextureMoved: (id: number, pos: number, angle: number) => void;
   onLugMoved: (index: number, pos: number, angle: number) => void;
+  onAnnotationSelected: (id: number) => void;
+  onAnnotationMoved: (id: number, pos: number, angle: number) => void;
+  onAnnotationCreated: (type: AnnotationShapeType, pos: number, angle: number, width: number, height: number) => void;
+  onAnnotationPreview: (type: AnnotationShapeType, pos: number, angle: number, width: number, height: number) => void;
+  onRulerCreated: (startPos: number, startAngle: number, endPos: number, endAngle: number) => void;
+  onRulerPreview: (startPos: number, startAngle: number, endPos: number, endAngle: number) => void;
+  onCoverageRectCreated: (pos: number, angle: number, width: number, height: number) => void;
+  onCoverageRectPreview: (pos: number, angle: number, width: number, height: number) => void;
+  onCoverageRectSelected: (id: number) => void;
+  onCoverageRectMoved: (id: number, pos: number, angle: number) => void;
+  onInspectionImageSelected: (id: number) => void;
+  onInspectionImageMoved: (id: number, pos: number, angle: number) => void;
+  onWeldSelected: (index: number) => void;
+  onWeldMoved: (index: number, pos: number, angle: number) => void;
   onDragEnd: () => void;
   onNeedRebuild: () => void;
 }
@@ -60,19 +74,39 @@ export class InteractionManager {
   private selectedSaddleIdx = -1;
   private selectedTextureIdx = -1;
   private selectedLugIdx = -1;
+  private selectedAnnotationIdx = -1;
+  private selectedCoverageRectId = -1;
+  private selectedInspectionImageId = -1;
+  private selectedWeldIdx = -1;
   private isDown = false;
+
+  // Draw mode state
+  drawMode: AnnotationShapeType | null = null;
+  coverageDrawMode = false;
+  rulerDrawMode = false;
+  /** @deprecated per-item locked now on CoverageRectConfig */
+  private drawStartPos = 0;
+  private drawStartAngle = 0;
+  private isDrawing = false;
+  private isDrawingCoverage = false;
+  private isDrawingRuler = false;
 
   // Lock flags - public so the React layer can toggle them
   nozzlesLocked = false;
   saddlesLocked = false;
   texturesLocked = false;
   lugsLocked = false;
+  weldsLocked = false;
 
   // External mesh references (updated by the rebuild cycle)
   nozzleMeshes: THREE.Object3D[] = [];
   lugMeshes: THREE.Object3D[] = [];
-  saddleMeshes: THREE.Mesh[] = [];
+  saddleMeshes: THREE.Object3D[] = [];
+  weldMeshes: THREE.Object3D[] = [];
   textureMeshes: THREE.Mesh[] = [];
+  annotationMeshes: THREE.Object3D[] = [];
+  coverageMeshes: THREE.Object3D[] = [];
+  inspectionImageDotMeshes: THREE.Object3D[] = [];
   vesselGroup: THREE.Group | null = null;
 
   // Vessel state reference (for position calculations)
@@ -82,7 +116,7 @@ export class InteractionManager {
   // Bound handlers stored for proper cleanup
   private boundPointerDown: (e: PointerEvent) => void;
   private boundPointerMove: (e: PointerEvent) => void;
-  private boundPointerUp: () => void;
+  private boundPointerUp: (e: PointerEvent) => void;
 
   // ---------------------------------------------------------------------------
   // Constructor
@@ -164,6 +198,34 @@ export class InteractionManager {
 
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
+    // ----- Draw mode: start drawing annotation, coverage rect, or ruler ----- //
+    if (this.drawMode || this.coverageDrawMode || this.rulerDrawMode) {
+      const shellMeshes = this.getShellMeshes();
+      if (shellMeshes.length === 0) return;
+      const hits = this.raycaster.intersectObjects(shellMeshes, true);
+      if (hits.length === 0) return;
+
+      const point = hits[0].point;
+      const state = this.vesselState;
+      const isVertical = state.orientation === 'vertical';
+
+      this.drawStartPos = isVertical
+        ? (point.y / SCALE) + (state.length / 2)
+        : (point.x / SCALE) + (state.length / 2);
+
+      const rad = isVertical
+        ? Math.atan2(point.z, point.x)
+        : Math.atan2(point.y, point.z);
+      this.drawStartAngle = ((rad * 180) / Math.PI + 360) % 360;
+
+      this.isDrawing = !!this.drawMode;
+      this.isDrawingCoverage = this.coverageDrawMode;
+      this.isDrawingRuler = this.rulerDrawMode;
+      this.isDown = true;
+      this.controls.enabled = false;
+      return;
+    }
+
     // ----- Priority 1: Texture meshes ----- //
     if (!this.texturesLocked && this.textureMeshes.length > 0) {
       const textureHits = this.raycaster.intersectObjects(this.textureMeshes, false);
@@ -178,7 +240,84 @@ export class InteractionManager {
       }
     }
 
-    // ----- Priority 2: Nozzle meshes (groups - use recursive intersect) ----- //
+    // ----- Priority 2: Annotation meshes (per-item lock check) ----- //
+    if (this.annotationMeshes.length > 0) {
+      const annHits = this.raycaster.intersectObjects(this.annotationMeshes, true);
+      if (annHits.length > 0) {
+        let obj: THREE.Object3D | null = annHits[0].object;
+        let annId: number | undefined;
+        while (obj) {
+          annId = obj.userData.annotationId as number | undefined;
+          if (annId !== undefined) break;
+          obj = obj.parent;
+        }
+        if (annId !== undefined) {
+          const ann = this.vesselState.annotations.find(a => a.id === annId);
+          if (!ann?.locked) {
+            this.startDrag('annotation', -1, -1, -1, -1, annId);
+          }
+          this.callbacks.onAnnotationSelected(annId);
+          return;
+        }
+      }
+    }
+
+    // ----- Priority 2.5: Coverage rect meshes (per-item lock check) ----- //
+    if (this.coverageMeshes.length > 0) {
+      const covHits = this.raycaster.intersectObjects(this.coverageMeshes, true);
+      if (covHits.length > 0) {
+        let obj: THREE.Object3D | null = covHits[0].object;
+        let covId: number | undefined;
+        while (obj) {
+          covId = obj.userData.coverageRectId as number | undefined;
+          if (covId !== undefined) break;
+          obj = obj.parent;
+        }
+        if (covId !== undefined) {
+          // Check per-item locked state
+          const rect = this.vesselState.coverageRects.find(r => r.id === covId);
+          if (rect?.locked) {
+            this.callbacks.onCoverageRectSelected(covId);
+            return;
+          }
+          this.selectedCoverageRectId = covId;
+          this.isDown = true;
+          this.isDragging = true;
+          this.dragType = 'coverageRect';
+          this.controls.enabled = false;
+          this.callbacks.onCoverageRectSelected(covId);
+          return;
+        }
+      }
+    }
+
+    // ----- Priority 2.7: Inspection image dot meshes (per-item lock check) ----- //
+    if (this.inspectionImageDotMeshes.length > 0) {
+      const imgHits = this.raycaster.intersectObjects(this.inspectionImageDotMeshes, true);
+      if (imgHits.length > 0) {
+        let obj: THREE.Object3D | null = imgHits[0].object;
+        let imgId: number | undefined;
+        while (obj) {
+          imgId = obj.userData.inspectionImageId as number | undefined;
+          if (imgId !== undefined) break;
+          obj = obj.parent;
+        }
+        if (imgId !== undefined) {
+          const img = this.vesselState.inspectionImages.find(i => i.id === imgId);
+          if (!img?.locked) {
+            this.selectedInspectionImageId = imgId;
+            this.isDown = true;
+            this.isDragging = true;
+            this.dragType = 'inspectionImage';
+            this.controls.enabled = false;
+          }
+          this.callbacks.onInspectionImageSelected(imgId);
+          return;
+        }
+      }
+    }
+
+    // ----- Priority 3: Nozzle meshes (groups - use recursive intersect) ----- //
     if (!this.nozzlesLocked && this.nozzleMeshes.length > 0) {
       const nozzleHits = this.raycaster.intersectObjects(this.nozzleMeshes, true);
       if (nozzleHits.length > 0) {
@@ -217,9 +356,32 @@ export class InteractionManager {
       }
     }
 
+    // ----- Priority 3.5: Weld meshes (groups - recursive) ----- //
+    if (!this.weldsLocked && this.weldMeshes.length > 0) {
+      const weldHits = this.raycaster.intersectObjects(this.weldMeshes, true);
+      if (weldHits.length > 0) {
+        let obj: THREE.Object3D | null = weldHits[0].object;
+        let weldIdx: number | undefined;
+        while (obj) {
+          weldIdx = obj.userData.weldIdx as number | undefined;
+          if (weldIdx !== undefined) break;
+          obj = obj.parent;
+        }
+        if (weldIdx !== undefined) {
+          this.selectedWeldIdx = weldIdx;
+          this.isDown = true;
+          this.isDragging = true;
+          this.dragType = 'weld';
+          this.controls.enabled = false;
+          this.callbacks.onWeldSelected(weldIdx);
+          return;
+        }
+      }
+    }
+
     // ----- Priority 4: Saddle meshes ----- //
     if (!this.saddlesLocked && this.saddleMeshes.length > 0) {
-      const saddleHits = this.raycaster.intersectObjects(this.saddleMeshes, false);
+      const saddleHits = this.raycaster.intersectObjects(this.saddleMeshes, true);
       if (saddleHits.length > 0) {
         const hit = saddleHits[0].object as THREE.Mesh;
         const saddleIdx = hit.userData.saddleIdx as number | undefined;
@@ -236,6 +398,10 @@ export class InteractionManager {
     this.selectedSaddleIdx = -1;
     this.selectedTextureIdx = -1;
     this.selectedLugIdx = -1;
+    this.selectedAnnotationIdx = -1;
+    this.selectedCoverageRectId = -1;
+    this.selectedInspectionImageId = -1;
+    this.selectedWeldIdx = -1;
     this.dragType = null;
     this.callbacks.onDeselect();
   }
@@ -245,6 +411,54 @@ export class InteractionManager {
   // ---------------------------------------------------------------------------
 
   private onPointerMove(event: PointerEvent): void {
+    // --- Draw mode preview (annotation, coverage, or ruler) ---
+    if ((this.isDrawing || this.isDrawingCoverage || this.isDrawingRuler) && this.isDown) {
+      const rect = this.canvas.getBoundingClientRect();
+      this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      this.raycaster.setFromCamera(this.mouse, this.camera);
+
+      const shellMeshes = this.getShellMeshes();
+      if (shellMeshes.length === 0) return;
+      const hits = this.raycaster.intersectObjects(shellMeshes, true);
+      if (hits.length === 0) return;
+
+      const point = hits[0].point;
+      const state = this.vesselState;
+      const isVertical = state.orientation === 'vertical';
+
+      let currentPos = isVertical
+        ? (point.y / SCALE) + (state.length / 2)
+        : (point.x / SCALE) + (state.length / 2);
+      const rad = isVertical
+        ? Math.atan2(point.z, point.x)
+        : Math.atan2(point.y, point.z);
+      let currentAngle = ((rad * 180) / Math.PI + 360) % 360;
+
+      const circumference = Math.PI * state.id;
+      const axialDelta = Math.abs(currentPos - this.drawStartPos);
+      let angleDelta = Math.abs(currentAngle - this.drawStartAngle);
+      if (angleDelta > 180) angleDelta = 360 - angleDelta;
+      const circumDelta = (angleDelta / 360) * circumference;
+
+      const centerPos = (this.drawStartPos + currentPos) / 2;
+      const centerAngle = (this.drawStartAngle + currentAngle) / 2;
+
+      if (this.isDrawingRuler) {
+        this.callbacks.onRulerPreview(this.drawStartPos, this.drawStartAngle, currentPos, currentAngle);
+      } else if (this.isDrawingCoverage) {
+        const width = Math.max(axialDelta, 20);
+        const height = Math.max(circumDelta, 20);
+        this.callbacks.onCoverageRectPreview(centerPos, centerAngle, width, height);
+      } else if (this.drawMode === 'circle') {
+        const diameter = Math.max(axialDelta, circumDelta);
+        this.callbacks.onAnnotationPreview(this.drawMode, centerPos, centerAngle, diameter, diameter);
+      } else {
+        this.callbacks.onAnnotationPreview(this.drawMode!, centerPos, centerAngle, axialDelta, circumDelta);
+      }
+      return;
+    }
+
     if (!this.isDown || !this.isDragging || this.dragType === null) return;
 
     // Update NDC from pointer position (use canvas rect for consistency)
@@ -256,7 +470,74 @@ export class InteractionManager {
 
     const state = this.vesselState;
 
-    if (this.dragType === 'nozzle' || this.dragType === 'texture' || this.dragType === 'liftingLug') {
+    if (this.dragType === 'coverageRect') {
+      const shellMeshes = this.getShellMeshes();
+      if (shellMeshes.length === 0) return;
+      const hits = this.raycaster.intersectObjects(shellMeshes, true);
+      if (hits.length === 0) return;
+
+      const point = hits[0].point;
+      const isVertical = state.orientation === 'vertical';
+      let newPos = isVertical
+        ? (point.y / SCALE) + (state.length / 2)
+        : (point.x / SCALE) + (state.length / 2);
+      const rad = isVertical
+        ? Math.atan2(point.z, point.x)
+        : Math.atan2(point.y, point.z);
+      let deg = (rad * 180) / Math.PI;
+      if (deg < 0) deg += 360;
+
+      this.callbacks.onCoverageRectMoved(this.selectedCoverageRectId, newPos, deg);
+      return;
+    }
+
+    if (this.dragType === 'inspectionImage') {
+      const shellMeshes = this.getShellMeshes();
+      if (shellMeshes.length === 0) return;
+      const hits = this.raycaster.intersectObjects(shellMeshes, true);
+      if (hits.length === 0) return;
+
+      const point = hits[0].point;
+      const isVertical = state.orientation === 'vertical';
+      let newPos = isVertical
+        ? (point.y / SCALE) + (state.length / 2)
+        : (point.x / SCALE) + (state.length / 2);
+      const headDepth = state.id / (2 * state.headRatio);
+      newPos = Math.max(-headDepth, Math.min(state.length + headDepth, newPos));
+      const rad = isVertical
+        ? Math.atan2(point.z, point.x)
+        : Math.atan2(point.y, point.z);
+      let deg = (rad * 180) / Math.PI;
+      if (deg < 0) deg += 360;
+
+      this.callbacks.onInspectionImageMoved(this.selectedInspectionImageId, newPos, deg);
+      return;
+    }
+
+    if (this.dragType === 'weld') {
+      const shellMeshes = this.getShellMeshes();
+      if (shellMeshes.length === 0) return;
+      const hits = this.raycaster.intersectObjects(shellMeshes, true);
+      if (hits.length === 0) return;
+
+      const point = hits[0].point;
+      const isVertical = state.orientation === 'vertical';
+      let newPos = isVertical
+        ? (point.y / SCALE) + (state.length / 2)
+        : (point.x / SCALE) + (state.length / 2);
+      const headDepth = state.id / (2 * state.headRatio);
+      newPos = Math.max(-headDepth, Math.min(state.length + headDepth, newPos));
+      const rad = isVertical
+        ? Math.atan2(point.z, point.x)
+        : Math.atan2(point.y, point.z);
+      let deg = (rad * 180) / Math.PI;
+      if (deg < 0) deg += 360;
+
+      this.callbacks.onWeldMoved(this.selectedWeldIdx, newPos, deg);
+      return;
+    }
+
+    if (this.dragType === 'nozzle' || this.dragType === 'texture' || this.dragType === 'liftingLug' || this.dragType === 'annotation') {
       // Raycast against the vessel shell to find the surface point
       const shellMeshes = this.getShellMeshes();
       if (shellMeshes.length === 0) return;
@@ -287,6 +568,8 @@ export class InteractionManager {
         this.callbacks.onNozzleMoved(this.selectedNozzleIdx, newPos, deg);
       } else if (this.dragType === 'liftingLug') {
         this.callbacks.onLugMoved(this.selectedLugIdx, newPos, deg);
+      } else if (this.dragType === 'annotation') {
+        this.callbacks.onAnnotationMoved(this.selectedAnnotationIdx, newPos, deg);
       } else {
         this.callbacks.onTextureMoved(this.selectedTextureIdx, newPos, deg);
       }
@@ -310,8 +593,67 @@ export class InteractionManager {
   // Pointer Up
   // ---------------------------------------------------------------------------
 
-  private onPointerUp(): void {
+  private onPointerUp(event: PointerEvent): void {
     if (!this.isDown) return;
+
+    // --- Draw mode: finalize shape (annotation, coverage, or ruler) ---
+    if (this.isDrawing || this.isDrawingCoverage || this.isDrawingRuler) {
+      const wasCoverage = this.isDrawingCoverage;
+      const wasRuler = this.isDrawingRuler;
+      this.isDown = false;
+      this.isDrawing = false;
+      this.isDrawingCoverage = false;
+      this.isDrawingRuler = false;
+      this.controls.enabled = true;
+
+      // Raycast final position
+      const rect = this.canvas.getBoundingClientRect();
+      this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      this.raycaster.setFromCamera(this.mouse, this.camera);
+
+      const shellMeshes = this.getShellMeshes();
+      const hits = this.raycaster.intersectObjects(shellMeshes, true);
+      if (hits.length > 0) {
+        const point = hits[0].point;
+        const state = this.vesselState;
+        const isVertical = state.orientation === 'vertical';
+
+        let endPos = isVertical
+          ? (point.y / SCALE) + (state.length / 2)
+          : (point.x / SCALE) + (state.length / 2);
+        const rad = isVertical
+          ? Math.atan2(point.z, point.x)
+          : Math.atan2(point.y, point.z);
+        let endAngle = ((rad * 180) / Math.PI + 360) % 360;
+
+        const circumference = Math.PI * state.id;
+        const axialDelta = Math.abs(endPos - this.drawStartPos);
+        let angleDelta = Math.abs(endAngle - this.drawStartAngle);
+        if (angleDelta > 180) angleDelta = 360 - angleDelta;
+        const circumDelta = (angleDelta / 360) * circumference;
+
+        const centerPos = (this.drawStartPos + endPos) / 2;
+        const centerAngle = (this.drawStartAngle + endAngle) / 2;
+
+        const minSize = 20;
+        if (wasRuler) {
+          this.callbacks.onRulerCreated(this.drawStartPos, this.drawStartAngle, endPos, endAngle);
+        } else if (wasCoverage) {
+          const width = Math.max(axialDelta, minSize);
+          const height = Math.max(circumDelta, minSize);
+          this.callbacks.onCoverageRectCreated(centerPos, centerAngle, width, height);
+        } else if (this.drawMode === 'circle') {
+          const diameter = Math.max(axialDelta, circumDelta, minSize);
+          this.callbacks.onAnnotationCreated(this.drawMode, centerPos, centerAngle, diameter, diameter);
+        } else {
+          const width = Math.max(axialDelta, minSize);
+          const height = Math.max(circumDelta, minSize);
+          this.callbacks.onAnnotationCreated(this.drawMode!, centerPos, centerAngle, width, height);
+        }
+      }
+      return;
+    }
 
     this.isDown = false;
 
@@ -335,11 +677,12 @@ export class InteractionManager {
    * controls so they don't fight the drag, and set state flags.
    */
   private startDrag(
-    type: 'nozzle' | 'liftingLug' | 'saddle' | 'texture',
+    type: 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | 'annotation',
     nozzleIdx: number,
     saddleIdx: number,
     textureIdx: number,
     lugIdx: number = -1,
+    annotationIdx: number = -1,
   ): void {
     this.isDown = true;
     this.isDragging = true;
@@ -348,6 +691,7 @@ export class InteractionManager {
     this.selectedSaddleIdx = saddleIdx;
     this.selectedTextureIdx = textureIdx;
     this.selectedLugIdx = lugIdx;
+    this.selectedAnnotationIdx = annotationIdx;
 
     // Disable orbit controls during drag so panning doesn't interfere
     this.controls.enabled = false;

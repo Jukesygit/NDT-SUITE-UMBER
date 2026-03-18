@@ -37,7 +37,7 @@ import { SCALE } from './materials';
 export function createFlangedNozzle(
   nozzle: NozzleConfig,
   shellRadius: number,
-  material: THREE.MeshPhongMaterial,
+  material: THREE.Material,
 ): THREE.Group {
   const group = new THREE.Group();
 

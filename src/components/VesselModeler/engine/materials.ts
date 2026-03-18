@@ -4,6 +4,8 @@
 // Factory functions for creating Three.js materials used in the vessel scene.
 // Each factory returns a NEW material instance for proper lifecycle management
 // (creation, update, disposal).
+//
+// Uses MeshStandardMaterial (PBR) for physically-based roughness/metalness.
 // =============================================================================
 
 import * as THREE from 'three';
@@ -23,12 +25,13 @@ export const SCALE = 0.001;
  */
 export function createShellMaterial(
   preset: MaterialKey = 'cs',
-): THREE.MeshPhongMaterial {
+): THREE.MeshStandardMaterial {
   const p = MATERIAL_PRESETS[preset];
-  return new THREE.MeshPhongMaterial({
+  return new THREE.MeshStandardMaterial({
     color: p.color,
     emissive: p.emissive,
-    shininess: p.shininess,
+    roughness: p.roughness,
+    metalness: p.metalness,
     side: THREE.DoubleSide,
     transparent: true,
     opacity: 1.0,
@@ -45,12 +48,13 @@ export function createShellMaterial(
  */
 export function createNozzleMaterial(
   preset: MaterialKey = 'cs',
-): THREE.MeshPhongMaterial {
+): THREE.MeshStandardMaterial {
   const p = MATERIAL_PRESETS[preset];
-  return new THREE.MeshPhongMaterial({
+  return new THREE.MeshStandardMaterial({
     color: p.color,
     emissive: p.emissive,
-    shininess: p.shininess,
+    roughness: p.roughness,
+    metalness: p.metalness,
     side: THREE.FrontSide,
     transparent: true,
     opacity: 1.0,
@@ -64,11 +68,12 @@ export function createNozzleMaterial(
 /**
  * Create a bright highlight material used for the currently selected nozzle.
  */
-export function createHighlightMaterial(): THREE.MeshPhongMaterial {
-  return new THREE.MeshPhongMaterial({
+export function createHighlightMaterial(): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
     color: 0xffcc00,
     emissive: 0x553300,
-    shininess: 80,
+    roughness: 0.3,
+    metalness: 0.5,
     side: THREE.FrontSide,
     transparent: true,
     opacity: 1.0,
@@ -85,11 +90,12 @@ export function createHighlightMaterial(): THREE.MeshPhongMaterial {
  */
 export function createSaddleMaterial(
   color: number = 0x2244ff,
-): THREE.MeshPhongMaterial {
-  return new THREE.MeshPhongMaterial({
+): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
     color,
     emissive: 0x000033,
-    shininess: 40,
+    roughness: 0.5,
+    metalness: 0.4,
     side: THREE.FrontSide,
     transparent: true,
     opacity: 1.0,
@@ -99,11 +105,12 @@ export function createSaddleMaterial(
 /**
  * Create a highlight material for the currently selected saddle.
  */
-export function createSaddleHighlightMaterial(): THREE.MeshPhongMaterial {
-  return new THREE.MeshPhongMaterial({
+export function createSaddleHighlightMaterial(): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
     color: 0x44ccff,
     emissive: 0x003355,
-    shininess: 80,
+    roughness: 0.3,
+    metalness: 0.5,
     side: THREE.FrontSide,
     transparent: true,
     opacity: 1.0,
@@ -120,12 +127,13 @@ export function createSaddleHighlightMaterial(): THREE.MeshPhongMaterial {
  */
 export function createLugMaterial(
   preset: MaterialKey = 'cs',
-): THREE.MeshPhongMaterial {
+): THREE.MeshStandardMaterial {
   const p = MATERIAL_PRESETS[preset];
-  return new THREE.MeshPhongMaterial({
+  return new THREE.MeshStandardMaterial({
     color: p.color,
     emissive: p.emissive,
-    shininess: p.shininess,
+    roughness: p.roughness,
+    metalness: p.metalness,
     side: THREE.FrontSide,
     transparent: true,
     opacity: 1.0,
@@ -135,11 +143,47 @@ export function createLugMaterial(
 /**
  * Create a highlight material for the currently selected lifting lug.
  */
-export function createLugHighlightMaterial(): THREE.MeshPhongMaterial {
-  return new THREE.MeshPhongMaterial({
+export function createLugHighlightMaterial(): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
     color: 0xff8844,
     emissive: 0x553311,
-    shininess: 80,
+    roughness: 0.3,
+    metalness: 0.5,
+    side: THREE.FrontSide,
+    transparent: true,
+    opacity: 1.0,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Weld Materials
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a material for weld seams.
+ * Uses a darker, rougher finish to visually distinguish welds from the shell.
+ */
+export function createWeldMaterial(): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    color: 0x888888,
+    emissive: 0x111111,
+    roughness: 0.7,
+    metalness: 0.5,
+    side: THREE.FrontSide,
+    transparent: true,
+    opacity: 1.0,
+  });
+}
+
+/**
+ * Create a highlight material for the currently selected weld.
+ */
+export function createWeldHighlightMaterial(): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    color: 0x44ff88,
+    emissive: 0x115533,
+    roughness: 0.3,
+    metalness: 0.5,
     side: THREE.FrontSide,
     transparent: true,
     opacity: 1.0,
@@ -157,14 +201,15 @@ export function createLugHighlightMaterial(): THREE.MeshPhongMaterial {
  * Steel to Stainless Steel).
  */
 export function updateMaterialPreset(
-  material: THREE.MeshPhongMaterial,
+  material: THREE.MeshStandardMaterial,
   preset: MaterialKey,
   opacity?: number,
 ): void {
   const p = MATERIAL_PRESETS[preset];
   material.color.setHex(p.color);
   material.emissive.setHex(p.emissive);
-  material.shininess = p.shininess;
+  material.roughness = p.roughness;
+  material.metalness = p.metalness;
 
   if (opacity !== undefined) {
     material.opacity = opacity;

@@ -14,6 +14,7 @@ import { type VesselState, type TextureConfig } from '../types';
 import { SCALE } from './materials';
 import { createFlangedNozzle } from './nozzle-geometry';
 import { createLiftingLug } from './lifting-lug-geometry';
+import { createSaddleGroup, getSaddleBaseY } from './saddle-geometry';
 
 // ---------------------------------------------------------------------------
 // Result interface
@@ -23,7 +24,7 @@ export interface BuildSceneResult {
   vesselGroup: THREE.Group;
   nozzleMeshes: THREE.Object3D[];
   lugMeshes: THREE.Object3D[];
-  saddleMeshes: THREE.Mesh[];
+  saddleMeshes: THREE.Object3D[];
   textureMeshes: THREE.Mesh[];
 }
 
@@ -319,12 +320,12 @@ function createTexturePlane(
  */
 export function buildVesselScene(
   state: VesselState,
-  shellMaterial: THREE.MeshPhongMaterial,
-  nozzleMaterial: THREE.MeshPhongMaterial,
-  nozzleHighlightMaterial: THREE.MeshPhongMaterial,
-  lugMaterial: THREE.MeshPhongMaterial,
-  lugHighlightMaterial: THREE.MeshPhongMaterial,
-  saddleHighlightMaterial: THREE.MeshPhongMaterial,
+  shellMaterial: THREE.Material,
+  nozzleMaterial: THREE.Material,
+  nozzleHighlightMaterial: THREE.Material,
+  lugMaterial: THREE.Material,
+  lugHighlightMaterial: THREE.Material,
+  saddleHighlightMaterial: THREE.Material,
   textureObjects: Record<number, THREE.Texture>,
   selectedNozzleIndex: number,
   selectedLugIndex: number,
@@ -334,7 +335,7 @@ export function buildVesselScene(
   const vesselGroup = new THREE.Group();
   const nozzleMeshes: THREE.Object3D[] = [];
   const lugMeshes: THREE.Object3D[] = [];
-  const saddleMeshes: THREE.Mesh[] = [];
+  const saddleMeshes: THREE.Object3D[] = [];
   const textureMeshes: THREE.Mesh[] = [];
 
   // -- Return empty group with grid if no model data yet --------------------
@@ -625,28 +626,19 @@ export function buildVesselScene(
   // -- Saddles (only for horizontal vessels) --------------------------------
   if (!isVertical) {
     state.saddles.forEach((saddle, idx) => {
-      const pos = saddle.pos;
-      const color = saddle.color || '#2244ff';
-      const x = (pos - TAN_TAN / 2) * SCALE;
-      const geom = new THREE.BoxGeometry(
-        400 * SCALE,
-        RADIUS * SCALE,
-        RADIUS * 2.2 * SCALE,
+      const saddleGroup = createSaddleGroup(
+        saddle,
+        idx,
+        state,
+        idx === selectedSaddleIndex,
+        saddleHighlightMaterial,
       );
-      let mat: THREE.MeshPhongMaterial;
-      if (idx === selectedSaddleIndex) {
-        mat = saddleHighlightMaterial;
-      } else {
-        mat = new THREE.MeshPhongMaterial({
-          color: new THREE.Color(color),
-          shininess: 30,
-        });
-      }
-      const mesh = new THREE.Mesh(geom, mat);
-      mesh.position.set(x, -RADIUS * 1.2 * SCALE, 0);
-      mesh.userData = { type: 'saddle', saddleIdx: idx };
-      vesselGroup.add(mesh);
-      saddleMeshes.push(mesh);
+      // Tag all children for raycasting walk-up
+      saddleGroup.traverse((child) => {
+        child.userData = { ...child.userData, type: 'saddle', saddleIdx: idx };
+      });
+      vesselGroup.add(saddleGroup);
+      saddleMeshes.push(saddleGroup);
     });
   }
 
@@ -669,7 +661,7 @@ export function buildVesselScene(
   const grid = new THREE.GridHelper(gridSize, 30, 0x444444, 0x222222);
   grid.position.y = isVertical
     ? -(TAN_TAN / 2 + HEAD_DEPTH + RADIUS * 0.5) * SCALE
-    : -RADIUS * 1.5 * SCALE;
+    : getSaddleBaseY(state);
   vesselGroup.add(grid);
 
   return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes };

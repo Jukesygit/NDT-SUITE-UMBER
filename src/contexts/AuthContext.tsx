@@ -119,12 +119,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         initAuth();
 
-        // Subscribe to auth state changes
-        const unsubscribe = authManager.onAuthStateChange(() => {
+        // Subscribe to auth state changes (via custom events only, not a duplicate Supabase listener).
+        // auth-manager already has its own Supabase onAuthStateChange listener that updates
+        // currentUser/currentProfile. We listen for the events it dispatches instead.
+        const handleAuthChange = () => {
             if (mounted) {
                 loadAuthState();
             }
-        });
+        };
+        window.addEventListener('authStateChanged', handleAuthChange);
 
         // Listen for login events (dispatched AFTER profile is loaded in auth-manager)
         const handleLogin = () => {
@@ -194,7 +197,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         return () => {
             mounted = false;
-            if (unsubscribe) unsubscribe();
+            window.removeEventListener('authStateChanged', handleAuthChange);
             if (unsubscribeSessionManager) unsubscribeSessionManager();
             window.removeEventListener('userLoggedIn', handleLogin);
             window.removeEventListener('userLoggedOut', handleLogout);

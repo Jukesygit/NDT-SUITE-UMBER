@@ -99,12 +99,12 @@ function LayoutNew() {
     };
 
     checkAccess();
-    const unsubscribe = authManager.onAuthStateChange(checkAccess);
     window.addEventListener('userLoggedIn', checkAccess);
+    window.addEventListener('authStateChanged', checkAccess);
 
     return () => {
-      if (unsubscribe) unsubscribe();
       window.removeEventListener('userLoggedIn', checkAccess);
+      window.removeEventListener('authStateChanged', checkAccess);
     };
   }, []);
 

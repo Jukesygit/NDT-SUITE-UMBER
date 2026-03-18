@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 
 /**
  * SceneManager - Core Three.js lifecycle manager for the Vessel Modeler.
@@ -18,11 +19,14 @@ export class SceneManager {
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
   private renderer: THREE.WebGLRenderer;
+  private css2DRenderer: CSS2DRenderer;
   private controls: OrbitControls;
   private animationFrameId: number | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private resizeTimeout: ReturnType<typeof setTimeout> | null = null;
   private vesselGroup: THREE.Group | null = null;
+  private gridHelper: THREE.GridHelper | null = null;
+  private axesHelper: THREE.AxesHelper | null = null;
   private disposed = false;
 
   constructor(container: HTMLDivElement) {
@@ -47,6 +51,14 @@ export class SceneManager {
     this.renderer.setSize(width, height);
     this.renderer.setPixelRatio(window.devicePixelRatio);
 
+    // --- CSS2D Renderer (for annotation labels) ---
+    this.css2DRenderer = new CSS2DRenderer();
+    this.css2DRenderer.setSize(width, height);
+    this.css2DRenderer.domElement.style.position = 'absolute';
+    this.css2DRenderer.domElement.style.top = '0';
+    this.css2DRenderer.domElement.style.left = '0';
+    this.css2DRenderer.domElement.style.pointerEvents = 'none';
+
     // --- Controls ---
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
@@ -61,6 +73,7 @@ export class SceneManager {
   init(): void {
     // Append the canvas to the container (not document.body)
     this.container.appendChild(this.renderer.domElement);
+    this.container.appendChild(this.css2DRenderer.domElement);
 
     // --- Studio Lights ---
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -120,9 +133,12 @@ export class SceneManager {
     // Recursively dispose all objects in the scene
     this.disposeObject(this.scene);
 
-    // Remove the canvas from the container
+    // Remove the canvas and CSS2D overlay from the container
     if (this.renderer.domElement.parentNode === this.container) {
       this.container.removeChild(this.renderer.domElement);
+    }
+    if (this.css2DRenderer.domElement.parentNode === this.container) {
+      this.container.removeChild(this.css2DRenderer.domElement);
     }
 
     // Dispose the renderer (releases WebGL context)
@@ -149,12 +165,121 @@ export class SceneManager {
     return this.controls;
   }
 
+  getCSS2DRenderer(): CSS2DRenderer {
+    return this.css2DRenderer;
+  }
+
   getVesselGroup(): THREE.Group | null {
     return this.vesselGroup;
   }
 
   setVesselGroup(group: THREE.Group | null): void {
     this.vesselGroup = group;
+  }
+
+  /**
+   * Update the scene background color at runtime.
+   */
+  setBackgroundColor(hex: string): void {
+    this.scene.background = new THREE.Color(hex);
+  }
+
+  /**
+   * Show or hide a reference grid on the ground plane.
+   */
+  setGridVisible(visible: boolean): void {
+    if (visible && !this.gridHelper) {
+      this.gridHelper = new THREE.GridHelper(30, 30, 0x444444, 0x222222);
+      this.gridHelper.position.y = -0.01; // Slightly below origin to avoid z-fighting
+      this.scene.add(this.gridHelper);
+    } else if (!visible && this.gridHelper) {
+      this.scene.remove(this.gridHelper);
+      this.gridHelper.dispose();
+      this.gridHelper = null;
+    }
+  }
+
+  /**
+   * Update grid colors to contrast with the background.
+   */
+  updateGridColors(bgHex: string): void {
+    if (!this.gridHelper) return;
+    const bg = new THREE.Color(bgHex);
+    const luminance = bg.r * 0.299 + bg.g * 0.587 + bg.b * 0.114;
+    if (luminance > 0.5) {
+      // Light background → dark grid
+      (this.gridHelper.material as THREE.Material).opacity = 0.3;
+      (this.gridHelper.material as THREE.Material).transparent = true;
+      this.gridHelper.material = new THREE.LineBasicMaterial({ color: 0x999999, transparent: true, opacity: 0.4 });
+    } else {
+      // Dark background → light grid
+      this.gridHelper.material = new THREE.LineBasicMaterial({ color: 0x333333, transparent: true, opacity: 0.6 });
+    }
+  }
+
+  /**
+   * Show or hide XYZ axes helper.
+   */
+  setAxesVisible(visible: boolean): void {
+    if (visible && !this.axesHelper) {
+      this.axesHelper = new THREE.AxesHelper(5);
+      this.scene.add(this.axesHelper);
+    } else if (!visible && this.axesHelper) {
+      this.scene.remove(this.axesHelper);
+      this.axesHelper.dispose();
+      this.axesHelper = null;
+    }
+  }
+
+  /**
+   * Enable or disable an environment map for reflections.
+   * Uses a simple procedural gradient environment (no external HDRI).
+   */
+  setEnvironmentMap(enabled: boolean): void {
+    if (enabled) {
+      const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+      pmremGenerator.compileEquirectangularShader();
+
+      // Create a simple gradient environment scene
+      const envScene = new THREE.Scene();
+      const envGeo = new THREE.SphereGeometry(10, 32, 16);
+      const envMat = new THREE.ShaderMaterial({
+        side: THREE.BackSide,
+        uniforms: {
+          topColor: { value: new THREE.Color(0x88aacc) },
+          bottomColor: { value: new THREE.Color(0x222222) },
+        },
+        vertexShader: `
+          varying vec3 vWorldPosition;
+          void main() {
+            vec4 worldPos = modelMatrix * vec4(position, 1.0);
+            vWorldPosition = worldPos.xyz;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 topColor;
+          uniform vec3 bottomColor;
+          varying vec3 vWorldPosition;
+          void main() {
+            float h = normalize(vWorldPosition).y * 0.5 + 0.5;
+            gl_FragColor = vec4(mix(bottomColor, topColor, h), 1.0);
+          }
+        `,
+      });
+      envScene.add(new THREE.Mesh(envGeo, envMat));
+
+      const envMap = pmremGenerator.fromScene(envScene, 0.04).texture;
+      this.scene.environment = envMap;
+      pmremGenerator.dispose();
+      envGeo.dispose();
+      envMat.dispose();
+    } else {
+      if (this.scene.environment) {
+        this.scene.environment.dispose();
+        this.scene.environment = null;
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -190,6 +315,7 @@ export class SceneManager {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
+    this.css2DRenderer.setSize(width, height);
   }
 
   // ---------------------------------------------------------------------------
@@ -206,6 +332,7 @@ export class SceneManager {
     this.animationFrameId = requestAnimationFrame(() => this.animate());
     this.controls.update(); // Required for damping
     this.renderer.render(this.scene, this.camera);
+    this.css2DRenderer.render(this.scene, this.camera);
   }
 
   // ---------------------------------------------------------------------------

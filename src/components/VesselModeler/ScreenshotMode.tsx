@@ -261,11 +261,20 @@ export default function ScreenshotMode({
     const wrapper = canvasWrapperRef.current;
     if (!rendererEl || !wrapper) return;
 
-    // Save original parent so we can restore on unmount
+    // Save original parent and styles so we can restore on unmount
     originalParentRef.current = rendererEl.parentElement;
+    const origWidth = rendererEl.style.width;
+    const origHeight = rendererEl.style.height;
 
     // Reparent the live renderer canvas into our wrapper
     wrapper.insertBefore(rendererEl, wrapper.firstChild);
+
+    // Override Three.js inline styles so the renderer canvas scales to fit
+    // the wrapper identically to the annotation canvas (both use CSS 100%).
+    // Without this, the renderer canvas overflows at its native pixel size
+    // while the annotation canvas scales down, causing coordinate mismatch.
+    rendererEl.style.width = '100%';
+    rendererEl.style.height = '100%';
 
     // Size annotation canvas to match renderer
     const size = renderer.getSize(new THREE.Vector2());
@@ -277,6 +286,9 @@ export default function ScreenshotMode({
     }
 
     return () => {
+      // Restore renderer's original inline styles
+      rendererEl.style.width = origWidth;
+      rendererEl.style.height = origHeight;
       // Restore renderer to original parent
       if (originalParentRef.current) {
         originalParentRef.current.appendChild(rendererEl);

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, lazy, Suspense, type ChangeEvent } from 'react';
+import { useState, useRef, useCallback, useEffect, lazy, Suspense, type ChangeEvent } from 'react';
 import { Lock, Unlock, Save, Upload, RotateCcw, PanelLeftClose, PanelLeft, FileUp, Camera } from 'lucide-react';
 import ThreeViewport from './ThreeViewport';
 import type { ThreeViewportHandle } from './ThreeViewport';
@@ -11,15 +11,25 @@ import {
     type SaddleConfig,
     type TextureConfig,
     type LiftingLugConfig,
+    type AnnotationShapeConfig,
+    type AnnotationShapeType,
+    type CoverageRectConfig,
+    type RulerConfig,
+    type InspectionImageConfig,
+    type MeasurementConfig,
     type VesselCallbacks,
+    type WeldConfig,
 } from './types';
 import type { ExtractionResult } from './engine/drawing-parser';
 import { loadTextureFromData } from './engine/texture-manager';
 import './vessel-modeler.css';
 import * as THREE from 'three';
 
+import CoveragePanel from './CoveragePanel';
+
 const DrawingImportModal = lazy(() => import('./DrawingImportModal'));
 const ScreenshotMode = lazy(() => import('./ScreenshotMode'));
+const InspectionImageViewer = lazy(() => import('./InspectionImageViewer'));
 
 export default function VesselModeler() {
     // Core vessel state
@@ -30,6 +40,30 @@ export default function VesselModeler() {
     const [selectedSaddleIndex, setSelectedSaddleIndex] = useState(-1);
     const [selectedTextureId, setSelectedTextureId] = useState(-1);
     const [selectedLugIndex, setSelectedLugIndex] = useState(-1);
+    const [selectedAnnotationId, setSelectedAnnotationId] = useState(-1);
+    const [selectedRulerId, setSelectedRulerId] = useState(-1);
+    const [selectedWeldIndex, setSelectedWeldIndex] = useState(-1);
+
+    // Draw mode
+    const [drawMode, setDrawMode] = useState<AnnotationShapeType | null>(null);
+    const [previewAnnotation, setPreviewAnnotation] = useState<AnnotationShapeConfig | null>(null);
+    const nextAnnotationIdRef = useRef(1);
+
+    // Coverage state
+    const [selectedCoverageRectId, setSelectedCoverageRectId] = useState(-1);
+    const [coverageDrawMode, setCoverageDrawMode] = useState(false);
+    const [previewCoverageRect, setPreviewCoverageRect] = useState<CoverageRectConfig | null>(null);
+    const nextCoverageRectIdRef = useRef(1);
+
+    // Ruler state
+    const [rulerDrawMode, setRulerDrawMode] = useState(false);
+    const [previewRuler, setPreviewRuler] = useState<RulerConfig | null>(null);
+    const nextRulerIdRef = useRef(1);
+
+    // Inspection image state
+    const [selectedInspectionImageId, setSelectedInspectionImageId] = useState(-1);
+    const [viewingInspectionImageId, setViewingInspectionImageId] = useState(-1);
+    const nextInspectionImageIdRef = useRef(1);
 
     // UI state
     const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -43,6 +77,7 @@ export default function VesselModeler() {
     const [saddlesLocked, setSaddlesLocked] = useState(false);
     const [texturesLocked, setTexturesLocked] = useState(false);
     const [lugsLocked, setLugsLocked] = useState(false);
+    const [weldsLocked, setWeldsLocked] = useState(false);
 
     // Three.js texture objects (imperative, not React state)
     const textureObjectsRef = useRef<Record<number, THREE.Texture>>({});
@@ -128,6 +163,30 @@ export default function VesselModeler() {
         setSelectedLugIndex(-1);
     }, []);
 
+    // --- Weld handlers ---
+    const addWeld = useCallback((weld: WeldConfig) => {
+        setVesselState(prev => ({
+            ...prev,
+            welds: [...prev.welds, weld],
+            hasModel: true,
+        }));
+    }, []);
+
+    const updateWeld = useCallback((index: number, updates: Partial<WeldConfig>) => {
+        setVesselState(prev => ({
+            ...prev,
+            welds: prev.welds.map((w, i) => i === index ? { ...w, ...updates } : w),
+        }));
+    }, []);
+
+    const removeWeld = useCallback((index: number) => {
+        setVesselState(prev => ({
+            ...prev,
+            welds: prev.welds.filter((_, i) => i !== index),
+        }));
+        setSelectedWeldIndex(-1);
+    }, []);
+
     // --- Texture handlers ---
     const addTexture = useCallback((texture: TextureConfig, threeTexture: THREE.Texture) => {
         textureObjectsRef.current[Number(texture.id)] = threeTexture;
@@ -163,6 +222,158 @@ export default function VesselModeler() {
         return nextTextureIdRef.current++;
     }, []);
 
+    // --- Annotation handlers ---
+    const addAnnotation = useCallback((annotation: AnnotationShapeConfig) => {
+        setVesselState(prev => ({
+            ...prev,
+            annotations: [...prev.annotations, annotation],
+        }));
+    }, []);
+
+    const updateAnnotation = useCallback((id: number, updates: Partial<AnnotationShapeConfig>) => {
+        setVesselState(prev => ({
+            ...prev,
+            annotations: prev.annotations.map(a => a.id === id ? { ...a, ...updates } : a),
+        }));
+    }, []);
+
+    const removeAnnotation = useCallback((id: number) => {
+        setVesselState(prev => ({
+            ...prev,
+            annotations: prev.annotations.filter(a => a.id !== id),
+        }));
+        setSelectedAnnotationId(-1);
+    }, []);
+
+    const updateMeasurementConfig = useCallback((updates: Partial<MeasurementConfig>) => {
+        setVesselState(prev => ({
+            ...prev,
+            measurementConfig: { ...prev.measurementConfig, ...updates },
+        }));
+    }, []);
+
+    const getNextAnnotationId = useCallback(() => {
+        return nextAnnotationIdRef.current++;
+    }, []);
+
+    // --- Coverage rect handlers ---
+    const addCoverageRect = useCallback((rect: CoverageRectConfig) => {
+        setVesselState(prev => ({
+            ...prev,
+            coverageRects: [...prev.coverageRects, rect],
+        }));
+    }, []);
+
+    const updateCoverageRect = useCallback((id: number, updates: Partial<CoverageRectConfig>) => {
+        setVesselState(prev => ({
+            ...prev,
+            coverageRects: prev.coverageRects.map(r => r.id === id ? { ...r, ...updates } : r),
+        }));
+    }, []);
+
+    const removeCoverageRect = useCallback((id: number) => {
+        setVesselState(prev => ({
+            ...prev,
+            coverageRects: prev.coverageRects.filter(r => r.id !== id),
+        }));
+        setSelectedCoverageRectId(-1);
+    }, []);
+
+    const getNextCoverageRectId = useCallback(() => {
+        return nextCoverageRectIdRef.current++;
+    }, []);
+
+    // --- Ruler handlers ---
+    const addRuler = useCallback((ruler: RulerConfig) => {
+        setVesselState(prev => ({
+            ...prev,
+            rulers: [...prev.rulers, ruler],
+        }));
+    }, []);
+
+    const removeRuler = useCallback((id: number) => {
+        setVesselState(prev => ({
+            ...prev,
+            rulers: prev.rulers.filter(r => r.id !== id),
+        }));
+        setSelectedRulerId(prev => prev === id ? -1 : prev);
+    }, []);
+
+    const updateRuler = useCallback((id: number, updates: Partial<RulerConfig>) => {
+        setVesselState(prev => ({
+            ...prev,
+            rulers: prev.rulers.map(r => r.id === id ? { ...r, ...updates } : r),
+        }));
+    }, []);
+
+    const getNextRulerId = useCallback(() => {
+        return nextRulerIdRef.current++;
+    }, []);
+
+    // --- Inspection image handlers ---
+    const addInspectionImage = useCallback((img: InspectionImageConfig) => {
+        setVesselState(prev => ({
+            ...prev,
+            inspectionImages: [...prev.inspectionImages, img],
+        }));
+    }, []);
+
+    const updateInspectionImage = useCallback((id: number, updates: Partial<InspectionImageConfig>) => {
+        setVesselState(prev => ({
+            ...prev,
+            inspectionImages: prev.inspectionImages.map(i => i.id === id ? { ...i, ...updates } : i),
+        }));
+    }, []);
+
+    const removeInspectionImage = useCallback((id: number) => {
+        setVesselState(prev => ({
+            ...prev,
+            inspectionImages: prev.inspectionImages.filter(i => i.id !== id),
+        }));
+        setSelectedInspectionImageId(-1);
+        if (viewingInspectionImageId === id) setViewingInspectionImageId(-1);
+    }, [viewingInspectionImageId]);
+
+    const toggleInspectionImageVisible = useCallback((id: number) => {
+        setVesselState(prev => ({
+            ...prev,
+            inspectionImages: prev.inspectionImages.map(i =>
+                i.id === id ? { ...i, visible: i.visible === false ? true : false } : i,
+            ),
+        }));
+    }, []);
+
+    const toggleInspectionImageLocked = useCallback((id: number) => {
+        setVesselState(prev => ({
+            ...prev,
+            inspectionImages: prev.inspectionImages.map(i =>
+                i.id === id ? { ...i, locked: !i.locked } : i,
+            ),
+        }));
+    }, []);
+
+    const toggleAnnotationVisible = useCallback((id: number) => {
+        setVesselState(prev => ({
+            ...prev,
+            annotations: prev.annotations.map(a =>
+                a.id === id ? { ...a, visible: a.visible === false ? true : false } : a,
+            ),
+        }));
+    }, []);
+
+    const toggleAnnotationLocked = useCallback((id: number) => {
+        setVesselState(prev => ({
+            ...prev,
+            annotations: prev.annotations.map(a =>
+                a.id === id ? { ...a, locked: !a.locked } : a,
+            ),
+        }));
+    }, []);
+
+    const getNextInspectionImageId = useCallback(() => {
+        return nextInspectionImageIdRef.current++;
+    }, []);
+
     // --- Interaction callbacks (from Three.js viewport) ---
     const vesselCallbacks: VesselCallbacks = {
         onNozzleSelected: (idx) => {
@@ -170,30 +381,204 @@ export default function VesselModeler() {
             setSelectedSaddleIndex(-1);
             setSelectedTextureId(-1);
             setSelectedLugIndex(-1);
+            setSelectedAnnotationId(-1);
+            setSelectedInspectionImageId(-1);
+            setSelectedWeldIndex(-1);
         },
         onSaddleSelected: (idx) => {
             setSelectedNozzleIndex(-1);
             setSelectedSaddleIndex(idx);
             setSelectedTextureId(-1);
             setSelectedLugIndex(-1);
+            setSelectedAnnotationId(-1);
+            setSelectedInspectionImageId(-1);
+            setSelectedWeldIndex(-1);
         },
         onTextureSelected: (id) => {
             setSelectedNozzleIndex(-1);
             setSelectedSaddleIndex(-1);
             setSelectedTextureId(id);
             setSelectedLugIndex(-1);
+            setSelectedAnnotationId(-1);
+            setSelectedInspectionImageId(-1);
+            setSelectedWeldIndex(-1);
         },
         onLugSelected: (idx) => {
             setSelectedNozzleIndex(-1);
             setSelectedSaddleIndex(-1);
             setSelectedTextureId(-1);
             setSelectedLugIndex(idx);
+            setSelectedAnnotationId(-1);
+            setSelectedInspectionImageId(-1);
+            setSelectedWeldIndex(-1);
+        },
+        onAnnotationSelected: (id) => {
+            setSelectedNozzleIndex(-1);
+            setSelectedSaddleIndex(-1);
+            setSelectedTextureId(-1);
+            setSelectedLugIndex(-1);
+            setSelectedAnnotationId(id);
+            setSelectedInspectionImageId(-1);
+            setSelectedWeldIndex(-1);
+        },
+        onAnnotationMoved: (id, pos, angle) => {
+            updateAnnotation(id, { pos: Math.round(pos), angle: Math.round(angle) });
+        },
+        onAnnotationLabelOffsetChanged: (id, offset) => {
+            updateAnnotation(id, { labelOffset: offset });
+        },
+        onAnnotationCreated: (type, pos, angle, width, height) => {
+            const id = getNextAnnotationId();
+            const annNum = vesselState.annotations.length + 1;
+            addAnnotation({
+                id,
+                name: `A${annNum}`,
+                type,
+                pos: Math.round(pos),
+                angle: Math.round(angle),
+                width: Math.round(width),
+                height: Math.round(height),
+                color: '#ff3333',
+                lineWidth: 2,
+                showLabel: true,
+            });
+            setSelectedAnnotationId(id);
+            setPreviewAnnotation(null);
+            setDrawMode(null);
+        },
+        onAnnotationPreview: (type, pos, angle, width, height) => {
+            setPreviewAnnotation({
+                id: -1,
+                name: 'Preview',
+                type,
+                pos: Math.round(pos),
+                angle: Math.round(angle),
+                width: Math.round(width),
+                height: Math.round(height),
+                color: '#ff3333',
+                lineWidth: 2,
+                showLabel: false,
+            });
+        },
+        onRulerCreated: (startPos, startAngle, endPos, endAngle) => {
+            const id = getNextRulerId();
+            const num = vesselState.rulers.length + 1;
+            addRuler({
+                id,
+                name: `R${num}`,
+                startPos: Math.round(startPos),
+                startAngle: Math.round(startAngle),
+                endPos: Math.round(endPos),
+                endAngle: Math.round(endAngle),
+                color: '#ffaa00',
+                showLabel: true,
+            });
+            setPreviewRuler(null);
+            setRulerDrawMode(false);
+        },
+        onRulerPreview: (startPos, startAngle, endPos, endAngle) => {
+            setPreviewRuler({
+                id: -1,
+                name: 'Preview',
+                startPos: Math.round(startPos),
+                startAngle: Math.round(startAngle),
+                endPos: Math.round(endPos),
+                endAngle: Math.round(endAngle),
+                color: '#ffaa00',
+                showLabel: true,
+            });
+        },
+        onCoverageRectCreated: (pos, angle, width, height) => {
+            const id = getNextCoverageRectId();
+            const num = vesselState.coverageRects.length + 1;
+            addCoverageRect({
+                id,
+                name: `C${num}`,
+                pos: Math.round(pos),
+                angle: Math.round(angle),
+                width: Math.round(width),
+                height: Math.round(height),
+                color: '#00cc66',
+                lineWidth: 2,
+                filled: true,
+                fillOpacity: 0.2,
+            });
+            setSelectedCoverageRectId(id);
+            setPreviewCoverageRect(null);
+            setCoverageDrawMode(false);
+        },
+        onCoverageRectPreview: (pos, angle, width, height) => {
+            setPreviewCoverageRect({
+                id: -1,
+                name: 'Preview',
+                pos: Math.round(pos),
+                angle: Math.round(angle),
+                width: Math.round(width),
+                height: Math.round(height),
+                color: '#00cc66',
+                lineWidth: 2,
+                filled: false,
+                fillOpacity: 0.2,
+            });
+        },
+        onCoverageRectSelected: (id) => {
+            setSelectedNozzleIndex(-1);
+            setSelectedSaddleIndex(-1);
+            setSelectedTextureId(-1);
+            setSelectedLugIndex(-1);
+            setSelectedAnnotationId(-1);
+            setSelectedCoverageRectId(id);
+            setSelectedInspectionImageId(-1);
+            setSelectedWeldIndex(-1);
+        },
+        onCoverageRectMoved: (id, pos, angle) => {
+            updateCoverageRect(id, { pos: Math.round(pos), angle: Math.round(angle) });
+        },
+        onInspectionImageSelected: (id) => {
+            setSelectedNozzleIndex(-1);
+            setSelectedSaddleIndex(-1);
+            setSelectedTextureId(-1);
+            setSelectedLugIndex(-1);
+            setSelectedAnnotationId(-1);
+            setSelectedCoverageRectId(-1);
+            setSelectedInspectionImageId(id);
+            setSelectedWeldIndex(-1);
+        },
+        onInspectionImageMoved: (id, pos, angle) => {
+            updateInspectionImage(id, { pos: Math.round(pos), angle: Math.round(angle) });
+        },
+        onInspectionImageLabelOffsetChanged: (id, offset) => {
+            updateInspectionImage(id, { labelOffset: offset });
+        },
+        onWeldSelected: (idx) => {
+            setSelectedNozzleIndex(-1);
+            setSelectedSaddleIndex(-1);
+            setSelectedTextureId(-1);
+            setSelectedLugIndex(-1);
+            setSelectedAnnotationId(-1);
+            setSelectedCoverageRectId(-1);
+            setSelectedInspectionImageId(-1);
+            setSelectedWeldIndex(idx);
+        },
+        onWeldMoved: (idx, pos, angle) => {
+            const weld = vesselState.welds[idx];
+            if (weld?.type === 'circumferential') {
+                updateWeld(idx, { pos: Math.round(pos) });
+            } else {
+                // For longitudinal welds, move shifts the start pos while keeping length
+                const delta = Math.round(pos) - weld.pos;
+                updateWeld(idx, { pos: Math.round(pos), endPos: (weld.endPos ?? vesselState.length) + delta, angle: Math.round(angle) });
+            }
         },
         onDeselect: () => {
             setSelectedNozzleIndex(-1);
             setSelectedSaddleIndex(-1);
             setSelectedTextureId(-1);
             setSelectedLugIndex(-1);
+            setSelectedAnnotationId(-1);
+            setSelectedCoverageRectId(-1);
+            setSelectedInspectionImageId(-1);
+            setSelectedWeldIndex(-1);
         },
         onNozzleMoved: (idx, pos, angle) => {
             updateNozzle(idx, { pos: Math.round(pos), angle: Math.round(angle) });
@@ -234,6 +619,10 @@ export default function VesselModeler() {
             saddles: vesselState.saddles.map(s => ({
                 pos: s.pos, color: s.color || '#2244ff',
             })),
+            welds: vesselState.welds.map(w => ({
+                name: w.name, type: w.type, pos: w.pos,
+                endPos: w.endPos, angle: w.angle, color: w.color,
+            })),
             textures: vesselState.textures.map(t => ({
                 id: t.id, name: t.name, imageData: t.imageData,
                 pos: t.pos, angle: t.angle,
@@ -241,6 +630,32 @@ export default function VesselModeler() {
                 rotation: t.rotation || 0,
                 flipH: t.flipH || false, flipV: t.flipV || false,
             })),
+            annotations: vesselState.annotations.map(a => ({
+                id: a.id, name: a.name, type: a.type,
+                pos: a.pos, angle: a.angle, width: a.width, height: a.height,
+                color: a.color, lineWidth: a.lineWidth, showLabel: a.showLabel,
+                leaderLength: a.leaderLength, labelOffset: a.labelOffset, visible: a.visible, locked: a.locked,
+            })),
+            rulers: vesselState.rulers.map(r => ({
+                id: r.id, name: r.name,
+                startPos: r.startPos, startAngle: r.startAngle,
+                endPos: r.endPos, endAngle: r.endAngle,
+                color: r.color, showLabel: r.showLabel,
+            })),
+            coverageRects: vesselState.coverageRects.map(r => ({
+                id: r.id, name: r.name,
+                pos: r.pos, angle: r.angle, width: r.width, height: r.height,
+                color: r.color, lineWidth: r.lineWidth,
+                filled: r.filled, fillOpacity: r.fillOpacity, locked: r.locked,
+            })),
+            inspectionImages: vesselState.inspectionImages.map(i => ({
+                id: i.id, name: i.name, imageData: i.imageData,
+                pos: i.pos, angle: i.angle,
+                description: i.description, date: i.date,
+                inspector: i.inspector, method: i.method, result: i.result,
+                leaderLength: i.leaderLength, labelOffset: i.labelOffset, visible: i.visible, locked: i.locked,
+            })),
+            measurementConfig: { ...vesselState.measurementConfig },
             visuals: { ...vesselState.visuals },
         };
 
@@ -318,7 +733,44 @@ export default function VesselModeler() {
                     saddles: (projectData.saddles || []).map((s: any) =>
                         typeof s === 'number' ? { pos: s, color: '#2244ff' } : { pos: s.pos, color: s.color || '#2244ff' }
                     ),
+                    welds: (projectData.welds || []).map((w: any) => ({
+                        name: w.name || 'W', type: w.type || 'circumferential',
+                        pos: w.pos ?? 0, endPos: w.endPos, angle: w.angle,
+                        color: w.color || '#888888',
+                    })),
                     textures: loadedTextures,
+                    annotations: (projectData.annotations || []).map((a: any) => ({
+                        id: a.id || 0, name: a.name || 'A', type: a.type || 'circle',
+                        pos: a.pos ?? 0, angle: a.angle ?? 90,
+                        width: a.width ?? 100, height: a.height ?? 100,
+                        color: a.color || '#ff3333', lineWidth: a.lineWidth ?? 2,
+                        showLabel: a.showLabel !== false,
+                        leaderLength: a.leaderLength, labelOffset: a.labelOffset, visible: a.visible, locked: a.locked,
+                    })),
+                    rulers: (projectData.rulers || []).map((r: any) => ({
+                        id: r.id || 0, name: r.name || 'R',
+                        startPos: r.startPos ?? 0, startAngle: r.startAngle ?? 90,
+                        endPos: r.endPos ?? 100, endAngle: r.endAngle ?? 90,
+                        color: r.color || '#ffaa00', showLabel: r.showLabel !== false,
+                    })),
+                    coverageRects: (projectData.coverageRects || []).map((r: any) => ({
+                        id: r.id || 0, name: r.name || 'C',
+                        pos: r.pos ?? 0, angle: r.angle ?? 90,
+                        width: r.width ?? 300, height: r.height ?? 200,
+                        color: r.color || '#00cc66', lineWidth: r.lineWidth ?? 2,
+                        filled: r.filled ?? true, fillOpacity: r.fillOpacity ?? 0.2, locked: r.locked,
+                    })),
+                    inspectionImages: (projectData.inspectionImages || []).map((i: any) => ({
+                        id: i.id || 0, name: i.name || 'IMG', imageData: i.imageData || '',
+                        pos: i.pos ?? 0, angle: i.angle ?? 90,
+                        description: i.description, date: i.date,
+                        inspector: i.inspector, method: i.method, result: i.result,
+                        leaderLength: i.leaderLength, labelOffset: i.labelOffset, visible: i.visible, locked: i.locked,
+                    })),
+                    measurementConfig: {
+                        ...DEFAULT_VESSEL_STATE.measurementConfig,
+                        ...(projectData.measurementConfig || {}),
+                    },
                     hasModel: true,
                     visuals: { ...DEFAULT_VESSEL_STATE.visuals, ...(projectData.visuals || {}) },
                 };
@@ -327,12 +779,32 @@ export default function VesselModeler() {
                 const maxId = loadedTextures.reduce((max: number, t: TextureConfig) => Math.max(max, Number(t.id) || 0), 0);
                 nextTextureIdRef.current = maxId + 1;
 
+                // Update next annotation ID to avoid conflicts
+                const maxAnnId = newState.annotations.reduce((max: number, a: AnnotationShapeConfig) => Math.max(max, a.id || 0), 0);
+                nextAnnotationIdRef.current = maxAnnId + 1;
+
+                // Update next coverage rect ID to avoid conflicts
+                const maxCovId = newState.coverageRects.reduce((max: number, r: CoverageRectConfig) => Math.max(max, r.id || 0), 0);
+                nextCoverageRectIdRef.current = maxCovId + 1;
+
+                // Update next ruler ID to avoid conflicts
+                const maxRulerId = newState.rulers.reduce((max: number, r: RulerConfig) => Math.max(max, r.id || 0), 0);
+                nextRulerIdRef.current = maxRulerId + 1;
+
+                // Update next inspection image ID to avoid conflicts
+                const maxImgId = newState.inspectionImages.reduce((max: number, i: InspectionImageConfig) => Math.max(max, i.id || 0), 0);
+                nextInspectionImageIdRef.current = maxImgId + 1;
+
                 setVesselState(newState);
                 setTextureObjectsVersion(v => v + 1);
                 setSelectedNozzleIndex(-1);
                 setSelectedSaddleIndex(-1);
                 setSelectedTextureId(-1);
                 setSelectedLugIndex(-1);
+                setSelectedAnnotationId(-1);
+                setSelectedCoverageRectId(-1);
+                setSelectedInspectionImageId(-1);
+                setSelectedWeldIndex(-1);
             } catch (error: any) {
                 alert('Error loading project: ' + error.message);
             }
@@ -367,6 +839,28 @@ export default function VesselModeler() {
         setSelectedTextureId(-1);
         setSelectedLugIndex(-1);
     }, []);
+
+    // --- Escape key cancels draw mode ---
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                if (drawMode) {
+                    setDrawMode(null);
+                    setPreviewAnnotation(null);
+                }
+                if (coverageDrawMode) {
+                    setCoverageDrawMode(false);
+                    setPreviewCoverageRect(null);
+                }
+                if (rulerDrawMode) {
+                    setRulerDrawMode(false);
+                    setPreviewRuler(null);
+                }
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [drawMode, coverageDrawMode, rulerDrawMode]);
 
     // --- Nozzle library drag-and-drop onto 3D canvas ---
     const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -546,13 +1040,22 @@ export default function VesselModeler() {
 
     // --- Hint text ---
     const getHintText = () => {
+        if (rulerDrawMode) {
+            return 'Drawing Ruler - Click on vessel to set start point, drag to end point | Press Esc to cancel';
+        }
+        if (coverageDrawMode) {
+            return 'Drawing Coverage Rectangle - Click on vessel to start, drag to size | Press Esc to cancel';
+        }
+        if (drawMode) {
+            return `Drawing ${drawMode === 'circle' ? 'Circle' : 'Rectangle'} - Click on vessel to start, drag to size | Press Esc to cancel`;
+        }
         const locked = [];
         if (nozzlesLocked) locked.push('Nozzles');
         if (lugsLocked) locked.push('Lugs');
         if (saddlesLocked) locked.push('Saddles');
         if (texturesLocked) locked.push('Textures');
+        if (weldsLocked) locked.push('Welds');
 
-        if (locked.length === 4) return 'All Components Locked - Camera Only Mode';
         if (locked.length > 0) return `${locked.join(', ')} Locked | Other components can be repositioned`;
         return 'Drag from Library to Add | Click & Drag Nozzles, Supports, or Textures to Reposition';
     };
@@ -561,7 +1064,7 @@ export default function VesselModeler() {
         <div className="h-full w-full flex flex-col overflow-hidden" style={{ background: '#111111' }}>
             {/* Main content area */}
             <div
-                className="flex-1 relative overflow-hidden"
+                className={`flex-1 relative overflow-hidden ${drawMode || coverageDrawMode || rulerDrawMode ? 'vm-draw-mode-active' : ''}`}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
             >
@@ -573,12 +1076,24 @@ export default function VesselModeler() {
                     selectedLugIndex={selectedLugIndex}
                     selectedSaddleIndex={selectedSaddleIndex}
                     selectedTextureId={selectedTextureId}
+                    selectedAnnotationId={selectedAnnotationId}
                     textureObjects={textureObjectsRef.current}
                     callbacks={vesselCallbacks}
                     nozzlesLocked={nozzlesLocked}
                     saddlesLocked={saddlesLocked}
                     texturesLocked={texturesLocked}
                     lugsLocked={lugsLocked}
+
+                    weldsLocked={weldsLocked}
+                    selectedWeldIndex={selectedWeldIndex}
+                    selectedInspectionImageId={selectedInspectionImageId}
+                    onInspectionImageThumbnailClick={(id) => setViewingInspectionImageId(id)}
+                    drawMode={drawMode}
+                    coverageDrawMode={coverageDrawMode}
+                    previewAnnotation={previewAnnotation}
+                    previewCoverageRect={previewCoverageRect}
+                    rulerDrawMode={rulerDrawMode}
+                    previewRuler={previewRuler}
                 />
 
                 {/* Sidebar (z-20) */}
@@ -602,12 +1117,51 @@ export default function VesselModeler() {
                         onUpdateSaddle={updateSaddle}
                         onRemoveSaddle={removeSaddle}
                         onSelectSaddle={setSelectedSaddleIndex}
+                        selectedWeldIndex={selectedWeldIndex}
+                        onAddWeld={addWeld}
+                        onUpdateWeld={updateWeld}
+                        onRemoveWeld={removeWeld}
+                        onSelectWeld={setSelectedWeldIndex}
                         onAddTexture={addTexture}
                         onUpdateTexture={updateTexture}
                         onRemoveTexture={removeTexture}
                         onSelectTexture={setSelectedTextureId}
                         getNextTextureId={getNextTextureId}
                         renderer={viewportRef.current?.getRenderer() ?? null}
+                        selectedAnnotationId={selectedAnnotationId}
+                        drawMode={drawMode}
+                        onSetDrawMode={(mode) => { setDrawMode(mode); if (mode) { setCoverageDrawMode(false); setRulerDrawMode(false); } }}
+                        onAddAnnotation={addAnnotation}
+                        onUpdateAnnotation={updateAnnotation}
+                        onRemoveAnnotation={removeAnnotation}
+                        onSelectAnnotation={setSelectedAnnotationId}
+                        onUpdateMeasurementConfig={updateMeasurementConfig}
+                        getNextAnnotationId={getNextAnnotationId}
+                        coverageDrawMode={coverageDrawMode}
+                        onSetCoverageDrawMode={(active) => { setCoverageDrawMode(active); if (active) { setDrawMode(null); setRulerDrawMode(false); } }}
+                        onAddCoverageRect={addCoverageRect}
+                        onUpdateCoverageRect={updateCoverageRect}
+                        onRemoveCoverageRect={removeCoverageRect}
+                        onSelectCoverageRect={setSelectedCoverageRectId}
+                        selectedCoverageRectId={selectedCoverageRectId}
+                        getNextCoverageRectId={getNextCoverageRectId}
+                        rulerDrawMode={rulerDrawMode}
+                        onSetRulerDrawMode={(active) => { setRulerDrawMode(active); if (active) { setDrawMode(null); setCoverageDrawMode(false); } }}
+                        onRemoveRuler={removeRuler}
+                        onUpdateRuler={updateRuler}
+                        selectedRulerId={selectedRulerId}
+                        onSelectRuler={setSelectedRulerId}
+                        selectedInspectionImageId={selectedInspectionImageId}
+                        onAddInspectionImage={addInspectionImage}
+                        onUpdateInspectionImage={updateInspectionImage}
+                        onRemoveInspectionImage={removeInspectionImage}
+                        onSelectInspectionImage={setSelectedInspectionImageId}
+                        onToggleInspectionImageVisible={toggleInspectionImageVisible}
+                        onToggleInspectionImageLocked={toggleInspectionImageLocked}
+                        onToggleAnnotationVisible={toggleAnnotationVisible}
+                        onToggleAnnotationLocked={toggleAnnotationLocked}
+                        onViewInspectionImage={(id) => setViewingInspectionImageId(id)}
+                        getNextInspectionImageId={getNextInspectionImageId}
                     />
                 </div>
 
@@ -655,12 +1209,20 @@ export default function VesselModeler() {
                         {lugsLocked ? <Lock size={12} /> : <Unlock size={12} />}
                         L
                     </button>
+                    <button
+                        className={`vm-lock-btn ${weldsLocked ? 'locked' : ''}`}
+                        onClick={() => setWeldsLocked(l => !l)}
+                        title={weldsLocked ? 'Unlock welds' : 'Lock welds'}
+                    >
+                        {weldsLocked ? <Lock size={12} /> : <Unlock size={12} />}
+                        W
+                    </button>
                 </div>
 
                 {/* Quick action buttons */}
                 <div className="vm-quick-actions">
-                    <button className="vm-quick-btn" onClick={() => setShowDrawingImport(true)} title="Import from Drawing">
-                        <FileUp size={16} /> Import
+                    <button className="vm-quick-btn" onClick={() => setShowDrawingImport(true)} title="Import General Arrangement Drawing">
+                        <FileUp size={16} /> Import GA
                     </button>
                     <button className="vm-quick-btn" onClick={() => setShowScreenshotMode(true)} title="Screenshot Mode">
                         <Camera size={16} /> Screenshot
@@ -676,6 +1238,9 @@ export default function VesselModeler() {
                         <input type="file" accept=".json" onChange={loadProject} style={{ display: 'none' }} />
                     </label>
                 </div>
+
+                {/* Coverage overlay */}
+                <CoveragePanel vesselState={vesselState} sidebarOpen={sidebarOpen} />
 
                 {/* Interaction hint */}
                 <div className="vm-hint">
@@ -723,6 +1288,21 @@ export default function VesselModeler() {
                     />
                 </Suspense>
             )}
+
+            {/* Inspection Image Viewer Modal */}
+            {viewingInspectionImageId >= 0 && (() => {
+                const viewImg = vesselState.inspectionImages.find(i => i.id === viewingInspectionImageId);
+                if (!viewImg) return null;
+                return (
+                    <Suspense fallback={null}>
+                        <InspectionImageViewer
+                            image={viewImg}
+                            onClose={() => setViewingInspectionImageId(-1)}
+                            onUpdate={updateInspectionImage}
+                        />
+                    </Suspense>
+                );
+            })()}
         </div>
     );
 }

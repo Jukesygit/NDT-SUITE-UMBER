@@ -66,6 +66,7 @@ class AuthManager {
     constructor() {
         this.currentUser = null;
         this.currentProfile = null;
+        this._authSubscription = null; // Track Supabase auth listener to prevent duplicates
         this.useSupabase = isSupabaseConfigured();
 
         // Fallback local data for when Supabase is not configured
@@ -114,8 +115,14 @@ class AuthManager {
             // Allow app to continue - user will be prompted to login
         }
 
+        // Prevent duplicate listener registration (e.g., during HMR)
+        if (this._authSubscription) {
+            this._authSubscription.unsubscribe();
+            this._authSubscription = null;
+        }
+
         // Listen for auth state changes
-        supabase.auth.onAuthStateChange(async (event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (event === 'PASSWORD_RECOVERY') {
                 // User clicked password reset link
                 // Don't show modal here - LoginPageNew handles this via React state
@@ -134,16 +141,29 @@ class AuthManager {
                 // User data updated (e.g., password changed)
                 if (session?.user) {
                     await this.loadUserProfile(session.user.id);
+                    window.dispatchEvent(new CustomEvent('authStateChanged'));
                 }
             } else if (event === 'SIGNED_OUT') {
-                // User signed out
+                // Guard: verify session is truly gone before clearing state.
+                // Supabase can emit transient SIGNED_OUT during token refresh.
+                try {
+                    const { data: { session: currentSession } } = await supabase.auth.getSession();
+                    if (currentSession?.user) {
+                        // Session still valid — this was a transient event, ignore it
+                        return;
+                    }
+                } catch {
+                    // If getSession fails, treat as truly signed out
+                }
                 this.currentUser = null;
                 this.currentProfile = null;
             } else if (session?.user && !this.currentUser) {
                 // Catch-all: if we have a session but no current user, load profile
                 await this.loadUserProfile(session.user.id);
+                window.dispatchEvent(new CustomEvent('authStateChanged'));
             }
         });
+        this._authSubscription = subscription;
     }
 
     async initializeLocal() {
