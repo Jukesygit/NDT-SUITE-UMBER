@@ -6,7 +6,8 @@ import {
   ChevronRight,
   Layers,
   Grid3x3,
-  Loader2
+  Loader2,
+  CloudUpload
 } from 'lucide-react';
 import CanvasViewport from './CanvasViewport';
 import FilePanel from './FilePanel';
@@ -23,6 +24,10 @@ import {
   getCscanWorkerManager,
   type ProcessingProgress
 } from './utils/workerManager';
+import { useSaveScanComposite } from '../../hooks/mutations/useScanCompositeMutations';
+import { useAuth } from '../../contexts/AuthContext';
+// @ts-ignore - JS module without type declarations
+import { isSupabaseConfigured } from '../../supabase-client.js';
 
 const CscanVisualizer: React.FC = () => {
   // Refs
@@ -44,6 +49,10 @@ const CscanVisualizer: React.FC = () => {
   const [pendingScans, setPendingScans] = useState<CscanData[]>([]);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Save to cloud state
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [saveName, setSaveName] = useState('');
+
   // Export progress state
   const [exportProgress, setExportProgress] = useState<{ progress: number; message: string } | null>(null);
 
@@ -59,6 +68,10 @@ const CscanVisualizer: React.FC = () => {
     smoothing: 'best',
     range: { min: null, max: null }
   });
+
+  // Cloud save hooks
+  const saveComposite = useSaveScanComposite();
+  const { user } = useAuth();
 
   // Helper to add scans to state
   const addScansToState = useCallback((scans: CscanData[]) => {
@@ -279,6 +292,32 @@ const CscanVisualizer: React.FC = () => {
     };
   }, []);
 
+  // Save to cloud handler
+  const handleSaveToCloud = useCallback(async () => {
+    if (!scanData || !user) return;
+    try {
+      await saveComposite.mutateAsync({
+        name: saveName || scanData.filename || 'Untitled Composite',
+        organizationId: user.organizationId || '',
+        userId: user.id,
+        thicknessData: scanData.data,
+        xAxis: scanData.xAxis,
+        yAxis: scanData.yAxis,
+        stats: scanData.stats || null,
+        width: scanData.width,
+        height: scanData.height,
+        sourceFiles: scanData.sourceRegions || null,
+      });
+      setShowSaveDialog(false);
+      setSaveName('');
+      setStatusMessage({ type: 'success', message: 'Composite saved to cloud' });
+      setTimeout(() => setStatusMessage(null), 3000);
+    } catch {
+      setStatusMessage({ type: 'error', message: 'Failed to save composite' });
+      setTimeout(() => setStatusMessage(null), 5000);
+    }
+  }, [scanData, user, saveName, saveComposite]);
+
   // Export handlers
   const handleExportImage = useCallback(async () => {
     if (!scanData || !canvasRef.current) return;
@@ -484,6 +523,20 @@ const CscanVisualizer: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* Save to Cloud button */}
+          {scanData && isSupabaseConfigured() && (
+            <button
+              onClick={() => {
+                setSaveName(scanData.filename || 'Composite');
+                setShowSaveDialog(true);
+              }}
+              className="p-2 hover:bg-gray-700 rounded transition-colors"
+              title="Save to Cloud"
+            >
+              <CloudUpload className="w-4 h-4 text-gray-400" />
+            </button>
+          )}
         </div>
 
       </div>
@@ -609,6 +662,52 @@ const CscanVisualizer: React.FC = () => {
         scans={pendingScans}
         onRepairComplete={handleRepairComplete}
       />
+
+      {/* Save to Cloud Dialog */}
+      {showSaveDialog && (
+        <div
+          className="fixed inset-0 flex items-center justify-center z-50"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)' }}
+          onClick={() => setShowSaveDialog(false)}
+        >
+          <div
+            className="rounded-lg p-6 shadow-xl min-w-[360px]"
+            style={{ backgroundColor: '#1f2937', border: '1px solid #374151' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-white font-medium mb-4">Save Composite to Cloud</h3>
+            <label className="block text-sm text-gray-400 mb-1">Name</label>
+            <input
+              type="text"
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              placeholder="Composite name"
+              className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500 mb-4"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSaveToCloud();
+                if (e.key === 'Escape') setShowSaveDialog(false);
+              }}
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowSaveDialog(false)}
+                className="px-4 py-2 text-sm rounded bg-gray-600 text-gray-300 hover:bg-gray-500 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveToCloud}
+                disabled={saveComposite.isPending}
+                className="px-4 py-2 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {saveComposite.isPending && <Loader2 className="w-3 h-3 animate-spin" />}
+                {saveComposite.isPending ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
