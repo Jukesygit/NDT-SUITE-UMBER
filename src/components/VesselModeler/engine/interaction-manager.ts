@@ -51,6 +51,7 @@ export interface InteractionCallbacks {
   onInspectionImageMoved: (id: number, pos: number, angle: number) => void;
   onWeldSelected: (index: number) => void;
   onWeldMoved: (index: number, pos: number, angle: number) => void;
+  onScanCompositeHover: (id: string, thickness: number | null, scanMm: number, indexMm: number) => void;
   onDragEnd: () => void;
   onNeedRebuild: () => void;
 }
@@ -460,7 +461,39 @@ export class InteractionManager {
       return;
     }
 
-    if (!this.isDown || !this.isDragging || this.dragType === null) return;
+    if (!this.isDown || !this.isDragging || this.dragType === null) {
+      // --- Scan composite hover (only when not dragging) ---
+      if (this.scanCompositeMeshes.length > 0) {
+        const rect = this.canvas.getBoundingClientRect();
+        this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+
+        const hits = this.raycaster.intersectObjects(this.scanCompositeMeshes, false);
+        if (hits.length > 0) {
+          const hit = hits[0];
+          const uv = hit.uv;
+          const userData = hit.object.userData;
+
+          if (uv && userData.type === 'scanComposite' && userData.data) {
+            const col = Math.min(Math.floor(uv.x * userData.width), userData.width - 1);
+            const row = Math.min(Math.floor((1 - uv.y) * userData.height), userData.height - 1);
+            const thickness = userData.data[row]?.[col] ?? null;
+
+            this.callbacks.onScanCompositeHover(
+              userData.id,
+              thickness,
+              userData.xAxis[col] ?? 0,
+              userData.yAxis[row] ?? 0,
+            );
+          }
+        } else {
+          // Clear hover when not over any composite
+          this.callbacks.onScanCompositeHover('', null, 0, 0);
+        }
+      }
+      return;
+    }
 
     // Update NDC from pointer position (use canvas rect for consistency)
     const rect = this.canvas.getBoundingClientRect();

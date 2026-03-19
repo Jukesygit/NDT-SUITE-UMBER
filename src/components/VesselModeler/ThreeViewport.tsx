@@ -140,6 +140,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
                 onInspectionImageMoved: (id, pos, angle) => callbacksRef.current.onInspectionImageMoved?.(id, pos, angle),
                 onWeldSelected: (idx) => callbacksRef.current.onWeldSelected?.(idx),
                 onWeldMoved: (idx, pos, angle) => callbacksRef.current.onWeldMoved?.(idx, pos, angle),
+                onScanCompositeHover: (id, thickness, scanMm, indexMm) => callbacksRef.current.onScanCompositeHover?.(id, thickness, scanMm, indexMm),
                 onDragEnd: () => callbacksRef.current.onDragEnd?.(),
                 onNeedRebuild: () => {
                     // Trigger rebuild by calling rebuild directly
