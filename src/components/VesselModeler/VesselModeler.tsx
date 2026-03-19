@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, lazy, Suspense, type ChangeEvent } from 'react';
-import { Lock, Unlock, Save, Upload, RotateCcw, PanelLeftClose, PanelLeft, FileUp, Camera } from 'lucide-react';
+import { Lock, Unlock, Save, Upload, RotateCcw, PanelLeftClose, PanelLeft, FileUp, Camera, ChevronDown, Trash2, Cloud } from 'lucide-react';
 import ThreeViewport from './ThreeViewport';
 import type { ThreeViewportHandle } from './ThreeViewport';
 import SidebarPanel from './SidebarPanel';
@@ -19,9 +19,12 @@ import {
     type MeasurementConfig,
     type VesselCallbacks,
     type WeldConfig,
+    type ScanCompositeConfig,
 } from './types';
 import type { ExtractionResult } from './engine/drawing-parser';
-import { loadTextureFromData } from './engine/texture-manager';
+import { loadTextureFromData, clearHeatmapCache } from './engine/texture-manager';
+import { useScanCompositeList } from '../../hooks/queries/useScanComposites';
+import { getScanComposite } from '../../services/scan-composite-service';
 import './vessel-modeler.css';
 import * as THREE from 'three';
 
@@ -64,6 +67,20 @@ export default function VesselModeler() {
     const [selectedInspectionImageId, setSelectedInspectionImageId] = useState(-1);
     const [viewingInspectionImageId, setViewingInspectionImageId] = useState(-1);
     const nextInspectionImageIdRef = useRef(1);
+
+    // Scan composite state
+    const [selectedScanCompositeId, setSelectedScanCompositeId] = useState('');
+    const [showImportComposite, setShowImportComposite] = useState(false);
+    const [importPlacement, setImportPlacement] = useState({
+        indexStartMm: 0,
+        scanDirection: 'cw' as 'cw' | 'ccw',
+        indexDirection: 'forward' as 'forward' | 'reverse',
+    });
+    const [importingCompositeId, setImportingCompositeId] = useState<string | null>(null);
+    const [scanCompositesOpen, setScanCompositesOpen] = useState(true);
+
+    // Cloud composites query
+    const { data: cloudComposites } = useScanCompositeList();
 
     // UI state
     const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -372,6 +389,58 @@ export default function VesselModeler() {
 
     const getNextInspectionImageId = useCallback(() => {
         return nextInspectionImageIdRef.current++;
+    }, []);
+
+    // --- Scan composite handlers ---
+    const handleImportComposite = useCallback(async () => {
+        if (!importingCompositeId) return;
+        try {
+            const composite = await getScanComposite(importingCompositeId);
+            const newConfig: ScanCompositeConfig = {
+                id: `sc_${Date.now()}`,
+                name: composite.name,
+                cloudId: composite.id,
+                data: composite.thickness_data,
+                xAxis: composite.x_axis,
+                yAxis: composite.y_axis,
+                stats: composite.stats || { min: 0, max: 0, mean: 0, median: 0, stdDev: 0 },
+                indexStartMm: importPlacement.indexStartMm,
+                scanDirection: importPlacement.scanDirection,
+                indexDirection: importPlacement.indexDirection,
+                colorScale: 'Jet',
+                rangeMin: null,
+                rangeMax: null,
+                opacity: 1,
+            };
+            setVesselState(prev => ({
+                ...prev,
+                scanComposites: [...prev.scanComposites, newConfig],
+            }));
+            setShowImportComposite(false);
+            setImportingCompositeId(null);
+            setImportPlacement({ indexStartMm: 0, scanDirection: 'cw', indexDirection: 'forward' });
+        } catch (err) {
+            console.error('Failed to import composite:', err);
+        }
+    }, [importingCompositeId, importPlacement]);
+
+    const handleRemoveScanComposite = useCallback((id: string) => {
+        clearHeatmapCache(id);
+        setVesselState(prev => ({
+            ...prev,
+            scanComposites: prev.scanComposites.filter(sc => sc.id !== id),
+        }));
+        if (selectedScanCompositeId === id) setSelectedScanCompositeId('');
+    }, [selectedScanCompositeId]);
+
+    const handleUpdateScanComposite = useCallback((id: string, updates: Partial<ScanCompositeConfig>) => {
+        clearHeatmapCache(id);
+        setVesselState(prev => ({
+            ...prev,
+            scanComposites: prev.scanComposites.map(sc =>
+                sc.id === id ? { ...sc, ...updates } : sc
+            ),
+        }));
     }, []);
 
     // --- Interaction callbacks (from Three.js viewport) ---
@@ -1110,6 +1179,7 @@ export default function VesselModeler() {
                     previewCoverageRect={previewCoverageRect}
                     rulerDrawMode={rulerDrawMode}
                     previewRuler={previewRuler}
+                    selectedScanCompositeId={selectedScanCompositeId}
                 />
 
                 {/* Sidebar (z-20) */}
@@ -1179,6 +1249,127 @@ export default function VesselModeler() {
                         onViewInspectionImage={(id) => setViewingInspectionImageId(id)}
                         getNextInspectionImageId={getNextInspectionImageId}
                     />
+
+                    {/* Scan Composites Section */}
+                    <div className="border-t border-gray-700">
+                        <button
+                            className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-200 hover:bg-gray-700/50"
+                            onClick={() => setScanCompositesOpen(o => !o)}
+                        >
+                            <span className="flex items-center gap-2">
+                                Scan Composites
+                                {vesselState.scanComposites.length > 0 && (
+                                    <span className="bg-blue-600 text-white text-xs px-1.5 py-0.5 rounded-full">
+                                        {vesselState.scanComposites.length}
+                                    </span>
+                                )}
+                            </span>
+                            <ChevronDown size={14} className={`transition-transform ${scanCompositesOpen ? '' : '-rotate-90'}`} />
+                        </button>
+
+                        {scanCompositesOpen && (
+                            <div className="px-3 pb-3 space-y-2">
+                                <button
+                                    className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded"
+                                    onClick={() => setShowImportComposite(true)}
+                                >
+                                    <Cloud size={12} /> Import from Cloud
+                                </button>
+
+                                {vesselState.scanComposites.length === 0 && (
+                                    <p className="text-xs text-gray-500 text-center py-2">No scan composites placed</p>
+                                )}
+
+                                {vesselState.scanComposites.map(sc => {
+                                    const isSelected = selectedScanCompositeId === sc.id;
+                                    const widthMm = sc.xAxis.length > 0 ? Math.round(sc.xAxis[sc.xAxis.length - 1] - sc.xAxis[0]) : 0;
+                                    const heightMm = sc.yAxis.length > 0 ? Math.round(sc.yAxis[sc.yAxis.length - 1] - sc.yAxis[0]) : 0;
+                                    return (
+                                        <div
+                                            key={sc.id}
+                                            className={`rounded border p-2 cursor-pointer text-xs space-y-1.5 ${isSelected ? 'border-blue-500 bg-blue-900/30' : 'border-gray-600 bg-gray-800 hover:border-gray-500'}`}
+                                            onClick={() => setSelectedScanCompositeId(isSelected ? '' : sc.id)}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <span className="font-medium text-gray-200 truncate">{sc.name}</span>
+                                                <button
+                                                    className="text-red-400 hover:text-red-300 p-0.5"
+                                                    onClick={(e) => { e.stopPropagation(); handleRemoveScanComposite(sc.id); }}
+                                                    title="Remove"
+                                                >
+                                                    <Trash2 size={12} />
+                                                </button>
+                                            </div>
+                                            <div className="text-gray-400">{widthMm} x {heightMm} mm</div>
+
+                                            {isSelected && (
+                                                <div className="space-y-1.5 pt-1 border-t border-gray-700">
+                                                    {/* Colorscale */}
+                                                    <label className="flex items-center justify-between">
+                                                        <span className="text-gray-400">Colorscale</span>
+                                                        <select
+                                                            className="bg-gray-700 text-gray-200 text-xs rounded px-1.5 py-0.5 border border-gray-600"
+                                                            value={sc.colorScale}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            onChange={(e) => handleUpdateScanComposite(sc.id, { colorScale: e.target.value })}
+                                                        >
+                                                            <option value="Jet">Jet</option>
+                                                            <option value="Viridis">Viridis</option>
+                                                            <option value="Hot">Hot</option>
+                                                            <option value="Blues">Blues</option>
+                                                        </select>
+                                                    </label>
+
+                                                    {/* Opacity */}
+                                                    <label className="flex items-center justify-between">
+                                                        <span className="text-gray-400">Opacity</span>
+                                                        <input
+                                                            type="range"
+                                                            min={0} max={1} step={0.1}
+                                                            value={sc.opacity}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            onChange={(e) => handleUpdateScanComposite(sc.id, { opacity: parseFloat(e.target.value) })}
+                                                            className="w-20"
+                                                        />
+                                                    </label>
+
+                                                    {/* Range Min */}
+                                                    <label className="flex items-center justify-between">
+                                                        <span className="text-gray-400">Min</span>
+                                                        <input
+                                                            type="number"
+                                                            className="w-16 bg-gray-700 text-gray-200 text-xs rounded px-1.5 py-0.5 border border-gray-600"
+                                                            placeholder="Auto"
+                                                            value={sc.rangeMin ?? ''}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            onChange={(e) => handleUpdateScanComposite(sc.id, {
+                                                                rangeMin: e.target.value === '' ? null : parseFloat(e.target.value),
+                                                            })}
+                                                        />
+                                                    </label>
+
+                                                    {/* Range Max */}
+                                                    <label className="flex items-center justify-between">
+                                                        <span className="text-gray-400">Max</span>
+                                                        <input
+                                                            type="number"
+                                                            className="w-16 bg-gray-700 text-gray-200 text-xs rounded px-1.5 py-0.5 border border-gray-600"
+                                                            placeholder="Auto"
+                                                            value={sc.rangeMax ?? ''}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            onChange={(e) => handleUpdateScanComposite(sc.id, {
+                                                                rangeMax: e.target.value === '' ? null : parseFloat(e.target.value),
+                                                            })}
+                                                        />
+                                                    </label>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Toggle sidebar button */}
@@ -1319,6 +1510,129 @@ export default function VesselModeler() {
                     </Suspense>
                 );
             })()}
+
+            {/* Scan Composite Import Modal */}
+            {showImportComposite && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+                    <div className="bg-gray-800 rounded-lg shadow-xl w-[480px] max-h-[80vh] flex flex-col border border-gray-600">
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+                            <h2 className="text-sm font-semibold text-white">Import Scan Composite</h2>
+                            <button
+                                className="text-gray-400 hover:text-white text-lg leading-none"
+                                onClick={() => { setShowImportComposite(false); setImportingCompositeId(null); }}
+                            >
+                                &times;
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                            {!importingCompositeId ? (
+                                <>
+                                    <p className="text-xs text-gray-400">Select a composite to import:</p>
+                                    {(!cloudComposites || cloudComposites.length === 0) ? (
+                                        <p className="text-sm text-gray-500 text-center py-6">No composites saved yet</p>
+                                    ) : (
+                                        <div className="space-y-1">
+                                            {cloudComposites.map(c => (
+                                                <button
+                                                    key={c.id}
+                                                    className="w-full text-left px-3 py-2 rounded bg-gray-700 hover:bg-gray-600 border border-gray-600 hover:border-gray-500 text-xs"
+                                                    onClick={() => setImportingCompositeId(c.id)}
+                                                >
+                                                    <div className="font-medium text-gray-200">{c.name}</div>
+                                                    <div className="text-gray-400 mt-0.5">
+                                                        {c.width} x {c.height} mm &middot; {new Date(c.created_at).toLocaleDateString()}
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <p className="text-xs text-gray-400">
+                                        Placing: <span className="text-gray-200 font-medium">{cloudComposites?.find(c => c.id === importingCompositeId)?.name}</span>
+                                    </p>
+
+                                    {/* Index start position */}
+                                    <label className="block">
+                                        <span className="text-xs text-gray-400">Index start position (mm from tangent line)</span>
+                                        <input
+                                            type="number"
+                                            className="mt-1 w-full bg-gray-700 text-gray-200 text-xs rounded px-2 py-1.5 border border-gray-600"
+                                            value={importPlacement.indexStartMm}
+                                            onChange={(e) => setImportPlacement(p => ({ ...p, indexStartMm: parseFloat(e.target.value) || 0 }))}
+                                        />
+                                    </label>
+
+                                    {/* Scan direction */}
+                                    <div>
+                                        <span className="text-xs text-gray-400">Scan direction from TDC</span>
+                                        <div className="flex gap-1 mt-1">
+                                            <button
+                                                className={`flex-1 text-xs py-1.5 rounded ${importPlacement.scanDirection === 'cw' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                                                onClick={() => setImportPlacement(p => ({ ...p, scanDirection: 'cw' }))}
+                                            >
+                                                CW
+                                            </button>
+                                            <button
+                                                className={`flex-1 text-xs py-1.5 rounded ${importPlacement.scanDirection === 'ccw' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                                                onClick={() => setImportPlacement(p => ({ ...p, scanDirection: 'ccw' }))}
+                                            >
+                                                CCW
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Index direction */}
+                                    <div>
+                                        <span className="text-xs text-gray-400">Index direction along vessel</span>
+                                        <div className="flex gap-1 mt-1">
+                                            <button
+                                                className={`flex-1 text-xs py-1.5 rounded ${importPlacement.indexDirection === 'forward' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                                                onClick={() => setImportPlacement(p => ({ ...p, indexDirection: 'forward' }))}
+                                            >
+                                                Forward
+                                            </button>
+                                            <button
+                                                className={`flex-1 text-xs py-1.5 rounded ${importPlacement.indexDirection === 'reverse' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                                                onClick={() => setImportPlacement(p => ({ ...p, indexDirection: 'reverse' }))}
+                                            >
+                                                Reverse
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        <div className="flex justify-end gap-2 px-4 py-3 border-t border-gray-700">
+                            {importingCompositeId && (
+                                <button
+                                    className="px-3 py-1.5 text-xs text-gray-300 bg-gray-700 hover:bg-gray-600 rounded"
+                                    onClick={() => setImportingCompositeId(null)}
+                                >
+                                    Back
+                                </button>
+                            )}
+                            <button
+                                className="px-3 py-1.5 text-xs text-gray-300 bg-gray-700 hover:bg-gray-600 rounded"
+                                onClick={() => { setShowImportComposite(false); setImportingCompositeId(null); }}
+                            >
+                                Cancel
+                            </button>
+                            {importingCompositeId && (
+                                <button
+                                    className="px-3 py-1.5 text-xs text-white bg-blue-600 hover:bg-blue-500 rounded"
+                                    onClick={handleImportComposite}
+                                >
+                                    Import
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
