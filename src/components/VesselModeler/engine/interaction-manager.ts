@@ -104,6 +104,7 @@ export class InteractionManager {
   saddleMeshes: THREE.Object3D[] = [];
   weldMeshes: THREE.Object3D[] = [];
   textureMeshes: THREE.Mesh[] = [];
+  scanCompositeMeshes: THREE.Mesh[] = [];
   annotationMeshes: THREE.Object3D[] = [];
   coverageMeshes: THREE.Object3D[] = [];
   inspectionImageDotMeshes: THREE.Object3D[] = [];

@@ -52,10 +52,11 @@ interface ThreeViewportProps {
     previewCoverageRect: CoverageRectConfig | null;
     rulerDrawMode: boolean;
     previewRuler: RulerConfig | null;
+    selectedScanCompositeId?: string;
 }
 
 const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(function ThreeViewport(
-    { vesselState, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedAnnotationId, textureObjects, callbacks, nozzlesLocked, saddlesLocked, texturesLocked, lugsLocked, weldsLocked, selectedWeldIndex, selectedInspectionImageId, onInspectionImageThumbnailClick, drawMode, coverageDrawMode, previewAnnotation, previewCoverageRect, rulerDrawMode, previewRuler },
+    { vesselState, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedAnnotationId, textureObjects, callbacks, nozzlesLocked, saddlesLocked, texturesLocked, lugsLocked, weldsLocked, selectedWeldIndex, selectedInspectionImageId, onInspectionImageThumbnailClick, drawMode, coverageDrawMode, previewAnnotation, previewCoverageRect, rulerDrawMode, previewRuler, selectedScanCompositeId = '' },
     ref
 ) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -201,6 +202,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             selectedLugIndex,
             selectedSaddleIndex,
             selectedTextureId,
+            selectedScanCompositeId,
         );
 
         // -- Annotation shapes (outlines + hit meshes) --
@@ -365,17 +367,18 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             interactionRef.current.saddleMeshes = result.saddleMeshes;
             interactionRef.current.weldMeshes = weldMeshes;
             interactionRef.current.textureMeshes = result.textureMeshes;
+            interactionRef.current.scanCompositeMeshes = result.scanCompositeMeshes;
             interactionRef.current.annotationMeshes = annotationMeshes;
             interactionRef.current.coverageMeshes = coverageMeshes;
             interactionRef.current.inspectionImageDotMeshes = inspectionImageDotMeshes;
             interactionRef.current.vesselGroup = result.vesselGroup;
         }
-    }, [textureObjects, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedAnnotationId, selectedInspectionImageId, selectedWeldIndex, onInspectionImageThumbnailClick, previewAnnotation, previewCoverageRect, previewRuler]);
+    }, [textureObjects, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedScanCompositeId, selectedAnnotationId, selectedInspectionImageId, selectedWeldIndex, onInspectionImageThumbnailClick, previewAnnotation, previewCoverageRect, previewRuler]);
 
     // Rebuild when state changes
     useEffect(() => {
         rebuildScene();
-    }, [vesselState, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedAnnotationId, selectedInspectionImageId, selectedWeldIndex, textureObjects, previewAnnotation, previewCoverageRect, previewRuler, rebuildScene]);
+    }, [vesselState, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedScanCompositeId, selectedAnnotationId, selectedInspectionImageId, selectedWeldIndex, textureObjects, previewAnnotation, previewCoverageRect, previewRuler, rebuildScene]);
 
     // Update interaction manager's vessel state reference
     useEffect(() => {

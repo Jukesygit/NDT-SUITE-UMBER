@@ -15,6 +15,7 @@ import { SCALE } from './materials';
 import { createFlangedNozzle } from './nozzle-geometry';
 import { createLiftingLug } from './lifting-lug-geometry';
 import { createSaddleGroup, getSaddleBaseY } from './saddle-geometry';
+import { createScanCompositePlane } from './texture-manager';
 
 // ---------------------------------------------------------------------------
 // Result interface
@@ -26,6 +27,7 @@ export interface BuildSceneResult {
   lugMeshes: THREE.Object3D[];
   saddleMeshes: THREE.Object3D[];
   textureMeshes: THREE.Mesh[];
+  scanCompositeMeshes: THREE.Mesh[];
 }
 
 // ---------------------------------------------------------------------------
@@ -331,18 +333,20 @@ export function buildVesselScene(
   selectedLugIndex: number,
   selectedSaddleIndex: number,
   selectedTextureId: number,
+  selectedScanCompositeId: string = '',
 ): BuildSceneResult {
   const vesselGroup = new THREE.Group();
   const nozzleMeshes: THREE.Object3D[] = [];
   const lugMeshes: THREE.Object3D[] = [];
   const saddleMeshes: THREE.Object3D[] = [];
   const textureMeshes: THREE.Mesh[] = [];
+  const scanCompositeMeshes: THREE.Mesh[] = [];
 
   // -- Return empty group with grid if no model data yet --------------------
   if (!state.hasModel) {
     const grid = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
     vesselGroup.add(grid);
-    return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes };
+    return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes, scanCompositeMeshes };
   }
 
   // -- Vessel dimensions ----------------------------------------------------
@@ -654,6 +658,15 @@ export function buildVesselScene(
     }
   });
 
+  // -- Scan Composite Overlays ----------------------------------------------
+  for (const composite of state.scanComposites) {
+    const mesh = createScanCompositePlane(composite, state, selectedScanCompositeId);
+    if (mesh) {
+      vesselGroup.add(mesh);
+      scanCompositeMeshes.push(mesh);
+    }
+  }
+
   // -- Grid helper ----------------------------------------------------------
   const gridSize = isVertical
     ? Math.max(30, (TAN_TAN + RADIUS * 2) * SCALE * 1.2)
@@ -664,5 +677,5 @@ export function buildVesselScene(
     : getSaddleBaseY(state);
   vesselGroup.add(grid);
 
-  return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes };
+  return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes, scanCompositeMeshes };
 }
