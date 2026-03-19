@@ -162,6 +162,41 @@ export interface TextureConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Scan Composite Overlays (structured C-scan data on vessel surface)
+// ---------------------------------------------------------------------------
+
+export interface ScanCompositeConfig {
+  /** Unique local ID */
+  id: string;
+  /** Display name */
+  name: string;
+  /** Supabase record ID (if saved to cloud) */
+  cloudId?: string;
+  /** 2D thickness matrix [rows][cols] - index axis x scan axis */
+  data: (number | null)[][];
+  /** Scan axis coordinates in mm (circumferential) */
+  xAxis: number[];
+  /** Index axis coordinates in mm (longitudinal) */
+  yAxis: number[];
+  /** Pre-computed statistics */
+  stats: { min: number; max: number; mean: number; median: number; stdDev: number };
+  /** Longitudinal start position on vessel (mm from tangent line) */
+  indexStartMm: number;
+  /** Scan direction from TDC: 'cw' or 'ccw' */
+  scanDirection: 'cw' | 'ccw';
+  /** Index direction along vessel: 'forward' or 'reverse' */
+  indexDirection: 'forward' | 'reverse';
+  /** Colorscale name */
+  colorScale: string;
+  /** Override min for color range (null = use stats.min) */
+  rangeMin: number | null;
+  /** Override max for color range (null = use stats.max) */
+  rangeMax: number | null;
+  /** Opacity 0-1 */
+  opacity: number;
+}
+
+// ---------------------------------------------------------------------------
 // Annotation Shapes
 // ---------------------------------------------------------------------------
 
@@ -319,6 +354,7 @@ export interface VesselState {
   rulers: RulerConfig[];
   coverageRects: CoverageRectConfig[];
   inspectionImages: InspectionImageConfig[];
+  scanComposites: ScanCompositeConfig[];
   measurementConfig: MeasurementConfig;
   hasModel: boolean;
   visuals: VisualSettings;
@@ -643,6 +679,7 @@ export const DEFAULT_VESSEL_STATE: VesselState = {
   rulers: [],
   coverageRects: [],
   inspectionImages: [],
+  scanComposites: [],
   measurementConfig: {
     referenceTangent: 'left',
     circumDirection: 'CW',
@@ -692,6 +729,8 @@ export interface VesselCallbacks {
   onInspectionImageLabelOffsetChanged?: (id: number, offset: [number, number, number]) => void;
   onWeldSelected?: (index: number) => void;
   onWeldMoved?: (index: number, newPos: number, newAngle: number) => void;
+  onScanCompositeSelected?: (id: string) => void;
+  onScanCompositeHover?: (id: string, thickness: number | null, scanMm: number, indexMm: number) => void;
   onDeselect?: () => void;
   onDragEnd?: () => void;
 }

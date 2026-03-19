@@ -611,13 +611,18 @@ export default function VesselModeler() {
             nozzles: vesselState.nozzles.map(n => ({
                 name: n.name, pos: n.pos, proj: n.proj,
                 angle: n.angle, size: n.size,
+                orientationMode: n.orientationMode,
+                flangeOD: n.flangeOD, flangeThk: n.flangeThk, pipeOD: n.pipeOD,
             })),
             liftingLugs: vesselState.liftingLugs.map(l => ({
                 name: l.name, pos: l.pos, angle: l.angle,
                 style: l.style, swl: l.swl,
+                width: l.width, height: l.height,
+                thickness: l.thickness, holeDiameter: l.holeDiameter,
             })),
             saddles: vesselState.saddles.map(s => ({
                 pos: s.pos, color: s.color || '#2244ff',
+                height: s.height,
             })),
             welds: vesselState.welds.map(w => ({
                 name: w.name, type: w.type, pos: w.pos,
@@ -728,10 +733,20 @@ export default function VesselModeler() {
                     length: projectData.vessel.length || 8000,
                     headRatio: projectData.vessel.headRatio || 2.0,
                     orientation: projectData.vessel.orientation || 'horizontal',
-                    nozzles: projectData.nozzles || [],
-                    liftingLugs: projectData.liftingLugs || [],
+                    nozzles: (projectData.nozzles || []).map((n: any) => ({
+                        name: n.name || 'N', pos: n.pos ?? 0, proj: n.proj ?? 200,
+                        angle: n.angle ?? 90, size: n.size ?? 100,
+                        orientationMode: n.orientationMode,
+                        flangeOD: n.flangeOD, flangeThk: n.flangeThk, pipeOD: n.pipeOD,
+                    })),
+                    liftingLugs: (projectData.liftingLugs || []).map((l: any) => ({
+                        name: l.name || 'L', pos: l.pos ?? 0, angle: l.angle ?? 90,
+                        style: l.style || 'padEye', swl: l.swl || '5t',
+                        width: l.width, height: l.height,
+                        thickness: l.thickness, holeDiameter: l.holeDiameter,
+                    })),
                     saddles: (projectData.saddles || []).map((s: any) =>
-                        typeof s === 'number' ? { pos: s, color: '#2244ff' } : { pos: s.pos, color: s.color || '#2244ff' }
+                        typeof s === 'number' ? { pos: s, color: '#2244ff' } : { pos: s.pos, color: s.color || '#2244ff', height: s.height }
                     ),
                     welds: (projectData.welds || []).map((w: any) => ({
                         name: w.name || 'W', type: w.type || 'circumferential',
@@ -767,6 +782,7 @@ export default function VesselModeler() {
                         inspector: i.inspector, method: i.method, result: i.result,
                         leaderLength: i.leaderLength, labelOffset: i.labelOffset, visible: i.visible, locked: i.locked,
                     })),
+                    scanComposites: projectData.scanComposites || [],
                     measurementConfig: {
                         ...DEFAULT_VESSEL_STATE.measurementConfig,
                         ...(projectData.measurementConfig || {}),
