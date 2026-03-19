@@ -70,6 +70,11 @@ export default function VesselModeler() {
 
     // Scan composite state
     const [selectedScanCompositeId, setSelectedScanCompositeId] = useState('');
+    const [hoverData, setHoverData] = useState<{
+        thickness: number | null;
+        scanMm: number;
+        indexMm: number;
+    } | null>(null);
     const [showImportComposite, setShowImportComposite] = useState(false);
     const [importPlacement, setImportPlacement] = useState({
         indexStartMm: 0,
@@ -639,6 +644,13 @@ export default function VesselModeler() {
                 updateWeld(idx, { pos: Math.round(pos), endPos: (weld.endPos ?? vesselState.length) + delta, angle: Math.round(angle) });
             }
         },
+        onScanCompositeHover: (_id, thickness, scanMm, indexMm) => {
+            if (thickness !== null) {
+                setHoverData({ thickness, scanMm, indexMm });
+            } else {
+                setHoverData(null);
+            }
+        },
         onDeselect: () => {
             setSelectedNozzleIndex(-1);
             setSelectedSaddleIndex(-1);
@@ -728,6 +740,22 @@ export default function VesselModeler() {
                 description: i.description, date: i.date,
                 inspector: i.inspector, method: i.method, result: i.result,
                 leaderLength: i.leaderLength, labelOffset: i.labelOffset, visible: i.visible, locked: i.locked,
+            })),
+            scanComposites: vesselState.scanComposites.map(sc => ({
+                id: sc.id,
+                name: sc.name,
+                cloudId: sc.cloudId,
+                data: sc.data,
+                xAxis: sc.xAxis,
+                yAxis: sc.yAxis,
+                stats: sc.stats,
+                indexStartMm: sc.indexStartMm,
+                scanDirection: sc.scanDirection,
+                indexDirection: sc.indexDirection,
+                colorScale: sc.colorScale,
+                rangeMin: sc.rangeMin,
+                rangeMax: sc.rangeMax,
+                opacity: sc.opacity,
             })),
             measurementConfig: { ...vesselState.measurementConfig },
             visuals: { ...vesselState.visuals },
@@ -859,6 +887,9 @@ export default function VesselModeler() {
                     hasModel: true,
                     visuals: { ...DEFAULT_VESSEL_STATE.visuals, ...(projectData.visuals || {}) },
                 };
+
+                // Clear heatmap cache to avoid stale scan composite textures
+                clearHeatmapCache();
 
                 // Update next texture ID to avoid conflicts
                 const maxId = loadedTextures.reduce((max: number, t: TextureConfig) => Math.max(max, Number(t.id) || 0), 0);
@@ -1181,6 +1212,26 @@ export default function VesselModeler() {
                     previewRuler={previewRuler}
                     selectedScanCompositeId={selectedScanCompositeId}
                 />
+
+                {/* Scan composite hover tooltip */}
+                {hoverData && hoverData.thickness !== null && (
+                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-gray-900/90 text-white px-4 py-2 rounded-lg text-sm z-50 flex items-center gap-4 pointer-events-none backdrop-blur-sm border border-gray-700">
+                        <div>
+                            <span className="text-gray-400 text-xs">Thickness</span>
+                            <div className="font-bold text-lg">{hoverData.thickness.toFixed(2)} mm</div>
+                        </div>
+                        <div className="w-px h-8 bg-gray-600" />
+                        <div>
+                            <span className="text-gray-400 text-xs">Scan</span>
+                            <div>{hoverData.scanMm.toFixed(1)} mm</div>
+                        </div>
+                        <div className="w-px h-8 bg-gray-600" />
+                        <div>
+                            <span className="text-gray-400 text-xs">Index</span>
+                            <div>{hoverData.indexMm.toFixed(1)} mm</div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Sidebar (z-20) */}
                 <div className={`vm-sidebar ${sidebarOpen ? '' : 'collapsed'}`}>
