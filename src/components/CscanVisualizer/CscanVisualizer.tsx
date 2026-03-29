@@ -312,7 +312,8 @@ const CscanVisualizer: React.FC = () => {
       setSaveName('');
       setStatusMessage({ type: 'success', message: 'Composite saved to cloud' });
       setTimeout(() => setStatusMessage(null), 3000);
-    } catch {
+    } catch (err) {
+      console.error('Failed to save composite:', err);
       setStatusMessage({ type: 'error', message: 'Failed to save composite' });
       setTimeout(() => setStatusMessage(null), 5000);
     }

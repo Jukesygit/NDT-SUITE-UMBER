@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, Plus, Trash2, ArrowLeftRight, ArrowUpDown, ImagePlus, Circle, Square, Eye, EyeOff, Lock, Unlock, Ruler, Camera, Maximize2 } from 'lucide-react';
+import { ChevronDown, Plus, Trash2, ArrowLeftRight, ArrowUpDown, ImagePlus, Circle, Square, Eye, EyeOff, Lock, Unlock, Ruler, Camera, Maximize2, Cloud } from 'lucide-react';
 import type {
     VesselState,
     NozzleConfig,
@@ -17,6 +17,7 @@ import type {
     Orientation,
     WeldConfig,
     WeldType,
+    ScanCompositeConfig,
 } from './types';
 import { MATERIAL_PRESETS, SCENE_PRESETS, PIPE_SIZES, LIFTING_LUG_SIZES, findClosestPipeSize } from './types';
 import type { ScenePresetKey } from './types';
@@ -98,6 +99,15 @@ interface SidebarPanelProps {
     onUpdateRuler: (id: number, updates: Partial<import('./types').RulerConfig>) => void;
     selectedRulerId: number;
     onSelectRuler: (id: number) => void;
+    // Scan composite props
+    selectedScanCompositeId: string;
+    onSelectScanComposite: (id: string) => void;
+    onImportComposite: (compositeId: string, placement: { indexStartMm: number; scanDirection: 'cw' | 'ccw'; indexDirection: 'forward' | 'reverse' }) => void;
+    onUpdateScanComposite: (id: string, updates: Partial<ScanCompositeConfig>) => void;
+    onRemoveScanComposite: (id: string) => void;
+    cloudComposites: Array<{ id: string; name: string; width: number; height: number; created_at: string }> | undefined;
+    cloudCompositesLoading: boolean;
+    cloudCompositesError: Error | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -219,7 +229,13 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                     <WeldSection {...props} />
                     <SaddleSection {...props} />
                 </Section>
-                <TextureSection {...props} />
+                <Section title="Scan Overlay" defaultOpen={false} count={
+                    props.vesselState.textures.length +
+                    props.vesselState.scanComposites.length
+                }>
+                    <ImageOverlaySubSection {...props} />
+                    <ScanCompositeSubSection {...props} />
+                </Section>
                 <Section title="Inspection" defaultOpen={false} count={
                     props.vesselState.annotations.length +
                     props.vesselState.rulers.length +
@@ -975,10 +991,10 @@ function SaddleSection({
 }
 
 // ---------------------------------------------------------------------------
-// Texture Section
+// Image Overlay SubSection (formerly TextureSection)
 // ---------------------------------------------------------------------------
 
-function TextureSection({
+function ImageOverlaySubSection({
     vesselState, selectedTextureId,
     onAddTexture, onUpdateTexture, onRemoveTexture, onSelectTexture,
     getNextTextureId, renderer,
@@ -1022,7 +1038,7 @@ function TextureSection({
     };
 
     return (
-        <Section title="Scan Overlay" defaultOpen={false} count={vesselState.textures.length}>
+        <SubSection title="Image Overlays" count={vesselState.textures.length}>
             {/* Drop zone */}
             <label
                 className="vm-texture-import"
@@ -1127,7 +1143,230 @@ function TextureSection({
                     </React.Fragment>
                 );
             })}
-        </Section>
+        </SubSection>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Scan Composite SubSection
+// ---------------------------------------------------------------------------
+
+function ScanCompositeSubSection({
+    vesselState, selectedScanCompositeId,
+    onSelectScanComposite, onImportComposite,
+    onUpdateScanComposite, onRemoveScanComposite,
+    cloudComposites, cloudCompositesLoading, cloudCompositesError,
+}: SidebarPanelProps) {
+    const [showImport, setShowImport] = useState(false);
+    const [importingId, setImportingId] = useState<string | null>(null);
+    const [placement, setPlacement] = useState({
+        indexStartMm: 0,
+        scanDirection: 'cw' as 'cw' | 'ccw',
+        indexDirection: 'forward' as 'forward' | 'reverse',
+    });
+
+    const handleImport = () => {
+        if (!importingId) return;
+        onImportComposite(importingId, placement);
+        setShowImport(false);
+        setImportingId(null);
+        setPlacement({ indexStartMm: 0, scanDirection: 'cw', indexDirection: 'forward' });
+    };
+
+    return (
+        <SubSection title="Scan Composites" count={vesselState.scanComposites.length}>
+            <button
+                className="vm-btn vm-btn-primary"
+                onClick={() => setShowImport(true)}
+                style={{ marginBottom: 8 }}
+            >
+                <Cloud size={14} /> Import from Cloud
+            </button>
+
+            {vesselState.scanComposites.length === 0 && (
+                <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.35)', textAlign: 'center', padding: '8px 0' }}>
+                    No scan composites placed
+                </p>
+            )}
+
+            {vesselState.scanComposites.map(sc => {
+                const isSelected = selectedScanCompositeId === sc.id;
+                const widthMm = sc.xAxis.length > 0 ? Math.round(sc.xAxis[sc.xAxis.length - 1] - sc.xAxis[0]) : 0;
+                const heightMm = sc.yAxis.length > 0 ? Math.round(sc.yAxis[sc.yAxis.length - 1] - sc.yAxis[0]) : 0;
+                return (
+                    <React.Fragment key={sc.id}>
+                        <div
+                            className={`vm-list-item texture ${isSelected ? 'selected' : ''}`}
+                            onClick={() => onSelectScanComposite(isSelected ? '' : sc.id)}
+                        >
+                            <div className="vm-list-item-info">
+                                <strong>{sc.name}</strong>
+                                <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
+                                    {widthMm} &times; {heightMm} mm
+                                </div>
+                            </div>
+                            <button className="vm-btn-icon" onClick={e => { e.stopPropagation(); onRemoveScanComposite(sc.id); }}>
+                                <Trash2 size={14} />
+                            </button>
+                        </div>
+                        {isSelected && (
+                            <div className="vm-form edit-mode" style={{ marginTop: 8 }}>
+                                <div className="vm-control-group">
+                                    <div className="vm-label"><span>Colorscale</span></div>
+                                    <select
+                                        className="vm-select"
+                                        value={sc.colorScale}
+                                        onChange={e => onUpdateScanComposite(sc.id, { colorScale: e.target.value })}
+                                    >
+                                        <option value="Jet">Jet</option>
+                                        <option value="Viridis">Viridis</option>
+                                        <option value="Hot">Hot</option>
+                                        <option value="Blues">Blues</option>
+                                    </select>
+                                </div>
+                                <SliderRow
+                                    label="Opacity"
+                                    value={sc.opacity}
+                                    min={0}
+                                    max={1}
+                                    step={0.1}
+                                    unit=""
+                                    onChange={v => onUpdateScanComposite(sc.id, { opacity: v })}
+                                />
+                                <div className="vm-form-row">
+                                    <div className="vm-control-group">
+                                        <div className="vm-label"><span>Min</span></div>
+                                        <input
+                                            type="number"
+                                            className="vm-input"
+                                            placeholder="Auto"
+                                            value={sc.rangeMin ?? ''}
+                                            onChange={e => onUpdateScanComposite(sc.id, {
+                                                rangeMin: e.target.value === '' ? null : parseFloat(e.target.value),
+                                            })}
+                                        />
+                                    </div>
+                                    <div className="vm-control-group">
+                                        <div className="vm-label"><span>Max</span></div>
+                                        <input
+                                            type="number"
+                                            className="vm-input"
+                                            placeholder="Auto"
+                                            value={sc.rangeMax ?? ''}
+                                            onChange={e => onUpdateScanComposite(sc.id, {
+                                                rangeMax: e.target.value === '' ? null : parseFloat(e.target.value),
+                                            })}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </React.Fragment>
+                );
+            })}
+
+            {/* Import modal */}
+            {showImport && (
+                <div className="vm-modal-overlay">
+                    <div className="vm-modal">
+                        <div className="vm-modal-header">
+                            <h3 style={{ margin: 0, fontSize: '0.9rem', color: 'white' }}>Import Scan Composite</h3>
+                            <button className="vm-btn-icon" onClick={() => { setShowImport(false); setImportingId(null); }}>
+                                &times;
+                            </button>
+                        </div>
+                        <div className="vm-modal-body">
+                            {!importingId ? (
+                                <>
+                                    <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', margin: '0 0 10px' }}>
+                                        Select a composite to import:
+                                    </p>
+                                    {cloudCompositesLoading ? (
+                                        <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: '20px 0' }}>
+                                            Loading...
+                                        </p>
+                                    ) : cloudCompositesError ? (
+                                        <p style={{ fontSize: '0.85rem', color: '#ef4444', textAlign: 'center', padding: '20px 0' }}>
+                                            Error: {cloudCompositesError.message}
+                                        </p>
+                                    ) : (!cloudComposites || cloudComposites.length === 0) ? (
+                                        <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: '20px 0' }}>
+                                            No composites saved yet
+                                        </p>
+                                    ) : (
+                                        cloudComposites.map(c => (
+                                            <div
+                                                key={c.id}
+                                                className="vm-list-item texture"
+                                                onClick={() => setImportingId(c.id)}
+                                                style={{ cursor: 'pointer' }}
+                                            >
+                                                <div className="vm-list-item-info">
+                                                    <strong>{c.name}</strong>
+                                                    <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
+                                                        {c.width} &times; {c.height} &middot; {new Date(c.created_at).toLocaleDateString()}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', margin: '0 0 10px' }}>
+                                        Placing: <strong style={{ color: 'white' }}>{cloudComposites?.find(c => c.id === importingId)?.name}</strong>
+                                    </p>
+                                    <div className="vm-control-group">
+                                        <div className="vm-label"><span>Index start (mm)</span></div>
+                                        <input
+                                            type="number"
+                                            className="vm-input"
+                                            value={placement.indexStartMm}
+                                            onChange={e => setPlacement(p => ({ ...p, indexStartMm: parseFloat(e.target.value) || 0 }))}
+                                        />
+                                    </div>
+                                    <div className="vm-control-group">
+                                        <div className="vm-label"><span>Scan direction from TDC</span></div>
+                                        <div className="vm-toggle-group">
+                                            <button
+                                                className={`vm-toggle-btn ${placement.scanDirection === 'cw' ? 'active' : ''}`}
+                                                onClick={() => setPlacement(p => ({ ...p, scanDirection: 'cw' }))}
+                                            >CW</button>
+                                            <button
+                                                className={`vm-toggle-btn ${placement.scanDirection === 'ccw' ? 'active' : ''}`}
+                                                onClick={() => setPlacement(p => ({ ...p, scanDirection: 'ccw' }))}
+                                            >CCW</button>
+                                        </div>
+                                    </div>
+                                    <div className="vm-control-group">
+                                        <div className="vm-label"><span>Index direction</span></div>
+                                        <div className="vm-toggle-group">
+                                            <button
+                                                className={`vm-toggle-btn ${placement.indexDirection === 'forward' ? 'active' : ''}`}
+                                                onClick={() => setPlacement(p => ({ ...p, indexDirection: 'forward' }))}
+                                            >Forward</button>
+                                            <button
+                                                className={`vm-toggle-btn ${placement.indexDirection === 'reverse' ? 'active' : ''}`}
+                                                onClick={() => setPlacement(p => ({ ...p, indexDirection: 'reverse' }))}
+                                            >Reverse</button>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                        <div className="vm-modal-footer">
+                            {importingId && (
+                                <button className="vm-btn" onClick={() => setImportingId(null)}>Back</button>
+                            )}
+                            <button className="vm-btn" onClick={() => { setShowImport(false); setImportingId(null); }}>Cancel</button>
+                            {importingId && (
+                                <button className="vm-btn vm-btn-primary" onClick={handleImport}>Import</button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </SubSection>
     );
 }
 

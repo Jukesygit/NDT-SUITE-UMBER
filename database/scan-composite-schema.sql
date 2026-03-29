@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS scan_composites (
     name TEXT NOT NULL,
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-    thickness_data JSONB NOT NULL,
+    thickness_data TEXT, -- Storage path to binary file in scan-data bucket
     x_axis JSONB NOT NULL,
     y_axis JSONB NOT NULL,
     stats JSONB,
