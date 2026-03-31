@@ -13,7 +13,7 @@ export type Orientation = 'horizontal' | 'vertical';
 
 export type MaterialKey = 'blue' | 'cs' | 'ss' | 'red';
 
-export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | 'annotation' | 'inspectionImage' | 'weld';
+export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | 'annotation' | 'inspectionImage' | 'weld' | 'scanGizmo';
 
 export type AnnotationTool =
   | 'arrow'
@@ -182,10 +182,14 @@ export interface ScanCompositeConfig {
   stats: { min: number; max: number; mean: number; median: number; stdDev: number };
   /** Longitudinal start position on vessel (mm from tangent line) */
   indexStartMm: number;
-  /** Scan direction from TDC: 'cw' or 'ccw' */
+  /** Circumferential datum angle in degrees (0-360). 0 = TDC (12 o'clock) */
+  datumAngleDeg: number;
+  /** Scan direction from datum: 'cw' or 'ccw' */
   scanDirection: 'cw' | 'ccw';
   /** Index direction along vessel: 'forward' or 'reverse' */
   indexDirection: 'forward' | 'reverse';
+  /** Whether the user has confirmed the orientation (scan renders only after confirmation) */
+  orientationConfirmed: boolean;
   /** Colorscale name */
   colorScale: string;
   /** Override min for color range (null = use stats.min) */
@@ -228,6 +232,12 @@ export interface AnnotationShapeConfig {
   visible?: boolean;
   /** Whether this annotation is locked (not draggable) */
   locked?: boolean;
+  /** Auto-computed thickness stats when annotation overlaps scan data */
+  thicknessStats?: AnnotationThicknessStats;
+  /** Image attachments (uploaded photos + viewport captures) */
+  attachments?: AnnotationAttachment[];
+  /** Computed severity level based on thickness thresholds */
+  severityLevel?: 'red' | 'yellow' | 'green' | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -317,6 +327,42 @@ export interface MeasurementConfig {
   viewFromEnd: 'left' | 'right';
 }
 
+export interface ThicknessThresholds {
+  mode: 'absolute' | 'percentage';
+  /** Red severity if min thickness below this value (mm) — absolute mode */
+  redBelow?: number;
+  /** Yellow severity if min thickness below this value (mm) — absolute mode */
+  yellowBelow?: number;
+  /** Nominal wall thickness in mm — percentage mode */
+  nominalThickness?: number;
+  /** Red severity if min < this % of nominal — percentage mode */
+  redBelowPct?: number;
+  /** Yellow severity if min < this % of nominal — percentage mode */
+  yellowBelowPct?: number;
+}
+
+export interface AnnotationThicknessStats {
+  min: number;
+  max: number;
+  avg: number;
+  stdDev: number;
+  /** Location of the minimum reading on the vessel */
+  minPoint: { pos: number; angle: number };
+  /** Location of the maximum reading on the vessel */
+  maxPoint: { pos: number; angle: number };
+  /** Number of valid data points sampled within the footprint */
+  sampleCount: number;
+}
+
+export interface AnnotationAttachment {
+  id: string;
+  type: 'upload' | 'viewport-capture';
+  /** Supabase Storage path */
+  storagePath: string;
+  caption?: string;
+  capturedAt: string;
+}
+
 export interface VisualSettings {
   material: MaterialKey;
   shellOpacity: number;
@@ -356,6 +402,7 @@ export interface VesselState {
   inspectionImages: InspectionImageConfig[];
   scanComposites: ScanCompositeConfig[];
   measurementConfig: MeasurementConfig;
+  thicknessThresholds?: ThicknessThresholds;
   hasModel: boolean;
   visuals: VisualSettings;
 }
@@ -730,7 +777,9 @@ export interface VesselCallbacks {
   onWeldSelected?: (index: number) => void;
   onWeldMoved?: (index: number, newPos: number, newAngle: number) => void;
   onScanCompositeSelected?: (id: string) => void;
-  onScanCompositeHover?: (id: string, thickness: number | null, scanMm: number, indexMm: number) => void;
+  onScanCompositeHover?: (id: string, thickness: number | null, scanMm: number, indexMm: number, screenX: number, screenY: number) => void;
+  onScanGizmoDatumMoved?: (compositeId: string, angleDeg: number, posMm: number) => void;
+  onScanGizmoDirectionToggle?: (compositeId: string, field: 'scanDirection' | 'indexDirection') => void;
   onDeselect?: () => void;
   onDragEnd?: () => void;
 }
