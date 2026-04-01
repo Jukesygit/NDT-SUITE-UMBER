@@ -174,7 +174,24 @@ export function computeAnnotationThicknessStats(
     }
   }
 
-  if (values.length === 0) return undefined;
+  if (values.length === 0) {
+    // Debug: log why no data was found
+    console.warn('[annotation-stats] No thickness data found for annotation', ann.name, {
+      annPos: ann.pos, annAngle: ann.angle, annWidth: ann.width, annHeight: ann.height,
+      axialRange: [axialStart, axialEnd],
+      angleRange: [angleStart, angleEnd],
+      circumference,
+      composites: composites.filter(c => c.orientationConfirmed).map(c => ({
+        indexStartMm: c.indexStartMm,
+        indexDir: c.indexDirection,
+        datumAngleDeg: c.datumAngleDeg,
+        scanDir: c.scanDirection,
+        xAxisRange: [c.xAxis[0], c.xAxis[c.xAxis.length - 1]],
+        yAxisRange: [c.yAxis[0], c.yAxis[c.yAxis.length - 1]],
+      })),
+    });
+    return undefined;
+  }
 
   // Compute statistics
   let min = Infinity;

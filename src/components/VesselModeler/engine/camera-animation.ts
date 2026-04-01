@@ -43,19 +43,20 @@ export function computeInspectionCameraTarget(
     vesselState: VesselState,
     camera: THREE.PerspectiveCamera,
 ): { position: THREE.Vector3; target: THREE.Vector3 } {
-    // Convert annotation angle (degrees, 90=TDC) to internal radians (0=3-o'clock)
-    const angleRad = (ann.angle - 90) * Math.PI / 180;
+    // Convert annotation angle (degrees) to radians — same convention as annotation-geometry.ts
+    const angleRad = (ann.angle * Math.PI) / 180;
 
     // Get the surface point at the annotation center
     const target = shellPoint(ann.pos, angleRad, vesselState, 0);
 
     // Compute surface normal (radially outward from vessel axis)
+    // Must match shellPoint's coordinate system: horizontal → y=sin, z=cos
     const isVertical = vesselState.orientation === 'vertical';
     let normal: THREE.Vector3;
     if (isVertical) {
         normal = new THREE.Vector3(Math.cos(angleRad), 0, Math.sin(angleRad));
     } else {
-        normal = new THREE.Vector3(0, Math.cos(angleRad), Math.sin(angleRad));
+        normal = new THREE.Vector3(0, Math.sin(angleRad), Math.cos(angleRad));
     }
     normal.normalize();
 

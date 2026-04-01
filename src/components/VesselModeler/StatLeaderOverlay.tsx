@@ -29,7 +29,7 @@ export default function StatLeaderOverlay({
     const point = hoveredStat === 'min' ? stats.minPoint : stats.maxPoint;
 
     // Convert vessel-surface coords to 3D world position
-    const angleRad = (point.angle - 90) * (Math.PI / 180);
+    const angleRad = (point.angle * Math.PI) / 180;
     const worldPt = shellPoint(point.pos, angleRad, vesselState, 2);
 
     // shellPoint already applies SCALE internally, but we need the final Three.js coords
