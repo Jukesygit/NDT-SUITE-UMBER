@@ -82,7 +82,14 @@ export type ActionType =
     | 'document_submitted_for_review'
     | 'document_revision_approved'
     | 'document_revision_rejected'
-    | 'document_review_completed';
+    | 'document_review_completed'
+    // Admin - Competency Definitions & Categories
+    | 'category_created'
+    | 'category_updated'
+    | 'category_deleted'
+    | 'definition_created'
+    | 'definition_updated'
+    | 'definition_deleted';
 
 export interface ActivityLogEntry {
     id: string;

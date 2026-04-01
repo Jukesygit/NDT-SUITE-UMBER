@@ -81,7 +81,7 @@ export async function deleteCompetency(competencyId: string): Promise<boolean> {
         .from('employee_competencies')
         .select('competency:competency_definitions(name)')
         .eq('id', competencyId).single();
-    const competencyName = existing?.competency?.name || 'Unknown';
+    const competencyName = (existing?.competency as any)?.name || 'Unknown';
 
     const { error } = await supabase
         .from('employee_competencies').delete().eq('id', competencyId);
@@ -159,7 +159,7 @@ export async function uploadDocument(
     const fileExt = file.name.split('.').pop();
     const fileName = `${userId}/${competencyName.replace(/\s+/g, '_')}_${Date.now()}.${fileExt}`;
     const filePath = `competency-documents/${fileName}`;
-    const { data, error } = await supabase.storage
+    const { data: _data, error } = await supabase.storage
         .from('documents').upload(filePath, file, { cacheControl: '3600', upsert: false });
     if (error) throw error;
     return { url: filePath, name: file.name, path: filePath };

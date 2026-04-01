@@ -17,7 +17,7 @@ export async function getCategories(): Promise<CompetencyCategory[]> {
     ensureConfigured();
     const { data, error } = await supabase
         .from('competency_categories')
-        .select('id, name, description, display_order, is_active')
+        .select('id, name, description, display_order, is_active, created_at, updated_at')
         .eq('is_active', true)
         .order('display_order', { ascending: true });
     if (error) throw error;
