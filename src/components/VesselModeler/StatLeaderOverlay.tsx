@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
 import * as THREE from 'three';
 import type { AnnotationShapeConfig, VesselState } from './types';
 import { shellPoint } from './engine/annotation-geometry';
@@ -18,41 +18,32 @@ export default function StatLeaderOverlay({
   cameraRef,
   containerRef,
 }: StatLeaderOverlayProps) {
-  const [screen, setScreen] = useState<{ x: number; y: number } | null>(null);
+  const camera = cameraRef.current;
+  const container = containerRef.current;
 
-  useEffect(() => {
-    const camera = cameraRef.current;
-    const container = containerRef.current;
-    if (!camera || !container || !annotation.thicknessStats) return;
+  const screen = useMemo(() => {
+    if (!camera || !container || !annotation.thicknessStats) return null;
 
     const stats = annotation.thicknessStats;
     const point = hoveredStat === 'min' ? stats.minPoint : stats.maxPoint;
 
-    // Convert vessel-surface coords to 3D world position
     const angleRad = (point.angle * Math.PI) / 180;
     const worldPt = shellPoint(point.pos, angleRad, vesselState, 2);
 
-    // shellPoint already applies SCALE internally, but we need the final Three.js coords
     const projected = worldPt.clone().project(camera);
+
+    // Behind camera check
+    if (projected.z > 1) return null;
 
     const w = container.clientWidth;
     const h = container.clientHeight;
-    const sx = (projected.x * 0.5 + 0.5) * w;
-    const sy = (-projected.y * 0.5 + 0.5) * h;
+    return {
+      x: (projected.x * 0.5 + 0.5) * w,
+      y: (-projected.y * 0.5 + 0.5) * h,
+    };
+  }, [hoveredStat, annotation, vesselState, camera, container]);
 
-    // Behind camera check
-    if (projected.z > 1) {
-      setScreen(null);
-      return;
-    }
-
-    setScreen({ x: sx, y: sy });
-  });
-
-  if (!screen) return null;
-
-  const container = containerRef.current;
-  if (!container) return null;
+  if (!screen || !container) return null;
 
   const w = container.clientWidth;
   const h = container.clientHeight;

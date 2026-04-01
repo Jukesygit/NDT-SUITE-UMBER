@@ -179,40 +179,7 @@ export function computeAnnotationThicknessStats(
     }
   }
 
-  if (values.length === 0) {
-    // Debug: log detailed overlap diagnostics
-    const confirmed = composites.filter(c => c.orientationConfirmed);
-    for (const c of confirmed) {
-      const datumConv = c.datumAngleDeg + 90;
-      const indexRange = c.yAxis[c.yAxis.length - 1] - c.yAxis[0];
-      const testAxial = centerPos;
-      const testAngle = centerAngle;
-      const idxOff = c.indexDirection === 'forward' ? testAxial - c.indexStartMm : c.indexStartMm - testAxial;
-      const rawD = angularDelta(datumConv, testAngle);
-      const scanOff = c.scanDirection === 'cw' ? (-rawD / 360) * circumference : (rawD / 360) * circumference;
-      console.warn('[annotation-stats] Debug for', ann.name, {
-        annCenter: { pos: testAxial, angle: testAngle },
-        composite: {
-          datumAngleDeg: c.datumAngleDeg,
-          datumConverted: datumConv,
-          indexStartMm: c.indexStartMm,
-          indexDir: c.indexDirection,
-          scanDir: c.scanDirection,
-          xAxisRange: [c.xAxis[0], c.xAxis[c.xAxis.length - 1]],
-          yAxisRange: [c.yAxis[0], c.yAxis[c.yAxis.length - 1]],
-          indexRange,
-        },
-        sampling: {
-          indexOffset: idxOff,
-          indexInRange: idxOff >= 0 && idxOff <= indexRange,
-          rawAngularDelta: rawD,
-          scanOffsetMm: scanOff,
-          scanInRange: scanOff >= c.xAxis[0] && scanOff <= c.xAxis[c.xAxis.length - 1],
-        },
-      });
-    }
-    return undefined;
-  }
+  if (values.length === 0) return undefined;
 
   // Compute statistics
   let min = Infinity;
