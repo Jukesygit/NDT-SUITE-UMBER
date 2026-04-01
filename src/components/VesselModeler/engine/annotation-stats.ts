@@ -75,7 +75,10 @@ function sampleComposite(
   const scanRangeMm = scanEndMm - scanStartMm;
 
   // Angular offset from datum in the scan direction (converted to mm)
-  const rawDelta = angularDelta(datumAngleDeg, angleDeg);
+  // datumAngleDeg uses 0=TDC convention, but annotation angles use 90=TDC.
+  // Convert datum to annotation convention by adding 90.
+  const datumInAnnConvention = datumAngleDeg + 90;
+  const rawDelta = angularDelta(datumInAnnConvention, angleDeg);
   let scanOffsetMm: number;
   if (scanDirection === 'cw') {
     scanOffsetMm = (-rawDelta / 360) * circumference; // CW → positive when angleDeg < datum

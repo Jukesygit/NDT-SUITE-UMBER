@@ -75,8 +75,10 @@ function compositeOverlapsAnnotation(
   const annAngleMin = ann.angle - halfHeightDeg;
   const annAngleMax = ann.angle + halfHeightDeg;
 
+  // datumAngleDeg uses 0=TDC, annotation angles use 90=TDC — convert
+  const datumInAnnConvention = datumAngleDeg + 90;
   for (const testAngle of [annAngleMin, annAngleMax, ann.angle]) {
-    const rawDelta = angularDelta(datumAngleDeg, testAngle);
+    const rawDelta = angularDelta(datumInAnnConvention, testAngle);
     const scanOffsetMm = scanDirection === 'cw'
       ? (-rawDelta / 360) * circumference
       : (rawDelta / 360) * circumference;
@@ -84,7 +86,7 @@ function compositeOverlapsAnnotation(
   }
 
   // Also test composite edges against annotation center
-  const datumDelta = angularDelta(ann.angle, datumAngleDeg);
+  const datumDelta = angularDelta(ann.angle, datumInAnnConvention);
   const datumDeltaDeg = Math.abs(datumDelta);
   if (datumDeltaDeg <= halfHeightDeg) return true;
 
@@ -121,7 +123,8 @@ function sampleComposite(
   const scanEndMm = xAxis[xAxis.length - 1];
   const scanRangeMm = scanEndMm - scanStartMm;
 
-  const rawDelta = angularDelta(datumAngleDeg, angleDeg);
+  // datumAngleDeg uses 0=TDC, annotation angles use 90=TDC — convert
+  const rawDelta = angularDelta(datumAngleDeg + 90, angleDeg);
   let scanOffsetMm: number;
   if (scanDirection === 'cw') {
     scanOffsetMm = (-rawDelta / 360) * circumference;
