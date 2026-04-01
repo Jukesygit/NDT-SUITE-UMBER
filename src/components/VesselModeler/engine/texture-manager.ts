@@ -69,7 +69,7 @@ function buildSelectionBorder(
 ): THREE.Mesh {
   const shellRadius = vesselState.id / 2;
   const TAN_TAN = vesselState.length;
-  const HEAD_DEPTH = vesselState.id / (2 * vesselState.headRatio);
+  const HEAD_DEPTH = vesselState.headRatio > 0 ? vesselState.id / (2 * vesselState.headRatio) : 0;
   const RADIUS = shellRadius;
   const isVertical = vesselState.orientation === 'vertical';
 
@@ -211,7 +211,7 @@ export function createTexturePlane(
   const texHeight = baseSize * tex.scaleY * curvatureCompensation;
 
   const TAN_TAN = vesselState.length;
-  const HEAD_DEPTH = vesselState.id / (2 * vesselState.headRatio);
+  const HEAD_DEPTH = vesselState.headRatio > 0 ? vesselState.id / (2 * vesselState.headRatio) : 0;
   const RADIUS = shellRadius;
 
   const circumference = 2 * Math.PI * RADIUS;
@@ -324,8 +324,8 @@ export function createTexturePlane(
   const mesh = new THREE.Mesh(geometry, material);
   mesh.userData = { type: 'texture', id: tex.id };
 
-  // --- Selection highlight border ---
-  if (tex.id === selectedTextureId) {
+  // --- Selection highlight border (always created, hidden when not selected) ---
+  {
     const border = buildSelectionBorder(
       tex,
       vesselState,
@@ -335,6 +335,7 @@ export function createTexturePlane(
       segmentsY,
     );
     border.userData = { type: 'texture-border', id: tex.id };
+    border.visible = tex.id === selectedTextureId;
     mesh.add(border);
   }
 
@@ -345,19 +346,42 @@ export function createTexturePlane(
 // Scan Composite Heatmap Cache
 // ---------------------------------------------------------------------------
 
+const HEATMAP_CACHE_MAX = 10;
 const heatmapCache = new Map<string, HeatmapTextureResult>();
 
 /**
+ * Build a cache key that includes visual parameters so colorscale/range/opacity
+ * changes naturally invalidate the entry without explicit clearing.
+ */
+function heatmapCacheKey(composite: { id: string; colorScale: string; rangeMin: number | null; rangeMax: number | null; opacity: number }): string {
+  return `${composite.id}_${composite.colorScale}_${composite.rangeMin}_${composite.rangeMax}_${composite.opacity}`;
+}
+
+/**
+ * Evict oldest entries when cache exceeds max size (simple LRU via insertion order).
+ */
+function evictHeatmapCache(): void {
+  while (heatmapCache.size > HEATMAP_CACHE_MAX) {
+    const oldest = heatmapCache.keys().next().value!;
+    const entry = heatmapCache.get(oldest);
+    if (entry) entry.texture.dispose();
+    heatmapCache.delete(oldest);
+  }
+}
+
+/**
  * Dispose cached heatmap texture(s) and free GPU / canvas memory.
- * If `compositeId` is provided, only that entry is removed; otherwise the
- * entire cache is cleared.
+ * If `compositeId` is provided, removes all entries for that composite;
+ * otherwise the entire cache is cleared.
  */
 export function clearHeatmapCache(compositeId?: string): void {
   if (compositeId !== undefined) {
-    const entry = heatmapCache.get(compositeId);
-    if (entry) {
-      entry.texture.dispose();
-      heatmapCache.delete(compositeId);
+    // Remove all entries whose key starts with this composite ID
+    for (const [key, entry] of heatmapCache) {
+      if (key.startsWith(compositeId + '_') || key === compositeId) {
+        entry.texture.dispose();
+        heatmapCache.delete(key);
+      }
     }
   } else {
     for (const entry of heatmapCache.values()) {
@@ -403,23 +427,26 @@ export function createScanCompositePlane(
     return null;
   }
 
-  // --- Get or create cached heatmap texture ---
-  let heatmapResult = heatmapCache.get(composite.id);
+  // --- Get or create cached heatmap texture (keyed by visual params) ---
+  const cacheKey = heatmapCacheKey(composite);
+  let heatmapResult = heatmapCache.get(cacheKey);
   if (!heatmapResult) {
     heatmapResult = createHeatmapTexture(composite.data, composite.stats, {
       colorScale: composite.colorScale,
       rangeMin: composite.rangeMin,
       rangeMax: composite.rangeMax,
       opacity: composite.opacity,
+      reverseScale: true, // NDT convention: thin (low) = red (danger), thick (high) = blue (safe)
     });
-    heatmapCache.set(composite.id, heatmapResult);
+    heatmapCache.set(cacheKey, heatmapResult);
+    evictHeatmapCache();
   }
 
   // --- Vessel geometry constants ---
   const shellRadius = vesselState.id / 2;
   const RADIUS = shellRadius;
   const TAN_TAN = vesselState.length;
-  const HEAD_DEPTH = vesselState.id / (2 * vesselState.headRatio);
+  const HEAD_DEPTH = vesselState.headRatio > 0 ? vesselState.id / (2 * vesselState.headRatio) : 0;
   const isVertical = vesselState.orientation === 'vertical';
   const circumference = 2 * Math.PI * RADIUS;
 
@@ -442,13 +469,22 @@ export function createScanCompositePlane(
       : composite.indexStartMm - indexHalf;
 
   // --- Center angle (circumferential) ---
-  // TDC = 90 degrees = PI/2 radians in vessel coordinate system
-  const tdcRad = (90 * Math.PI) / 180;
+  // datumAngleDeg is user-facing: 0° = TDC (12 o'clock). Add 90° to convert to
+  // internal coordinates where 0° = 3 o'clock and 90° = TDC.
+  // xAxis[0] is the circumferential distance (mm) from the datum where the scan starts.
+  // The vertex loop maps v=1 → col 0 (xAxis[0]) at centerAngle + scanHalf,
+  // so centerAngle = startAngle - scanHalf to place col 0 at the correct position.
+  const datumRad = ((composite.datumAngleDeg + 90) * Math.PI) / 180;
+  const scanStartMm = composite.xAxis[0];
+  const scanStartRad = (scanStartMm / circumference) * 2 * Math.PI;
   const scanHalf = angularSpan / 2;
-  const centerAngle =
+  const startAngle =
     composite.scanDirection === 'cw'
-      ? tdcRad - scanHalf
-      : tdcRad + scanHalf;
+      ? datumRad - scanStartRad   // CW: angle decreases from datum
+      : datumRad + scanStartRad;  // CCW: angle increases from datum
+  const centerAngle = composite.scanDirection === 'cw'
+    ? startAngle - scanHalf   // CW: scan extends toward decreasing angles
+    : startAngle + scanHalf;  // CCW: scan extends toward increasing angles
 
   // --- Segment counts (scale with physical size) ---
   const baseSegments = 64;
@@ -524,8 +560,12 @@ export function createScanCompositePlane(
 
       vertices.push(x, y, z);
 
-      // Simple linear UV mapping (data orientation handled by axis mapping)
-      uvs.push(u, 1 - v);
+      // UV mapping: uv.x → circumferential (scan/xAxis), uv.y → longitudinal (index/yAxis)
+      // CW: 1-v keeps column 0 at datum side; CCW: v flips so column 0 is still at datum
+      // Forward: 1-u maps longitudinal rows; Reverse: u flips row order
+      const vMapped = composite.scanDirection === 'ccw' ? v : 1 - v;
+      const uMapped = composite.indexDirection === 'reverse' ? u : 1 - u;
+      uvs.push(vMapped, uMapped);
     }
   }
 
@@ -565,12 +605,14 @@ export function createScanCompositePlane(
     xAxis: composite.xAxis,
     yAxis: composite.yAxis,
     stats: composite.stats,
-    width: texWidth,
-    height: scanRange,
+    width: composite.xAxis.length,
+    height: composite.yAxis.length,
+    scanDirection: composite.scanDirection,
+    indexDirection: composite.indexDirection,
   };
 
-  // --- Selection highlight border ---
-  if (composite.id === selectedId) {
+  // --- Selection highlight border (always created, hidden when not selected) ---
+  {
     const borderMaterial = new THREE.MeshBasicMaterial({
       color: 0xffcc00,
       transparent: true,
@@ -582,7 +624,7 @@ export function createScanCompositePlane(
     const borderScale = 1.08;
     const borderWidth = texWidth * borderScale;
     const borderAngularSpan = angularSpan * borderScale;
-    const borderOffset = 1; // sits slightly behind the texture
+    const borderOffset = 1;
 
     const borderGeometry = new THREE.BufferGeometry();
     const borderVertices: number[] = [];
@@ -663,6 +705,7 @@ export function createScanCompositePlane(
 
     const border = new THREE.Mesh(borderGeometry, borderMaterial);
     border.userData = { type: 'scanComposite-border', id: composite.id };
+    border.visible = composite.id === selectedId;
     mesh.add(border);
   }
 

@@ -68,24 +68,26 @@ function sampleComposite(
   if (indexOffset < 0 || indexOffset > indexRangeMm) return undefined;
 
   // --- Scan (circumferential) axis ---
-  const scanRangeMm = xAxis[xAxis.length - 1] - xAxis[0];
-  const scanRangeDeg = (scanRangeMm / circumference) * 360;
+  // xAxis values are mm from the datum along the scan direction.
+  // The scan covers from xAxis[0] to xAxis[last].
+  const scanStartMm = xAxis[0];
+  const scanEndMm = xAxis[xAxis.length - 1];
+  const scanRangeMm = scanEndMm - scanStartMm;
 
-  // Angular offset from datum in the scan direction
+  // Angular offset from datum in the scan direction (converted to mm)
   const rawDelta = angularDelta(datumAngleDeg, angleDeg);
-  // scanDirection 'cw' means angles decrease (delta < 0), 'ccw' means increase
-  let scanOffsetDeg: number;
+  let scanOffsetMm: number;
   if (scanDirection === 'cw') {
-    scanOffsetDeg = -rawDelta; // CW → positive offset when angleDeg < datumAngleDeg
+    scanOffsetMm = (-rawDelta / 360) * circumference; // CW → positive when angleDeg < datum
   } else {
-    scanOffsetDeg = rawDelta; // CCW → positive offset when angleDeg > datumAngleDeg
+    scanOffsetMm = (rawDelta / 360) * circumference; // CCW → positive when angleDeg > datum
   }
-  if (scanOffsetDeg < 0 || scanOffsetDeg > scanRangeDeg) return undefined;
+  // Check if the point falls within the scan range [xAxis[0], xAxis[last]]
+  if (scanOffsetMm < scanStartMm || scanOffsetMm > scanEndMm) return undefined;
 
   // Convert offsets to data grid indices
   const rowFrac = indexRangeMm > 0 ? (indexOffset / indexRangeMm) * (data.length - 1) : 0;
-  const scanOffsetMm = (scanOffsetDeg / 360) * circumference - xAxis[0];
-  const colFrac = scanRangeMm > 0 ? (scanOffsetMm / scanRangeMm) * (data[0].length - 1) : 0;
+  const colFrac = scanRangeMm > 0 ? ((scanOffsetMm - scanStartMm) / scanRangeMm) * (data[0].length - 1) : 0;
 
   const row = Math.round(rowFrac);
   const col = Math.round(colFrac);

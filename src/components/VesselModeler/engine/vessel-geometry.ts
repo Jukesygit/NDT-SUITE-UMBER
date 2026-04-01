@@ -16,6 +16,7 @@ import { createFlangedNozzle } from './nozzle-geometry';
 import { createLiftingLug } from './lifting-lug-geometry';
 import { createSaddleGroup, getSaddleBaseY } from './saddle-geometry';
 import { createScanCompositePlane } from './texture-manager';
+import { buildScanOrientationGizmo } from './scan-gizmo-geometry';
 
 // ---------------------------------------------------------------------------
 // Result interface
@@ -28,6 +29,7 @@ export interface BuildSceneResult {
   saddleMeshes: THREE.Object3D[];
   textureMeshes: THREE.Mesh[];
   scanCompositeMeshes: THREE.Mesh[];
+  gizmoMeshes: THREE.Object3D[];
 }
 
 // ---------------------------------------------------------------------------
@@ -61,7 +63,7 @@ function createTexturePlane(
   // Base size relative to vessel - size in mm
   const RADIUS = shellRadius;
   const TAN_TAN = state.length;
-  const HEAD_DEPTH = state.id / (2 * state.headRatio);
+  const HEAD_DEPTH = state.headRatio > 0 ? state.id / (2 * state.headRatio) : 0;
   const baseSize = RADIUS * 0.4; // Base size in mm
   const texWidth = baseSize * tex.scaleX * aspect; // Width in mm (along vessel length)
   // Apply curvature compensation: increase circumferential coverage slightly
@@ -215,9 +217,8 @@ function createTexturePlane(
 
   const mesh = new THREE.Mesh(geometry, material);
 
-  // Add highlight border if selected
-  if (tex.id === selectedTextureId) {
-    // Create a slightly larger version for the border
+  // Always create highlight border (hidden when not selected, toggled by Tier 2)
+  {
     const borderVertices: number[] = [];
     const borderScale = 1.08;
 
@@ -294,6 +295,8 @@ function createTexturePlane(
     });
 
     const border = new THREE.Mesh(borderGeom, borderMat);
+    border.userData = { type: 'texture-border' };
+    border.visible = tex.id === selectedTextureId;
     mesh.add(border);
   }
 
@@ -341,18 +344,19 @@ export function buildVesselScene(
   const saddleMeshes: THREE.Object3D[] = [];
   const textureMeshes: THREE.Mesh[] = [];
   const scanCompositeMeshes: THREE.Mesh[] = [];
+  const gizmoMeshes: THREE.Object3D[] = [];
 
   // -- Return empty group with grid if no model data yet --------------------
   if (!state.hasModel) {
     const grid = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
     vesselGroup.add(grid);
-    return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes, scanCompositeMeshes };
+    return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes, scanCompositeMeshes, gizmoMeshes };
   }
 
   // -- Vessel dimensions ----------------------------------------------------
   const RADIUS = state.id / 2;
   const TAN_TAN = state.length;
-  const HEAD_DEPTH = state.id / (2 * state.headRatio);
+  const HEAD_DEPTH = state.headRatio > 0 ? state.id / (2 * state.headRatio) : 0;
   const isVertical = state.orientation === 'vertical';
 
   // -- Shell cylinder -------------------------------------------------------
@@ -658,12 +662,32 @@ export function buildVesselScene(
     }
   });
 
-  // -- Scan Composite Overlays ----------------------------------------------
+  // -- Scan Composite Overlays (only render if orientation is confirmed) ------
   for (const composite of state.scanComposites) {
+    if (!composite.orientationConfirmed) continue;
     const mesh = createScanCompositePlane(composite, state, selectedScanCompositeId);
     if (mesh) {
       vesselGroup.add(mesh);
       scanCompositeMeshes.push(mesh);
+    }
+  }
+
+  // -- Scan Orientation Gizmo (for selected composite only) -----------------
+  if (selectedScanCompositeId) {
+    const selectedComposite = state.scanComposites.find(
+      sc => sc.id === selectedScanCompositeId,
+    );
+    if (selectedComposite && !selectedComposite.orientationConfirmed) {
+      const { group: gizmoGroup, originMesh } = buildScanOrientationGizmo(
+        selectedComposite,
+        state,
+      );
+      vesselGroup.add(gizmoGroup);
+      gizmoMeshes.push(originMesh);
+      // Also add arrow groups for click-to-toggle raycasting
+      gizmoGroup.children.forEach(child => {
+        if (child !== originMesh) gizmoMeshes.push(child);
+      });
     }
   }
 
@@ -677,5 +701,5 @@ export function buildVesselScene(
     : getSaddleBaseY(state);
   vesselGroup.add(grid);
 
-  return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes, scanCompositeMeshes };
+  return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes, scanCompositeMeshes, gizmoMeshes };
 }

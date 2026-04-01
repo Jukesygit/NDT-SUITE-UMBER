@@ -207,9 +207,8 @@ class CscanWorkerManager {
   async processFiles(files: File[], options: ProcessFilesOptions = {}): Promise<ProcessFilesResult> {
     const { batchSize = 15, onProgress } = options;
 
-    // If no worker, fall back to main thread
     if (!this.worker) {
-      return this.processFilesMainThread(files, options);
+      throw new Error('Web Worker unavailable. Please use a modern browser to process C-scan files.');
     }
 
     await this.ensureReady();
@@ -244,26 +243,6 @@ class CscanWorkerManager {
         buffers // Transfer ownership to avoid copying
       );
     });
-  }
-
-  /**
-   * Fallback: Process files on main thread
-   */
-  private async processFilesMainThread(files: File[], options: ProcessFilesOptions = {}): Promise<ProcessFilesResult> {
-    const { onProgress } = options;
-
-    // Dynamic import to avoid loading parser if worker works
-    const { processFiles: legacyProcessFiles, hasOffsetsToCorrect } = await import('./fileParser');
-
-    const scans = await legacyProcessFiles(files, (current, total) => {
-      onProgress?.({ current, total, message: `Processing ${current}/${total}...` });
-    });
-
-    return {
-      scans,
-      efficientScans: [], // Not available in fallback
-      hasOffsetIssues: hasOffsetsToCorrect(scans)
-    };
   }
 
   /**

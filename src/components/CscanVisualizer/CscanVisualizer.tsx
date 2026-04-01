@@ -15,7 +15,6 @@ import ToolBar from './ToolBar';
 import StatsPanel from './StatsPanel';
 import CsvRepairModal from './CsvRepairModal';
 import { CscanData, Tool, DisplaySettings } from './types';
-import { createComposite } from './utils/fileParser';
 import { exportAndDownloadHeatmap } from './utils/streamedExport';
 import {
   processFilesWithWorker,
@@ -235,41 +234,17 @@ const CscanVisualizer: React.FC = () => {
         });
         setTimeout(() => setStatusMessage(null), 4000);
       } else {
-        // Last resort: legacy composite (only if worker unavailable)
-        const composite = createComposite(scansToComposite);
-        if (composite) {
-          // Also replace source scans in legacy path
-          const compositeSourceIds = new Set(scansToComposite.map(s => s.id));
-          setProcessedScans(prev => {
-            const nonSourceScans = prev.filter(s => !compositeSourceIds.has(s.id));
-            return [...nonSourceScans, composite];
-          });
-          setScanData(composite);
-          setSelectedScans(new Set());
-          setDisplaySettings(prev => ({
-            ...prev,
-            range: { min: null, max: null }
-          }));
-        }
+        setStatusMessage({
+          type: 'error',
+          message: 'Failed to create composite — worker unavailable. Please use a modern browser.'
+        });
+        setTimeout(() => setStatusMessage(null), 5000);
       }
     } catch (error) {
       setProcessingProgress(null);
-
-      // Last resort fallback to legacy composite
-      const composite = createComposite(scansToComposite);
-      if (composite) {
-        const compositeSourceIds = new Set(scansToComposite.map(s => s.id));
-        setProcessedScans(prev => {
-          const nonSourceScans = prev.filter(s => !compositeSourceIds.has(s.id));
-          return [...nonSourceScans, composite];
-        });
-        setScanData(composite);
-        setSelectedScans(new Set());
-        setDisplaySettings(prev => ({
-          ...prev,
-          range: { min: null, max: null }
-        }));
-      }
+      const msg = error instanceof Error ? error.message : 'Unknown error creating composite';
+      setStatusMessage({ type: 'error', message: msg });
+      setTimeout(() => setStatusMessage(null), 5000);
     }
   }, [processedScans, selectedScans]);
 
@@ -314,7 +289,10 @@ const CscanVisualizer: React.FC = () => {
       setTimeout(() => setStatusMessage(null), 3000);
     } catch (err) {
       console.error('Failed to save composite:', err);
-      setStatusMessage({ type: 'error', message: 'Failed to save composite' });
+      const sizeMsg = err instanceof Error && err.message?.includes('maximum allowed size')
+        ? ' — file too large for storage'
+        : '';
+      setStatusMessage({ type: 'error', message: `Failed to save composite${sizeMsg}` });
       setTimeout(() => setStatusMessage(null), 5000);
     }
   }, [scanData, user, saveName, saveComposite]);
