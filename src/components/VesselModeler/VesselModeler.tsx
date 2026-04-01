@@ -1210,8 +1210,23 @@ export default function VesselModeler() {
         dispatch({ type: 'CYCLE_INSPECTION', annotationId });
     }, [vesselState]);
 
-    // enterInspectionMode is called from sidebar annotation double-click (future)
-    void enterInspectionMode;
+    // Sidebar annotation click: enter/cycle inspection mode when scan data exists
+    const handleSidebarAnnotationSelect = useCallback((id: number) => {
+        const ann = vesselState.annotations.find(a => a.id === id);
+        const hasConfirmedScans = vesselState.scanComposites.some(sc => sc.orientationConfirmed && sc.data.length > 0);
+        const hasScanData = !!ann?.thicknessStats && hasConfirmedScans;
+
+        if (hasScanData) {
+            if (ui.inspectingAnnotationId !== null && ui.inspectingAnnotationId !== id) {
+                cycleInspection(id);
+            } else if (ui.inspectingAnnotationId === null) {
+                enterInspectionMode(id);
+            }
+            // If clicking the already-inspected annotation, do nothing extra
+        } else {
+            dispatch({ type: 'SELECT_ANNOTATION', id });
+        }
+    }, [vesselState, ui.inspectingAnnotationId, enterInspectionMode, cycleInspection]);
 
     // --- Escape key cancels draw mode or exits inspection mode ---
     useEffect(() => {
@@ -1545,7 +1560,7 @@ export default function VesselModeler() {
                         onAddAnnotation={addAnnotation}
                         onUpdateAnnotation={updateAnnotation}
                         onRemoveAnnotation={removeAnnotation}
-                        onSelectAnnotation={(id) => dispatch({ type: 'SELECT_ANNOTATION', id })}
+                        onSelectAnnotation={handleSidebarAnnotationSelect}
                         onUpdateMeasurementConfig={updateMeasurementConfig}
                         getNextAnnotationId={getNextAnnotationId}
                         coverageDrawMode={drawModeState.coverage}
