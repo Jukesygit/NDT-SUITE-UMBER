@@ -138,7 +138,7 @@ export const parseCscanFile = async (file: File): Promise<CscanData> => {
   xAxis = headerParts.slice(1).map(v => {
     const num = parseFloat(v.trim());
     return isNaN(num) ? 0 : num;
-  }).filter((_, idx) => !isNaN(headerParts[idx + 1] as any));
+  }).filter((_, idx) => !isNaN(Number(headerParts[idx + 1])));
 
   // Parse data rows
   for (let i = dataStartIndex + 1; i < lines.length; i++) {

@@ -8,7 +8,7 @@ import FormField from '../../../components/ui/Form/FormField';
 import { FormTextarea, FormCheckbox, FormSelect } from '../../../components/ui';
 import { useCreateDefinition } from '../../../hooks/mutations';
 import { RandomMatrixSpinner } from '../../../components/MatrixSpinners';
-import type { CompetencyCategory } from '../../../hooks/queries/useCompetencies';
+import type { CompetencyCategory, CompetencyDefinition } from '../../../hooks/queries/useCompetencies';
 
 export interface CreateDefinitionModalProps {
     isOpen: boolean;
@@ -37,7 +37,7 @@ export function CreateDefinitionModal({ isOpen, onClose, categories }: CreateDef
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [categoryId, setCategoryId] = useState('');
-    const [fieldType, setFieldType] = useState<string>('expiry_date');
+    const [fieldType, setFieldType] = useState<CompetencyDefinition['field_type']>('expiry_date');
     const [requiresDocument, setRequiresDocument] = useState(true);
     const [requiresApproval, setRequiresApproval] = useState(false);
     const [errors, setErrors] = useState<FormErrors>({});
@@ -64,7 +64,7 @@ export function CreateDefinitionModal({ isOpen, onClose, categories }: CreateDef
                 name: trimmedName,
                 description: description.trim() || undefined,
                 category_id: categoryId,
-                field_type: fieldType as any,
+                field_type: fieldType,
                 requires_document: requiresDocument,
                 requires_approval: requiresApproval,
             });
@@ -155,7 +155,7 @@ export function CreateDefinitionModal({ isOpen, onClose, categories }: CreateDef
                 <FormSelect
                     label="Field Type"
                     value={fieldType}
-                    onChange={(e) => setFieldType(e.target.value)}
+                    onChange={(e) => setFieldType(e.target.value as CompetencyDefinition['field_type'])}
                     required
                 >
                     {FIELD_TYPE_OPTIONS.map((opt) => (

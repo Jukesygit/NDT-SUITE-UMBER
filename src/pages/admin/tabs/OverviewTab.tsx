@@ -228,7 +228,7 @@ export default function OverviewTab() {
                                         </p>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <StatusBadge variant={user.role as any}>
+                                        <StatusBadge variant={user.role}>
                                             {user.role}
                                         </StatusBadge>
                                         <StatusBadge variant={user.is_active ? 'active' : 'inactive'} />

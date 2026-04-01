@@ -113,7 +113,7 @@ export function EditUserModal({ isOpen, onClose, user }: EditUserModalProps) {
             const result = await updateUser.mutateAsync({
                 id: user.id,
                 data: {
-                    role: formData.role as any, // Type coercion needed due to enum vs string union
+                    role: formData.role,
                     organizationId: formData.organizationId,
                     isActive: formData.isActive,
                 },

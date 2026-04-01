@@ -155,7 +155,7 @@ export function CreateUserModal({ isOpen, onClose }: CreateUserModalProps) {
                 username: formData.username.trim(),
                 email: formData.email.trim(),
                 password: formData.password,
-                role: formData.role as any, // Type coercion needed due to enum vs string union
+                role: formData.role,
                 organizationId: formData.organizationId,
             });
 

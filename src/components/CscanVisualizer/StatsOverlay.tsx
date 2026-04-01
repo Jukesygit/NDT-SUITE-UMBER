@@ -25,6 +25,7 @@ const StatsOverlay: React.FC<StatsOverlayProps> = ({ data, onClose }) => {
           min: 0,
           max: 0,
           mean: 0,
+          median: 0,
           stdDev: 0,
           validPoints: 0,
           totalPoints: data.width * data.height,
@@ -40,10 +41,16 @@ const StatsOverlay: React.FC<StatsOverlayProps> = ({ data, onClose }) => {
       const variance = flatData.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / validPoints;
       const stdDev = Math.sqrt(variance);
 
+      // Calculate median
+      const sorted = [...flatData].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      const median = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+
       return {
         min,
         max,
         mean,
+        median,
         stdDev,
         validPoints,
         totalPoints: data.width * data.height,
@@ -165,7 +172,7 @@ const StatsOverlay: React.FC<StatsOverlayProps> = ({ data, onClose }) => {
             </div>
             <div className="bg-gray-900/50 rounded p-2">
               <div className="text-xs text-gray-400 mb-1">Median</div>
-              <div className="text-sm font-mono text-white">{formatValue((stats as any).median ?? stats.mean)} mm</div>
+              <div className="text-sm font-mono text-white">{formatValue(stats.median ?? stats.mean)} mm</div>
             </div>
             <div className="bg-gray-900/50 rounded p-2">
               <div className="text-xs text-gray-400 mb-1">Std Dev</div>
