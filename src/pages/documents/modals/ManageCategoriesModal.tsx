@@ -134,7 +134,7 @@ export default function ManageCategoriesModal({ isOpen, onClose }: Props) {
                 ),
             },
         ],
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
         [categories.length, reorderCategories.isPending]
     );
 

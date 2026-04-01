@@ -429,13 +429,13 @@ export class InteractionManager {
       const state = this.vesselState;
       const isVertical = state.orientation === 'vertical';
 
-      let currentPos = isVertical
+      const currentPos = isVertical
         ? (point.y / SCALE) + (state.length / 2)
         : (point.x / SCALE) + (state.length / 2);
       const rad = isVertical
         ? Math.atan2(point.z, point.x)
         : Math.atan2(point.y, point.z);
-      let currentAngle = ((rad * 180) / Math.PI + 360) % 360;
+      const currentAngle = ((rad * 180) / Math.PI + 360) % 360;
 
       const circumference = Math.PI * state.id;
       const axialDelta = Math.abs(currentPos - this.drawStartPos);
@@ -512,7 +512,7 @@ export class InteractionManager {
 
       const point = hits[0].point;
       const isVertical = state.orientation === 'vertical';
-      let newPos = isVertical
+      const newPos = isVertical
         ? (point.y / SCALE) + (state.length / 2)
         : (point.x / SCALE) + (state.length / 2);
       const rad = isVertical
@@ -653,13 +653,13 @@ export class InteractionManager {
         const state = this.vesselState;
         const isVertical = state.orientation === 'vertical';
 
-        let endPos = isVertical
+        const endPos = isVertical
           ? (point.y / SCALE) + (state.length / 2)
           : (point.x / SCALE) + (state.length / 2);
         const rad = isVertical
           ? Math.atan2(point.z, point.x)
           : Math.atan2(point.y, point.z);
-        let endAngle = ((rad * 180) / Math.PI + 360) % 360;
+        const endAngle = ((rad * 180) / Math.PI + 360) % 360;
 
         const circumference = Math.PI * state.id;
         const axialDelta = Math.abs(endPos - this.drawStartPos);

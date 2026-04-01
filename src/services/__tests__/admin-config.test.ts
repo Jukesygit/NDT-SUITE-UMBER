@@ -40,7 +40,7 @@ const { mockChain, mockAuth, mockConfigManager } = vi.hoisted(() => {
 
 vi.mock('../../supabase-client.js', () => ({ default: mockChain, supabase: mockChain }));
 vi.mock('../../auth-manager.js', () => ({ default: mockAuth }));
-vi.mock('../../admin-config.js', () => ({ default: mockConfigManager }));
+vi.mock('../../config/admin.ts', () => ({ default: mockConfigManager }));
 
 import {
     getConfig, getConfigMetadata, addConfigItem, updateConfigItem,

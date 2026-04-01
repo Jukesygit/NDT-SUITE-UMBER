@@ -4,7 +4,7 @@
 
 import { supabase } from '../supabase-client.js';
 import authManager from '../auth-manager.js';
-import adminConfigManager from '../admin-config.js';
+import adminConfigManager from '../config/admin.ts';
 import type {
   ConfigMetadata,
   ServiceResult,

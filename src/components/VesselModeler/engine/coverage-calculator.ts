@@ -51,8 +51,8 @@ function toUnwrappedRects(rects: CoverageRectConfig[], vesselState: VesselState)
 
     const posMin = r.pos - halfW;
     const posMax = r.pos + halfW;
-    let angleMin = r.angle - angularHalfSpan;
-    let angleMax = r.angle + angularHalfSpan;
+    const angleMin = r.angle - angularHalfSpan;
+    const angleMax = r.angle + angularHalfSpan;
 
     // Handle wrapping around 0/360 boundary
     if (angleMin < 0) {

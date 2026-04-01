@@ -72,7 +72,7 @@ function computeCircumDistance(
 ): { value: number; label: string } {
   const circumference = Math.PI * vesselState.id;
   const TDC = 90;
-  let angle = ((angleDeg % 360) + 360) % 360;
+  const angle = ((angleDeg % 360) + 360) % 360;
   let diff = angle - TDC;
   if (config.viewFromEnd === 'left') diff = -diff;
   if (config.circumDirection === 'CCW') diff = -diff;
