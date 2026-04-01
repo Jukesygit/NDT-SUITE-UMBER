@@ -56,7 +56,7 @@ export default function OverviewTab() {
     }
 
     // Memoize computed values to avoid recalculating on every render
-    const { safeOrganizations, safeUsers, pendingRequests, topOrganizations, recentUsers } = useMemo(() => {
+    const { pendingRequests, topOrganizations, recentUsers } = useMemo(() => {
         const safeOrganizations = Array.isArray(organizations) ? organizations : [];
         const safeUsers = Array.isArray(users) ? users : [];
         const pendingRequests = (stats?.pendingAccountRequests || 0) + (stats?.pendingPermissionRequests || 0);

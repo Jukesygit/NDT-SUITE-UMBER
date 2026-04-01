@@ -183,10 +183,10 @@ export async function getPermissionRequests(): Promise<PermissionRequest[]> {
     // Map profiles to requests
     const profileMap = new Map(profiles?.map((p: { id: string; username: string; email: string }) => [p.id, p]) || []);
 
-    return requests.map((req: { user_id: string; [key: string]: unknown }) => ({
+    return requests.map((req) => ({
       ...req,
       profiles: profileMap.get(req.user_id) || undefined,
-    }));
+    })) as PermissionRequest[];
   } catch (error) {
     return [];
   }

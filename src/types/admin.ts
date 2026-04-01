@@ -1,5 +1,8 @@
 // Admin Dashboard Type Definitions
 
+import type { UserRole } from './auth.types';
+export type { UserRole };
+
 // ============================================================================
 // Organization Types
 // ============================================================================
@@ -22,8 +25,6 @@ export interface OrganizationStats extends Organization {
 // ============================================================================
 // User Types
 // ============================================================================
-
-export type UserRole = 'admin' | 'manager' | 'org_admin' | 'editor' | 'viewer';
 
 export interface AdminUser {
   id: string;

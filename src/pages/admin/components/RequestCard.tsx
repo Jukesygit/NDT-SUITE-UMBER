@@ -135,8 +135,8 @@ export function RequestCard(props: RequestCardProps) {
                     <p className="text-sm text-white/70">{permissionRequest.profiles?.email}</p>
                 </div>
                 <div className="flex gap-2">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getRoleBadgeColor(permissionRequest.current_role)}`}>
-                        {permissionRequest.current_role}
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getRoleBadgeColor(permissionRequest.user_current_role)}`}>
+                        {permissionRequest.user_current_role}
                     </span>
                     <svg className="w-4 h-4 text-white/50 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
@@ -147,10 +147,10 @@ export function RequestCard(props: RequestCardProps) {
                 </div>
             </div>
 
-            {permissionRequest.reason && (
+            {permissionRequest.message && (
                 <div className="mb-4 p-3 bg-slate-900/50 rounded border border-slate-700">
                     <p className="text-xs text-white/50 mb-1">Reason</p>
-                    <p className="text-sm text-white/70">{permissionRequest.reason}</p>
+                    <p className="text-sm text-white/70">{permissionRequest.message}</p>
                 </div>
             )}
 

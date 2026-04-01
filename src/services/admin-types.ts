@@ -63,11 +63,16 @@ export interface AccountRequest {
 export interface PermissionRequest {
   id: string;
   user_id: string;
-  current_role: string;
+  user_current_role: string;
   requested_role: string;
-  reason?: string;
+  message?: string;
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
+  approved_by?: string;
+  rejected_by?: string;
+  rejection_reason?: string;
+  approved_at?: string;
+  rejected_at?: string;
   profiles?: {
     id: string;
     username: string;
