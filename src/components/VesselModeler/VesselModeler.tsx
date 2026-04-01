@@ -26,6 +26,7 @@ import {
 import type { ExtractionResult } from './engine/drawing-parser';
 import { loadTextureFromData, clearHeatmapCache } from './engine/texture-manager';
 import { recomputeAllAnnotationStats } from './engine/annotation-stats';
+import { computeInspectionCameraTarget, animateCamera, cancelCameraAnimation } from './engine/camera-animation';
 import { useScanCompositeList } from '../../hooks/queries/useScanComposites';
 import { getScanComposite } from '../../services/scan-composite-service';
 import './vessel-modeler.css';
@@ -1084,18 +1085,89 @@ export default function VesselModeler() {
         dispatch({ type: 'DESELECT_ALL' });
     }, [updateVessel]);
 
-    // --- Escape key cancels draw mode ---
+    // --- Inspection mode handlers ---
+    const enterInspectionMode = useCallback((annotationId: number) => {
+        const camera = viewportRef.current?.getCamera();
+        const controls = viewportRef.current?.getControls();
+        if (!camera || !controls) return;
+
+        const ann = vesselState.annotations.find(a => a.id === annotationId);
+        if (!ann) return;
+
+        // Save current camera state before animating
+        const savedCameraState: { position: [number, number, number]; target: [number, number, number] } = {
+            position: camera.position.toArray() as [number, number, number],
+            target: (controls.target as THREE.Vector3).toArray() as [number, number, number],
+        };
+
+        const { position: targetPos, target: targetLookAt } = computeInspectionCameraTarget(ann, vesselState, camera);
+
+        animateCamera(camera, controls, targetPos, targetLookAt, 500, () => {
+            controls.enabled = false;
+        });
+
+        dispatch({ type: 'ENTER_INSPECTION_MODE', annotationId, cameraState: savedCameraState });
+    }, [vesselState]);
+
+    const exitInspectionMode = useCallback(() => {
+        const camera = viewportRef.current?.getCamera();
+        const controls = viewportRef.current?.getControls();
+        if (!camera || !controls) return;
+
+        const saved = ui.savedCameraState;
+        if (!saved) {
+            dispatch({ type: 'EXIT_INSPECTION_MODE' });
+            return;
+        }
+
+        // Re-enable controls before animating back
+        controls.enabled = true;
+        cancelCameraAnimation();
+
+        const targetPos = new THREE.Vector3(...saved.position);
+        const targetLookAt = new THREE.Vector3(...saved.target);
+
+        animateCamera(camera, controls, targetPos, targetLookAt, 500);
+        dispatch({ type: 'EXIT_INSPECTION_MODE' });
+    }, [ui.savedCameraState]);
+
+    const cycleInspection = useCallback((annotationId: number) => {
+        const camera = viewportRef.current?.getCamera();
+        const controls = viewportRef.current?.getControls();
+        if (!camera || !controls) return;
+
+        const ann = vesselState.annotations.find(a => a.id === annotationId);
+        if (!ann) return;
+
+        const { position: targetPos, target: targetLookAt } = computeInspectionCameraTarget(ann, vesselState, camera);
+
+        // Temporarily re-enable controls for the animation
+        controls.enabled = true;
+        animateCamera(camera, controls, targetPos, targetLookAt, 500, () => {
+            controls.enabled = false;
+        });
+
+        dispatch({ type: 'CYCLE_INSPECTION', annotationId });
+    }, [vesselState]);
+
+    // Expose for future UI wiring (inspection toolbar buttons)
+    void enterInspectionMode;
+    void cycleInspection;
+
+    // --- Escape key cancels draw mode or exits inspection mode ---
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                if (drawModeState.annotation || drawModeState.coverage || drawModeState.ruler) {
+                if (ui.inspectingAnnotationId !== null) {
+                    exitInspectionMode();
+                } else if (drawModeState.annotation || drawModeState.coverage || drawModeState.ruler) {
                     dispatch({ type: 'CANCEL_ALL_DRAW_MODES' });
                 }
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [drawModeState]);
+    }, [drawModeState, ui.inspectingAnnotationId, exitInspectionMode]);
 
     // --- Nozzle library drag-and-drop onto 3D canvas ---
     const handleDragOver = useCallback((e: React.DragEvent) => {

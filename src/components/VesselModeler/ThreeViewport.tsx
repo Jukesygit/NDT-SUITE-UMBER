@@ -2,13 +2,14 @@ import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 
 import type { VesselState, VesselCallbacks, AnnotationShapeType, AnnotationShapeConfig, CoverageRectConfig, RulerConfig } from './types';
 import { MATERIAL_PRESETS } from './types';
 import { SceneManager } from './engine/scene-manager';
-import { buildVesselScene } from './engine/vessel-geometry';
+import { buildVesselScene, type BuildSceneResult } from './engine/vessel-geometry';
 import { InteractionManager } from './engine/interaction-manager';
 import { createAnnotationShape, createRectOutline, createRectFill, createRulerLine } from './engine/annotation-geometry';
 import { createAnnotationLabel, createAnnotationLeaderLine, createRulerLabel, type LabelDragContext } from './engine/annotation-labels';
 import { createAllInspectionImageLabels, type InspectionImageClickHandler } from './engine/inspection-image-labels';
 import { createAllInspectionImageMarkers } from './engine/inspection-image-geometry';
 import { createWeldGeometry } from './engine/weld-geometry';
+import { updateCameraAnimation } from './engine/camera-animation';
 import {
     createShellMaterial,
     createNozzleMaterial,
@@ -21,12 +22,29 @@ import {
 } from './engine/materials';
 import * as THREE from 'three';
 
+// ---------------------------------------------------------------------------
+// Structural hash — only geometry-affecting properties. When this changes,
+// the full scene must be rebuilt.  Selection / preview changes do NOT alter it.
+// ---------------------------------------------------------------------------
+function structuralHash(s: VesselState): string {
+    return JSON.stringify({
+        id: s.id, length: s.length, headRatio: s.headRatio, orientation: s.orientation,
+        nozzles: s.nozzles, liftingLugs: s.liftingLugs, saddles: s.saddles,
+        textures: s.textures.map(t => ({ id: t.id, pos: t.pos, angle: t.angle, scaleX: t.scaleX, scaleY: t.scaleY, rotation: t.rotation, flipH: t.flipH, flipV: t.flipV })),
+        welds: s.welds, annotations: s.annotations, rulers: s.rulers,
+        coverageRects: s.coverageRects, inspectionImages: s.inspectionImages,
+        scanComposites: s.scanComposites.map(sc => ({ id: sc.id, hasData: sc.data.length > 0, indexStartMm: sc.indexStartMm, datumAngleDeg: sc.datumAngleDeg, scanDirection: sc.scanDirection, indexDirection: sc.indexDirection, orientationConfirmed: sc.orientationConfirmed, colorScale: sc.colorScale, rangeMin: sc.rangeMin, rangeMax: sc.rangeMax, opacity: sc.opacity })),
+        hasModel: s.hasModel,
+    });
+}
+
 export interface ThreeViewportHandle {
     resetCamera: () => void;
     getSceneManager: () => SceneManager | null;
     getRenderer: () => THREE.WebGLRenderer | null;
     getScene: () => THREE.Scene | null;
     getCamera: () => THREE.PerspectiveCamera | null;
+    getControls: () => import('three/addons/controls/OrbitControls.js').OrbitControls | null;
 }
 
 interface ThreeViewportProps {
@@ -75,6 +93,19 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         weldHighlight: THREE.MeshStandardMaterial;
     } | null>(null);
 
+    // --- Tier 1: structural hash to avoid redundant full rebuilds ---
+    const structuralRef = useRef('');
+
+    // --- Tier 2: cached mesh arrays from the last build result ---
+    const buildResultRef = useRef<BuildSceneResult | null>(null);
+    const weldMeshesRef = useRef<THREE.Object3D[]>([]);
+
+    // --- Tier 1: track textureObjects identity for forced rebuild ---
+    const textureObjectsRef = useRef<Record<number, THREE.Texture>>(textureObjects);
+
+    // --- Tier 3: persistent preview group (never disposed with main vessel group) ---
+    const previewGroupRef = useRef<THREE.Group>(new THREE.Group());
+
     // Track latest state for callbacks (avoid stale closures)
     const vesselStateRef = useRef(vesselState);
     const callbacksRef = useRef(callbacks);
@@ -88,6 +119,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         getRenderer: () => sceneManagerRef.current?.getRenderer() ?? null,
         getScene: () => sceneManagerRef.current?.getScene() ?? null,
         getCamera: () => sceneManagerRef.current?.getCamera() ?? null,
+        getControls: () => sceneManagerRef.current?.getControls() ?? null,
     }), []);
 
     // Initialize Three.js scene on mount
@@ -97,6 +129,14 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         const manager = new SceneManager(containerRef.current);
         manager.init();
         sceneManagerRef.current = manager;
+
+        // Hook camera animation into the render loop
+        manager.onBeforeRender = (cam, ctrl) => {
+            updateCameraAnimation(cam, ctrl);
+        };
+
+        // Add persistent preview group to scene (Tier 3)
+        manager.getScene().add(previewGroupRef.current);
 
         // Create materials
         const shell = createShellMaterial(vesselStateRef.current.visuals.material);
@@ -140,7 +180,9 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
                 onInspectionImageMoved: (id, pos, angle) => callbacksRef.current.onInspectionImageMoved?.(id, pos, angle),
                 onWeldSelected: (idx) => callbacksRef.current.onWeldSelected?.(idx),
                 onWeldMoved: (idx, pos, angle) => callbacksRef.current.onWeldMoved?.(idx, pos, angle),
-                onScanCompositeHover: (id, thickness, scanMm, indexMm) => callbacksRef.current.onScanCompositeHover?.(id, thickness, scanMm, indexMm),
+                onScanCompositeHover: (id, thickness, scanMm, indexMm, screenX, screenY) => callbacksRef.current.onScanCompositeHover?.(id, thickness, scanMm, indexMm, screenX, screenY),
+                onScanGizmoDatumMoved: (compositeId, angleDeg, posMm) => callbacksRef.current.onScanGizmoDatumMoved?.(compositeId, angleDeg, posMm),
+                onScanGizmoDirectionToggle: (compositeId, field) => callbacksRef.current.onScanGizmoDirectionToggle?.(compositeId, field),
                 onDragEnd: () => callbacksRef.current.onDragEnd?.(),
                 onNeedRebuild: () => {
                     // Trigger rebuild by calling rebuild directly
@@ -150,6 +192,9 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         );
         interaction.init();
         interactionRef.current = interaction;
+
+        // Trigger initial scene build now that manager + materials are ready
+        rebuildScene();
 
         return () => {
             interaction.dispose();
@@ -168,12 +213,22 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
                 materialsRef.current = null;
             }
 
+            // Clean up preview group
+            const pg = previewGroupRef.current;
+            while (pg.children.length > 0) {
+                const ch = pg.children[0];
+                manager.disposeObject(ch);
+                pg.remove(ch);
+            }
+
             manager.dispose();
             sceneManagerRef.current = null;
         };
     }, []); // Mount once
 
-    // Rebuild scene when vessel state changes
+    // =========================================================================
+    // rebuildScene — full geometry disposal + recreation (expensive)
+    // =========================================================================
     const rebuildScene = useCallback(() => {
         const manager = sceneManagerRef.current;
         const materials = materialsRef.current;
@@ -189,7 +244,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             scene.remove(oldGroup);
         }
 
-        // Build new scene
+        // Build new scene (passes current selection for initial highlight)
         const result = buildVesselScene(
             state,
             materials.shell,
@@ -224,7 +279,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
                 width: rect.width, height: rect.height,
                 color: rect.color, lineWidth: rect.lineWidth, showLabel: false,
             };
-            const surfaceOffset = 4; // mm above shell (above annotations at 3mm)
+            const surfaceOffset = 4;
             const outline = createRectOutline(shapeConfig, state, surfaceOffset);
             outline.userData = { type: 'coverageRect', coverageRectId: rect.id };
             const covGroup = new THREE.Group();
@@ -237,7 +292,6 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
                 covGroup.add(fill);
             }
 
-            // Invisible hit mesh for raycasting
             const hitMesh = createRectFill(shapeConfig, state, surfaceOffset);
             (hitMesh.material as THREE.MeshBasicMaterial).opacity = 0;
             hitMesh.userData = { type: 'coverageRect', coverageRectId: rect.id };
@@ -269,7 +323,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             inspectionImageDotMeshes.push(...imgMarkers.dotMeshes);
         }
 
-        // Add CSS2D inspection image thumbnails (per-item visibility)
+        // Add CSS2D inspection image thumbnails
         if (state.inspectionImages.length > 0) {
             const clickHandler: InspectionImageClickHandler = {
                 onThumbnailClick: (id) => onInspectionImageThumbnailClick(id),
@@ -290,7 +344,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             imgLabels.forEach(label => result.vesselGroup.add(label));
         }
 
-        // Add annotation leader lines + CSS2D labels (per-item visibility)
+        // Add annotation leader lines + CSS2D labels
         {
             const dragCtx: LabelDragContext | undefined = manager ? {
                 canvas: manager.getRenderer().domElement,
@@ -308,16 +362,13 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             state.annotations.forEach((ann) => {
                 if (ann.visible === false) return;
                 if (ann.showLabel) {
-                    // Leader line geometry (dot + line)
                     const leaderGroup = createAnnotationLeaderLine(ann, state, ann.id === selectedAnnotationId);
                     result.vesselGroup.add(leaderGroup);
-                    // CSS2D label at leader end
                     const label = createAnnotationLabel(ann, state, state.measurementConfig, ann.id === selectedAnnotationId, dragCtx);
                     result.vesselGroup.add(label);
                 }
             });
 
-            // Ruler lines + labels (per-ruler visibility)
             state.rulers.forEach((ruler) => {
                 const rulerGroup = createRulerLine(ruler, state);
                 result.vesselGroup.add(rulerGroup);
@@ -328,19 +379,145 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             });
         }
 
+        scene.add(result.vesselGroup);
+        manager.setVesselGroup(result.vesselGroup);
+
+        // Cache build result for Tier 2 (selection highlight fast-path)
+        buildResultRef.current = result;
+        weldMeshesRef.current = weldMeshes;
+
+        // Update interaction manager mesh references
+        if (interactionRef.current) {
+            interactionRef.current.nozzleMeshes = result.nozzleMeshes;
+            interactionRef.current.lugMeshes = result.lugMeshes;
+            interactionRef.current.saddleMeshes = result.saddleMeshes;
+            interactionRef.current.weldMeshes = weldMeshes;
+            interactionRef.current.textureMeshes = result.textureMeshes;
+            interactionRef.current.scanCompositeMeshes = result.scanCompositeMeshes;
+            interactionRef.current.gizmoMeshes = result.gizmoMeshes;
+            interactionRef.current.annotationMeshes = annotationMeshes;
+            interactionRef.current.coverageMeshes = coverageMeshes;
+            interactionRef.current.inspectionImageDotMeshes = inspectionImageDotMeshes;
+            interactionRef.current.vesselGroup = result.vesselGroup;
+        }
+    }, [textureObjects, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedScanCompositeId, selectedAnnotationId, selectedInspectionImageId, selectedWeldIndex, onInspectionImageThumbnailClick]);
+
+    // =========================================================================
+    // Tier 2 — Selection highlight update (O(n) material swaps, no geometry)
+    // =========================================================================
+    const updateSelectionHighlights = useCallback(() => {
+        const materials = materialsRef.current;
+        const result = buildResultRef.current;
+        if (!materials || !result) return;
+
+        const state = vesselStateRef.current;
+
+        // Nozzles: swap material on all child meshes
+        result.nozzleMeshes.forEach((nozzleGroup) => {
+            const idx = nozzleGroup.userData?.nozzleIdx as number | undefined;
+            const mat = idx === selectedNozzleIndex ? materials.nozzleHighlight : materials.nozzle;
+            nozzleGroup.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                    child.material = mat;
+                }
+            });
+        });
+
+        // Lifting lugs: swap material on all child meshes
+        result.lugMeshes.forEach((lugGroup) => {
+            const idx = lugGroup.userData?.lugIdx as number | undefined;
+            const mat = idx === selectedLugIndex ? materials.lugHighlight : materials.lug;
+            lugGroup.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                    child.material = mat;
+                }
+            });
+        });
+
+        // Saddles: swap material on all child meshes
+        result.saddleMeshes.forEach((saddleGroup) => {
+            const idx = saddleGroup.userData?.saddleIdx as number | undefined;
+            const isSelected = idx === selectedSaddleIndex;
+            saddleGroup.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                    if (isSelected) {
+                        child.material = materials.saddleHighlight;
+                    } else if (typeof idx === 'number' && state.saddles[idx]) {
+                        // Restore original saddle color from vesselState
+                        const color = state.saddles[idx].color || '#2244ff';
+                        child.material = new THREE.MeshStandardMaterial({
+                            color: new THREE.Color(color),
+                            roughness: 0.6,
+                            metalness: 0.5,
+                        });
+                    }
+                }
+            });
+        });
+
+        // Welds: swap material on all child meshes
+        weldMeshesRef.current.forEach((weldGroup) => {
+            const idx = weldGroup.userData?.weldIdx as number | undefined;
+            const mat = idx === selectedWeldIndex ? materials.weldHighlight : materials.weld;
+            weldGroup.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                    child.material = mat;
+                }
+            });
+        });
+
+        // Textures: toggle border child mesh visibility
+        result.textureMeshes.forEach((texMesh) => {
+            const texId = texMesh.userData?.textureIdx as number | undefined;
+            const isSelected = texId === selectedTextureId;
+            texMesh.children.forEach((child) => {
+                if (child instanceof THREE.Mesh && child.userData?.type === 'texture-border') {
+                    child.visible = isSelected;
+                }
+            });
+        });
+
+        // Scan composites: toggle border child mesh visibility
+        result.scanCompositeMeshes.forEach((scMesh) => {
+            const scId = scMesh.userData?.id as string | undefined;
+            const isSelected = scId === selectedScanCompositeId;
+            scMesh.children.forEach((child) => {
+                if (child instanceof THREE.Mesh && child.userData?.type === 'scanComposite-border') {
+                    child.visible = isSelected;
+                }
+            });
+        });
+    }, [selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedScanCompositeId, selectedWeldIndex]);
+
+    // =========================================================================
+    // Tier 3 — Preview overlay update (only touches preview group, never main vessel)
+    // =========================================================================
+    const updatePreviews = useCallback(() => {
+        const state = vesselStateRef.current;
+        const previewGroup = previewGroupRef.current;
+        const manager = sceneManagerRef.current;
+
+        // Dispose and remove all existing preview children
+        while (previewGroup.children.length > 0) {
+            const child = previewGroup.children[0];
+            if (manager) manager.disposeObject(child);
+            previewGroup.remove(child);
+        }
+
+        if (!state) return;
+
         // Add preview ruler during drawing
         if (previewRuler) {
-            const previewGroup = createRulerLine(previewRuler, state);
-            result.vesselGroup.add(previewGroup);
-            // Also show distance label during preview
-            const previewLabel = createRulerLabel(previewRuler, state);
-            result.vesselGroup.add(previewLabel);
+            const rulerGroup = createRulerLine(previewRuler, state);
+            previewGroup.add(rulerGroup);
+            const rulerLabel = createRulerLabel(previewRuler, state);
+            previewGroup.add(rulerLabel);
         }
 
         // Add preview annotation shape during drawing
         if (previewAnnotation) {
-            const previewGroup = createAnnotationShape(previewAnnotation, state, false);
-            result.vesselGroup.add(previewGroup);
+            const annGroup = createAnnotationShape(previewAnnotation, state, false);
+            previewGroup.add(annGroup);
         }
 
         // Add preview coverage rect during drawing
@@ -355,31 +532,40 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
                 state,
                 4,
             );
-            result.vesselGroup.add(previewOutline);
+            previewGroup.add(previewOutline);
         }
+    }, [previewAnnotation, previewCoverageRect, previewRuler]);
 
-        scene.add(result.vesselGroup);
-        manager.setVesselGroup(result.vesselGroup);
-
-        // Update interaction manager mesh references
-        if (interactionRef.current) {
-            interactionRef.current.nozzleMeshes = result.nozzleMeshes;
-            interactionRef.current.lugMeshes = result.lugMeshes;
-            interactionRef.current.saddleMeshes = result.saddleMeshes;
-            interactionRef.current.weldMeshes = weldMeshes;
-            interactionRef.current.textureMeshes = result.textureMeshes;
-            interactionRef.current.scanCompositeMeshes = result.scanCompositeMeshes;
-            interactionRef.current.annotationMeshes = annotationMeshes;
-            interactionRef.current.coverageMeshes = coverageMeshes;
-            interactionRef.current.inspectionImageDotMeshes = inspectionImageDotMeshes;
-            interactionRef.current.vesselGroup = result.vesselGroup;
-        }
-    }, [textureObjects, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedScanCompositeId, selectedAnnotationId, selectedInspectionImageId, selectedWeldIndex, onInspectionImageThumbnailClick, previewAnnotation, previewCoverageRect, previewRuler]);
-
-    // Rebuild when state changes
+    // =========================================================================
+    // Tier 1 effect — Structural rebuild (only when geometry-affecting state changes)
+    // =========================================================================
     useEffect(() => {
-        rebuildScene();
-    }, [vesselState, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedScanCompositeId, selectedAnnotationId, selectedInspectionImageId, selectedWeldIndex, textureObjects, previewAnnotation, previewCoverageRect, previewRuler, rebuildScene]);
+        const hash = structuralHash(vesselState);
+        const hashChanged = hash !== structuralRef.current;
+        const texturesChanged = textureObjects !== textureObjectsRef.current;
+
+        if (hashChanged || texturesChanged) {
+            structuralRef.current = hash;
+            textureObjectsRef.current = textureObjects;
+            rebuildScene();
+            // After a full rebuild, previews also need to be re-added
+            updatePreviews();
+        }
+    }, [vesselState, textureObjects, rebuildScene, updatePreviews]);
+
+    // =========================================================================
+    // Tier 2 effect — Selection highlight fast-path (no geometry rebuild)
+    // =========================================================================
+    useEffect(() => {
+        updateSelectionHighlights();
+    }, [updateSelectionHighlights]);
+
+    // =========================================================================
+    // Tier 3 effect — Preview overlay fast-path (only preview group changes)
+    // =========================================================================
+    useEffect(() => {
+        updatePreviews();
+    }, [updatePreviews]);
 
     // Update interaction manager's vessel state reference
     useEffect(() => {

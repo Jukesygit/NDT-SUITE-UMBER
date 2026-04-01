@@ -29,6 +29,9 @@ export class SceneManager {
   private axesHelper: THREE.AxesHelper | null = null;
   private disposed = false;
 
+  /** Optional callback invoked each frame before rendering (e.g. camera animation). */
+  public onBeforeRender: ((camera: THREE.PerspectiveCamera, controls: OrbitControls) => void) | null = null;
+
   constructor(container: HTMLDivElement) {
     this.container = container;
 
@@ -330,6 +333,7 @@ export class SceneManager {
     if (this.disposed) return;
 
     this.animationFrameId = requestAnimationFrame(() => this.animate());
+    this.onBeforeRender?.(this.camera, this.controls);
     this.controls.update(); // Required for damping
     this.renderer.render(this.scene, this.camera);
     this.css2DRenderer.render(this.scene, this.camera);
