@@ -2,7 +2,7 @@ import authManager from '../../auth-manager.js';
 import competencyService from '../../services/competency-service';
 import { FIELD_MAPPING } from './fieldMapping';
 import { parseDate, parseBoolean } from './parseUtils';
-import type { ParsedData, ImportProgress } from './types';
+import type { ParsedData, ImportProgress, ImportStage } from './types';
 
 interface CertificationValue {
   issuingBody: string | null;
@@ -21,7 +21,7 @@ function isCertificationValue(value: unknown): value is CertificationValue {
 export async function runImport(
   parseData: ParsedData,
   setImporting: (v: boolean) => void,
-  setStage: (stage: string) => void,
+  setStage: (stage: ImportStage) => void,
   setProgress: (fn: ImportProgress | ((prev: ImportProgress) => ImportProgress)) => void,
   setSuccessCount: (n: number) => void,
   setErrors: (errors: string[]) => void,

@@ -1,4 +1,3 @@
-import React from 'react';
 import { RandomMatrixSpinner } from '../MatrixSpinners';
 import type { ImportProgress } from './types';
 

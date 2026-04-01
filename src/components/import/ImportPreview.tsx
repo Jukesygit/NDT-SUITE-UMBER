@@ -1,4 +1,3 @@
-import React from 'react';
 import type { ParsedData } from './types';
 
 interface ImportPreviewProps {
