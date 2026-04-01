@@ -43,6 +43,13 @@ if (environmentConfig.isSupabaseConfigured()) {
 // Export the client (will be null if not configured)
 export { supabase };
 
+// Get supabase client with non-null assertion for use in services
+// Throws if called before Supabase is configured
+export function getSupabase(): SupabaseClient {
+    if (!supabase) throw new Error('Supabase client not initialized');
+    return supabase;
+}
+
 // Check if Supabase is properly configured
 export function isSupabaseConfigured(): boolean {
     return environmentConfig.isSupabaseConfigured() && supabase !== null;
