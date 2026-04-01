@@ -74,17 +74,19 @@ function sampleComposite(
   const scanEndMm = xAxis[xAxis.length - 1];
   const scanRangeMm = scanEndMm - scanStartMm;
 
-  // Angular offset from datum in the scan direction (converted to mm)
-  // datumAngleDeg uses 0=TDC convention, but annotation angles use 90=TDC.
-  // Convert datum to annotation convention by adding 90.
-  const datumInAnnConvention = datumAngleDeg + 90;
-  const rawDelta = angularDelta(datumInAnnConvention, angleDeg);
-  let scanOffsetMm: number;
+  // Angular offset from datum in the scan direction (converted to mm).
+  // datumAngleDeg uses 0=TDC convention, annotation angles use 90=TDC.
+  const datumInAnnConvention = normAngle(datumAngleDeg + 90);
+  // Use DIRECTED angular distance (not shortest path) in the scan direction:
+  // CW: datum decreases → offset = (datum - angle + 360) % 360
+  // CCW: datum increases → offset = (angle - datum + 360) % 360
+  let scanOffsetDeg: number;
   if (scanDirection === 'cw') {
-    scanOffsetMm = (-rawDelta / 360) * circumference; // CW → positive when angleDeg < datum
+    scanOffsetDeg = ((datumInAnnConvention - angleDeg) % 360 + 360) % 360;
   } else {
-    scanOffsetMm = (rawDelta / 360) * circumference; // CCW → positive when angleDeg > datum
+    scanOffsetDeg = ((angleDeg - datumInAnnConvention) % 360 + 360) % 360;
   }
+  const scanOffsetMm = (scanOffsetDeg / 360) * circumference;
   // Check if the point falls within the scan range [xAxis[0], xAxis[last]]
   if (scanOffsetMm < scanStartMm || scanOffsetMm > scanEndMm) return undefined;
 
@@ -178,21 +180,37 @@ export function computeAnnotationThicknessStats(
   }
 
   if (values.length === 0) {
-    // Debug: log why no data was found
-    console.warn('[annotation-stats] No thickness data found for annotation', ann.name, {
-      annPos: ann.pos, annAngle: ann.angle, annWidth: ann.width, annHeight: ann.height,
-      axialRange: [axialStart, axialEnd],
-      angleRange: [angleStart, angleEnd],
-      circumference,
-      composites: composites.filter(c => c.orientationConfirmed).map(c => ({
-        indexStartMm: c.indexStartMm,
-        indexDir: c.indexDirection,
-        datumAngleDeg: c.datumAngleDeg,
-        scanDir: c.scanDirection,
-        xAxisRange: [c.xAxis[0], c.xAxis[c.xAxis.length - 1]],
-        yAxisRange: [c.yAxis[0], c.yAxis[c.yAxis.length - 1]],
-      })),
-    });
+    // Debug: log detailed overlap diagnostics
+    const confirmed = composites.filter(c => c.orientationConfirmed);
+    for (const c of confirmed) {
+      const datumConv = c.datumAngleDeg + 90;
+      const indexRange = c.yAxis[c.yAxis.length - 1] - c.yAxis[0];
+      const testAxial = centerPos;
+      const testAngle = centerAngle;
+      const idxOff = c.indexDirection === 'forward' ? testAxial - c.indexStartMm : c.indexStartMm - testAxial;
+      const rawD = angularDelta(datumConv, testAngle);
+      const scanOff = c.scanDirection === 'cw' ? (-rawD / 360) * circumference : (rawD / 360) * circumference;
+      console.warn('[annotation-stats] Debug for', ann.name, {
+        annCenter: { pos: testAxial, angle: testAngle },
+        composite: {
+          datumAngleDeg: c.datumAngleDeg,
+          datumConverted: datumConv,
+          indexStartMm: c.indexStartMm,
+          indexDir: c.indexDirection,
+          scanDir: c.scanDirection,
+          xAxisRange: [c.xAxis[0], c.xAxis[c.xAxis.length - 1]],
+          yAxisRange: [c.yAxis[0], c.yAxis[c.yAxis.length - 1]],
+          indexRange,
+        },
+        sampling: {
+          indexOffset: idxOff,
+          indexInRange: idxOff >= 0 && idxOff <= indexRange,
+          rawAngularDelta: rawD,
+          scanOffsetMm: scanOff,
+          scanInRange: scanOff >= c.xAxis[0] && scanOff <= c.xAxis[c.xAxis.length - 1],
+        },
+      });
+    }
     return undefined;
   }
 

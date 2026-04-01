@@ -75,20 +75,33 @@ function compositeOverlapsAnnotation(
   const annAngleMin = ann.angle - halfHeightDeg;
   const annAngleMax = ann.angle + halfHeightDeg;
 
-  // datumAngleDeg uses 0=TDC, annotation angles use 90=TDC — convert
-  const datumInAnnConvention = datumAngleDeg + 90;
+  // datumAngleDeg uses 0=TDC, annotation angles use 90=TDC — convert.
+  // Use directed angular distance (not shortest path) in scan direction.
+  const datumConv = normAngle(datumAngleDeg + 90);
   for (const testAngle of [annAngleMin, annAngleMax, ann.angle]) {
-    const rawDelta = angularDelta(datumInAnnConvention, testAngle);
-    const scanOffsetMm = scanDirection === 'cw'
-      ? (-rawDelta / 360) * circumference
-      : (rawDelta / 360) * circumference;
+    let scanOffsetDeg: number;
+    if (scanDirection === 'cw') {
+      scanOffsetDeg = ((datumConv - testAngle) % 360 + 360) % 360;
+    } else {
+      scanOffsetDeg = ((testAngle - datumConv) % 360 + 360) % 360;
+    }
+    const scanOffsetMm = (scanOffsetDeg / 360) * circumference;
     if (scanOffsetMm >= scanStartMm && scanOffsetMm <= scanEndMm) return true;
   }
 
-  // Also test composite edges against annotation center
-  const datumDelta = angularDelta(ann.angle, datumInAnnConvention);
-  const datumDeltaDeg = Math.abs(datumDelta);
-  if (datumDeltaDeg <= halfHeightDeg) return true;
+  // Also test: does the composite's scan range overlap the annotation's angular range?
+  // Check if composite start or end angle falls within the annotation
+  for (const edgeMm of [scanStartMm, scanEndMm]) {
+    const edgeDeg = (edgeMm / circumference) * 360;
+    let edgeAngle: number;
+    if (scanDirection === 'cw') {
+      edgeAngle = normAngle(datumConv - edgeDeg);
+    } else {
+      edgeAngle = normAngle(datumConv + edgeDeg);
+    }
+    const delta = angularDelta(ann.angle, edgeAngle);
+    if (Math.abs(delta) <= halfHeightDeg) return true;
+  }
 
   return false;
 }
@@ -123,14 +136,16 @@ function sampleComposite(
   const scanEndMm = xAxis[xAxis.length - 1];
   const scanRangeMm = scanEndMm - scanStartMm;
 
-  // datumAngleDeg uses 0=TDC, annotation angles use 90=TDC — convert
-  const rawDelta = angularDelta(datumAngleDeg + 90, angleDeg);
-  let scanOffsetMm: number;
+  // datumAngleDeg uses 0=TDC, annotation angles use 90=TDC — convert.
+  // Use directed angular distance (not shortest path) in scan direction.
+  const datumConv = normAngle(datumAngleDeg + 90);
+  let scanOffsetDeg: number;
   if (scanDirection === 'cw') {
-    scanOffsetMm = (-rawDelta / 360) * circumference;
+    scanOffsetDeg = ((datumConv - angleDeg) % 360 + 360) % 360;
   } else {
-    scanOffsetMm = (rawDelta / 360) * circumference;
+    scanOffsetDeg = ((angleDeg - datumConv) % 360 + 360) % 360;
   }
+  const scanOffsetMm = (scanOffsetDeg / 360) * circumference;
   if (scanOffsetMm < scanStartMm || scanOffsetMm > scanEndMm) return undefined;
 
   const rowFrac = indexRangeMm > 0 ? (indexOffset / indexRangeMm) * (data.length - 1) : 0;
