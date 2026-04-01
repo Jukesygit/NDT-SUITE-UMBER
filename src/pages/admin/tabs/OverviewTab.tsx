@@ -3,6 +3,7 @@
  * Uses Personnel Management page styling patterns
  */
 
+import { useMemo } from 'react';
 import { useAdminStats } from '../../../hooks/queries/useAdminStats';
 import { useOrganizationsWithStats } from '../../../hooks/queries/useAdminOrganizations';
 import { useAdminUsers } from '../../../hooks/queries/useAdminUsers';
@@ -54,22 +55,19 @@ export default function OverviewTab() {
         return <ErrorDisplay error={error} title="Failed to load dashboard" />;
     }
 
-    // Ensure arrays are always valid (defensive against null/undefined)
-    const safeOrganizations = Array.isArray(organizations) ? organizations : [];
-    const safeUsers = Array.isArray(users) ? users : [];
-
-    // Calculate pending requests total
-    const pendingRequests = (stats?.pendingAccountRequests || 0) + (stats?.pendingPermissionRequests || 0);
-
-    // Get top 5 organizations (filter out any malformed entries)
-    const topOrganizations = safeOrganizations
-        .filter(org => org && org.organization && org.organization.id)
-        .slice(0, 5);
-
-    // Get recent users (last 5, filter out malformed entries)
-    const recentUsers = safeUsers
-        .filter(user => user && user.id)
-        .slice(0, 5);
+    // Memoize computed values to avoid recalculating on every render
+    const { safeOrganizations, safeUsers, pendingRequests, topOrganizations, recentUsers } = useMemo(() => {
+        const safeOrganizations = Array.isArray(organizations) ? organizations : [];
+        const safeUsers = Array.isArray(users) ? users : [];
+        const pendingRequests = (stats?.pendingAccountRequests || 0) + (stats?.pendingPermissionRequests || 0);
+        const topOrganizations = safeOrganizations
+            .filter(org => org && org.organization && org.organization.id)
+            .slice(0, 5);
+        const recentUsers = safeUsers
+            .filter(user => user && user.id)
+            .slice(0, 5);
+        return { safeOrganizations, safeUsers, pendingRequests, topOrganizations, recentUsers };
+    }, [organizations, users, stats]);
 
     return (
         <div>

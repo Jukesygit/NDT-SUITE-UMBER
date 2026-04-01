@@ -2,7 +2,7 @@
  * PersonnelTable - Table component for displaying personnel list
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Person, PersonCompetency, CompetencyStats, Organization } from '../../hooks/queries/usePersonnel';
 import { personnelKeys, getPendingApprovalCount } from '../../hooks/queries/usePersonnel';
@@ -81,15 +81,30 @@ export function PersonnelTable({
         onPersonUpdate?.();
     }, [onPersonUpdate]);
 
+    const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (hoverTimeoutRef.current) {
+                clearTimeout(hoverTimeoutRef.current);
+            }
+        };
+    }, []);
+
     const handlePersonHover = useCallback((personId: string) => {
-        queryClient.prefetchQuery({
-            queryKey: personnelKeys.detail(personId),
-            queryFn: async () => {
-                const report = await personnelService.getPersonnelComplianceReport(personId);
-                return report?.person || null;
-            },
-            staleTime: 1 * 60 * 1000,
-        });
+        if (hoverTimeoutRef.current) {
+            clearTimeout(hoverTimeoutRef.current);
+        }
+        hoverTimeoutRef.current = setTimeout(() => {
+            queryClient.prefetchQuery({
+                queryKey: personnelKeys.detail(personId),
+                queryFn: async () => {
+                    const report = await personnelService.getPersonnelComplianceReport(personId);
+                    return report?.person || null;
+                },
+                staleTime: 1 * 60 * 1000,
+            });
+        }, 200);
     }, [queryClient]);
 
     if (personnel.length === 0) {
