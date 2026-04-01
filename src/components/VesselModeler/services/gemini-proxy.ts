@@ -1,4 +1,4 @@
-import { supabase } from '../../../supabase-client.js';
+import { supabase } from '../../../supabase-client';
 
 const GEMINI_API_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent';

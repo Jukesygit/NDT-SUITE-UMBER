@@ -1,31 +1,61 @@
 // Lightweight Animated Background for Tool Headers
 // Performant version without mouse interaction
 
+interface AnimatedBackgroundOptions {
+    particleCount?: number;
+    waveIntensity?: number;
+    vertexDensity?: number;
+    [key: string]: unknown;
+}
+
+interface Vertex {
+    x: number;
+    y: number;
+    ox: number;
+    oy: number;
+    phase: number;
+}
+
+interface Particle {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    size: number;
+    opacity: number;
+    hue: number;
+}
+
 export class AnimatedBackground {
-    constructor(canvas, options = {}) {
+    private canvas: HTMLCanvasElement;
+    private ctx: CanvasRenderingContext2D;
+    private options: Required<Pick<AnimatedBackgroundOptions, 'particleCount' | 'waveIntensity' | 'vertexDensity'>>;
+    private vertices: Vertex[] = [];
+    private particles: Particle[] = [];
+    private animationFrameId: number | null = null;
+    private isRunning = false;
+    private cols = 0;
+    private rows = 0;
+    private totalCols = 0;
+
+    constructor(canvas: HTMLCanvasElement, options: AnimatedBackgroundOptions = {}) {
         this.canvas = canvas;
-        this.ctx = canvas.getContext('2d');
+        this.ctx = canvas.getContext('2d')!;
         this.options = {
             particleCount: options.particleCount || 20,
             waveIntensity: options.waveIntensity || 0.5,
             vertexDensity: options.vertexDensity || 30,
-            ...options
         };
-
-        this.vertices = [];
-        this.particles = [];
-        this.animationFrameId = null;
-        this.isRunning = false;
 
         this.init();
     }
 
-    init() {
+    private init(): void {
         // Don't call resizeCanvas here - it will be called when animation starts
         window.addEventListener('resize', () => this.resizeCanvas());
     }
 
-    resizeCanvas() {
+    private resizeCanvas(): void {
         if (!this.canvas.parentElement) return;
 
         const rect = this.canvas.parentElement.getBoundingClientRect();
@@ -41,7 +71,7 @@ export class AnimatedBackground {
         }
     }
 
-    initVertices() {
+    private initVertices(): void {
         const cols = Math.floor(this.canvas.width / this.options.vertexDensity);
         const rows = Math.floor(this.canvas.height / this.options.vertexDensity);
         const spacing = Math.max(this.canvas.width / cols, this.canvas.height / rows);
@@ -64,7 +94,7 @@ export class AnimatedBackground {
         this.totalCols = cols + 5;
     }
 
-    initParticles() {
+    private initParticles(): void {
         this.particles = [];
         for (let i = 0; i < this.options.particleCount; i++) {
             this.particles.push({
@@ -79,7 +109,7 @@ export class AnimatedBackground {
         }
     }
 
-    drawBackground() {
+    private drawBackground(): void {
         // Modern glassmorphic gradient with deep blue/purple tones
         const gradient = this.ctx.createLinearGradient(0, 0, this.canvas.width, this.canvas.height);
         gradient.addColorStop(0, 'rgba(15, 23, 42, 0.95)'); // Deep slate
@@ -101,7 +131,7 @@ export class AnimatedBackground {
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     }
 
-    drawParticles() {
+    private drawParticles(): void {
         this.particles.forEach(p => {
             // Update position
             p.x += p.vx;
@@ -127,7 +157,7 @@ export class AnimatedBackground {
         });
     }
 
-    updateVertices(time) {
+    private updateVertices(time: number): void {
         const waveDirection = time * 1.2; // Faster animation
         const intensity = this.options.waveIntensity;
 
@@ -154,7 +184,7 @@ export class AnimatedBackground {
         });
     }
 
-    drawTriangle(v1, v2, v3) {
+    private drawTriangle(v1: Vertex, v2: Vertex, v3: Vertex): void {
         const area = Math.abs((v2.x - v1.x) * (v3.y - v1.y) - (v3.x - v1.x) * (v2.y - v1.y)) / 2;
         if (area < 5) return;
 
@@ -196,7 +226,7 @@ export class AnimatedBackground {
         this.ctx.stroke();
     }
 
-    drawMesh() {
+    private drawMesh(): void {
         for (let y = 0; y < this.rows + 3; y++) {
             for (let x = 0; x < this.cols + 3; x++) {
                 const i = y * this.totalCols + x;
@@ -210,7 +240,7 @@ export class AnimatedBackground {
         }
     }
 
-    animate() {
+    private animate(): void {
         if (!this.isRunning) return;
 
         const time = Date.now() * 0.001;
@@ -237,7 +267,7 @@ export class AnimatedBackground {
         this.animationFrameId = requestAnimationFrame(() => this.animate());
     }
 
-    start() {
+    start(): void {
         if (this.isRunning) return;
         this.isRunning = true;
 
@@ -249,7 +279,7 @@ export class AnimatedBackground {
         this.animate();
     }
 
-    stop() {
+    stop(): void {
         this.isRunning = false;
         if (this.animationFrameId) {
             cancelAnimationFrame(this.animationFrameId);
@@ -257,14 +287,21 @@ export class AnimatedBackground {
         }
     }
 
-    destroy() {
+    destroy(): void {
         this.stop();
         window.removeEventListener('resize', () => this.resizeCanvas());
     }
 }
 
+interface CreateAnimatedHeaderOptions {
+    height?: string;
+    particleCount?: number;
+    waveIntensity?: number;
+    vertexDensity?: number;
+}
+
 // Helper function to create a header with animated background
-export function createAnimatedHeader(title, subtitle, options = {}) {
+export function createAnimatedHeader(title: string, subtitle: string, options: CreateAnimatedHeaderOptions = {}): HTMLDivElement {
     const container = document.createElement('div');
     container.className = 'animated-header-container';
     container.style.cssText = `
@@ -370,7 +407,7 @@ export function createAnimatedHeader(title, subtitle, options = {}) {
     animation.start();
 
     // Store animation instance for cleanup
-    container._animationInstance = animation;
+    (container as HTMLDivElement & { _animationInstance?: AnimatedBackground })._animationInstance = animation;
 
     return container;
 }

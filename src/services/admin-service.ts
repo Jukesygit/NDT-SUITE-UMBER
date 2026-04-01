@@ -18,7 +18,7 @@ export type {
   UpdateAnnouncementData,
 } from './admin-types';
 
-import type { Organization, Profile } from '../types/database.types.js';
+import type { Organization, Profile } from '../types/database.types';
 import type {
   AdminDashboardStats,
   OrganizationStats,

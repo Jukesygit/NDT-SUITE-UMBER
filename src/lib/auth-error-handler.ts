@@ -4,7 +4,7 @@
  */
 
 // Error codes/messages that indicate auth failure
-const AUTH_ERROR_PATTERNS = [
+const AUTH_ERROR_PATTERNS: string[] = [
     // Supabase/PostgREST error codes
     'PGRST301', // JWT expired
     'PGRST302', // JWT invalid
@@ -23,12 +23,19 @@ const AUTH_ERROR_PATTERNS = [
     'user not found',
 ];
 
+interface ErrorLike {
+    code?: string | number;
+    status?: number;
+    statusCode?: number;
+    message?: string;
+    error?: string;
+    msg?: string;
+}
+
 /**
  * Check if an error is auth-related
- * @param {Error|Object} error - The error to check
- * @returns {boolean} - True if the error is auth-related
  */
-export function isAuthError(error) {
+export function isAuthError(error: ErrorLike | null | undefined): boolean {
     if (!error) return false;
 
     // Check error code
@@ -48,7 +55,7 @@ export function isAuthError(error) {
  * Handle auth error by logging out and redirecting to login
  * This is called when we detect an auth error that can't be recovered
  */
-export async function handleAuthError() {
+export async function handleAuthError(): Promise<void> {
     // Dispatch event to notify the app of auth failure
     window.dispatchEvent(new CustomEvent('authError', {
         detail: { reason: 'session_expired' }
@@ -60,13 +67,11 @@ export async function handleAuthError() {
 
 /**
  * Create a query error handler for React Query
- * @param {Function} onAuthError - Callback when auth error is detected
- * @returns {Function} - Error handler function
  */
-export function createQueryErrorHandler(onAuthError) {
+export function createQueryErrorHandler(onAuthError?: (error: ErrorLike) => void): (error: ErrorLike) => void {
     let isHandlingAuthError = false;
 
-    return (error) => {
+    return (error: ErrorLike) => {
         // Prevent multiple simultaneous auth error handling
         if (isHandlingAuthError) return;
 

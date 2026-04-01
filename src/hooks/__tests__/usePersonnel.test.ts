@@ -28,7 +28,7 @@ import {
     getPendingApprovalCount,
     getPendingApprovalCompetencies,
 } from '../queries/usePersonnel';
-import personnelService from '../../services/personnel-service.js';
+import personnelService from '../../services/personnel-service';
 import authManager from '../../auth-manager.js';
 
 beforeEach(() => {

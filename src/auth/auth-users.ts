@@ -5,7 +5,7 @@
  * user sync, and bulk user creation.
  */
 
-import supabase from '../supabase-client.js';
+import supabase from '../supabase-client';
 import bcrypt from 'bcryptjs';
 import {
     ROLES,

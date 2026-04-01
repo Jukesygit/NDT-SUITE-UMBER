@@ -14,7 +14,7 @@ export const PASSWORD_POLICY = {
     preventUserInfo: true,
     maxConsecutiveChars: 3,
     minStrengthScore: 3 // 0-4 scale
-};
+} as const;
 
 // Session configuration
 export const SESSION_CONFIG = {
@@ -22,10 +22,20 @@ export const SESSION_CONFIG = {
     warningTime: 5 * 60 * 1000, // Warning 5 minutes before timeout
     refreshInterval: 10 * 60 * 1000, // Refresh token every 10 minutes
     maxExtensions: 3 // Maximum times session can be extended
-};
+} as const;
+
+interface RateLimitConfig {
+    attempts: number;
+    windowMs: number;
+    blockDurationMs: number;
+}
 
 // Rate limiting configuration
-export const RATE_LIMITS = {
+export const RATE_LIMITS: {
+    login: RateLimitConfig;
+    passwordReset: RateLimitConfig;
+    api: { requestsPerMinute: number; burstLimit: number };
+} = {
     login: {
         attempts: 5,
         windowMs: 15 * 60 * 1000, // 15 minutes
@@ -43,7 +53,7 @@ export const RATE_LIMITS = {
 };
 
 // Common passwords list (partial - expand this)
-export const COMMON_PASSWORDS = [
+export const COMMON_PASSWORDS: string[] = [
     'password', 'password123', '123456', '12345678', 'qwerty', 'abc123',
     'admin', 'letmein', 'welcome', 'monkey', '1234567890', 'password1',
     'qwertyuiop', 'superman', 'iloveyou', 'trustno1', '1234567',
@@ -51,16 +61,38 @@ export const COMMON_PASSWORDS = [
     'football', 'jesus', 'michael', 'ninja', 'mustang', 'password123'
 ];
 
+interface PasswordValidationResult {
+    isValid: boolean;
+    score: number;
+    strength: string;
+    feedback: string[];
+    requirements: {
+        length: boolean;
+        uppercase: boolean;
+        lowercase: boolean;
+        numbers: boolean;
+        special: boolean;
+        notCommon: boolean;
+        noUserInfo: boolean;
+        noConsecutive: boolean;
+    };
+}
+
+interface UserInfo {
+    username?: string;
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+}
+
 /**
  * Validate password strength
- * @param {string} password - Password to validate
- * @param {Object} userInfo - User information to check against
- * @returns {Object} Validation result with score and feedback
  */
-export function validatePasswordStrength(password, userInfo = {}) {
-    const result = {
+export function validatePasswordStrength(password: string, userInfo: UserInfo = {}): PasswordValidationResult {
+    const result: PasswordValidationResult = {
         isValid: false,
         score: 0,
+        strength: '',
         feedback: [],
         requirements: {
             length: false,
@@ -147,7 +179,7 @@ export function validatePasswordStrength(password, userInfo = {}) {
             userInfo.email?.split('@')[0],
             userInfo.firstName,
             userInfo.lastName
-        ].filter(Boolean).map(s => s.toLowerCase());
+        ].filter(Boolean).map(s => s!.toLowerCase());
 
         const containsUserInfo = userFields.some(field =>
             field && (lowerPassword.includes(field) || field.includes(lowerPassword))
@@ -201,10 +233,8 @@ export function validatePasswordStrength(password, userInfo = {}) {
 
 /**
  * Generate a secure random password
- * @param {number} length - Password length
- * @returns {string} Generated password
  */
-export function generateSecurePassword(length = 16) {
+export function generateSecurePassword(length = 16): string {
     const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const lowercase = 'abcdefghijklmnopqrstuvwxyz';
     const numbers = '0123456789';
@@ -231,11 +261,8 @@ export function generateSecurePassword(length = 16) {
 /**
  * Hash password using Web Crypto API (for client-side hashing before sending)
  * Note: This is additional security - actual password hashing should be done server-side
- * @param {string} password - Password to hash
- * @param {string} salt - Salt for hashing
- * @returns {Promise<string>} Hashed password
  */
-export async function hashPassword(password, salt) {
+export async function hashPassword(password: string, salt: string): Promise<string> {
     const encoder = new TextEncoder();
     const data = encoder.encode(password + salt);
     const hash = await crypto.subtle.digest('SHA-256', data);
@@ -244,21 +271,36 @@ export async function hashPassword(password, salt) {
         .join('');
 }
 
+interface RateLimitRecord {
+    count: number;
+    firstAttempt: number;
+    blockedUntil: number | null;
+}
+
+interface RateLimitResult {
+    allowed: boolean;
+    remaining: number;
+    resetIn?: number;
+    blockedUntil?: number;
+    retryAfter?: number;
+}
+
 /**
  * Rate limiter class
  */
 export class RateLimiter {
-    constructor(config) {
+    private attempts: Map<string, RateLimitRecord>;
+    private config: RateLimitConfig;
+
+    constructor(config: RateLimitConfig) {
         this.attempts = new Map();
         this.config = config;
     }
 
     /**
      * Check if action is allowed
-     * @param {string} key - Unique identifier (e.g., user ID, IP)
-     * @returns {Object} Result with allowed status and remaining attempts
      */
-    isAllowed(key) {
+    isAllowed(key: string): RateLimitResult {
         const now = Date.now();
         const record = this.attempts.get(key);
 
@@ -321,16 +363,15 @@ export class RateLimiter {
 
     /**
      * Reset attempts for a key
-     * @param {string} key - Unique identifier
      */
-    reset(key) {
+    reset(key: string): void {
         this.attempts.delete(key);
     }
 
     /**
      * Clear old entries to prevent memory leak
      */
-    cleanup() {
+    cleanup(): void {
         const now = Date.now();
         for (const [key, record] of this.attempts.entries()) {
             if (record.blockedUntil && now > record.blockedUntil + this.config.windowMs) {

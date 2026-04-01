@@ -3,14 +3,12 @@
  * Sends emails via Supabase Edge Function (which uses Resend)
  */
 
-import supabase from '../supabase-client.js';
+import supabase from '../supabase-client';
 
 /**
  * HTML-escape a string to prevent XSS in email templates
- * @param {string} str - String to escape
- * @returns {string} Escaped string
  */
-function escapeHtml(str) {
+function escapeHtml(str: string): string {
     if (typeof str !== 'string') return '';
     return str
         .replace(/&/g, '&amp;')
@@ -22,25 +20,32 @@ function escapeHtml(str) {
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
+interface SendEmailOptions {
+    to: string | string[];
+    subject: string;
+    html: string;
+    from?: string;
+    cc?: string | string[];
+    replyTo?: string;
+}
+
+interface SendEmailResult {
+    success: boolean;
+    id?: string;
+    error?: string;
+}
+
 /**
  * Send an email via the Edge Function
- * @param {Object} options - Email options
- * @param {string|string[]} options.to - Recipient email(s)
- * @param {string} options.subject - Email subject
- * @param {string} options.html - HTML content
- * @param {string} [options.from] - Sender email (optional, defaults to notifications@matrixportal.io)
- * @param {string|string[]} [options.cc] - CC recipient(s) (optional)
- * @param {string} [options.replyTo] - Reply-to address (optional)
- * @returns {Promise<{success: boolean, id?: string, error?: string}>}
  */
-export async function sendEmail({ to, subject, html, from, cc, replyTo }) {
-    const { data: { session } } = await supabase.auth.getSession();
+export async function sendEmail({ to, subject, html, from, cc, replyTo }: SendEmailOptions): Promise<SendEmailResult> {
+    const { data: { session } } = await supabase!.auth.getSession();
 
     if (!session) {
         throw new Error('User must be authenticated to send emails');
     }
 
-    const payload = { to, subject, html };
+    const payload: Record<string, unknown> = { to, subject, html };
     if (from) payload.from = from;
     if (cc) payload.cc = cc;
     if (replyTo) payload.replyTo = replyTo;
@@ -63,22 +68,25 @@ export async function sendEmail({ to, subject, html, from, cc, replyTo }) {
     return data;
 }
 
+interface CompetencyExpirationNotification {
+    recipientEmail: string;
+    recipientName: string;
+    competency: {
+        name: string;
+        expiryDate: string;
+    };
+    daysUntilExpiry: number;
+}
+
 /**
  * Send competency expiration notification email
- * @param {Object} options - Notification options
- * @param {string} options.recipientEmail - User's email
- * @param {string} options.recipientName - User's name
- * @param {Object} options.competency - Competency details
- * @param {string} options.competency.name - Competency name
- * @param {string} options.competency.expiryDate - Expiry date (ISO string)
- * @param {number} options.daysUntilExpiry - Days until expiry
  */
 export async function sendCompetencyExpirationNotification({
     recipientEmail,
     recipientName,
     competency,
     daysUntilExpiry,
-}) {
+}: CompetencyExpirationNotification): Promise<SendEmailResult> {
     const expiryDate = new Date(competency.expiryDate).toLocaleDateString('en-AU', {
         year: 'numeric',
         month: 'long',
@@ -106,9 +114,8 @@ export async function sendCompetencyExpirationNotification({
 
 /**
  * Send bulk expiration notifications
- * @param {Array} notifications - Array of notification objects
  */
-export async function sendBulkExpirationNotifications(notifications) {
+export async function sendBulkExpirationNotifications(notifications: CompetencyExpirationNotification[]) {
     const results = await Promise.allSettled(
         notifications.map(notification => sendCompetencyExpirationNotification(notification))
     );
@@ -118,6 +125,15 @@ export async function sendBulkExpirationNotifications(notifications) {
         failed: results.filter(r => r.status === 'rejected').length,
         results,
     };
+}
+
+interface ExpirationEmailParams {
+    recipientName: string;
+    competencyName: string;
+    expiryDate: string;
+    daysUntilExpiry: number;
+    urgencyColor: string;
+    urgencyText: string;
 }
 
 /**
@@ -130,7 +146,7 @@ function generateCompetencyExpirationEmail({
     daysUntilExpiry,
     urgencyColor,
     urgencyText,
-}) {
+}: ExpirationEmailParams): string {
     // Sanitize all user-provided data to prevent XSS
     const safeRecipientName = escapeHtml(recipientName);
     const safeCompetencyName = escapeHtml(competencyName);

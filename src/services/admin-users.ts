@@ -2,7 +2,7 @@
  * Admin User, Account Request, and Permission Request Operations
  */
 
-import { supabase } from '../supabase-client.js';
+import { supabase } from '../supabase-client';
 import authManager from '../auth-manager.js';
 import { logActivity } from './activity-log-service';
 import type {

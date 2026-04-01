@@ -5,7 +5,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 // @ts-ignore - JS module without type declarations
-import * as supabaseModule from '../supabase-client.js';
+import * as supabaseModule from '../supabase-client';
 // @ts-ignore - accessing property from untyped module
 const supabase: SupabaseClient | null = supabaseModule.supabase;
 

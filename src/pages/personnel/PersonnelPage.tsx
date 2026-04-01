@@ -26,8 +26,8 @@ import { PendingApprovalsView } from './PendingApprovalsView';
 
 // Auth
 import { useAuth } from '../../contexts/AuthContext';
-import { isSupabaseConfigured } from '../../supabase-client.js';
-import { filterOutPersonalDetails } from '../../utils/competency-field-utils.js';
+import { isSupabaseConfigured } from '../../supabase-client';
+import { filterOutPersonalDetails } from '../../utils/competency-field-utils';
 
 type ViewType = 'directory' | 'expiring' | 'approvals';
 type SortColumn = 'name' | 'org' | 'role' | 'total' | 'active' | 'expiring' | 'expired';

@@ -7,7 +7,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { SupabaseClient } from '@supabase/supabase-js';
 // @ts-ignore - JS module without types
-import supabaseImport, { isSupabaseConfigured } from '../../supabase-client.js';
+import supabaseImport, { isSupabaseConfigured } from '../../supabase-client';
 // @ts-ignore - typing JS module import
 const supabase: SupabaseClient = supabaseImport;
 import { useAuth } from '../../contexts/AuthContext';

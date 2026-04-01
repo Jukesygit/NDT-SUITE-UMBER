@@ -5,7 +5,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 // Services - ES module imports
-import personnelService from '../../services/personnel-service.js';
+import personnelService from '../../services/personnel-service';
 import authManager from '../../auth-manager.js';
 
 // Types

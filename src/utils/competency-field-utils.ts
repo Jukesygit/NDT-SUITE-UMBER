@@ -3,13 +3,26 @@
  * Determines appropriate input types based on field names and types
  */
 
+interface CompetencyDefinition {
+    name?: string;
+    field_type?: string;
+    category?: {
+        name?: string;
+    };
+    competency?: {
+        name?: string;
+        field_type?: string;
+        category?: {
+            name?: string;
+        };
+    };
+    witness_checked?: boolean;
+}
+
 /**
  * Get the appropriate input type for a competency field
- * @param {string} fieldName - The name of the field
- * @param {string} fieldType - The field type from the database (text, date, expiry_date, boolean, etc.)
- * @returns {string} - HTML input type (text, email, tel, date, etc.)
  */
-export function getInputType(fieldName, fieldType) {
+export function getInputType(fieldName: string, fieldType: string): string {
     const lowerFieldName = fieldName?.toLowerCase() || '';
 
     // Handle specific field types first
@@ -44,11 +57,8 @@ export function getInputType(fieldName, fieldType) {
 
 /**
  * Get placeholder text for a field
- * @param {string} fieldName - The name of the field
- * @param {string} inputType - The input type
- * @returns {string} - Placeholder text
  */
-export function getPlaceholder(fieldName, inputType) {
+export function getPlaceholder(fieldName: string, inputType: string): string {
     const lowerFieldName = fieldName?.toLowerCase() || '';
 
     if (inputType === 'email') {
@@ -84,10 +94,8 @@ export function getPlaceholder(fieldName, inputType) {
 
 /**
  * Check if a field should show certification-specific inputs (issuing body, ID, expiry)
- * @param {object} competency - The competency definition
- * @returns {boolean} - True if certification fields should be shown
  */
-export function shouldShowCertificationFields(competency) {
+export function shouldShowCertificationFields(competency: CompetencyDefinition | null): boolean {
     if (!competency) return false;
 
     const fieldType = competency.field_type;
@@ -130,10 +138,8 @@ export function shouldShowCertificationFields(competency) {
 /**
  * Check if a field should show issued/expiry date fields
  * Personal details like DOB, email, phone, address should NOT show these
- * @param {object} competency - The competency definition
- * @returns {boolean} - True if date fields should be shown
  */
-export function shouldShowDateFields(competency) {
+export function shouldShowDateFields(competency: CompetencyDefinition | null): boolean {
     if (!competency) return false;
 
     const categoryName = competency.category?.name?.toLowerCase() || '';
@@ -169,10 +175,8 @@ export function shouldShowDateFields(competency) {
 
 /**
  * Check if a competency is a personal detail (not a certification/qualification)
- * @param {object} competency - The competency definition or employee competency
- * @returns {boolean} - True if this is a personal detail
  */
-export function isPersonalDetail(competency) {
+export function isPersonalDetail(competency: CompetencyDefinition | null): boolean {
     if (!competency) return false;
 
     // Check category name
@@ -215,31 +219,24 @@ export function isPersonalDetail(competency) {
 
 /**
  * Filter out personal details from a list of competencies
- * @param {Array} competencies - Array of competency definitions or employee competencies
- * @returns {Array} - Filtered array without personal details
  */
-export function filterOutPersonalDetails(competencies) {
+export function filterOutPersonalDetails(competencies: CompetencyDefinition[]): CompetencyDefinition[] {
     if (!Array.isArray(competencies)) return [];
     return competencies.filter(comp => !isPersonalDetail(comp));
 }
 
 /**
  * Get only personal details from a list of competencies
- * @param {Array} competencies - Array of competency definitions or employee competencies
- * @returns {Array} - Array containing only personal details
  */
-export function getPersonalDetails(competencies) {
+export function getPersonalDetails(competencies: CompetencyDefinition[]): CompetencyDefinition[] {
     if (!Array.isArray(competencies)) return [];
     return competencies.filter(comp => isPersonalDetail(comp));
 }
 
 /**
  * Format a value for display based on field type
- * @param {any} value - The value to format
- * @param {string} fieldType - The field type
- * @returns {string} - Formatted value
  */
-export function formatValue(value, fieldType) {
+export function formatValue(value: unknown, fieldType: string): string {
     if (!value) return '-';
 
     if (fieldType === 'boolean') {
@@ -248,25 +245,23 @@ export function formatValue(value, fieldType) {
 
     if (fieldType === 'date' || fieldType === 'expiry_date') {
         try {
-            return new Date(value).toLocaleDateString('en-GB', {
+            return new Date(value as string).toLocaleDateString('en-GB', {
                 day: '2-digit',
                 month: '2-digit',
                 year: 'numeric'
             });
         } catch (e) {
-            return value;
+            return String(value);
         }
     }
 
-    return value;
+    return String(value);
 }
 
 /**
  * Check if a competency is an NDT certification
- * @param {object} competency - The competency definition or employee competency
- * @returns {boolean} - True if this is an NDT certification
  */
-export function isNDTCertification(competency) {
+export function isNDTCertification(competency: CompetencyDefinition | null): boolean {
     if (!competency) return false;
 
     // Check category name
@@ -302,16 +297,14 @@ export function isNDTCertification(competency) {
 /**
  * Check if an NDT competency requires a witness check
  * Some NDT fields like "PCN Number" are informational and don't need witness checks
- * @param {object} competency - The competency definition or employee competency
- * @returns {boolean} - True if this NDT cert requires a witness check
  */
-export function requiresWitnessCheck(competency) {
+export function requiresWitnessCheck(competency: CompetencyDefinition | null): boolean {
     if (!isNDTCertification(competency)) {
         return false;
     }
 
-    const fieldName = competency.name?.toLowerCase() ||
-                     competency.competency?.name?.toLowerCase() || '';
+    const fieldName = competency!.name?.toLowerCase() ||
+                     competency!.competency?.name?.toLowerCase() || '';
 
     // These NDT fields don't require witness checks (they're informational)
     const excludedFields = [
@@ -325,7 +318,7 @@ export function requiresWitnessCheck(competency) {
     }
 
     // If it's an expiry_date type NDT cert, it needs a witness check
-    const fieldType = competency.field_type || competency.competency?.field_type;
+    const fieldType = competency!.field_type || competency!.competency?.field_type;
     if (fieldType === 'expiry_date') {
         return true;
     }
@@ -340,10 +333,8 @@ export function requiresWitnessCheck(competency) {
 
 /**
  * Get witness check status summary for a list of competencies
- * @param {Array} competencies - Array of employee competencies
- * @returns {object} - Object with total, witnessed, and percentage
  */
-export function getWitnessCheckSummary(competencies) {
+export function getWitnessCheckSummary(competencies: CompetencyDefinition[]): { total: number; witnessed: number; percentage: number } {
     if (!Array.isArray(competencies)) {
         return { total: 0, witnessed: 0, percentage: 0 };
     }

@@ -3,7 +3,7 @@
  * CRUD operations for managing competency categories and definitions (admin only).
  */
 // @ts-ignore - JS module without type declarations
-import supabase, { isSupabaseConfigured } from '../supabase-client.js';
+import supabase, { isSupabaseConfigured } from '../supabase-client';
 // @ts-ignore - JS module without type declarations
 import authManager from '../auth-manager.js';
 import { logActivity } from './activity-log-service.ts';

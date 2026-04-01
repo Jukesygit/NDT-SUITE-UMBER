@@ -3,13 +3,13 @@
  * Provides error sanitization and input validation for service layer
  */
 
-import { sanitizeString } from './validation.js';
+import { sanitizeString } from './validation';
 
 /**
  * Generic error messages by operation type
  * Used to prevent leaking database schema details to clients
  */
-const GENERIC_ERROR_MESSAGES = {
+const GENERIC_ERROR_MESSAGES: Record<string, string> = {
     fetch: 'Failed to load data',
     create: 'Failed to create record',
     update: 'Failed to update record',
@@ -23,13 +23,8 @@ const GENERIC_ERROR_MESSAGES = {
 /**
  * Sanitize database errors to prevent information leakage
  * Logs the full error for debugging while returning a generic message to client
- *
- * @param {Error} error - Original error from database
- * @param {string} serviceName - Name of the service (for logging)
- * @param {string} operation - Operation type (fetch, create, update, delete, etc.)
- * @returns {Error} Sanitized error safe to return to client
  */
-export function sanitizeDbError(error, serviceName, operation) {
+export function sanitizeDbError(error: Error, serviceName: string, operation: string): Error {
     // Return generic message to client
     const genericMessage = GENERIC_ERROR_MESSAGES[operation] || 'An error occurred';
     return new Error(genericMessage);
@@ -37,37 +32,33 @@ export function sanitizeDbError(error, serviceName, operation) {
 
 /**
  * Wrap a service function to automatically sanitize errors
- *
- * @param {Function} fn - Service function to wrap
- * @param {string} serviceName - Name of the service
- * @param {string} operation - Operation type
- * @returns {Function} Wrapped function with error sanitization
  */
-export function withErrorSanitization(fn, serviceName, operation) {
-    return async (...args) => {
+export function withErrorSanitization<T extends (...args: unknown[]) => Promise<unknown>>(
+    fn: T,
+    serviceName: string,
+    operation: string
+): (...args: Parameters<T>) => Promise<ReturnType<T>> {
+    return async (...args: Parameters<T>): Promise<ReturnType<T>> => {
         try {
-            return await fn(...args);
+            return await fn(...args) as ReturnType<T>;
         } catch (error) {
-            throw sanitizeDbError(error, serviceName, operation);
+            throw sanitizeDbError(error as Error, serviceName, operation);
         }
     };
 }
 
+interface FieldConfig {
+    encodeHtml?: boolean;
+    maxLength?: number;
+}
+
 /**
  * Sanitize user input for service operations
- *
- * @param {object} data - Object containing user input
- * @param {object} fieldConfig - Configuration for each field
- * @returns {object} Sanitized data
- *
- * @example
- * sanitizeServiceInput(data, {
- *   name: { maxLength: 100 },
- *   description: { maxLength: 500 },
- *   notes: { maxLength: 2000 }
- * });
  */
-export function sanitizeServiceInput(data, fieldConfig) {
+export function sanitizeServiceInput(
+    data: Record<string, unknown> | null | undefined,
+    fieldConfig: Record<string, FieldConfig>
+): Record<string, unknown> | null | undefined {
     if (!data || typeof data !== 'object') {
         return data;
     }
@@ -77,7 +68,7 @@ export function sanitizeServiceInput(data, fieldConfig) {
     for (const [field, config] of Object.entries(fieldConfig)) {
         if (sanitized[field] !== undefined && sanitized[field] !== null) {
             if (typeof sanitized[field] === 'string') {
-                sanitized[field] = sanitizeString(sanitized[field], {
+                sanitized[field] = sanitizeString(sanitized[field] as string, {
                     encodeHtml: config.encodeHtml ?? false,
                     maxLength: config.maxLength || 1000
                 });
@@ -90,12 +81,8 @@ export function sanitizeServiceInput(data, fieldConfig) {
 
 /**
  * Validate UUID format
- *
- * @param {string} id - ID to validate
- * @param {string} fieldName - Name of field for error message
- * @throws {Error} If ID is not a valid UUID
  */
-export function validateUUID(id, fieldName = 'ID') {
+export function validateUUID(id: string, fieldName = 'ID'): void {
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     if (!id || typeof id !== 'string') {
@@ -109,13 +96,8 @@ export function validateUUID(id, fieldName = 'ID') {
 
 /**
  * Validate that a value is one of allowed values
- *
- * @param {*} value - Value to check
- * @param {Array} allowedValues - Array of allowed values
- * @param {string} fieldName - Name of field for error message
- * @throws {Error} If value is not in allowed list
  */
-export function validateEnum(value, allowedValues, fieldName) {
+export function validateEnum(value: unknown, allowedValues: unknown[], fieldName: string): void {
     if (!allowedValues.includes(value)) {
         throw new Error(`Invalid ${fieldName}. Allowed values: ${allowedValues.join(', ')}`);
     }

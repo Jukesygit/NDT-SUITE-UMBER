@@ -8,9 +8,9 @@ import { personnelKeys, Person, PersonCompetency } from '../queries/usePersonnel
 
 // Services - ES module imports
 // @ts-ignore - JS module without types
-import supabaseImport from '../../supabase-client.js';
+import supabaseImport from '../../supabase-client';
 // @ts-ignore - JS module without types
-import personnelService from '../../services/personnel-service.js';
+import personnelService from '../../services/personnel-service';
 
 // @ts-ignore - typing JS module import
 const supabase: SupabaseClient = supabaseImport;

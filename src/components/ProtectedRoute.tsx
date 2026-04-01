@@ -1,8 +1,15 @@
+import { type ReactNode } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Spinner } from './LoadingStates';
 
-function ProtectedRoute({ requireAdmin, requireElevatedAccess, children }) {
+interface ProtectedRouteProps {
+    requireAdmin?: boolean;
+    requireElevatedAccess?: boolean;
+    children?: ReactNode;
+}
+
+function ProtectedRoute({ requireAdmin, requireElevatedAccess, children }: ProtectedRouteProps) {
     const location = useLocation();
     const { isAuthenticated, isAdmin, hasElevatedAccess, isLoading } = useAuth();
 

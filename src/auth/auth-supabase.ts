@@ -5,7 +5,7 @@
  * and auth state change listener.
  */
 
-import supabase from '../supabase-client.js';
+import supabase from '../supabase-client';
 import { logActivity } from '../services/activity-log-service.ts';
 import type { AuthCurrentUser, AuthProfile, AuthResult } from './auth-types';
 

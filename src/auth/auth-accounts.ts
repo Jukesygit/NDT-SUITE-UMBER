@@ -5,7 +5,7 @@
  * and bulk user creation via edge functions.
  */
 
-import supabase from '../supabase-client.js';
+import supabase from '../supabase-client';
 import {
     ROLES,
     type AuthResult,

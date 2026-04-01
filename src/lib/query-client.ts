@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
-import { isAuthError } from './auth-error-handler.js';
+import { isAuthError } from './auth-error-handler';
 import { sessionManager } from './session-manager';
 
 /**
@@ -7,8 +7,8 @@ import { sessionManager } from './session-manager';
  * Delegates auth errors to the centralized session manager
  * (Session manager handles deduplication internally - no flag needed here)
  */
-function handleQueryError(error) {
-    if (!isAuthError(error)) return;
+function handleQueryError(error: unknown): void {
+    if (!isAuthError(error as Record<string, unknown>)) return;
 
     // Delegate to session manager - it handles deduplication and coordination
     sessionManager.reportAuthError(error);
@@ -18,8 +18,8 @@ function handleQueryError(error) {
  * Global error handler for mutations
  * Delegates auth errors to the centralized session manager
  */
-function handleMutationError(error) {
-    if (!isAuthError(error)) return;
+function handleMutationError(error: unknown): void {
+    if (!isAuthError(error as Record<string, unknown>)) return;
 
     // Delegate to session manager - it handles deduplication and coordination
     sessionManager.reportAuthError(error);
@@ -28,9 +28,9 @@ function handleMutationError(error) {
 /**
  * Custom retry function that doesn't retry auth errors
  */
-function shouldRetry(failureCount, error) {
+function shouldRetry(failureCount: number, error: unknown): boolean {
     // Never retry auth errors - they won't succeed without re-login
-    if (isAuthError(error)) {
+    if (isAuthError(error as Record<string, unknown>)) {
         return false;
     }
     // Retry other errors once
@@ -58,7 +58,7 @@ queryClient.getQueryCache().config.onError = handleQueryError;
 /**
  * Clear all cached data - call on logout
  */
-export function clearQueryCache() {
+export function clearQueryCache(): void {
     queryClient.clear();
 }
 
@@ -67,7 +67,7 @@ export function clearQueryCache() {
  * Only invalidates queries that are in error state or have stale data
  * This prevents the "thundering herd" problem of refetching everything at once
  */
-export function invalidateStaleQueries() {
+export function invalidateStaleQueries(): void {
     const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
 
     queryClient.invalidateQueries({
@@ -86,6 +86,6 @@ export function invalidateStaleQueries() {
  * Invalidate all queries - use sparingly, prefer invalidateStaleQueries
  * @deprecated Use invalidateStaleQueries instead for better performance
  */
-export function invalidateAllQueries() {
+export function invalidateAllQueries(): void {
     queryClient.invalidateQueries();
 }

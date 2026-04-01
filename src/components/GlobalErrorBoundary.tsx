@@ -1,7 +1,18 @@
-import React from 'react';
+import React, { type ReactNode, type ErrorInfo } from 'react';
 
-class GlobalErrorBoundary extends React.Component {
-    constructor(props) {
+interface GlobalErrorBoundaryProps {
+    children: ReactNode;
+}
+
+interface GlobalErrorBoundaryState {
+    hasError: boolean;
+    error: Error | null;
+    errorInfo: ErrorInfo | null;
+    errorCount: number;
+}
+
+class GlobalErrorBoundary extends React.Component<GlobalErrorBoundaryProps, GlobalErrorBoundaryState> {
+    constructor(props: GlobalErrorBoundaryProps) {
         super(props);
         this.state = {
             hasError: false,
@@ -11,12 +22,12 @@ class GlobalErrorBoundary extends React.Component {
         };
     }
 
-    static getDerivedStateFromError(error) {
+    static getDerivedStateFromError(error: Error): Partial<GlobalErrorBoundaryState> {
         // Update state to show fallback UI
         return { hasError: true };
     }
 
-    componentDidCatch(error, errorInfo) {
+    componentDidCatch(error: Error, errorInfo: ErrorInfo) {
         // Log error to console in development
         console.error('Global Error Boundary caught:', error, errorInfo);
 
@@ -33,7 +44,7 @@ class GlobalErrorBoundary extends React.Component {
         }
     }
 
-    reportErrorToService(error) {
+    reportErrorToService(error: Error) {
         // GDPR: componentStack excluded (can contain rendered PII from props).
         // URL stripped to pathname only (query params may contain user IDs/emails).
         const errorData = {
@@ -48,7 +59,7 @@ class GlobalErrorBoundary extends React.Component {
         try {
             const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
             const errors = JSON.parse(localStorage.getItem('app_errors') || '[]')
-                .filter((e) => e.timestamp && new Date(e.timestamp).getTime() > sevenDaysAgo);
+                .filter((e: { timestamp?: string }) => e.timestamp && new Date(e.timestamp).getTime() > sevenDaysAgo);
             errors.push(errorData);
             if (errors.length > 10) {
                 errors.shift();
@@ -193,8 +204,8 @@ class GlobalErrorBoundary extends React.Component {
                                     fontWeight: '500',
                                     transition: 'background-color 0.2s'
                                 }}
-                                onMouseEnter={(e) => e.target.style.backgroundColor = '#059669'}
-                                onMouseLeave={(e) => e.target.style.backgroundColor = '#10b981'}
+                                onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#059669'}
+                                onMouseLeave={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#10b981'}
                             >
                                 Try Again
                             </button>
@@ -212,8 +223,8 @@ class GlobalErrorBoundary extends React.Component {
                                     fontWeight: '500',
                                     transition: 'background-color 0.2s'
                                 }}
-                                onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.15)'}
-                                onMouseLeave={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                                onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = 'rgba(255, 255, 255, 0.15)'}
+                                onMouseLeave={(e) => (e.target as HTMLButtonElement).style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
                             >
                                 Go Home
                             </button>

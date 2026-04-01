@@ -1,5 +1,5 @@
 // Personnel Management Service
-import supabase, { isSupabaseConfigured } from '../supabase-client.js';
+import supabase, { isSupabaseConfigured } from '../supabase-client';
 import authManager from '../auth-manager.js';
 import competencyService from './competency-service.ts';
 
@@ -17,7 +17,7 @@ class PersonnelService {
 
         // Fetch profiles and all competencies in parallel (2 queries instead of N+1)
         const [profilesResult, competenciesResult] = await Promise.all([
-            supabase
+            supabase!
                 .from('profiles')
                 .select(`
                     id,
@@ -37,7 +37,7 @@ class PersonnelService {
                     organizations(id, name)
                 `)
                 .order('username', { ascending: true }),
-            supabase
+            supabase!
                 .from('employee_competencies')
                 .select(`
                     id,
@@ -81,25 +81,27 @@ class PersonnelService {
         const allCompetencies = competenciesResult.data || [];
 
         // Group competencies by user_id for efficient lookup
-        const competenciesByUser = {};
-        allCompetencies.forEach(comp => {
-            if (!competenciesByUser[comp.user_id]) {
-                competenciesByUser[comp.user_id] = [];
+        const competenciesByUser: Record<string, unknown[]> = {};
+        allCompetencies.forEach((comp: Record<string, unknown>) => {
+            const userId = comp.user_id as string;
+            if (!competenciesByUser[userId]) {
+                competenciesByUser[userId] = [];
             }
+            const compDefs = comp.competency_definitions as Record<string, unknown> | undefined;
             // Flatten the competency_definitions structure
-            competenciesByUser[comp.user_id].push({
+            competenciesByUser[userId].push({
                 ...comp,
                 competency: {
-                    ...comp.competency_definitions,
-                    category: comp.competency_definitions?.competency_categories || null
+                    ...compDefs,
+                    category: (compDefs as Record<string, unknown> | undefined)?.competency_categories || null
                 }
             });
         });
 
         // Attach competencies to each profile
-        const profilesWithCompetencies = profiles.map(profile => ({
+        const profilesWithCompetencies = profiles.map((profile: Record<string, unknown>) => ({
             ...profile,
-            competencies: competenciesByUser[profile.id] || []
+            competencies: competenciesByUser[profile.id as string] || []
         }));
 
         return profilesWithCompetencies;
@@ -121,13 +123,13 @@ class PersonnelService {
 
         // Build matrix
         return {
-            personnel: personnel.map(person => ({
+            personnel: personnel.map((person: Record<string, unknown>) => ({
                 id: person.id,
                 username: person.username,
                 email: person.email,
                 organization_id: person.organization_id,
                 role: person.role,
-                competencies: person.competencies || []
+                competencies: (person.competencies as unknown[]) || []
             })),
             competencies: definitions
         };
@@ -135,19 +137,19 @@ class PersonnelService {
 
     /**
      * Export personnel and competencies to CSV format
-     * @param {Array} personnel - Array of personnel objects with competencies
      */
-    async exportPersonnelToCSV(personnel) {
+    async exportPersonnelToCSV(personnel: Record<string, unknown>[]): Promise<string> {
         if (!personnel || personnel.length === 0) {
             throw new Error('No personnel data to export');
         }
 
         // Get all unique competency names across all personnel
-        const competencyNames = new Set();
+        const competencyNames = new Set<string>();
         personnel.forEach(person => {
-            (person.competencies || []).forEach(comp => {
-                if (comp.competency?.name) {
-                    competencyNames.add(comp.competency.name);
+            ((person.competencies as Record<string, unknown>[]) || []).forEach(comp => {
+                const competency = comp.competency as Record<string, unknown> | undefined;
+                if (competency?.name) {
+                    competencyNames.add(competency.name as string);
                 }
             });
         });
@@ -165,21 +167,25 @@ class PersonnelService {
 
         // Build CSV rows
         const rows = personnel.map(person => {
-            const row = [
-                person.username || '',
-                person.email || '',
-                person.organizations?.name || '',
-                person.role || ''
+            const orgs = person.organizations as Record<string, unknown> | undefined;
+            const row: string[] = [
+                (person.username as string) || '',
+                (person.email as string) || '',
+                (orgs?.name as string) || '',
+                (person.role as string) || ''
             ];
 
             // Add competency status for each competency column
             sortedCompNames.forEach(compName => {
-                const comp = (person.competencies || []).find(c => c.competency?.name === compName);
+                const comp = ((person.competencies as Record<string, unknown>[]) || []).find(c => {
+                    const competency = c.competency as Record<string, unknown> | undefined;
+                    return competency?.name === compName;
+                });
                 if (comp) {
                     // Include status and expiry date if available
-                    let cellValue = comp.value || 'Yes';
+                    let cellValue = (comp.value as string) || 'Yes';
                     if (comp.expiry_date) {
-                        const expiryDate = new Date(comp.expiry_date).toLocaleDateString();
+                        const expiryDate = new Date(comp.expiry_date as string).toLocaleDateString();
                         cellValue += ` (Exp: ${expiryDate})`;
                     }
                     if (comp.status === 'expired') {
@@ -214,14 +220,13 @@ class PersonnelService {
 
     /**
      * Get personnel statistics for a given organization
-     * @param {string} organizationId - Organization ID
      */
-    async getOrganizationPersonnelStats(organizationId) {
+    async getOrganizationPersonnelStats(organizationId: string) {
         if (!isSupabaseConfigured()) {
             throw new Error('Supabase not configured');
         }
 
-        const { data, error } = await supabase
+        const { data, error } = await supabase!
             .from('profiles')
             .select(`
                 id,
@@ -244,18 +249,18 @@ class PersonnelService {
             expiredCompetencies: 0
         };
 
-        data.forEach(person => {
-            const competencies = person.competencies || [];
+        data.forEach((person: Record<string, unknown>) => {
+            const competencies = (person.competencies as Record<string, unknown>[]) || [];
             stats.totalCompetencies += competencies.length;
 
             competencies.forEach(comp => {
                 if (comp.status === 'active') {
                     stats.activeCompetencies++;
                 }
-                if (comp.status === 'expired' || (comp.expiry_date && new Date(comp.expiry_date) < new Date())) {
+                if (comp.status === 'expired' || (comp.expiry_date && new Date(comp.expiry_date as string) < new Date())) {
                     stats.expiredCompetencies++;
                 } else if (comp.expiry_date) {
-                    const daysUntilExpiry = Math.ceil((new Date(comp.expiry_date) - new Date()) / (1000 * 60 * 60 * 24));
+                    const daysUntilExpiry = Math.ceil((new Date(comp.expiry_date as string).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
                     if (daysUntilExpiry > 0 && daysUntilExpiry <= 30) {
                         stats.expiringCompetencies++;
                     }
@@ -268,9 +273,8 @@ class PersonnelService {
 
     /**
      * Search personnel by name, email, or competency
-     * @param {string} searchTerm - Search term
      */
-    async searchPersonnel(searchTerm) {
+    async searchPersonnel(searchTerm: string) {
         if (!isSupabaseConfigured()) {
             throw new Error('Supabase not configured');
         }
@@ -283,36 +287,34 @@ class PersonnelService {
 
         // Get all personnel and filter
         const allPersonnel = await this.getAllPersonnelWithCompetencies();
-        return allPersonnel.filter(person =>
-            person.username?.toLowerCase().includes(term) ||
-            person.email?.toLowerCase().includes(term)
+        return allPersonnel.filter((person: Record<string, unknown>) =>
+            (person.username as string)?.toLowerCase().includes(term) ||
+            (person.email as string)?.toLowerCase().includes(term)
         );
     }
 
     /**
      * Get personnel by role
-     * @param {string} role - Role to filter by
      */
-    async getPersonnelByRole(role) {
+    async getPersonnelByRole(role: string) {
         if (!isSupabaseConfigured()) {
             throw new Error('Supabase not configured');
         }
 
         const allPersonnel = await this.getAllPersonnelWithCompetencies();
-        return allPersonnel.filter(person => person.role === role);
+        return allPersonnel.filter((person: Record<string, unknown>) => person.role === role);
     }
 
     /**
      * Get compliance report for a specific person
-     * @param {string} userId - User ID
      */
-    async getPersonnelComplianceReport(userId) {
+    async getPersonnelComplianceReport(userId: string) {
         if (!isSupabaseConfigured()) {
             throw new Error('Supabase not configured');
         }
 
         // Get profile
-        const { data: person, error: personError } = await supabase
+        const { data: person, error: personError } = await supabase!
             .from('profiles')
             .select(`
                 id,
@@ -331,7 +333,7 @@ class PersonnelService {
         if (personError) throw personError;
 
         // Get competencies with definitions and categories (only active definitions)
-        const { data: competencies, error: compError } = await supabase
+        const { data: competencies, error: compError } = await supabase!
             .from('employee_competencies')
             .select(`
                 id,
@@ -367,16 +369,19 @@ class PersonnelService {
         if (compError) throw compError;
 
         // Flatten and attach competencies
-        person.competencies = (competencies || []).map(comp => ({
-            ...comp,
-            competency: {
-                ...comp.competency_definitions,
-                category: comp.competency_definitions.competency_categories
-            }
-        }));
+        (person as Record<string, unknown>).competencies = (competencies || []).map((comp: Record<string, unknown>) => {
+            const compDefs = comp.competency_definitions as Record<string, unknown>;
+            return {
+                ...comp,
+                competency: {
+                    ...compDefs,
+                    category: compDefs.competency_categories
+                }
+            };
+        });
 
         // Get history
-        const { data: history, error: historyError } = await supabase
+        const { data: history, error: historyError } = await supabase!
             .from('competency_history')
             .select(`
                 id,
@@ -395,9 +400,12 @@ class PersonnelService {
         if (historyError) throw historyError;
 
         // Categorize competencies
-        const competenciesByCategory = {};
-        (person.competencies || []).forEach(comp => {
-            const categoryName = comp.competency?.category?.name || 'Other';
+        const personCompetencies = ((person as Record<string, unknown>).competencies as Record<string, unknown>[]) || [];
+        const competenciesByCategory: Record<string, Record<string, unknown>[]> = {};
+        personCompetencies.forEach(comp => {
+            const competency = comp.competency as Record<string, unknown> | undefined;
+            const category = competency?.category as Record<string, unknown> | undefined;
+            const categoryName = (category?.name as string) || 'Other';
             if (!competenciesByCategory[categoryName]) {
                 competenciesByCategory[categoryName] = [];
             }
@@ -409,22 +417,21 @@ class PersonnelService {
             competenciesByCategory,
             history,
             summary: {
-                totalCompetencies: person.competencies?.length || 0,
-                activeCompetencies: (person.competencies || []).filter(c => c.status === 'active').length,
-                expiredCompetencies: (person.competencies || []).filter(c =>
-                    c.status === 'expired' || (c.expiry_date && new Date(c.expiry_date) < new Date())
+                totalCompetencies: personCompetencies.length || 0,
+                activeCompetencies: personCompetencies.filter(c => c.status === 'active').length,
+                expiredCompetencies: personCompetencies.filter(c =>
+                    c.status === 'expired' || (c.expiry_date && new Date(c.expiry_date as string) < new Date())
                 ).length,
-                pendingApproval: (person.competencies || []).filter(c => c.status === 'pending_approval').length,
-                withDocuments: (person.competencies || []).filter(c => c.document_url).length
+                pendingApproval: personCompetencies.filter(c => c.status === 'pending_approval').length,
+                withDocuments: personCompetencies.filter(c => c.document_url).length
             }
         };
     }
 
     /**
      * Bulk update competency status for multiple personnel
-     * @param {Array} updates - Array of {userId, competencyId, status, notes}
      */
-    async bulkUpdateCompetencyStatus(updates) {
+    async bulkUpdateCompetencyStatus(updates: Array<{ userId: string; competencyId: string; status: string; notes?: string }>) {
         if (!isSupabaseConfigured()) {
             throw new Error('Supabase not configured');
         }
@@ -434,14 +441,14 @@ class PersonnelService {
             throw new Error('Insufficient permissions');
         }
 
-        const results = {
+        const results: { success: typeof updates; failed: Array<typeof updates[number] & { error: string }> } = {
             success: [],
             failed: []
         };
 
         for (const update of updates) {
             try {
-                const { error } = await supabase
+                const { error } = await supabase!
                     .from('employee_competencies')
                     .update({
                         status: update.status,
@@ -458,7 +465,7 @@ class PersonnelService {
                     results.success.push(update);
                 }
             } catch (error) {
-                results.failed.push({ ...update, error: error.message });
+                results.failed.push({ ...update, error: (error as Error).message });
             }
         }
 
@@ -467,12 +474,16 @@ class PersonnelService {
 
     /**
      * Add a competency to an employee
-     * @param {string} userId - User ID
-     * @param {string} competencyId - Competency definition ID
-     * @param {string} issuedDate - Issued date (ISO string or null)
-     * @param {string} expiryDate - Expiry date (ISO string or null)
      */
-    async addCompetencyToEmployee(userId, competencyId, issuedDate, expiryDate, issuingBody, certificationId, value) {
+    async addCompetencyToEmployee(
+        userId: string,
+        competencyId: string,
+        issuedDate: string | null,
+        expiryDate: string | null,
+        issuingBody?: string | null,
+        certificationId?: string | null,
+        value?: string | null
+    ) {
         if (!isSupabaseConfigured()) {
             throw new Error('Supabase not configured');
         }
@@ -483,7 +494,7 @@ class PersonnelService {
         }
 
         // First insert the competency
-        const { data, error } = await supabase
+        const { data, error } = await supabase!
             .from('employee_competencies')
             .insert({
                 user_id: userId,
@@ -509,7 +520,7 @@ class PersonnelService {
         // This is optional - if the function doesn't exist, we just won't update created_at
         if (issuedDate) {
             try {
-                const { error: rpcError } = await supabase.rpc('update_competency_created_at', {
+                const { error: rpcError } = await supabase!.rpc('update_competency_created_at', {
                     p_user_id: userId,
                     p_competency_id: competencyId,
                     p_created_at: issuedDate
@@ -529,15 +540,16 @@ class PersonnelService {
 
     /**
      * Update competency dates (issued and expiry)
-     * @param {string} userId - User ID
-     * @param {string} competencyId - Competency definition ID
-     * @param {string} issuedDate - Issued date (ISO string or null)
-     * @param {string} expiryDate - Expiry date (ISO string or null)
-     * @param {string} issuingBody - Issuing body/organization (for certifications)
-     * @param {string} certificationId - Certification ID/number
-     * @param {string} value - General value field
      */
-    async updateCompetencyDates(userId, competencyId, issuedDate, expiryDate, issuingBody, certificationId, value) {
+    async updateCompetencyDates(
+        userId: string,
+        competencyId: string,
+        issuedDate: string | null,
+        expiryDate: string | null,
+        issuingBody?: string | null,
+        certificationId?: string | null,
+        value?: string | null
+    ) {
         if (!isSupabaseConfigured()) {
             throw new Error('Supabase not configured');
         }
@@ -558,7 +570,7 @@ class PersonnelService {
         // If we need to update the issued date, we need to use a custom function or raw SQL
         // For now, we'll focus on updating the expiry_date and use created_at as the issued date
 
-        const { data, error } = await supabase
+        const { data, error } = await supabase!
             .from('employee_competencies')
             .update(updateData)
             .eq('user_id', userId)
@@ -572,7 +584,7 @@ class PersonnelService {
         // This is optional - if the function doesn't exist, we just won't update created_at
         if (issuedDate) {
             try {
-                const { error: rpcError } = await supabase.rpc('update_competency_created_at', {
+                const { error: rpcError } = await supabase!.rpc('update_competency_created_at', {
                     p_user_id: userId,
                     p_competency_id: competencyId,
                     p_created_at: issuedDate
@@ -610,19 +622,19 @@ class PersonnelService {
             expiringCompetencies: expiringData.length,
             expiredCompetencies: 0,
             pendingApproval: 0,
-            byOrganization: {},
-            byRole: {},
+            byOrganization: {} as Record<string, { personnel: number; competencies: number; active: number; expired: number }>,
+            byRole: {} as Record<string, { count: number; competencies: number }>,
             complianceRate: 0
         };
 
-        personnel.forEach(person => {
-            const competencies = person.competencies || [];
+        personnel.forEach((person: Record<string, unknown>) => {
+            const competencies = (person.competencies as Record<string, unknown>[]) || [];
             dashboard.totalCompetencies += competencies.length;
 
             competencies.forEach(comp => {
-                if (comp.status === 'active' && (!comp.expiry_date || new Date(comp.expiry_date) > new Date())) {
+                if (comp.status === 'active' && (!comp.expiry_date || new Date(comp.expiry_date as string) > new Date())) {
                     dashboard.activeCompetencies++;
-                } else if (comp.status === 'expired' || (comp.expiry_date && new Date(comp.expiry_date) < new Date())) {
+                } else if (comp.status === 'expired' || (comp.expiry_date && new Date(comp.expiry_date as string) < new Date())) {
                     dashboard.expiredCompetencies++;
                 } else if (comp.status === 'pending_approval') {
                     dashboard.pendingApproval++;
@@ -630,7 +642,8 @@ class PersonnelService {
             });
 
             // By organization
-            const orgName = person.organizations?.name || 'Unknown';
+            const orgs = person.organizations as Record<string, unknown> | undefined;
+            const orgName = (orgs?.name as string) || 'Unknown';
             if (!dashboard.byOrganization[orgName]) {
                 dashboard.byOrganization[orgName] = {
                     personnel: 0,
@@ -643,18 +656,19 @@ class PersonnelService {
             dashboard.byOrganization[orgName].competencies += competencies.length;
             dashboard.byOrganization[orgName].active += competencies.filter(c => c.status === 'active').length;
             dashboard.byOrganization[orgName].expired += competencies.filter(c =>
-                c.status === 'expired' || (c.expiry_date && new Date(c.expiry_date) < new Date())
+                c.status === 'expired' || (c.expiry_date && new Date(c.expiry_date as string) < new Date())
             ).length;
 
             // By role
-            if (!dashboard.byRole[person.role]) {
-                dashboard.byRole[person.role] = {
+            const role = person.role as string;
+            if (!dashboard.byRole[role]) {
+                dashboard.byRole[role] = {
                     count: 0,
                     competencies: 0
                 };
             }
-            dashboard.byRole[person.role].count++;
-            dashboard.byRole[person.role].competencies += competencies.length;
+            dashboard.byRole[role].count++;
+            dashboard.byRole[role].competencies += competencies.length;
         });
 
         // Calculate compliance rate

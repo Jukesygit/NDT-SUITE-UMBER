@@ -3,13 +3,44 @@
  * Centralizes all environment variables with validation and defaults
  */
 
+interface SupabaseConfig {
+    url: string;
+    anonKey: string;
+    isConfigured: boolean;
+}
+
+interface AppConfig {
+    url: string;
+    environment: string;
+    isDevelopment: boolean;
+    isProduction: boolean;
+    enableAnalytics: boolean;
+    maintenanceMode: boolean;
+}
+
+interface SecurityConfig {
+    enableLocalAuth: boolean;
+    sessionTimeout: number;
+    maxLoginAttempts: number;
+    lockoutDuration: number;
+}
+
+interface EnvironmentConfigData {
+    supabase: SupabaseConfig;
+    app: AppConfig;
+    security: SecurityConfig;
+    [key: string]: unknown;
+}
+
 class EnvironmentConfig {
+    private config: EnvironmentConfigData;
+
     constructor() {
         this.config = this.loadAndValidateConfig();
         this.validateRequiredVariables();
     }
 
-    loadAndValidateConfig() {
+    private loadAndValidateConfig(): EnvironmentConfigData {
         return {
             supabase: {
                 url: import.meta.env.VITE_SUPABASE_URL || '',
@@ -34,7 +65,7 @@ class EnvironmentConfig {
         };
     }
 
-    validateRequiredVariables() {
+    private validateRequiredVariables(): void {
         const { supabase } = this.config;
 
         // Check if Supabase is properly configured
@@ -61,50 +92,43 @@ class EnvironmentConfig {
 
     /**
      * Get a specific configuration value
-     * @param {string} path - Dot-notation path to config value (e.g., 'supabase.url')
-     * @returns {any} The configuration value
      */
-    get(path) {
-        return path.split('.').reduce((obj, key) => obj?.[key], this.config);
+    get(path: string): unknown {
+        return path.split('.').reduce((obj: unknown, key: string) => (obj as Record<string, unknown>)?.[key], this.config);
     }
 
     /**
      * Check if Supabase is properly configured
-     * @returns {boolean}
      */
-    isSupabaseConfigured() {
+    isSupabaseConfigured(): boolean {
         return this.config.supabase.isConfigured;
     }
 
     /**
      * Get the full configuration object (readonly)
-     * @returns {Object}
      */
-    getConfig() {
+    getConfig(): Readonly<EnvironmentConfigData> {
         return Object.freeze(JSON.parse(JSON.stringify(this.config)));
     }
 
     /**
      * Check if running in development mode
-     * @returns {boolean}
      */
-    isDevelopment() {
+    isDevelopment(): boolean {
         return this.config.app.isDevelopment;
     }
 
     /**
      * Check if running in production mode
-     * @returns {boolean}
      */
-    isProduction() {
+    isProduction(): boolean {
         return this.config.app.isProduction;
     }
 
     /**
      * Check if app is in maintenance mode (PII lockdown - tools only)
-     * @returns {boolean}
      */
-    isMaintenanceMode() {
+    isMaintenanceMode(): boolean {
         return this.config.app.maintenanceMode;
     }
 }

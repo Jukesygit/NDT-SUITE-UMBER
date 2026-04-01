@@ -1,11 +1,36 @@
 // Admin Configuration Module - Manages configurable lists for report fields
-import indexedDB from './indexed-db.js';
+import indexedDB from './indexed-db';
 import authManager from './auth-manager.js';
 
 const CONFIG_KEY = 'admin_configuration';
 
+interface AdminConfigData {
+    procedureNumbers: string[];
+    equipmentModels: string[];
+    probes: string[];
+    calibrationBlocks: string[];
+    couplants: string[];
+    scannerFrames: string[];
+    coatingTypes: string[];
+    materials: string[];
+    acceptanceCriteria: string[];
+    clients: string[];
+    locations: string[];
+    [key: string]: string[];
+}
+
+interface OperationResult {
+    success: boolean;
+    error?: string;
+}
+
+interface ListMetadataEntry {
+    label: string;
+    icon: string;
+}
+
 // Default values for common NDT equipment and materials
-const DEFAULT_CONFIG = {
+const DEFAULT_CONFIG: AdminConfigData = {
     procedureNumbers: [
         'MAI-P-NDT-009-PAUT-R03',
         'MAI-P-NDT-010-UT-R02',
@@ -121,19 +146,22 @@ const DEFAULT_CONFIG = {
 };
 
 class AdminConfig {
+    private config: AdminConfigData | null = null;
+    public initPromise: Promise<void>;
+
     constructor() {
         this.config = null;
         this.initPromise = this.initialize();
     }
 
-    async initialize() {
+    private async initialize(): Promise<void> {
         try {
             await indexedDB.ensureInitialized();
             const data = await indexedDB.loadData();
 
             // Load config from IndexedDB or use defaults
             if (data[CONFIG_KEY]) {
-                this.config = data[CONFIG_KEY];
+                this.config = data[CONFIG_KEY] as AdminConfigData;
             } else {
                 // Initialize with defaults
                 this.config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
@@ -144,34 +172,34 @@ class AdminConfig {
         }
     }
 
-    async ensureInitialized() {
+    async ensureInitialized(): Promise<void> {
         await this.initPromise;
     }
 
-    async saveConfig() {
+    private async saveConfig(): Promise<OperationResult> {
         try {
             const data = await indexedDB.loadData();
             data[CONFIG_KEY] = this.config;
             await indexedDB.saveData(data);
             return { success: true };
         } catch (error) {
-            return { success: false, error: error.message };
+            return { success: false, error: (error as Error).message };
         }
     }
 
     // Get all configuration
-    getAllConfig() {
+    getAllConfig(): AdminConfigData {
         return JSON.parse(JSON.stringify(this.config));
     }
 
     // Get specific list
-    getList(listName) {
-        return this.config[listName] ? [...this.config[listName]] : [];
+    getList(listName: string): string[] {
+        return this.config?.[listName] ? [...this.config[listName]] : [];
     }
 
     // Add item to list
-    async addItem(listName, item) {
-        if (!this.config[listName]) {
+    async addItem(listName: string, item: string): Promise<OperationResult> {
+        if (!this.config?.[listName]) {
             return { success: false, error: 'Invalid list name' };
         }
 
@@ -190,8 +218,8 @@ class AdminConfig {
     }
 
     // Update item in list
-    async updateItem(listName, oldItem, newItem) {
-        if (!this.config[listName]) {
+    async updateItem(listName: string, oldItem: string, newItem: string): Promise<OperationResult> {
+        if (!this.config?.[listName]) {
             return { success: false, error: 'Invalid list name' };
         }
 
@@ -216,8 +244,8 @@ class AdminConfig {
     }
 
     // Remove item from list
-    async removeItem(listName, item) {
-        if (!this.config[listName]) {
+    async removeItem(listName: string, item: string): Promise<OperationResult> {
+        if (!this.config?.[listName]) {
             return { success: false, error: 'Invalid list name' };
         }
 
@@ -232,30 +260,30 @@ class AdminConfig {
     }
 
     // Reset list to defaults
-    async resetList(listName) {
+    async resetList(listName: string): Promise<OperationResult> {
         if (!DEFAULT_CONFIG[listName]) {
             return { success: false, error: 'Invalid list name' };
         }
 
-        this.config[listName] = [...DEFAULT_CONFIG[listName]];
+        this.config![listName] = [...DEFAULT_CONFIG[listName]];
         await this.saveConfig();
         return { success: true };
     }
 
     // Reset all to defaults
-    async resetAllToDefaults() {
+    async resetAllToDefaults(): Promise<OperationResult> {
         this.config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
         await this.saveConfig();
         return { success: true };
     }
 
     // Export configuration
-    exportConfig() {
+    exportConfig(): string {
         return JSON.stringify(this.config, null, 2);
     }
 
     // Import configuration
-    async importConfig(jsonString) {
+    async importConfig(jsonString: string): Promise<OperationResult> {
         try {
             const imported = JSON.parse(jsonString);
 
@@ -278,7 +306,7 @@ class AdminConfig {
     }
 
     // Get list metadata
-    getListMetadata() {
+    getListMetadata(): Record<string, ListMetadataEntry> {
         return {
             procedureNumbers: { label: 'Procedure Numbers', icon: '📋' },
             equipmentModels: { label: 'Equipment Models', icon: '🔧' },
