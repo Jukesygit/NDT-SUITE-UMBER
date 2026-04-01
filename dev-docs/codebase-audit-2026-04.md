@@ -26,10 +26,22 @@
 - Split admin-service.ts (741 -> domain modules)
 
 ## Remaining Recommendations
-- Upgrade Vite 5 -> 6
+- ~~Upgrade Vite 5 -> 6~~ **Done** (upgraded to Vite 6.4.1)
 - Evaluate React 19 upgrade
 - Consider React Three Fiber migration for VesselModeler
-- Deprecate local auth fallback (bcryptjs/crypto-js/indexed-db)
+- ~~Deprecate local auth fallback (bcryptjs/crypto-js/indexed-db)~~ **Done** (Supabase is now sole auth provider)
 - Add comprehensive test suite (currently 1 test file)
 - Convert remaining .js files to .ts
 - Consolidate themes.js into Tailwind
+
+## Suggested Features
+- **Offline-capable read mode** — Cache recent inspections/reports in localStorage or a service worker so field engineers can view data without connectivity, even though auth now requires Supabase
+- **Role-based dashboard** — Tailor the landing page per role (Admin sees org stats, Inspectors see assigned jobs, Viewers see recent reports) instead of a single overview for all users
+- **Inspection report PDF export** — Generate professional PDF reports directly from inspection data (the phantom jspdf/pdfmake deps were removed but the underlying need likely remains)
+- **Notification system with email alerts** — Extend the existing NotificationsTab with email/push notifications for expiring certifications, overdue inspections, and pending account requests
+- **Audit trail export** — Allow admins to export the activity log as CSV/PDF for compliance audits and UKAS evidence packages
+- **Bulk inspection import** — Extend the existing import system to support batch uploading of historical inspection records with validation
+- **Dark mode** — The codebase already has a themes.js file; consolidating into Tailwind (per remaining recommendations) would make adding a dark theme straightforward
+- **API key management** — Allow organizations to generate API keys for integrating NDT Suite data with external systems (ERP, CMMS, asset management)
+- **Multi-language support (i18n)** — Internationalise the UI for field teams operating across regions (common in offshore/oil & gas NDT work)
+- **Vessel 3D annotation sharing** — Allow inspectors to share annotated VesselModeler views via shareable links or embedded snapshots in reports
