@@ -64,6 +64,23 @@ export function shellPoint(
 }
 
 // ---------------------------------------------------------------------------
+// Severity Color Lookup
+// ---------------------------------------------------------------------------
+
+const SEVERITY_COLORS: Record<string, string> = {
+  red: '#ff3333',
+  yellow: '#ffaa00',
+  green: '#33cc33',
+};
+
+/** Resolve outline color: severity level overrides the user-chosen color. */
+function resolveOutlineColor(config: AnnotationShapeConfig): string {
+  return config.severityLevel
+    ? SEVERITY_COLORS[config.severityLevel] ?? config.color
+    : config.color;
+}
+
+// ---------------------------------------------------------------------------
 // Circle Outline
 // ---------------------------------------------------------------------------
 
@@ -95,7 +112,7 @@ function createCircleOutline(
 
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
   const material = new THREE.LineBasicMaterial({
-    color: new THREE.Color(config.color),
+    color: new THREE.Color(resolveOutlineColor(config)),
     linewidth: 1, // WebGL limitation: linewidth > 1 only works on some backends
   });
 
@@ -147,7 +164,7 @@ export function createRectOutline(
 
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
   const material = new THREE.LineBasicMaterial({
-    color: new THREE.Color(config.color),
+    color: new THREE.Color(resolveOutlineColor(config)),
     linewidth: 1,
   });
 
