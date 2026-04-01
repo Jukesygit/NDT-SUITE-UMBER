@@ -114,7 +114,13 @@ export function usePersonnel() {
         queryKey: personnelKeys.list(),
         queryFn: async (): Promise<Person[]> => {
             const data = await personnelService.getAllPersonnelWithCompetencies();
-            return data || [];
+            // Supabase joins return organizations as array; normalize to single object
+            return (data || []).map((person: Record<string, unknown>) => ({
+                ...person,
+                organizations: Array.isArray(person.organizations)
+                    ? person.organizations[0]
+                    : person.organizations,
+            })) as Person[];
         },
         staleTime: 2 * 60 * 1000, // 2 minutes
     });
@@ -130,7 +136,15 @@ export function usePersonDetail(personId: string | undefined) {
             if (!personId) return null;
             // Use compliance report to get single person with competencies
             const report = await personnelService.getPersonnelComplianceReport(personId);
-            return report?.person || null;
+            const person = report?.person;
+            if (!person) return null;
+            // Normalize organizations array from Supabase join
+            return {
+                ...person,
+                organizations: Array.isArray(person.organizations)
+                    ? person.organizations[0]
+                    : person.organizations,
+            } as Person;
         },
         enabled: !!personId,
         staleTime: 1 * 60 * 1000, // 1 minute
