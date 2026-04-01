@@ -3,8 +3,7 @@
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-// @ts-ignore - JS service module
-import competencyService from '../../services/competency-service.js';
+import competencyService from '../../services/competency-service.ts';
 
 // Types
 export interface CategoryData {

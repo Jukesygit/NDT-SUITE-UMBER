@@ -8,7 +8,7 @@ import { createPortal } from 'react-dom';
 import type { Person } from '../../hooks/queries/usePersonnel';
 import { getPendingApprovalCompetencies } from '../../hooks/queries/usePersonnel';
 import { useApproveCompetency, useRejectCompetency, useRequestChanges } from '../../hooks/mutations/useCompetencyMutations';
-import competencyService from '../../services/competency-service.js';
+import competencyService from '../../services/competency-service.ts';
 
 interface PersonDocumentReviewModalProps {
     isOpen: boolean;
