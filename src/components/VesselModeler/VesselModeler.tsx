@@ -21,6 +21,7 @@ import {
     type VesselCallbacks,
     type WeldConfig,
     type ScanCompositeConfig,
+    type ThicknessThresholds,
 } from './types';
 import type { ExtractionResult } from './engine/drawing-parser';
 import { loadTextureFromData, clearHeatmapCache } from './engine/texture-manager';
@@ -101,6 +102,13 @@ interface UIState {
     viewingInspectionImageId: number;
     hoverData: { thickness: number | null; scanMm: number; indexMm: number } | null;
     scanTooltipFollow: boolean;
+    /** ID of annotation being inspected (null = not in inspection mode) */
+    inspectingAnnotationId: number | null;
+    /** Camera state saved before entering inspection mode */
+    savedCameraState: {
+        position: [number, number, number];
+        target: [number, number, number];
+    } | null;
 }
 
 interface VesselModelerState {
@@ -138,6 +146,8 @@ const INITIAL_STATE: VesselModelerState = {
         viewingInspectionImageId: -1,
         hoverData: null,
         scanTooltipFollow: false,
+        inspectingAnnotationId: null,
+        savedCameraState: null,
     },
 };
 
@@ -170,7 +180,10 @@ type VesselAction =
     | { type: 'SET_HOVER_DATA'; data: UIState['hoverData'] }
     | { type: 'TOGGLE_SCAN_TOOLTIP_FOLLOW' }
     | { type: 'CANCEL_ALL_DRAW_MODES' }
-    | { type: 'UPDATE_THICKNESS_THRESHOLDS'; thresholds: VesselState['thicknessThresholds'] };
+    | { type: 'UPDATE_THICKNESS_THRESHOLDS'; thresholds: VesselState['thicknessThresholds'] }
+    | { type: 'ENTER_INSPECTION_MODE'; annotationId: number; cameraState: { position: [number, number, number]; target: [number, number, number] } }
+    | { type: 'CYCLE_INSPECTION'; annotationId: number }
+    | { type: 'EXIT_INSPECTION_MODE' };
 
 function vesselReducer(state: VesselModelerState, action: VesselAction): VesselModelerState {
     switch (action.type) {
@@ -259,6 +272,31 @@ function vesselReducer(state: VesselModelerState, action: VesselAction): VesselM
             return {
                 ...state,
                 vessel: { ...state.vessel, thicknessThresholds: action.thresholds },
+            };
+        case 'ENTER_INSPECTION_MODE':
+            return {
+                ...state,
+                selection: { ...state.selection, annotationId: action.annotationId },
+                ui: {
+                    ...state.ui,
+                    inspectingAnnotationId: action.annotationId,
+                    savedCameraState: action.cameraState,
+                },
+            };
+        case 'CYCLE_INSPECTION':
+            return {
+                ...state,
+                selection: { ...state.selection, annotationId: action.annotationId },
+                ui: { ...state.ui, inspectingAnnotationId: action.annotationId },
+            };
+        case 'EXIT_INSPECTION_MODE':
+            return {
+                ...state,
+                ui: {
+                    ...state.ui,
+                    inspectingAnnotationId: null,
+                    savedCameraState: null,
+                },
             };
         default:
             return state;
@@ -424,6 +462,10 @@ export default function VesselModeler() {
     const updateMeasurementConfig = useCallback((updates: Partial<MeasurementConfig>) => {
         updateVessel(prev => ({ ...prev, measurementConfig: { ...prev.measurementConfig, ...updates } }));
     }, [updateVessel]);
+
+    const updateThicknessThresholds = useCallback((thresholds: ThicknessThresholds) => {
+        dispatch({ type: 'UPDATE_THICKNESS_THRESHOLDS', thresholds });
+    }, []);
 
     const getNextAnnotationId = useCallback(() => {
         return nextAnnotationIdRef.current++;
@@ -1407,6 +1449,7 @@ export default function VesselModeler() {
                         cloudComposites={cloudComposites}
                         cloudCompositesLoading={cloudCompositesLoading}
                         cloudCompositesError={cloudCompositesError as Error | null}
+                        onUpdateThicknessThresholds={updateThicknessThresholds}
                     />
                 </div>
 
