@@ -6,9 +6,11 @@ import type {
     AnnotationShapeType,
     MeasurementConfig,
     RulerConfig,
+    ThicknessThresholds,
 } from '../types';
 import { computeRulerDistance } from '../engine/annotation-geometry';
 import { SliderRow, SubSection } from './SliderRow';
+import { ThresholdSection } from './ThresholdSection';
 
 export interface AnnotationSectionProps {
     vesselState: VesselState;
@@ -29,6 +31,7 @@ export interface AnnotationSectionProps {
     onUpdateRuler: (id: number, updates: Partial<RulerConfig>) => void;
     selectedRulerId: number;
     onSelectRuler: (id: number) => void;
+    onUpdateThicknessThresholds: (thresholds: ThicknessThresholds) => void;
 }
 
 export function AnnotationSection({
@@ -38,6 +41,7 @@ export function AnnotationSection({
     onToggleAnnotationVisible, onToggleAnnotationLocked,
     rulerDrawMode, onSetRulerDrawMode, onRemoveRuler,
     onUpdateRuler, selectedRulerId, onSelectRuler,
+    onUpdateThicknessThresholds,
 }: AnnotationSectionProps) {
     const sel = vesselState.annotations.find(a => a.id === selectedAnnotationId);
     const selRuler = vesselState.rulers.find(r => r.id === selectedRulerId);
@@ -353,6 +357,12 @@ export function AnnotationSection({
                     </div>
                 </div>
             </div>
+
+            {/* Thickness thresholds */}
+            <ThresholdSection
+                thresholds={vesselState.thicknessThresholds}
+                onUpdate={onUpdateThicknessThresholds}
+            />
         </SubSection>
     );
 }
