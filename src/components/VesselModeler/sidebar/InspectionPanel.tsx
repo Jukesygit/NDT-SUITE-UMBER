@@ -7,11 +7,12 @@
 
 import { useEffect, useRef } from 'react';
 import { ChevronLeft } from 'lucide-react';
-import type { AnnotationShapeConfig, VesselState } from '../types';
+import type { AnnotationShapeConfig, ThicknessThresholds, VesselState } from '../types';
 import {
   createAnnotationHeatmapCanvas,
   findOverlappingComposite,
 } from '../engine/annotation-heatmap';
+import { ThresholdSection } from './ThresholdSection';
 
 interface InspectionPanelProps {
   annotation: AnnotationShapeConfig;
@@ -19,6 +20,8 @@ interface InspectionPanelProps {
   onClose: () => void;
   onCycleToAnnotation: (id: number) => void;
   onStatHover: (stat: 'min' | 'max' | null) => void;
+  thicknessThresholds?: ThicknessThresholds;
+  onUpdateThicknessThresholds: (thresholds: ThicknessThresholds) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -58,6 +61,8 @@ export default function InspectionPanel({
   onClose,
   onCycleToAnnotation,
   onStatHover,
+  thicknessThresholds,
+  onUpdateThicknessThresholds,
 }: InspectionPanelProps) {
   const stats = annotation.thicknessStats;
   const scanMm = scanPositionMm(annotation.angle, vesselState.id);
@@ -258,7 +263,7 @@ export default function InspectionPanel({
 
       {/* Navigation: Other annotations */}
       {otherAnnotations.length > 0 && (
-        <div className="vm-inspection-section" style={{ borderBottom: 'none' }}>
+        <div className="vm-inspection-section">
           <div className="vm-inspection-section-title">
             Other Annotations ({otherAnnotations.length})
           </div>
@@ -311,6 +316,15 @@ export default function InspectionPanel({
           })}
         </div>
       )}
+
+      {/* Threshold Controls */}
+      <div className="vm-inspection-section" style={{ borderBottom: 'none' }}>
+        <div className="vm-inspection-section-title">Thresholds</div>
+        <ThresholdSection
+          thresholds={thicknessThresholds}
+          onUpdate={onUpdateThicknessThresholds}
+        />
+      </div>
     </div>
   );
 }

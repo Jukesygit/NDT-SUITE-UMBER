@@ -1623,6 +1623,8 @@ export default function VesselModeler() {
                                 onClose={exitInspectionMode}
                                 onCycleToAnnotation={cycleInspection}
                                 onStatHover={setStatHover}
+                                thicknessThresholds={vesselState.thicknessThresholds}
+                                onUpdateThicknessThresholds={updateThicknessThresholds}
                             />
                             {statHover !== null && ann.thicknessStats && (
                                 <StatLeaderOverlay
