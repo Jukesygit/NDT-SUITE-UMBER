@@ -34,6 +34,7 @@ import * as THREE from 'three';
 
 import CoveragePanel from './CoveragePanel';
 import InspectionPanel from './sidebar/InspectionPanel';
+import StatLeaderOverlay from './StatLeaderOverlay';
 
 const DrawingImportModal = lazy(() => import('./DrawingImportModal'));
 const ScreenshotMode = lazy(() => import('./ScreenshotMode'));
@@ -330,12 +331,11 @@ export default function VesselModeler() {
 
     // Viewport ref
     const viewportRef = useRef<ThreeViewportHandle>(null);
+    const viewportContainerRef = useRef<HTMLDivElement>(null);
     const cursorTooltipRef = useRef<HTMLDivElement>(null);
 
     // Inspection panel: which stat row is hovered (highlights min/max point on vessel)
     const [statHover, setStatHover] = useState<'min' | 'max' | null>(null);
-    // statHover will be consumed by ThreeViewport in a later task to highlight min/max points
-    void statHover;
 
     // --- Helper: dispatch vessel update via functional updater ---
     const updateVessel = useCallback((updater: (prev: VesselState) => VesselState) => {
@@ -1376,6 +1376,7 @@ export default function VesselModeler() {
         <div className="h-full w-full flex flex-col overflow-hidden" style={{ background: '#111111' }}>
             {/* Main content area */}
             <div
+                ref={viewportContainerRef}
                 className={`flex-1 relative overflow-hidden ${drawModeState.annotation || drawModeState.coverage || drawModeState.ruler ? 'vm-draw-mode-active' : ''}`}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
@@ -1623,6 +1624,15 @@ export default function VesselModeler() {
                                 onCycleToAnnotation={cycleInspection}
                                 onStatHover={setStatHover}
                             />
+                            {statHover !== null && ann.thicknessStats && (
+                                <StatLeaderOverlay
+                                    hoveredStat={statHover}
+                                    annotation={ann}
+                                    vesselState={vesselState}
+                                    cameraRef={{ current: viewportRef.current?.getCamera() ?? null }}
+                                    containerRef={viewportContainerRef}
+                                />
+                            )}
                         </>
                     );
                 })()}
