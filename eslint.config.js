@@ -38,6 +38,7 @@ export default [
       '@typescript-eslint/no-require-imports': 'off',
       '@typescript-eslint/ban-ts-comment': ['warn', { 'ts-ignore': 'allow-with-description' }],
       'no-unused-vars': 'off',
+      'max-lines': ['warn', 300],
     },
   },
   {
