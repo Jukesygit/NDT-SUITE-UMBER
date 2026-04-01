@@ -25,7 +25,7 @@ import { SCALE } from './materials';
 // Public Types
 // ---------------------------------------------------------------------------
 
-export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | 'annotation' | 'coverageRect' | 'inspectionImage' | 'weld' | null;
+export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | 'annotation' | 'coverageRect' | 'inspectionImage' | 'weld' | 'scanGizmo' | null;
 
 export interface InteractionCallbacks {
   onNozzleSelected: (index: number) => void;
@@ -51,7 +51,9 @@ export interface InteractionCallbacks {
   onInspectionImageMoved: (id: number, pos: number, angle: number) => void;
   onWeldSelected: (index: number) => void;
   onWeldMoved: (index: number, pos: number, angle: number) => void;
-  onScanCompositeHover: (id: string, thickness: number | null, scanMm: number, indexMm: number) => void;
+  onScanCompositeHover: (id: string, thickness: number | null, scanMm: number, indexMm: number, screenX: number, screenY: number) => void;
+  onScanGizmoDatumMoved: (compositeId: string, angleDeg: number, posMm: number) => void;
+  onScanGizmoDirectionToggle: (compositeId: string, field: 'scanDirection' | 'indexDirection') => void;
   onDragEnd: () => void;
   onNeedRebuild: () => void;
 }
@@ -79,6 +81,7 @@ export class InteractionManager {
   private selectedCoverageRectId = -1;
   private selectedInspectionImageId = -1;
   private selectedWeldIdx = -1;
+  private selectedGizmoCompositeId = '';
   private isDown = false;
 
   // Draw mode state
@@ -106,6 +109,7 @@ export class InteractionManager {
   weldMeshes: THREE.Object3D[] = [];
   textureMeshes: THREE.Mesh[] = [];
   scanCompositeMeshes: THREE.Mesh[] = [];
+  gizmoMeshes: THREE.Object3D[] = [];
   annotationMeshes: THREE.Object3D[] = [];
   coverageMeshes: THREE.Object3D[] = [];
   inspectionImageDotMeshes: THREE.Object3D[] = [];
@@ -228,170 +232,153 @@ export class InteractionManager {
       return;
     }
 
-    // ----- Priority 1: Texture meshes ----- //
-    if (!this.texturesLocked && this.textureMeshes.length > 0) {
-      const textureHits = this.raycaster.intersectObjects(this.textureMeshes, false);
-      if (textureHits.length > 0) {
-        const hit = textureHits[0].object as THREE.Mesh;
-        const textureIdx = hit.userData.textureIdx as number | undefined;
-        if (textureIdx !== undefined) {
-          this.startDrag('texture', -1, -1, textureIdx);
-          this.callbacks.onTextureSelected(textureIdx);
-          return;
-        }
-      }
-    }
+    // ----- Gizmo: highest priority (check before other interactables) ----- //
+    if (this.gizmoMeshes.length > 0) {
+      const gizmoHits = this.raycaster.intersectObjects(this.gizmoMeshes, true);
+      for (const hit of gizmoHits) {
+        const ud = this.findGizmoData(hit.object);
+        if (!ud) continue;
 
-    // ----- Priority 2: Annotation meshes (per-item lock check) ----- //
-    if (this.annotationMeshes.length > 0) {
-      const annHits = this.raycaster.intersectObjects(this.annotationMeshes, true);
-      if (annHits.length > 0) {
-        let obj: THREE.Object3D | null = annHits[0].object;
-        let annId: number | undefined;
-        while (obj) {
-          annId = obj.userData.annotationId as number | undefined;
-          if (annId !== undefined) break;
-          obj = obj.parent;
-        }
-        if (annId !== undefined) {
-          const ann = this.vesselState.annotations.find(a => a.id === annId);
-          if (!ann?.locked) {
-            this.startDrag('annotation', -1, -1, -1, -1, annId);
-          }
-          this.callbacks.onAnnotationSelected(annId);
-          return;
-        }
-      }
-    }
-
-    // ----- Priority 2.5: Coverage rect meshes (per-item lock check) ----- //
-    if (this.coverageMeshes.length > 0) {
-      const covHits = this.raycaster.intersectObjects(this.coverageMeshes, true);
-      if (covHits.length > 0) {
-        let obj: THREE.Object3D | null = covHits[0].object;
-        let covId: number | undefined;
-        while (obj) {
-          covId = obj.userData.coverageRectId as number | undefined;
-          if (covId !== undefined) break;
-          obj = obj.parent;
-        }
-        if (covId !== undefined) {
-          // Check per-item locked state
-          const rect = this.vesselState.coverageRects.find(r => r.id === covId);
-          if (rect?.locked) {
-            this.callbacks.onCoverageRectSelected(covId);
-            return;
-          }
-          this.selectedCoverageRectId = covId;
+        if (ud.type === 'scanGizmo') {
+          // Origin sphere: start drag
+          this.selectedGizmoCompositeId = ud.compositeId as string;
           this.isDown = true;
           this.isDragging = true;
-          this.dragType = 'coverageRect';
+          this.dragType = 'scanGizmo';
           this.controls.enabled = false;
+          return;
+        }
+
+        if (ud.type === 'scanGizmoArrowCirc') {
+          // Click on circumferential arrow: toggle scan direction
+          this.callbacks.onScanGizmoDirectionToggle(ud.compositeId as string, 'scanDirection');
+          return;
+        }
+
+        if (ud.type === 'scanGizmoArrowLong') {
+          // Click on longitudinal arrow: toggle index direction
+          this.callbacks.onScanGizmoDirectionToggle(ud.compositeId as string, 'indexDirection');
+          return;
+        }
+      }
+    }
+
+    // ----- Single-pass raycast against all interactable meshes ----- //
+    const allInteractables: THREE.Object3D[] = [
+      ...this.textureMeshes,
+      ...this.annotationMeshes,
+      ...this.coverageMeshes,
+      ...this.inspectionImageDotMeshes,
+      ...this.nozzleMeshes,
+      ...this.lugMeshes,
+      ...this.weldMeshes,
+      ...this.saddleMeshes,
+      ...this.scanCompositeMeshes,
+    ];
+
+    const hits = allInteractables.length > 0
+      ? this.raycaster.intersectObjects(allInteractables, true)
+      : [];
+
+    for (const hit of hits) {
+      const entityData = this.findEntityData(hit.object);
+      if (!entityData) continue;
+
+      // --- Texture ---
+      if (entityData.textureIdx !== undefined) {
+        if (this.texturesLocked) continue;
+        const textureIdx = entityData.textureIdx as number;
+        this.startDrag('texture', -1, -1, textureIdx);
+        this.callbacks.onTextureSelected(textureIdx);
+        return;
+      }
+
+      // --- Annotation (per-item lock) ---
+      if (entityData.annotationId !== undefined) {
+        const annId = entityData.annotationId as number;
+        const ann = this.vesselState.annotations.find(a => a.id === annId);
+        if (!ann?.locked) {
+          this.startDrag('annotation', -1, -1, -1, -1, annId);
+        }
+        this.callbacks.onAnnotationSelected(annId);
+        return;
+      }
+
+      // --- Coverage Rect (per-item lock) ---
+      if (entityData.coverageRectId !== undefined) {
+        const covId = entityData.coverageRectId as number;
+        const rect = this.vesselState.coverageRects.find(r => r.id === covId);
+        if (rect?.locked) {
           this.callbacks.onCoverageRectSelected(covId);
           return;
         }
+        this.selectedCoverageRectId = covId;
+        this.isDown = true;
+        this.isDragging = true;
+        this.dragType = 'coverageRect';
+        this.controls.enabled = false;
+        this.callbacks.onCoverageRectSelected(covId);
+        return;
       }
-    }
 
-    // ----- Priority 2.7: Inspection image dot meshes (per-item lock check) ----- //
-    if (this.inspectionImageDotMeshes.length > 0) {
-      const imgHits = this.raycaster.intersectObjects(this.inspectionImageDotMeshes, true);
-      if (imgHits.length > 0) {
-        let obj: THREE.Object3D | null = imgHits[0].object;
-        let imgId: number | undefined;
-        while (obj) {
-          imgId = obj.userData.inspectionImageId as number | undefined;
-          if (imgId !== undefined) break;
-          obj = obj.parent;
-        }
-        if (imgId !== undefined) {
-          const img = this.vesselState.inspectionImages.find(i => i.id === imgId);
-          if (!img?.locked) {
-            this.selectedInspectionImageId = imgId;
-            this.isDown = true;
-            this.isDragging = true;
-            this.dragType = 'inspectionImage';
-            this.controls.enabled = false;
-          }
-          this.callbacks.onInspectionImageSelected(imgId);
-          return;
-        }
-      }
-    }
-
-    // ----- Priority 3: Nozzle meshes (groups - use recursive intersect) ----- //
-    if (!this.nozzlesLocked && this.nozzleMeshes.length > 0) {
-      const nozzleHits = this.raycaster.intersectObjects(this.nozzleMeshes, true);
-      if (nozzleHits.length > 0) {
-        // Walk up the hierarchy to find the root nozzle group that has the index
-        let obj: THREE.Object3D | null = nozzleHits[0].object;
-        let nozzleIdx: number | undefined;
-        while (obj) {
-          nozzleIdx = obj.userData.nozzleIdx as number | undefined;
-          if (nozzleIdx !== undefined) break;
-          obj = obj.parent;
-        }
-        if (nozzleIdx !== undefined) {
-          this.startDrag('nozzle', nozzleIdx, -1, -1);
-          this.callbacks.onNozzleSelected(nozzleIdx);
-          return;
-        }
-      }
-    }
-
-    // ----- Priority 3: Lifting lug meshes (groups - recursive) ----- //
-    if (!this.lugsLocked && this.lugMeshes.length > 0) {
-      const lugHits = this.raycaster.intersectObjects(this.lugMeshes, true);
-      if (lugHits.length > 0) {
-        let obj: THREE.Object3D | null = lugHits[0].object;
-        let lugIdx: number | undefined;
-        while (obj) {
-          lugIdx = obj.userData.lugIdx as number | undefined;
-          if (lugIdx !== undefined) break;
-          obj = obj.parent;
-        }
-        if (lugIdx !== undefined) {
-          this.startDrag('liftingLug', -1, -1, -1, lugIdx);
-          this.callbacks.onLugSelected(lugIdx);
-          return;
-        }
-      }
-    }
-
-    // ----- Priority 3.5: Weld meshes (groups - recursive) ----- //
-    if (!this.weldsLocked && this.weldMeshes.length > 0) {
-      const weldHits = this.raycaster.intersectObjects(this.weldMeshes, true);
-      if (weldHits.length > 0) {
-        let obj: THREE.Object3D | null = weldHits[0].object;
-        let weldIdx: number | undefined;
-        while (obj) {
-          weldIdx = obj.userData.weldIdx as number | undefined;
-          if (weldIdx !== undefined) break;
-          obj = obj.parent;
-        }
-        if (weldIdx !== undefined) {
-          this.selectedWeldIdx = weldIdx;
+      // --- Inspection Image (per-item lock) ---
+      if (entityData.inspectionImageId !== undefined) {
+        const imgId = entityData.inspectionImageId as number;
+        const img = this.vesselState.inspectionImages.find(i => i.id === imgId);
+        if (!img?.locked) {
+          this.selectedInspectionImageId = imgId;
           this.isDown = true;
           this.isDragging = true;
-          this.dragType = 'weld';
+          this.dragType = 'inspectionImage';
           this.controls.enabled = false;
-          this.callbacks.onWeldSelected(weldIdx);
-          return;
         }
+        this.callbacks.onInspectionImageSelected(imgId);
+        return;
       }
-    }
 
-    // ----- Priority 4: Saddle meshes ----- //
-    if (!this.saddlesLocked && this.saddleMeshes.length > 0) {
-      const saddleHits = this.raycaster.intersectObjects(this.saddleMeshes, true);
-      if (saddleHits.length > 0) {
-        const hit = saddleHits[0].object as THREE.Mesh;
-        const saddleIdx = hit.userData.saddleIdx as number | undefined;
-        if (saddleIdx !== undefined) {
-          this.startDrag('saddle', -1, saddleIdx, -1);
-          this.callbacks.onSaddleSelected(saddleIdx);
-          return;
-        }
+      // --- Nozzle ---
+      if (entityData.nozzleIdx !== undefined) {
+        if (this.nozzlesLocked) continue;
+        const nozzleIdx = entityData.nozzleIdx as number;
+        this.startDrag('nozzle', nozzleIdx, -1, -1);
+        this.callbacks.onNozzleSelected(nozzleIdx);
+        return;
+      }
+
+      // --- Lifting Lug ---
+      if (entityData.lugIdx !== undefined) {
+        if (this.lugsLocked) continue;
+        const lugIdx = entityData.lugIdx as number;
+        this.startDrag('liftingLug', -1, -1, -1, lugIdx);
+        this.callbacks.onLugSelected(lugIdx);
+        return;
+      }
+
+      // --- Weld ---
+      if (entityData.weldIdx !== undefined) {
+        if (this.weldsLocked) continue;
+        const weldIdx = entityData.weldIdx as number;
+        this.selectedWeldIdx = weldIdx;
+        this.isDown = true;
+        this.isDragging = true;
+        this.dragType = 'weld';
+        this.controls.enabled = false;
+        this.callbacks.onWeldSelected(weldIdx);
+        return;
+      }
+
+      // --- Saddle ---
+      if (entityData.saddleIdx !== undefined) {
+        if (this.saddlesLocked) continue;
+        const saddleIdx = entityData.saddleIdx as number;
+        this.startDrag('saddle', -1, saddleIdx, -1);
+        this.callbacks.onSaddleSelected(saddleIdx);
+        return;
+      }
+
+      // --- Scan Composite (click-through, no selection action) ---
+      if (entityData.type === 'scanComposite') {
+        continue;
       }
     }
 
@@ -476,8 +463,12 @@ export class InteractionManager {
           const userData = hit.object.userData;
 
           if (uv && userData.type === 'scanComposite' && userData.data) {
-            const col = Math.min(Math.floor(uv.x * userData.width), userData.width - 1);
-            const row = Math.min(Math.floor((1 - uv.y) * userData.height), userData.height - 1);
+            // CCW flips uv.x via `v` instead of `1-v`, so invert back for column lookup
+            const uvX = userData.scanDirection === 'ccw' ? 1 - uv.x : uv.x;
+            const col = Math.min(Math.floor(uvX * userData.width), userData.width - 1);
+            const row = userData.indexDirection === 'reverse'
+              ? Math.min(Math.floor(uv.y * userData.height), userData.height - 1)
+              : Math.min(Math.floor((1 - uv.y) * userData.height), userData.height - 1);
             const thickness = userData.data[row]?.[col] ?? null;
 
             this.callbacks.onScanCompositeHover(
@@ -485,11 +476,13 @@ export class InteractionManager {
               thickness,
               userData.xAxis[col] ?? 0,
               userData.yAxis[row] ?? 0,
+              event.clientX,
+              event.clientY,
             );
           }
         } else {
           // Clear hover when not over any composite
-          this.callbacks.onScanCompositeHover('', null, 0, 0);
+          this.callbacks.onScanCompositeHover('', null, 0, 0, 0, 0);
         }
       }
       return;
@@ -568,6 +561,32 @@ export class InteractionManager {
       if (deg < 0) deg += 360;
 
       this.callbacks.onWeldMoved(this.selectedWeldIdx, newPos, deg);
+      return;
+    }
+
+    if (this.dragType === 'scanGizmo') {
+      const shellMeshes = this.getShellMeshes();
+      if (shellMeshes.length === 0) return;
+      const hits = this.raycaster.intersectObjects(shellMeshes, true);
+      if (hits.length === 0) return;
+
+      const point = hits[0].point;
+      const isVertical = state.orientation === 'vertical';
+      let newPos = isVertical
+        ? (point.y / SCALE) + (state.length / 2)
+        : (point.x / SCALE) + (state.length / 2);
+      // Clamp to vessel tan-tan range
+      newPos = Math.max(0, Math.min(state.length, newPos));
+
+      const rad = isVertical
+        ? Math.atan2(point.z, point.x)
+        : Math.atan2(point.y, point.z);
+      // Convert internal angle (0°=3-o'clock) to user-facing (0°=TDC) by subtracting 90°
+      let deg = (rad * 180) / Math.PI - 90;
+      deg = ((deg % 360) + 360) % 360;
+      deg = Math.round(deg);
+
+      this.callbacks.onScanGizmoDatumMoved(this.selectedGizmoCompositeId, deg, newPos);
       return;
     }
 
@@ -729,6 +748,52 @@ export class InteractionManager {
 
     // Disable orbit controls during drag so panning doesn't interfere
     this.controls.enabled = false;
+  }
+
+  /**
+   * Walk up from a hit object to find gizmo userData (scanGizmo, scanGizmoArrowCirc, scanGizmoArrowLong).
+   */
+  private findGizmoData(obj: THREE.Object3D): Record<string, unknown> | null {
+    let current: THREE.Object3D | null = obj;
+    while (current) {
+      const ud = current.userData;
+      if (
+        ud.type === 'scanGizmo' ||
+        ud.type === 'scanGizmoArrowCirc' ||
+        ud.type === 'scanGizmoArrowLong'
+      ) {
+        return ud as Record<string, unknown>;
+      }
+      current = current.parent;
+    }
+    return null;
+  }
+
+  /**
+   * Walk up the parent chain from a hit object to find the nearest ancestor
+   * (or self) that carries entity identification in its userData. Returns the
+   * userData object, or null if nothing relevant is found.
+   */
+  private findEntityData(obj: THREE.Object3D): Record<string, unknown> | null {
+    let current: THREE.Object3D | null = obj;
+    while (current) {
+      const ud = current.userData;
+      if (
+        ud.textureIdx !== undefined ||
+        ud.annotationId !== undefined ||
+        ud.coverageRectId !== undefined ||
+        ud.inspectionImageId !== undefined ||
+        ud.nozzleIdx !== undefined ||
+        ud.lugIdx !== undefined ||
+        ud.weldIdx !== undefined ||
+        ud.saddleIdx !== undefined ||
+        ud.type === 'scanComposite'
+      ) {
+        return ud as Record<string, unknown>;
+      }
+      current = current.parent;
+    }
+    return null;
   }
 
   /**

@@ -6,12 +6,11 @@
  */
 
 import * as THREE from 'three';
+import { COLOR_SCALES, interpolateColor } from '../../../utils/colorscales';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-type ColorStop = [number, [number, number, number]];
 
 export interface HeatmapTextureOptions {
   colorScale?: string;
@@ -24,81 +23,6 @@ export interface HeatmapTextureOptions {
 export interface HeatmapTextureResult {
   texture: THREE.CanvasTexture;
   canvas: HTMLCanvasElement;
-}
-
-// ---------------------------------------------------------------------------
-// Colorscale definitions (Plotly-compatible RGB values)
-// ---------------------------------------------------------------------------
-
-const COLORSCALES: Record<string, ColorStop[]> = {
-  Jet: [
-    [0.0, [0, 0, 131]],
-    [0.167, [0, 60, 170]],
-    [0.333, [0, 255, 255]],
-    [0.5, [0, 255, 0]],
-    [0.667, [255, 255, 0]],
-    [0.833, [255, 0, 0]],
-    [1.0, [128, 0, 0]],
-  ],
-  Viridis: [
-    [0.0, [68, 1, 84]],
-    [0.25, [59, 82, 139]],
-    [0.5, [33, 145, 140]],
-    [0.75, [94, 201, 98]],
-    [1.0, [253, 231, 37]],
-  ],
-  Hot: [
-    [0.0, [10, 0, 0]],
-    [0.333, [255, 0, 0]],
-    [0.667, [255, 255, 0]],
-    [1.0, [255, 255, 255]],
-  ],
-  Blues: [
-    [0.0, [247, 251, 255]],
-    [0.5, [107, 174, 214]],
-    [1.0, [8, 48, 107]],
-  ],
-};
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-function lerpColor(
-  c1: [number, number, number],
-  c2: [number, number, number],
-  t: number,
-): [number, number, number] {
-  return [
-    Math.round(c1[0] + (c2[0] - c1[0]) * t),
-    Math.round(c1[1] + (c2[1] - c1[1]) * t),
-    Math.round(c1[2] + (c2[2] - c1[2]) * t),
-  ];
-}
-
-function valueToColor(
-  normalizedValue: number,
-  colorscale: ColorStop[],
-): [number, number, number] {
-  const v = Math.max(0, Math.min(1, normalizedValue));
-
-  // If at or beyond the last stop, return the final color
-  if (v >= colorscale[colorscale.length - 1][0]) {
-    return colorscale[colorscale.length - 1][1];
-  }
-
-  for (let i = 0; i < colorscale.length - 1; i++) {
-    const [pos0, col0] = colorscale[i];
-    const [pos1, col1] = colorscale[i + 1];
-
-    if (v >= pos0 && v < pos1) {
-      const t = (v - pos0) / (pos1 - pos0);
-      return lerpColor(col0, col1, t);
-    }
-  }
-
-  // Fallback (should not reach here)
-  return colorscale[0][1];
 }
 
 // ---------------------------------------------------------------------------
@@ -136,14 +60,7 @@ function renderToCanvas(
   const max = rangeMax != null ? rangeMax : stats.max;
   const range = max === min ? 1 : max - min;
 
-  let stops = COLORSCALES[colorScale] ?? COLORSCALES.Jet;
-
-  if (reverseScale) {
-    stops = stops
-      .map<ColorStop>(([pos, col]) => [1 - pos, col])
-      .reverse();
-  }
-
+  const stops = COLOR_SCALES[colorScale] ?? COLOR_SCALES.Jet;
   const alpha = Math.round(Math.max(0, Math.min(1, opacity)) * 255);
 
   for (let row = 0; row < rows; row++) {
@@ -152,14 +69,13 @@ function renderToCanvas(
       const value = data[row][col];
 
       if (value == null) {
-        // Transparent pixel for null values
         pixels[idx] = 0;
         pixels[idx + 1] = 0;
         pixels[idx + 2] = 0;
         pixels[idx + 3] = 0;
       } else {
         const normalized = (value - min) / range;
-        const [r, g, b] = valueToColor(normalized, stops);
+        const [r, g, b] = interpolateColor(normalized, stops, reverseScale);
         pixels[idx] = r;
         pixels[idx + 1] = g;
         pixels[idx + 2] = b;
@@ -204,6 +120,4 @@ export function updateHeatmapTexture(
   result.texture.needsUpdate = true;
 }
 
-export function getAvailableColorscales(): string[] {
-  return Object.keys(COLORSCALES);
-}
+export { getAvailableColorscales } from '../../../utils/colorscales';

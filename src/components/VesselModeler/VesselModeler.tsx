@@ -1,6 +1,7 @@
-import { useState, useRef, useCallback, useEffect, lazy, Suspense, type ChangeEvent } from 'react';
-import { Lock, Unlock, Save, Upload, RotateCcw, PanelLeftClose, PanelLeft, FileUp, Camera } from 'lucide-react';
+import { useState, useReducer, useRef, useCallback, useEffect, lazy, Suspense, type ChangeEvent } from 'react';
+import { Lock, Unlock, Save, Upload, RotateCcw, PanelLeftClose, PanelLeft, FileUp, Camera, AlertTriangle, MousePointer, PanelBottomClose } from 'lucide-react';
 import ThreeViewport from './ThreeViewport';
+import ErrorBoundary from '../ErrorBoundary';
 import type { ThreeViewportHandle } from './ThreeViewport';
 import SidebarPanel from './SidebarPanel';
 import StatusBar from './StatusBar';
@@ -20,204 +21,410 @@ import {
     type VesselCallbacks,
     type WeldConfig,
     type ScanCompositeConfig,
+    type ThicknessThresholds,
 } from './types';
 import type { ExtractionResult } from './engine/drawing-parser';
 import { loadTextureFromData, clearHeatmapCache } from './engine/texture-manager';
+import { recomputeAllAnnotationStats } from './engine/annotation-stats';
+import { computeInspectionCameraTarget, animateCamera, cancelCameraAnimation } from './engine/camera-animation';
 import { useScanCompositeList } from '../../hooks/queries/useScanComposites';
 import { getScanComposite } from '../../services/scan-composite-service';
+import { uploadAnnotationImage, deleteAnnotationImage, getAnnotationImageUrl } from '../../services/annotation-attachment-service';
+import { useAuth } from '../../contexts/AuthContext';
 import './vessel-modeler.css';
 import * as THREE from 'three';
 
 import CoveragePanel from './CoveragePanel';
+import InspectionPanel from './sidebar/InspectionPanel';
+import StatLeaderOverlay from './StatLeaderOverlay';
 
 const DrawingImportModal = lazy(() => import('./DrawingImportModal'));
 const ScreenshotMode = lazy(() => import('./ScreenshotMode'));
 const InspectionImageViewer = lazy(() => import('./InspectionImageViewer'));
 
+/** Clamp vessel dimensions and nozzle positions to safe ranges to prevent division-by-zero and NaN geometry. */
+function validateVesselState(state: VesselState): VesselState {
+    const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+    const id = clamp(state.id, 100, 20000);
+    const length = clamp(state.length, 100, 50000);
+    const headRatio = clamp(state.headRatio, 1.5, 4.0);
+    const HEAD_DEPTH = id / (2 * headRatio);
+
+    return {
+        ...state,
+        id,
+        length,
+        headRatio,
+        nozzles: state.nozzles.map(n => ({
+            ...n,
+            pos: clamp(n.pos, -HEAD_DEPTH, length + HEAD_DEPTH),
+            angle: ((n.angle % 360) + 360) % 360,
+        })),
+    };
+}
+
+// ---------------------------------------------------------------------------
+// Consolidated state & reducer
+// ---------------------------------------------------------------------------
+
+interface SelectionState {
+    nozzleIndex: number;
+    saddleIndex: number;
+    textureId: number;
+    lugIndex: number;
+    annotationId: number;
+    rulerId: number;
+    weldIndex: number;
+    coverageRectId: number;
+    inspectionImageId: number;
+    scanCompositeId: string;
+}
+
+interface LocksState {
+    nozzles: boolean;
+    saddles: boolean;
+    textures: boolean;
+    lugs: boolean;
+    welds: boolean;
+}
+
+interface DrawModeState {
+    annotation: AnnotationShapeType | null;
+    coverage: boolean;
+    ruler: boolean;
+}
+
+interface PreviewsState {
+    annotation: AnnotationShapeConfig | null;
+    coverageRect: CoverageRectConfig | null;
+    ruler: RulerConfig | null;
+}
+
+interface UIState {
+    sidebarOpen: boolean;
+    showDrawingImport: boolean;
+    showScreenshotMode: boolean;
+    viewingInspectionImageId: number;
+    hoverData: { thickness: number | null; scanMm: number; indexMm: number } | null;
+    scanTooltipFollow: boolean;
+    /** ID of annotation being inspected (null = not in inspection mode) */
+    inspectingAnnotationId: number | null;
+    /** Camera state saved before entering inspection mode */
+    savedCameraState: {
+        position: [number, number, number];
+        target: [number, number, number];
+    } | null;
+}
+
+interface VesselModelerState {
+    vessel: VesselState;
+    selection: SelectionState;
+    locks: LocksState;
+    drawMode: DrawModeState;
+    previews: PreviewsState;
+    ui: UIState;
+}
+
+const DESELECTED: SelectionState = {
+    nozzleIndex: -1,
+    saddleIndex: -1,
+    textureId: -1,
+    lugIndex: -1,
+    annotationId: -1,
+    rulerId: -1,
+    weldIndex: -1,
+    coverageRectId: -1,
+    inspectionImageId: -1,
+    scanCompositeId: '',
+};
+
+const INITIAL_STATE: VesselModelerState = {
+    vessel: { ...DEFAULT_VESSEL_STATE },
+    selection: { ...DESELECTED },
+    locks: { nozzles: false, saddles: false, textures: false, lugs: false, welds: false },
+    drawMode: { annotation: null, coverage: false, ruler: false },
+    previews: { annotation: null, coverageRect: null, ruler: null },
+    ui: {
+        sidebarOpen: true,
+        showDrawingImport: false,
+        showScreenshotMode: false,
+        viewingInspectionImageId: -1,
+        hoverData: null,
+        scanTooltipFollow: false,
+        inspectingAnnotationId: null,
+        savedCameraState: null,
+    },
+};
+
+type VesselAction =
+    | { type: 'SET_VESSEL'; vessel: VesselState }
+    | { type: 'UPDATE_VESSEL_FN'; updater: (prev: VesselState) => VesselState }
+    | { type: 'SELECT_NOZZLE'; index: number }
+    | { type: 'SELECT_SADDLE'; index: number }
+    | { type: 'SELECT_TEXTURE'; id: number }
+    | { type: 'SELECT_LUG'; index: number }
+    | { type: 'SELECT_ANNOTATION'; id: number }
+    | { type: 'SELECT_RULER'; id: number }
+    | { type: 'SELECT_WELD'; index: number }
+    | { type: 'SELECT_COVERAGE_RECT'; id: number }
+    | { type: 'SELECT_INSPECTION_IMAGE'; id: number }
+    | { type: 'SELECT_SCAN_COMPOSITE'; id: string }
+    | { type: 'DESELECT_ALL' }
+    | { type: 'TOGGLE_LOCK'; key: keyof LocksState }
+    | { type: 'SET_DRAW_MODE_ANNOTATION'; mode: AnnotationShapeType | null }
+    | { type: 'SET_DRAW_MODE_COVERAGE'; active: boolean }
+    | { type: 'SET_DRAW_MODE_RULER'; active: boolean }
+    | { type: 'SET_PREVIEW_ANNOTATION'; preview: AnnotationShapeConfig | null }
+    | { type: 'SET_PREVIEW_COVERAGE_RECT'; preview: CoverageRectConfig | null }
+    | { type: 'SET_PREVIEW_RULER'; preview: RulerConfig | null }
+    | { type: 'SET_SIDEBAR_OPEN'; open: boolean }
+    | { type: 'TOGGLE_SIDEBAR' }
+    | { type: 'SET_SHOW_DRAWING_IMPORT'; show: boolean }
+    | { type: 'SET_SHOW_SCREENSHOT_MODE'; show: boolean }
+    | { type: 'SET_VIEWING_INSPECTION_IMAGE'; id: number }
+    | { type: 'SET_HOVER_DATA'; data: UIState['hoverData'] }
+    | { type: 'TOGGLE_SCAN_TOOLTIP_FOLLOW' }
+    | { type: 'CANCEL_ALL_DRAW_MODES' }
+    | { type: 'UPDATE_THICKNESS_THRESHOLDS'; thresholds: VesselState['thicknessThresholds'] }
+    | { type: 'ENTER_INSPECTION_MODE'; annotationId: number; cameraState: { position: [number, number, number]; target: [number, number, number] } }
+    | { type: 'CYCLE_INSPECTION'; annotationId: number }
+    | { type: 'EXIT_INSPECTION_MODE' };
+
+function vesselReducer(state: VesselModelerState, action: VesselAction): VesselModelerState {
+    switch (action.type) {
+        case 'SET_VESSEL':
+            return { ...state, vessel: action.vessel };
+        case 'UPDATE_VESSEL_FN':
+            return { ...state, vessel: action.updater(state.vessel) };
+        case 'SELECT_NOZZLE':
+            return { ...state, selection: { ...DESELECTED, nozzleIndex: action.index } };
+        case 'SELECT_SADDLE':
+            return { ...state, selection: { ...DESELECTED, saddleIndex: action.index } };
+        case 'SELECT_TEXTURE':
+            return { ...state, selection: { ...DESELECTED, textureId: action.id } };
+        case 'SELECT_LUG':
+            return { ...state, selection: { ...DESELECTED, lugIndex: action.index } };
+        case 'SELECT_ANNOTATION':
+            return { ...state, selection: { ...DESELECTED, annotationId: action.id } };
+        case 'SELECT_RULER':
+            return { ...state, selection: { ...DESELECTED, rulerId: action.id } };
+        case 'SELECT_WELD':
+            return { ...state, selection: { ...DESELECTED, weldIndex: action.index } };
+        case 'SELECT_COVERAGE_RECT':
+            return { ...state, selection: { ...DESELECTED, coverageRectId: action.id } };
+        case 'SELECT_INSPECTION_IMAGE':
+            return { ...state, selection: { ...DESELECTED, inspectionImageId: action.id } };
+        case 'SELECT_SCAN_COMPOSITE':
+            return { ...state, selection: { ...state.selection, scanCompositeId: action.id } };
+        case 'DESELECT_ALL':
+            return { ...state, selection: { ...DESELECTED } };
+        case 'TOGGLE_LOCK':
+            return { ...state, locks: { ...state.locks, [action.key]: !state.locks[action.key] } };
+        case 'SET_DRAW_MODE_ANNOTATION':
+            return {
+                ...state,
+                drawMode: {
+                    annotation: action.mode,
+                    coverage: action.mode ? false : state.drawMode.coverage,
+                    ruler: action.mode ? false : state.drawMode.ruler,
+                },
+            };
+        case 'SET_DRAW_MODE_COVERAGE':
+            return {
+                ...state,
+                drawMode: {
+                    annotation: action.active ? null : state.drawMode.annotation,
+                    coverage: action.active,
+                    ruler: action.active ? false : state.drawMode.ruler,
+                },
+            };
+        case 'SET_DRAW_MODE_RULER':
+            return {
+                ...state,
+                drawMode: {
+                    annotation: action.active ? null : state.drawMode.annotation,
+                    coverage: action.active ? false : state.drawMode.coverage,
+                    ruler: action.active,
+                },
+            };
+        case 'SET_PREVIEW_ANNOTATION':
+            return { ...state, previews: { ...state.previews, annotation: action.preview } };
+        case 'SET_PREVIEW_COVERAGE_RECT':
+            return { ...state, previews: { ...state.previews, coverageRect: action.preview } };
+        case 'SET_PREVIEW_RULER':
+            return { ...state, previews: { ...state.previews, ruler: action.preview } };
+        case 'SET_SIDEBAR_OPEN':
+            return { ...state, ui: { ...state.ui, sidebarOpen: action.open } };
+        case 'TOGGLE_SIDEBAR':
+            return { ...state, ui: { ...state.ui, sidebarOpen: !state.ui.sidebarOpen } };
+        case 'SET_SHOW_DRAWING_IMPORT':
+            return { ...state, ui: { ...state.ui, showDrawingImport: action.show } };
+        case 'SET_SHOW_SCREENSHOT_MODE':
+            return { ...state, ui: { ...state.ui, showScreenshotMode: action.show } };
+        case 'SET_VIEWING_INSPECTION_IMAGE':
+            return { ...state, ui: { ...state.ui, viewingInspectionImageId: action.id } };
+        case 'SET_HOVER_DATA':
+            return { ...state, ui: { ...state.ui, hoverData: action.data } };
+        case 'TOGGLE_SCAN_TOOLTIP_FOLLOW':
+            return { ...state, ui: { ...state.ui, scanTooltipFollow: !state.ui.scanTooltipFollow } };
+        case 'CANCEL_ALL_DRAW_MODES':
+            return {
+                ...state,
+                drawMode: { annotation: null, coverage: false, ruler: false },
+                previews: { annotation: null, coverageRect: null, ruler: null },
+            };
+        case 'UPDATE_THICKNESS_THRESHOLDS':
+            return {
+                ...state,
+                vessel: { ...state.vessel, thicknessThresholds: action.thresholds },
+            };
+        case 'ENTER_INSPECTION_MODE':
+            return {
+                ...state,
+                selection: { ...state.selection, annotationId: action.annotationId },
+                ui: {
+                    ...state.ui,
+                    inspectingAnnotationId: action.annotationId,
+                    savedCameraState: action.cameraState,
+                },
+            };
+        case 'CYCLE_INSPECTION':
+            return {
+                ...state,
+                selection: { ...state.selection, annotationId: action.annotationId },
+                ui: { ...state.ui, inspectingAnnotationId: action.annotationId },
+            };
+        case 'EXIT_INSPECTION_MODE':
+            return {
+                ...state,
+                ui: {
+                    ...state.ui,
+                    inspectingAnnotationId: null,
+                    savedCameraState: null,
+                },
+            };
+        default:
+            return state;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
 export default function VesselModeler() {
-    // Core vessel state
-    const [vesselState, setVesselState] = useState<VesselState>({ ...DEFAULT_VESSEL_STATE });
+    const [state, dispatch] = useReducer(vesselReducer, INITIAL_STATE);
+    const { vessel: vesselState, selection, locks, drawMode: drawModeState, previews, ui } = state;
 
-    // Selection state
-    const [selectedNozzleIndex, setSelectedNozzleIndex] = useState(-1);
-    const [selectedSaddleIndex, setSelectedSaddleIndex] = useState(-1);
-    const [selectedTextureId, setSelectedTextureId] = useState(-1);
-    const [selectedLugIndex, setSelectedLugIndex] = useState(-1);
-    const [selectedAnnotationId, setSelectedAnnotationId] = useState(-1);
-    const [selectedRulerId, setSelectedRulerId] = useState(-1);
-    const [selectedWeldIndex, setSelectedWeldIndex] = useState(-1);
-
-    // Draw mode
-    const [drawMode, setDrawMode] = useState<AnnotationShapeType | null>(null);
-    const [previewAnnotation, setPreviewAnnotation] = useState<AnnotationShapeConfig | null>(null);
-    const nextAnnotationIdRef = useRef(1);
-
-    // Coverage state
-    const [selectedCoverageRectId, setSelectedCoverageRectId] = useState(-1);
-    const [coverageDrawMode, setCoverageDrawMode] = useState(false);
-    const [previewCoverageRect, setPreviewCoverageRect] = useState<CoverageRectConfig | null>(null);
-    const nextCoverageRectIdRef = useRef(1);
-
-    // Ruler state
-    const [rulerDrawMode, setRulerDrawMode] = useState(false);
-    const [previewRuler, setPreviewRuler] = useState<RulerConfig | null>(null);
-    const nextRulerIdRef = useRef(1);
-
-    // Inspection image state
-    const [selectedInspectionImageId, setSelectedInspectionImageId] = useState(-1);
-    const [viewingInspectionImageId, setViewingInspectionImageId] = useState(-1);
-    const nextInspectionImageIdRef = useRef(1);
-
-    // Scan composite state
-    const [selectedScanCompositeId, setSelectedScanCompositeId] = useState('');
-    const [hoverData, setHoverData] = useState<{
-        thickness: number | null;
-        scanMm: number;
-        indexMm: number;
-    } | null>(null);
+    // Auth context for attachment uploads
+    const { user } = useAuth();
+    const organizationId = user?.organizationId ?? 'local';
+    const vesselModelIdRef = useRef(crypto.randomUUID());
+    const vesselModelId = vesselModelIdRef.current;
 
     // Cloud composites query
     const { data: cloudComposites, error: cloudCompositesError, isLoading: cloudCompositesLoading } = useScanCompositeList();
     if (cloudCompositesError) console.error('Failed to fetch cloud composites:', cloudCompositesError);
-
-    // UI state
-    const [sidebarOpen, setSidebarOpen] = useState(true);
-    const [showDrawingImport, setShowDrawingImport] = useState(false);
-    const [showScreenshotMode, setShowScreenshotMode] = useState(false);
-    const [isLoading] = useState(false);
-    const [loadingMessage] = useState('');
-
-    // Lock state
-    const [nozzlesLocked, setNozzlesLocked] = useState(false);
-    const [saddlesLocked, setSaddlesLocked] = useState(false);
-    const [texturesLocked, setTexturesLocked] = useState(false);
-    const [lugsLocked, setLugsLocked] = useState(false);
-    const [weldsLocked, setWeldsLocked] = useState(false);
 
     // Three.js texture objects (imperative, not React state)
     const textureObjectsRef = useRef<Record<number, THREE.Texture>>({});
     const [, setTextureObjectsVersion] = useState(0);
     const nextTextureIdRef = useRef(1);
 
+    // ID counter refs
+    const nextAnnotationIdRef = useRef(1);
+    const nextCoverageRectIdRef = useRef(1);
+    const nextRulerIdRef = useRef(1);
+    const nextInspectionImageIdRef = useRef(1);
+
     // Viewport ref
     const viewportRef = useRef<ThreeViewportHandle>(null);
+    const viewportContainerRef = useRef<HTMLDivElement>(null);
+    const cursorTooltipRef = useRef<HTMLDivElement>(null);
+
+    // Inspection panel: which stat row is hovered (highlights min/max point on vessel)
+    const [visibleStatLines, setVisibleStatLines] = useState<{ min: boolean; max: boolean }>({ min: false, max: false });
+
+    const toggleStatLine = useCallback((stat: 'min' | 'max') => {
+        setVisibleStatLines(prev => ({ ...prev, [stat]: !prev[stat] }));
+    }, []);
+
+    // --- Helper: dispatch vessel update via functional updater ---
+    const updateVessel = useCallback((updater: (prev: VesselState) => VesselState) => {
+        dispatch({ type: 'UPDATE_VESSEL_FN', updater });
+    }, []);
 
     // --- Vessel dimension handlers ---
     const updateDimensions = useCallback((updates: Partial<VesselState>) => {
-        setVesselState(prev => ({ ...prev, ...updates, hasModel: true }));
-    }, []);
+        updateVessel(prev => ({ ...prev, ...updates, hasModel: true }));
+    }, [updateVessel]);
 
     // --- Nozzle handlers ---
     const addNozzle = useCallback((nozzle: NozzleConfig) => {
-        setVesselState(prev => ({
-            ...prev,
-            nozzles: [...prev.nozzles, nozzle],
-            hasModel: true,
-        }));
-    }, []);
+        updateVessel(prev => ({ ...prev, nozzles: [...prev.nozzles, nozzle], hasModel: true }));
+    }, [updateVessel]);
 
     const updateNozzle = useCallback((index: number, updates: Partial<NozzleConfig>) => {
-        setVesselState(prev => ({
-            ...prev,
-            nozzles: prev.nozzles.map((n, i) => i === index ? { ...n, ...updates } : n),
-        }));
-    }, []);
+        updateVessel(prev => ({ ...prev, nozzles: prev.nozzles.map((n, i) => i === index ? { ...n, ...updates } : n) }));
+    }, [updateVessel]);
 
     const removeNozzle = useCallback((index: number) => {
-        setVesselState(prev => ({
-            ...prev,
-            nozzles: prev.nozzles.filter((_, i) => i !== index),
-        }));
-        setSelectedNozzleIndex(-1);
-    }, []);
+        updateVessel(prev => ({ ...prev, nozzles: prev.nozzles.filter((_, i) => i !== index) }));
+        dispatch({ type: 'SELECT_NOZZLE', index: -1 });
+    }, [updateVessel]);
 
     // --- Saddle handlers ---
     const addSaddle = useCallback((saddle: SaddleConfig) => {
-        setVesselState(prev => ({
-            ...prev,
-            saddles: [...prev.saddles, saddle],
-        }));
-    }, []);
+        updateVessel(prev => ({ ...prev, saddles: [...prev.saddles, saddle] }));
+    }, [updateVessel]);
 
     const updateSaddle = useCallback((index: number, updates: Partial<SaddleConfig>) => {
-        setVesselState(prev => ({
-            ...prev,
-            saddles: prev.saddles.map((s, i) => i === index ? { ...s, ...updates } : s),
-        }));
-    }, []);
+        updateVessel(prev => ({ ...prev, saddles: prev.saddles.map((s, i) => i === index ? { ...s, ...updates } : s) }));
+    }, [updateVessel]);
 
     const removeSaddle = useCallback((index: number) => {
-        setVesselState(prev => ({
-            ...prev,
-            saddles: prev.saddles.filter((_, i) => i !== index),
-        }));
-        setSelectedSaddleIndex(-1);
-    }, []);
+        updateVessel(prev => ({ ...prev, saddles: prev.saddles.filter((_, i) => i !== index) }));
+        dispatch({ type: 'SELECT_SADDLE', index: -1 });
+    }, [updateVessel]);
 
     // --- Lifting lug handlers ---
     const addLug = useCallback((lug: LiftingLugConfig) => {
-        setVesselState(prev => ({
-            ...prev,
-            liftingLugs: [...prev.liftingLugs, lug],
-            hasModel: true,
-        }));
-    }, []);
+        updateVessel(prev => ({ ...prev, liftingLugs: [...prev.liftingLugs, lug], hasModel: true }));
+    }, [updateVessel]);
 
     const updateLug = useCallback((index: number, updates: Partial<LiftingLugConfig>) => {
-        setVesselState(prev => ({
-            ...prev,
-            liftingLugs: prev.liftingLugs.map((l, i) => i === index ? { ...l, ...updates } : l),
-        }));
-    }, []);
+        updateVessel(prev => ({ ...prev, liftingLugs: prev.liftingLugs.map((l, i) => i === index ? { ...l, ...updates } : l) }));
+    }, [updateVessel]);
 
     const removeLug = useCallback((index: number) => {
-        setVesselState(prev => ({
-            ...prev,
-            liftingLugs: prev.liftingLugs.filter((_, i) => i !== index),
-        }));
-        setSelectedLugIndex(-1);
-    }, []);
+        updateVessel(prev => ({ ...prev, liftingLugs: prev.liftingLugs.filter((_, i) => i !== index) }));
+        dispatch({ type: 'SELECT_LUG', index: -1 });
+    }, [updateVessel]);
 
     // --- Weld handlers ---
     const addWeld = useCallback((weld: WeldConfig) => {
-        setVesselState(prev => ({
-            ...prev,
-            welds: [...prev.welds, weld],
-            hasModel: true,
-        }));
-    }, []);
+        updateVessel(prev => ({ ...prev, welds: [...prev.welds, weld], hasModel: true }));
+    }, [updateVessel]);
 
     const updateWeld = useCallback((index: number, updates: Partial<WeldConfig>) => {
-        setVesselState(prev => ({
-            ...prev,
-            welds: prev.welds.map((w, i) => i === index ? { ...w, ...updates } : w),
-        }));
-    }, []);
+        updateVessel(prev => ({ ...prev, welds: prev.welds.map((w, i) => i === index ? { ...w, ...updates } : w) }));
+    }, [updateVessel]);
 
     const removeWeld = useCallback((index: number) => {
-        setVesselState(prev => ({
-            ...prev,
-            welds: prev.welds.filter((_, i) => i !== index),
-        }));
-        setSelectedWeldIndex(-1);
-    }, []);
+        updateVessel(prev => ({ ...prev, welds: prev.welds.filter((_, i) => i !== index) }));
+        dispatch({ type: 'SELECT_WELD', index: -1 });
+    }, [updateVessel]);
 
     // --- Texture handlers ---
     const addTexture = useCallback((texture: TextureConfig, threeTexture: THREE.Texture) => {
         textureObjectsRef.current[Number(texture.id)] = threeTexture;
         setTextureObjectsVersion(v => v + 1);
-        setVesselState(prev => ({
-            ...prev,
-            textures: [...prev.textures, texture],
-        }));
-    }, []);
+        updateVessel(prev => ({ ...prev, textures: [...prev.textures, texture] }));
+    }, [updateVessel]);
 
     const updateTexture = useCallback((id: number, updates: Partial<TextureConfig>) => {
-        setVesselState(prev => ({
-            ...prev,
-            textures: prev.textures.map(t => Number(t.id) === id ? { ...t, ...updates } : t),
-        }));
-    }, []);
+        updateVessel(prev => ({ ...prev, textures: prev.textures.map(t => Number(t.id) === id ? { ...t, ...updates } : t) }));
+    }, [updateVessel]);
 
     const removeTexture = useCallback((id: number) => {
         const tex = textureObjectsRef.current[id];
@@ -226,12 +433,9 @@ export default function VesselModeler() {
             delete textureObjectsRef.current[id];
             setTextureObjectsVersion(v => v + 1);
         }
-        setVesselState(prev => ({
-            ...prev,
-            textures: prev.textures.filter(t => Number(t.id) !== id),
-        }));
-        setSelectedTextureId(-1);
-    }, []);
+        updateVessel(prev => ({ ...prev, textures: prev.textures.filter(t => Number(t.id) !== id) }));
+        dispatch({ type: 'SELECT_TEXTURE', id: -1 });
+    }, [updateVessel]);
 
     const getNextTextureId = useCallback(() => {
         return nextTextureIdRef.current++;
@@ -239,32 +443,93 @@ export default function VesselModeler() {
 
     // --- Annotation handlers ---
     const addAnnotation = useCallback((annotation: AnnotationShapeConfig) => {
-        setVesselState(prev => ({
-            ...prev,
-            annotations: [...prev.annotations, annotation],
-        }));
-    }, []);
+        updateVessel(prev => ({ ...prev, annotations: [...prev.annotations, annotation] }));
+    }, [updateVessel]);
 
     const updateAnnotation = useCallback((id: number, updates: Partial<AnnotationShapeConfig>) => {
-        setVesselState(prev => ({
-            ...prev,
-            annotations: prev.annotations.map(a => a.id === id ? { ...a, ...updates } : a),
-        }));
-    }, []);
+        updateVessel(prev => ({ ...prev, annotations: prev.annotations.map(a => a.id === id ? { ...a, ...updates } : a) }));
+    }, [updateVessel]);
 
     const removeAnnotation = useCallback((id: number) => {
-        setVesselState(prev => ({
-            ...prev,
-            annotations: prev.annotations.filter(a => a.id !== id),
-        }));
-        setSelectedAnnotationId(-1);
-    }, []);
+        updateVessel(prev => ({ ...prev, annotations: prev.annotations.filter(a => a.id !== id) }));
+        dispatch({ type: 'SELECT_ANNOTATION', id: -1 });
+    }, [updateVessel]);
+
+    // --- Annotation attachment handlers ---
+    const captureViewport = useCallback(async () => {
+        const renderer = viewportRef.current?.getRenderer();
+        const canvas = renderer?.domElement;
+        if (!canvas || ui.inspectingAnnotationId == null) return;
+
+        // Force a render so the canvas has current content
+        const scene = viewportRef.current?.getScene();
+        const camera = viewportRef.current?.getCamera();
+        if (scene && camera) renderer!.render(scene, camera);
+
+        const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+        if (!blob) return;
+
+        const { storagePath, id } = await uploadAnnotationImage(
+            organizationId, vesselModelId, ui.inspectingAnnotationId, blob, 'viewport-capture',
+        );
+        const attachment = { id, type: 'viewport-capture' as const, storagePath, capturedAt: new Date().toISOString() };
+        const ann = vesselState.annotations.find(a => a.id === ui.inspectingAnnotationId);
+        updateAnnotation(ui.inspectingAnnotationId, {
+            attachments: [...(ann?.attachments ?? []), attachment],
+        });
+    }, [ui.inspectingAnnotationId, vesselState, organizationId, vesselModelId, updateAnnotation]);
+
+    const uploadImage = useCallback(async (file: File) => {
+        if (ui.inspectingAnnotationId == null) return;
+        const { storagePath, id } = await uploadAnnotationImage(
+            organizationId, vesselModelId, ui.inspectingAnnotationId, file, 'upload',
+        );
+        const attachment = { id, type: 'upload' as const, storagePath, capturedAt: new Date().toISOString() };
+        const ann = vesselState.annotations.find(a => a.id === ui.inspectingAnnotationId);
+        updateAnnotation(ui.inspectingAnnotationId, {
+            attachments: [...(ann?.attachments ?? []), attachment],
+        });
+    }, [ui.inspectingAnnotationId, vesselState, organizationId, vesselModelId, updateAnnotation]);
+
+    const deleteAttachment = useCallback(async (attachmentId: string) => {
+        if (ui.inspectingAnnotationId == null) return;
+        const ann = vesselState.annotations.find(a => a.id === ui.inspectingAnnotationId);
+        const attachment = ann?.attachments?.find(a => a.id === attachmentId);
+        if (attachment) await deleteAnnotationImage(attachment.storagePath);
+        updateAnnotation(ui.inspectingAnnotationId, {
+            attachments: (ann?.attachments ?? []).filter(a => a.id !== attachmentId),
+        });
+    }, [ui.inspectingAnnotationId, vesselState, updateAnnotation]);
+
+    // --- Annotation stats recomputation ---
+    const recomputeAnnotationStats = useCallback(() => {
+        const updatedAnnotations = recomputeAllAnnotationStats(vesselState);
+        const changed = updatedAnnotations.some((ann, i) => {
+            const old = vesselState.annotations[i];
+            return ann.thicknessStats !== old.thicknessStats || ann.severityLevel !== old.severityLevel;
+        });
+        if (changed) {
+            updateVessel(prev => ({ ...prev, annotations: updatedAnnotations }));
+        }
+    }, [vesselState, updateVessel]);
+
+    // Recompute stats when annotation geometry, composite orientation, or thresholds change.
+    // Serialize only geometry-affecting fields to avoid infinite loops (since recompute updates annotations).
+    const annotationsJson = JSON.stringify(vesselState.annotations.map(a => ({ id: a.id, pos: a.pos, angle: a.angle, width: a.width, height: a.height, type: a.type })));
+    const compositesJson = JSON.stringify(vesselState.scanComposites.map(c => ({ id: c.id, orientationConfirmed: c.orientationConfirmed, indexStartMm: c.indexStartMm, datumAngleDeg: c.datumAngleDeg, scanDirection: c.scanDirection, indexDirection: c.indexDirection })));
+    const thresholdsJson = JSON.stringify(vesselState.thicknessThresholds);
+
+    useEffect(() => {
+        recomputeAnnotationStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [annotationsJson, compositesJson, thresholdsJson]);
 
     const updateMeasurementConfig = useCallback((updates: Partial<MeasurementConfig>) => {
-        setVesselState(prev => ({
-            ...prev,
-            measurementConfig: { ...prev.measurementConfig, ...updates },
-        }));
+        updateVessel(prev => ({ ...prev, measurementConfig: { ...prev.measurementConfig, ...updates } }));
+    }, [updateVessel]);
+
+    const updateThicknessThresholds = useCallback((thresholds: ThicknessThresholds) => {
+        dispatch({ type: 'UPDATE_THICKNESS_THRESHOLDS', thresholds });
     }, []);
 
     const getNextAnnotationId = useCallback(() => {
@@ -273,26 +538,17 @@ export default function VesselModeler() {
 
     // --- Coverage rect handlers ---
     const addCoverageRect = useCallback((rect: CoverageRectConfig) => {
-        setVesselState(prev => ({
-            ...prev,
-            coverageRects: [...prev.coverageRects, rect],
-        }));
-    }, []);
+        updateVessel(prev => ({ ...prev, coverageRects: [...prev.coverageRects, rect] }));
+    }, [updateVessel]);
 
     const updateCoverageRect = useCallback((id: number, updates: Partial<CoverageRectConfig>) => {
-        setVesselState(prev => ({
-            ...prev,
-            coverageRects: prev.coverageRects.map(r => r.id === id ? { ...r, ...updates } : r),
-        }));
-    }, []);
+        updateVessel(prev => ({ ...prev, coverageRects: prev.coverageRects.map(r => r.id === id ? { ...r, ...updates } : r) }));
+    }, [updateVessel]);
 
     const removeCoverageRect = useCallback((id: number) => {
-        setVesselState(prev => ({
-            ...prev,
-            coverageRects: prev.coverageRects.filter(r => r.id !== id),
-        }));
-        setSelectedCoverageRectId(-1);
-    }, []);
+        updateVessel(prev => ({ ...prev, coverageRects: prev.coverageRects.filter(r => r.id !== id) }));
+        dispatch({ type: 'SELECT_COVERAGE_RECT', id: -1 });
+    }, [updateVessel]);
 
     const getNextCoverageRectId = useCallback(() => {
         return nextCoverageRectIdRef.current++;
@@ -300,26 +556,18 @@ export default function VesselModeler() {
 
     // --- Ruler handlers ---
     const addRuler = useCallback((ruler: RulerConfig) => {
-        setVesselState(prev => ({
-            ...prev,
-            rulers: [...prev.rulers, ruler],
-        }));
-    }, []);
+        updateVessel(prev => ({ ...prev, rulers: [...prev.rulers, ruler] }));
+    }, [updateVessel]);
 
     const removeRuler = useCallback((id: number) => {
-        setVesselState(prev => ({
-            ...prev,
-            rulers: prev.rulers.filter(r => r.id !== id),
-        }));
-        setSelectedRulerId(prev => prev === id ? -1 : prev);
-    }, []);
+        updateVessel(prev => ({ ...prev, rulers: prev.rulers.filter(r => r.id !== id) }));
+        // Only deselect if this ruler was selected
+        dispatch({ type: 'SELECT_RULER', id: -1 });
+    }, [updateVessel]);
 
     const updateRuler = useCallback((id: number, updates: Partial<RulerConfig>) => {
-        setVesselState(prev => ({
-            ...prev,
-            rulers: prev.rulers.map(r => r.id === id ? { ...r, ...updates } : r),
-        }));
-    }, []);
+        updateVessel(prev => ({ ...prev, rulers: prev.rulers.map(r => r.id === id ? { ...r, ...updates } : r) }));
+    }, [updateVessel]);
 
     const getNextRulerId = useCallback(() => {
         return nextRulerIdRef.current++;
@@ -327,63 +575,54 @@ export default function VesselModeler() {
 
     // --- Inspection image handlers ---
     const addInspectionImage = useCallback((img: InspectionImageConfig) => {
-        setVesselState(prev => ({
-            ...prev,
-            inspectionImages: [...prev.inspectionImages, img],
-        }));
-    }, []);
+        updateVessel(prev => ({ ...prev, inspectionImages: [...prev.inspectionImages, img] }));
+    }, [updateVessel]);
 
     const updateInspectionImage = useCallback((id: number, updates: Partial<InspectionImageConfig>) => {
-        setVesselState(prev => ({
-            ...prev,
-            inspectionImages: prev.inspectionImages.map(i => i.id === id ? { ...i, ...updates } : i),
-        }));
-    }, []);
+        updateVessel(prev => ({ ...prev, inspectionImages: prev.inspectionImages.map(i => i.id === id ? { ...i, ...updates } : i) }));
+    }, [updateVessel]);
 
     const removeInspectionImage = useCallback((id: number) => {
-        setVesselState(prev => ({
-            ...prev,
-            inspectionImages: prev.inspectionImages.filter(i => i.id !== id),
-        }));
-        setSelectedInspectionImageId(-1);
-        if (viewingInspectionImageId === id) setViewingInspectionImageId(-1);
-    }, [viewingInspectionImageId]);
+        updateVessel(prev => ({ ...prev, inspectionImages: prev.inspectionImages.filter(i => i.id !== id) }));
+        dispatch({ type: 'SELECT_INSPECTION_IMAGE', id: -1 });
+        if (ui.viewingInspectionImageId === id) dispatch({ type: 'SET_VIEWING_INSPECTION_IMAGE', id: -1 });
+    }, [updateVessel, ui.viewingInspectionImageId]);
 
     const toggleInspectionImageVisible = useCallback((id: number) => {
-        setVesselState(prev => ({
+        updateVessel(prev => ({
             ...prev,
             inspectionImages: prev.inspectionImages.map(i =>
                 i.id === id ? { ...i, visible: i.visible === false ? true : false } : i,
             ),
         }));
-    }, []);
+    }, [updateVessel]);
 
     const toggleInspectionImageLocked = useCallback((id: number) => {
-        setVesselState(prev => ({
+        updateVessel(prev => ({
             ...prev,
             inspectionImages: prev.inspectionImages.map(i =>
                 i.id === id ? { ...i, locked: !i.locked } : i,
             ),
         }));
-    }, []);
+    }, [updateVessel]);
 
     const toggleAnnotationVisible = useCallback((id: number) => {
-        setVesselState(prev => ({
+        updateVessel(prev => ({
             ...prev,
             annotations: prev.annotations.map(a =>
                 a.id === id ? { ...a, visible: a.visible === false ? true : false } : a,
             ),
         }));
-    }, []);
+    }, [updateVessel]);
 
     const toggleAnnotationLocked = useCallback((id: number) => {
-        setVesselState(prev => ({
+        updateVessel(prev => ({
             ...prev,
             annotations: prev.annotations.map(a =>
                 a.id === id ? { ...a, locked: !a.locked } : a,
             ),
         }));
-    }, []);
+    }, [updateVessel]);
 
     const getNextInspectionImageId = useCallback(() => {
         return nextInspectionImageIdRef.current++;
@@ -392,7 +631,7 @@ export default function VesselModeler() {
     // --- Scan composite handlers ---
     const handleImportComposite = useCallback(async (
         compositeId: string,
-        placement: { indexStartMm: number; scanDirection: 'cw' | 'ccw'; indexDirection: 'forward' | 'reverse' },
+        placement: { scanDirection: 'cw' | 'ccw'; indexDirection: 'forward' | 'reverse' },
     ) => {
         try {
             const composite = await getScanComposite(compositeId);
@@ -404,89 +643,42 @@ export default function VesselModeler() {
                 xAxis: composite.x_axis,
                 yAxis: composite.y_axis,
                 stats: composite.stats || { min: 0, max: 0, mean: 0, median: 0, stdDev: 0 },
-                indexStartMm: placement.indexStartMm,
+                indexStartMm: 0,
+                datumAngleDeg: 0,
                 scanDirection: placement.scanDirection,
                 indexDirection: placement.indexDirection,
+                orientationConfirmed: false,
                 colorScale: 'Jet',
                 rangeMin: null,
                 rangeMax: null,
                 opacity: 1,
             };
-            setVesselState(prev => ({
-                ...prev,
-                scanComposites: [...prev.scanComposites, newConfig],
-            }));
+            updateVessel(prev => ({ ...prev, scanComposites: [...prev.scanComposites, newConfig] }));
         } catch (err) {
             console.error('Failed to import composite:', err);
         }
-    }, []);
+    }, [updateVessel]);
 
     const handleRemoveScanComposite = useCallback((id: string) => {
         clearHeatmapCache(id);
-        setVesselState(prev => ({
-            ...prev,
-            scanComposites: prev.scanComposites.filter(sc => sc.id !== id),
-        }));
-        if (selectedScanCompositeId === id) setSelectedScanCompositeId('');
-    }, [selectedScanCompositeId]);
+        updateVessel(prev => ({ ...prev, scanComposites: prev.scanComposites.filter(sc => sc.id !== id) }));
+        if (selection.scanCompositeId === id) dispatch({ type: 'SELECT_SCAN_COMPOSITE', id: '' });
+    }, [updateVessel, selection.scanCompositeId]);
 
     const handleUpdateScanComposite = useCallback((id: string, updates: Partial<ScanCompositeConfig>) => {
-        clearHeatmapCache(id);
-        setVesselState(prev => ({
+        updateVessel(prev => ({
             ...prev,
-            scanComposites: prev.scanComposites.map(sc =>
-                sc.id === id ? { ...sc, ...updates } : sc
-            ),
+            scanComposites: prev.scanComposites.map(sc => sc.id === id ? { ...sc, ...updates } : sc),
         }));
-    }, []);
+    }, [updateVessel]);
 
     // --- Interaction callbacks (from Three.js viewport) ---
     const vesselCallbacks: VesselCallbacks = {
-        onNozzleSelected: (idx) => {
-            setSelectedNozzleIndex(idx);
-            setSelectedSaddleIndex(-1);
-            setSelectedTextureId(-1);
-            setSelectedLugIndex(-1);
-            setSelectedAnnotationId(-1);
-            setSelectedInspectionImageId(-1);
-            setSelectedWeldIndex(-1);
-        },
-        onSaddleSelected: (idx) => {
-            setSelectedNozzleIndex(-1);
-            setSelectedSaddleIndex(idx);
-            setSelectedTextureId(-1);
-            setSelectedLugIndex(-1);
-            setSelectedAnnotationId(-1);
-            setSelectedInspectionImageId(-1);
-            setSelectedWeldIndex(-1);
-        },
-        onTextureSelected: (id) => {
-            setSelectedNozzleIndex(-1);
-            setSelectedSaddleIndex(-1);
-            setSelectedTextureId(id);
-            setSelectedLugIndex(-1);
-            setSelectedAnnotationId(-1);
-            setSelectedInspectionImageId(-1);
-            setSelectedWeldIndex(-1);
-        },
-        onLugSelected: (idx) => {
-            setSelectedNozzleIndex(-1);
-            setSelectedSaddleIndex(-1);
-            setSelectedTextureId(-1);
-            setSelectedLugIndex(idx);
-            setSelectedAnnotationId(-1);
-            setSelectedInspectionImageId(-1);
-            setSelectedWeldIndex(-1);
-        },
-        onAnnotationSelected: (id) => {
-            setSelectedNozzleIndex(-1);
-            setSelectedSaddleIndex(-1);
-            setSelectedTextureId(-1);
-            setSelectedLugIndex(-1);
-            setSelectedAnnotationId(id);
-            setSelectedInspectionImageId(-1);
-            setSelectedWeldIndex(-1);
-        },
+        onNozzleSelected: (idx) => dispatch({ type: 'SELECT_NOZZLE', index: idx }),
+        onSaddleSelected: (idx) => dispatch({ type: 'SELECT_SADDLE', index: idx }),
+        onTextureSelected: (id) => dispatch({ type: 'SELECT_TEXTURE', id }),
+        onLugSelected: (idx) => dispatch({ type: 'SELECT_LUG', index: idx }),
+        onAnnotationSelected: (id) => dispatch({ type: 'SELECT_ANNOTATION', id }),
         onAnnotationMoved: (id, pos, angle) => {
             updateAnnotation(id, { pos: Math.round(pos), angle: Math.round(angle) });
         },
@@ -508,12 +700,12 @@ export default function VesselModeler() {
                 lineWidth: 2,
                 showLabel: true,
             });
-            setSelectedAnnotationId(id);
-            setPreviewAnnotation(null);
-            setDrawMode(null);
+            dispatch({ type: 'SELECT_ANNOTATION', id });
+            dispatch({ type: 'SET_PREVIEW_ANNOTATION', preview: null });
+            dispatch({ type: 'SET_DRAW_MODE_ANNOTATION', mode: null });
         },
         onAnnotationPreview: (type, pos, angle, width, height) => {
-            setPreviewAnnotation({
+            dispatch({ type: 'SET_PREVIEW_ANNOTATION', preview: {
                 id: -1,
                 name: 'Preview',
                 type,
@@ -524,7 +716,7 @@ export default function VesselModeler() {
                 color: '#ff3333',
                 lineWidth: 2,
                 showLabel: false,
-            });
+            }});
         },
         onRulerCreated: (startPos, startAngle, endPos, endAngle) => {
             const id = getNextRulerId();
@@ -539,11 +731,11 @@ export default function VesselModeler() {
                 color: '#ffaa00',
                 showLabel: true,
             });
-            setPreviewRuler(null);
-            setRulerDrawMode(false);
+            dispatch({ type: 'SET_PREVIEW_RULER', preview: null });
+            dispatch({ type: 'SET_DRAW_MODE_RULER', active: false });
         },
         onRulerPreview: (startPos, startAngle, endPos, endAngle) => {
-            setPreviewRuler({
+            dispatch({ type: 'SET_PREVIEW_RULER', preview: {
                 id: -1,
                 name: 'Preview',
                 startPos: Math.round(startPos),
@@ -552,7 +744,7 @@ export default function VesselModeler() {
                 endAngle: Math.round(endAngle),
                 color: '#ffaa00',
                 showLabel: true,
-            });
+            }});
         },
         onCoverageRectCreated: (pos, angle, width, height) => {
             const id = getNextCoverageRectId();
@@ -569,12 +761,12 @@ export default function VesselModeler() {
                 filled: true,
                 fillOpacity: 0.2,
             });
-            setSelectedCoverageRectId(id);
-            setPreviewCoverageRect(null);
-            setCoverageDrawMode(false);
+            dispatch({ type: 'SELECT_COVERAGE_RECT', id });
+            dispatch({ type: 'SET_PREVIEW_COVERAGE_RECT', preview: null });
+            dispatch({ type: 'SET_DRAW_MODE_COVERAGE', active: false });
         },
         onCoverageRectPreview: (pos, angle, width, height) => {
-            setPreviewCoverageRect({
+            dispatch({ type: 'SET_PREVIEW_COVERAGE_RECT', preview: {
                 id: -1,
                 name: 'Preview',
                 pos: Math.round(pos),
@@ -585,74 +777,52 @@ export default function VesselModeler() {
                 lineWidth: 2,
                 filled: false,
                 fillOpacity: 0.2,
-            });
+            }});
         },
-        onCoverageRectSelected: (id) => {
-            setSelectedNozzleIndex(-1);
-            setSelectedSaddleIndex(-1);
-            setSelectedTextureId(-1);
-            setSelectedLugIndex(-1);
-            setSelectedAnnotationId(-1);
-            setSelectedCoverageRectId(id);
-            setSelectedInspectionImageId(-1);
-            setSelectedWeldIndex(-1);
-        },
+        onCoverageRectSelected: (id) => dispatch({ type: 'SELECT_COVERAGE_RECT', id }),
         onCoverageRectMoved: (id, pos, angle) => {
             updateCoverageRect(id, { pos: Math.round(pos), angle: Math.round(angle) });
         },
-        onInspectionImageSelected: (id) => {
-            setSelectedNozzleIndex(-1);
-            setSelectedSaddleIndex(-1);
-            setSelectedTextureId(-1);
-            setSelectedLugIndex(-1);
-            setSelectedAnnotationId(-1);
-            setSelectedCoverageRectId(-1);
-            setSelectedInspectionImageId(id);
-            setSelectedWeldIndex(-1);
-        },
+        onInspectionImageSelected: (id) => dispatch({ type: 'SELECT_INSPECTION_IMAGE', id }),
         onInspectionImageMoved: (id, pos, angle) => {
             updateInspectionImage(id, { pos: Math.round(pos), angle: Math.round(angle) });
         },
         onInspectionImageLabelOffsetChanged: (id, offset) => {
             updateInspectionImage(id, { labelOffset: offset });
         },
-        onWeldSelected: (idx) => {
-            setSelectedNozzleIndex(-1);
-            setSelectedSaddleIndex(-1);
-            setSelectedTextureId(-1);
-            setSelectedLugIndex(-1);
-            setSelectedAnnotationId(-1);
-            setSelectedCoverageRectId(-1);
-            setSelectedInspectionImageId(-1);
-            setSelectedWeldIndex(idx);
-        },
+        onWeldSelected: (idx) => dispatch({ type: 'SELECT_WELD', index: idx }),
         onWeldMoved: (idx, pos, angle) => {
             const weld = vesselState.welds[idx];
             if (weld?.type === 'circumferential') {
                 updateWeld(idx, { pos: Math.round(pos) });
             } else {
-                // For longitudinal welds, move shifts the start pos while keeping length
                 const delta = Math.round(pos) - weld.pos;
                 updateWeld(idx, { pos: Math.round(pos), endPos: (weld.endPos ?? vesselState.length) + delta, angle: Math.round(angle) });
             }
         },
-        onScanCompositeHover: (_id, thickness, scanMm, indexMm) => {
-            if (thickness !== null) {
-                setHoverData({ thickness, scanMm, indexMm });
-            } else {
-                setHoverData(null);
+        onScanCompositeHover: (_id, thickness, scanMm, indexMm, screenX, screenY) => {
+            dispatch({ type: 'SET_HOVER_DATA', data: thickness !== null ? { thickness, scanMm, indexMm } : null });
+            // Update cursor-follow tooltip position via ref (avoids re-render lag)
+            if (cursorTooltipRef.current) {
+                if (thickness !== null) {
+                    cursorTooltipRef.current.style.left = `${screenX + 16}px`;
+                    cursorTooltipRef.current.style.top = `${screenY - 12}px`;
+                }
             }
         },
-        onDeselect: () => {
-            setSelectedNozzleIndex(-1);
-            setSelectedSaddleIndex(-1);
-            setSelectedTextureId(-1);
-            setSelectedLugIndex(-1);
-            setSelectedAnnotationId(-1);
-            setSelectedCoverageRectId(-1);
-            setSelectedInspectionImageId(-1);
-            setSelectedWeldIndex(-1);
+        onScanGizmoDatumMoved: (compositeId, angleDeg, posMm) => {
+            handleUpdateScanComposite(compositeId, { datumAngleDeg: angleDeg, indexStartMm: Math.round(posMm) });
         },
+        onScanGizmoDirectionToggle: (compositeId, field) => {
+            const sc = vesselState.scanComposites.find(c => c.id === compositeId);
+            if (!sc) return;
+            if (field === 'scanDirection') {
+                handleUpdateScanComposite(compositeId, { scanDirection: sc.scanDirection === 'cw' ? 'ccw' : 'cw' });
+            } else {
+                handleUpdateScanComposite(compositeId, { indexDirection: sc.indexDirection === 'forward' ? 'reverse' : 'forward' });
+            }
+        },
+        onDeselect: () => dispatch({ type: 'DESELECT_ALL' }),
         onNozzleMoved: (idx, pos, angle) => {
             updateNozzle(idx, { pos: Math.round(pos), angle: Math.round(angle) });
         },
@@ -737,13 +907,11 @@ export default function VesselModeler() {
                 id: sc.id,
                 name: sc.name,
                 cloudId: sc.cloudId,
-                data: sc.data,
-                xAxis: sc.xAxis,
-                yAxis: sc.yAxis,
-                stats: sc.stats,
                 indexStartMm: sc.indexStartMm,
+                datumAngleDeg: sc.datumAngleDeg,
                 scanDirection: sc.scanDirection,
                 indexDirection: sc.indexDirection,
+                orientationConfirmed: sc.orientationConfirmed,
                 colorScale: sc.colorScale,
                 rangeMin: sc.rangeMin,
                 rangeMax: sc.rangeMax,
@@ -871,7 +1039,24 @@ export default function VesselModeler() {
                         inspector: i.inspector, method: i.method, result: i.result,
                         leaderLength: i.leaderLength, labelOffset: i.labelOffset, visible: i.visible, locked: i.locked,
                     })),
-                    scanComposites: projectData.scanComposites || [],
+                    scanComposites: (projectData.scanComposites || []).map((sc: any) => ({
+                        id: sc.id || `sc_${Date.now()}`,
+                        name: sc.name || 'Untitled',
+                        cloudId: sc.cloudId,
+                        data: sc.data || [],          // may be empty if saved without data (Issue 3.6)
+                        xAxis: sc.xAxis || [],
+                        yAxis: sc.yAxis || [],
+                        stats: sc.stats || { min: 0, max: 0, mean: 0, median: 0, stdDev: 0 },
+                        indexStartMm: sc.indexStartMm ?? 0,
+                        datumAngleDeg: sc.datumAngleDeg ?? 0,
+                        scanDirection: sc.scanDirection || 'cw',
+                        indexDirection: sc.indexDirection || 'forward',
+                        orientationConfirmed: sc.orientationConfirmed ?? true,
+                        colorScale: sc.colorScale || 'Jet',
+                        rangeMin: sc.rangeMin ?? null,
+                        rangeMax: sc.rangeMax ?? null,
+                        opacity: sc.opacity ?? 1,
+                    })),
                     measurementConfig: {
                         ...DEFAULT_VESSEL_STATE.measurementConfig,
                         ...(projectData.measurementConfig || {}),
@@ -903,16 +1088,35 @@ export default function VesselModeler() {
                 const maxImgId = newState.inspectionImages.reduce((max: number, i: InspectionImageConfig) => Math.max(max, i.id || 0), 0);
                 nextInspectionImageIdRef.current = maxImgId + 1;
 
-                setVesselState(newState);
+                const validatedState = validateVesselState(newState);
+                dispatch({ type: 'SET_VESSEL', vessel: validatedState });
                 setTextureObjectsVersion(v => v + 1);
-                setSelectedNozzleIndex(-1);
-                setSelectedSaddleIndex(-1);
-                setSelectedTextureId(-1);
-                setSelectedLugIndex(-1);
-                setSelectedAnnotationId(-1);
-                setSelectedCoverageRectId(-1);
-                setSelectedInspectionImageId(-1);
-                setSelectedWeldIndex(-1);
+                dispatch({ type: 'DESELECT_ALL' });
+
+                // Re-fetch thickness data from cloud for composites saved without inline data
+                const compositesNeedingData = validatedState.scanComposites.filter(
+                    sc => sc.cloudId && (!sc.data || sc.data.length === 0),
+                );
+                for (const sc of compositesNeedingData) {
+                    getScanComposite(sc.cloudId!).then((cloud) => {
+                        dispatch({ type: 'UPDATE_VESSEL_FN', updater: prev => ({
+                            ...prev,
+                            scanComposites: prev.scanComposites.map(existing =>
+                                existing.id === sc.id
+                                    ? {
+                                        ...existing,
+                                        data: cloud.thickness_data,
+                                        xAxis: cloud.x_axis,
+                                        yAxis: cloud.y_axis,
+                                        stats: cloud.stats || existing.stats,
+                                    }
+                                    : existing,
+                            ),
+                        })});
+                    }).catch((err) => {
+                        console.error(`Failed to fetch scan composite ${sc.cloudId}:`, err);
+                    });
+                }
             } catch (error: any) {
                 alert('Error loading project: ' + error.message);
             }
@@ -923,7 +1127,7 @@ export default function VesselModeler() {
 
     // --- Drawing import apply handler ---
     const handleDrawingApply = useCallback((result: ExtractionResult) => {
-        setVesselState(prev => ({
+        updateVessel(prev => validateVesselState({
             ...prev,
             id: result.id,
             length: result.length,
@@ -942,33 +1146,101 @@ export default function VesselModeler() {
             })),
             hasModel: true,
         }));
-        setSelectedNozzleIndex(-1);
-        setSelectedSaddleIndex(-1);
-        setSelectedTextureId(-1);
-        setSelectedLugIndex(-1);
-    }, []);
+        dispatch({ type: 'DESELECT_ALL' });
+    }, [updateVessel]);
 
-    // --- Escape key cancels draw mode ---
+    // --- Inspection mode handlers ---
+    const enterInspectionMode = useCallback((annotationId: number) => {
+        const camera = viewportRef.current?.getCamera();
+        const controls = viewportRef.current?.getControls();
+        if (!camera || !controls) return;
+
+        const ann = vesselState.annotations.find(a => a.id === annotationId);
+        if (!ann) return;
+
+        // Save current camera state before animating
+        const savedCameraState: { position: [number, number, number]; target: [number, number, number] } = {
+            position: camera.position.toArray() as [number, number, number],
+            target: (controls.target as THREE.Vector3).toArray() as [number, number, number],
+        };
+
+        const { position: targetPos, target: targetLookAt } = computeInspectionCameraTarget(ann, vesselState, camera);
+
+        setVisibleStatLines({ min: false, max: false });
+        animateCamera(camera, controls, targetPos, targetLookAt, 500, () => {
+            controls.enabled = false;
+            setVisibleStatLines({ min: true, max: true });
+        });
+
+        dispatch({ type: 'ENTER_INSPECTION_MODE', annotationId, cameraState: savedCameraState });
+    }, [vesselState]);
+
+    const exitInspectionMode = useCallback(() => {
+        const camera = viewportRef.current?.getCamera();
+        const controls = viewportRef.current?.getControls();
+        if (!camera || !controls) return;
+
+        const saved = ui.savedCameraState;
+        if (!saved) {
+            dispatch({ type: 'EXIT_INSPECTION_MODE' });
+            return;
+        }
+
+        // Re-enable controls before animating back
+        controls.enabled = true;
+        cancelCameraAnimation();
+
+        const targetPos = new THREE.Vector3(...saved.position);
+        const targetLookAt = new THREE.Vector3(...saved.target);
+
+        animateCamera(camera, controls, targetPos, targetLookAt, 500);
+        dispatch({ type: 'EXIT_INSPECTION_MODE' });
+    }, [ui.savedCameraState]);
+
+    const cycleInspection = useCallback((annotationId: number) => {
+        const camera = viewportRef.current?.getCamera();
+        const controls = viewportRef.current?.getControls();
+        if (!camera || !controls) return;
+
+        const ann = vesselState.annotations.find(a => a.id === annotationId);
+        if (!ann) return;
+
+        const { position: targetPos, target: targetLookAt } = computeInspectionCameraTarget(ann, vesselState, camera);
+
+        // Temporarily re-enable controls for the animation
+        controls.enabled = true;
+        setVisibleStatLines({ min: false, max: false });
+        animateCamera(camera, controls, targetPos, targetLookAt, 500, () => {
+            controls.enabled = false;
+            setVisibleStatLines({ min: true, max: true });
+        });
+
+        dispatch({ type: 'CYCLE_INSPECTION', annotationId });
+    }, [vesselState]);
+
+    // Sidebar annotation click: enter/cycle inspection mode when scan data exists
+    const handleSidebarAnnotationSelect = useCallback((id: number) => {
+        if (ui.inspectingAnnotationId !== null && ui.inspectingAnnotationId !== id) {
+            cycleInspection(id);
+        } else if (ui.inspectingAnnotationId === null) {
+            enterInspectionMode(id);
+        }
+    }, [ui.inspectingAnnotationId, enterInspectionMode, cycleInspection]);
+
+    // --- Escape key cancels draw mode or exits inspection mode ---
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                if (drawMode) {
-                    setDrawMode(null);
-                    setPreviewAnnotation(null);
-                }
-                if (coverageDrawMode) {
-                    setCoverageDrawMode(false);
-                    setPreviewCoverageRect(null);
-                }
-                if (rulerDrawMode) {
-                    setRulerDrawMode(false);
-                    setPreviewRuler(null);
+                if (ui.inspectingAnnotationId !== null) {
+                    exitInspectionMode();
+                } else if (drawModeState.annotation || drawModeState.coverage || drawModeState.ruler) {
+                    dispatch({ type: 'CANCEL_ALL_DRAW_MODES' });
                 }
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [drawMode, coverageDrawMode, rulerDrawMode]);
+    }, [drawModeState, ui.inspectingAnnotationId, exitInspectionMode]);
 
     // --- Nozzle library drag-and-drop onto 3D canvas ---
     const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -1148,21 +1420,21 @@ export default function VesselModeler() {
 
     // --- Hint text ---
     const getHintText = () => {
-        if (rulerDrawMode) {
+        if (drawModeState.ruler) {
             return 'Drawing Ruler - Click on vessel to set start point, drag to end point | Press Esc to cancel';
         }
-        if (coverageDrawMode) {
+        if (drawModeState.coverage) {
             return 'Drawing Coverage Rectangle - Click on vessel to start, drag to size | Press Esc to cancel';
         }
-        if (drawMode) {
-            return `Drawing ${drawMode === 'circle' ? 'Circle' : 'Rectangle'} - Click on vessel to start, drag to size | Press Esc to cancel`;
+        if (drawModeState.annotation) {
+            return `Drawing ${drawModeState.annotation === 'circle' ? 'Circle' : 'Rectangle'} - Click on vessel to start, drag to size | Press Esc to cancel`;
         }
         const locked = [];
-        if (nozzlesLocked) locked.push('Nozzles');
-        if (lugsLocked) locked.push('Lugs');
-        if (saddlesLocked) locked.push('Saddles');
-        if (texturesLocked) locked.push('Textures');
-        if (weldsLocked) locked.push('Welds');
+        if (locks.nozzles) locked.push('Nozzles');
+        if (locks.lugs) locked.push('Lugs');
+        if (locks.saddles) locked.push('Saddles');
+        if (locks.textures) locked.push('Textures');
+        if (locks.welds) locked.push('Welds');
 
         if (locked.length > 0) return `${locked.join(', ')} Locked | Other components can be repositioned`;
         return 'Drag from Library to Add | Click & Drag Nozzles, Supports, or Textures to Reposition';
@@ -1172,196 +1444,222 @@ export default function VesselModeler() {
         <div className="h-full w-full flex flex-col overflow-hidden" style={{ background: '#111111' }}>
             {/* Main content area */}
             <div
-                className={`flex-1 relative overflow-hidden ${drawMode || coverageDrawMode || rulerDrawMode ? 'vm-draw-mode-active' : ''}`}
+                ref={viewportContainerRef}
+                className={`flex-1 relative overflow-hidden ${drawModeState.annotation || drawModeState.coverage || drawModeState.ruler ? 'vm-draw-mode-active' : ''}`}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
             >
                 {/* Three.js viewport (z-0) */}
-                <ThreeViewport
-                    ref={viewportRef}
-                    vesselState={vesselState}
-                    selectedNozzleIndex={selectedNozzleIndex}
-                    selectedLugIndex={selectedLugIndex}
-                    selectedSaddleIndex={selectedSaddleIndex}
-                    selectedTextureId={selectedTextureId}
-                    selectedAnnotationId={selectedAnnotationId}
-                    textureObjects={textureObjectsRef.current}
-                    callbacks={vesselCallbacks}
-                    nozzlesLocked={nozzlesLocked}
-                    saddlesLocked={saddlesLocked}
-                    texturesLocked={texturesLocked}
-                    lugsLocked={lugsLocked}
-
-                    weldsLocked={weldsLocked}
-                    selectedWeldIndex={selectedWeldIndex}
-                    selectedInspectionImageId={selectedInspectionImageId}
-                    onInspectionImageThumbnailClick={(id) => setViewingInspectionImageId(id)}
-                    drawMode={drawMode}
-                    coverageDrawMode={coverageDrawMode}
-                    previewAnnotation={previewAnnotation}
-                    previewCoverageRect={previewCoverageRect}
-                    rulerDrawMode={rulerDrawMode}
-                    previewRuler={previewRuler}
-                    selectedScanCompositeId={selectedScanCompositeId}
-                />
-
-                {/* Scan composite hover tooltip */}
-                {hoverData && hoverData.thickness !== null && (
-                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-gray-900/90 text-white px-4 py-2 rounded-lg text-sm z-50 flex items-center gap-4 pointer-events-none backdrop-blur-sm border border-gray-700">
-                        <div>
-                            <span className="text-gray-400 text-xs">Thickness</span>
-                            <div className="font-bold text-lg">{hoverData.thickness.toFixed(2)} mm</div>
+                <ErrorBoundary fallback={
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+                        <div className="text-center p-8 max-w-md">
+                            <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+                            <h3 className="text-lg font-semibold text-white mb-2">3D Viewport Error</h3>
+                            <p className="text-gray-400 text-sm mb-4">
+                                The 3D renderer encountered an error. This can happen due to GPU driver issues or corrupted geometry.
+                            </p>
+                            <button
+                                onClick={() => window.location.reload()}
+                                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                            >
+                                Reload Page
+                            </button>
                         </div>
-                        <div className="w-px h-8 bg-gray-600" />
-                        <div>
-                            <span className="text-gray-400 text-xs">Scan</span>
-                            <div>{hoverData.scanMm.toFixed(1)} mm</div>
-                        </div>
-                        <div className="w-px h-8 bg-gray-600" />
-                        <div>
-                            <span className="text-gray-400 text-xs">Index</span>
-                            <div>{hoverData.indexMm.toFixed(1)} mm</div>
+                    </div>
+                }>
+                    <ThreeViewport
+                        ref={viewportRef}
+                        vesselState={vesselState}
+                        selectedNozzleIndex={selection.nozzleIndex}
+                        selectedLugIndex={selection.lugIndex}
+                        selectedSaddleIndex={selection.saddleIndex}
+                        selectedTextureId={selection.textureId}
+                        selectedAnnotationId={selection.annotationId}
+                        textureObjects={textureObjectsRef.current}
+                        callbacks={vesselCallbacks}
+                        nozzlesLocked={locks.nozzles}
+                        saddlesLocked={locks.saddles}
+                        texturesLocked={locks.textures}
+                        lugsLocked={locks.lugs}
+                        weldsLocked={locks.welds}
+                        selectedWeldIndex={selection.weldIndex}
+                        selectedInspectionImageId={selection.inspectionImageId}
+                        onInspectionImageThumbnailClick={(id) => dispatch({ type: 'SET_VIEWING_INSPECTION_IMAGE', id })}
+                        drawMode={drawModeState.annotation}
+                        coverageDrawMode={drawModeState.coverage}
+                        previewAnnotation={previews.annotation}
+                        previewCoverageRect={previews.coverageRect}
+                        rulerDrawMode={drawModeState.ruler}
+                        previewRuler={previews.ruler}
+                        selectedScanCompositeId={selection.scanCompositeId}
+                        inspectingAnnotationId={ui.inspectingAnnotationId}
+                    />
+                </ErrorBoundary>
+
+                {/* Scan composite hover tooltip — cursor-following mode */}
+                {ui.scanTooltipFollow && ui.hoverData && ui.hoverData.thickness !== null && (
+                    <div
+                        ref={cursorTooltipRef}
+                        className="pointer-events-none"
+                        style={{ position: 'fixed', zIndex: 9999 }}
+                    >
+                        <div className="vm-scan-tooltip">
+                            <div className="vm-scan-tooltip-value">
+                                <span className="vm-scan-tooltip-label">Thickness</span>
+                                <span className="vm-scan-tooltip-number primary">{ui.hoverData.thickness.toFixed(2)}<span className="vm-scan-tooltip-unit">mm</span></span>
+                            </div>
+                            <div className="vm-scan-tooltip-divider" />
+                            <div className="vm-scan-tooltip-value">
+                                <span className="vm-scan-tooltip-label">Scan</span>
+                                <span className="vm-scan-tooltip-number">{ui.hoverData.scanMm.toFixed(1)}<span className="vm-scan-tooltip-unit">mm</span></span>
+                            </div>
+                            <div className="vm-scan-tooltip-divider" />
+                            <div className="vm-scan-tooltip-value">
+                                <span className="vm-scan-tooltip-label">Index</span>
+                                <span className="vm-scan-tooltip-number">{ui.hoverData.indexMm.toFixed(1)}<span className="vm-scan-tooltip-unit">mm</span></span>
+                            </div>
                         </div>
                     </div>
                 )}
 
                 {/* Sidebar (z-20) */}
-                <div className={`vm-sidebar ${sidebarOpen ? '' : 'collapsed'}`}>
+                <div className={`vm-sidebar ${ui.sidebarOpen ? '' : 'collapsed'}`}>
                     <SidebarPanel
                         vesselState={vesselState}
-                        selectedNozzleIndex={selectedNozzleIndex}
-                        selectedSaddleIndex={selectedSaddleIndex}
-                        selectedTextureId={selectedTextureId}
+                        selectedNozzleIndex={selection.nozzleIndex}
+                        selectedSaddleIndex={selection.saddleIndex}
+                        selectedTextureId={selection.textureId}
                         onUpdateDimensions={updateDimensions}
                         onAddNozzle={addNozzle}
                         onUpdateNozzle={updateNozzle}
                         onRemoveNozzle={removeNozzle}
-                        onSelectNozzle={setSelectedNozzleIndex}
-                        selectedLugIndex={selectedLugIndex}
+                        onSelectNozzle={(index) => dispatch({ type: 'SELECT_NOZZLE', index })}
+                        selectedLugIndex={selection.lugIndex}
                         onAddLug={addLug}
                         onUpdateLug={updateLug}
                         onRemoveLug={removeLug}
-                        onSelectLug={setSelectedLugIndex}
+                        onSelectLug={(index) => dispatch({ type: 'SELECT_LUG', index })}
                         onAddSaddle={addSaddle}
                         onUpdateSaddle={updateSaddle}
                         onRemoveSaddle={removeSaddle}
-                        onSelectSaddle={setSelectedSaddleIndex}
-                        selectedWeldIndex={selectedWeldIndex}
+                        onSelectSaddle={(index) => dispatch({ type: 'SELECT_SADDLE', index })}
+                        selectedWeldIndex={selection.weldIndex}
                         onAddWeld={addWeld}
                         onUpdateWeld={updateWeld}
                         onRemoveWeld={removeWeld}
-                        onSelectWeld={setSelectedWeldIndex}
+                        onSelectWeld={(index) => dispatch({ type: 'SELECT_WELD', index })}
                         onAddTexture={addTexture}
                         onUpdateTexture={updateTexture}
                         onRemoveTexture={removeTexture}
-                        onSelectTexture={setSelectedTextureId}
+                        onSelectTexture={(id) => dispatch({ type: 'SELECT_TEXTURE', id })}
                         getNextTextureId={getNextTextureId}
                         renderer={viewportRef.current?.getRenderer() ?? null}
-                        selectedAnnotationId={selectedAnnotationId}
-                        drawMode={drawMode}
-                        onSetDrawMode={(mode) => { setDrawMode(mode); if (mode) { setCoverageDrawMode(false); setRulerDrawMode(false); } }}
+                        selectedAnnotationId={selection.annotationId}
+                        drawMode={drawModeState.annotation}
+                        onSetDrawMode={(mode) => dispatch({ type: 'SET_DRAW_MODE_ANNOTATION', mode })}
                         onAddAnnotation={addAnnotation}
                         onUpdateAnnotation={updateAnnotation}
                         onRemoveAnnotation={removeAnnotation}
-                        onSelectAnnotation={setSelectedAnnotationId}
+                        onSelectAnnotation={handleSidebarAnnotationSelect}
                         onUpdateMeasurementConfig={updateMeasurementConfig}
                         getNextAnnotationId={getNextAnnotationId}
-                        coverageDrawMode={coverageDrawMode}
-                        onSetCoverageDrawMode={(active) => { setCoverageDrawMode(active); if (active) { setDrawMode(null); setRulerDrawMode(false); } }}
+                        coverageDrawMode={drawModeState.coverage}
+                        onSetCoverageDrawMode={(active) => dispatch({ type: 'SET_DRAW_MODE_COVERAGE', active })}
                         onAddCoverageRect={addCoverageRect}
                         onUpdateCoverageRect={updateCoverageRect}
                         onRemoveCoverageRect={removeCoverageRect}
-                        onSelectCoverageRect={setSelectedCoverageRectId}
-                        selectedCoverageRectId={selectedCoverageRectId}
+                        onSelectCoverageRect={(id) => dispatch({ type: 'SELECT_COVERAGE_RECT', id })}
+                        selectedCoverageRectId={selection.coverageRectId}
                         getNextCoverageRectId={getNextCoverageRectId}
-                        rulerDrawMode={rulerDrawMode}
-                        onSetRulerDrawMode={(active) => { setRulerDrawMode(active); if (active) { setDrawMode(null); setCoverageDrawMode(false); } }}
+                        rulerDrawMode={drawModeState.ruler}
+                        onSetRulerDrawMode={(active) => dispatch({ type: 'SET_DRAW_MODE_RULER', active })}
                         onRemoveRuler={removeRuler}
                         onUpdateRuler={updateRuler}
-                        selectedRulerId={selectedRulerId}
-                        onSelectRuler={setSelectedRulerId}
-                        selectedInspectionImageId={selectedInspectionImageId}
+                        selectedRulerId={selection.rulerId}
+                        onSelectRuler={(id) => dispatch({ type: 'SELECT_RULER', id })}
+                        selectedInspectionImageId={selection.inspectionImageId}
                         onAddInspectionImage={addInspectionImage}
                         onUpdateInspectionImage={updateInspectionImage}
                         onRemoveInspectionImage={removeInspectionImage}
-                        onSelectInspectionImage={setSelectedInspectionImageId}
+                        onSelectInspectionImage={(id) => dispatch({ type: 'SELECT_INSPECTION_IMAGE', id })}
                         onToggleInspectionImageVisible={toggleInspectionImageVisible}
                         onToggleInspectionImageLocked={toggleInspectionImageLocked}
                         onToggleAnnotationVisible={toggleAnnotationVisible}
                         onToggleAnnotationLocked={toggleAnnotationLocked}
-                        onViewInspectionImage={(id) => setViewingInspectionImageId(id)}
+                        onViewInspectionImage={(id) => dispatch({ type: 'SET_VIEWING_INSPECTION_IMAGE', id })}
                         getNextInspectionImageId={getNextInspectionImageId}
-                        selectedScanCompositeId={selectedScanCompositeId}
-                        onSelectScanComposite={setSelectedScanCompositeId}
+                        selectedScanCompositeId={selection.scanCompositeId}
+                        onSelectScanComposite={(id) => dispatch({ type: 'SELECT_SCAN_COMPOSITE', id })}
                         onImportComposite={handleImportComposite}
                         onUpdateScanComposite={handleUpdateScanComposite}
                         onRemoveScanComposite={handleRemoveScanComposite}
                         cloudComposites={cloudComposites}
                         cloudCompositesLoading={cloudCompositesLoading}
                         cloudCompositesError={cloudCompositesError as Error | null}
+                        onUpdateThicknessThresholds={updateThicknessThresholds}
                     />
                 </div>
 
                 {/* Toggle sidebar button */}
                 <button
-                    className={`vm-toggle-sidebar ${sidebarOpen ? '' : 'sidebar-collapsed'}`}
-                    onClick={() => setSidebarOpen(o => !o)}
-                    title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+                    className={`vm-toggle-sidebar ${ui.sidebarOpen ? '' : 'sidebar-collapsed'}`}
+                    onClick={() => dispatch({ type: 'TOGGLE_SIDEBAR' })}
+                    title={ui.sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
                 >
-                    {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeft size={18} />}
+                    {ui.sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeft size={18} />}
                 </button>
 
                 {/* Lock controls */}
-                <div className="vm-lock-controls" style={{ left: sidebarOpen ? 400 : 60 }}>
+                <div className="vm-lock-controls" style={{ left: ui.sidebarOpen ? 400 : 60 }}>
                     <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginRight: 4 }}>Lock:</span>
                     <button
-                        className={`vm-lock-btn ${nozzlesLocked ? 'locked' : ''}`}
-                        onClick={() => setNozzlesLocked(l => !l)}
-                        title={nozzlesLocked ? 'Unlock nozzles' : 'Lock nozzles'}
+                        className={`vm-lock-btn ${locks.nozzles ? 'locked' : ''}`}
+                        onClick={() => dispatch({ type: 'TOGGLE_LOCK', key: 'nozzles' })}
+                        title={locks.nozzles ? 'Unlock nozzles' : 'Lock nozzles'}
                     >
-                        {nozzlesLocked ? <Lock size={12} /> : <Unlock size={12} />}
+                        {locks.nozzles ? <Lock size={12} /> : <Unlock size={12} />}
                         N
                     </button>
                     <button
-                        className={`vm-lock-btn ${saddlesLocked ? 'locked' : ''}`}
-                        onClick={() => setSaddlesLocked(l => !l)}
-                        title={saddlesLocked ? 'Unlock saddles' : 'Lock saddles'}
+                        className={`vm-lock-btn ${locks.saddles ? 'locked' : ''}`}
+                        onClick={() => dispatch({ type: 'TOGGLE_LOCK', key: 'saddles' })}
+                        title={locks.saddles ? 'Unlock saddles' : 'Lock saddles'}
                     >
-                        {saddlesLocked ? <Lock size={12} /> : <Unlock size={12} />}
+                        {locks.saddles ? <Lock size={12} /> : <Unlock size={12} />}
                         S
                     </button>
                     <button
-                        className={`vm-lock-btn ${texturesLocked ? 'locked' : ''}`}
-                        onClick={() => setTexturesLocked(l => !l)}
-                        title={texturesLocked ? 'Unlock textures' : 'Lock textures'}
+                        className={`vm-lock-btn ${locks.textures ? 'locked' : ''}`}
+                        onClick={() => dispatch({ type: 'TOGGLE_LOCK', key: 'textures' })}
+                        title={locks.textures ? 'Unlock textures' : 'Lock textures'}
                     >
-                        {texturesLocked ? <Lock size={12} /> : <Unlock size={12} />}
+                        {locks.textures ? <Lock size={12} /> : <Unlock size={12} />}
                         T
                     </button>
                     <button
-                        className={`vm-lock-btn ${lugsLocked ? 'locked' : ''}`}
-                        onClick={() => setLugsLocked(l => !l)}
-                        title={lugsLocked ? 'Unlock lifting lugs' : 'Lock lifting lugs'}
+                        className={`vm-lock-btn ${locks.lugs ? 'locked' : ''}`}
+                        onClick={() => dispatch({ type: 'TOGGLE_LOCK', key: 'lugs' })}
+                        title={locks.lugs ? 'Unlock lifting lugs' : 'Lock lifting lugs'}
                     >
-                        {lugsLocked ? <Lock size={12} /> : <Unlock size={12} />}
+                        {locks.lugs ? <Lock size={12} /> : <Unlock size={12} />}
                         L
                     </button>
                     <button
-                        className={`vm-lock-btn ${weldsLocked ? 'locked' : ''}`}
-                        onClick={() => setWeldsLocked(l => !l)}
-                        title={weldsLocked ? 'Unlock welds' : 'Lock welds'}
+                        className={`vm-lock-btn ${locks.welds ? 'locked' : ''}`}
+                        onClick={() => dispatch({ type: 'TOGGLE_LOCK', key: 'welds' })}
+                        title={locks.welds ? 'Unlock welds' : 'Lock welds'}
                     >
-                        {weldsLocked ? <Lock size={12} /> : <Unlock size={12} />}
+                        {locks.welds ? <Lock size={12} /> : <Unlock size={12} />}
                         W
                     </button>
                 </div>
 
                 {/* Quick action buttons */}
                 <div className="vm-quick-actions">
-                    <button className="vm-quick-btn" onClick={() => setShowDrawingImport(true)} title="Import General Arrangement Drawing">
+                    <button className="vm-quick-btn" onClick={() => dispatch({ type: 'SET_SHOW_DRAWING_IMPORT', show: true })} title="Import General Arrangement Drawing">
                         <FileUp size={16} /> Import GA
                     </button>
-                    <button className="vm-quick-btn" onClick={() => setShowScreenshotMode(true)} title="Screenshot Mode">
+                    <button className="vm-quick-btn" onClick={() => dispatch({ type: 'SET_SHOW_SCREENSHOT_MODE', show: true })} title="Screenshot Mode">
                         <Camera size={16} /> Screenshot
                     </button>
                     <button className="vm-quick-btn" onClick={() => viewportRef.current?.resetCamera()} title="Reset Camera">
@@ -1377,39 +1675,120 @@ export default function VesselModeler() {
                 </div>
 
                 {/* Coverage overlay */}
-                <CoveragePanel vesselState={vesselState} sidebarOpen={sidebarOpen} />
+                <CoveragePanel vesselState={vesselState} sidebarOpen={ui.sidebarOpen} />
 
-                {/* Interaction hint */}
-                <div className="vm-hint">
-                    {getHintText()}
-                </div>
+                {/* Inspection mode overlay (right-side panel + camera lock indicator) */}
+                {ui.inspectingAnnotationId !== null && (() => {
+                    const ann = vesselState.annotations.find(a => a.id === ui.inspectingAnnotationId);
+                    if (!ann) return null;
+                    return (
+                        <>
+                            <div className="vm-camera-lock-indicator">
+                                <Lock size={14} /> Inspection Mode
+                            </div>
+                            <InspectionPanel
+                                annotation={ann}
+                                vesselState={vesselState}
+                                onClose={exitInspectionMode}
+                                onCycleToAnnotation={cycleInspection}
+                                onToggleStatLine={toggleStatLine}
+                                visibleStatLines={visibleStatLines}
+                                thicknessThresholds={vesselState.thicknessThresholds}
+                                onUpdateThicknessThresholds={updateThicknessThresholds}
+                                onCaptureViewport={captureViewport}
+                                onUploadImage={uploadImage}
+                                onDeleteAttachment={deleteAttachment}
+                                getImageUrl={getAnnotationImageUrl}
+                            />
+                            {ann.thicknessStats && (
+                                <>
+                                    {visibleStatLines.min && (
+                                        <StatLeaderOverlay
+                                            hoveredStat="min"
+                                            annotation={ann}
+                                            vesselState={vesselState}
+                                            cameraRef={{ current: viewportRef.current?.getCamera() ?? null }}
+                                            containerRef={viewportContainerRef}
+                                        />
+                                    )}
+                                    {visibleStatLines.max && (
+                                        <StatLeaderOverlay
+                                            hoveredStat="max"
+                                            annotation={ann}
+                                            vesselState={vesselState}
+                                            cameraRef={{ current: viewportRef.current?.getCamera() ?? null }}
+                                            containerRef={viewportContainerRef}
+                                        />
+                                    )}
+                                </>
+                            )}
+                        </>
+                    );
+                })()}
 
-                {/* Loading overlay */}
-                {isLoading && (
-                    <div className="vm-loader">
-                        <div className="spinner" />
-                        <div className="status-text">{loadingMessage}</div>
-                        <div className="status-detail">This may take up to 30 seconds...</div>
+                {/* Interaction hint / scan hover readout */}
+                {ui.hoverData && ui.hoverData.thickness !== null && !ui.scanTooltipFollow ? (
+                    <div className="vm-hint vm-hint--scan">
+                        <div className="vm-scan-tooltip">
+                            <div className="vm-scan-tooltip-value">
+                                <span className="vm-scan-tooltip-label">Thickness</span>
+                                <span className="vm-scan-tooltip-number primary">{ui.hoverData.thickness.toFixed(2)}<span className="vm-scan-tooltip-unit">mm</span></span>
+                            </div>
+                            <div className="vm-scan-tooltip-divider" />
+                            <div className="vm-scan-tooltip-value">
+                                <span className="vm-scan-tooltip-label">Scan</span>
+                                <span className="vm-scan-tooltip-number">{ui.hoverData.scanMm.toFixed(1)}<span className="vm-scan-tooltip-unit">mm</span></span>
+                            </div>
+                            <div className="vm-scan-tooltip-divider" />
+                            <div className="vm-scan-tooltip-value">
+                                <span className="vm-scan-tooltip-label">Index</span>
+                                <span className="vm-scan-tooltip-number">{ui.hoverData.indexMm.toFixed(1)}<span className="vm-scan-tooltip-unit">mm</span></span>
+                            </div>
+                            <div className="vm-scan-tooltip-divider" />
+                            <button
+                                className="vm-scan-tooltip-toggle"
+                                onClick={() => dispatch({ type: 'TOGGLE_SCAN_TOOLTIP_FOLLOW' })}
+                                title="Switch to cursor-following tooltip"
+                            >
+                                <MousePointer size={13} />
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="vm-hint">
+                        {ui.scanTooltipFollow && ui.hoverData && ui.hoverData.thickness !== null && (
+                            <button
+                                className="vm-scan-tooltip-toggle"
+                                onClick={() => dispatch({ type: 'TOGGLE_SCAN_TOOLTIP_FOLLOW' })}
+                                title="Switch to fixed readout"
+                                style={{ marginRight: 8 }}
+                            >
+                                <PanelBottomClose size={13} />
+                            </button>
+                        )}
+                        {getHintText()}
                     </div>
                 )}
+
+                {/* Loading overlay (placeholder for future use) */}
             </div>
 
             {/* Status bar */}
             <StatusBar vesselState={vesselState} />
 
             {/* Drawing Import Modal */}
-            {showDrawingImport && (
+            {ui.showDrawingImport && (
                 <Suspense fallback={null}>
                     <DrawingImportModal
-                        isOpen={showDrawingImport}
-                        onClose={() => setShowDrawingImport(false)}
+                        isOpen={ui.showDrawingImport}
+                        onClose={() => dispatch({ type: 'SET_SHOW_DRAWING_IMPORT', show: false })}
                         onApply={handleDrawingApply}
                     />
                 </Suspense>
             )}
 
             {/* Screenshot Mode Overlay */}
-            {showScreenshotMode &&
+            {ui.showScreenshotMode &&
               viewportRef.current?.getRenderer() &&
               viewportRef.current?.getScene() &&
               viewportRef.current?.getCamera() &&
@@ -1421,20 +1800,20 @@ export default function VesselModeler() {
                         camera={viewportRef.current.getCamera()!}
                         controls={viewportRef.current.getSceneManager()!.getControls()!}
                         vesselLength={vesselState.length}
-                        onExit={() => setShowScreenshotMode(false)}
+                        onExit={() => dispatch({ type: 'SET_SHOW_SCREENSHOT_MODE', show: false })}
                     />
                 </Suspense>
             )}
 
             {/* Inspection Image Viewer Modal */}
-            {viewingInspectionImageId >= 0 && (() => {
-                const viewImg = vesselState.inspectionImages.find(i => i.id === viewingInspectionImageId);
+            {ui.viewingInspectionImageId >= 0 && (() => {
+                const viewImg = vesselState.inspectionImages.find(i => i.id === ui.viewingInspectionImageId);
                 if (!viewImg) return null;
                 return (
                     <Suspense fallback={null}>
                         <InspectionImageViewer
                             image={viewImg}
-                            onClose={() => setViewingInspectionImageId(-1)}
+                            onClose={() => dispatch({ type: 'SET_VIEWING_INSPECTION_IMAGE', id: -1 })}
                             onUpdate={updateInspectionImage}
                         />
                     </Suspense>

@@ -117,6 +117,31 @@ function decodeThicknessData(buffer: ArrayBuffer, width: number, height: number)
     return result;
 }
 
+/**
+ * Compress an ArrayBuffer using gzip via the browser's CompressionStream API.
+ * Typically achieves 5-10x compression on thickness data.
+ */
+async function compressBuffer(buffer: ArrayBuffer): Promise<ArrayBuffer> {
+    const stream = new Blob([buffer]).stream().pipeThrough(new CompressionStream('gzip'));
+    return new Response(stream).arrayBuffer();
+}
+
+/**
+ * Decompress a gzip-compressed ArrayBuffer via the browser's DecompressionStream API.
+ */
+async function decompressBuffer(buffer: ArrayBuffer): Promise<ArrayBuffer> {
+    const stream = new Blob([buffer]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return new Response(stream).arrayBuffer();
+}
+
+/**
+ * Check if a buffer is gzip-compressed by looking for the gzip magic number (1f 8b).
+ */
+function isGzipCompressed(buffer: ArrayBuffer): boolean {
+    const bytes = new Uint8Array(buffer);
+    return bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+}
+
 // ============================================================================
 // CRUD Operations
 // ============================================================================
@@ -155,8 +180,9 @@ export async function saveScanComposite(params: SaveScanCompositeParams): Promis
     const compositeId = row.id;
     const storagePath = `${params.organizationId}/${compositeId}.bin`;
 
-    // 2. Encode and upload thickness data as binary
-    const binaryData = encodeThicknessData(params.thicknessData, params.width, params.height);
+    // 2. Encode and gzip-compress thickness data before upload
+    const rawData = encodeThicknessData(params.thicknessData, params.width, params.height);
+    const binaryData = await compressBuffer(rawData);
 
     const { error: uploadError } = await supabase!.storage
         .from(STORAGE_BUCKET)
@@ -229,8 +255,9 @@ export async function getScanComposite(id: string): Promise<ScanCompositeRecord>
 
     if (downloadError) throw downloadError;
 
-    // 3. Decode binary back to 2D array
-    const buffer = await blob.arrayBuffer();
+    // 3. Decompress (if gzipped) and decode binary back to 2D array
+    const rawBuffer = await blob.arrayBuffer();
+    const buffer = isGzipCompressed(rawBuffer) ? await decompressBuffer(rawBuffer) : rawBuffer;
     const thicknessData = decodeThicknessData(buffer, record.width, record.height);
 
     return {
