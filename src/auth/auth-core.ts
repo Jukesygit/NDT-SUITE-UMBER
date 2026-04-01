@@ -2,6 +2,9 @@
  * Auth Core - Core auth state, role checking, user info, and organization management.
  *
  * These functions are bound to the AuthManager instance via `this`.
+ *
+ * Local/IndexedDB auth fallback has been deprecated (April 2026).
+ * All organization management now goes through Supabase.
  */
 
 import supabase from '../supabase-client';
@@ -90,57 +93,30 @@ export async function createOrganization(
         return { success: false, error: 'Permission denied' };
     }
 
-    if (this.useSupabase) {
-        const { data, error } = await sb
-            .from('organizations')
-            .insert({ name })
-            .select()
-            .single();
+    const { data, error } = await sb
+        .from('organizations')
+        .insert({ name })
+        .select()
+        .single();
 
-        if (error) {
-            return { success: false, error: error.message };
-        }
-
-        return { success: true, organization: data };
-    } else {
-        const org: AuthOrganization = {
-            id: generateId(),
-            name,
-            createdAt: Date.now(),
-        };
-
-        this.authData.organizations.push(org);
-        await this.saveAuthData();
-
-        return { success: true, organization: org };
+    if (error) {
+        return { success: false, error: error.message };
     }
+
+    return { success: true, organization: data };
 }
 
 export async function getOrganizations(this: any): Promise<AuthOrganization[]> {
-    if (this.useSupabase) {
-        const { data, error } = await sb
-            .from('organizations')
-            .select('*')
-            .order('name');
+    const { data, error } = await sb
+        .from('organizations')
+        .select('*')
+        .order('name');
 
-        if (error) {
-            return [];
-        }
-
-        return data || [];
-    } else {
-        if (!this.currentUser) {
-            return this.authData.organizations;
-        }
-
-        if (this.isAdmin()) {
-            return this.authData.organizations;
-        }
-
-        return this.authData.organizations.filter(
-            (org: AuthOrganization) => org.id === this.currentUser.organizationId,
-        );
+    if (error) {
+        return [];
     }
+
+    return data || [];
 }
 
 export async function getOrganization(
@@ -151,21 +127,17 @@ export async function getOrganization(
         return null;
     }
 
-    if (this.useSupabase) {
-        const { data, error } = await sb
-            .from('organizations')
-            .select('*')
-            .eq('id', organizationId)
-            .single();
+    const { data, error } = await sb
+        .from('organizations')
+        .select('*')
+        .eq('id', organizationId)
+        .single();
 
-        if (error) {
-            return null;
-        }
-
-        return data;
-    } else {
-        return this.authData.organizations.find((org: AuthOrganization) => org.id === organizationId) ?? null;
+    if (error) {
+        return null;
     }
+
+    return data;
 }
 
 export async function updateOrganization(
@@ -177,29 +149,18 @@ export async function updateOrganization(
         return { success: false, error: 'Permission denied' };
     }
 
-    if (this.useSupabase) {
-        const { data, error } = await sb
-            .from('organizations')
-            .update(updates)
-            .eq('id', organizationId)
-            .select()
-            .single();
+    const { data, error } = await sb
+        .from('organizations')
+        .update(updates)
+        .eq('id', organizationId)
+        .select()
+        .single();
 
-        if (error) {
-            return { success: false, error: error.message };
-        }
-
-        return { success: true, organization: data };
-    } else {
-        const org = await this.getOrganization(organizationId);
-        if (org) {
-            Object.assign(org, updates);
-            await this.saveAuthData();
-            return { success: true, organization: org };
-        }
-
-        return { success: false, error: 'Organization not found' };
+    if (error) {
+        return { success: false, error: error.message };
     }
+
+    return { success: true, organization: data };
 }
 
 export async function deleteOrganization(
@@ -210,40 +171,19 @@ export async function deleteOrganization(
         return { success: false, error: 'Permission denied' };
     }
 
-    if (this.useSupabase) {
-        const org = await this.getOrganization(organizationId);
-        if (org?.name === 'SYSTEM') {
-            return { success: false, error: 'Cannot delete system organization' };
-        }
-
-        const { error } = await sb
-            .from('organizations')
-            .delete()
-            .eq('id', organizationId);
-
-        if (error) {
-            return { success: false, error: error.message };
-        }
-
-        return { success: true };
-    } else {
-        const org = await this.getOrganization(organizationId);
-        if (org?.name === 'SYSTEM') {
-            return { success: false, error: 'Cannot delete system organization' };
-        }
-
-        const index = this.authData.organizations.findIndex(
-            (o: AuthOrganization) => o.id === organizationId,
-        );
-        if (index !== -1) {
-            this.authData.organizations.splice(index, 1);
-            this.authData.users = this.authData.users.filter(
-                (u: any) => u.organizationId !== organizationId,
-            );
-            await this.saveAuthData();
-            return { success: true };
-        }
-
-        return { success: false, error: 'Organization not found' };
+    const org = await this.getOrganization(organizationId);
+    if (org?.name === 'SYSTEM') {
+        return { success: false, error: 'Cannot delete system organization' };
     }
+
+    const { error } = await sb
+        .from('organizations')
+        .delete()
+        .eq('id', organizationId);
+
+    if (error) {
+        return { success: false, error: error.message };
+    }
+
+    return { success: true };
 }

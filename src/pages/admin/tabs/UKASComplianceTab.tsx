@@ -39,7 +39,7 @@ const complianceSections: ComplianceSection[] = [
         items: [
             { title: '5-tier RBAC implemented', verified: true, evidence: 'src/auth-manager.js:9-16 defines Admin, Manager, Org Admin, Editor, Viewer roles' },
             { title: 'Magic link authentication available', verified: true, evidence: 'supabase/functions/send-reset-code/index.ts implements passwordless auth' },
-            { title: 'Password hashing uses bcrypt', verified: true, evidence: 'src/auth-manager.js imports bcryptjs for industry standard protection' },
+            { title: 'Password hashing handled by Supabase Auth', verified: true, evidence: 'Authentication delegated to Supabase Auth which uses bcrypt internally' },
             { title: 'JWT tokens used for session management', verified: true, evidence: 'Supabase Auth manages JWT sessions with secure token refresh' },
             { title: 'Permission request workflow requires approval', verified: true, evidence: 'permission_requests table with status workflow and admin approval' },
             { title: 'Role changes logged to activity log', verified: true, evidence: 'activity-log-schema.sql lists permission_approved, permission_rejected action types' },

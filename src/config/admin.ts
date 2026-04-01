@@ -1,7 +1,6 @@
 // Admin Configuration Module - Manages configurable lists for report fields
-import indexedDB from '../indexed-db.js';
 
-const CONFIG_KEY = 'admin_configuration';
+const CONFIG_KEY = 'ndt_admin_configuration';
 
 // Default values for common NDT equipment and materials
 const DEFAULT_CONFIG: Record<string, string[]> = {
@@ -140,16 +139,12 @@ class AdminConfig {
 
     async initialize(): Promise<void> {
         try {
-            await indexedDB.ensureInitialized();
-            const data = await indexedDB.loadData();
-
-            // Load config from IndexedDB or use defaults
-            if (data[CONFIG_KEY]) {
-                this.config = data[CONFIG_KEY] as Record<string, string[]>;
+            const stored = localStorage.getItem(CONFIG_KEY);
+            if (stored) {
+                this.config = JSON.parse(stored);
             } else {
-                // Initialize with defaults
                 this.config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-                await this.saveConfig();
+                this.saveConfig();
             }
         } catch {
             this.config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
@@ -162,9 +157,7 @@ class AdminConfig {
 
     async saveConfig(): Promise<ServiceResult> {
         try {
-            const data = await indexedDB.loadData();
-            data[CONFIG_KEY] = this.config;
-            await indexedDB.saveData(data);
+            localStorage.setItem(CONFIG_KEY, JSON.stringify(this.config));
             return { success: true };
         } catch (error: unknown) {
             return { success: false, error: error instanceof Error ? error.message : String(error) };

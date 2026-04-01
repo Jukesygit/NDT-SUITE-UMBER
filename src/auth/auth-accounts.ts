@@ -2,7 +2,9 @@
  * Auth Accounts - Account requests and bulk user creation.
  *
  * Handles the account request workflow (submit, approve, reject)
- * and bulk user creation via edge functions.
+ * and bulk user creation via Supabase edge functions.
+ *
+ * Local/IndexedDB fallback has been deprecated (April 2026).
  */
 
 import supabase from '../supabase-client';
@@ -10,10 +12,8 @@ import {
     ROLES,
     type AuthResult,
     type AccountRequestData,
-    type LocalAccountRequest,
     type BulkCreateUserData,
 } from './auth-types';
-import { generateId } from './auth-core';
 
 // Supabase is guaranteed initialized when auth services are called
 const sb = supabase!;
@@ -24,46 +24,28 @@ export async function requestAccount(
     this: any,
     requestData: AccountRequestData,
 ): Promise<AuthResult> {
-    if (this.useSupabase) {
-        try {
-            const { data, error } = await sb.functions.invoke('submit-account-request', {
-                body: {
-                    username: requestData.username,
-                    email: requestData.email,
-                    organization_id: requestData.organizationId,
-                    requested_role: requestData.requestedRole || ROLES.VIEWER,
-                    message: requestData.message || '',
-                },
-            });
+    try {
+        const { data, error } = await sb.functions.invoke('submit-account-request', {
+            body: {
+                username: requestData.username,
+                email: requestData.email,
+                organization_id: requestData.organizationId,
+                requested_role: requestData.requestedRole || ROLES.VIEWER,
+                message: requestData.message || '',
+            },
+        });
 
-            if (error) {
-                return { success: false, error: error.message };
-            }
-
-            if (data?.error) {
-                return { success: false, error: data.error };
-            }
-
-            return { success: true, request: data?.request };
-        } catch (err: any) {
-            return { success: false, error: err.message || 'Failed to submit request' };
+        if (error) {
+            return { success: false, error: error.message };
         }
-    } else {
-        const request: LocalAccountRequest = {
-            id: generateId(),
-            username: requestData.username,
-            email: requestData.email,
-            requestedRole: requestData.requestedRole || ROLES.VIEWER,
-            organizationId: requestData.organizationId,
-            message: requestData.message || '',
-            status: 'pending',
-            createdAt: Date.now(),
-        };
 
-        this.authData.accountRequests.push(request);
-        await this.saveAuthData();
+        if (data?.error) {
+            return { success: false, error: data.error };
+        }
 
-        return { success: true, request };
+        return { success: true, request: data?.request };
+    } catch (err: any) {
+        return { success: false, error: err.message || 'Failed to submit request' };
     }
 }
 
@@ -72,87 +54,52 @@ export async function getPendingAccountRequests(this: any): Promise<any[]> {
         return [];
     }
 
-    if (this.useSupabase) {
-        let query = sb
-            .from('account_requests')
-            .select('*, organizations(*)')
-            .eq('status', 'pending');
+    let query = sb
+        .from('account_requests')
+        .select('*, organizations(*)')
+        .eq('status', 'pending');
 
-        if (this.currentUser?.role === ROLES.ORG_ADMIN) {
-            query = query.eq('organization_id', this.currentUser.organizationId);
-        }
-
-        const { data, error } = await query;
-
-        if (error) {
-            return [];
-        }
-
-        return data || [];
-    } else {
-        if (this.isAdmin()) {
-            return this.authData.accountRequests.filter((r: any) => r.status === 'pending');
-        }
-
-        return this.authData.accountRequests.filter(
-            (r: any) => r.status === 'pending' && r.organizationId === this.currentUser.organizationId,
-        );
+    if (this.currentUser?.role === ROLES.ORG_ADMIN) {
+        query = query.eq('organization_id', this.currentUser.organizationId);
     }
+
+    const { data, error } = await query;
+
+    if (error) {
+        return [];
+    }
+
+    return data || [];
 }
 
 export async function approveAccountRequest(
     this: any,
     requestId: string,
 ): Promise<AuthResult> {
-    if (this.useSupabase) {
-        try {
-            const { data, error } = await sb.functions.invoke('approve-account-request', {
-                body: {
-                    request_id: requestId,
-                    approved_by_user_id: this.currentUser.id,
-                },
-            });
-
-            if (error) {
-                return { success: false, error: error.message || JSON.stringify(error) };
-            }
-
-            if (data?.error) {
-                const errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
-                const details = data.details ? ` Details: ${JSON.stringify(data.details)}` : '';
-                return { success: false, error: errorMsg + details };
-            }
-
-            return {
-                success: true,
-                message: data?.message || 'Account created successfully. User will receive an email to set their password.',
-            };
-        } catch (err: any) {
-            return { success: false, error: err.message || 'Failed to approve request' };
-        }
-    } else {
-        const request = this.authData.accountRequests.find((r: any) => r.id === requestId);
-        if (!request) {
-            return { success: false, error: 'Request not found' };
-        }
-
-        const tempPassword = 'ChangeMe123!';
-        const result = await this.createUser({
-            username: request.username,
-            email: request.email,
-            password: tempPassword,
-            role: request.requestedRole,
-            organizationId: request.organizationId,
+    try {
+        const { data, error } = await sb.functions.invoke('approve-account-request', {
+            body: {
+                request_id: requestId,
+                approved_by_user_id: this.currentUser.id,
+            },
         });
 
-        if (result.success) {
-            request.status = 'approved';
-            request.approvedAt = Date.now();
-            request.approvedBy = this.currentUser.id;
-            await this.saveAuthData();
+        if (error) {
+            return { success: false, error: error.message || JSON.stringify(error) };
         }
 
-        return result;
+        if (data?.error) {
+            const errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+            const details = data.details ? ` Details: ${JSON.stringify(data.details)}` : '';
+            return { success: false, error: errorMsg + details };
+        }
+
+        return {
+            success: true,
+            message: data?.message || 'Account created successfully. User will receive an email to set their password.',
+        };
+    } catch (err: any) {
+        return { success: false, error: err.message || 'Failed to approve request' };
     }
 }
 
@@ -161,36 +108,21 @@ export async function rejectAccountRequest(
     requestId: string,
     reason: string,
 ): Promise<AuthResult> {
-    if (this.useSupabase) {
-        const { error } = await sb
-            .from('account_requests')
-            .update({
-                status: 'rejected',
-                rejected_by: this.currentUser.id,
-                rejected_at: new Date().toISOString(),
-                rejection_reason: reason,
-            })
-            .eq('id', requestId);
+    const { error } = await sb
+        .from('account_requests')
+        .update({
+            status: 'rejected',
+            rejected_by: this.currentUser.id,
+            rejected_at: new Date().toISOString(),
+            rejection_reason: reason,
+        })
+        .eq('id', requestId);
 
-        if (error) {
-            return { success: false, error: error.message };
-        }
-
-        return { success: true };
-    } else {
-        const request = this.authData.accountRequests.find((r: any) => r.id === requestId);
-        if (!request) {
-            return { success: false, error: 'Request not found' };
-        }
-
-        request.status = 'rejected';
-        request.rejectedAt = Date.now();
-        request.rejectedBy = this.currentUser.id;
-        request.rejectionReason = reason;
-        await this.saveAuthData();
-
-        return { success: true };
+    if (error) {
+        return { success: false, error: error.message };
     }
+
+    return { success: true };
 }
 
 // ── Bulk User Creation ─────────────────────────────────────────────────────
@@ -202,10 +134,6 @@ export async function bulkCreateUsers(
 ): Promise<AuthResult> {
     if (!this.isAdmin()) {
         return { success: false, error: 'Only admins can bulk create users' };
-    }
-
-    if (!this.useSupabase) {
-        return { success: false, error: 'Bulk user creation only available in Supabase mode' };
     }
 
     if (!Array.isArray(users) || users.length === 0) {

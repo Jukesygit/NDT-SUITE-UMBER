@@ -103,7 +103,6 @@ export default defineConfig({
           // Heavy libraries are dynamically imported, so we don't bundle them in static chunks
           // Removed: 'three', 'html2canvas', 'jspdf', 'plotly.js-dist-min', 'xlsx'
           // These will be loaded on-demand when their features are used
-          'utils-vendor': ['crypto-js', 'bcryptjs']
         }
       }
     },
