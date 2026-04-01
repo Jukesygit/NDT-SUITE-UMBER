@@ -90,6 +90,9 @@ function filterAndSortPersonnel(
     sortColumn: SortColumn,
     sortDirection: SortDirection
 ): Person[] {
+    // Cache current date outside the loop to avoid repeated allocations
+    const now = new Date();
+
     // Filter
     const filtered = personnel.filter((person) => {
         const matchesSearch =
@@ -107,7 +110,7 @@ function filterAndSortPersonnel(
                 person.competencies?.some(
                     (c) =>
                         c.competency_id === compId &&
-                        (c.status === 'active' || (c.expiry_date && new Date(c.expiry_date) >= new Date()))
+                        (c.status === 'active' || (c.expiry_date && new Date(c.expiry_date) >= now))
                 )
             );
 

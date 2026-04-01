@@ -57,6 +57,7 @@ export default function InspectionImageViewer({ image, onClose, onUpdate }: Insp
                     <img
                         src={image.imageData}
                         alt={image.name}
+                        loading="lazy"
                         style={{
                             maxWidth: '60vw',
                             maxHeight: '80vh',
