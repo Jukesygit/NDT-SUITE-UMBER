@@ -47,24 +47,15 @@ export default function StatLeaderOverlay({
 
   const w = container.clientWidth;
   const h = container.clientHeight;
-
-  // Source point: right edge of viewport (panel boundary), vertically offset per stat
-  const srcX = w - 360;
-  const srcY = hoveredStat === 'min' ? h * 0.4 : h * 0.45;
-
   const color = hoveredStat === 'min' ? '#ef4444' : '#22c55e';
 
   return (
     <svg
-      className="absolute inset-0 z-30 transition-opacity duration-200"
+      className="absolute inset-0 z-30"
       width={w}
       height={h}
       style={{ pointerEvents: 'none' }}
     >
-      <line
-        x1={srcX} y1={srcY} x2={screen.x} y2={screen.y}
-        stroke={color} strokeWidth={1.5} strokeDasharray="6 4" opacity={0.8}
-      />
       <circle cx={screen.x} cy={screen.y} r={8} fill="none" stroke={color} strokeWidth={2} opacity={0.9}>
         <animate attributeName="r" values="6;10;6" dur="1.5s" repeatCount="indefinite" />
         <animate attributeName="opacity" values="0.9;0.4;0.9" dur="1.5s" repeatCount="indefinite" />

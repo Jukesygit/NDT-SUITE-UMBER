@@ -343,7 +343,7 @@ export default function VesselModeler() {
     const cursorTooltipRef = useRef<HTMLDivElement>(null);
 
     // Inspection panel: which stat row is hovered (highlights min/max point on vessel)
-    const [visibleStatLines, setVisibleStatLines] = useState<{ min: boolean; max: boolean }>({ min: true, max: true });
+    const [visibleStatLines, setVisibleStatLines] = useState<{ min: boolean; max: boolean }>({ min: false, max: false });
 
     const toggleStatLine = useCallback((stat: 'min' | 'max') => {
         setVisibleStatLines(prev => ({ ...prev, [stat]: !prev[stat] }));
@@ -1166,8 +1166,10 @@ export default function VesselModeler() {
 
         const { position: targetPos, target: targetLookAt } = computeInspectionCameraTarget(ann, vesselState, camera);
 
+        setVisibleStatLines({ min: false, max: false });
         animateCamera(camera, controls, targetPos, targetLookAt, 500, () => {
             controls.enabled = false;
+            setVisibleStatLines({ min: true, max: true });
         });
 
         dispatch({ type: 'ENTER_INSPECTION_MODE', annotationId, cameraState: savedCameraState });
@@ -1207,8 +1209,10 @@ export default function VesselModeler() {
 
         // Temporarily re-enable controls for the animation
         controls.enabled = true;
+        setVisibleStatLines({ min: false, max: false });
         animateCamera(camera, controls, targetPos, targetLookAt, 500, () => {
             controls.enabled = false;
+            setVisibleStatLines({ min: true, max: true });
         });
 
         dispatch({ type: 'CYCLE_INSPECTION', annotationId });
