@@ -58,9 +58,9 @@ function compositeOverlapsAnnotation(
     compAxialEnd = indexStartMm;
   }
 
-  // Composite scan (circumferential) extent in degrees
-  const scanRangeMm = xAxis[xAxis.length - 1] - xAxis[0];
-  const scanRangeDeg = (scanRangeMm / circumference) * 360;
+  // Composite scan (circumferential) extent — xAxis values are mm from datum
+  const scanStartMm = xAxis[0];
+  const scanEndMm = xAxis[xAxis.length - 1];
 
   // Annotation bounds
   const halfWidthMm = ann.width / 2;
@@ -71,16 +71,16 @@ function compositeOverlapsAnnotation(
   // Check axial overlap
   if (annAxialEnd < compAxialStart || annAxialStart > compAxialEnd) return false;
 
-  // Check circumferential overlap (simplified — check if any edge of the
-  // annotation falls within the composite's angular range from datum)
+  // Check circumferential overlap — convert annotation angles to mm offset from datum
   const annAngleMin = ann.angle - halfHeightDeg;
   const annAngleMax = ann.angle + halfHeightDeg;
 
-  // Convert annotation angles to offset from datum in scan direction
   for (const testAngle of [annAngleMin, annAngleMax, ann.angle]) {
     const rawDelta = angularDelta(datumAngleDeg, testAngle);
-    const scanOffsetDeg = scanDirection === 'cw' ? -rawDelta : rawDelta;
-    if (scanOffsetDeg >= 0 && scanOffsetDeg <= scanRangeDeg) return true;
+    const scanOffsetMm = scanDirection === 'cw'
+      ? (-rawDelta / 360) * circumference
+      : (rawDelta / 360) * circumference;
+    if (scanOffsetMm >= scanStartMm && scanOffsetMm <= scanEndMm) return true;
   }
 
   // Also test composite edges against annotation center
@@ -116,21 +116,22 @@ function sampleComposite(
   }
   if (indexOffset < 0 || indexOffset > indexRangeMm) return undefined;
 
-  const scanRangeMm = xAxis[xAxis.length - 1] - xAxis[0];
-  const scanRangeDeg = (scanRangeMm / circumference) * 360;
+  // xAxis values are mm from the datum along the scan direction.
+  const scanStartMm = xAxis[0];
+  const scanEndMm = xAxis[xAxis.length - 1];
+  const scanRangeMm = scanEndMm - scanStartMm;
 
   const rawDelta = angularDelta(datumAngleDeg, angleDeg);
-  let scanOffsetDeg: number;
+  let scanOffsetMm: number;
   if (scanDirection === 'cw') {
-    scanOffsetDeg = -rawDelta;
+    scanOffsetMm = (-rawDelta / 360) * circumference;
   } else {
-    scanOffsetDeg = rawDelta;
+    scanOffsetMm = (rawDelta / 360) * circumference;
   }
-  if (scanOffsetDeg < 0 || scanOffsetDeg > scanRangeDeg) return undefined;
+  if (scanOffsetMm < scanStartMm || scanOffsetMm > scanEndMm) return undefined;
 
   const rowFrac = indexRangeMm > 0 ? (indexOffset / indexRangeMm) * (data.length - 1) : 0;
-  const scanOffsetMm = (scanOffsetDeg / 360) * circumference - xAxis[0];
-  const colFrac = scanRangeMm > 0 ? (scanOffsetMm / scanRangeMm) * (data[0].length - 1) : 0;
+  const colFrac = scanRangeMm > 0 ? ((scanOffsetMm - scanStartMm) / scanRangeMm) * (data[0].length - 1) : 0;
 
   const row = Math.round(rowFrac);
   const col = Math.round(colFrac);

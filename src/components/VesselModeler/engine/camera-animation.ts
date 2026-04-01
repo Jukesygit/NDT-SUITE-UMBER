@@ -61,8 +61,11 @@ export function computeInspectionCameraTarget(
 
     // Calculate distance so the annotation footprint fills ~70% of viewport
     const footprint = Math.max(ann.width, ann.height) * SCALE;
-    const hFovRad = (camera.fov * Math.PI) / 180; // vertical FOV in radians
-    const distance = (footprint / 0.7) / (2 * Math.tan(hFovRad / 2));
+    const vFovRad = (camera.fov * Math.PI) / 180;
+    const hFovRad = 2 * Math.atan(Math.tan(vFovRad / 2) * camera.aspect);
+    // Use whichever FOV is narrower to ensure the footprint fits
+    const fov = Math.min(vFovRad, hFovRad);
+    const distance = (footprint / 0.7) / (2 * Math.tan(fov / 2));
 
     // Position camera along the normal at the computed distance
     const position = target.clone().add(normal.multiplyScalar(distance));
