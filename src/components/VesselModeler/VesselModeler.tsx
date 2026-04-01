@@ -33,6 +33,7 @@ import './vessel-modeler.css';
 import * as THREE from 'three';
 
 import CoveragePanel from './CoveragePanel';
+import InspectionPanel from './sidebar/InspectionPanel';
 
 const DrawingImportModal = lazy(() => import('./DrawingImportModal'));
 const ScreenshotMode = lazy(() => import('./ScreenshotMode'));
@@ -330,6 +331,11 @@ export default function VesselModeler() {
     // Viewport ref
     const viewportRef = useRef<ThreeViewportHandle>(null);
     const cursorTooltipRef = useRef<HTMLDivElement>(null);
+
+    // Inspection panel: which stat row is hovered (highlights min/max point on vessel)
+    const [statHover, setStatHover] = useState<'min' | 'max' | null>(null);
+    // statHover will be consumed by ThreeViewport in a later task to highlight min/max points
+    void statHover;
 
     // --- Helper: dispatch vessel update via functional updater ---
     const updateVessel = useCallback((updater: (prev: VesselState) => VesselState) => {
@@ -1150,9 +1156,8 @@ export default function VesselModeler() {
         dispatch({ type: 'CYCLE_INSPECTION', annotationId });
     }, [vesselState]);
 
-    // Expose for future UI wiring (inspection toolbar buttons)
+    // enterInspectionMode is called from sidebar annotation double-click (future)
     void enterInspectionMode;
-    void cycleInspection;
 
     // --- Escape key cancels draw mode or exits inspection mode ---
     useEffect(() => {
@@ -1601,6 +1606,26 @@ export default function VesselModeler() {
 
                 {/* Coverage overlay */}
                 <CoveragePanel vesselState={vesselState} sidebarOpen={ui.sidebarOpen} />
+
+                {/* Inspection mode overlay (right-side panel + camera lock indicator) */}
+                {ui.inspectingAnnotationId !== null && (() => {
+                    const ann = vesselState.annotations.find(a => a.id === ui.inspectingAnnotationId);
+                    if (!ann) return null;
+                    return (
+                        <>
+                            <div className="vm-camera-lock-indicator">
+                                <Lock size={14} /> Inspection Mode
+                            </div>
+                            <InspectionPanel
+                                annotation={ann}
+                                vesselState={vesselState}
+                                onClose={exitInspectionMode}
+                                onCycleToAnnotation={cycleInspection}
+                                onStatHover={setStatHover}
+                            />
+                        </>
+                    );
+                })()}
 
                 {/* Interaction hint / scan hover readout */}
                 {ui.hoverData && ui.hoverData.thickness !== null && !ui.scanTooltipFollow ? (

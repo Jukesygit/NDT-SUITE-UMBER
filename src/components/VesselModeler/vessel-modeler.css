@@ -1348,3 +1348,96 @@
     width: auto;
     padding: 8px 16px;
 }
+
+/* ========================================
+   Inspection Panel (right-side overlay)
+   ======================================== */
+
+.vm-inspection-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 350px;
+    height: 100%;
+    background: rgba(20, 20, 30, 0.95);
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(12px);
+    overflow-y: auto;
+    z-index: 100;
+    animation: vm-slide-in-right 0.3s ease-out;
+    padding: 16px;
+    color: #e0e0e0;
+}
+
+@keyframes vm-slide-in-right {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+.vm-inspection-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.vm-inspection-stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.8rem;
+}
+
+.vm-inspection-stat-row.hoverable:hover {
+    background: rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+}
+
+.vm-inspection-section {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.vm-inspection-section-title {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 8px;
+}
+
+.vm-inspection-panel::-webkit-scrollbar {
+    width: 6px;
+}
+
+.vm-inspection-panel::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.vm-inspection-panel::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+}
+
+/* Camera lock indicator (inspection mode) */
+
+.vm-camera-lock-indicator {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 4px;
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.6);
+    pointer-events: none;
+    z-index: 50;
+}
