@@ -2,8 +2,8 @@
  * Admin Service Type Definitions
  */
 
-import type { Organization, Profile } from '../types/database.types.js';
-import type { UserRole } from '../types/auth.types.js';
+import type { Organization, Profile } from '../types/database.types';
+import type { UserRole } from '../types/auth.types';
 
 export type { Organization, Profile, UserRole };
 

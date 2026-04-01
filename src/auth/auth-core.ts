@@ -4,7 +4,7 @@
  * These functions are bound to the AuthManager instance via `this`.
  */
 
-import supabase from '../supabase-client.js';
+import supabase from '../supabase-client';
 import {
     ROLES,
     PERMISSIONS,

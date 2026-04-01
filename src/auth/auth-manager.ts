@@ -2,7 +2,7 @@
  * Auth Manager - Main barrel export + AuthManager class.
  * Delegates to: auth-core, auth-supabase, auth-local, auth-users, auth-accounts.
  */
-import { isSupabaseConfigured } from '../supabase-client.js';
+import { isSupabaseConfigured } from '../supabase-client';
 import { logActivity } from '../services/activity-log-service.ts';
 import {
     ROLES, PERMISSIONS, ROLE_PERMISSIONS,

@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 
 // ES module imports
 // @ts-ignore - JS module without types
-import supabaseImport, { isSupabaseConfigured } from '../../supabase-client.js';
+import supabaseImport, { isSupabaseConfigured } from '../../supabase-client';
 // @ts-ignore - typing JS module import
 const supabase: SupabaseClient = supabaseImport;
 

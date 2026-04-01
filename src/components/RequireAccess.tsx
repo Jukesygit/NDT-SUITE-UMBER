@@ -1,18 +1,20 @@
+import { type ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Spinner } from './LoadingStates';
+
+interface RequireAccessProps {
+    requireAdmin?: boolean;
+    requireElevatedAccess?: boolean;
+    children: ReactNode;
+}
 
 /**
  * Component-level access control wrapper.
  * Use this to protect individual components/pages while keeping them
  * under the same Layout instance (preventing Layout remount on navigation).
- *
- * @param {Object} props
- * @param {boolean} props.requireAdmin - Only allow admin users
- * @param {boolean} props.requireElevatedAccess - Allow admin or manager users
- * @param {React.ReactNode} props.children - The protected content
  */
-function RequireAccess({ requireAdmin, requireElevatedAccess, children }) {
+function RequireAccess({ requireAdmin, requireElevatedAccess, children }: RequireAccessProps) {
     const { isAdmin, hasElevatedAccess, isLoading } = useAuth();
 
     // Show spinner while auth is loading (instead of blank screen)

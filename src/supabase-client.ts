@@ -1,13 +1,13 @@
 // Supabase Client Configuration
-import { createClient } from '@supabase/supabase-js';
-import environmentConfig from './config/environment.js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import environmentConfig from './config/environment';
 
 // Get Supabase credentials from secure config
-const SUPABASE_URL = environmentConfig.get('supabase.url');
-const SUPABASE_ANON_KEY = environmentConfig.get('supabase.anonKey');
+const SUPABASE_URL = environmentConfig.get('supabase.url') as string;
+const SUPABASE_ANON_KEY = environmentConfig.get('supabase.anonKey') as string;
 
 // Create Supabase client only if properly configured
-let supabase = null;
+let supabase: SupabaseClient | null = null;
 
 if (environmentConfig.isSupabaseConfigured()) {
     try {
@@ -44,7 +44,7 @@ if (environmentConfig.isSupabaseConfigured()) {
 export { supabase };
 
 // Check if Supabase is properly configured
-export function isSupabaseConfigured() {
+export function isSupabaseConfigured(): boolean {
     return environmentConfig.isSupabaseConfigured() && supabase !== null;
 }
 

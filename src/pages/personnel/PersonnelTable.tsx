@@ -6,7 +6,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Person, PersonCompetency, CompetencyStats, Organization } from '../../hooks/queries/usePersonnel';
 import { personnelKeys, getPendingApprovalCount } from '../../hooks/queries/usePersonnel';
-import personnelService from '../../services/personnel-service.js';
+import personnelService from '../../services/personnel-service';
 import { PersonnelExpandedRow } from './PersonnelExpandedRow';
 import { PersonDocumentReviewModal } from './PersonDocumentReviewModal';
 import { PersonAvatar } from './PersonAvatar';

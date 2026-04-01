@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authManager from '../auth-manager.js';
-import supabase from '../supabase-client.js';
+import supabase from '../supabase-client';
 import { LogoGradientShift } from '../components/MatrixLogoAnimated';
 import { RandomMatrixSpinner } from '../components/MatrixSpinners';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,8 +9,10 @@ import { useAuth } from '../contexts/AuthContext';
 // Storage key for tracking password reset mode
 const PASSWORD_RESET_KEY = 'ndt_password_reset_pending';
 
+type LoginMode = 'login' | 'register' | 'reset' | 'verify-code' | 'update-password' | 'processing';
+
 // Check for recovery mode before component mounts (synchronous check)
-const getInitialMode = () => {
+const getInitialMode = (): LoginMode => {
   if (typeof window !== 'undefined') {
     const hash = window.location.hash;
     const params = new URLSearchParams(window.location.search);
@@ -56,7 +58,7 @@ function LoginPageNew() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-  const [mode, setMode] = useState(getInitialMode); // 'login', 'register', 'reset', 'verify-code', 'update-password'
+  const [mode, setMode] = useState<LoginMode>(getInitialMode); // 'login', 'register', 'reset', 'verify-code', 'update-password'
   const isRedirectingRef = useRef(false); // Track if we're in the process of redirecting
 
   useEffect(() => {
@@ -75,7 +77,7 @@ function LoginPageNew() {
     window.addEventListener('passwordRecoveryMode', handlePasswordRecovery);
 
     // Listen for Supabase auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase!.auth.onAuthStateChange((event, session) => {
       // Re-check sessionStorage in case it was set by another handler
       const currentPasswordResetMode = sessionStorage.getItem(PASSWORD_RESET_KEY) === 'true';
 
@@ -95,7 +97,7 @@ function LoginPageNew() {
         setIsLoading(false);
         setMode('login');
         // Sign out and THEN clear the password reset flag (prevents redirect while still logged in)
-        supabase.auth.signOut()
+        supabase!.auth.signOut()
           .then(() => {
             sessionStorage.removeItem(PASSWORD_RESET_KEY);
           })
@@ -124,7 +126,7 @@ function LoginPageNew() {
     };
   }, [navigate, mode, isAuthenticated]);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccessMessage('');
@@ -274,13 +276,13 @@ function LoginPageNew() {
         }
 
         // Check if we have a session (the code should have been exchanged for a session)
-        let { data: { session } } = await supabase.auth.getSession();
+        let { data: { session } } = await supabase!.auth.getSession();
         if (!session) {
           // Try to exchange the code if it's still in the URL
           const params = new URLSearchParams(window.location.search);
           const code = params.get('code');
           if (code) {
-            const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+            const { data: exchangeData, error: exchangeError } = await supabase!.auth.exchangeCodeForSession(code);
             if (exchangeError) {
               setError('Your password reset link has expired. Please request a new one.');
               setIsLoading(false);
@@ -297,7 +299,7 @@ function LoginPageNew() {
         // Use Edge Function to update password AND confirm email
         // This is necessary because clicking the reset link proves email ownership
         try {
-          const { data, error: updateError } = await supabase.functions.invoke('update-password-confirm-email', {
+          const { data, error: updateError } = await supabase!.functions.invoke('update-password-confirm-email', {
             body: {
               newPassword,
               accessToken: session?.access_token
@@ -314,15 +316,15 @@ function LoginPageNew() {
             setNewPassword('');
             setConfirmPassword('');
             // Sign out the recovery session and redirect to login
-            await supabase.auth.signOut();
+            await supabase!.auth.signOut();
             setMode('login');
           }
         } catch (updateErr) {
-          setError('Error updating password: ' + (updateErr.message || 'Unknown error'));
+          setError('Error updating password: ' + ((updateErr as Error).message || 'Unknown error'));
         }
       }
     } catch (err) {
-      setError(err.message || 'An error occurred');
+      setError((err as Error).message || 'An error occurred');
     } finally {
       // Don't clear isLoading if we're in the process of redirecting
       // This keeps the "Processing..." spinner visible until the page reloads
@@ -657,7 +659,7 @@ function LoginPageNew() {
                     setError('');
                     setSuccessMessage('');
                     // Sign out and THEN clear flag (prevents redirect while still logged in)
-                    supabase.auth.signOut()
+                    supabase!.auth.signOut()
                       .then(() => {
                         sessionStorage.removeItem(PASSWORD_RESET_KEY);
                       })

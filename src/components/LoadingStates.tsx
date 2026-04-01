@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { type CSSProperties } from 'react';
 import '../styles/glassmorphic.css';
 import { RandomMatrixSpinner } from './MatrixSpinners';
 
@@ -14,11 +14,20 @@ import { RandomMatrixSpinner } from './MatrixSpinners';
 // Spinner Components
 // ========================================
 
+type SpinnerSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+type SpinnerColor = 'primary' | 'white' | 'success' | 'warning' | 'danger';
+
+interface SpinnerProps {
+  size?: SpinnerSize;
+  color?: SpinnerColor;
+  className?: string;
+}
+
 /**
  * Primary Spinner - Elegant rotating loader
  */
-export const Spinner = ({ size = 'md', color = 'primary', className = '' }) => {
-  const sizes = {
+export const Spinner = ({ size = 'md', color = 'primary', className = '' }: SpinnerProps) => {
+  const sizes: Record<SpinnerSize, string> = {
     xs: '16px',
     sm: '20px',
     md: '32px',
@@ -26,7 +35,7 @@ export const Spinner = ({ size = 'md', color = 'primary', className = '' }) => {
     xl: '64px'
   };
 
-  const colors = {
+  const colors: Record<SpinnerColor, string> = {
     primary: 'var(--accent-blue)',
     white: 'var(--text-primary)',
     success: 'var(--success)',
@@ -54,17 +63,25 @@ export const Spinner = ({ size = 'md', color = 'primary', className = '' }) => {
   );
 };
 
+type DotsSize = 'sm' | 'md' | 'lg';
+
+interface DotsSpinnerProps {
+  size?: DotsSize;
+  color?: SpinnerColor;
+  className?: string;
+}
+
 /**
  * Dots Spinner - Three animated dots
  */
-export const DotsSpinner = ({ size = 'md', color = 'primary', className = '' }) => {
-  const sizes = {
+export const DotsSpinner = ({ size = 'md', color = 'primary', className = '' }: DotsSpinnerProps) => {
+  const sizes: Record<DotsSize, string> = {
     sm: '6px',
     md: '8px',
     lg: '12px'
   };
 
-  const colors = {
+  const colors: Record<SpinnerColor, string> = {
     primary: 'var(--accent-blue)',
     white: 'var(--text-primary)',
     success: 'var(--success)',
@@ -72,7 +89,7 @@ export const DotsSpinner = ({ size = 'md', color = 'primary', className = '' }) 
     danger: 'var(--danger)'
   };
 
-  const dotStyle = {
+  const dotStyle: CSSProperties = {
     width: sizes[size],
     height: sizes[size],
     borderRadius: '50%',
@@ -93,11 +110,16 @@ export const DotsSpinner = ({ size = 'md', color = 'primary', className = '' }) 
   );
 };
 
+interface RingSpinnerProps {
+  size?: DotsSize;
+  className?: string;
+}
+
 /**
  * Ring Spinner - Dual rotating rings
  */
-export const RingSpinner = ({ size = 'md', className = '' }) => {
-  const sizes = {
+export const RingSpinner = ({ size = 'md', className = '' }: RingSpinnerProps) => {
+  const sizes: Record<DotsSize, string> = {
     sm: '24px',
     md: '40px',
     lg: '56px'
@@ -142,6 +164,17 @@ export const RingSpinner = ({ size = 'md', className = '' }) => {
 // Progress Bars
 // ========================================
 
+type ProgressColor = 'primary' | 'success' | 'warning' | 'danger';
+type BarHeight = 'sm' | 'md' | 'lg';
+
+interface ProgressBarProps {
+  progress?: number;
+  showLabel?: boolean;
+  color?: ProgressColor;
+  height?: BarHeight;
+  className?: string;
+}
+
 /**
  * Linear Progress Bar
  */
@@ -151,15 +184,15 @@ export const ProgressBar = ({
   color = 'primary',
   height = 'md',
   className = ''
-}) => {
-  const colors = {
+}: ProgressBarProps) => {
+  const colors: Record<ProgressColor, string> = {
     primary: 'var(--accent-blue)',
     success: 'var(--success)',
     warning: 'var(--warning)',
     danger: 'var(--danger)'
   };
 
-  const heights = {
+  const heights: Record<BarHeight, string> = {
     sm: '4px',
     md: '8px',
     lg: '12px'
@@ -197,18 +230,24 @@ export const ProgressBar = ({
   );
 };
 
+interface IndeterminateProgressProps {
+  color?: ProgressColor;
+  height?: BarHeight;
+  className?: string;
+}
+
 /**
  * Indeterminate Progress Bar
  */
-export const IndeterminateProgress = ({ color = 'primary', height = 'md', className = '' }) => {
-  const colors = {
+export const IndeterminateProgress = ({ color = 'primary', height = 'md', className = '' }: IndeterminateProgressProps) => {
+  const colors: Record<ProgressColor, string> = {
     primary: 'var(--accent-blue)',
     success: 'var(--success)',
     warning: 'var(--warning)',
     danger: 'var(--danger)'
   };
 
-  const heights = {
+  const heights: Record<BarHeight, string> = {
     sm: '4px',
     md: '8px',
     lg: '12px'
@@ -241,6 +280,14 @@ export const IndeterminateProgress = ({ color = 'primary', height = 'md', classN
   );
 };
 
+interface CircularProgressProps {
+  progress?: number;
+  size?: DotsSize;
+  showLabel?: boolean;
+  color?: ProgressColor;
+  className?: string;
+}
+
 /**
  * Circular Progress
  */
@@ -250,14 +297,14 @@ export const CircularProgress = ({
   showLabel = true,
   color = 'primary',
   className = ''
-}) => {
-  const sizes = {
+}: CircularProgressProps) => {
+  const sizes: Record<DotsSize, { size: number; stroke: number }> = {
     sm: { size: 40, stroke: 3 },
     md: { size: 64, stroke: 4 },
     lg: { size: 96, stroke: 5 }
   };
 
-  const colors = {
+  const colors: Record<ProgressColor, string> = {
     primary: 'var(--accent-blue)',
     success: 'var(--success)',
     warning: 'var(--warning)',
@@ -309,6 +356,13 @@ export const CircularProgress = ({
 // Skeleton Loaders
 // ========================================
 
+interface SkeletonProps {
+  width?: string;
+  height?: string;
+  borderRadius?: string;
+  className?: string;
+}
+
 /**
  * Base Skeleton Component
  */
@@ -317,7 +371,7 @@ export const Skeleton = ({
   height = '1rem',
   borderRadius = 'var(--radius-md)',
   className = ''
-}) => {
+}: SkeletonProps) => {
   return (
     <div
       className={`skeleton ${className}`}
@@ -335,10 +389,15 @@ export const Skeleton = ({
   );
 };
 
+interface SkeletonTextProps {
+  lines?: number;
+  className?: string;
+}
+
 /**
  * Text Skeleton - Multiple lines
  */
-export const SkeletonText = ({ lines = 3, className = '' }) => {
+export const SkeletonText = ({ lines = 3, className = '' }: SkeletonTextProps) => {
   return (
     <div className={`space-y-3 ${className}`}>
       {Array.from({ length: lines }).map((_, index) => (
@@ -352,10 +411,15 @@ export const SkeletonText = ({ lines = 3, className = '' }) => {
   );
 };
 
+interface SkeletonCardProps {
+  showImage?: boolean;
+  className?: string;
+}
+
 /**
  * Card Skeleton
  */
-export const SkeletonCard = ({ showImage = true, className = '' }) => {
+export const SkeletonCard = ({ showImage = true, className = '' }: SkeletonCardProps) => {
   return (
     <div
       className={`glass-card p-6 ${className}`}
@@ -378,10 +442,15 @@ export const SkeletonCard = ({ showImage = true, className = '' }) => {
   );
 };
 
+interface SkeletonListItemProps {
+  showAvatar?: boolean;
+  className?: string;
+}
+
 /**
  * List Item Skeleton
  */
-export const SkeletonListItem = ({ showAvatar = true, className = '' }) => {
+export const SkeletonListItem = ({ showAvatar = true, className = '' }: SkeletonListItemProps) => {
   return (
     <div className={`flex items-center gap-4 p-4 ${className}`}>
       {showAvatar && (
@@ -400,10 +469,16 @@ export const SkeletonListItem = ({ showAvatar = true, className = '' }) => {
   );
 };
 
+interface SkeletonTableProps {
+  rows?: number;
+  columns?: number;
+  className?: string;
+}
+
 /**
  * Table Skeleton
  */
-export const SkeletonTable = ({ rows = 5, columns = 4, className = '' }) => {
+export const SkeletonTable = ({ rows = 5, columns = 4, className = '' }: SkeletonTableProps) => {
   return (
     <div className={`glass-panel p-6 ${className}`}>
       {/* Header */}
@@ -430,11 +505,16 @@ export const SkeletonTable = ({ rows = 5, columns = 4, className = '' }) => {
   );
 };
 
+interface SkeletonAvatarProps {
+  size?: SpinnerSize;
+  className?: string;
+}
+
 /**
  * Avatar Skeleton
  */
-export const SkeletonAvatar = ({ size = 'md', className = '' }) => {
-  const sizes = {
+export const SkeletonAvatar = ({ size = 'md', className = '' }: SkeletonAvatarProps) => {
+  const sizes: Record<SpinnerSize, string> = {
     xs: '24px',
     sm: '32px',
     md: '48px',
@@ -456,6 +536,15 @@ export const SkeletonAvatar = ({ size = 'md', className = '' }) => {
 // Full Page Loaders
 // ========================================
 
+type SpinnerType = 'default' | 'ring' | 'dots' | 'matrix';
+
+interface LoadingOverlayProps {
+  message?: string;
+  spinner?: SpinnerType;
+  transparent?: boolean;
+  className?: string;
+}
+
 /**
  * Full Page Loading Overlay
  */
@@ -464,8 +553,8 @@ export const LoadingOverlay = ({
   spinner = 'matrix',
   transparent = false,
   className = ''
-}) => {
-  const spinners = {
+}: LoadingOverlayProps) => {
+  const spinners: Record<SpinnerType, React.ReactNode> = {
     default: <Spinner size="lg" />,
     ring: <RingSpinner size="lg" />,
     dots: <DotsSpinner size="lg" />,
@@ -515,6 +604,12 @@ export const LoadingOverlay = ({
   );
 };
 
+interface ContentLoaderProps {
+  type?: SpinnerType;
+  message?: string;
+  className?: string;
+}
+
 /**
  * Content Loading State
  */
@@ -522,7 +617,7 @@ export const ContentLoader = ({
   type = 'matrix',
   message = 'Loading content...',
   className = ''
-}) => {
+}: ContentLoaderProps) => {
   return (
     <div className={`flex flex-col items-center justify-center min-h-[60vh] ${className}`}>
       {type === 'spinner' && <Spinner size="lg" />}
@@ -536,10 +631,15 @@ export const ContentLoader = ({
   );
 };
 
+interface InlineLoaderProps {
+  size?: SpinnerSize;
+  className?: string;
+}
+
 /**
  * Inline Loader - for buttons and small spaces
  */
-export const InlineLoader = ({ size = 'sm', className = '' }) => {
+export const InlineLoader = ({ size = 'sm', className = '' }: InlineLoaderProps) => {
   return (
     <Spinner size={size} className={className} />
   );
@@ -549,10 +649,14 @@ export const InlineLoader = ({ size = 'sm', className = '' }) => {
 // Composite Loading States
 // ========================================
 
+interface DashboardLoaderProps {
+  className?: string;
+}
+
 /**
  * Dashboard Loading State
  */
-export const DashboardLoader = ({ className = '' }) => {
+export const DashboardLoader = ({ className = '' }: DashboardLoaderProps) => {
   return (
     <div className={`p-6 space-y-6 ${className}`}>
       {/* Header */}
@@ -589,10 +693,15 @@ export const DashboardLoader = ({ className = '' }) => {
   );
 };
 
+interface FormLoaderProps {
+  fields?: number;
+  className?: string;
+}
+
 /**
  * Form Loading State
  */
-export const FormLoader = ({ fields = 4, className = '' }) => {
+export const FormLoader = ({ fields = 4, className = '' }: FormLoaderProps) => {
   return (
     <div className={`glass-panel p-6 space-y-4 ${className}`}>
       <Skeleton height="1.5rem" width="200px" className="mb-4" />

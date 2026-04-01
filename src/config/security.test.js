@@ -7,7 +7,7 @@ import {
     loginRateLimiter,
     PASSWORD_POLICY,
     RATE_LIMITS
-} from './security.js';
+} from './security';
 
 describe('Security Module', () => {
     describe('validatePasswordStrength', () => {

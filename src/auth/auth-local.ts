@@ -5,7 +5,7 @@
  * and IndexedDB auth data persistence.
  */
 
-import indexedDB from '../indexed-db.js';
+import indexedDB from '../indexed-db';
 import bcrypt from 'bcryptjs';
 import { ROLES, AUTH_STORE_KEY, type AuthData, type AuthCurrentUser, type AuthResult } from './auth-types';
 import { generateId } from './auth-core';

@@ -3,8 +3,8 @@
  * Manages certification expiration email reminder settings and logs
  */
 
-import { supabase } from '../supabase-client.js';
-import environmentConfig from '../config/environment.js';
+import { supabase } from '../supabase-client';
+import environmentConfig from '../config/environment';
 
 // Get Supabase URL from environment config
 const SUPABASE_URL = environmentConfig.get('supabase.url') as string;

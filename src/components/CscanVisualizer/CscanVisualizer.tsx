@@ -27,7 +27,7 @@ import {
 import { useSaveScanComposite } from '../../hooks/mutations/useScanCompositeMutations';
 import { useAuth } from '../../contexts/AuthContext';
 // @ts-ignore - JS module without type declarations
-import { isSupabaseConfigured } from '../../supabase-client.js';
+import { isSupabaseConfigured } from '../../supabase-client';
 
 const CscanVisualizer: React.FC = () => {
   // Refs

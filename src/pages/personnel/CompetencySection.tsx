@@ -3,7 +3,7 @@
  */
 
 import type { PersonCompetency } from '../../hooks/queries/usePersonnel';
-import { requiresWitnessCheck } from '../../utils/competency-field-utils.js';
+import { requiresWitnessCheck } from '../../utils/competency-field-utils';
 import {
     CertIcon,
     WitnessIcon,

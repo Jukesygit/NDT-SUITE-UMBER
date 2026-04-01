@@ -7,7 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 // ES module import
 // @ts-ignore - JS module without types
-import supabaseImport, { isSupabaseConfigured } from '../../supabase-client.js';
+import supabaseImport, { isSupabaseConfigured } from '../../supabase-client';
 // @ts-ignore - typing JS module import
 const supabase: SupabaseClient = supabaseImport;
 

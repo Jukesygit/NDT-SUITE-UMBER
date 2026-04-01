@@ -1,15 +1,34 @@
+import { type ReactNode } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import authManager from '../auth-manager.js';
-import environmentConfig from '../config/environment.js';
+import environmentConfig from '../config/environment';
 import { LogoGradientShift } from './MatrixLogoAnimated';
 import { NotificationBell } from './NotificationBell';
 import { AnnouncementBanner } from './AnnouncementBanner';
 
 const isMaintenanceMode = environmentConfig.isMaintenanceMode();
 
+interface NavChild {
+  id: string;
+  path: string;
+  label: string;
+  description: string;
+}
+
+interface NavItem {
+  id: string;
+  path?: string;
+  label: string;
+  requiresElevatedAccess?: boolean;
+  adminOnly?: boolean;
+  isGroup?: boolean;
+  icon: ReactNode;
+  children?: NavChild[];
+}
+
 // Navigation configuration
-const navigationConfig = [
+const navigationConfig: NavItem[] = [
   {
     id: 'personnel',
     path: '/personnel',
@@ -169,7 +188,7 @@ function LayoutNew() {
                       </button>
                       {toolsOpen && (
                         <div className="dropdown__menu animate-slideDown">
-                          {item.children.map((child) => (
+                          {item.children!.map((child) => (
                             <Link
                               key={child.id}
                               to={child.path}
@@ -192,7 +211,7 @@ function LayoutNew() {
                 return (
                   <Link
                     key={item.id}
-                    to={item.path}
+                    to={item.path!}
                     className={`nav__item ${isActive ? 'nav__item--active' : ''}`}
                   >
                     <span className="nav__icon">{item.icon}</span>

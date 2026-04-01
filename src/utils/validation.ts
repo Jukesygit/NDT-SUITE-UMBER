@@ -29,13 +29,16 @@ const XSS_PATTERNS = [
     /<object/gi
 ];
 
+interface SanitizeOptions {
+    encodeHtml?: boolean;
+    removeControlChars?: boolean;
+    maxLength?: number;
+}
+
 /**
  * Sanitize string input
- * @param {string} input - Input to sanitize
- * @param {Object} options - Sanitization options
- * @returns {string} Sanitized string
  */
-export function sanitizeString(input, options = {}) {
+export function sanitizeString(input: string, options: SanitizeOptions = {}): string {
     if (typeof input !== 'string') {
         return '';
     }
@@ -70,13 +73,17 @@ export function sanitizeString(input, options = {}) {
     return sanitized;
 }
 
+interface ValidationResult {
+    isValid: boolean;
+    error: string | null;
+    sanitized: string | null;
+}
+
 /**
  * Validate email address
- * @param {string} email - Email to validate
- * @returns {Object} Validation result
  */
-export function validateEmail(email) {
-    const result = {
+export function validateEmail(email: string): ValidationResult {
+    const result: ValidationResult = {
         isValid: false,
         error: null,
         sanitized: null
@@ -109,11 +116,9 @@ export function validateEmail(email) {
 
 /**
  * Validate username
- * @param {string} username - Username to validate
- * @returns {Object} Validation result
  */
-export function validateUsername(username) {
-    const result = {
+export function validateUsername(username: string): ValidationResult {
+    const result: ValidationResult = {
         isValid: false,
         error: null,
         sanitized: null
@@ -155,10 +160,8 @@ export function validateUsername(username) {
 
 /**
  * Validate UUID
- * @param {string} uuid - UUID to validate
- * @returns {boolean} True if valid UUID
  */
-export function validateUUID(uuid) {
+export function validateUUID(uuid: string): boolean {
     if (!uuid || typeof uuid !== 'string') {
         return false;
     }
@@ -167,10 +170,8 @@ export function validateUUID(uuid) {
 
 /**
  * Check for SQL injection attempts
- * @param {string} input - Input to check
- * @returns {boolean} True if potential SQL injection detected
  */
-export function detectSQLInjection(input) {
+export function detectSQLInjection(input: string): boolean {
     if (!input || typeof input !== 'string') {
         return false;
     }
@@ -186,10 +187,8 @@ export function detectSQLInjection(input) {
 
 /**
  * Check for XSS attempts
- * @param {string} input - Input to check
- * @returns {boolean} True if potential XSS detected
  */
-export function detectXSS(input) {
+export function detectXSS(input: string): boolean {
     if (!input || typeof input !== 'string') {
         return false;
     }
@@ -203,14 +202,32 @@ export function detectXSS(input) {
     return false;
 }
 
+interface ValidationRule {
+    required?: boolean;
+    type?: 'string' | 'number' | 'array';
+    minLength?: number;
+    maxLength?: number;
+    min?: number;
+    max?: number;
+    minItems?: number;
+    maxItems?: number;
+    pattern?: RegExp;
+    patternError?: string;
+    sanitizeOptions?: SanitizeOptions;
+    custom?: (value: unknown) => { isValid: boolean; error?: string; sanitized?: unknown };
+}
+
+interface ObjectValidationResult {
+    isValid: boolean;
+    errors: Record<string, string>;
+    sanitized: Record<string, unknown>;
+}
+
 /**
  * Validate and sanitize object properties
- * @param {Object} obj - Object to validate
- * @param {Object} schema - Validation schema
- * @returns {Object} Validation result with sanitized data
  */
-export function validateObject(obj, schema) {
-    const result = {
+export function validateObject(obj: Record<string, unknown>, schema: Record<string, ValidationRule>): ObjectValidationResult {
+    const result: ObjectValidationResult = {
         isValid: true,
         errors: {},
         sanitized: {}
@@ -244,27 +261,27 @@ export function validateObject(obj, schema) {
         // String validation
         if (rules.type === 'string') {
             // Check for injection attacks
-            if (detectSQLInjection(value) || detectXSS(value)) {
+            if (detectSQLInjection(value as string) || detectXSS(value as string)) {
                 result.isValid = false;
                 result.errors[key] = `${key} contains invalid characters`;
                 continue;
             }
 
             // Sanitize
-            result.sanitized[key] = sanitizeString(value, rules.sanitizeOptions || {});
+            result.sanitized[key] = sanitizeString(value as string, rules.sanitizeOptions || {});
 
             // Min/max length
-            if (rules.minLength && value.length < rules.minLength) {
+            if (rules.minLength && (value as string).length < rules.minLength) {
                 result.isValid = false;
                 result.errors[key] = `${key} must be at least ${rules.minLength} characters`;
             }
-            if (rules.maxLength && value.length > rules.maxLength) {
+            if (rules.maxLength && (value as string).length > rules.maxLength) {
                 result.isValid = false;
                 result.errors[key] = `${key} must be less than ${rules.maxLength} characters`;
             }
 
             // Pattern matching
-            if (rules.pattern && !rules.pattern.test(value)) {
+            if (rules.pattern && !rules.pattern.test(value as string)) {
                 result.isValid = false;
                 result.errors[key] = rules.patternError || `${key} format is invalid`;
             }
@@ -316,7 +333,7 @@ export function validateObject(obj, schema) {
             const customResult = rules.custom(value);
             if (!customResult.isValid) {
                 result.isValid = false;
-                result.errors[key] = customResult.error;
+                result.errors[key] = customResult.error || `${key} is invalid`;
             } else if (customResult.sanitized !== undefined) {
                 result.sanitized[key] = customResult.sanitized;
             }
@@ -331,14 +348,22 @@ export function validateObject(obj, schema) {
     return result;
 }
 
+interface FileValidationOptions {
+    maxSize?: number;
+    allowedTypes?: string[];
+    allowedExtensions?: string[];
+}
+
+interface FileValidationResult {
+    isValid: boolean;
+    error: string | null;
+}
+
 /**
  * Validate file upload
- * @param {File} file - File to validate
- * @param {Object} options - Validation options
- * @returns {Object} Validation result
  */
-export function validateFileUpload(file, options = {}) {
-    const result = {
+export function validateFileUpload(file: File | null, options: FileValidationOptions = {}): FileValidationResult {
+    const result: FileValidationResult = {
         isValid: true,
         error: null
     };

@@ -1,7 +1,21 @@
 // Theme System - 5 Professional Color Schemes
 // No pink/purple themes as requested
 
-export const themes = {
+interface ThemeColors {
+    [key: string]: string;
+}
+
+interface Theme {
+    name: string;
+    description: string;
+    colors: ThemeColors;
+}
+
+interface ThemeMap {
+    [key: string]: Theme;
+}
+
+export const themes: ThemeMap = {
     'cyber-teal': {
         name: 'Cyber Teal',
         description: 'High-tech industrial • Modern • Energetic',
@@ -308,7 +322,7 @@ export const themes = {
 };
 
 // Apply theme to CSS variables
-export function applyTheme(themeId) {
+export function applyTheme(themeId: string): void {
     const theme = themes[themeId];
     if (!theme) {
         return;
@@ -327,18 +341,18 @@ export function applyTheme(themeId) {
 }
 
 // Get current theme from localStorage
-export function getCurrentTheme() {
+export function getCurrentTheme(): string {
     return localStorage.getItem('ndt-theme') || 'cyber-teal';
 }
 
 // Save theme to localStorage
-export function saveTheme(themeId) {
+export function saveTheme(themeId: string): void {
     localStorage.setItem('ndt-theme', themeId);
     applyTheme(themeId);
 }
 
 // Initialize theme on app load
-export function initializeTheme() {
+export function initializeTheme(): void {
     const currentTheme = getCurrentTheme();
     applyTheme(currentTheme);
 }

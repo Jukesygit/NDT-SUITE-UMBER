@@ -12,7 +12,7 @@ import type { CompetencyFormData } from '../profile/EditCompetencyModal';
 import type { WitnessCheckData } from '../../components/features/witness/WitnessCheckModal';
 
 // @ts-ignore - JS module without types
-import supabaseImport from '../../supabase-client.js';
+import supabaseImport from '../../supabase-client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 // @ts-ignore - typing JS module import
 const supabaseClient: SupabaseClient = supabaseImport;

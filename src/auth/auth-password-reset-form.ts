@@ -5,7 +5,7 @@
  * clicks a Supabase password recovery link.
  */
 
-import supabase from '../supabase-client.js';
+import supabase from '../supabase-client';
 
 export function showPasswordResetForm(): void {
     const modal = document.createElement('div');

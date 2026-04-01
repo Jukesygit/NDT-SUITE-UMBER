@@ -6,13 +6,16 @@ const DB_VERSION = 1;
 const STORE_NAME = 'ndtData';
 
 class IndexedDBWrapper {
+    private db: IDBDatabase | null = null;
+    public initPromise: Promise<IDBDatabase>;
+
     constructor() {
         this.db = null;
         this.initPromise = this.init();
     }
 
     // Initialize the database
-    async init() {
+    private async init(): Promise<IDBDatabase> {
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
 
@@ -26,7 +29,7 @@ class IndexedDBWrapper {
             };
 
             request.onupgradeneeded = (event) => {
-                const db = event.target.result;
+                const db = (event.target as IDBOpenDBRequest).result;
 
                 // Create object store if it doesn't exist
                 if (!db.objectStoreNames.contains(STORE_NAME)) {
@@ -38,18 +41,18 @@ class IndexedDBWrapper {
     }
 
     // Ensure DB is initialized before operations
-    async ensureInitialized() {
+    async ensureInitialized(): Promise<void> {
         if (!this.db) {
             await this.initPromise;
         }
     }
 
     // Save entire data structure
-    async saveData(data) {
+    async saveData(data: Record<string, unknown>): Promise<boolean> {
         await this.ensureInitialized();
 
         return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([STORE_NAME], 'readwrite');
+            const transaction = this.db!.transaction([STORE_NAME], 'readwrite');
             const objectStore = transaction.objectStore(STORE_NAME);
 
             // Store with a fixed key for the main data structure
@@ -65,11 +68,11 @@ class IndexedDBWrapper {
     }
 
     // Load entire data structure
-    async loadData() {
+    async loadData(): Promise<Record<string, unknown>> {
         await this.ensureInitialized();
 
         return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([STORE_NAME], 'readonly');
+            const transaction = this.db!.transaction([STORE_NAME], 'readonly');
             const objectStore = transaction.objectStore(STORE_NAME);
             const request = objectStore.get('main_data');
 
@@ -83,11 +86,11 @@ class IndexedDBWrapper {
     }
 
     // Clear all data
-    async clearData() {
+    async clearData(): Promise<boolean> {
         await this.ensureInitialized();
 
         return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([STORE_NAME], 'readwrite');
+            const transaction = this.db!.transaction([STORE_NAME], 'readwrite');
             const objectStore = transaction.objectStore(STORE_NAME);
             const request = objectStore.clear();
 
@@ -97,7 +100,7 @@ class IndexedDBWrapper {
     }
 
     // Get database size estimate (useful for monitoring storage usage)
-    async getStorageEstimate() {
+    async getStorageEstimate(): Promise<StorageEstimate | null> {
         if (navigator.storage && navigator.storage.estimate) {
             return await navigator.storage.estimate();
         }
@@ -105,13 +108,13 @@ class IndexedDBWrapper {
     }
 
     // Export data as JSON string
-    async exportData() {
+    async exportData(): Promise<string> {
         const data = await this.loadData();
         return JSON.stringify(data, null, 2);
     }
 
     // Import data from JSON string
-    async importData(jsonString) {
+    async importData(jsonString: string): Promise<boolean> {
         try {
             const data = JSON.parse(jsonString);
             if (data && typeof data === 'object') {
@@ -125,7 +128,7 @@ class IndexedDBWrapper {
     }
 
     // Migrate data from localStorage to IndexedDB
-    async migrateFromLocalStorage(storageKey) {
+    async migrateFromLocalStorage(storageKey: string): Promise<boolean> {
         try {
             const localData = localStorage.getItem(storageKey);
             if (localData) {
@@ -140,34 +143,34 @@ class IndexedDBWrapper {
     }
 
     // Save a single item directly to the store
-    async saveItem(key, value) {
+    async saveItem(key: string, value: unknown): Promise<boolean> {
         await this.ensureInitialized();
         return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([STORE_NAME], 'readwrite');
+            const transaction = this.db!.transaction([STORE_NAME], 'readwrite');
             const objectStore = transaction.objectStore(STORE_NAME);
             const request = objectStore.put({
                 id: key,
                 timestamp: Date.now(),
                 value: value // Store as value to distinguish from legacy data wrapper
             });
-            
+
             request.onsuccess = () => resolve(true);
             request.onerror = () => reject(request.error);
         });
     }
 
     // Load a single item directly from the store
-    async loadItem(key) {
+    async loadItem<T = unknown>(key: string): Promise<T | null> {
         await this.ensureInitialized();
         return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([STORE_NAME], 'readonly');
+            const transaction = this.db!.transaction([STORE_NAME], 'readonly');
             const objectStore = transaction.objectStore(STORE_NAME);
             const request = objectStore.get(key);
 
             request.onsuccess = () => {
                 const result = request.result;
                 if (!result) return resolve(null);
-                
+
                 // Handle both new {value: ...} format and legacy raw objects if any
                 resolve(result.value !== undefined ? result.value : result.data);
             };

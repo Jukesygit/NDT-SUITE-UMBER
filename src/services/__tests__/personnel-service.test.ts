@@ -35,7 +35,7 @@ vi.mock('../competency-service.ts', () => ({
     },
 }));
 
-import personnelService from '../personnel-service.js';
+import personnelService from '../personnel-service';
 
 function resetChain() {
     mockChain._resolved = { data: [], error: null };

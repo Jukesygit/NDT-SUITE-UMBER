@@ -1,31 +1,36 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useState, useEffect, Suspense, lazy } from 'react';
+import { useState, useEffect, Suspense, lazy, type ReactNode } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { queryClient } from './lib/query-client';
 import './styles/main.css';
-import { initializeTheme } from './themes.js';
+import { initializeTheme } from './themes';
 import authManager from './auth-manager.js';
-import { AnimatedBackground } from './animated-background.js';
+import { AnimatedBackground } from './animated-background';
 import { AuthProvider } from './contexts/AuthContext';
-import GlobalErrorBoundary from './components/GlobalErrorBoundary.jsx';
+import GlobalErrorBoundary from './components/GlobalErrorBoundary';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
-import Layout from './components/LayoutNew.jsx';
-import ProtectedRoute from './components/ProtectedRoute.jsx';
-import RequireAccess from './components/RequireAccess.jsx';
-import LoginPage from './pages/LoginPageNew.jsx';
+import Layout from './components/LayoutNew';
+import ProtectedRoute from './components/ProtectedRoute';
+import RequireAccess from './components/RequireAccess';
+import LoginPage from './pages/LoginPageNew';
 import PrivacyPolicyPage from './pages/legal/PrivacyPolicyPage.tsx';
 import { RandomMatrixSpinner } from './components/MatrixSpinners';
-import environmentConfig from './config/environment.js';
+import environmentConfig from './config/environment';
 
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage.tsx'));
-const CscanVisualizerPage = lazy(() => import('./pages/CscanVisualizerPage.jsx'));
+const CscanVisualizerPage = lazy(() => import('./pages/CscanVisualizerPage'));
 const PersonnelPage = lazy(() => import('./pages/personnel/PersonnelPage.tsx'));
 const AdminPage = lazy(() => import('./pages/admin/index.tsx'));
 const VesselModelerPage = lazy(() => import('./pages/VesselModelerPage.tsx'));
 const DocumentsPage = lazy(() => import('./pages/documents/index.tsx'));
 
-function SuspenseRoutes({ children, fallback }) {
+interface SuspenseRoutesProps {
+    children: ReactNode;
+    fallback: ReactNode;
+}
+
+function SuspenseRoutes({ children, fallback }: SuspenseRoutesProps) {
     const location = useLocation();
     return (
         <Suspense key={location.pathname} fallback={fallback}>

@@ -8,7 +8,6 @@ import CryptoJS from 'crypto-js';
 
 // Configuration
 const SALT_ROUNDS = 12; // Increased for better security
-const MIN_PASSWORD_LENGTH = 8;
 const PASSWORD_REQUIREMENTS = {
     minLength: 8,
     requireUpperCase: true,
@@ -17,12 +16,17 @@ const PASSWORD_REQUIREMENTS = {
     requireSpecialChars: true
 };
 
+interface PasswordValidationResult {
+    isValid: boolean;
+    errors: string[];
+    strength: 'weak' | 'medium' | 'strong';
+    score: number;
+}
+
 /**
  * Hash a password securely
- * @param {string} password - Plain text password
- * @returns {Promise<string>} Hashed password
  */
-export async function hashPassword(password) {
+export async function hashPassword(password: string): Promise<string> {
     if (!password || typeof password !== 'string') {
         throw new Error('Invalid password provided');
     }
@@ -37,11 +41,8 @@ export async function hashPassword(password) {
 
 /**
  * Verify a password against a hash
- * @param {string} password - Plain text password
- * @param {string} hash - Hashed password
- * @returns {Promise<boolean>} True if password matches
  */
-export async function verifyPassword(password, hash) {
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
     if (!password || !hash) {
         return false;
     }
@@ -55,12 +56,10 @@ export async function verifyPassword(password, hash) {
 
 /**
  * Validate password strength
- * @param {string} password - Password to validate
- * @returns {Object} Validation result with errors
  */
-export function validatePasswordStrength(password) {
-    const errors = [];
-    const result = {
+export function validatePasswordStrength(password: string): PasswordValidationResult {
+    const errors: string[] = [];
+    const result: PasswordValidationResult = {
         isValid: true,
         errors: [],
         strength: 'weak',
@@ -137,10 +136,8 @@ export function validatePasswordStrength(password) {
 
 /**
  * Generate a secure random password
- * @param {number} length - Password length (default 16)
- * @returns {string} Random password
  */
-export function generateSecurePassword(length = 16) {
+export function generateSecurePassword(length = 16): string {
     const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const lowercase = 'abcdefghijklmnopqrstuvwxyz';
     const numbers = '0123456789';
@@ -166,11 +163,8 @@ export function generateSecurePassword(length = 16) {
 
 /**
  * Encrypt sensitive data
- * @param {string} data - Data to encrypt
- * @param {string} key - Encryption key
- * @returns {string} Encrypted data
  */
-export function encryptData(data, key) {
+export function encryptData(data: unknown, key: string): string {
     if (!data || !key) {
         throw new Error('Data and key are required for encryption');
     }
@@ -184,11 +178,8 @@ export function encryptData(data, key) {
 
 /**
  * Decrypt sensitive data
- * @param {string} encryptedData - Encrypted data
- * @param {string} key - Decryption key
- * @returns {any} Decrypted data
  */
-export function decryptData(encryptedData, key) {
+export function decryptData<T = unknown>(encryptedData: string, key: string): T {
     if (!encryptedData || !key) {
         throw new Error('Encrypted data and key are required for decryption');
     }
@@ -204,10 +195,8 @@ export function decryptData(encryptedData, key) {
 
 /**
  * Generate a secure token
- * @param {number} length - Token length
- * @returns {string} Secure random token
  */
-export function generateSecureToken(length = 32) {
+export function generateSecureToken(length = 32): string {
     const array = new Uint8Array(length);
     crypto.getRandomValues(array);
     return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
@@ -215,20 +204,15 @@ export function generateSecureToken(length = 32) {
 
 /**
  * Hash sensitive data (one-way)
- * @param {string} data - Data to hash
- * @returns {string} SHA256 hash
  */
-export function hashData(data) {
+export function hashData(data: string): string {
     return CryptoJS.SHA256(data).toString();
 }
 
 /**
  * Create a session token with expiry
- * @param {Object} payload - Token payload
- * @param {number} expiryMs - Expiry in milliseconds
- * @returns {string} Signed token
  */
-export function createSessionToken(payload, expiryMs = 3600000) {
+export function createSessionToken(payload: Record<string, unknown>, expiryMs = 3600000): string {
     const tokenData = {
         ...payload,
         exp: Date.now() + expiryMs,
@@ -242,16 +226,14 @@ export function createSessionToken(payload, expiryMs = 3600000) {
 
 /**
  * Verify and decode a session token
- * @param {string} token - Token to verify
- * @returns {Object|null} Decoded payload or null if invalid
  */
-export function verifySessionToken(token) {
+export function verifySessionToken(token: string): Record<string, unknown> | null {
     try {
         const [encryptedData, secret] = token.split('.');
-        const payload = decryptData(encryptedData, secret);
+        const payload = decryptData<Record<string, unknown>>(encryptedData, secret);
 
         // Check expiry
-        if (payload.exp && Date.now() > payload.exp) {
+        if (payload.exp && Date.now() > (payload.exp as number)) {
             return null;
         }
 

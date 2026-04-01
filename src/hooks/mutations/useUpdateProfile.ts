@@ -8,7 +8,7 @@ import { logActivity } from '../../services/activity-log-service';
 
 // ES module import
 // @ts-ignore - JS module without types
-import supabaseImport from '../../supabase-client.js';
+import supabaseImport from '../../supabase-client';
 // @ts-ignore - typing JS module import
 const supabase: SupabaseClient = supabaseImport;
 
