@@ -5,8 +5,13 @@
 // when the user enters inspection mode on an annotation shape.
 // =============================================================================
 
+import { useEffect, useRef } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import type { AnnotationShapeConfig, VesselState } from '../types';
+import {
+  createAnnotationHeatmapCanvas,
+  findOverlappingComposite,
+} from '../engine/annotation-heatmap';
 
 interface InspectionPanelProps {
   annotation: AnnotationShapeConfig;
@@ -62,6 +67,34 @@ export default function InspectionPanel({
     : 'rgba(255,255,255,0.3)';
 
   const otherAnnotations = vesselState.annotations.filter(a => a.id !== annotation.id);
+
+  // --- Mini heatmap ---
+  const heatmapContainerRef = useRef<HTMLDivElement>(null);
+  const overlappingComposite = findOverlappingComposite(annotation, vesselState);
+  const heatmapColorScale = overlappingComposite?.colorScale ?? null;
+
+  useEffect(() => {
+    const container = heatmapContainerRef.current;
+    if (!container) return;
+
+    // Clear previous canvas
+    container.innerHTML = '';
+
+    const canvas = createAnnotationHeatmapCanvas(
+      annotation,
+      vesselState,
+      heatmapColorScale ?? 'Jet',
+    );
+
+    if (canvas) {
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+      canvas.style.objectFit = 'contain';
+      canvas.style.borderRadius = '4px';
+      canvas.style.imageRendering = 'pixelated';
+      container.appendChild(canvas);
+    }
+  }, [annotation, vesselState, heatmapColorScale]);
 
   return (
     <div className="vm-inspection-panel">
@@ -159,23 +192,49 @@ export default function InspectionPanel({
         </div>
       )}
 
-      {/* Placeholder: Mini Heatmap */}
+      {/* Mini Heatmap */}
       <div className="vm-inspection-section">
-        <div className="vm-inspection-section-title">Heatmap Preview</div>
-        <div
-          style={{
-            height: 80,
-            background: 'rgba(255,255,255,0.03)',
-            borderRadius: 4,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '0.75rem',
-            color: 'rgba(255,255,255,0.25)',
-          }}
-        >
-          Coming soon
+        <div className="vm-inspection-section-title">
+          Heatmap Preview
+          {heatmapColorScale && (
+            <span
+              style={{
+                fontWeight: 400,
+                fontSize: '0.7rem',
+                color: 'rgba(255,255,255,0.4)',
+                marginLeft: 6,
+              }}
+            >
+              ({heatmapColorScale})
+            </span>
+          )}
         </div>
+        {overlappingComposite ? (
+          <div
+            ref={heatmapContainerRef}
+            style={{
+              height: 80,
+              background: 'rgba(255,255,255,0.03)',
+              borderRadius: 4,
+              overflow: 'hidden',
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              height: 80,
+              background: 'rgba(255,255,255,0.03)',
+              borderRadius: 4,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '0.75rem',
+              color: 'rgba(255,255,255,0.25)',
+            }}
+          >
+            No scan data
+          </div>
+        )}
       </div>
 
       {/* Placeholder: Attachments */}
