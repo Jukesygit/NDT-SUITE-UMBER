@@ -145,7 +145,7 @@ class AdminConfig {
 
             // Load config from IndexedDB or use defaults
             if (data[CONFIG_KEY]) {
-                this.config = data[CONFIG_KEY];
+                this.config = data[CONFIG_KEY] as Record<string, string[]>;
             } else {
                 // Initialize with defaults
                 this.config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));

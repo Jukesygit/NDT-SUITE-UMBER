@@ -29,7 +29,7 @@ import authManager from '../../auth-manager.js';
  */
 export default function ProfilePage() {
     // Get current user from auth manager
-    const [user, setUser] = useState<{ id: string; username: string; email: string } | null>(null);
+    const [user, setUser] = useState<{ id: string; username: string | null; email: string | null; role?: string; organizationId?: string | null; isActive?: boolean } | null>(null);
     const [isInitialized, setIsInitialized] = useState(false);
 
     // Initialize user on mount

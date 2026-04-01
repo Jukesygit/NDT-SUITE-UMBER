@@ -7,6 +7,9 @@
 
 import supabase from '../supabase-client';
 
+// Supabase is guaranteed initialized when this form is shown
+const sb = supabase!;
+
 export function showPasswordResetForm(): void {
     const modal = document.createElement('div');
     modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-center; z-index: 9999;';
@@ -68,7 +71,7 @@ export function showPasswordResetForm(): void {
             return;
         }
 
-        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        const { error } = await sb.auth.updateUser({ password: newPassword });
 
         if (error) {
             errorDiv.textContent = 'Error updating password: ' + error.message;

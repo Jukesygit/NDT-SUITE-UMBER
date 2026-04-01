@@ -128,13 +128,13 @@ export function onAuthStateChangeLocal(
 
 export async function loadAuthData(): Promise<AuthData | null> {
     try {
-        const isolatedData = await indexedDB.loadItem(AUTH_STORE_KEY);
+        const isolatedData = await indexedDB.loadItem<AuthData>(AUTH_STORE_KEY);
         if (isolatedData) {
             return isolatedData;
         }
 
         const data = await indexedDB.loadData();
-        const legacyAuthData = data[AUTH_STORE_KEY];
+        const legacyAuthData = data[AUTH_STORE_KEY] as AuthData | undefined;
 
         if (legacyAuthData) {
             await indexedDB.saveItem(AUTH_STORE_KEY, legacyAuthData);

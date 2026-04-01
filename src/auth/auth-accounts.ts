@@ -15,6 +15,9 @@ import {
 } from './auth-types';
 import { generateId } from './auth-core';
 
+// Supabase is guaranteed initialized when auth services are called
+const sb = supabase!;
+
 // ── Account Requests ───────────────────────────────────────────────────────
 
 export async function requestAccount(
@@ -23,7 +26,7 @@ export async function requestAccount(
 ): Promise<AuthResult> {
     if (this.useSupabase) {
         try {
-            const { data, error } = await supabase.functions.invoke('submit-account-request', {
+            const { data, error } = await sb.functions.invoke('submit-account-request', {
                 body: {
                     username: requestData.username,
                     email: requestData.email,
@@ -70,7 +73,7 @@ export async function getPendingAccountRequests(this: any): Promise<any[]> {
     }
 
     if (this.useSupabase) {
-        let query = supabase
+        let query = sb
             .from('account_requests')
             .select('*, organizations(*)')
             .eq('status', 'pending');
@@ -103,7 +106,7 @@ export async function approveAccountRequest(
 ): Promise<AuthResult> {
     if (this.useSupabase) {
         try {
-            const { data, error } = await supabase.functions.invoke('approve-account-request', {
+            const { data, error } = await sb.functions.invoke('approve-account-request', {
                 body: {
                     request_id: requestId,
                     approved_by_user_id: this.currentUser.id,
@@ -159,7 +162,7 @@ export async function rejectAccountRequest(
     reason: string,
 ): Promise<AuthResult> {
     if (this.useSupabase) {
-        const { error } = await supabase
+        const { error } = await sb
             .from('account_requests')
             .update({
                 status: 'rejected',
@@ -210,7 +213,7 @@ export async function bulkCreateUsers(
     }
 
     try {
-        const { data, error } = await supabase.functions.invoke('bulk-create-users', {
+        const { data, error } = await sb.functions.invoke('bulk-create-users', {
             body: {
                 users: users.map((u: BulkCreateUserData) => ({
                     email: u.email,

@@ -249,7 +249,7 @@ export function useAddPersonCompetency() {
  * This is not a mutation but a utility function
  */
 export async function exportPersonnelToCSV(personnel: Person[]): Promise<void> {
-    const csv = await personnelService.exportPersonnelToCSV(personnel);
+    const csv = await personnelService.exportPersonnelToCSV(personnel as unknown as Record<string, unknown>[]);
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

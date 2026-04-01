@@ -620,7 +620,7 @@ export const ContentLoader = ({
 }: ContentLoaderProps) => {
   return (
     <div className={`flex flex-col items-center justify-center min-h-[60vh] ${className}`}>
-      {type === 'spinner' && <Spinner size="lg" />}
+      {type === 'default' && <Spinner size="lg" />}
       {type === 'ring' && <RingSpinner size="lg" />}
       {type === 'dots' && <DotsSpinner size="lg" />}
       {type === 'matrix' && <RandomMatrixSpinner size={160} />}

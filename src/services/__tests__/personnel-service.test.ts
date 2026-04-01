@@ -76,8 +76,8 @@ describe('getAllPersonnelWithCompetencies', () => {
         };
         const result = await personnelService.getAllPersonnelWithCompetencies();
         expect(result).toHaveLength(1);
-        expect(result[0].username).toBe('alice');
-        expect(result[0].competencies).toHaveLength(1);
+        expect((result[0] as any).username).toBe('alice');
+        expect((result[0] as any).competencies).toHaveLength(1);
     });
 
     it('throws when supabase not configured', async () => {
@@ -109,7 +109,7 @@ describe('exportPersonnelToCSV', () => {
     });
 
     it('throws when personnel is null', async () => {
-        await expect(personnelService.exportPersonnelToCSV(null))
+        await expect(personnelService.exportPersonnelToCSV(null as any))
             .rejects.toThrow('No personnel data to export');
     });
 });

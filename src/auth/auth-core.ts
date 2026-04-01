@@ -15,6 +15,9 @@ import {
     type AuthResult,
 } from './auth-types';
 
+// Supabase is guaranteed initialized when auth services are called
+const sb = supabase!;
+
 // ── State & Role Helpers ────────────────────────────────────────────────────
 
 export function getCurrentUser(this: { currentUser: AuthCurrentUser | null }): AuthCurrentUser | null {
@@ -88,7 +91,7 @@ export async function createOrganization(
     }
 
     if (this.useSupabase) {
-        const { data, error } = await supabase
+        const { data, error } = await sb
             .from('organizations')
             .insert({ name })
             .select()
@@ -115,7 +118,7 @@ export async function createOrganization(
 
 export async function getOrganizations(this: any): Promise<AuthOrganization[]> {
     if (this.useSupabase) {
-        const { data, error } = await supabase
+        const { data, error } = await sb
             .from('organizations')
             .select('*')
             .order('name');
@@ -149,7 +152,7 @@ export async function getOrganization(
     }
 
     if (this.useSupabase) {
-        const { data, error } = await supabase
+        const { data, error } = await sb
             .from('organizations')
             .select('*')
             .eq('id', organizationId)
@@ -175,7 +178,7 @@ export async function updateOrganization(
     }
 
     if (this.useSupabase) {
-        const { data, error } = await supabase
+        const { data, error } = await sb
             .from('organizations')
             .update(updates)
             .eq('id', organizationId)
@@ -213,7 +216,7 @@ export async function deleteOrganization(
             return { success: false, error: 'Cannot delete system organization' };
         }
 
-        const { error } = await supabase
+        const { error } = await sb
             .from('organizations')
             .delete()
             .eq('id', organizationId);

@@ -110,7 +110,7 @@ describe('useCompetencyDefinitions', () => {
 describe('useCompetencyCategories', () => {
     it('fetches categories', async () => {
         vi.mocked(competencyService.getCategories).mockResolvedValueOnce([
-            { id: 'c1', name: 'NDT Methods' },
+            { id: 'c1', name: 'NDT Methods', description: null, display_order: 0, is_active: true, created_at: '', updated_at: '' },
         ]);
         const wrapper = createWrapper();
         const { result } = renderHook(() => useCompetencyCategories(), { wrapper });

@@ -3,20 +3,30 @@
  * Determines appropriate input types based on field names and types
  */
 
-interface CompetencyDefinition {
+interface CompetencyLike {
     name?: string;
     field_type?: string;
     category?: {
         name?: string;
-    };
+    } | string;
     competency?: {
         name?: string;
         field_type?: string;
         category?: {
             name?: string;
-        };
+        } | string;
     };
     witness_checked?: boolean;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+type CompetencyDefinition = CompetencyLike;
+
+/** Extract category name from either a string or object */
+function getCategoryName(category: { name?: string } | string | undefined | null): string {
+    if (!category) return '';
+    if (typeof category === 'string') return category;
+    return category.name || '';
 }
 
 /**
@@ -100,7 +110,7 @@ export function shouldShowCertificationFields(competency: CompetencyDefinition |
 
     const fieldType = competency.field_type;
     const fieldName = competency.name?.toLowerCase() || '';
-    const categoryName = competency.category?.name?.toLowerCase() || '';
+    const categoryName = getCategoryName(competency.category).toLowerCase() || '';
 
     // Don't show certification fields for Personal Details category
     if (categoryName.includes('personal details')) {
@@ -142,7 +152,7 @@ export function shouldShowCertificationFields(competency: CompetencyDefinition |
 export function shouldShowDateFields(competency: CompetencyDefinition | null): boolean {
     if (!competency) return false;
 
-    const categoryName = competency.category?.name?.toLowerCase() || '';
+    const categoryName = getCategoryName(competency.category).toLowerCase() || '';
     const fieldName = competency.name?.toLowerCase() || '';
 
     // Personal details don't have issued/expiry dates
@@ -180,8 +190,8 @@ export function isPersonalDetail(competency: CompetencyDefinition | null): boole
     if (!competency) return false;
 
     // Check category name
-    const categoryName = competency.category?.name?.toLowerCase() ||
-                        competency.competency?.category?.name?.toLowerCase() || '';
+    const categoryName = getCategoryName(competency.category).toLowerCase() ||
+                        getCategoryName(competency.competency?.category).toLowerCase() || '';
 
     if (categoryName.includes('personal details')) {
         return true;
@@ -220,17 +230,17 @@ export function isPersonalDetail(competency: CompetencyDefinition | null): boole
 /**
  * Filter out personal details from a list of competencies
  */
-export function filterOutPersonalDetails(competencies: CompetencyDefinition[]): CompetencyDefinition[] {
+export function filterOutPersonalDetails<T extends CompetencyLike>(competencies: T[]): T[] {
     if (!Array.isArray(competencies)) return [];
-    return competencies.filter(comp => !isPersonalDetail(comp));
+    return competencies.filter(comp => !isPersonalDetail(comp as CompetencyDefinition));
 }
 
 /**
  * Get only personal details from a list of competencies
  */
-export function getPersonalDetails(competencies: CompetencyDefinition[]): CompetencyDefinition[] {
+export function getPersonalDetails<T extends CompetencyLike>(competencies: T[]): T[] {
     if (!Array.isArray(competencies)) return [];
-    return competencies.filter(comp => isPersonalDetail(comp));
+    return competencies.filter(comp => isPersonalDetail(comp as CompetencyDefinition));
 }
 
 /**
@@ -265,8 +275,8 @@ export function isNDTCertification(competency: CompetencyDefinition | null): boo
     if (!competency) return false;
 
     // Check category name
-    const categoryName = competency.category?.name?.toLowerCase() ||
-                        competency.competency?.category?.name?.toLowerCase() || '';
+    const categoryName = getCategoryName(competency.category).toLowerCase() ||
+                        getCategoryName(competency.competency?.category).toLowerCase() || '';
 
     if (categoryName === 'ndt certifications') {
         return true;
@@ -298,7 +308,7 @@ export function isNDTCertification(competency: CompetencyDefinition | null): boo
  * Check if an NDT competency requires a witness check
  * Some NDT fields like "PCN Number" are informational and don't need witness checks
  */
-export function requiresWitnessCheck(competency: CompetencyDefinition | null): boolean {
+export function requiresWitnessCheck(competency: CompetencyLike | null): boolean {
     if (!isNDTCertification(competency)) {
         return false;
     }

@@ -1,4 +1,3 @@
-import React from 'react';
 import CscanVisualizer from '../components/CscanVisualizer/CscanVisualizer';
 
 /**

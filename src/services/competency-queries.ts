@@ -2,10 +2,12 @@
  * Competency Query Operations
  * Read/fetch operations for competencies, categories, and definitions.
  */
-// @ts-ignore - JS module without type declarations
-import supabase, { isSupabaseConfigured } from '../supabase-client';
+import { supabase, isSupabaseConfigured } from '../supabase-client';
 // @ts-ignore - JS module without type declarations
 import authManager from '../auth-manager.js';
+
+// Supabase is guaranteed initialized when services are called
+const sb = supabase!;
 import type { CompetencyCategory } from '../types/database.types';
 
 function ensureConfigured(): void {
@@ -15,7 +17,7 @@ function ensureConfigured(): void {
 /** Get all active competency categories */
 export async function getCategories(): Promise<CompetencyCategory[]> {
     ensureConfigured();
-    const { data, error } = await supabase
+    const { data, error } = await sb
         .from('competency_categories')
         .select('id, name, description, display_order, is_active, created_at, updated_at')
         .eq('is_active', true)
@@ -27,7 +29,7 @@ export async function getCategories(): Promise<CompetencyCategory[]> {
 /** Get competency definitions by category */
 export async function getCompetencyDefinitions(categoryId: string | null = null): Promise<any[]> {
     ensureConfigured();
-    let query = supabase
+    let query = sb
         .from('competency_definitions')
         .select(`
             id, name, description, field_type, category_id, display_order,
@@ -50,7 +52,7 @@ export async function getAllCompetencyDefinitions(): Promise<any[]> {
 /** Get competencies for a specific user */
 export async function getUserCompetencies(userId: string): Promise<any[]> {
     ensureConfigured();
-    const { data, error } = await supabase
+    const { data, error } = await sb
         .from('employee_competencies')
         .select(`
             id, user_id, competency_id, value, expiry_date, document_url,
@@ -86,7 +88,7 @@ export async function getUserCompetenciesByCategory(userId: string): Promise<any
 /** Get competency history for a user */
 export async function getCompetencyHistory(userId: string): Promise<any[]> {
     ensureConfigured();
-    const { data, error } = await supabase
+    const { data, error } = await sb
         .from('competency_history')
         .select(`
             id, user_id, competency_id, action, old_value, new_value,
@@ -103,7 +105,7 @@ export async function getCompetencyHistory(userId: string): Promise<any[]> {
 export async function getDocumentUrl(filePath: string): Promise<string> {
     ensureConfigured();
     if (filePath.startsWith('http')) return filePath;
-    const { data, error } = await supabase.storage
+    const { data, error } = await sb.storage
         .from('documents').createSignedUrl(filePath, 3600);
     if (error) throw error;
     return data.signedUrl;
@@ -116,7 +118,7 @@ export async function canManageCompetencies(targetUserId: string): Promise<boole
     if (currentUser.role === 'admin') return true;
     if (currentUser.id === targetUserId) return true;
     if (currentUser.role === 'org_admin') {
-        const { data: targetProfile } = await supabase
+        const { data: targetProfile } = await sb
             .from('profiles').select('organization_id').eq('id', targetUserId).single();
         return targetProfile?.organization_id === currentUser.organizationId;
     }
@@ -126,7 +128,7 @@ export async function canManageCompetencies(targetUserId: string): Promise<boole
 /** Get all competencies pending document approval */
 export async function getPendingApprovals(): Promise<any[]> {
     ensureConfigured();
-    const { data: competencies, error: compError } = await supabase
+    const { data: competencies, error: compError } = await sb
         .from('employee_competencies')
         .select(`
             id, user_id, competency_id, value, expiry_date, document_url,
@@ -144,7 +146,7 @@ export async function getPendingApprovals(): Promise<any[]> {
     if (!competencies || competencies.length === 0) return [];
 
     const userIds = [...new Set(competencies.map((c: any) => c.user_id))];
-    const { data: profiles, error: profileError } = await supabase
+    const { data: profiles, error: profileError } = await sb
         .from('profiles')
         .select('id, username, email, avatar_url, organization_id, organizations(id, name)')
         .in('id', userIds);
@@ -165,12 +167,12 @@ export async function getExpiringCompetencies(
     const functionName = includeComments
         ? 'get_expiring_competencies_with_comments'
         : 'get_expiring_competencies';
-    const { data, error } = await supabase.rpc(functionName, { days_threshold: daysThreshold });
+    const { data, error } = await sb.rpc(functionName, { days_threshold: daysThreshold });
 
     if (error && error.message?.includes('function')) {
         const futureDate = new Date();
         futureDate.setDate(futureDate.getDate() + daysThreshold);
-        const { data: fallbackData, error: fallbackError } = await supabase
+        const { data: fallbackData, error: fallbackError } = await sb
             .from('employee_competencies')
             .select(`
                 id, user_id, competency_id, value, expiry_date, status,
@@ -205,7 +207,7 @@ export async function getExpiringCompetencies(
 /** Get all categories (including inactive) for admin view */
 export async function getAllCategories(includeInactive: boolean = true): Promise<CompetencyCategory[]> {
     ensureConfigured();
-    let query = supabase.from('competency_categories').select('*')
+    let query = sb.from('competency_categories').select('*')
         .order('display_order', { ascending: true });
     if (!includeInactive) query = query.eq('is_active', true);
     const { data, error } = await query;
@@ -218,7 +220,7 @@ export async function getAllDefinitions(
     includeInactive: boolean = true, categoryId: string | null = null
 ): Promise<any[]> {
     ensureConfigured();
-    let query = supabase.from('competency_definitions')
+    let query = sb.from('competency_definitions')
         .select('*, category:competency_categories(id, name)')
         .order('display_order', { ascending: true });
     if (!includeInactive) query = query.eq('is_active', true);
@@ -231,7 +233,7 @@ export async function getAllDefinitions(
 /** Get usage count for a definition (how many employees have this cert) */
 export async function getDefinitionUsageCount(definitionId: string): Promise<number> {
     ensureConfigured();
-    const { count, error } = await supabase
+    const { count, error } = await sb
         .from('employee_competencies')
         .select('*', { count: 'exact', head: true })
         .eq('competency_id', definitionId);

@@ -13,6 +13,14 @@ import type {
 } from './admin-types';
 import { getPermissionRequests } from './admin-users';
 
+/** Convert AuthResult to ServiceResult */
+function toServiceResult<T = any>(authResult: any): ServiceResult<T> {
+  const error = authResult.error
+    ? (typeof authResult.error === 'string' ? authResult.error : authResult.error.message)
+    : undefined;
+  return { success: authResult.success, error, message: authResult.message };
+}
+
 // ==========================================================================
 // STATS
 // ==========================================================================
@@ -23,7 +31,7 @@ export async function getDashboardStats(): Promise<AdminDashboardStats> {
 
     // Get organizations
     const organizations = await authManager.getOrganizations();
-    const filteredOrgs = organizations.filter((org: Organization) => org.name !== 'SYSTEM');
+    const filteredOrgs = organizations.filter((org) => org.name !== 'SYSTEM');
 
     // Get users
     const users = await authManager.getUsers();
@@ -59,13 +67,13 @@ export async function getDashboardStats(): Promise<AdminDashboardStats> {
 
 export async function getOrganizations(): Promise<Organization[]> {
   const orgs = await authManager.getOrganizations();
-  return orgs.filter((org: Organization) => org.name !== 'SYSTEM');
+  return orgs.filter((org) => org.name !== 'SYSTEM') as unknown as Organization[];
 }
 
 export async function getOrganizationsWithStats(): Promise<OrganizationStats[]> {
   const organizations = await getOrganizations();
 
-  return organizations.map((org: Organization) => ({
+  return organizations.map((org) => ({
     organization: org,
     userCount: 0,
   }));
@@ -84,7 +92,7 @@ export async function createOrganization(name: string): Promise<ServiceResult<Or
     });
   }
 
-  return result;
+  return toServiceResult<Organization>(result);
 }
 
 export async function updateOrganization(id: string, data: { name: string }): Promise<ServiceResult<Organization>> {
@@ -101,7 +109,7 @@ export async function updateOrganization(id: string, data: { name: string }): Pr
     });
   }
 
-  return result;
+  return toServiceResult<Organization>(result);
 }
 
 export async function deleteOrganization(id: string): Promise<ServiceResult> {
@@ -117,5 +125,5 @@ export async function deleteOrganization(id: string): Promise<ServiceResult> {
     });
   }
 
-  return result;
+  return toServiceResult(result);
 }

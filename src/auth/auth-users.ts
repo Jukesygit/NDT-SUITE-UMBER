@@ -15,6 +15,9 @@ import {
 } from './auth-types';
 import { generateId } from './auth-core';
 
+// Supabase is guaranteed initialized when auth services are called
+const sb = supabase!;
+
 // ── User CRUD ──────────────────────────────────────────────────────────────
 
 export async function createUser(
@@ -40,7 +43,7 @@ export async function createUser(
     if (this.useSupabase) {
         const orgId = userData.organizationId ? String(userData.organizationId) : null;
 
-        const { data, error } = await supabase.functions.invoke('create-user', {
+        const { data, error } = await sb.functions.invoke('create-user', {
             body: {
                 email: userData.email,
                 username: userData.username,
@@ -95,7 +98,7 @@ export async function syncUsers(this: any): Promise<AuthResult> {
     }
 
     try {
-        const { data, error } = await supabase.functions.invoke('sync-users');
+        const { data, error } = await sb.functions.invoke('sync-users');
 
         if (error) {
             return { success: false, error: error.message };
@@ -115,7 +118,7 @@ export async function getUsers(this: any): Promise<any[]> {
     if (this.useSupabase) {
         await this.syncUsers();
 
-        let query = supabase
+        let query = sb
             .from('profiles')
             .select('*, organizations(*)');
 
@@ -147,7 +150,7 @@ export async function getUsers(this: any): Promise<any[]> {
 
 export async function getUser(this: any, userId: string): Promise<any> {
     if (this.useSupabase) {
-        const { data, error } = await supabase
+        const { data, error } = await sb
             .from('profiles')
             .select('*, organizations(*)')
             .eq('id', userId)
@@ -183,7 +186,7 @@ export async function updateUser(
     }
 
     if (this.useSupabase) {
-        const { data: updatedRows, error: updateError } = await supabase
+        const { data: updatedRows, error: updateError } = await sb
             .from('profiles')
             .update(updates)
             .eq('id', userId)
@@ -247,7 +250,7 @@ export async function deleteUser(this: any, userId: string): Promise<AuthResult>
     }
 
     if (this.useSupabase) {
-        const { data, error } = await supabase.functions.invoke('delete-user', {
+        const { data, error } = await sb.functions.invoke('delete-user', {
             body: { userId },
         });
 

@@ -11,7 +11,7 @@ function handleQueryError(error: unknown): void {
     if (!isAuthError(error as Record<string, unknown>)) return;
 
     // Delegate to session manager - it handles deduplication and coordination
-    sessionManager.reportAuthError(error);
+    sessionManager.reportAuthError(error instanceof Error ? error : new Error(String(error)));
 }
 
 /**
@@ -22,7 +22,7 @@ function handleMutationError(error: unknown): void {
     if (!isAuthError(error as Record<string, unknown>)) return;
 
     // Delegate to session manager - it handles deduplication and coordination
-    sessionManager.reportAuthError(error);
+    sessionManager.reportAuthError(error instanceof Error ? error : new Error(String(error)));
 }
 
 /**

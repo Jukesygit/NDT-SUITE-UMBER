@@ -2,10 +2,12 @@
  * Competency Definition & Category Admin Operations
  * CRUD operations for managing competency categories and definitions (admin only).
  */
-// @ts-ignore - JS module without type declarations
-import supabase, { isSupabaseConfigured } from '../supabase-client';
+import { supabase, isSupabaseConfigured } from '../supabase-client';
 // @ts-ignore - JS module without type declarations
 import authManager from '../auth-manager.js';
+
+// Supabase is guaranteed initialized when services are called
+const sb = supabase!;
 import { logActivity } from './activity-log-service.ts';
 import type { CompetencyCategory, CompetencyDefinition } from '../types/database.types';
 
@@ -56,12 +58,12 @@ export async function createCategory(data: CategoryCreateData): Promise<Competen
     ensureConfigured();
     const currentUser = requireAdmin();
 
-    const { data: existing } = await supabase
+    const { data: existing } = await sb
         .from('competency_categories').select('display_order')
         .order('display_order', { ascending: false }).limit(1);
     const maxOrder = existing?.[0]?.display_order ?? 0;
 
-    const { data: result, error } = await supabase
+    const { data: result, error } = await sb
         .from('competency_categories')
         .insert({ name: data.name, description: data.description || null, display_order: maxOrder + 1, is_active: true })
         .select().single();
@@ -85,7 +87,7 @@ export async function updateCategory(id: string, data: CategoryUpdateData): Prom
     if (data.description !== undefined) updates.description = data.description;
     if (data.is_active !== undefined) updates.is_active = data.is_active;
 
-    const { data: result, error } = await supabase
+    const { data: result, error } = await sb
         .from('competency_categories').update(updates).eq('id', id).select().single();
     if (error) throw error;
 
@@ -102,12 +104,12 @@ export async function deleteCategory(id: string, hardDelete: boolean = false): P
     ensureConfigured();
     const currentUser = requireAdmin();
 
-    const { data: definitions } = await supabase
+    const { data: definitions } = await sb
         .from('competency_definitions').select('id').eq('category_id', id).limit(1);
     const hasDefinitions = definitions && definitions.length > 0;
 
     if (hardDelete && !hasDefinitions) {
-        const { error } = await supabase.from('competency_categories').delete().eq('id', id);
+        const { error } = await sb.from('competency_categories').delete().eq('id', id);
         if (error) throw error;
         logActivity({
             userId: currentUser.id, actionType: 'category_deleted', actionCategory: 'admin',
@@ -125,7 +127,7 @@ export async function reorderCategories(orderedIds: string[]): Promise<{ success
     ensureConfigured();
     requireAdmin();
     for (let i = 0; i < orderedIds.length; i++) {
-        const { error } = await supabase
+        const { error } = await sb
             .from('competency_categories').update({ display_order: i + 1 }).eq('id', orderedIds[i]);
         if (error) throw error;
     }
@@ -137,12 +139,12 @@ export async function createDefinition(data: DefinitionCreateData): Promise<any>
     ensureConfigured();
     const currentUser = requireAdmin();
 
-    const { data: existing } = await supabase
+    const { data: existing } = await sb
         .from('competency_definitions').select('display_order')
         .eq('category_id', data.category_id).order('display_order', { ascending: false }).limit(1);
     const maxOrder = existing?.[0]?.display_order ?? 0;
 
-    const { data: result, error } = await supabase
+    const { data: result, error } = await sb
         .from('competency_definitions')
         .insert({
             name: data.name, description: data.description || null,
@@ -177,7 +179,7 @@ export async function updateDefinition(id: string, data: DefinitionUpdateData): 
     if (data.requires_approval !== undefined) updates.requires_approval = data.requires_approval;
     if (data.is_active !== undefined) updates.is_active = data.is_active;
 
-    const { data: result, error } = await supabase
+    const { data: result, error } = await sb
         .from('competency_definitions').update(updates).eq('id', id)
         .select(DEFINITION_WITH_CATEGORY).single();
     if (error) throw error;
@@ -195,12 +197,12 @@ export async function deleteDefinition(id: string, hardDelete: boolean = false):
     ensureConfigured();
     const currentUser = requireAdmin();
 
-    const { data: employeeCompetencies } = await supabase
+    const { data: employeeCompetencies } = await sb
         .from('employee_competencies').select('id').eq('competency_id', id).limit(1);
     const hasEmployeeRecords = employeeCompetencies && employeeCompetencies.length > 0;
 
     if (hardDelete && !hasEmployeeRecords) {
-        const { error } = await supabase.from('competency_definitions').delete().eq('id', id);
+        const { error } = await sb.from('competency_definitions').delete().eq('id', id);
         if (error) throw error;
         logActivity({
             userId: currentUser.id, actionType: 'definition_deleted', actionCategory: 'admin',
@@ -220,7 +222,7 @@ export async function reorderDefinitions(
     ensureConfigured();
     requireAdmin();
     for (let i = 0; i < orderedIds.length; i++) {
-        const { error } = await supabase
+        const { error } = await sb
             .from('competency_definitions').update({ display_order: i + 1 })
             .eq('id', orderedIds[i]).eq('category_id', categoryId);
         if (error) throw error;

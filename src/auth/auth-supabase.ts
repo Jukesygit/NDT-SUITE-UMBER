@@ -9,6 +9,9 @@ import supabase from '../supabase-client';
 import { logActivity } from '../services/activity-log-service.ts';
 import type { AuthCurrentUser, AuthProfile, AuthResult } from './auth-types';
 
+// Supabase is guaranteed initialized when auth services are called
+const sb = supabase!;
+
 // ── Supabase Initialization ────────────────────────────────────────────────
 
 export async function initializeSupabase(this: any): Promise<void> {
@@ -19,7 +22,7 @@ export async function initializeSupabase(this: any): Promise<void> {
     );
 
     try {
-        const sessionPromise = supabase.auth.getSession();
+        const sessionPromise = sb.auth.getSession();
         const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
 
         if (session?.user) {
@@ -36,7 +39,7 @@ export async function initializeSupabase(this: any): Promise<void> {
     }
 
     // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: string, session: any) => {
+    const { data: { subscription } } = sb.auth.onAuthStateChange(async (event: string, session: any) => {
         if (event === 'PASSWORD_RECOVERY') {
             window.dispatchEvent(new CustomEvent('passwordRecoveryMode', { detail: { active: true } }));
             return;
@@ -54,7 +57,7 @@ export async function initializeSupabase(this: any): Promise<void> {
         } else if (event === 'SIGNED_OUT') {
             // Guard: verify session is truly gone before clearing state.
             try {
-                const { data: { session: currentSession } } = await supabase.auth.getSession();
+                const { data: { session: currentSession } } = await sb.auth.getSession();
                 if (currentSession?.user) {
                     return;
                 }
@@ -77,7 +80,7 @@ export async function loadUserProfile(
     this: any,
     userId: string,
 ): Promise<void> {
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await sb
         .from('profiles')
         .select('*')
         .eq('id', userId)
@@ -89,7 +92,7 @@ export async function loadUserProfile(
 
     let organization = null;
     if (profile.organization_id) {
-        const { data: orgData, error: orgError } = await supabase
+        const { data: orgData, error: orgError } = await sb
             .from('organizations')
             .select('*')
             .eq('id', profile.organization_id)
@@ -122,7 +125,7 @@ export async function loginSupabase(
 ): Promise<AuthResult> {
     let data: any, error: any;
     try {
-        const response = await supabase.auth.signInWithPassword({ email, password });
+        const response = await sb.auth.signInWithPassword({ email, password });
         data = response.data;
         error = response.error;
     } catch (_fetchError) {
@@ -137,12 +140,12 @@ export async function loginSupabase(
         await this.loadUserProfile(data.user.id);
 
         if (!this.currentUser) {
-            await supabase.auth.signOut();
+            await sb.auth.signOut();
             return { success: false, error: 'Invalid email or password' };
         }
 
         if (!this.currentUser.isActive) {
-            await supabase.auth.signOut();
+            await sb.auth.signOut();
             return { success: false, error: 'Invalid email or password' };
         }
 
@@ -179,7 +182,7 @@ export async function signUpSupabase(
     email: string,
     password: string,
 ): Promise<AuthResult> {
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await sb.auth.signUp({
         email,
         password,
         options: {
@@ -201,7 +204,7 @@ export async function resetPasswordSupabase(
     email: string,
 ): Promise<AuthResult> {
     try {
-        const { data, error } = await supabase.functions.invoke('send-reset-code', {
+        const { data, error } = await sb.functions.invoke('send-reset-code', {
             body: { email },
         });
 
@@ -226,7 +229,7 @@ export async function verifyResetCodeSupabase(
     newPassword: string,
 ): Promise<AuthResult> {
     try {
-        const { data, error } = await supabase.functions.invoke('verify-reset-code', {
+        const { data, error } = await sb.functions.invoke('verify-reset-code', {
             body: { email, code, newPassword },
         });
 
@@ -252,7 +255,7 @@ export async function getSessionSupabase(timeoutMs: number = 10000): Promise<any
     });
 
     try {
-        const sessionPromise = supabase.auth.getSession();
+        const sessionPromise = sb.auth.getSession();
         const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
         return session;
     } catch (_error) {
@@ -267,7 +270,7 @@ export async function refreshSessionSupabase(timeoutMs: number = 10000): Promise
     });
 
     try {
-        const refreshPromise = supabase.auth.refreshSession();
+        const refreshPromise = sb.auth.refreshSession();
         const { data: { session }, error } = await Promise.race([refreshPromise, timeoutPromise]);
 
         clearTimeout(timeoutId!);
@@ -284,7 +287,7 @@ export async function refreshSessionSupabase(timeoutMs: number = 10000): Promise
 }
 
 export function onAuthStateChangeSupabase(callback: (session: any) => void): () => void {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: string, session: any) => {
+    const { data: { subscription } } = sb.auth.onAuthStateChange((_event: string, session: any) => {
         callback(session);
     });
     return () => subscription.unsubscribe();
@@ -293,5 +296,5 @@ export function onAuthStateChangeSupabase(callback: (session: any) => void): () 
 // ── Supabase Logout ────────────────────────────────────────────────────────
 
 export async function logoutSupabase(): Promise<void> {
-    await supabase.auth.signOut({ scope: 'local' });
+    await sb.auth.signOut({ scope: 'local' });
 }

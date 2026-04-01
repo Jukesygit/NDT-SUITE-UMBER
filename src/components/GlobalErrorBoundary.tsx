@@ -22,7 +22,7 @@ class GlobalErrorBoundary extends React.Component<GlobalErrorBoundaryProps, Glob
         };
     }
 
-    static getDerivedStateFromError(error: Error): Partial<GlobalErrorBoundaryState> {
+    static getDerivedStateFromError(_error: Error): Partial<GlobalErrorBoundaryState> {
         // Update state to show fallback UI
         return { hasError: true };
     }

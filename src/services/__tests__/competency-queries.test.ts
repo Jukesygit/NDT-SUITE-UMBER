@@ -57,7 +57,7 @@ import {
     getCompetencyHistory,
     getDocumentUrl,
     canManageCompetencies,
-    getPendingApprovals,
+    // getPendingApprovals - imported but currently unused in tests
     getExpiringCompetencies,
     getAllCategories,
     getAllDefinitions,
@@ -171,7 +171,7 @@ describe('getUserCompetenciesByCategory', () => {
         ];
 
         let callCount = 0;
-        mockChain.then = function (resolve) {
+        mockChain.then = function (resolve: any) {
             callCount++;
             // call 1 = getUserCompetencies, call 2 = getCategories
             if (callCount === 1) {

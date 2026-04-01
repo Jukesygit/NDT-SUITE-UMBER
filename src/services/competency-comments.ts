@@ -2,10 +2,12 @@
  * Competency Comment Operations
  * All query and mutation operations for competency comments.
  */
-// @ts-ignore - JS module without type declarations
-import supabase, { isSupabaseConfigured } from '../supabase-client';
+import { supabase, isSupabaseConfigured } from '../supabase-client';
 // @ts-ignore - JS module without type declarations
 import authManager from '../auth-manager.js';
+
+// Supabase is guaranteed initialized when services are called
+const sb = supabase!;
 
 import type { CompetencyComment } from '../types/database.types';
 
@@ -30,7 +32,7 @@ export async function getCompetencyComments(employeeCompetencyId: string): Promi
         throw new Error('Supabase not configured');
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await sb
         .from('competency_comments')
         .select(COMMENT_SELECT)
         .eq('employee_competency_id', employeeCompetencyId)
@@ -52,7 +54,7 @@ export async function getCompetenciesWithComments(
         throw new Error('Supabase not configured');
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await sb
         .rpc('get_competencies_with_comments', {
             p_user_id: userId,
             p_days_back: daysBack
@@ -85,7 +87,7 @@ export async function addCompetencyComment(
         throw new Error('Not authenticated');
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await sb
         .from('competency_comments')
         .insert({
             employee_competency_id: employeeCompetencyId,
@@ -113,7 +115,7 @@ export async function updateCompetencyComment(
         throw new Error('Supabase not configured');
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await sb
         .from('competency_comments')
         .update(updates)
         .eq('id', commentId)
@@ -132,7 +134,7 @@ export async function deleteCompetencyComment(commentId: string): Promise<boolea
         throw new Error('Supabase not configured');
     }
 
-    const { error } = await supabase
+    const { error } = await sb
         .from('competency_comments')
         .delete()
         .eq('id', commentId);

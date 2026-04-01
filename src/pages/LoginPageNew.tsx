@@ -77,7 +77,7 @@ function LoginPageNew() {
     window.addEventListener('passwordRecoveryMode', handlePasswordRecovery);
 
     // Listen for Supabase auth state changes
-    const { data: { subscription } } = supabase!.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase!.auth.onAuthStateChange((event, _session) => {
       // Re-check sessionStorage in case it was set by another handler
       const currentPasswordResetMode = sessionStorage.getItem(PASSWORD_RESET_KEY) === 'true';
 
@@ -170,7 +170,7 @@ function LoginPageNew() {
       } else if (mode === 'reset') {
         const result = await authManager.resetPassword(email);
         if (result.error) {
-          const errorMsg = result.error.message || 'Password reset failed';
+          const errorMsg = typeof result.error === 'string' ? result.error : result.error?.message || 'Password reset failed';
 
           // Check for rate limit error
           if (errorMsg.includes('rate limit') || errorMsg.includes('429') || errorMsg.includes('wait')) {
@@ -229,7 +229,7 @@ function LoginPageNew() {
 
         const result = await authManager.verifyResetCode(resetEmail, resetCode, newPassword);
         if (result.error) {
-          setError(result.error.message || 'Failed to verify code');
+          setError(typeof result.error === 'string' ? result.error : result.error?.message || 'Failed to verify code');
         } else {
           setError('');
           setSuccessMessage(result.message || 'Password updated successfully! You can now sign in.');

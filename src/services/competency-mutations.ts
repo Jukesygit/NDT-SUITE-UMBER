@@ -3,10 +3,12 @@
  * Create, update, delete operations for employee competencies,
  * documents, and bulk imports.
  */
-// @ts-ignore - JS module without type declarations
-import supabase, { isSupabaseConfigured } from '../supabase-client';
+import { supabase, isSupabaseConfigured } from '../supabase-client';
 // @ts-ignore - JS module without type declarations
 import authManager from '../auth-manager.js';
+
+// Supabase is guaranteed initialized when services are called
+const sb = supabase!;
 import { logActivity } from './activity-log-service.ts';
 import { getCompetencyDefinitions } from './competency-queries.ts';
 
@@ -54,7 +56,7 @@ export async function upsertCompetency(
         witnessed_at: data.witnessedAt || null, witness_notes: data.witnessNotes || null
     };
 
-    const { data: result, error } = await supabase
+    const { data: result, error } = await sb
         .from('employee_competencies')
         .upsert(competencyData, { onConflict: 'user_id,competency_id' })
         .select('*, competency:competency_definitions(name)')
@@ -77,13 +79,13 @@ export async function upsertCompetency(
 /** Delete a competency */
 export async function deleteCompetency(competencyId: string): Promise<boolean> {
     ensureConfigured();
-    const { data: existing } = await supabase
+    const { data: existing } = await sb
         .from('employee_competencies')
         .select('competency:competency_definitions(name)')
         .eq('id', competencyId).single();
     const competencyName = (existing?.competency as any)?.name || 'Unknown';
 
-    const { error } = await supabase
+    const { error } = await sb
         .from('employee_competencies').delete().eq('id', competencyId);
     if (error) throw error;
 
@@ -109,7 +111,7 @@ export async function verifyCompetency(
     };
     if (!approved && reason) updateData.notes = reason;
 
-    const { data, error } = await supabase
+    const { data, error } = await sb
         .from('employee_competencies').update(updateData).eq('id', competencyId)
         .select('*, competency:competency_definitions(name)').single();
     if (error) throw error;
@@ -131,7 +133,7 @@ export async function requestChanges(competencyId: string, comment: string): Pro
     const currentUser = authManager.getCurrentUser();
     if (!currentUser) throw new Error('Not authenticated');
 
-    const { data, error } = await supabase
+    const { data, error } = await sb
         .from('employee_competencies')
         .update({
             status: 'changes_requested', notes: comment,
@@ -159,7 +161,7 @@ export async function uploadDocument(
     const fileExt = file.name.split('.').pop();
     const fileName = `${userId}/${competencyName.replace(/\s+/g, '_')}_${Date.now()}.${fileExt}`;
     const filePath = `competency-documents/${fileName}`;
-    const { data: _data, error } = await supabase.storage
+    const { data: _data, error } = await sb.storage
         .from('documents').upload(filePath, file, { cacheControl: '3600', upsert: false });
     if (error) throw error;
     return { url: filePath, name: file.name, path: filePath };
@@ -168,7 +170,7 @@ export async function uploadDocument(
 /** Delete a document from storage */
 export async function deleteDocument(filePath: string): Promise<boolean> {
     ensureConfigured();
-    const { error } = await supabase.storage.from('documents').remove([filePath]);
+    const { error } = await sb.storage.from('documents').remove([filePath]);
     if (error) throw error;
     return true;
 }
@@ -179,7 +181,7 @@ export async function bulkCreateCompetencies(competencies: any[]): Promise<any[]
     if (!Array.isArray(competencies) || competencies.length === 0) {
         throw new Error('Competencies array is required');
     }
-    const { data, error } = await supabase
+    const { data, error } = await sb
         .from('employee_competencies')
         .upsert(competencies, { onConflict: 'user_id,competency_id' }).select();
     if (error) throw error;
@@ -211,7 +213,7 @@ export async function bulkImportCompetencies(
     if (competenciesToImport.length === 0) {
         throw new Error('No matching competencies found in CSV data');
     }
-    const { data, error } = await supabase
+    const { data, error } = await sb
         .from('employee_competencies')
         .upsert(competenciesToImport, { onConflict: 'user_id,competency_id' }).select();
     if (error) throw error;

@@ -24,7 +24,7 @@ const GENERIC_ERROR_MESSAGES: Record<string, string> = {
  * Sanitize database errors to prevent information leakage
  * Logs the full error for debugging while returning a generic message to client
  */
-export function sanitizeDbError(error: Error, serviceName: string, operation: string): Error {
+export function sanitizeDbError(_error: Error, _serviceName: string, operation: string): Error {
     // Return generic message to client
     const genericMessage = GENERIC_ERROR_MESSAGES[operation] || 'An error occurred';
     return new Error(genericMessage);

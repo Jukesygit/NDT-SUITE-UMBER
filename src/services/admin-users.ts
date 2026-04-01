@@ -14,6 +14,14 @@ import type {
   ServiceResult,
 } from './admin-types';
 
+/** Convert AuthResult to ServiceResult */
+function toServiceResult<T = any>(authResult: any): ServiceResult<T> {
+  const error = authResult.error
+    ? (typeof authResult.error === 'string' ? authResult.error : authResult.error.message)
+    : undefined;
+  return { success: authResult.success, error, message: authResult.message };
+}
+
 // ==========================================================================
 // USERS
 // ==========================================================================
@@ -48,7 +56,7 @@ export async function createUser(data: CreateUserData): Promise<ServiceResult> {
     });
   }
 
-  return result;
+  return toServiceResult(result);
 }
 
 export async function updateUser(id: string, data: UpdateUserData): Promise<ServiceResult<Profile>> {
@@ -74,7 +82,7 @@ export async function updateUser(id: string, data: UpdateUserData): Promise<Serv
     });
   }
 
-  return result;
+  return toServiceResult<Profile>(result);
 }
 
 export async function deleteUser(id: string): Promise<ServiceResult> {
@@ -90,7 +98,7 @@ export async function deleteUser(id: string): Promise<ServiceResult> {
     });
   }
 
-  return result;
+  return toServiceResult(result);
 }
 
 // ==========================================================================
@@ -114,7 +122,7 @@ export async function approveAccountRequest(id: string): Promise<ServiceResult> 
     });
   }
 
-  return result;
+  return toServiceResult(result);
 }
 
 export async function rejectAccountRequest(id: string, reason?: string): Promise<ServiceResult> {
@@ -131,7 +139,7 @@ export async function rejectAccountRequest(id: string, reason?: string): Promise
     });
   }
 
-  return result;
+  return toServiceResult(result);
 }
 
 // ==========================================================================

@@ -87,10 +87,11 @@ export async function runImport(
             });
 
             if (!createResult.success) {
-              throw new Error(createResult.error || 'Failed to create user');
+              const errMsg = typeof createResult.error === 'string' ? createResult.error : createResult.error?.message || 'Failed to create user';
+              throw new Error(errMsg);
             }
 
-            userId = createResult.user.id;
+            userId = (createResult.user as { id: string }).id;
 
             // Wait longer for user creation to complete and avoid rate limits
             await new Promise(resolve => setTimeout(resolve, 3000));

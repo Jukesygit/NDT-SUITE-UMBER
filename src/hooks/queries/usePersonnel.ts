@@ -174,7 +174,7 @@ export function useCompetencyMatrix() {
         queryKey: personnelKeys.matrix(),
         queryFn: async (): Promise<CompetencyMatrix> => {
             const matrix = await personnelService.getCompetencyMatrix();
-            return matrix;
+            return matrix as CompetencyMatrix;
         },
         staleTime: 2 * 60 * 1000, // 2 minutes
     });

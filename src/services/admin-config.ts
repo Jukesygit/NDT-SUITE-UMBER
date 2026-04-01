@@ -22,7 +22,7 @@ export async function getConfig(): Promise<Record<string, string[]>> {
 }
 
 export function getConfigMetadata(): ConfigMetadata {
-  return adminConfigManager.getListMetadata() as ConfigMetadata;
+  return adminConfigManager.getListMetadata() as unknown as ConfigMetadata;
 }
 
 export async function addConfigItem(listName: string, item: string): Promise<ServiceResult> {

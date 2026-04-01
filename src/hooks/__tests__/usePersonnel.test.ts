@@ -41,7 +41,7 @@ beforeEach(() => {
 describe('usePersonnel', () => {
     it('fetches personnel and normalizes organizations', async () => {
         vi.mocked(personnelService.getAllPersonnelWithCompetencies).mockResolvedValueOnce([
-            { id: 'u1', username: 'alice', organizations: [{ id: 'o1', name: 'Acme' }] },
+            { id: 'u1', username: 'alice', organizations: [{ id: 'o1', name: 'Acme' }] } as any,
         ]);
 
         const wrapper = createWrapper();
@@ -75,7 +75,7 @@ describe('usePersonDetail', () => {
     it('fetches person detail', async () => {
         vi.mocked(personnelService.getPersonnelComplianceReport).mockResolvedValueOnce({
             person: { id: 'u1', username: 'bob', organizations: { id: 'o1', name: 'Corp' } },
-        });
+        } as any);
         const wrapper = createWrapper();
         const { result } = renderHook(() => usePersonDetail('u1'), { wrapper });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
