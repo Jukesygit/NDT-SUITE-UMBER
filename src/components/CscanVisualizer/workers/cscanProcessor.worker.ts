@@ -20,6 +20,11 @@ import type {
   ErrorMessage
 } from '../utils/efficientTypes';
 
+/** Chrome-only Performance.memory API */
+interface PerformanceWithMemory extends Performance {
+  memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number };
+}
+
 // Store parsed scans for composite creation
 const parsedScans = new Map<string, EfficientCscanData>();
 
@@ -33,7 +38,7 @@ const OFFSET_TOLERANCE = 10;
  * Post a progress message to main thread
  */
 function postProgress(type: 'PARSE_PROGRESS' | 'COMPOSITE_PROGRESS', current: number, total: number, message: string): void {
-  const memoryUsage = (performance as any).memory?.usedJSHeapSize;
+  const memoryUsage = (performance as PerformanceWithMemory).memory?.usedJSHeapSize;
   const msg: ProgressMessage = {
     type,
     payload: { current, total, message, memoryUsage }
@@ -418,7 +423,7 @@ function hasOffsetIssues(scan: EfficientCscanData): boolean {
  * Process files in batches with memory cleanup
  */
 async function processFilesInBatches(
-  buffers: ArrayBuffer[],
+  buffers: (ArrayBuffer | null)[],
   filenames: string[],
   batchSize: number
 ): Promise<{ scans: EfficientCscanData[]; hasOffsetIssues: boolean }> {
@@ -439,7 +444,7 @@ async function processFilesInBatches(
     // Process batch
     for (let i = batchStart; i < batchEnd; i++) {
       try {
-        const scan = parseSingleFile(buffers[i], filenames[i]);
+        const scan = parseSingleFile(buffers[i]!, filenames[i]);
 
         // Store for potential composite creation
         parsedScans.set(scan.id, scan);
@@ -463,7 +468,7 @@ async function processFilesInBatches(
 
     // Clear the processed buffers to help GC
     for (let i = batchStart; i < batchEnd; i++) {
-      buffers[i] = null as any;
+      buffers[i] = null;
     }
 
     // Allow GC between batches

@@ -84,7 +84,7 @@ export default function UsersTab() {
                 header: 'Role',
                 align: 'center',
                 render: (user) => (
-                    <StatusBadge variant={user.role as any}>
+                    <StatusBadge variant={user.role}>
                         {user.role}
                     </StatusBadge>
                 ),

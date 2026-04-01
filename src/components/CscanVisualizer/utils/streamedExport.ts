@@ -216,7 +216,7 @@ export async function exportHeatmapToBlob(
   const pixelCount = width * height;
   const bytesNeeded = pixelCount * 4;
 
-  let pixels: Uint8Array;
+  let pixels: Uint8Array | null;
   try {
     pixels = new Uint8Array(bytesNeeded);
   } catch (e) {
@@ -289,7 +289,7 @@ export async function exportHeatmapToBlob(
   const blob = new Blob([new Uint8Array(pngData)], { type: 'image/png' });
 
   // Help garbage collection by clearing the pixel buffer
-  pixels = null as any;
+  pixels = null;
 
   onProgress?.(100, 'Export complete');
 

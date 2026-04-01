@@ -130,8 +130,8 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
         const exportHeight = numRows;
 
         // Clean heatmap trace - no colorbar, no smoothing for pixel-perfect export
-        const cleanTrace: Partial<Plotly.Data> = {
-          type: 'heatmap',
+        const cleanTrace = {
+          type: 'heatmap' as const,
           z: zData,
           colorscale: displaySettings.colorScale,
           reversescale: displaySettings.reverseScale,
@@ -139,8 +139,8 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
           zmax: zMax,
           connectgaps: false,
           showscale: false, // Hide colorbar
-          zsmooth: false // Disable smoothing for pixel-perfect 1:1 export
-        } as any;
+          zsmooth: false as const // Disable smoothing for pixel-perfect 1:1 export
+        };
 
         // Clean layout - no axes, no title, transparent background
         const cleanLayout: Partial<Plotly.Layout> = {
@@ -217,8 +217,8 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
     const zMin = min ?? data.stats?.min ?? 0;
     const zMax = max ?? data.stats?.max ?? 1;
 
-    const trace: Partial<Plotly.Data> = {
-      type: 'heatmap',
+    const trace = {
+      type: 'heatmap' as const,
       z: zData,
       x: xAxis,
       y: yAxis,
@@ -235,7 +235,7 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
         x: 1.02
       },
       zsmooth: displaySettings.smoothing === 'none' ? false : displaySettings.smoothing
-    } as any;
+    };
 
     // Build filename annotations for composite scans
     const annotations: Partial<Plotly.Annotations>[] = [];

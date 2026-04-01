@@ -80,7 +80,7 @@ export function EditDefinitionModal({ isOpen, onClose, definition, categories }:
                     name: trimmedName,
                     description: description.trim() || undefined,
                     category_id: categoryId,
-                    field_type: fieldType as any,
+                    field_type: fieldType,
                     requires_document: requiresDocument,
                     requires_approval: requiresApproval,
                     is_active: isActive,
@@ -154,7 +154,7 @@ export function EditDefinitionModal({ isOpen, onClose, definition, categories }:
                 <FormSelect
                     label="Field Type"
                     value={fieldType}
-                    onChange={(e) => setFieldType(e.target.value as any)}
+                    onChange={(e) => setFieldType(e.target.value as CompetencyDefinition['field_type'])}
                     required
                 >
                     {FIELD_TYPE_OPTIONS.map((opt) => (
