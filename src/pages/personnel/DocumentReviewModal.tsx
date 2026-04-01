@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { PendingApproval } from '../../hooks/queries/useCompetencies';
 import { useApproveCompetency, useRejectCompetency, useRequestChanges } from '../../hooks/mutations/useCompetencyMutations';
-import competencyService from '../../services/competency-service.js';
+import competencyService from '../../services/competency-service.ts';
 
 interface DocumentReviewModalProps {
     approval: PendingApproval;

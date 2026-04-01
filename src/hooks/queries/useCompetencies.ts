@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import competencyService from '../../services/competency-service.js';
+import competencyService from '../../services/competency-service.ts';
 
 // Types - these match the database schema
 export interface CompetencyCategory {

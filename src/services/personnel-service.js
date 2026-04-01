@@ -1,7 +1,7 @@
 // Personnel Management Service
 import supabase, { isSupabaseConfigured } from '../supabase-client.js';
 import authManager from '../auth-manager.js';
-import competencyService from './competency-service.js';
+import competencyService from './competency-service.ts';
 
 /**
  * Service for managing personnel and their competencies

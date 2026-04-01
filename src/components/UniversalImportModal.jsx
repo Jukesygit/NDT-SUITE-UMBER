@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Papa from 'papaparse';
 import authManager from '../auth-manager.js';
-import competencyService from '../services/competency-service.js';
+import competencyService from '../services/competency-service.ts';
 import { RandomMatrixSpinner } from './MatrixSpinners';
 
 // XLSX will be dynamically imported when needed

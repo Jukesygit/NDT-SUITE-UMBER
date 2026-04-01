@@ -5,7 +5,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 // ES module import
-import competencyService from '../../services/competency-service.js';
+import competencyService from '../../services/competency-service.ts';
 
 interface CompetencyData {
     competency_id: string;
