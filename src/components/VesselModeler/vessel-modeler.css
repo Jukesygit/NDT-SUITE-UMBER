@@ -387,6 +387,15 @@
     color: white;
 }
 
+.vm-severity-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
 /* Nozzle library grid */
 .vm-library-grid {
     display: grid;
@@ -543,6 +552,87 @@
     background: var(--color-primary-500, #3b82f6);
     color: #000;
     border-color: var(--color-primary-500, #3b82f6);
+}
+
+/* Scan composite hover tooltip */
+.vm-scan-tooltip {
+    background: rgba(20, 25, 35, 0.92);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+}
+
+.vm-scan-tooltip-value {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+}
+
+.vm-scan-tooltip-label {
+    font-size: 0.625rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255, 255, 255, 0.4);
+    line-height: 1;
+}
+
+.vm-scan-tooltip-number {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.85);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+}
+
+.vm-scan-tooltip-number.primary {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #60a5fa;
+}
+
+.vm-scan-tooltip-unit {
+    font-size: 0.65rem;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.35);
+    margin-left: 2px;
+}
+
+.vm-scan-tooltip-divider {
+    width: 1px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.vm-scan-tooltip-toggle {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.4);
+    border-radius: 4px;
+    padding: 4px 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: all 0.15s;
+    pointer-events: auto;
+}
+
+.vm-scan-tooltip-toggle:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* Hint bar override when showing scan data */
+.vm-hint--scan {
+    background: transparent !important;
+    padding: 0 !important;
+    pointer-events: auto;
 }
 
 /* Status bar */
@@ -1046,21 +1136,24 @@
 }
 
 .vm-annotation-label-pos,
-.vm-annotation-label-circ,
-.vm-annotation-label-dims,
-.vm-annotation-label-region {
+.vm-annotation-label-area {
     color: rgba(255, 255, 255, 0.65);
 }
 
-.vm-annotation-label-dims {
+.vm-annotation-label-area {
     color: rgba(77, 184, 255, 0.9);
 }
 
-.vm-annotation-label-region {
-    color: rgba(255, 204, 0, 0.8);
-    font-size: 0.6rem;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
+.vm-annotation-label[data-severity="red"] {
+    border-left: 3px solid #ff3333;
+}
+
+.vm-annotation-label[data-severity="yellow"] {
+    border-left: 3px solid #ffaa00;
+}
+
+.vm-annotation-label[data-severity="green"] {
+    border-left: 3px solid #33cc33;
 }
 
 /* ===========================================================================

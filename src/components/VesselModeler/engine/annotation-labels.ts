@@ -51,43 +51,6 @@ export interface LabelDragContext {
 }
 
 // ---------------------------------------------------------------------------
-// Measurement Calculations
-// ---------------------------------------------------------------------------
-
-function computeAxialPosition(
-  posMm: number,
-  vesselState: VesselState,
-  config: MeasurementConfig,
-): { value: number; label: string } {
-  if (config.referenceTangent === 'right') {
-    return { value: Math.round(vesselState.length - posMm), label: 'from RTL' };
-  }
-  return { value: Math.round(posMm), label: 'from LTL' };
-}
-
-function computeCircumDistance(
-  angleDeg: number,
-  vesselState: VesselState,
-  config: MeasurementConfig,
-): { value: number; label: string } {
-  const circumference = Math.PI * vesselState.id;
-  const TDC = 90;
-  let angle = ((angleDeg % 360) + 360) % 360;
-  let diff = angle - TDC;
-  if (config.viewFromEnd === 'left') diff = -diff;
-  if (config.circumDirection === 'CCW') diff = -diff;
-  diff = ((diff % 360) + 360) % 360;
-  const distanceMm = Math.round((diff / 360) * circumference);
-  return { value: distanceMm, label: `${config.circumDirection} from TDC` };
-}
-
-function computeRegion(posMm: number, vesselState: VesselState): string {
-  if (posMm < 0) return 'Left Head';
-  if (posMm > vesselState.length) return 'Right Head';
-  return 'Shell';
-}
-
-// ---------------------------------------------------------------------------
 // 3D Position Helpers
 // ---------------------------------------------------------------------------
 
@@ -172,27 +135,28 @@ export function createAnnotationLeaderLine(
 export function createAnnotationLabel(
   config: AnnotationShapeConfig,
   vesselState: VesselState,
-  measurementConfig: MeasurementConfig,
+  _measurementConfig: MeasurementConfig,
   isSelected: boolean,
   dragContext?: LabelDragContext,
 ): CSS2DObject {
-  const axial = computeAxialPosition(config.pos, vesselState, measurementConfig);
-  const circum = computeCircumDistance(config.angle, vesselState, measurementConfig);
-  const region = computeRegion(config.pos, vesselState);
+  // Line 2: Scan (circumferential mm) and Index (axial mm from tangent line)
+  const scanMm = Math.round((config.angle / 360) * Math.PI * vesselState.id);
+  const indexMm = Math.round(config.pos);
 
-  const dimText = config.type === 'circle'
-    ? `\u2300 ${Math.round(config.width)} mm`
-    : `${Math.round(config.width)} \u00d7 ${Math.round(config.height)} mm`;
-
+  // Line 3: Area in m²
+  const areaSqM = config.type === 'circle'
+    ? (Math.PI * (config.width / 2) ** 2) / 1_000_000
+    : (config.width * config.height) / 1_000_000;
 
   const el = document.createElement('div');
   el.className = `vm-annotation-label${isSelected ? ' selected' : ''}`;
+  if (config.severityLevel) {
+    el.dataset.severity = config.severityLevel;
+  }
   el.innerHTML = `
     <div class="vm-annotation-label-name">${config.name}</div>
-    <div class="vm-annotation-label-pos">${axial.value} mm ${axial.label}</div>
-    <div class="vm-annotation-label-circ">${circum.value} mm ${circum.label}</div>
-    <div class="vm-annotation-label-dims">${dimText}</div>
-    <div class="vm-annotation-label-region">${region}</div>
+    <div class="vm-annotation-label-pos">Scan: ${scanMm}mm \u00a0 Index: ${indexMm}mm</div>
+    <div class="vm-annotation-label-area">${areaSqM.toFixed(2)} m\u00b2</div>
   `.trim();
 
   if (dragContext) {
