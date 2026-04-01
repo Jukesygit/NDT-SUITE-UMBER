@@ -83,9 +83,9 @@ function sampleComposite(
   if (scanOffsetDeg < 0 || scanOffsetDeg > scanRangeDeg) return undefined;
 
   // Convert offsets to data grid indices
-  const rowFrac = (indexOffset / indexRangeMm) * (data.length - 1);
-  const scanOffsetMm = (scanOffsetDeg / 360) * circumference;
-  const colFrac = (scanOffsetMm / scanRangeMm) * (data[0].length - 1);
+  const rowFrac = indexRangeMm > 0 ? (indexOffset / indexRangeMm) * (data.length - 1) : 0;
+  const scanOffsetMm = (scanOffsetDeg / 360) * circumference - xAxis[0];
+  const colFrac = scanRangeMm > 0 ? (scanOffsetMm / scanRangeMm) * (data[0].length - 1) : 0;
 
   const row = Math.round(rowFrac);
   const col = Math.round(colFrac);
