@@ -71,10 +71,11 @@ interface ThreeViewportProps {
     rulerDrawMode: boolean;
     previewRuler: RulerConfig | null;
     selectedScanCompositeId?: string;
+    inspectingAnnotationId?: number | null;
 }
 
 const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(function ThreeViewport(
-    { vesselState, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedAnnotationId, textureObjects, callbacks, nozzlesLocked, saddlesLocked, texturesLocked, lugsLocked, weldsLocked, selectedWeldIndex, selectedInspectionImageId, onInspectionImageThumbnailClick, drawMode, coverageDrawMode, previewAnnotation, previewCoverageRect, rulerDrawMode, previewRuler, selectedScanCompositeId = '' },
+    { vesselState, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedAnnotationId, textureObjects, callbacks, nozzlesLocked, saddlesLocked, texturesLocked, lugsLocked, weldsLocked, selectedWeldIndex, selectedInspectionImageId, onInspectionImageThumbnailClick, drawMode, coverageDrawMode, previewAnnotation, previewCoverageRect, rulerDrawMode, previewRuler, selectedScanCompositeId = '', inspectingAnnotationId },
     ref
 ) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -361,6 +362,8 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
 
             state.annotations.forEach((ann) => {
                 if (ann.visible === false) return;
+                // Hide leader line + label for the annotation being inspected
+                if (inspectingAnnotationId != null && ann.id === inspectingAnnotationId) return;
                 if (ann.showLabel) {
                     const leaderGroup = createAnnotationLeaderLine(ann, state, ann.id === selectedAnnotationId);
                     result.vesselGroup.add(leaderGroup);
@@ -400,7 +403,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             interactionRef.current.inspectionImageDotMeshes = inspectionImageDotMeshes;
             interactionRef.current.vesselGroup = result.vesselGroup;
         }
-    }, [textureObjects, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedScanCompositeId, selectedAnnotationId, selectedInspectionImageId, selectedWeldIndex, onInspectionImageThumbnailClick]);
+    }, [textureObjects, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedScanCompositeId, selectedAnnotationId, selectedInspectionImageId, selectedWeldIndex, onInspectionImageThumbnailClick, inspectingAnnotationId]);
 
     // =========================================================================
     // Tier 2 — Selection highlight update (O(n) material swaps, no geometry)

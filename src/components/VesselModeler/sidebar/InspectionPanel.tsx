@@ -5,7 +5,7 @@
 // when the user enters inspection mode on an annotation shape.
 // =============================================================================
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Camera, ChevronLeft, Upload, X } from 'lucide-react';
 import type { AnnotationShapeConfig, ThicknessThresholds, VesselState } from '../types';
 import {
@@ -19,7 +19,8 @@ interface InspectionPanelProps {
   vesselState: VesselState;
   onClose: () => void;
   onCycleToAnnotation: (id: number) => void;
-  onStatHover: (stat: 'min' | 'max' | null) => void;
+  onToggleStatLine: (stat: 'min' | 'max') => void;
+  visibleStatLines: { min: boolean; max: boolean };
   thicknessThresholds?: ThicknessThresholds;
   onUpdateThicknessThresholds: (thresholds: ThicknessThresholds) => void;
   onCaptureViewport: () => void;
@@ -64,7 +65,8 @@ export default function InspectionPanel({
   vesselState,
   onClose,
   onCycleToAnnotation,
-  onStatHover,
+  onToggleStatLine,
+  visibleStatLines,
   thicknessThresholds,
   onUpdateThicknessThresholds,
   onCaptureViewport,
@@ -73,6 +75,7 @@ export default function InspectionPanel({
   getImageUrl,
 }: InspectionPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [viewingImageUrl, setViewingImageUrl] = useState<string | null>(null);
   const stats = annotation.thicknessStats;
   const scanMm = scanPositionMm(annotation.angle, vesselState.id);
   const area = computeArea(annotation.type, annotation.width, annotation.height);
@@ -177,16 +180,16 @@ export default function InspectionPanel({
           <div className="vm-inspection-section-title">Thickness Statistics</div>
           <div
             className="vm-inspection-stat-row hoverable"
-            onMouseEnter={() => onStatHover('min')}
-            onMouseLeave={() => onStatHover(null)}
+            onClick={() => onToggleStatLine('min')}
+            style={{ opacity: visibleStatLines.min ? 1 : 0.5, borderLeft: visibleStatLines.min ? '3px solid #ef4444' : '3px solid transparent' }}
           >
             <span>Min</span>
             <span>{stats.min.toFixed(2)} mm</span>
           </div>
           <div
             className="vm-inspection-stat-row hoverable"
-            onMouseEnter={() => onStatHover('max')}
-            onMouseLeave={() => onStatHover(null)}
+            onClick={() => onToggleStatLine('max')}
+            style={{ opacity: visibleStatLines.max ? 1 : 0.5, borderLeft: visibleStatLines.max ? '3px solid #22c55e' : '3px solid transparent' }}
           >
             <span>Max</span>
             <span>{stats.max.toFixed(2)} mm</span>
@@ -269,7 +272,7 @@ export default function InspectionPanel({
               <div
                 key={att.id}
                 className="vm-inspection-thumbnail"
-                onClick={() => window.open(getImageUrl(att.storagePath), '_blank')}
+                onClick={() => setViewingImageUrl(getImageUrl(att.storagePath))}
                 title={att.type === 'viewport-capture' ? 'Viewport capture' : 'Uploaded image'}
               >
                 <img src={getImageUrl(att.storagePath)} alt={att.type} />
@@ -408,6 +411,36 @@ export default function InspectionPanel({
           onUpdate={onUpdateThicknessThresholds}
         />
       </div>
+      {/* Image lightbox */}
+      {viewingImageUrl && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,0.85)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+          onClick={() => setViewingImageUrl(null)}
+        >
+          <img
+            src={viewingImageUrl}
+            alt="Attachment"
+            style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: 6, objectFit: 'contain' }}
+            onClick={e => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setViewingImageUrl(null)}
+            style={{
+              position: 'absolute', top: 16, right: 16,
+              background: 'rgba(0,0,0,0.6)', border: 'none', color: '#fff',
+              width: 36, height: 36, borderRadius: '50%', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

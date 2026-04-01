@@ -244,10 +244,16 @@ export function createAnnotationHeatmapCanvas(
   const axialStep = (axialEnd - axialStart) / canvasW;
   const angleStep = (angleEnd - angleStart) / canvasH;
 
+  // Match 3D texture orientation: flip based on scan/index direction
+  const flipV = composite.scanDirection === 'cw';   // texture-manager: v = 1-v for CW
+  const flipU = composite.indexDirection === 'forward'; // texture-manager: u = 1-u for forward
+
   for (let py = 0; py < canvasH; py++) {
-    const angle = angleStart + (py + 0.5) * angleStep;
+    const yFrac = flipV ? (canvasH - 1 - py) : py;
+    const angle = angleStart + (yFrac + 0.5) * angleStep;
     for (let px = 0; px < canvasW; px++) {
-      const axial = axialStart + (px + 0.5) * axialStep;
+      const xFrac = flipU ? (canvasW - 1 - px) : px;
+      const axial = axialStart + (xFrac + 0.5) * axialStep;
       const idx = (py * canvasW + px) * 4;
 
       // Circle hit test

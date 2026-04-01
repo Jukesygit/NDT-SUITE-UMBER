@@ -343,7 +343,11 @@ export default function VesselModeler() {
     const cursorTooltipRef = useRef<HTMLDivElement>(null);
 
     // Inspection panel: which stat row is hovered (highlights min/max point on vessel)
-    const [statHover, setStatHover] = useState<'min' | 'max' | null>(null);
+    const [visibleStatLines, setVisibleStatLines] = useState<{ min: boolean; max: boolean }>({ min: true, max: true });
+
+    const toggleStatLine = useCallback((stat: 'min' | 'max') => {
+        setVisibleStatLines(prev => ({ ...prev, [stat]: !prev[stat] }));
+    }, []);
 
     // --- Helper: dispatch vessel update via functional updater ---
     const updateVessel = useCallback((updater: (prev: VesselState) => VesselState) => {
@@ -1484,6 +1488,7 @@ export default function VesselModeler() {
                         rulerDrawMode={drawModeState.ruler}
                         previewRuler={previews.ruler}
                         selectedScanCompositeId={selection.scanCompositeId}
+                        inspectingAnnotationId={ui.inspectingAnnotationId}
                     />
                 </ErrorBoundary>
 
@@ -1682,7 +1687,8 @@ export default function VesselModeler() {
                                 vesselState={vesselState}
                                 onClose={exitInspectionMode}
                                 onCycleToAnnotation={cycleInspection}
-                                onStatHover={setStatHover}
+                                onToggleStatLine={toggleStatLine}
+                                visibleStatLines={visibleStatLines}
                                 thicknessThresholds={vesselState.thicknessThresholds}
                                 onUpdateThicknessThresholds={updateThicknessThresholds}
                                 onCaptureViewport={captureViewport}
@@ -1690,14 +1696,27 @@ export default function VesselModeler() {
                                 onDeleteAttachment={deleteAttachment}
                                 getImageUrl={getAnnotationImageUrl}
                             />
-                            {statHover !== null && ann.thicknessStats && (
-                                <StatLeaderOverlay
-                                    hoveredStat={statHover}
-                                    annotation={ann}
-                                    vesselState={vesselState}
-                                    cameraRef={{ current: viewportRef.current?.getCamera() ?? null }}
-                                    containerRef={viewportContainerRef}
-                                />
+                            {ann.thicknessStats && (
+                                <>
+                                    {visibleStatLines.min && (
+                                        <StatLeaderOverlay
+                                            hoveredStat="min"
+                                            annotation={ann}
+                                            vesselState={vesselState}
+                                            cameraRef={{ current: viewportRef.current?.getCamera() ?? null }}
+                                            containerRef={viewportContainerRef}
+                                        />
+                                    )}
+                                    {visibleStatLines.max && (
+                                        <StatLeaderOverlay
+                                            hoveredStat="max"
+                                            annotation={ann}
+                                            vesselState={vesselState}
+                                            cameraRef={{ current: viewportRef.current?.getCamera() ?? null }}
+                                            containerRef={viewportContainerRef}
+                                        />
+                                    )}
+                                </>
                             )}
                         </>
                     );
