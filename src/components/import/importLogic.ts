@@ -1,5 +1,5 @@
 import authManager from '../../auth-manager.js';
-import competencyService from '../../services/competency-service.js';
+import competencyService from '../../services/competency-service';
 import { FIELD_MAPPING } from './fieldMapping';
 import { parseDate, parseBoolean } from './parseUtils';
 import type { ParsedData, ImportProgress } from './types';
