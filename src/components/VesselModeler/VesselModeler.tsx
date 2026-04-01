@@ -29,6 +29,8 @@ import { recomputeAllAnnotationStats } from './engine/annotation-stats';
 import { computeInspectionCameraTarget, animateCamera, cancelCameraAnimation } from './engine/camera-animation';
 import { useScanCompositeList } from '../../hooks/queries/useScanComposites';
 import { getScanComposite } from '../../services/scan-composite-service';
+import { uploadAnnotationImage, deleteAnnotationImage, getAnnotationImageUrl } from '../../services/annotation-attachment-service';
+import { useAuth } from '../../contexts/AuthContext';
 import './vessel-modeler.css';
 import * as THREE from 'three';
 
@@ -314,6 +316,12 @@ export default function VesselModeler() {
     const [state, dispatch] = useReducer(vesselReducer, INITIAL_STATE);
     const { vessel: vesselState, selection, locks, drawMode: drawModeState, previews, ui } = state;
 
+    // Auth context for attachment uploads
+    const { user } = useAuth();
+    const organizationId = user?.organizationId ?? 'local';
+    const vesselModelIdRef = useRef(crypto.randomUUID());
+    const vesselModelId = vesselModelIdRef.current;
+
     // Cloud composites query
     const { data: cloudComposites, error: cloudCompositesError, isLoading: cloudCompositesLoading } = useScanCompositeList();
     if (cloudCompositesError) console.error('Failed to fetch cloud composites:', cloudCompositesError);
@@ -442,6 +450,52 @@ export default function VesselModeler() {
         updateVessel(prev => ({ ...prev, annotations: prev.annotations.filter(a => a.id !== id) }));
         dispatch({ type: 'SELECT_ANNOTATION', id: -1 });
     }, [updateVessel]);
+
+    // --- Annotation attachment handlers ---
+    const captureViewport = useCallback(async () => {
+        const renderer = viewportRef.current?.getRenderer();
+        const canvas = renderer?.domElement;
+        if (!canvas || ui.inspectingAnnotationId == null) return;
+
+        // Force a render so the canvas has current content
+        const scene = viewportRef.current?.getScene();
+        const camera = viewportRef.current?.getCamera();
+        if (scene && camera) renderer!.render(scene, camera);
+
+        const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+        if (!blob) return;
+
+        const { storagePath, id } = await uploadAnnotationImage(
+            organizationId, vesselModelId, ui.inspectingAnnotationId, blob, 'viewport-capture',
+        );
+        const attachment = { id, type: 'viewport-capture' as const, storagePath, capturedAt: new Date().toISOString() };
+        const ann = vesselState.annotations.find(a => a.id === ui.inspectingAnnotationId);
+        updateAnnotation(ui.inspectingAnnotationId, {
+            attachments: [...(ann?.attachments ?? []), attachment],
+        });
+    }, [ui.inspectingAnnotationId, vesselState, organizationId, vesselModelId, updateAnnotation]);
+
+    const uploadImage = useCallback(async (file: File) => {
+        if (ui.inspectingAnnotationId == null) return;
+        const { storagePath, id } = await uploadAnnotationImage(
+            organizationId, vesselModelId, ui.inspectingAnnotationId, file, 'upload',
+        );
+        const attachment = { id, type: 'upload' as const, storagePath, capturedAt: new Date().toISOString() };
+        const ann = vesselState.annotations.find(a => a.id === ui.inspectingAnnotationId);
+        updateAnnotation(ui.inspectingAnnotationId, {
+            attachments: [...(ann?.attachments ?? []), attachment],
+        });
+    }, [ui.inspectingAnnotationId, vesselState, organizationId, vesselModelId, updateAnnotation]);
+
+    const deleteAttachment = useCallback(async (attachmentId: string) => {
+        if (ui.inspectingAnnotationId == null) return;
+        const ann = vesselState.annotations.find(a => a.id === ui.inspectingAnnotationId);
+        const attachment = ann?.attachments?.find(a => a.id === attachmentId);
+        if (attachment) await deleteAnnotationImage(attachment.storagePath);
+        updateAnnotation(ui.inspectingAnnotationId, {
+            attachments: (ann?.attachments ?? []).filter(a => a.id !== attachmentId),
+        });
+    }, [ui.inspectingAnnotationId, vesselState, updateAnnotation]);
 
     // --- Annotation stats recomputation ---
     const recomputeAnnotationStats = useCallback(() => {
@@ -1625,6 +1679,10 @@ export default function VesselModeler() {
                                 onStatHover={setStatHover}
                                 thicknessThresholds={vesselState.thicknessThresholds}
                                 onUpdateThicknessThresholds={updateThicknessThresholds}
+                                onCaptureViewport={captureViewport}
+                                onUploadImage={uploadImage}
+                                onDeleteAttachment={deleteAttachment}
+                                getImageUrl={getAnnotationImageUrl}
                             />
                             {statHover !== null && ann.thicknessStats && (
                                 <StatLeaderOverlay

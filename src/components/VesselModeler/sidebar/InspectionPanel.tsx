@@ -6,7 +6,7 @@
 // =============================================================================
 
 import { useEffect, useRef } from 'react';
-import { ChevronLeft } from 'lucide-react';
+import { Camera, ChevronLeft, Upload, X } from 'lucide-react';
 import type { AnnotationShapeConfig, ThicknessThresholds, VesselState } from '../types';
 import {
   createAnnotationHeatmapCanvas,
@@ -22,6 +22,10 @@ interface InspectionPanelProps {
   onStatHover: (stat: 'min' | 'max' | null) => void;
   thicknessThresholds?: ThicknessThresholds;
   onUpdateThicknessThresholds: (thresholds: ThicknessThresholds) => void;
+  onCaptureViewport: () => void;
+  onUploadImage: (file: File) => void;
+  onDeleteAttachment: (attachmentId: string) => void;
+  getImageUrl: (storagePath: string) => string;
 }
 
 // ---------------------------------------------------------------------------
@@ -63,7 +67,12 @@ export default function InspectionPanel({
   onStatHover,
   thicknessThresholds,
   onUpdateThicknessThresholds,
+  onCaptureViewport,
+  onUploadImage,
+  onDeleteAttachment,
+  getImageUrl,
 }: InspectionPanelProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const stats = annotation.thicknessStats;
   const scanMm = scanPositionMm(annotation.angle, vesselState.id);
   const area = computeArea(annotation.type, annotation.width, annotation.height);
@@ -242,22 +251,96 @@ export default function InspectionPanel({
         )}
       </div>
 
-      {/* Placeholder: Attachments */}
+      {/* Attachments */}
       <div className="vm-inspection-section">
-        <div className="vm-inspection-section-title">Attachments</div>
-        <div
-          style={{
-            height: 48,
-            background: 'rgba(255,255,255,0.03)',
-            borderRadius: 4,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '0.75rem',
-            color: 'rgba(255,255,255,0.25)',
-          }}
-        >
-          Coming soon
+        <div className="vm-inspection-section-title">
+          Attachments
+          {annotation.attachments && annotation.attachments.length > 0 && (
+            <span style={{ fontWeight: 400, fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginLeft: 6 }}>
+              ({annotation.attachments.length})
+            </span>
+          )}
+        </div>
+
+        {/* Thumbnail grid */}
+        {annotation.attachments && annotation.attachments.length > 0 && (
+          <div className="vm-inspection-attachments-grid">
+            {annotation.attachments.map(att => (
+              <div
+                key={att.id}
+                className="vm-inspection-thumbnail"
+                onClick={() => window.open(getImageUrl(att.storagePath), '_blank')}
+                title={att.type === 'viewport-capture' ? 'Viewport capture' : 'Uploaded image'}
+              >
+                <img src={getImageUrl(att.storagePath)} alt={att.type} />
+                <button
+                  className="vm-inspection-thumbnail-delete"
+                  onClick={e => {
+                    e.stopPropagation();
+                    onDeleteAttachment(att.id);
+                  }}
+                  title="Delete attachment"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={onCaptureViewport}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              padding: '6px 8px',
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 4,
+              color: '#ccc',
+              cursor: 'pointer',
+              fontSize: '0.75rem',
+            }}
+            title="Capture current viewport as image"
+          >
+            <Camera size={14} /> Capture
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              padding: '6px 8px',
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 4,
+              color: '#ccc',
+              cursor: 'pointer',
+              fontSize: '0.75rem',
+            }}
+            title="Upload an image file"
+          >
+            <Upload size={14} /> Upload
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={e => {
+              const file = e.target.files?.[0];
+              if (file) onUploadImage(file);
+              e.target.value = '';
+            }}
+          />
         </div>
       </div>
 
