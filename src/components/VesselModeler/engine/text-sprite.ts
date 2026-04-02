@@ -22,15 +22,16 @@ interface TextLine {
   color: string;
 }
 
-const PADDING_X = 16;
-const PADDING_Y = 12;
-const LINE_HEIGHT = 36;
-const FONT_SIZE_NAME = 28;
-const FONT_SIZE_DETAIL = 24;
-const BORDER_WIDTH = 2;
+const CANVAS_SCALE = 2;          // render at 2x for crisp text
+const PADDING_X = 16 * CANVAS_SCALE;
+const PADDING_Y = 12 * CANVAS_SCALE;
+const LINE_HEIGHT = 36 * CANVAS_SCALE;
+const FONT_SIZE_NAME = 28 * CANVAS_SCALE;
+const FONT_SIZE_DETAIL = 24 * CANVAS_SCALE;
+const BORDER_WIDTH = 2 * CANVAS_SCALE;
 
 /**
- * Render multi-line styled text onto a canvas and return it as a THREE.Sprite.
+ * Render multi-line styled text onto a hi-res canvas and return as a plane Mesh.
  * The canvas is auto-sized to fit the text content.
  */
 function createTextSprite(
@@ -38,11 +39,13 @@ function createTextSprite(
   background: string,
   borderColor: string,
   worldScale: number,
-): THREE.Sprite {
+): THREE.Mesh {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
 
-  // Measure text to determine canvas size
+  // Measure text on a temporary canvas to determine dimensions.
+  // Setting canvas.width later resets ctx state, so we measure first,
+  // then re-apply fonts when drawing.
   let maxWidth = 0;
   if (ctx) {
     for (const line of lines) {
@@ -51,14 +54,14 @@ function createTextSprite(
       maxWidth = Math.max(maxWidth, metrics.width);
     }
   } else {
-    // Fallback estimate when canvas context unavailable (e.g. test environments)
     for (const line of lines) {
-      maxWidth = Math.max(maxWidth, line.text.length * 14);
+      maxWidth = Math.max(maxWidth, line.text.length * 14 * CANVAS_SCALE);
     }
   }
 
   const contentHeight = lines.length * LINE_HEIGHT;
-  canvas.width = Math.ceil(maxWidth + PADDING_X * 2 + BORDER_WIDTH * 2);
+  // Extra 10% margin to guard against measurement rounding
+  canvas.width = Math.ceil((maxWidth + PADDING_X * 2 + BORDER_WIDTH * 2) * 1.1);
   canvas.height = Math.ceil(contentHeight + PADDING_Y * 2 + BORDER_WIDTH * 2);
 
   if (ctx) {
@@ -76,7 +79,7 @@ function createTextSprite(
       canvas.height - BORDER_WIDTH,
     );
 
-    // Text lines
+    // Text lines (re-apply font after canvas resize reset the context)
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       ctx.font = line.font;
@@ -90,27 +93,34 @@ function createTextSprite(
     }
   }
 
-  // Create texture + sprite
+  // Create texture + mesh plane (GLTFExporter does not support THREE.Sprite)
   const texture = new THREE.CanvasTexture(canvas);
   texture.minFilter = THREE.LinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.generateMipmaps = false;
 
-  const material = new THREE.SpriteMaterial({
+  // World size accounts for canvas scale so the label stays the same physical size
+  const w = (canvas.width / CANVAS_SCALE) * worldScale;
+  const h = (canvas.height / CANVAS_SCALE) * worldScale;
+  const geometry = new THREE.PlaneGeometry(w, h);
+
+  // Flip UVs horizontally so text reads correctly when the plane faces the camera.
+  // PlaneGeometry default UVs assume viewing from +Z; in the exported GLB the
+  // labels are typically viewed from -Z, which mirrors the text.
+  const uv = geometry.attributes.uv;
+  for (let i = 0; i < uv.count; i++) {
+    uv.setX(i, 1 - uv.getX(i));
+  }
+
+  const material = new THREE.MeshBasicMaterial({
     map: texture,
     transparent: true,
     depthWrite: false,
-    sizeAttenuation: true,
+    side: THREE.DoubleSide,
   });
 
-  const sprite = new THREE.Sprite(material);
-  sprite.scale.set(
-    canvas.width * worldScale,
-    canvas.height * worldScale,
-    1,
-  );
-
-  return sprite;
+  const mesh = new THREE.Mesh(geometry, material);
+  return mesh;
 }
 
 // ---------------------------------------------------------------------------
@@ -124,7 +134,7 @@ function createTextSprite(
 export function createAnnotationLabelSprite(
   config: AnnotationShapeConfig,
   vesselState: VesselState,
-): THREE.Sprite {
+): THREE.Mesh {
   const scanMm = Math.round((config.angle / 360) * Math.PI * vesselState.id);
   const indexMm = Math.round(config.pos);
   const areaSqM = config.type === 'circle'
@@ -150,9 +160,9 @@ export function createAnnotationLabelSprite(
   ];
 
   // Scale labels relative to vessel size so they're readable but not overwhelming
-  const worldScale = vesselState.id * SCALE * 0.003;
+  const worldScale = vesselState.id * SCALE * 0.001;
 
-  const sprite = createTextSprite(
+  const mesh = createTextSprite(
     lines,
     'rgba(10, 14, 20, 0.88)',
     'rgba(255, 255, 255, 0.15)',
@@ -160,10 +170,10 @@ export function createAnnotationLabelSprite(
   );
 
   const position = getAnnotationLeaderEndPosition(config, vesselState);
-  sprite.position.copy(position);
-  sprite.userData = { type: 'export-label', sourceType: 'annotation', sourceId: config.id };
+  mesh.position.copy(position);
+  mesh.userData = { type: 'export-label', sourceType: 'annotation', sourceId: config.id };
 
-  return sprite;
+  return mesh;
 }
 
 // ---------------------------------------------------------------------------
@@ -177,7 +187,7 @@ export function createAnnotationLabelSprite(
 export function createRulerLabelSprite(
   config: RulerConfig,
   vesselState: VesselState,
-): THREE.Sprite {
+): THREE.Mesh {
   const distMm = computeRulerDistance(config, vesselState);
 
   const lines: TextLine[] = [
@@ -188,9 +198,9 @@ export function createRulerLabelSprite(
     },
   ];
 
-  const worldScale = vesselState.id * SCALE * 0.003;
+  const worldScale = vesselState.id * SCALE * 0.001;
 
-  const sprite = createTextSprite(
+  const mesh = createTextSprite(
     lines,
     'rgba(255, 170, 0, 0.9)',
     'rgba(200, 130, 0, 1)',
@@ -202,8 +212,8 @@ export function createRulerLabelSprite(
   const midAngle = (config.startAngle + config.endAngle) / 2;
   const surfaceOffset = 5;
   const point = shellPoint(midPos, (midAngle * Math.PI) / 180, vesselState, surfaceOffset);
-  sprite.position.copy(point);
-  sprite.userData = { type: 'export-label', sourceType: 'ruler', sourceId: config.id };
+  mesh.position.copy(point);
+  mesh.userData = { type: 'export-label', sourceType: 'ruler', sourceId: config.id };
 
-  return sprite;
+  return mesh;
 }

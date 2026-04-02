@@ -85,12 +85,39 @@ function filterScene(root: THREE.Object3D): void {
 // ---------------------------------------------------------------------------
 
 /**
+ * Temporarily strip large / non-serialisable userData fields before
+ * `Object3D.clone(true)` (which internally does `JSON.parse(JSON.stringify(userData))`).
+ * Returns a restore function that puts the original userData back.
+ */
+function stripHeavyUserData(root: THREE.Object3D): () => void {
+  const saved: { obj: THREE.Object3D; original: Record<string, unknown> }[] = [];
+
+  root.traverse((obj) => {
+    const ud = obj.userData;
+    if (!ud) return;
+    // scanComposite meshes store the full measurement array in userData.data
+    if (ud.type === 'scanComposite' && ud.data) {
+      saved.push({ obj, original: { ...ud } });
+      // Keep only lightweight fields needed for export identification
+      const { data, stats, xAxis, yAxis, ...lightweight } = ud;
+      obj.userData = lightweight;
+    }
+  });
+
+  return () => {
+    for (const entry of saved) {
+      entry.obj.userData = entry.original;
+    }
+  };
+}
+
+/**
  * Export the vessel model as a binary .glb file and trigger a download.
  *
  * Pipeline:
  * 1. Deep-clone the vessel group (never mutate the live scene)
  * 2. Strip CSS2D labels, helpers, selection highlights, hit meshes, gizmos
- * 3. Bake annotation + ruler labels as THREE.Sprite (canvas textures)
+ * 3. Bake annotation + ruler labels as Mesh planes (canvas textures)
  * 4. Run GLTFExporter in binary mode
  * 5. Create Blob and trigger browser download
  */
@@ -99,12 +126,19 @@ export async function exportVesselGLB(
   vesselState: VesselState,
 ): Promise<void> {
   // 1. Deep-clone to avoid mutating the live scene
-  const clone = vesselGroup.clone(true);
+  //    Strip heavy userData first to prevent JSON.stringify overflow during clone
+  const restore = stripHeavyUserData(vesselGroup);
+  let clone: THREE.Group;
+  try {
+    clone = vesselGroup.clone(true);
+  } finally {
+    restore();
+  }
 
   // 2. Filter out non-exportable objects
   filterScene(clone);
 
-  // 3. Add text label sprites for annotations
+  // 3. Add text label meshes for annotations
   for (const ann of vesselState.annotations) {
     if (!ann.showLabel) continue;
     if (ann.visible === false) continue;
@@ -113,7 +147,7 @@ export async function exportVesselGLB(
     clone.add(sprite);
   }
 
-  // 4. Add text label sprites for rulers
+  // 4. Add text label meshes for rulers
   for (const ruler of vesselState.rulers) {
     if (!ruler.showLabel) continue;
 
@@ -143,10 +177,10 @@ export async function exportVesselGLB(
 
   // 7. Dispose cloned resources
   clone.traverse((obj) => {
-    if (obj instanceof THREE.Mesh || obj instanceof THREE.Sprite) {
+    if (obj instanceof THREE.Mesh) {
       const mat = obj.material as THREE.Material;
       if (mat) mat.dispose();
-      if ('geometry' in obj && obj.geometry) obj.geometry.dispose();
+      if (obj.geometry) obj.geometry.dispose();
     }
   });
 }

@@ -340,7 +340,7 @@ describe('gltf-export filtering', () => {
       ],
     });
 
-    const sprites: THREE.Sprite[] = [];
+    const sprites: THREE.Mesh[] = [];
     for (const ann of state.annotations) {
       if (!ann.showLabel) continue;
       if (ann.visible === false) continue;
@@ -362,7 +362,7 @@ describe('gltf-export filtering', () => {
       ],
     });
 
-    const sprites: THREE.Sprite[] = [];
+    const sprites: THREE.Mesh[] = [];
     for (const ruler of state.rulers) {
       if (!ruler.showLabel) continue;
       sprites.push(createRulerLabelSprite(ruler, state));
