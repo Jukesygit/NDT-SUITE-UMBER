@@ -40,45 +40,54 @@ function createTextSprite(
   worldScale: number,
 ): THREE.Sprite {
   const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d')!;
+  const ctx = canvas.getContext('2d');
 
   // Measure text to determine canvas size
   let maxWidth = 0;
-  for (const line of lines) {
-    ctx.font = line.font;
-    const metrics = ctx.measureText(line.text);
-    maxWidth = Math.max(maxWidth, metrics.width);
+  if (ctx) {
+    for (const line of lines) {
+      ctx.font = line.font;
+      const metrics = ctx.measureText(line.text);
+      maxWidth = Math.max(maxWidth, metrics.width);
+    }
+  } else {
+    // Fallback estimate when canvas context unavailable (e.g. test environments)
+    for (const line of lines) {
+      maxWidth = Math.max(maxWidth, line.text.length * 14);
+    }
   }
 
   const contentHeight = lines.length * LINE_HEIGHT;
   canvas.width = Math.ceil(maxWidth + PADDING_X * 2 + BORDER_WIDTH * 2);
   canvas.height = Math.ceil(contentHeight + PADDING_Y * 2 + BORDER_WIDTH * 2);
 
-  // Background
-  ctx.fillStyle = background;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (ctx) {
+    // Background
+    ctx.fillStyle = background;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Border
-  ctx.strokeStyle = borderColor;
-  ctx.lineWidth = BORDER_WIDTH;
-  ctx.strokeRect(
-    BORDER_WIDTH / 2,
-    BORDER_WIDTH / 2,
-    canvas.width - BORDER_WIDTH,
-    canvas.height - BORDER_WIDTH,
-  );
-
-  // Text lines
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    ctx.font = line.font;
-    ctx.fillStyle = line.color;
-    ctx.textBaseline = 'top';
-    ctx.fillText(
-      line.text,
-      PADDING_X + BORDER_WIDTH,
-      PADDING_Y + BORDER_WIDTH + i * LINE_HEIGHT,
+    // Border
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = BORDER_WIDTH;
+    ctx.strokeRect(
+      BORDER_WIDTH / 2,
+      BORDER_WIDTH / 2,
+      canvas.width - BORDER_WIDTH,
+      canvas.height - BORDER_WIDTH,
     );
+
+    // Text lines
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      ctx.font = line.font;
+      ctx.fillStyle = line.color;
+      ctx.textBaseline = 'top';
+      ctx.fillText(
+        line.text,
+        PADDING_X + BORDER_WIDTH,
+        PADDING_Y + BORDER_WIDTH + i * LINE_HEIGHT,
+      );
+    }
   }
 
   // Create texture + sprite
