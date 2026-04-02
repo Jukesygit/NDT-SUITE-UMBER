@@ -1,5 +1,5 @@
 import { useState, useReducer, useRef, useCallback, useEffect, lazy, Suspense, type ChangeEvent } from 'react';
-import { Lock, Unlock, Save, Upload, RotateCcw, PanelLeftClose, PanelLeft, FileUp, Camera, AlertTriangle, MousePointer, PanelBottomClose } from 'lucide-react';
+import { Lock, Unlock, Save, Upload, RotateCcw, PanelLeftClose, PanelLeft, FileUp, Camera, AlertTriangle, MousePointer, PanelBottomClose, Box } from 'lucide-react';
 import ThreeViewport from './ThreeViewport';
 import ErrorBoundary from '../ErrorBoundary';
 import type { ThreeViewportHandle } from './ThreeViewport';
@@ -25,6 +25,7 @@ import {
 } from './types';
 import type { ExtractionResult } from './engine/drawing-parser';
 import { loadTextureFromData, clearHeatmapCache } from './engine/texture-manager';
+import { exportVesselGLB } from './engine/gltf-export';
 import { recomputeAllAnnotationStats } from './engine/annotation-stats';
 import { computeInspectionCameraTarget, animateCamera, cancelCameraAnimation } from './engine/camera-animation';
 import { useScanCompositeList } from '../../hooks/queries/useScanComposites';
@@ -937,6 +938,18 @@ export default function VesselModeler() {
         URL.revokeObjectURL(url);
     }, [vesselState]);
 
+    const exportGLB = useCallback(async () => {
+        const sceneManager = viewportRef.current?.getSceneManager();
+        const vesselGroup = sceneManager?.getVesselGroup();
+        if (!vesselGroup) return;
+
+        try {
+            await exportVesselGLB(vesselGroup, vesselState);
+        } catch (err) {
+            console.error('GLB export failed:', err);
+        }
+    }, [vesselState]);
+
     const loadProject = useCallback((event: ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -1672,6 +1685,9 @@ export default function VesselModeler() {
                         <Upload size={16} /> Load
                         <input type="file" accept=".json" onChange={loadProject} style={{ display: 'none' }} />
                     </label>
+                    <button className="vm-quick-btn" onClick={exportGLB} title="Export 3D Model (.glb)">
+                        <Box size={16} /> 3D Export
+                    </button>
                 </div>
 
                 {/* Coverage overlay */}
