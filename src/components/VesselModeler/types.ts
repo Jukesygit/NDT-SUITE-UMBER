@@ -391,6 +391,12 @@ export interface VesselState {
   /** Head ratio (e.g., 2.0 for 2:1 Ellipsoidal) */
   headRatio: number;
   orientation: Orientation;
+  /** Display name for the vessel (e.g., "V-2401") */
+  vesselName: string;
+  /** Site/facility location (e.g., "Karstoe Terminal") */
+  location: string;
+  /** Inspection date as ISO string (e.g., "2026-04-02") */
+  inspectionDate: string;
   nozzles: NozzleConfig[];
   liftingLugs: LiftingLugConfig[];
   saddles: SaddleConfig[];
@@ -714,6 +720,9 @@ export const DEFAULT_VESSEL_STATE: VesselState = {
   length: 8000,
   headRatio: 2.0,
   orientation: 'horizontal',
+  vesselName: '',
+  location: '',
+  inspectionDate: '',
   nozzles: [],
   liftingLugs: [],
   saddles: [

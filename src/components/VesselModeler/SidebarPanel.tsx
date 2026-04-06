@@ -27,6 +27,7 @@ import {
     AnnotationSection,
     CoverageSection,
     InspectionImageSection,
+    ProjectInfoSection,
 } from './sidebar';
 
 // ---------------------------------------------------------------------------
@@ -133,6 +134,10 @@ export default function SidebarPanel(props: SidebarPanelProps) {
 
             {/* Scrollable sections */}
             <div style={{ flex: 1, overflowY: 'auto' }}>
+                <ProjectInfoSection
+                    vesselState={vesselState}
+                    onUpdateDimensions={props.onUpdateDimensions}
+                />
                 <DimensionsSection
                     vesselState={vesselState}
                     onUpdateDimensions={props.onUpdateDimensions}

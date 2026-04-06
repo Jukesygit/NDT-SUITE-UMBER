@@ -11,8 +11,7 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import type { VesselState } from '../types';
-import { createAnnotationLabelSprite } from './text-sprite';
-import { createRulerLabelSprite } from './text-sprite';
+import { createAnnotationLabelSprite, createRulerLabelSprite, createNameplateSprite } from './text-sprite';
 
 // ---------------------------------------------------------------------------
 // userData types to exclude from export
@@ -155,7 +154,13 @@ export async function exportVesselGLB(
     clone.add(sprite);
   }
 
-  // 5. Export as GLB
+  // 5. Add nameplate if project info is provided
+  const nameplate = createNameplateSprite(vesselState);
+  if (nameplate) {
+    clone.add(nameplate);
+  }
+
+  // 6. Export as GLB
   const exporter = new GLTFExporter();
   const glb = await exporter.parseAsync(clone, {
     binary: true,
@@ -169,7 +174,10 @@ export async function exportVesselGLB(
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `vessel_model_${new Date().toISOString().slice(0, 10)}.glb`;
+  const baseName = vesselState.vesselName
+    ? vesselState.vesselName.replace(/[^a-zA-Z0-9_-]/g, '_')
+    : 'vessel_model';
+  a.download = `${baseName}_${new Date().toISOString().slice(0, 10)}.glb`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

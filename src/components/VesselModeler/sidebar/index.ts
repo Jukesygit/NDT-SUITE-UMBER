@@ -1,4 +1,5 @@
 export { SliderRow, Section, SubSection } from './SliderRow';
+export { ProjectInfoSection } from './ProjectInfoSection';
 export { DimensionsSection } from './DimensionsSection';
 export { VisualsSection } from './VisualsSection';
 export { NozzleSection } from './NozzleSection';

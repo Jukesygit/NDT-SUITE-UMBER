@@ -851,6 +851,9 @@ export default function VesselModeler() {
                 length: vesselState.length,
                 headRatio: vesselState.headRatio,
                 orientation: vesselState.orientation,
+                vesselName: vesselState.vesselName,
+                location: vesselState.location,
+                inspectionDate: vesselState.inspectionDate,
             },
             nozzles: vesselState.nozzles.map(n => ({
                 name: n.name, pos: n.pos, proj: n.proj,
@@ -922,7 +925,9 @@ export default function VesselModeler() {
             visuals: { ...vesselState.visuals },
         };
 
-        const defaultName = `vessel_project_${new Date().toISOString().slice(0, 10)}`;
+        const defaultName = vesselState.vesselName
+            ? `${vesselState.vesselName.replace(/[^a-zA-Z0-9_-]/g, '_')}_${new Date().toISOString().slice(0, 10)}`
+            : `vessel_project_${new Date().toISOString().slice(0, 10)}`;
         const filename = prompt('Enter filename:', defaultName);
         if (!filename) return;
 
@@ -1003,6 +1008,9 @@ export default function VesselModeler() {
                     length: projectData.vessel.length || 8000,
                     headRatio: projectData.vessel.headRatio || 2.0,
                     orientation: projectData.vessel.orientation || 'horizontal',
+                    vesselName: projectData.vessel.vesselName || '',
+                    location: projectData.vessel.location || '',
+                    inspectionDate: projectData.vessel.inspectionDate || '',
                     nozzles: (projectData.nozzles || []).map((n: any) => ({
                         name: n.name || 'N', pos: n.pos ?? 0, proj: n.proj ?? 200,
                         angle: n.angle ?? 90, size: n.size ?? 100,
