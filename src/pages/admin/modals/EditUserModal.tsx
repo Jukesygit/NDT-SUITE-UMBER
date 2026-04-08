@@ -18,6 +18,7 @@ import { RandomMatrixSpinner } from '../../../components/MatrixSpinners';
 import { useUpdateUser } from '../../../hooks/mutations/useUserMutations';
 import { useOrganizations } from '../../../hooks/queries/useAdminOrganizations';
 import type { AdminUser, UserRole as AdminUserRole } from '../../../types/admin';
+import { useAuth } from '../../../contexts/AuthContext';
 
 export interface EditUserModalProps {
     isOpen: boolean;
@@ -43,6 +44,7 @@ interface FormErrors {
 export function EditUserModal({ isOpen, onClose, user }: EditUserModalProps) {
     // Query hooks
     const { data: organizations = [], isLoading: isLoadingOrgs } = useOrganizations();
+    const { isSuperAdmin } = useAuth();
 
     // Mutation hook
     const updateUser = useUpdateUser();
@@ -238,6 +240,7 @@ export function EditUserModal({ isOpen, onClose, user }: EditUserModalProps) {
                         { value: 'org_admin', label: 'Org Admin - Manage organization (Data Hub, Tools, Profile)' },
                         { value: 'manager', label: 'Manager - Full access except Admin tools' },
                         { value: 'admin', label: 'Admin - Full system access' },
+                        ...(isSuperAdmin ? [{ value: 'super_admin', label: 'Super Admin - Full access + tab visibility control' }] : []),
                     ]}
                 />
 

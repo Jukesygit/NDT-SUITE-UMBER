@@ -2,7 +2,7 @@
  * Authentication Type Definitions
  */
 
-export type UserRole = 'admin' | 'manager' | 'org_admin' | 'editor' | 'viewer';
+export type UserRole = 'super_admin' | 'admin' | 'manager' | 'org_admin' | 'editor' | 'viewer';
 
 export enum Permission {
   VIEW = 'view',

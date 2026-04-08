@@ -35,8 +35,12 @@ export function isLoggedIn(this: { currentUser: AuthCurrentUser | null }): boole
     return this.currentUser !== null;
 }
 
+export function isSuperAdmin(this: { currentUser: AuthCurrentUser | null }): boolean {
+    return this.currentUser?.role === ROLES.SUPER_ADMIN;
+}
+
 export function isAdmin(this: { currentUser: AuthCurrentUser | null }): boolean {
-    return this.currentUser?.role === ROLES.ADMIN;
+    return this.currentUser?.role === ROLES.ADMIN || this.currentUser?.role === ROLES.SUPER_ADMIN;
 }
 
 export function isManager(this: { currentUser: AuthCurrentUser | null }): boolean {
@@ -65,7 +69,7 @@ export function canAccessOrganization(
     organizationId: string,
 ): boolean {
     if (!this.currentUser) return false;
-    if (this.currentUser.role === ROLES.ADMIN) return true;
+    if (this.currentUser.role === ROLES.SUPER_ADMIN || this.currentUser.role === ROLES.ADMIN) return true;
     return this.currentUser.organizationId === organizationId;
 }
 

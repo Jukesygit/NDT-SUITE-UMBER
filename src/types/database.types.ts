@@ -12,7 +12,7 @@ export interface Profile {
   id: string;                    // UUID - References auth.users(id)
   username: string;              // Unique username
   email: string;                 // User email
-  role: 'admin' | 'manager' | 'org_admin' | 'editor' | 'viewer';  // User role
+  role: 'super_admin' | 'admin' | 'manager' | 'org_admin' | 'editor' | 'viewer';  // User role
 
   // Organization & Status
   organization_id: string | null;  // UUID - References organizations(id)
@@ -42,7 +42,7 @@ export interface ProfileInsert {
   id: string;                      // Must match auth.users id
   username: string;
   email: string;
-  role: 'admin' | 'manager' | 'org_admin' | 'editor' | 'viewer';
+  role: 'super_admin' | 'admin' | 'manager' | 'org_admin' | 'editor' | 'viewer';
 
   // Optional fields
   organization_id?: string | null;
@@ -69,7 +69,7 @@ export interface ProfileInsert {
 export interface ProfileUpdate {
   username?: string;
   email?: string;
-  role?: 'admin' | 'org_admin' | 'editor' | 'viewer';
+  role?: 'super_admin' | 'admin' | 'org_admin' | 'editor' | 'viewer';
   organization_id?: string | null;
   is_active?: boolean;
   mobile_number?: string | null;
@@ -215,7 +215,7 @@ export type TypedSupabaseClient = any; // Replace with actual Supabase client ty
  * User role type guard
  */
 export function isValidRole(role: string): role is Profile['role'] {
-  return ['admin', 'manager', 'org_admin', 'editor', 'viewer'].includes(role);
+  return ['super_admin', 'admin', 'manager', 'org_admin', 'editor', 'viewer'].includes(role);
 }
 
 /**

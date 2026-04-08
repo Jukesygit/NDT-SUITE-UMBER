@@ -1,6 +1,7 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, useMemo, lazy, Suspense } from 'react';
 import { PageHeader, SectionSpinner } from '../../components/ui';
 import { useAccountRequests, usePermissionRequests } from '../../hooks/queries';
+import { useAuth } from '../../contexts/AuthContext';
 
 const OverviewTab = lazy(() => import('./tabs/OverviewTab'));
 const OrganizationsTab = lazy(() => import('./tabs/OrganizationsTab'));
@@ -11,15 +12,17 @@ const ActivityLogTab = lazy(() => import('./tabs/ActivityLogTab'));
 const CompetencyTypesTab = lazy(() => import('./tabs/CompetencyTypesTab'));
 const NotificationsTab = lazy(() => import('./tabs/NotificationsTab'));
 const UKASComplianceTab = lazy(() => import('./tabs/UKASComplianceTab'));
+const TabVisibilityTab = lazy(() => import('./tabs/TabVisibilityTab'));
 
-type TabType = 'overview' | 'organizations' | 'users' | 'requests' | 'notifications' | 'configuration' | 'competency-types' | 'activity' | 'ukas-compliance';
+type TabType = 'overview' | 'organizations' | 'users' | 'requests' | 'notifications' | 'configuration' | 'competency-types' | 'activity' | 'ukas-compliance' | 'tab-visibility';
 
 interface Tab {
     id: TabType;
     label: string;
+    superAdminOnly?: boolean;
 }
 
-const tabs: Tab[] = [
+const allTabs: Tab[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'organizations', label: 'Organizations' },
     { id: 'users', label: 'Users' },
@@ -29,14 +32,22 @@ const tabs: Tab[] = [
     { id: 'competency-types', label: 'Competency Types' },
     { id: 'activity', label: 'Activity Log' },
     { id: 'ukas-compliance', label: 'UKAS Compliance' },
+    { id: 'tab-visibility', label: 'Tab Visibility', superAdminOnly: true },
 ];
 
 export default function AdminPage() {
     const [activeTab, setActiveTab] = useState<TabType>('overview');
+    const { isSuperAdmin } = useAuth();
 
     const { data: accountRequests = [] } = useAccountRequests();
     const { data: permissionRequests = [] } = usePermissionRequests();
     const pendingCount = accountRequests.length + permissionRequests.length;
+
+    // Filter tabs based on role (Tab Visibility tab is super_admin only)
+    const tabs = useMemo(() =>
+        allTabs.filter(tab => !tab.superAdminOnly || isSuperAdmin),
+        [isSuperAdmin]
+    );
 
     const renderTabContent = () => {
         switch (activeTab) {
@@ -49,6 +60,7 @@ export default function AdminPage() {
             case 'competency-types': return <CompetencyTypesTab />;
             case 'activity': return <ActivityLogTab />;
             case 'ukas-compliance': return <UKASComplianceTab />;
+            case 'tab-visibility': return <TabVisibilityTab />;
             default: return <OverviewTab />;
         }
     };

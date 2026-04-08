@@ -6,6 +6,7 @@ import environmentConfig from '../config/environment';
 import { LogoGradientShift } from './MatrixLogoAnimated';
 import { NotificationBell } from './NotificationBell';
 import { AnnouncementBanner } from './AnnouncementBanner';
+import { useTabVisibility } from '../hooks/queries/useTabVisibility';
 
 const isMaintenanceMode = environmentConfig.isMaintenanceMode();
 
@@ -108,12 +109,17 @@ function LayoutNew() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [hasElevatedAccess, setHasElevatedAccess] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
+
+  // Fetch tab visibility settings from DB
+  const { data: tabVisibilitySettings = [] } = useTabVisibility();
 
   useEffect(() => {
     const checkAccess = () => {
       setIsAdmin(authManager.isAdmin());
+      setIsSuperAdmin(authManager.isSuperAdmin());
       setHasElevatedAccess(authManager.hasElevatedAccess());
     };
 
@@ -140,11 +146,25 @@ function LayoutNew() {
     authManager.logout().catch(() => {});
   };
 
-  // Filter navigation based on user role and maintenance mode
+  // Build a map of tab visibility from DB settings
+  const tabVisibilityMap = new Map(
+    tabVisibilitySettings.map(s => [s.tab_id, s.is_visible])
+  );
+
+  // Filter navigation based on user role, maintenance mode, and tab visibility
   const visibleNav = navigationConfig.filter(item => {
     if (isMaintenanceMode) return item.isGroup;
     if (item.adminOnly) return isAdmin;
     if (item.requiresElevatedAccess) return hasElevatedAccess;
+
+    // Super admins always see all tabs regardless of visibility settings
+    if (isSuperAdmin) return true;
+
+    // Check tab visibility settings (if settings exist in DB)
+    if (tabVisibilityMap.size > 0 && tabVisibilityMap.has(item.id)) {
+      return tabVisibilityMap.get(item.id) === true;
+    }
+
     return true;
   });
 

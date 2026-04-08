@@ -16,6 +16,7 @@ import {
     getCurrentUser,
     getCurrentProfile,
     isLoggedIn,
+    isSuperAdmin,
     isAdmin,
     isManager,
     isOrgAdmin,
@@ -98,6 +99,7 @@ class AuthManager {
     getCurrentUser = getCurrentUser;
     getCurrentProfile = getCurrentProfile;
     isLoggedIn = isLoggedIn;
+    isSuperAdmin = isSuperAdmin;
     isAdmin = isAdmin;
     isManager = isManager;
     isOrgAdmin = isOrgAdmin;

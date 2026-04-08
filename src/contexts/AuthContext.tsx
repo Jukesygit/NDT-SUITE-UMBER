@@ -16,7 +16,7 @@ export interface AuthUser {
     id: string;
     username: string | null;
     email: string | null;
-    role: 'admin' | 'manager' | 'org_admin' | 'editor' | 'viewer';
+    role: 'super_admin' | 'admin' | 'manager' | 'org_admin' | 'editor' | 'viewer';
     organizationId: string | null;
     isActive: boolean;
 }
@@ -35,7 +35,7 @@ export interface AuthProfile {
     } | null;
 }
 
-export type UserRole = 'admin' | 'manager' | 'org_admin' | 'editor' | 'viewer';
+export type UserRole = 'super_admin' | 'admin' | 'manager' | 'org_admin' | 'editor' | 'viewer';
 
 interface AuthContextType {
     // State
@@ -45,11 +45,12 @@ interface AuthContextType {
     isAuthenticated: boolean;
 
     // Role checks
+    isSuperAdmin: boolean;
     isAdmin: boolean;
     isManager: boolean;
     isOrgAdmin: boolean;
     isEditor: boolean;
-    hasElevatedAccess: boolean;  // admin or manager
+    hasElevatedAccess: boolean;  // super_admin, admin, or manager
 
     // Helper methods
     hasRole: (roles: UserRole | UserRole[]) => boolean;
@@ -207,7 +208,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     // Computed values
     const isAuthenticated = !!user;
-    const isAdmin = user?.role === 'admin';
+    const isSuperAdmin = user?.role === 'super_admin';
+    const isAdmin = user?.role === 'admin' || isSuperAdmin;
     const isManager = user?.role === 'manager';
     const isOrgAdmin = user?.role === 'org_admin';
     const isEditor = user?.role === 'editor' || isAdmin || isManager || isOrgAdmin;
@@ -266,6 +268,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         profile,
         isLoading,
         isAuthenticated,
+        isSuperAdmin,
         isAdmin,
         isManager,
         isOrgAdmin,

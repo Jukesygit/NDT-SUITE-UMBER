@@ -61,6 +61,13 @@ export {
     configKeys,
 } from './useAdminConfig';
 
+// Tab Visibility queries
+export {
+    useTabVisibility,
+    useUpdateTabVisibility,
+    tabVisibilityKeys,
+} from './useTabVisibility';
+
 // Activity Log queries
 export {
     useActivityLogs,

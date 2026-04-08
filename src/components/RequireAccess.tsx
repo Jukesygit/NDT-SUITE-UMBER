@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Spinner } from './LoadingStates';
 
 interface RequireAccessProps {
+    requireSuperAdmin?: boolean;
     requireAdmin?: boolean;
     requireElevatedAccess?: boolean;
     children: ReactNode;
@@ -14,8 +15,8 @@ interface RequireAccessProps {
  * Use this to protect individual components/pages while keeping them
  * under the same Layout instance (preventing Layout remount on navigation).
  */
-function RequireAccess({ requireAdmin, requireElevatedAccess, children }: RequireAccessProps) {
-    const { isAdmin, hasElevatedAccess, isLoading } = useAuth();
+function RequireAccess({ requireSuperAdmin, requireAdmin, requireElevatedAccess, children }: RequireAccessProps) {
+    const { isSuperAdmin, isAdmin, hasElevatedAccess, isLoading } = useAuth();
 
     // Show spinner while auth is loading (instead of blank screen)
     if (isLoading) {
@@ -29,7 +30,12 @@ function RequireAccess({ requireAdmin, requireElevatedAccess, children }: Requir
         );
     }
 
-    // Check admin requirement
+    // Check super admin requirement
+    if (requireSuperAdmin && !isSuperAdmin) {
+        return <Navigate to="/" replace />;
+    }
+
+    // Check admin requirement (super_admin passes this too since isAdmin includes super_admin)
     if (requireAdmin && !isAdmin) {
         return <Navigate to="/" replace />;
     }

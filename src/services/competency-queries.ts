@@ -115,7 +115,7 @@ export async function getDocumentUrl(filePath: string): Promise<string> {
 export async function canManageCompetencies(targetUserId: string): Promise<boolean> {
     const currentUser = authManager.getCurrentUser();
     if (!currentUser) return false;
-    if (currentUser.role === 'admin') return true;
+    if (currentUser.role === 'super_admin' || currentUser.role === 'admin') return true;
     if (currentUser.id === targetUserId) return true;
     if (currentUser.role === 'org_admin') {
         const { data: targetProfile } = await sb

@@ -10,6 +10,7 @@ import type { UserRole } from '../types/auth.types';
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 export const ROLES = {
+    SUPER_ADMIN: 'super_admin' as const,
     ADMIN: 'admin' as const,
     MANAGER: 'manager' as const,
     ORG_ADMIN: 'org_admin' as const,
@@ -27,6 +28,14 @@ export const PERMISSIONS = {
 };
 
 export const ROLE_PERMISSIONS: Record<string, string[]> = {
+    [ROLES.SUPER_ADMIN]: [
+        PERMISSIONS.VIEW,
+        PERMISSIONS.CREATE,
+        PERMISSIONS.EDIT,
+        PERMISSIONS.DELETE,
+        PERMISSIONS.EXPORT,
+        PERMISSIONS.MANAGE_USERS,
+    ],
     [ROLES.ADMIN]: [
         PERMISSIONS.VIEW,
         PERMISSIONS.CREATE,
