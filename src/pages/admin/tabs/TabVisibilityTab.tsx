@@ -4,14 +4,13 @@
 
 import { useTabVisibility, useUpdateTabVisibility } from '../../../hooks/queries/useTabVisibility';
 import { SectionSpinner, ErrorDisplay } from '../../../components/ui';
-import { RandomMatrixSpinner } from '../../../components/MatrixSpinners';
 
 export default function TabVisibilityTab() {
     const { data: settings = [], isLoading, isError } = useTabVisibility();
     const updateMutation = useUpdateTabVisibility();
 
     if (isLoading) return <SectionSpinner message="Loading tab settings..." />;
-    if (isError) return <ErrorDisplay message="Failed to load tab visibility settings" />;
+    if (isError) return <ErrorDisplay error={new Error('Failed to load tab visibility settings')} />;
 
     const handleToggle = (tabId: string, currentlyVisible: boolean) => {
         updateMutation.mutate({ tabId, isVisible: !currentlyVisible });
@@ -26,49 +25,61 @@ export default function TabVisibilityTab() {
                 </p>
             </div>
 
-            <div className="grid gap-3">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {settings.map((setting) => (
                     <div
                         key={setting.id}
-                        className="flex items-center justify-between p-4 rounded-lg bg-white/5 border border-white/10"
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '16px',
+                            borderRadius: '8px',
+                            backgroundColor: 'rgba(255,255,255,0.05)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                        }}
                     >
                         <div>
-                            <span className="text-sm font-medium text-white">
+                            <span style={{ fontSize: '14px', fontWeight: 500, color: 'white' }}>
                                 {setting.tab_label}
                             </span>
-                            <span className="ml-3 text-xs text-white/40">
+                            <span style={{ marginLeft: '12px', fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>
                                 ({setting.tab_id})
                             </span>
                         </div>
 
                         <button
+                            type="button"
                             onClick={() => handleToggle(setting.tab_id, setting.is_visible)}
                             disabled={updateMutation.isPending}
-                            className={`
-                                relative inline-flex h-6 w-11 items-center rounded-full
-                                transition-colors duration-200 ease-in-out
-                                focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-[#1a1a2e]
-                                disabled:opacity-50 disabled:cursor-not-allowed
-                                ${setting.is_visible
-                                    ? 'bg-blue-600'
-                                    : 'bg-white/20'
-                                }
-                            `}
+                            style={{
+                                position: 'relative',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                height: '28px',
+                                width: '52px',
+                                flexShrink: 0,
+                                borderRadius: '9999px',
+                                cursor: updateMutation.isPending ? 'not-allowed' : 'pointer',
+                                border: 'none',
+                                backgroundColor: setting.is_visible ? '#2563eb' : 'rgba(255,255,255,0.25)',
+                                transition: 'background-color 200ms',
+                                opacity: updateMutation.isPending ? 0.5 : 1,
+                            }}
                             title={setting.is_visible ? 'Click to hide' : 'Click to show'}
                         >
-                            {updateMutation.isPending ? (
-                                <span className="absolute inset-0 flex items-center justify-center">
-                                    <RandomMatrixSpinner size={14} />
-                                </span>
-                            ) : (
-                                <span
-                                    className={`
-                                        inline-block h-4 w-4 rounded-full bg-white shadow
-                                        transform transition-transform duration-200 ease-in-out
-                                        ${setting.is_visible ? 'translate-x-6' : 'translate-x-1'}
-                                    `}
-                                />
-                            )}
+                            <span
+                                style={{
+                                    display: 'block',
+                                    height: '22px',
+                                    width: '22px',
+                                    borderRadius: '50%',
+                                    backgroundColor: 'white',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                                    transform: setting.is_visible ? 'translateX(26px)' : 'translateX(3px)',
+                                    transition: 'transform 200ms',
+                                }}
+                            />
                         </button>
                     </div>
                 ))}

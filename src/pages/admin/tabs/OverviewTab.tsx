@@ -39,6 +39,20 @@ export default function OverviewTab() {
     const { data: organizations, isLoading: orgsLoading, error: orgsError } = useOrganizationsWithStats();
     const { data: users, isLoading: usersLoading, error: usersError } = useAdminUsers();
 
+    // Memoize computed values — must be above early returns to satisfy Rules of Hooks
+    const { pendingRequests, topOrganizations, recentUsers } = useMemo(() => {
+        const safeOrganizations = Array.isArray(organizations) ? organizations : [];
+        const safeUsers = Array.isArray(users) ? users : [];
+        const pendingRequests = (stats?.pendingAccountRequests || 0) + (stats?.pendingPermissionRequests || 0);
+        const topOrganizations = safeOrganizations
+            .filter(org => org && org.organization && org.organization.id)
+            .slice(0, 5);
+        const recentUsers = safeUsers
+            .filter(user => user && user.id)
+            .slice(0, 5);
+        return { pendingRequests, topOrganizations, recentUsers };
+    }, [organizations, users, stats]);
+
     // Show loading state with Matrix logo like Personnel page
     if (statsLoading) {
         return (
@@ -54,20 +68,6 @@ export default function OverviewTab() {
     if (error) {
         return <ErrorDisplay error={error} title="Failed to load dashboard" />;
     }
-
-    // Memoize computed values to avoid recalculating on every render
-    const { pendingRequests, topOrganizations, recentUsers } = useMemo(() => {
-        const safeOrganizations = Array.isArray(organizations) ? organizations : [];
-        const safeUsers = Array.isArray(users) ? users : [];
-        const pendingRequests = (stats?.pendingAccountRequests || 0) + (stats?.pendingPermissionRequests || 0);
-        const topOrganizations = safeOrganizations
-            .filter(org => org && org.organization && org.organization.id)
-            .slice(0, 5);
-        const recentUsers = safeUsers
-            .filter(user => user && user.id)
-            .slice(0, 5);
-        return { safeOrganizations, safeUsers, pendingRequests, topOrganizations, recentUsers };
-    }, [organizations, users, stats]);
 
     return (
         <div>

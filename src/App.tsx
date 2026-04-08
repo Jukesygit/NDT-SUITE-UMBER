@@ -13,6 +13,7 @@ import ErrorBoundary from './components/ErrorBoundary.tsx';
 import Layout from './components/LayoutNew';
 import ProtectedRoute from './components/ProtectedRoute';
 import RequireAccess from './components/RequireAccess';
+import RequireTabVisible from './components/RequireTabVisible';
 import LoginPage from './pages/LoginPageNew';
 import PrivacyPolicyPage from './pages/legal/PrivacyPolicyPage.tsx';
 import { RandomMatrixSpinner } from './components/MatrixSpinners';
@@ -132,8 +133,16 @@ function App() {
                                 <Route element={<ProtectedRoute />}>
                                     <Route element={<Layout />}>
                                         <Route path="/" element={<Navigate to={isMaintenanceMode ? "/cscan" : "/profile"} replace />} />
-                                        <Route path="/cscan" element={<ErrorBoundary><CscanVisualizerPage /></ErrorBoundary>} />
-                                        <Route path="/vessel-modeler" element={<ErrorBoundary><VesselModelerPage /></ErrorBoundary>} />
+                                        <Route path="/cscan" element={
+                                            <RequireTabVisible tabId="tools">
+                                                <ErrorBoundary><CscanVisualizerPage /></ErrorBoundary>
+                                            </RequireTabVisible>
+                                        } />
+                                        <Route path="/vessel-modeler" element={
+                                            <RequireTabVisible tabId="tools">
+                                                <ErrorBoundary><VesselModelerPage /></ErrorBoundary>
+                                            </RequireTabVisible>
+                                        } />
                                         {isMaintenanceMode ? (
                                             <>
                                                 <Route path="/profile" element={<Navigate to="/cscan" replace />} />
@@ -143,16 +152,28 @@ function App() {
                                             </>
                                         ) : (
                                             <>
-                                                <Route path="/profile" element={<ErrorBoundary><ProfilePage /></ErrorBoundary>} />
-                                                <Route path="/documents" element={<ErrorBoundary><DocumentsPage /></ErrorBoundary>} />
+                                                <Route path="/profile" element={
+                                                    <RequireTabVisible tabId="profile">
+                                                        <ErrorBoundary><ProfilePage /></ErrorBoundary>
+                                                    </RequireTabVisible>
+                                                } />
+                                                <Route path="/documents" element={
+                                                    <RequireTabVisible tabId="documents">
+                                                        <ErrorBoundary><DocumentsPage /></ErrorBoundary>
+                                                    </RequireTabVisible>
+                                                } />
                                                 <Route path="/personnel" element={
                                                     <RequireAccess requireElevatedAccess>
-                                                        <ErrorBoundary><PersonnelPage /></ErrorBoundary>
+                                                        <RequireTabVisible tabId="personnel">
+                                                            <ErrorBoundary><PersonnelPage /></ErrorBoundary>
+                                                        </RequireTabVisible>
                                                     </RequireAccess>
                                                 } />
                                                 <Route path="/admin" element={
                                                     <RequireAccess requireAdmin>
-                                                        <ErrorBoundary><AdminPage /></ErrorBoundary>
+                                                        <RequireTabVisible tabId="admin">
+                                                            <ErrorBoundary><AdminPage /></ErrorBoundary>
+                                                        </RequireTabVisible>
                                                     </RequireAccess>
                                                 } />
                                             </>

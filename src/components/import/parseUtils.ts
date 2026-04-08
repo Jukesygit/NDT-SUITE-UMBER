@@ -66,6 +66,7 @@ export async function parseExcelFile(
 ): Promise<void> {
   // Dynamically import XLSX when needed
   if (!XLSX) {
+    // @ts-expect-error xlsx is loaded dynamically and has no type declarations
     const xlsxModule = await import('xlsx');
     XLSX = xlsxModule;
   }

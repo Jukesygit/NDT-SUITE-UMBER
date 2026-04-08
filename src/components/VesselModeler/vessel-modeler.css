@@ -59,7 +59,7 @@
 .vm-section-title {
     margin: 0;
     font-size: 0.85rem;
-    color: rgba(255, 255, 255, 0.55);
+    color: rgba(255, 255, 255, 0.65);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     font-weight: 600;
@@ -88,7 +88,7 @@
 
 .vm-chevron {
     transition: transform 0.2s ease;
-    color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.45);
     font-size: 0.75rem;
 }
 

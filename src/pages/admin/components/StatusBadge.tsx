@@ -4,6 +4,7 @@
  */
 
 type BadgeVariant =
+    | 'super_admin'
     | 'admin'
     | 'manager'
     | 'org_admin'
@@ -26,6 +27,7 @@ interface StatusBadgeProps {
 
 // Map variants to badge color classes
 const variantColorClass: Record<BadgeVariant, string> = {
+    super_admin: 'badge-purple',
     admin: 'badge-purple',
     manager: 'badge-cyan',
     org_admin: 'badge-blue',
@@ -42,6 +44,7 @@ const variantColorClass: Record<BadgeVariant, string> = {
 };
 
 const variantLabels: Record<BadgeVariant, string> = {
+    super_admin: 'Super Admin',
     admin: 'Admin',
     manager: 'Manager',
     org_admin: 'Org Admin',
