@@ -102,12 +102,16 @@
     height: 18px;
     padding: 0 5px;
     border-radius: 9px;
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.6);
     font-size: 0.7rem;
     font-weight: 600;
     line-height: 1;
     margin-left: 6px;
+}
+
+.vm-subsection-count.empty {
+    opacity: 0.4;
 }
 
 /* Sub-sections (nested within grouped sections) */
@@ -134,7 +138,7 @@
 
 .vm-subsection-title {
     font-size: 0.78rem;
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(255, 255, 255, 0.75);
     font-weight: 500;
     letter-spacing: 0.3px;
 }
@@ -163,7 +167,14 @@
 
 /* Form controls */
 .vm-control-group {
-    margin-bottom: 10px;
+    margin-bottom: 12px;
+}
+
+.vm-control-group-spaced {
+    margin-bottom: 12px;
+    margin-top: 18px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .vm-label {
@@ -171,7 +182,7 @@
     justify-content: space-between;
     align-items: center;
     font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.55);
+    color: rgba(255, 255, 255, 0.7);
     margin-bottom: 4px;
 }
 
@@ -179,13 +190,14 @@
     color: var(--color-primary-400, #60a5fa);
     font-family: var(--font-mono, monospace);
     font-size: 0.8rem;
+    font-weight: 600;
 }
 
 .vm-input {
     width: 100%;
     padding: 8px;
     background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 4px;
     color: white;
     box-sizing: border-box;
@@ -237,6 +249,9 @@
     display: flex;
     gap: 8px;
     align-items: center;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 6px 8px;
+    border-radius: 6px;
 }
 
 .vm-slider-input-row .vm-slider {
@@ -266,7 +281,7 @@
     flex: 1;
     padding: 8px 12px;
     background: rgba(255, 255, 255, 0.06);
-    color: rgba(255, 255, 255, 0.55);
+    color: rgba(255, 255, 255, 0.65);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 4px;
     cursor: pointer;
@@ -281,13 +296,14 @@
 
 .vm-toggle-btn:hover {
     background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.75);
+    color: rgba(255, 255, 255, 0.85);
 }
 
 .vm-toggle-btn.active {
     background: var(--color-primary-500, #3b82f6);
-    color: #000;
+    color: #fff;
     border-color: var(--color-primary-500, #3b82f6);
+    font-weight: 600;
 }
 
 /* Buttons */
@@ -345,6 +361,13 @@
     color: rgba(255, 255, 255, 0.4);
     cursor: pointer;
     padding: 4px;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+}
+
+.vm-list-item:hover .vm-btn-icon,
+.vm-list-item.selected .vm-btn-icon {
+    opacity: 1;
 }
 
 .vm-btn-icon:hover {
@@ -357,7 +380,7 @@
     padding: 10px;
     border-radius: 4px;
     margin-bottom: 8px;
-    border-left: 3px solid var(--color-danger, #ef4444);
+    border-left: 3px solid rgba(255, 255, 255, 0.15);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -447,9 +470,9 @@
 }
 
 .vm-library-item {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
     padding: 8px 4px;
     text-align: center;
     cursor: grab;
@@ -473,7 +496,38 @@
 
 .vm-library-item .size-mm {
     font-size: 0.7rem;
-    color: rgba(255, 255, 255, 0.4);
+    color: rgba(255, 255, 255, 0.55);
+}
+
+/* Library-to-list separator */
+.vm-library-separator {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+    margin: 14px 0 10px;
+}
+
+/* Add-item button (dashed outline style) */
+.vm-btn-add {
+    width: 100%;
+    padding: 10px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.55);
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+    font-size: 0.85rem;
+}
+
+.vm-btn-add:hover {
+    background: rgba(59, 130, 246, 0.08);
+    border-color: var(--color-primary-500, #3b82f6);
+    color: var(--color-primary-400, #60a5fa);
 }
 
 /* Drop zone */

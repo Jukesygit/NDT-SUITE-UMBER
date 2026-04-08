@@ -26,9 +26,9 @@ export function SaddleSection({
     return (
         <SubSection title="Supports" count={vesselState.saddles.length}>
             <button
-                className="vm-btn"
+                className="vm-btn-add"
                 onClick={() => onAddSaddle({ pos: vesselState.length / 2 })}
-                style={{ marginBottom: 8 }}
+                style={{ marginBottom: 10 }}
             >
                 <Plus size={14} /> Add Saddle Support
             </button>

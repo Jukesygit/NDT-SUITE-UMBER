@@ -82,7 +82,7 @@ export function SubSection({ title, count, defaultOpen = false, children }: {
             <div className="vm-subsection-header" onClick={() => setOpen(o => !o)}>
                 <span className="vm-subsection-title">
                     {title}
-                    {count != null && count > 0 && <span className="vm-subsection-count">{count}</span>}
+                    {count != null && <span className={`vm-subsection-count${count === 0 ? ' empty' : ''}`}>{count}</span>}
                 </span>
                 <ChevronDown size={12} className="vm-chevron" />
             </div>

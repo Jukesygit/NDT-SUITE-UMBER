@@ -38,7 +38,7 @@ export function DimensionsSection({ vesselState, onUpdateDimensions }: Dimension
                     <option value={4}>4:1 Ellipsoidal</option>
                 </select>
             </div>
-            <div className="vm-control-group">
+            <div className="vm-control-group-spaced">
                 <div className="vm-label"><span>Orientation</span></div>
                 <div className="vm-toggle-group">
                     <button

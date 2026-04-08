@@ -41,7 +41,7 @@ export function NozzleSection({
             <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', margin: '0 0 8px 0' }}>
                 Drag a nozzle size onto the vessel
             </p>
-            <div className="vm-library-grid" style={{ marginBottom: 10 }}>
+            <div className="vm-library-grid">
                 {PIPE_SIZES.map(p => (
                     <div
                         key={p.nps}
@@ -61,6 +61,8 @@ export function NozzleSection({
                 ))}
             </div>
 
+            {flangedNozzles.length > 0 && <div className="vm-library-separator" />}
+
             {/* Nozzle list (flanged only — plain-pipe nozzles are in Piping section) */}
             {flangedNozzles.map(({ nozzle: n, index: i }) => (
                 <React.Fragment key={i}>
@@ -69,7 +71,10 @@ export function NozzleSection({
                         onClick={() => onSelectNozzle(i)}
                     >
                         <div className="vm-list-item-info">
-                            <strong>{n.name}</strong> &mdash; {findClosestPipeSize(n.size).nps} @ {Math.round(n.pos)}mm, {Math.round(n.angle)}&deg;
+                            <strong>{n.name}</strong> <span style={{ color: 'var(--color-primary-400, #60a5fa)', fontWeight: 600 }}>{findClosestPipeSize(n.size).nps}</span>
+                            <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
+                                {Math.round(n.pos)}mm &middot; {Math.round(n.angle)}&deg;
+                            </div>
                         </div>
                         <button className="vm-btn-icon" onClick={e => { e.stopPropagation(); onRemoveNozzle(i); }}>
                             <Trash2 size={14} />
