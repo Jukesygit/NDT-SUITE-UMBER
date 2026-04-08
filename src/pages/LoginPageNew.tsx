@@ -73,22 +73,21 @@ function LoginPageNew() {
     const handlePasswordRecovery = () => {
       sessionStorage.setItem(PASSWORD_RESET_KEY, 'true');
       setMode('update-password');
+      // Clean up URL but keep type=recovery for page reloads
+      const url = new URL(window.location.href);
+      url.searchParams.delete('code');
+      window.history.replaceState(null, '', url.toString());
     };
     window.addEventListener('passwordRecoveryMode', handlePasswordRecovery);
 
-    // Listen for Supabase auth state changes
+    // Listen only for USER_UPDATED during password reset flow.
+    // All other auth events (SIGNED_IN, PASSWORD_RECOVERY, etc.) are handled by
+    // auth-manager's single Supabase listener + custom events above.
+    // Avoiding duplicate onAuthStateChange listeners prevents race conditions.
     const { data: { subscription } } = supabase!.auth.onAuthStateChange((event, _session) => {
-      // Re-check sessionStorage in case it was set by another handler
       const currentPasswordResetMode = sessionStorage.getItem(PASSWORD_RESET_KEY) === 'true';
 
-      if (event === 'PASSWORD_RECOVERY') {
-        sessionStorage.setItem(PASSWORD_RESET_KEY, 'true');
-        setMode('update-password');
-        // Clean up URL but keep type=recovery for page reloads
-        const url = new URL(window.location.href);
-        url.searchParams.delete('code');
-        window.history.replaceState(null, '', url.toString());
-      } else if (event === 'USER_UPDATED' && currentPasswordResetMode) {
+      if (event === 'USER_UPDATED' && currentPasswordResetMode) {
         // Password was updated successfully - this fires faster than the promise resolves
         window.history.replaceState(null, '', window.location.pathname);
         setSuccessMessage('Password updated successfully! You can now sign in with your new password.');
@@ -104,14 +103,6 @@ function LoginPageNew() {
           .catch(() => {
             setTimeout(() => sessionStorage.removeItem(PASSWORD_RESET_KEY), 2000);
           });
-      } else if (event === 'SIGNED_IN') {
-        // Don't navigate here - let the isAuthenticated check in useEffect handle it
-        // This ensures AuthContext has updated before we try to navigate
-        if (!currentPasswordResetMode && mode !== 'update-password') {
-          // Auth context will handle redirect
-        } else {
-          // In password reset mode, staying on login page
-        }
       }
     });
 

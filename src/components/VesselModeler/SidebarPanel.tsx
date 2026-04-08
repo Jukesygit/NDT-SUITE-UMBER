@@ -12,7 +12,10 @@ import type {
     WeldConfig,
     ScanCompositeConfig,
     ThicknessThresholds,
+    PipeSegmentType,
 } from './types';
+import type { PipeSegment } from './types';
+import { GitBranch, Layers, ClipboardCheck } from 'lucide-react';
 import type * as THREE from 'three';
 import {
     Section,
@@ -27,6 +30,8 @@ import {
     AnnotationSection,
     CoverageSection,
     InspectionImageSection,
+    ProjectInfoSection,
+    PipingSection,
 } from './sidebar';
 
 // ---------------------------------------------------------------------------
@@ -51,6 +56,7 @@ export interface SidebarPanelProps {
     onSelectLug: (index: number) => void;
     onAddSaddle: (saddle: SaddleConfig) => void;
     onUpdateSaddle: (index: number, updates: Partial<SaddleConfig>) => void;
+    onUpdateAllSaddleHeights: (height: number) => void;
     onRemoveSaddle: (index: number) => void;
     onSelectSaddle: (index: number) => void;
     // Weld props
@@ -113,6 +119,15 @@ export interface SidebarPanelProps {
     cloudCompositesLoading: boolean;
     cloudCompositesError: Error | null;
     onUpdateThicknessThresholds: (thresholds: ThicknessThresholds) => void;
+    // Pipeline props
+    selectedPipelineId: string;
+    selectedSegmentIdx: number;
+    onAddPipeline: (nozzleIndex: number, segmentType: PipeSegmentType) => void;
+    onAddSegment: (pipelineId: string, segmentType: PipeSegmentType) => void;
+    onUpdateSegment: (pipelineId: string, segmentId: string, updates: Partial<PipeSegment>) => void;
+    onRemoveSegment: (pipelineId: string, segmentIndex: number) => void;
+    onRemovePipeline: (pipelineId: string) => void;
+    onSelectPipeSegment: (pipelineId: string, segmentIndex: number) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -133,6 +148,10 @@ export default function SidebarPanel(props: SidebarPanelProps) {
 
             {/* Scrollable sections */}
             <div style={{ flex: 1, overflowY: 'auto' }}>
+                <ProjectInfoSection
+                    vesselState={vesselState}
+                    onUpdateDimensions={props.onUpdateDimensions}
+                />
                 <DimensionsSection
                     vesselState={vesselState}
                     onUpdateDimensions={props.onUpdateDimensions}
@@ -141,11 +160,12 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                     vesselState={vesselState}
                     onUpdateDimensions={props.onUpdateDimensions}
                 />
-                <Section title="Attachments" defaultOpen={false} count={
+                <Section title="Attachments" defaultOpen={false} icon={<GitBranch size={14} style={{ marginRight: 6 }} />} count={
                     vesselState.nozzles.length +
                     vesselState.liftingLugs.length +
                     vesselState.welds.length +
-                    vesselState.saddles.length
+                    vesselState.saddles.length +
+                    vesselState.pipelines.length
                 }>
                     <NozzleSection
                         vesselState={vesselState}
@@ -176,11 +196,28 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                         selectedSaddleIndex={props.selectedSaddleIndex}
                         onAddSaddle={props.onAddSaddle}
                         onUpdateSaddle={props.onUpdateSaddle}
+                        onUpdateAllSaddleHeights={props.onUpdateAllSaddleHeights}
                         onRemoveSaddle={props.onRemoveSaddle}
                         onSelectSaddle={props.onSelectSaddle}
                     />
+                    <PipingSection
+                        vesselState={vesselState}
+                        selectedPipelineId={props.selectedPipelineId}
+                        selectedSegmentIdx={props.selectedSegmentIdx}
+                        selectedNozzleIndex={props.selectedNozzleIndex}
+                        onAddNozzle={props.onAddNozzle}
+                        onUpdateNozzle={props.onUpdateNozzle}
+                        onRemoveNozzle={props.onRemoveNozzle}
+                        onSelectNozzle={props.onSelectNozzle}
+                        onAddPipeline={props.onAddPipeline}
+                        onAddSegment={props.onAddSegment}
+                        onUpdateSegment={props.onUpdateSegment}
+                        onRemoveSegment={props.onRemoveSegment}
+                        onRemovePipeline={props.onRemovePipeline}
+                        onSelectPipeSegment={props.onSelectPipeSegment}
+                    />
                 </Section>
-                <Section title="Scan Overlay" defaultOpen={false} count={
+                <Section title="Scan Overlay" defaultOpen={false} icon={<Layers size={14} style={{ marginRight: 6 }} />} count={
                     vesselState.textures.length +
                     vesselState.scanComposites.length
                 }>
@@ -206,7 +243,7 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                         cloudCompositesError={props.cloudCompositesError}
                     />
                 </Section>
-                <Section title="Inspection" defaultOpen={false} count={
+                <Section title="Inspection" defaultOpen={false} icon={<ClipboardCheck size={14} style={{ marginRight: 6 }} />} count={
                     vesselState.annotations.length +
                     vesselState.rulers.length +
                     vesselState.coverageRects.length +

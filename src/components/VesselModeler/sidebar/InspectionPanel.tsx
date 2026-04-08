@@ -6,6 +6,7 @@
 // =============================================================================
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Camera, ChevronLeft, Upload, X } from 'lucide-react';
 import type { AnnotationShapeConfig, ThicknessThresholds, VesselState } from '../types';
 import {
@@ -411,15 +412,11 @@ export default function InspectionPanel({
           onUpdate={onUpdateThicknessThresholds}
         />
       </div>
-      {/* Image lightbox */}
-      {viewingImageUrl && (
+      {/* Image lightbox — rendered via portal to escape backdrop-filter containing block */}
+      {viewingImageUrl && createPortal(
         <div
-          style={{
-            position: 'fixed', inset: 0, zIndex: 9999,
-            background: 'rgba(0,0,0,0.85)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer',
-          }}
+          className="fixed inset-0 flex items-center justify-center"
+          style={{ zIndex: 9999, background: 'rgba(0,0,0,0.85)', cursor: 'pointer' }}
           onClick={() => setViewingImageUrl(null)}
         >
           <img
@@ -439,7 +436,8 @@ export default function InspectionPanel({
           >
             <X size={20} />
           </button>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

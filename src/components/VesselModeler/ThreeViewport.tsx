@@ -19,7 +19,10 @@ import {
     createLugHighlightMaterial,
     createWeldMaterial,
     createWeldHighlightMaterial,
+    createPipelineMaterial,
+    createConnectionPointMaterial,
 } from './engine/materials';
+import { buildPipelineGroup } from './engine/pipeline-geometry';
 import * as THREE from 'three';
 
 // ---------------------------------------------------------------------------
@@ -31,9 +34,13 @@ function structuralHash(s: VesselState): string {
         id: s.id, length: s.length, headRatio: s.headRatio, orientation: s.orientation,
         nozzles: s.nozzles, liftingLugs: s.liftingLugs, saddles: s.saddles,
         textures: s.textures.map(t => ({ id: t.id, pos: t.pos, angle: t.angle, scaleX: t.scaleX, scaleY: t.scaleY, rotation: t.rotation, flipH: t.flipH, flipV: t.flipV })),
-        welds: s.welds, annotations: s.annotations, rulers: s.rulers,
-        coverageRects: s.coverageRects, inspectionImages: s.inspectionImages,
+        welds: s.welds,
+        annotations: s.annotations.map(a => ({ ...a, labelOffset: undefined, leaderLength: undefined })),
+        rulers: s.rulers,
+        coverageRects: s.coverageRects,
+        inspectionImages: s.inspectionImages.map(i => ({ ...i, labelOffset: undefined, leaderLength: undefined })),
         scanComposites: s.scanComposites.map(sc => ({ id: sc.id, hasData: sc.data.length > 0, indexStartMm: sc.indexStartMm, datumAngleDeg: sc.datumAngleDeg, scanDirection: sc.scanDirection, indexDirection: sc.indexDirection, orientationConfirmed: sc.orientationConfirmed, colorScale: sc.colorScale, rangeMin: sc.rangeMin, rangeMax: sc.rangeMax, opacity: sc.opacity })),
+        pipelines: s.pipelines,
         hasModel: s.hasModel,
     });
 }
@@ -61,6 +68,7 @@ interface ThreeViewportProps {
     texturesLocked: boolean;
     lugsLocked: boolean;
     weldsLocked: boolean;
+    pipelinesLocked: boolean;
     selectedWeldIndex: number;
     selectedInspectionImageId: number;
     onInspectionImageThumbnailClick: (id: number) => void;
@@ -71,11 +79,13 @@ interface ThreeViewportProps {
     rulerDrawMode: boolean;
     previewRuler: RulerConfig | null;
     selectedScanCompositeId?: string;
+    selectedPipelineId?: string;
+    selectedPipeSegmentIdx?: number;
     inspectingAnnotationId?: number | null;
 }
 
 const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(function ThreeViewport(
-    { vesselState, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedAnnotationId, textureObjects, callbacks, nozzlesLocked, saddlesLocked, texturesLocked, lugsLocked, weldsLocked, selectedWeldIndex, selectedInspectionImageId, onInspectionImageThumbnailClick, drawMode, coverageDrawMode, previewAnnotation, previewCoverageRect, rulerDrawMode, previewRuler, selectedScanCompositeId = '', inspectingAnnotationId },
+    { vesselState, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedAnnotationId, textureObjects, callbacks, nozzlesLocked, saddlesLocked, texturesLocked, lugsLocked, weldsLocked, pipelinesLocked, selectedWeldIndex, selectedInspectionImageId, onInspectionImageThumbnailClick, drawMode, coverageDrawMode, previewAnnotation, previewCoverageRect, rulerDrawMode, previewRuler, selectedScanCompositeId = '', selectedPipelineId = '', selectedPipeSegmentIdx = -1, inspectingAnnotationId },
     ref
 ) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -92,6 +102,8 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         lugHighlight: THREE.MeshStandardMaterial;
         weld: THREE.MeshStandardMaterial;
         weldHighlight: THREE.MeshStandardMaterial;
+        pipeline: THREE.MeshStandardMaterial;
+        connectionPoint: THREE.MeshStandardMaterial;
     } | null>(null);
 
     // --- Tier 1: structural hash to avoid redundant full rebuilds ---
@@ -146,9 +158,11 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         const saddleHighlight = createSaddleHighlightMaterial();
         const lug = createLugMaterial(vesselStateRef.current.visuals.material);
         const lugHighlight = createLugHighlightMaterial();
-        const weld = createWeldMaterial();
+        const weld = createWeldMaterial(vesselStateRef.current.visuals.material);
         const weldHighlight = createWeldHighlightMaterial();
-        materialsRef.current = { shell, nozzle, nozzleHighlight, saddleHighlight, lug, lugHighlight, weld, weldHighlight };
+        const pipeline = createPipelineMaterial(vesselStateRef.current.visuals.material);
+        const connectionPoint = createConnectionPointMaterial();
+        materialsRef.current = { shell, nozzle, nozzleHighlight, saddleHighlight, lug, lugHighlight, weld, weldHighlight, pipeline, connectionPoint };
 
         // Setup interaction manager
         const canvas = manager.getRenderer().domElement;
@@ -184,6 +198,8 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
                 onScanCompositeHover: (id, thickness, scanMm, indexMm, screenX, screenY) => callbacksRef.current.onScanCompositeHover?.(id, thickness, scanMm, indexMm, screenX, screenY),
                 onScanGizmoDatumMoved: (compositeId, angleDeg, posMm) => callbacksRef.current.onScanGizmoDatumMoved?.(compositeId, angleDeg, posMm),
                 onScanGizmoDirectionToggle: (compositeId, field) => callbacksRef.current.onScanGizmoDirectionToggle?.(compositeId, field),
+                onPipeSegmentSelected: (pipelineId, segmentIndex) => callbacksRef.current.onPipeSegmentSelected?.(pipelineId, segmentIndex),
+                onPipeConnectionPointClicked: (pipelineId) => callbacksRef.current.onPipeConnectionPointClicked?.(pipelineId),
                 onDragEnd: () => callbacksRef.current.onDragEnd?.(),
                 onNeedRebuild: () => {
                     // Trigger rebuild by calling rebuild directly
@@ -193,6 +209,12 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         );
         interaction.init();
         interactionRef.current = interaction;
+
+        // Rebuild scene when WebGL context is restored after loss
+        manager.onContextRestored = () => {
+            structuralRef.current = ''; // Force rebuild
+            rebuildScene();
+        };
 
         // Trigger initial scene build now that manager + materials are ready
         rebuildScene();
@@ -211,6 +233,8 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
                 materialsRef.current.lugHighlight.dispose();
                 materialsRef.current.weld.dispose();
                 materialsRef.current.weldHighlight.dispose();
+                materialsRef.current.pipeline.dispose();
+                materialsRef.current.connectionPoint.dispose();
                 materialsRef.current = null;
             }
 
@@ -385,6 +409,41 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         scene.add(result.vesselGroup);
         manager.setVesselGroup(result.vesselGroup);
 
+        // -- Pipeline geometry --
+        // Build pipelines after vessel group is in the scene so nozzle world matrices are valid
+        if (state.pipelines.length > 0) {
+            const pipelineParent = new THREE.Group();
+            pipelineParent.userData = { type: 'pipelineRoot' };
+
+            for (const pl of state.pipelines) {
+                const nozzle = state.nozzles[pl.nozzleIndex];
+                if (!nozzle) continue;
+
+                // Find the nozzle group by its userData.nozzleIdx
+                let nozzleGroup: THREE.Group | null = null;
+                result.vesselGroup.traverse((child) => {
+                    if (child.userData?.type === 'nozzle' && child.userData?.nozzleIdx === pl.nozzleIndex) {
+                        nozzleGroup = child as THREE.Group;
+                    }
+                });
+                if (!nozzleGroup) continue;
+
+                const plGroup = buildPipelineGroup(
+                    pl,
+                    nozzleGroup,
+                    nozzle,
+                    state.id / 2, // shellRadius = inner diameter / 2
+                    materials.pipeline,
+                    materials.connectionPoint,
+                );
+                pipelineParent.add(plGroup);
+            }
+
+            manager.setPipelineGroup(pipelineParent);
+        } else {
+            manager.setPipelineGroup(null);
+        }
+
         // Cache build result for Tier 2 (selection highlight fast-path)
         buildResultRef.current = result;
         weldMeshesRef.current = weldMeshes;
@@ -469,6 +528,26 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             });
         });
 
+        // Pipe segments: highlight selected segment with gold material
+        const pipelineGroup = sceneManagerRef.current?.getPipelineGroup();
+        if (pipelineGroup && selectedPipelineId && selectedPipeSegmentIdx >= 0) {
+            const pipeline = state.pipelines.find(p => p.id === selectedPipelineId);
+            const selectedSegId = pipeline?.segments[selectedPipeSegmentIdx]?.id;
+            pipelineGroup.traverse((child) => {
+                if (child instanceof THREE.Mesh && child.userData?.type === 'pipeSegment') {
+                    child.material = child.userData.segmentId === selectedSegId
+                        ? materials.nozzleHighlight
+                        : materials.pipeline;
+                }
+            });
+        } else if (pipelineGroup) {
+            pipelineGroup.traverse((child) => {
+                if (child instanceof THREE.Mesh && child.userData?.type === 'pipeSegment') {
+                    child.material = materials.pipeline;
+                }
+            });
+        }
+
         // Textures: toggle border child mesh visibility
         result.textureMeshes.forEach((texMesh) => {
             const texId = texMesh.userData?.textureIdx as number | undefined;
@@ -490,7 +569,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
                 }
             });
         });
-    }, [selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedScanCompositeId, selectedWeldIndex]);
+    }, [selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedScanCompositeId, selectedWeldIndex, selectedPipelineId, selectedPipeSegmentIdx]);
 
     // =========================================================================
     // Tier 3 — Preview overlay update (only touches preview group, never main vessel)
@@ -583,11 +662,12 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             interactionRef.current.texturesLocked = texturesLocked;
             interactionRef.current.lugsLocked = lugsLocked;
             interactionRef.current.weldsLocked = weldsLocked;
+            interactionRef.current.pipelinesLocked = pipelinesLocked;
             interactionRef.current.drawMode = drawMode;
             interactionRef.current.coverageDrawMode = coverageDrawMode;
             interactionRef.current.rulerDrawMode = rulerDrawMode;
         }
-    }, [nozzlesLocked, saddlesLocked, texturesLocked, lugsLocked, weldsLocked, drawMode, coverageDrawMode, rulerDrawMode]);
+    }, [nozzlesLocked, saddlesLocked, texturesLocked, lugsLocked, weldsLocked, pipelinesLocked, drawMode, coverageDrawMode, rulerDrawMode]);
 
     // Update material visuals when visual settings change
     useEffect(() => {
@@ -624,6 +704,18 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         materials.lug.metalness = m;
         materials.lug.needsUpdate = true;
 
+        materials.weld.color.setHex(preset.color);
+        materials.weld.emissive.setHex(preset.emissive);
+        materials.weld.roughness = r;
+        materials.weld.metalness = m;
+        materials.weld.needsUpdate = true;
+
+        materials.pipeline.color.setHex(preset.color);
+        materials.pipeline.emissive.setHex(preset.emissive);
+        materials.pipeline.roughness = r;
+        materials.pipeline.metalness = m;
+        materials.pipeline.needsUpdate = true;
+
         // Update scene background color
         const bgColor = vesselState.visuals.backgroundColor || '#111111';
         const manager = sceneManagerRef.current;
@@ -632,7 +724,12 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             manager.setGridVisible(vesselState.visuals.showGrid);
             manager.updateGridColors(bgColor);
             manager.setAxesVisible(vesselState.visuals.showAxes);
+            manager.setCardinalDirectionsVisible(vesselState.visuals.showCardinalDirections, vesselState.visuals.cardinalRotation ?? 0);
             manager.setEnvironmentMap(vesselState.visuals.useEnvironmentMap);
+            manager.setShadowsEnabled(
+                vesselState.visuals.enableShadows ?? true,
+                vesselState.visuals.shadowIntensity ?? 0.35,
+            );
         }
     }, [vesselState.visuals]);
 
@@ -640,7 +737,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         <div
             ref={containerRef}
             className="absolute inset-0"
-            style={{ background: vesselState.visuals.backgroundColor || '#111111' }}
+            style={{ background: `linear-gradient(to bottom, ${vesselState.visuals.backgroundColor || '#111111'}, #000000)` }}
         />
     );
 });

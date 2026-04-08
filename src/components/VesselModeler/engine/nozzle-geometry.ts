@@ -40,6 +40,7 @@ export function createFlangedNozzle(
   material: THREE.Material,
 ): THREE.Group {
   const group = new THREE.Group();
+  const isPlainPipe = nozzle.style === 'plain-pipe';
 
   // -- Pipe dimensions from lookup table (with optional overrides) ----------
   const pipeID = nozzle.size;
@@ -58,6 +59,7 @@ export function createFlangedNozzle(
   const penetrationDepth = shellRadius * SCALE * 0.12;
 
   // -- Reinforcing pad (curved disc that follows shell curvature) -----------
+  if (!isPlainPipe) {
   const repadOD = pipeOD * 1.8; // Typically 1.5-2x pipe OD
   const repadRadius = (repadOD / 2) * SCALE;
   const repadThickness = 10 * SCALE; // ~10mm thick pad
@@ -78,6 +80,7 @@ export function createFlangedNozzle(
   repad.rotation.x = Math.PI; // Flip so curve matches shell
   repad.position.y = repadThickness * 0.5;
   group.add(repad);
+  }
 
   // -- Inner stub (penetrates into the shell) --------------------------------
   const stubLength = penetrationDepth;
@@ -116,43 +119,66 @@ export function createFlangedNozzle(
   pipe.position.y = weldNeckLength + pipeLength / 2;
   group.add(pipe);
 
-  // -- Flange hub (transition from pipe to flange) ---------------------------
-  const hubLength = flangeThickness * 0.4;
-  const hubGeom = new THREE.CylinderGeometry(
-    flangeRadius * 0.7,
-    pipeRadius,
-    hubLength,
-    32,
-  );
-  const hub = new THREE.Mesh(hubGeom, material);
-  hub.position.y = weldNeckLength + pipeLength + hubLength / 2;
-  group.add(hub);
+  if (!isPlainPipe) {
+    // -- Flange hub (transition from pipe to flange) ---------------------------
+    const hubLength = flangeThickness * 0.4;
+    const hubGeom = new THREE.CylinderGeometry(
+      flangeRadius * 0.7,
+      pipeRadius,
+      hubLength,
+      32,
+    );
+    const hub = new THREE.Mesh(hubGeom, material);
+    hub.position.y = weldNeckLength + pipeLength + hubLength / 2;
+    group.add(hub);
 
-  // -- Flange face -----------------------------------------------------------
-  const flangeBodyThk = flangeThickness * 0.5;
-  const flangeGeom = new THREE.CylinderGeometry(
-    flangeRadius,
-    flangeRadius,
-    flangeBodyThk,
-    32,
-  );
-  const flange = new THREE.Mesh(flangeGeom, material);
-  flange.position.y = weldNeckLength + pipeLength + hubLength + flangeBodyThk / 2;
-  group.add(flange);
+    // -- Flange face -----------------------------------------------------------
+    const flangeBodyThk = flangeThickness * 0.5;
+    const flangeGeom = new THREE.CylinderGeometry(
+      flangeRadius,
+      flangeRadius,
+      flangeBodyThk,
+      32,
+    );
+    const flange = new THREE.Mesh(flangeGeom, material);
+    flange.position.y = weldNeckLength + pipeLength + hubLength + flangeBodyThk / 2;
+    group.add(flange);
 
-  // -- Raised face (the sealing surface) -------------------------------------
-  const rfRadius = flangeRadius * 0.85;
-  const rfThickness = flangeThickness * 0.1;
-  const rfGeom = new THREE.CylinderGeometry(
-    rfRadius,
-    rfRadius,
-    rfThickness,
-    32,
-  );
-  const raisedFace = new THREE.Mesh(rfGeom, material);
-  raisedFace.position.y =
-    weldNeckLength + pipeLength + hubLength + flangeBodyThk + rfThickness / 2;
-  group.add(raisedFace);
+    // -- Raised face (the sealing surface) -------------------------------------
+    const rfRadius = flangeRadius * 0.85;
+    const rfThickness = flangeThickness * 0.1;
+    const rfGeom = new THREE.CylinderGeometry(
+      rfRadius,
+      rfRadius,
+      rfThickness,
+      32,
+    );
+    const raisedFace = new THREE.Mesh(rfGeom, material);
+    raisedFace.position.y =
+      weldNeckLength + pipeLength + hubLength + flangeBodyThk + rfThickness / 2;
+    group.add(raisedFace);
+  }
+
+  // -- Connection point ring for plain-pipe nozzles --------------------------
+  if (isPlainPipe) {
+    const ringGeom = new THREE.RingGeometry(
+      pipeRadius * 0.8,
+      pipeRadius * 1.2,
+      32,
+    );
+    const ringMat = new THREE.MeshStandardMaterial({
+      color: 0x00ff88,
+      emissive: 0x004422,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.8,
+    });
+    const ring = new THREE.Mesh(ringGeom, ringMat);
+    ring.position.y = weldNeckLength + pipeLength;
+    ring.rotation.x = Math.PI / 2;
+    ring.userData = { isConnectionPoint: true };
+    group.add(ring);
+  }
 
   // Nozzle is built along +Y axis; orientation is handled in buildVesselScene
   return group;

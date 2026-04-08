@@ -104,14 +104,6 @@ function createTextSprite(
   const h = (canvas.height / CANVAS_SCALE) * worldScale;
   const geometry = new THREE.PlaneGeometry(w, h);
 
-  // Flip UVs horizontally so text reads correctly when the plane faces the camera.
-  // PlaneGeometry default UVs assume viewing from +Z; in the exported GLB the
-  // labels are typically viewed from -Z, which mirrors the text.
-  const uv = geometry.attributes.uv;
-  for (let i = 0; i < uv.count; i++) {
-    uv.setX(i, 1 - uv.getX(i));
-  }
-
   const material = new THREE.MeshBasicMaterial({
     map: texture,
     transparent: true,
@@ -207,13 +199,89 @@ export function createRulerLabelSprite(
     worldScale,
   );
 
-  // Position at ruler midpoint (same logic as annotation-labels.ts:createRulerLabel)
+  // Position at ruler midpoint, offset radially so the label sits outside the
+  // ruler marker instead of covering it (mirrors the CSS translate(-50%,-100%)
+  // that the interactive CSS2D label uses).
   const midPos = (config.startPos + config.endPos) / 2;
   const midAngle = (config.startAngle + config.endAngle) / 2;
+  const angleRad = (midAngle * Math.PI) / 180;
   const surfaceOffset = 5;
-  const point = shellPoint(midPos, (midAngle * Math.PI) / 180, vesselState, surfaceOffset);
+  const point = shellPoint(midPos, angleRad, vesselState, surfaceOffset);
+
+  // Compute outward radial direction at this point
+  const origin = shellPoint(midPos, angleRad, vesselState, 0);
+  const radial = point.clone().sub(origin).normalize();
+
+  // Shift outward by half the sprite height + a small gap so the inner edge
+  // of the label starts just outside the ruler marker
+  const h = (mesh.geometry as THREE.PlaneGeometry).parameters.height;
+  point.addScaledVector(radial, h * 0.5 + worldScale * 4);
+
   mesh.position.copy(point);
   mesh.userData = { type: 'export-label', sourceType: 'ruler', sourceId: config.id };
 
+  return mesh;
+}
+
+// ---------------------------------------------------------------------------
+// Nameplate Sprite (for GLB export)
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a nameplate mesh with label-value pairs (Location, Vessel, Date).
+ * Positioned flat on the ground plane to the front-right of the vessel.
+ * Only rows with non-empty values are rendered. Returns null if all fields empty.
+ */
+export function createNameplateSprite(
+  vesselState: VesselState,
+): THREE.Mesh | null {
+  const rows: { label: string; value: string }[] = [];
+  if (vesselState.location) rows.push({ label: 'LOCATION', value: vesselState.location });
+  if (vesselState.vesselName) rows.push({ label: 'VESSEL', value: vesselState.vesselName });
+  if (vesselState.inspectionDate) rows.push({ label: 'DATE', value: vesselState.inspectionDate });
+
+  if (rows.length === 0) return null;
+
+  const maxLabelLen = Math.max(...rows.map(r => r.label.length));
+
+  const lines: TextLine[] = rows.map(row => ({
+    text: `  ${row.label.padEnd(maxLabelLen + 2)}${row.value}  `,
+    font: `bold ${FONT_SIZE_NAME}px monospace`,
+    color: '#ffffff',
+  }));
+
+  // Double-sized compared to annotation labels for readability
+  const worldScale = vesselState.id * SCALE * 0.003;
+
+  const mesh = createTextSprite(
+    lines,
+    'rgba(10, 14, 20, 0.92)',
+    'rgba(100, 160, 255, 0.3)',
+    worldScale,
+  );
+
+  // Position: flat on ground plane, to the front-right of the vessel
+  const vesselRadius = (vesselState.id / 2) * SCALE;
+  const vesselLength = vesselState.length * SCALE;
+
+  if (vesselState.orientation === 'horizontal') {
+    mesh.position.set(
+      vesselLength * 0.6,     // right of vessel center
+      -vesselRadius,           // ground level (bottom of vessel)
+      vesselRadius * 1.8,     // in front of vessel
+    );
+  } else {
+    mesh.position.set(
+      vesselRadius * 1.8,     // right of vessel
+      -vesselRadius,           // ground level (bottom of vessel)
+      vesselRadius * 1.8,     // in front of vessel
+    );
+  }
+
+  // Rotate to lie flat on the ground plane, text facing up and readable
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.rotation.z = Math.PI;
+
+  mesh.userData = { type: 'export-nameplate' };
   return mesh;
 }

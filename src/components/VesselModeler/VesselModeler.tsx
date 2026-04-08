@@ -1,5 +1,5 @@
 import { useState, useReducer, useRef, useCallback, useEffect, lazy, Suspense, type ChangeEvent } from 'react';
-import { Lock, Unlock, Save, Upload, RotateCcw, PanelLeftClose, PanelLeft, FileUp, Camera, AlertTriangle, MousePointer, PanelBottomClose, Box } from 'lucide-react';
+import { Lock, Unlock, Save, Upload, RotateCcw, PanelLeftClose, PanelLeft, FileUp, Camera, AlertTriangle, MousePointer, PanelBottomClose, Box, ChevronDown, Settings2 } from 'lucide-react';
 import ThreeViewport from './ThreeViewport';
 import ErrorBoundary from '../ErrorBoundary';
 import type { ThreeViewportHandle } from './ThreeViewport';
@@ -22,6 +22,11 @@ import {
     type WeldConfig,
     type ScanCompositeConfig,
     type ThicknessThresholds,
+    type Pipeline,
+    type PipeSegment,
+    type PipeSegmentType,
+    findClosestPipeSize,
+    PIPE_SIZES,
 } from './types';
 import type { ExtractionResult } from './engine/drawing-parser';
 import { loadTextureFromData, clearHeatmapCache } from './engine/texture-manager';
@@ -38,6 +43,7 @@ import * as THREE from 'three';
 import CoveragePanel from './CoveragePanel';
 import InspectionPanel from './sidebar/InspectionPanel';
 import StatLeaderOverlay from './StatLeaderOverlay';
+import { PipePartPopup } from './sidebar/PipePartPopup';
 
 const DrawingImportModal = lazy(() => import('./DrawingImportModal'));
 const ScreenshotMode = lazy(() => import('./ScreenshotMode'));
@@ -79,6 +85,8 @@ interface SelectionState {
     coverageRectId: number;
     inspectionImageId: number;
     scanCompositeId: string;
+    pipelineId: string;
+    pipeSegmentIdx: number;
 }
 
 interface LocksState {
@@ -87,6 +95,7 @@ interface LocksState {
     textures: boolean;
     lugs: boolean;
     welds: boolean;
+    pipelines: boolean;
 }
 
 interface DrawModeState {
@@ -137,12 +146,14 @@ const DESELECTED: SelectionState = {
     coverageRectId: -1,
     inspectionImageId: -1,
     scanCompositeId: '',
+    pipelineId: '',
+    pipeSegmentIdx: -1,
 };
 
 const INITIAL_STATE: VesselModelerState = {
     vessel: { ...DEFAULT_VESSEL_STATE },
     selection: { ...DESELECTED },
-    locks: { nozzles: false, saddles: false, textures: false, lugs: false, welds: false },
+    locks: { nozzles: false, saddles: false, textures: false, lugs: false, welds: false, pipelines: false },
     drawMode: { annotation: null, coverage: false, ruler: false },
     previews: { annotation: null, coverageRect: null, ruler: null },
     ui: {
@@ -170,6 +181,7 @@ type VesselAction =
     | { type: 'SELECT_COVERAGE_RECT'; id: number }
     | { type: 'SELECT_INSPECTION_IMAGE'; id: number }
     | { type: 'SELECT_SCAN_COMPOSITE'; id: string }
+    | { type: 'SELECT_PIPE_SEGMENT'; pipelineId: string; segmentIndex: number }
     | { type: 'DESELECT_ALL' }
     | { type: 'TOGGLE_LOCK'; key: keyof LocksState }
     | { type: 'SET_DRAW_MODE_ANNOTATION'; mode: AnnotationShapeType | null }
@@ -217,6 +229,8 @@ function vesselReducer(state: VesselModelerState, action: VesselAction): VesselM
             return { ...state, selection: { ...DESELECTED, inspectionImageId: action.id } };
         case 'SELECT_SCAN_COMPOSITE':
             return { ...state, selection: { ...state.selection, scanCompositeId: action.id } };
+        case 'SELECT_PIPE_SEGMENT':
+            return { ...state, selection: { ...DESELECTED, pipelineId: action.pipelineId, pipeSegmentIdx: action.segmentIndex } };
         case 'DESELECT_ALL':
             return { ...state, selection: { ...DESELECTED } };
         case 'TOGGLE_LOCK':
@@ -343,8 +357,31 @@ export default function VesselModeler() {
     const viewportContainerRef = useRef<HTMLDivElement>(null);
     const cursorTooltipRef = useRef<HTMLDivElement>(null);
 
+    // Toolbar popout menus
+    const [locksMenuOpen, setLocksMenuOpen] = useState(false);
+    const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+    const locksMenuRef = useRef<HTMLDivElement>(null);
+    const actionsMenuRef = useRef<HTMLDivElement>(null);
+
+    // Pipe part popup state (shown when clicking a connection point)
+    const [pipePartPopup, setPipePartPopup] = useState<{ pipelineId: string; x: number; y: number } | null>(null);
+
     // Inspection panel: which stat row is hovered (highlights min/max point on vessel)
     const [visibleStatLines, setVisibleStatLines] = useState<{ min: boolean; max: boolean }>({ min: false, max: false });
+
+    // Close popout menus on outside click
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (locksMenuRef.current && !locksMenuRef.current.contains(e.target as Node)) {
+                setLocksMenuOpen(false);
+            }
+            if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
+                setActionsMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const toggleStatLine = useCallback((stat: 'min' | 'max') => {
         setVisibleStatLines(prev => ({ ...prev, [stat]: !prev[stat] }));
@@ -370,9 +407,97 @@ export default function VesselModeler() {
     }, [updateVessel]);
 
     const removeNozzle = useCallback((index: number) => {
-        updateVessel(prev => ({ ...prev, nozzles: prev.nozzles.filter((_, i) => i !== index) }));
+        // Atomic cascade: remove nozzle + associated pipelines + decrement higher indices
+        updateVessel(prev => ({
+            ...prev,
+            nozzles: prev.nozzles.filter((_, i) => i !== index),
+            pipelines: prev.pipelines
+                .filter(p => p.nozzleIndex !== index)
+                .map(p => p.nozzleIndex > index
+                    ? { ...p, nozzleIndex: p.nozzleIndex - 1 }
+                    : p
+                ),
+        }));
         dispatch({ type: 'SELECT_NOZZLE', index: -1 });
     }, [updateVessel]);
+
+    // --- Pipeline handlers ---
+    const createDefaultSegment = useCallback((type: PipeSegmentType, pipeDiameter: number): PipeSegment => {
+        const base: PipeSegment = { id: crypto.randomUUID(), type, rotation: 0 };
+        switch (type) {
+            case 'straight': return { ...base, length: pipeDiameter * 3 };
+            case 'elbow': return { ...base, angle: 90, bendRadius: pipeDiameter * 1.5 };
+            case 'reducer': return { ...base, length: pipeDiameter * 2, endDiameter: pipeDiameter * 0.75 };
+            case 'flange': return { ...base, length: 25 };
+            case 'cap': return { ...base, style: 'flat' };
+            default: return { ...base, length: pipeDiameter * 3 };
+        }
+    }, []);
+
+    const addPipeline = useCallback((nozzleIndex: number, segmentType: PipeSegmentType) => {
+        const nozzle = vesselState.nozzles[nozzleIndex];
+        if (!nozzle) return;
+        const pipe = findClosestPipeSize(nozzle.size);
+        const diameter = pipe.od;
+        const newPipeline: Pipeline = {
+            id: crypto.randomUUID(),
+            nozzleIndex,
+            pipeDiameter: diameter,
+            segments: [createDefaultSegment(segmentType, diameter)],
+        };
+        updateVessel(prev => ({ ...prev, pipelines: [...prev.pipelines, newPipeline] }));
+    }, [vesselState.nozzles, updateVessel, createDefaultSegment]);
+
+    const addSegment = useCallback((pipelineId: string, segmentType: PipeSegmentType) => {
+        updateVessel(prev => ({
+            ...prev,
+            pipelines: prev.pipelines.map(p => {
+                if (p.id !== pipelineId) return p;
+                // Compute effective diameter (may have changed via reducer segments)
+                let currentDiameter = p.pipeDiameter;
+                for (const seg of p.segments) {
+                    if (seg.type === 'reducer' && seg.endDiameter) {
+                        currentDiameter = seg.endDiameter;
+                    }
+                }
+                return { ...p, segments: [...p.segments, createDefaultSegment(segmentType, currentDiameter)] };
+            }),
+        }));
+    }, [updateVessel, createDefaultSegment]);
+
+    const updateSegment = useCallback((pipelineId: string, segmentId: string, updates: Partial<PipeSegment>) => {
+        updateVessel(prev => ({
+            ...prev,
+            pipelines: prev.pipelines.map(p =>
+                p.id === pipelineId
+                    ? { ...p, segments: p.segments.map(s => s.id === segmentId ? { ...s, ...updates } : s) }
+                    : p
+            ),
+        }));
+    }, [updateVessel]);
+
+    const removeSegment = useCallback((pipelineId: string, segmentIndex: number) => {
+        updateVessel(prev => {
+            const updated = prev.pipelines.map(p => {
+                if (p.id !== pipelineId) return p;
+                return { ...p, segments: p.segments.slice(0, segmentIndex) };
+            }).filter(p => p.segments.length > 0);
+            return { ...prev, pipelines: updated };
+        });
+        dispatch({ type: 'SELECT_PIPE_SEGMENT', pipelineId: '', segmentIndex: -1 });
+    }, [updateVessel]);
+
+    const removePipeline = useCallback((pipelineId: string) => {
+        updateVessel(prev => ({
+            ...prev,
+            pipelines: prev.pipelines.filter(p => p.id !== pipelineId),
+        }));
+        dispatch({ type: 'SELECT_PIPE_SEGMENT', pipelineId: '', segmentIndex: -1 });
+    }, [updateVessel]);
+
+    const selectPipeSegment = useCallback((pipelineId: string, segmentIndex: number) => {
+        dispatch({ type: 'SELECT_PIPE_SEGMENT', pipelineId, segmentIndex });
+    }, []);
 
     // --- Saddle handlers ---
     const addSaddle = useCallback((saddle: SaddleConfig) => {
@@ -381,6 +506,10 @@ export default function VesselModeler() {
 
     const updateSaddle = useCallback((index: number, updates: Partial<SaddleConfig>) => {
         updateVessel(prev => ({ ...prev, saddles: prev.saddles.map((s, i) => i === index ? { ...s, ...updates } : s) }));
+    }, [updateVessel]);
+
+    const updateAllSaddleHeights = useCallback((height: number) => {
+        updateVessel(prev => ({ ...prev, saddles: prev.saddles.map(s => ({ ...s, height })) }));
     }, [updateVessel]);
 
     const removeSaddle = useCallback((index: number) => {
@@ -823,6 +952,13 @@ export default function VesselModeler() {
                 handleUpdateScanComposite(compositeId, { indexDirection: sc.indexDirection === 'forward' ? 'reverse' : 'forward' });
             }
         },
+        onPipeSegmentSelected: (pipelineId, segmentIndex) => {
+            dispatch({ type: 'SELECT_PIPE_SEGMENT', pipelineId, segmentIndex });
+        },
+        onPipeConnectionPointClicked: (pipelineId) => {
+            // Show the pipe part popup — handled via state
+            setPipePartPopup(prev => prev ? null : { pipelineId, x: 0, y: 0 });
+        },
         onDeselect: () => dispatch({ type: 'DESELECT_ALL' }),
         onNozzleMoved: (idx, pos, angle) => {
             updateNozzle(idx, { pos: Math.round(pos), angle: Math.round(angle) });
@@ -851,12 +987,15 @@ export default function VesselModeler() {
                 length: vesselState.length,
                 headRatio: vesselState.headRatio,
                 orientation: vesselState.orientation,
+                vesselName: vesselState.vesselName,
+                location: vesselState.location,
+                inspectionDate: vesselState.inspectionDate,
             },
             nozzles: vesselState.nozzles.map(n => ({
                 name: n.name, pos: n.pos, proj: n.proj,
                 angle: n.angle, size: n.size,
                 orientationMode: n.orientationMode,
-                flangeOD: n.flangeOD, flangeThk: n.flangeThk, pipeOD: n.pipeOD,
+                flangeOD: n.flangeOD, flangeThk: n.flangeThk, pipeOD: n.pipeOD, style: n.style,
             })),
             liftingLugs: vesselState.liftingLugs.map(l => ({
                 name: l.name, pos: l.pos, angle: l.angle,
@@ -918,11 +1057,14 @@ export default function VesselModeler() {
                 rangeMax: sc.rangeMax,
                 opacity: sc.opacity,
             })),
+            pipelines: vesselState.pipelines,
             measurementConfig: { ...vesselState.measurementConfig },
             visuals: { ...vesselState.visuals },
         };
 
-        const defaultName = `vessel_project_${new Date().toISOString().slice(0, 10)}`;
+        const defaultName = vesselState.vesselName
+            ? `${vesselState.vesselName.replace(/[^a-zA-Z0-9_-]/g, '_')}_${new Date().toISOString().slice(0, 10)}`
+            : `vessel_project_${new Date().toISOString().slice(0, 10)}`;
         const filename = prompt('Enter filename:', defaultName);
         if (!filename) return;
 
@@ -939,6 +1081,16 @@ export default function VesselModeler() {
     }, [vesselState]);
 
     const exportGLB = useCallback(async () => {
+        const hasProjectInfo = vesselState.vesselName || vesselState.location || vesselState.inspectionDate;
+        if (!hasProjectInfo) {
+            const proceed = window.confirm(
+                'No project info has been added. The exported file will use a generic name.\n\n'
+                + 'You can add a vessel name, location, and inspection date in the Project Info section of the sidebar.\n\n'
+                + 'Export anyway?',
+            );
+            if (!proceed) return;
+        }
+
         const sceneManager = viewportRef.current?.getSceneManager();
         const vesselGroup = sceneManager?.getVesselGroup();
         if (!vesselGroup) return;
@@ -1003,11 +1155,14 @@ export default function VesselModeler() {
                     length: projectData.vessel.length || 8000,
                     headRatio: projectData.vessel.headRatio || 2.0,
                     orientation: projectData.vessel.orientation || 'horizontal',
+                    vesselName: projectData.vessel.vesselName || '',
+                    location: projectData.vessel.location || '',
+                    inspectionDate: projectData.vessel.inspectionDate || '',
                     nozzles: (projectData.nozzles || []).map((n: any) => ({
                         name: n.name || 'N', pos: n.pos ?? 0, proj: n.proj ?? 200,
                         angle: n.angle ?? 90, size: n.size ?? 100,
                         orientationMode: n.orientationMode,
-                        flangeOD: n.flangeOD, flangeThk: n.flangeThk, pipeOD: n.pipeOD,
+                        flangeOD: n.flangeOD, flangeThk: n.flangeThk, pipeOD: n.pipeOD, style: n.style,
                     })),
                     liftingLugs: (projectData.liftingLugs || []).map((l: any) => ({
                         name: l.name || 'L', pos: l.pos ?? 0, angle: l.angle ?? 90,
@@ -1069,6 +1224,20 @@ export default function VesselModeler() {
                         rangeMin: sc.rangeMin ?? null,
                         rangeMax: sc.rangeMax ?? null,
                         opacity: sc.opacity ?? 1,
+                    })),
+                    pipelines: (projectData.pipelines || []).map((p: any) => ({
+                        id: p.id || crypto.randomUUID(),
+                        nozzleIndex: p.nozzleIndex ?? 0,
+                        pipeDiameter: p.pipeDiameter ?? 100,
+                        color: p.color,
+                        segments: (p.segments || []).map((s: any) => ({
+                            id: s.id || crypto.randomUUID(),
+                            type: s.type || 'straight',
+                            rotation: s.rotation ?? 0,
+                            length: s.length, angle: s.angle, bendRadius: s.bendRadius,
+                            endDiameter: s.endDiameter, branchDiameter: s.branchDiameter, style: s.style,
+                        })),
+                        locked: p.locked, visible: p.visible,
                     })),
                     measurementConfig: {
                         ...DEFAULT_VESSEL_STATE.measurementConfig,
@@ -1258,7 +1427,9 @@ export default function VesselModeler() {
     // --- Nozzle library drag-and-drop onto 3D canvas ---
     const handleDragOver = useCallback((e: React.DragEvent) => {
         if (e.dataTransfer.types.includes('application/x-nozzle-pipe') ||
-            e.dataTransfer.types.includes('application/x-lifting-lug')) {
+            e.dataTransfer.types.includes('application/x-lifting-lug') ||
+            e.dataTransfer.types.includes('application/x-weld') ||
+            e.dataTransfer.types.includes('application/x-pipe-part')) {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'copy';
         }
@@ -1315,11 +1486,12 @@ export default function VesselModeler() {
             if (deg < 0) deg += 360;
 
             // Find a unique name
+            const namePrefix = pipe.style === 'plain-pipe' ? 'P' : 'N';
             let nozzleNum = vesselState.nozzles.length + 1;
-            let name = 'N' + nozzleNum;
+            let name = namePrefix + nozzleNum;
             while (vesselState.nozzles.some(n => n.name === name)) {
                 nozzleNum++;
-                name = 'N' + nozzleNum;
+                name = namePrefix + nozzleNum;
             }
 
             const defaultProj = (vesselState.id / 2) + 200;
@@ -1333,14 +1505,16 @@ export default function VesselModeler() {
                 flangeOD: pipe.flangeOD,
                 flangeThk: pipe.flangeThk,
                 pipeOD: pipe.od,
+                ...(pipe.style ? { style: pipe.style } : {}),
             });
         } else {
             // Dropped on canvas but missed the vessel - add at center
+            const namePrefix = pipe.style === 'plain-pipe' ? 'P' : 'N';
             let nozzleNum = vesselState.nozzles.length + 1;
-            let name = 'N' + nozzleNum;
+            let name = namePrefix + nozzleNum;
             while (vesselState.nozzles.some(n => n.name === name)) {
                 nozzleNum++;
-                name = 'N' + nozzleNum;
+                name = namePrefix + nozzleNum;
             }
             addNozzle({
                 name,
@@ -1351,6 +1525,7 @@ export default function VesselModeler() {
                 flangeOD: pipe.flangeOD,
                 flangeThk: pipe.flangeThk,
                 pipeOD: pipe.od,
+                ...(pipe.style ? { style: pipe.style } : {}),
             });
         }
     }, [vesselState, addNozzle]);
@@ -1422,14 +1597,189 @@ export default function VesselModeler() {
         });
     }, [vesselState, addLug]);
 
+    // --- Weld drag-and-drop onto 3D canvas ---
+    const handleWeldDrop = useCallback((e: React.DragEvent) => {
+        const data = e.dataTransfer.getData('application/x-weld');
+        if (!data) return;
+        e.preventDefault();
+
+        const { type: wType } = JSON.parse(data) as { type: 'circumferential' | 'longitudinal' };
+        const cam = viewportRef.current?.getCamera();
+        const rendererEl = viewportRef.current?.getRenderer()?.domElement;
+        const sceneManager = viewportRef.current?.getSceneManager();
+        if (!cam || !rendererEl || !sceneManager) return;
+
+        const vesselGroup = sceneManager.getVesselGroup();
+        if (!vesselGroup) return;
+
+        const rect = rendererEl.getBoundingClientRect();
+        const mouse = new THREE.Vector2(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -((e.clientY - rect.top) / rect.height) * 2 + 1
+        );
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mouse, cam);
+
+        const shells: THREE.Object3D[] = [];
+        vesselGroup.traverse((child: THREE.Object3D) => {
+            if (child.userData.isShell) shells.push(child);
+        });
+        const intersects = raycaster.intersectObjects(shells);
+
+        let newPos: number;
+        let deg: number;
+
+        if (intersects.length > 0) {
+            const point = intersects[0].point;
+            const isVertical = vesselState.orientation === 'vertical';
+            newPos = isVertical
+                ? (point.y / SCALE) + (vesselState.length / 2)
+                : (point.x / SCALE) + (vesselState.length / 2);
+            const headDepth = vesselState.id / (2 * vesselState.headRatio);
+            newPos = Math.max(-headDepth, Math.min(vesselState.length + headDepth, newPos));
+
+            const rad = isVertical
+                ? Math.atan2(point.z, point.x)
+                : Math.atan2(point.y, point.z);
+            deg = (rad * 180) / Math.PI;
+            if (deg < 0) deg += 360;
+        } else {
+            newPos = vesselState.length / 2;
+            deg = 90;
+        }
+
+        let weldNum = vesselState.welds.length + 1;
+        let name = 'W' + weldNum;
+        while (vesselState.welds.some(w => w.name === name)) {
+            weldNum++;
+            name = 'W' + weldNum;
+        }
+
+        if (wType === 'circumferential') {
+            addWeld({
+                name,
+                type: 'circumferential',
+                pos: Math.round(newPos),
+                color: '#888888',
+            });
+        } else {
+            const halfLen = vesselState.length * 0.25;
+            addWeld({
+                name,
+                type: 'longitudinal',
+                pos: Math.round(newPos - halfLen),
+                endPos: Math.round(newPos + halfLen),
+                angle: Math.round(deg),
+                color: '#888888',
+            });
+        }
+    }, [vesselState, addWeld]);
+
+    // --- Pipe part drag-and-drop ---
+    const handlePipePartDrop = useCallback((e: React.DragEvent) => {
+        const data = e.dataTransfer.getData('application/x-pipe-part');
+        if (!data) return;
+        e.preventDefault();
+
+        const { type: segmentType } = JSON.parse(data) as { type: PipeSegmentType };
+
+        // Raycast the shell — same pattern as nozzle drop
+        const cam = viewportRef.current?.getCamera();
+        const rendererEl = viewportRef.current?.getRenderer()?.domElement;
+        const sceneManager = viewportRef.current?.getSceneManager();
+        if (!cam || !rendererEl || !sceneManager) return;
+
+        const vesselGroup = sceneManager.getVesselGroup();
+        if (!vesselGroup) return;
+
+        const rect = rendererEl.getBoundingClientRect();
+        const mouse = new THREE.Vector2(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -((e.clientY - rect.top) / rect.height) * 2 + 1,
+        );
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mouse, cam);
+
+        const shells: THREE.Object3D[] = [];
+        vesselGroup.traverse((child: THREE.Object3D) => {
+            if (child.userData.isShell) shells.push(child);
+        });
+        const intersects = raycaster.intersectObjects(shells);
+
+        // Compute pos/angle from hit point (mirrors nozzle drop logic)
+        const isVertical = vesselState.orientation === 'vertical';
+        const headDepth = vesselState.id / (2 * vesselState.headRatio);
+        let newPos: number;
+        let deg: number;
+
+        if (intersects.length > 0) {
+            const point = intersects[0].point;
+            newPos = isVertical
+                ? (point.y / SCALE) + (vesselState.length / 2)
+                : (point.x / SCALE) + (vesselState.length / 2);
+            newPos = Math.max(-headDepth, Math.min(vesselState.length + headDepth, newPos));
+
+            const rad = isVertical
+                ? Math.atan2(point.z, point.x)
+                : Math.atan2(point.y, point.z);
+            deg = (rad * 180) / Math.PI;
+            if (deg < 0) deg += 360;
+        } else {
+            // Missed the vessel — place at center top
+            newPos = vesselState.length / 2;
+            deg = 90;
+        }
+
+        // Default pipe size for the stub nozzle
+        const defaultPipeSize = PIPE_SIZES[2]; // 4" NPS
+        const defaultProj = (vesselState.id / 2) + 150;
+
+        // Find unique nozzle name
+        let nozzleNum = vesselState.nozzles.length + 1;
+        let name = 'P' + nozzleNum;
+        while (vesselState.nozzles.some(n => n.name === name)) {
+            nozzleNum++;
+            name = 'P' + nozzleNum;
+        }
+
+        // Create plain-pipe nozzle + pipeline with first segment in one atomic update
+        const nozzle: NozzleConfig = {
+            name,
+            pos: Math.round(newPos),
+            proj: defaultProj,
+            angle: Math.round(deg),
+            size: defaultPipeSize.id,
+            pipeOD: defaultPipeSize.od,
+            style: 'plain-pipe',
+        };
+
+        const newPipeline: Pipeline = {
+            id: crypto.randomUUID(),
+            nozzleIndex: vesselState.nozzles.length, // will be appended at end
+            pipeDiameter: defaultPipeSize.od,
+            segments: [createDefaultSegment(segmentType, defaultPipeSize.od)],
+        };
+
+        updateVessel(prev => ({
+            ...prev,
+            nozzles: [...prev.nozzles, nozzle],
+            pipelines: [...prev.pipelines, newPipeline],
+            hasModel: true,
+        }));
+    }, [vesselState, updateVessel, createDefaultSegment]);
+
     // --- Combined drop handler ---
     const handleDrop = useCallback((e: React.DragEvent) => {
         if (e.dataTransfer.types.includes('application/x-nozzle-pipe')) {
             handleNozzleDrop(e);
         } else if (e.dataTransfer.types.includes('application/x-lifting-lug')) {
             handleLugDrop(e);
+        } else if (e.dataTransfer.types.includes('application/x-weld')) {
+            handleWeldDrop(e);
+        } else if (e.dataTransfer.types.includes('application/x-pipe-part')) {
+            handlePipePartDrop(e);
         }
-    }, [handleNozzleDrop, handleLugDrop]);
+    }, [handleNozzleDrop, handleLugDrop, handleWeldDrop, handlePipePartDrop]);
 
     // --- Hint text ---
     const getHintText = () => {
@@ -1450,7 +1800,7 @@ export default function VesselModeler() {
         if (locks.welds) locked.push('Welds');
 
         if (locked.length > 0) return `${locked.join(', ')} Locked | Other components can be repositioned`;
-        return 'Drag from Library to Add | Click & Drag Nozzles, Supports, or Textures to Reposition';
+        return null;
     };
 
     return (
@@ -1495,6 +1845,7 @@ export default function VesselModeler() {
                         texturesLocked={locks.textures}
                         lugsLocked={locks.lugs}
                         weldsLocked={locks.welds}
+                        pipelinesLocked={locks.pipelines}
                         selectedWeldIndex={selection.weldIndex}
                         selectedInspectionImageId={selection.inspectionImageId}
                         onInspectionImageThumbnailClick={(id) => dispatch({ type: 'SET_VIEWING_INSPECTION_IMAGE', id })}
@@ -1505,9 +1856,20 @@ export default function VesselModeler() {
                         rulerDrawMode={drawModeState.ruler}
                         previewRuler={previews.ruler}
                         selectedScanCompositeId={selection.scanCompositeId}
+                        selectedPipelineId={selection.pipelineId}
+                        selectedPipeSegmentIdx={selection.pipeSegmentIdx}
                         inspectingAnnotationId={ui.inspectingAnnotationId}
                     />
                 </ErrorBoundary>
+
+                {/* Pipe part popup — shown when clicking a connection point */}
+                {pipePartPopup && (
+                    <PipePartPopup
+                        pipelineId={pipePartPopup.pipelineId}
+                        onSelect={(plId, type) => addSegment(plId, type)}
+                        onClose={() => setPipePartPopup(null)}
+                    />
+                )}
 
                 {/* Scan composite hover tooltip — cursor-following mode */}
                 {ui.scanTooltipFollow && ui.hoverData && ui.hoverData.thickness !== null && (
@@ -1554,6 +1916,7 @@ export default function VesselModeler() {
                         onSelectLug={(index) => dispatch({ type: 'SELECT_LUG', index })}
                         onAddSaddle={addSaddle}
                         onUpdateSaddle={updateSaddle}
+                        onUpdateAllSaddleHeights={updateAllSaddleHeights}
                         onRemoveSaddle={removeSaddle}
                         onSelectSaddle={(index) => dispatch({ type: 'SELECT_SADDLE', index })}
                         selectedWeldIndex={selection.weldIndex}
@@ -1610,6 +1973,14 @@ export default function VesselModeler() {
                         cloudCompositesLoading={cloudCompositesLoading}
                         cloudCompositesError={cloudCompositesError as Error | null}
                         onUpdateThicknessThresholds={updateThicknessThresholds}
+                        selectedPipelineId={selection.pipelineId}
+                        selectedSegmentIdx={selection.pipeSegmentIdx}
+                        onAddPipeline={addPipeline}
+                        onAddSegment={addSegment}
+                        onUpdateSegment={updateSegment}
+                        onRemoveSegment={removeSegment}
+                        onRemovePipeline={removePipeline}
+                        onSelectPipeSegment={selectPipeSegment}
                     />
                 </div>
 
@@ -1622,72 +1993,97 @@ export default function VesselModeler() {
                     {ui.sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeft size={18} />}
                 </button>
 
-                {/* Lock controls */}
-                <div className="vm-lock-controls" style={{ left: ui.sidebarOpen ? 400 : 60 }}>
-                    <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginRight: 4 }}>Lock:</span>
+                {/* Locks popout menu */}
+                <div className="vm-popout-menu" ref={locksMenuRef} style={{ left: ui.sidebarOpen ? 400 : 60 }}>
                     <button
-                        className={`vm-lock-btn ${locks.nozzles ? 'locked' : ''}`}
-                        onClick={() => dispatch({ type: 'TOGGLE_LOCK', key: 'nozzles' })}
-                        title={locks.nozzles ? 'Unlock nozzles' : 'Lock nozzles'}
+                        className={`vm-popout-trigger ${locksMenuOpen ? 'open' : ''}`}
+                        onClick={() => { setLocksMenuOpen(!locksMenuOpen); setActionsMenuOpen(false); }}
                     >
-                        {locks.nozzles ? <Lock size={12} /> : <Unlock size={12} />}
-                        N
+                        <Lock size={14} />
+                        Locks
+                        <ChevronDown size={12} className={`vm-popout-chevron ${locksMenuOpen ? 'rotated' : ''}`} />
                     </button>
-                    <button
-                        className={`vm-lock-btn ${locks.saddles ? 'locked' : ''}`}
-                        onClick={() => dispatch({ type: 'TOGGLE_LOCK', key: 'saddles' })}
-                        title={locks.saddles ? 'Unlock saddles' : 'Lock saddles'}
-                    >
-                        {locks.saddles ? <Lock size={12} /> : <Unlock size={12} />}
-                        S
-                    </button>
-                    <button
-                        className={`vm-lock-btn ${locks.textures ? 'locked' : ''}`}
-                        onClick={() => dispatch({ type: 'TOGGLE_LOCK', key: 'textures' })}
-                        title={locks.textures ? 'Unlock textures' : 'Lock textures'}
-                    >
-                        {locks.textures ? <Lock size={12} /> : <Unlock size={12} />}
-                        T
-                    </button>
-                    <button
-                        className={`vm-lock-btn ${locks.lugs ? 'locked' : ''}`}
-                        onClick={() => dispatch({ type: 'TOGGLE_LOCK', key: 'lugs' })}
-                        title={locks.lugs ? 'Unlock lifting lugs' : 'Lock lifting lugs'}
-                    >
-                        {locks.lugs ? <Lock size={12} /> : <Unlock size={12} />}
-                        L
-                    </button>
-                    <button
-                        className={`vm-lock-btn ${locks.welds ? 'locked' : ''}`}
-                        onClick={() => dispatch({ type: 'TOGGLE_LOCK', key: 'welds' })}
-                        title={locks.welds ? 'Unlock welds' : 'Lock welds'}
-                    >
-                        {locks.welds ? <Lock size={12} /> : <Unlock size={12} />}
-                        W
-                    </button>
+                    {locksMenuOpen && (
+                        <div className="vm-popout-panel">
+                            <button
+                                className={`vm-lock-btn ${locks.nozzles ? 'locked' : ''}`}
+                                onClick={() => dispatch({ type: 'TOGGLE_LOCK', key: 'nozzles' })}
+                                title={locks.nozzles ? 'Unlock nozzles' : 'Lock nozzles'}
+                            >
+                                {locks.nozzles ? <Lock size={12} /> : <Unlock size={12} />}
+                                Nozzles
+                            </button>
+                            <button
+                                className={`vm-lock-btn ${locks.saddles ? 'locked' : ''}`}
+                                onClick={() => dispatch({ type: 'TOGGLE_LOCK', key: 'saddles' })}
+                                title={locks.saddles ? 'Unlock saddles' : 'Lock saddles'}
+                            >
+                                {locks.saddles ? <Lock size={12} /> : <Unlock size={12} />}
+                                Saddles
+                            </button>
+                            <button
+                                className={`vm-lock-btn ${locks.textures ? 'locked' : ''}`}
+                                onClick={() => dispatch({ type: 'TOGGLE_LOCK', key: 'textures' })}
+                                title={locks.textures ? 'Unlock textures' : 'Lock textures'}
+                            >
+                                {locks.textures ? <Lock size={12} /> : <Unlock size={12} />}
+                                Textures
+                            </button>
+                            <button
+                                className={`vm-lock-btn ${locks.lugs ? 'locked' : ''}`}
+                                onClick={() => dispatch({ type: 'TOGGLE_LOCK', key: 'lugs' })}
+                                title={locks.lugs ? 'Unlock lifting lugs' : 'Lock lifting lugs'}
+                            >
+                                {locks.lugs ? <Lock size={12} /> : <Unlock size={12} />}
+                                Lifting Lugs
+                            </button>
+                            <button
+                                className={`vm-lock-btn ${locks.welds ? 'locked' : ''}`}
+                                onClick={() => dispatch({ type: 'TOGGLE_LOCK', key: 'welds' })}
+                                title={locks.welds ? 'Unlock welds' : 'Lock welds'}
+                            >
+                                {locks.welds ? <Lock size={12} /> : <Unlock size={12} />}
+                                Welds
+                            </button>
+                        </div>
+                    )}
                 </div>
 
-                {/* Quick action buttons */}
-                <div className="vm-quick-actions">
-                    <button className="vm-quick-btn" onClick={() => dispatch({ type: 'SET_SHOW_DRAWING_IMPORT', show: true })} title="Import General Arrangement Drawing">
-                        <FileUp size={16} /> Import GA
+                {/* Actions popout menu */}
+                <div className="vm-popout-menu vm-popout-menu-right" ref={actionsMenuRef}>
+                    <button
+                        className={`vm-popout-trigger ${actionsMenuOpen ? 'open' : ''}`}
+                        onClick={() => { setActionsMenuOpen(!actionsMenuOpen); setLocksMenuOpen(false); }}
+                    >
+                        <Settings2 size={14} />
+                        Actions
+                        <ChevronDown size={12} className={`vm-popout-chevron ${actionsMenuOpen ? 'rotated' : ''}`} />
                     </button>
-                    <button className="vm-quick-btn" onClick={() => dispatch({ type: 'SET_SHOW_SCREENSHOT_MODE', show: true })} title="Screenshot Mode">
-                        <Camera size={16} /> Screenshot
-                    </button>
-                    <button className="vm-quick-btn" onClick={() => viewportRef.current?.resetCamera()} title="Reset Camera">
-                        <RotateCcw size={16} /> Reset
-                    </button>
-                    <button className="vm-quick-btn" onClick={saveProject} title="Save Project">
-                        <Save size={16} /> Save
-                    </button>
-                    <label className="vm-quick-btn" title="Load Project" style={{ cursor: 'pointer' }}>
-                        <Upload size={16} /> Load
-                        <input type="file" accept=".json" onChange={loadProject} style={{ display: 'none' }} />
-                    </label>
-                    <button className="vm-quick-btn" onClick={exportGLB} title="Export 3D Model (.glb)">
-                        <Box size={16} /> 3D Export
-                    </button>
+                    {actionsMenuOpen && (
+                        <div className="vm-popout-panel">
+                            <button className="vm-popout-item" onClick={() => { dispatch({ type: 'SET_SHOW_DRAWING_IMPORT', show: true }); setActionsMenuOpen(false); }}>
+                                <FileUp size={14} /> Import GA
+                            </button>
+                            <button className="vm-popout-item" onClick={() => { dispatch({ type: 'SET_SHOW_SCREENSHOT_MODE', show: true }); setActionsMenuOpen(false); }}>
+                                <Camera size={14} /> Screenshot
+                            </button>
+                            <button className="vm-popout-item" onClick={() => { viewportRef.current?.resetCamera(); setActionsMenuOpen(false); }}>
+                                <RotateCcw size={14} /> Reset Camera
+                            </button>
+                            <div className="vm-popout-divider" />
+                            <button className="vm-popout-item" onClick={() => { saveProject(); setActionsMenuOpen(false); }}>
+                                <Save size={14} /> Save Project
+                            </button>
+                            <label className="vm-popout-item" style={{ cursor: 'pointer' }}>
+                                <Upload size={14} /> Load Project
+                                <input type="file" accept=".json" onChange={(e) => { loadProject(e); setActionsMenuOpen(false); }} style={{ display: 'none' }} />
+                            </label>
+                            <div className="vm-popout-divider" />
+                            <button className="vm-popout-item" onClick={() => { exportGLB(); setActionsMenuOpen(false); }}>
+                                <Box size={14} /> 3D Export
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {/* Coverage overlay */}
@@ -1770,7 +2166,7 @@ export default function VesselModeler() {
                             </button>
                         </div>
                     </div>
-                ) : (
+                ) : (getHintText() || (ui.scanTooltipFollow && ui.hoverData && ui.hoverData.thickness !== null)) ? (
                     <div className="vm-hint">
                         {ui.scanTooltipFollow && ui.hoverData && ui.hoverData.thickness !== null && (
                             <button
@@ -1784,7 +2180,7 @@ export default function VesselModeler() {
                         )}
                         {getHintText()}
                     </div>
-                )}
+                ) : null}
 
                 {/* Loading overlay (placeholder for future use) */}
             </div>

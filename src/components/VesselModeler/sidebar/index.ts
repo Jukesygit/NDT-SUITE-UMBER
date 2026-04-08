@@ -1,4 +1,5 @@
 export { SliderRow, Section, SubSection } from './SliderRow';
+export { ProjectInfoSection } from './ProjectInfoSection';
 export { DimensionsSection } from './DimensionsSection';
 export { VisualsSection } from './VisualsSection';
 export { NozzleSection } from './NozzleSection';
@@ -11,3 +12,4 @@ export { AnnotationSection } from './AnnotationSection';
 export { CoverageSection } from './CoverageSection';
 export { InspectionImageSection } from './InspectionImageSection';
 export { ThresholdSection } from './ThresholdSection';
+export { PipingSection } from './PipingSection';

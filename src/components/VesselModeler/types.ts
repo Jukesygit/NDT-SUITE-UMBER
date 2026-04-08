@@ -79,6 +79,8 @@ export interface NozzleConfig {
   flangeThk?: number;
   /** Optional pipe outside diameter override in mm */
   pipeOD?: number;
+  /** Nozzle style: 'flanged' (default) or 'plain-pipe' (simple stub for piping) */
+  style?: 'flanged' | 'plain-pipe';
 }
 
 export type LiftingLugStyle = 'padEye' | 'trunnion';
@@ -123,8 +125,8 @@ export interface LiftingLugSize {
 export interface SaddleConfig {
   /** Distance from left tangent line in mm */
   pos: number;
-  /** Hex color string */
-  color: string;
+  /** Hex color string (legacy — saddles now use the vessel shell material) */
+  color?: string;
   /** Overall saddle height in mm (from base plate to vessel centerline). Defaults to vessel radius × 1.2 */
   height?: number;
 }
@@ -381,6 +383,12 @@ export interface VisualSettings {
   useEnvironmentMap: boolean;
   /** Whether to show N/S/E/W cardinal direction labels on the floor grid */
   showCardinalDirections: boolean;
+  /** Rotation of cardinal directions in degrees (0–360, snaps at 90° increments) */
+  cardinalRotation: number;
+  /** Whether to enable real-time shadows from the key light */
+  enableShadows: boolean;
+  /** Shadow opacity (0–1). Controls how dark shadows appear. */
+  shadowIntensity: number;
 }
 
 export interface VesselState {
@@ -391,6 +399,12 @@ export interface VesselState {
   /** Head ratio (e.g., 2.0 for 2:1 Ellipsoidal) */
   headRatio: number;
   orientation: Orientation;
+  /** Display name for the vessel (e.g., "V-2401") */
+  vesselName: string;
+  /** Site/facility location (e.g., "Karstoe Terminal") */
+  location: string;
+  /** Inspection date as ISO string (e.g., "2026-04-02") */
+  inspectionDate: string;
   nozzles: NozzleConfig[];
   liftingLugs: LiftingLugConfig[];
   saddles: SaddleConfig[];
@@ -401,6 +415,7 @@ export interface VesselState {
   coverageRects: CoverageRectConfig[];
   inspectionImages: InspectionImageConfig[];
   scanComposites: ScanCompositeConfig[];
+  pipelines: Pipeline[];
   measurementConfig: MeasurementConfig;
   thicknessThresholds?: ThicknessThresholds;
   hasModel: boolean;
@@ -706,6 +721,45 @@ export function findClosestPipeSize(boreId: number): PipeSize {
 }
 
 // ---------------------------------------------------------------------------
+// Piping Attachments
+// ---------------------------------------------------------------------------
+
+export type PipeSegmentType = 'straight' | 'elbow' | 'reducer' | 'tee' | 'valve' | 'flange' | 'cap';
+
+export interface PipeSegment {
+  id: string;
+  type: PipeSegmentType;
+  /** Rotation around incoming pipe axis in degrees (0-360) */
+  rotation: number;
+  /** Segment length in mm (straight, reducer, valve, flange) */
+  length?: number;
+  /** Bend angle in degrees (elbow) or branch angle (tee) */
+  angle?: number;
+  /** Elbow bend radius in mm (defaults to 1.5x pipe diameter) */
+  bendRadius?: number;
+  /** Output diameter in mm (reducer) */
+  endDiameter?: number;
+  /** Branch diameter in mm (tee) */
+  branchDiameter?: number;
+  /** Sub-style: cap 'flat'|'dished' */
+  style?: string;
+}
+
+export interface Pipeline {
+  id: string;
+  /** Index into vesselState.nozzles — the connection origin */
+  nozzleIndex: number;
+  /** Pipe outside diameter in mm */
+  pipeDiameter: number;
+  /** Optional hex color override */
+  color?: string;
+  /** Ordered chain of segments from nozzle outward */
+  segments: PipeSegment[];
+  locked?: boolean;
+  visible?: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // Default State
 // ---------------------------------------------------------------------------
 
@@ -714,6 +768,9 @@ export const DEFAULT_VESSEL_STATE: VesselState = {
   length: 8000,
   headRatio: 2.0,
   orientation: 'horizontal',
+  vesselName: '',
+  location: '',
+  inspectionDate: '',
   nozzles: [],
   liftingLugs: [],
   saddles: [
@@ -727,6 +784,7 @@ export const DEFAULT_VESSEL_STATE: VesselState = {
   coverageRects: [],
   inspectionImages: [],
   scanComposites: [],
+  pipelines: [],
   measurementConfig: {
     referenceTangent: 'left',
     circumDirection: 'CW',
@@ -734,16 +792,19 @@ export const DEFAULT_VESSEL_STATE: VesselState = {
   },
   hasModel: true,
   visuals: {
-    material: 'cs',
+    material: 'ss',
     shellOpacity: 1.0,
     nozzleOpacity: 1.0,
-    roughness: null,
-    metalness: null,
-    backgroundColor: '#111111',
+    roughness: 0.62,
+    metalness: 0.30,
+    backgroundColor: '#C4C4C4',
     showGrid: false,
     showAxes: false,
     useEnvironmentMap: false,
     showCardinalDirections: false,
+    cardinalRotation: 0,
+    enableShadows: true,
+    shadowIntensity: 0.35,
   },
 };
 
@@ -780,6 +841,8 @@ export interface VesselCallbacks {
   onScanCompositeHover?: (id: string, thickness: number | null, scanMm: number, indexMm: number, screenX: number, screenY: number) => void;
   onScanGizmoDatumMoved?: (compositeId: string, angleDeg: number, posMm: number) => void;
   onScanGizmoDirectionToggle?: (compositeId: string, field: 'scanDirection' | 'indexDirection') => void;
+  onPipeSegmentSelected?: (pipelineId: string, segmentIndex: number) => void;
+  onPipeConnectionPointClicked?: (pipelineId: string) => void;
   onDeselect?: () => void;
   onDragEnd?: () => void;
 }

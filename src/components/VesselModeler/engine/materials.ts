@@ -85,24 +85,6 @@ export function createHighlightMaterial(): THREE.MeshStandardMaterial {
 // ---------------------------------------------------------------------------
 
 /**
- * Create a material for saddle supports.
- * @param color - Hex color number (default matches the blue used in saddle config)
- */
-export function createSaddleMaterial(
-  color: number = 0x2244ff,
-): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({
-    color,
-    emissive: 0x000033,
-    roughness: 0.5,
-    metalness: 0.4,
-    side: THREE.FrontSide,
-    transparent: true,
-    opacity: 1.0,
-  });
-}
-
-/**
  * Create a highlight material for the currently selected saddle.
  */
 export function createSaddleHighlightMaterial(): THREE.MeshStandardMaterial {
@@ -161,14 +143,17 @@ export function createLugHighlightMaterial(): THREE.MeshStandardMaterial {
 
 /**
  * Create a material for weld seams.
- * Uses a darker, rougher finish to visually distinguish welds from the shell.
+ * Uses the same preset as the shell so welds match the vessel appearance.
  */
-export function createWeldMaterial(): THREE.MeshStandardMaterial {
+export function createWeldMaterial(
+  preset: MaterialKey = 'cs',
+): THREE.MeshStandardMaterial {
+  const p = MATERIAL_PRESETS[preset];
   return new THREE.MeshStandardMaterial({
-    color: 0x888888,
-    emissive: 0x111111,
-    roughness: 0.7,
-    metalness: 0.5,
+    color: p.color,
+    emissive: p.emissive,
+    roughness: p.roughness,
+    metalness: p.metalness,
     side: THREE.FrontSide,
     transparent: true,
     opacity: 1.0,
@@ -187,6 +172,44 @@ export function createWeldHighlightMaterial(): THREE.MeshStandardMaterial {
     side: THREE.FrontSide,
     transparent: true,
     opacity: 1.0,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline Materials
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a material for pipe segments.
+ * Uses the same preset system as nozzles for consistency.
+ */
+export function createPipelineMaterial(
+  preset: MaterialKey = 'cs',
+): THREE.MeshStandardMaterial {
+  const p = MATERIAL_PRESETS[preset];
+  return new THREE.MeshStandardMaterial({
+    color: p.color,
+    emissive: p.emissive,
+    roughness: p.roughness,
+    metalness: p.metalness,
+    side: THREE.FrontSide,
+    transparent: true,
+    opacity: 1.0,
+  });
+}
+
+/**
+ * Create the green ring material used for pipe connection point indicators.
+ */
+export function createConnectionPointMaterial(): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    color: 0x00ff88,
+    emissive: 0x004422,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.8,
+    roughness: 0.3,
+    metalness: 0.2,
   });
 }
 

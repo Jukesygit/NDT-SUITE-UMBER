@@ -111,19 +111,13 @@ export function createSaddleGroup(
   vesselState: VesselState,
   isSelected: boolean,
   highlightMaterial: THREE.Material,
+  baseMaterial: THREE.Material,
 ): THREE.Group {
   const RADIUS = vesselState.id / 2;
   const TAN_TAN = vesselState.length;
   const x = (saddle.pos - TAN_TAN / 2) * SCALE;
-  const color = saddle.color || '#2244ff';
 
-  const mat: THREE.Material = isSelected
-    ? highlightMaterial
-    : new THREE.MeshStandardMaterial({
-        color: new THREE.Color(color),
-        roughness: 0.6,
-        metalness: 0.5,
-      });
+  const mat: THREE.Material = isSelected ? highlightMaterial : baseMaterial;
 
   const saddleWidth = 400; // mm along vessel axis
   const thickness = PLATE_THICKNESS;

@@ -1,4 +1,4 @@
-import { ArrowLeftRight, ArrowUpDown } from 'lucide-react';
+import { ArrowLeftRight, ArrowUpDown, Ruler } from 'lucide-react';
 import type { VesselState, Orientation } from '../types';
 import { SliderRow, Section } from './SliderRow';
 
@@ -9,7 +9,7 @@ export interface DimensionsSectionProps {
 
 export function DimensionsSection({ vesselState, onUpdateDimensions }: DimensionsSectionProps) {
     return (
-        <Section title="Dimensions">
+        <Section title="Dimensions" icon={<Ruler size={14} style={{ marginRight: 6 }} />}>
             <SliderRow
                 label="Inner Diameter"
                 value={vesselState.id}

@@ -14,7 +14,7 @@ import { type VesselState, type TextureConfig } from '../types';
 import { SCALE } from './materials';
 import { createFlangedNozzle } from './nozzle-geometry';
 import { createLiftingLug } from './lifting-lug-geometry';
-import { createSaddleGroup, getSaddleBaseY } from './saddle-geometry';
+import { createSaddleGroup } from './saddle-geometry';
 import { createScanCompositePlane } from './texture-manager';
 import { buildScanOrientationGizmo } from './scan-gizmo-geometry';
 
@@ -346,10 +346,8 @@ export function buildVesselScene(
   const scanCompositeMeshes: THREE.Mesh[] = [];
   const gizmoMeshes: THREE.Object3D[] = [];
 
-  // -- Return empty group with grid if no model data yet --------------------
+  // -- Return empty group if no model data yet ------------------------------
   if (!state.hasModel) {
-    const grid = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
-    vesselGroup.add(grid);
     return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes, scanCompositeMeshes, gizmoMeshes };
   }
 
@@ -640,6 +638,7 @@ export function buildVesselScene(
         state,
         idx === selectedSaddleIndex,
         saddleHighlightMaterial,
+        shellMaterial,
       );
       // Tag all children for raycasting walk-up
       saddleGroup.traverse((child) => {
@@ -690,16 +689,6 @@ export function buildVesselScene(
       });
     }
   }
-
-  // -- Grid helper ----------------------------------------------------------
-  const gridSize = isVertical
-    ? Math.max(30, (TAN_TAN + RADIUS * 2) * SCALE * 1.2)
-    : Math.max(30, TAN_TAN * SCALE * 1.5);
-  const grid = new THREE.GridHelper(gridSize, 30, 0x444444, 0x222222);
-  grid.position.y = isVertical
-    ? -(TAN_TAN / 2 + HEAD_DEPTH + RADIUS * 0.5) * SCALE
-    : getSaddleBaseY(state);
-  vesselGroup.add(grid);
 
   return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes, scanCompositeMeshes, gizmoMeshes };
 }

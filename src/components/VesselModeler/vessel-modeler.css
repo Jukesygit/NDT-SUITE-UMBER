@@ -387,6 +387,49 @@
     color: white;
 }
 
+/* Pipe accordion — connection point as parent, segments nested */
+.vm-pipe-accordion {
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.vm-pipe-accordion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.05);
+    transition: background 0.2s;
+    gap: 8px;
+}
+
+.vm-pipe-accordion-header:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.vm-pipe-accordion-header.selected {
+    background: rgba(96, 165, 250, 0.12);
+}
+
+.vm-pipe-accordion-body {
+    padding: 4px 10px 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.vm-pipe-accordion-body .vm-list-item.vm-pipe-segment {
+    border-left-color: rgba(255, 255, 255, 0.15);
+    margin-bottom: 4px;
+    padding: 6px 10px;
+    font-size: 0.8rem;
+}
+
+.vm-pipe-accordion-body .vm-list-item.vm-pipe-segment.selected {
+    border-left-color: var(--color-primary-400, #60a5fa);
+}
+
 .vm-severity-dot {
     display: inline-block;
     width: 8px;
@@ -462,22 +505,24 @@
     margin-top: 5px;
 }
 
-/* Quick action buttons (floating) */
-.vm-quick-actions {
+/* Popout menu system */
+.vm-popout-menu {
     position: absolute;
     top: 10px;
-    right: 10px;
     z-index: 20;
-    display: flex;
-    gap: 8px;
+    transition: left 0.3s ease;
 }
 
-.vm-quick-btn {
+.vm-popout-menu-right {
+    right: 10px;
+}
+
+.vm-popout-trigger {
     background: rgba(20, 25, 35, 0.85);
     backdrop-filter: blur(8px);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    color: white;
-    padding: 8px 12px;
+    color: rgba(255, 255, 255, 0.8);
+    padding: 8px 14px;
     border-radius: 6px;
     cursor: pointer;
     font-size: 0.8rem;
@@ -487,9 +532,65 @@
     transition: all 0.2s;
 }
 
-.vm-quick-btn:hover {
+.vm-popout-trigger:hover,
+.vm-popout-trigger.open {
     background: rgba(30, 35, 50, 0.95);
-    border-color: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: white;
+}
+
+.vm-popout-chevron {
+    transition: transform 0.2s;
+    opacity: 0.5;
+}
+
+.vm-popout-chevron.rotated {
+    transform: rotate(180deg);
+}
+
+.vm-popout-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    min-width: 160px;
+    background: rgba(20, 25, 35, 0.95);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.vm-popout-menu-right .vm-popout-panel {
+    right: 0;
+}
+
+.vm-popout-item {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.75);
+    padding: 8px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.vm-popout-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.vm-popout-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+    margin: 4px 8px;
 }
 
 /* Toggle sidebar button */
@@ -512,46 +613,31 @@
     left: 10px;
 }
 
-/* Lock controls */
-.vm-lock-controls {
-    position: absolute;
-    top: 10px;
-    left: 400px;
-    z-index: 15;
-    background: rgba(20, 25, 35, 0.85);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
-    padding: 4px 8px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    transition: left 0.3s ease;
-}
-
+/* Lock buttons (inside popout panel) */
 .vm-lock-btn {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: rgba(255, 255, 255, 0.6);
-    padding: 6px 10px;
-    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.7);
+    padding: 8px 12px;
+    border-radius: 5px;
     cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 4px;
-    transition: all 0.2s;
-    font-size: 0.75rem;
+    gap: 8px;
+    transition: all 0.15s;
+    font-size: 0.8rem;
+    white-space: nowrap;
 }
 
 .vm-lock-btn:hover {
-    background: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.12);
     color: white;
 }
 
 .vm-lock-btn.locked {
-    background: var(--color-primary-500, #3b82f6);
-    color: #000;
-    border-color: var(--color-primary-500, #3b82f6);
+    background: rgba(59, 130, 246, 0.2);
+    color: var(--color-primary-400, #60a5fa);
+    border-color: rgba(59, 130, 246, 0.4);
 }
 
 /* Scan composite hover tooltip */

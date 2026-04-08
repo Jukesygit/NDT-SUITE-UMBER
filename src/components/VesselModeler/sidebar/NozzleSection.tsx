@@ -17,6 +17,11 @@ export function NozzleSection({
     vesselState, selectedNozzleIndex,
     onAddNozzle, onUpdateNozzle, onRemoveNozzle, onSelectNozzle,
 }: NozzleSectionProps) {
+    // Filter out plain-pipe nozzles — those are managed in the Piping section
+    const flangedNozzles = vesselState.nozzles
+        .map((n, i) => ({ nozzle: n, index: i }))
+        .filter(({ nozzle }) => nozzle.style !== 'plain-pipe');
+
     const sel = selectedNozzleIndex >= 0 ? vesselState.nozzles[selectedNozzleIndex] : null;
 
     const addFromLibrary = (size: number) => {
@@ -31,7 +36,7 @@ export function NozzleSection({
     };
 
     return (
-        <SubSection title="Nozzles" count={vesselState.nozzles.length} defaultOpen>
+        <SubSection title="Nozzles" count={flangedNozzles.length} defaultOpen>
             {/* Library grid - drag onto 3D canvas or click to add */}
             <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', margin: '0 0 8px 0' }}>
                 Drag a nozzle size onto the vessel
@@ -56,8 +61,8 @@ export function NozzleSection({
                 ))}
             </div>
 
-            {/* Nozzle list */}
-            {vesselState.nozzles.map((n, i) => (
+            {/* Nozzle list (flanged only — plain-pipe nozzles are in Piping section) */}
+            {flangedNozzles.map(({ nozzle: n, index: i }) => (
                 <React.Fragment key={i}>
                     <div
                         className={`vm-list-item ${i === selectedNozzleIndex ? 'selected' : ''}`}
