@@ -174,10 +174,13 @@ export async function exportVesselGLB(
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  const baseName = vesselState.vesselName
-    ? vesselState.vesselName.replace(/[^a-zA-Z0-9_-]/g, '_')
-    : 'vessel_model';
-  a.download = `${baseName}_${new Date().toISOString().slice(0, 10)}.glb`;
+  const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const parts: string[] = [];
+  if (vesselState.location) parts.push(sanitize(vesselState.location));
+  if (vesselState.vesselName) parts.push(sanitize(vesselState.vesselName));
+  if (vesselState.inspectionDate) parts.push(vesselState.inspectionDate);
+  if (parts.length === 0) parts.push('vessel_model');
+  a.download = `${parts.join('_')}.glb`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

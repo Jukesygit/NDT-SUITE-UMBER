@@ -187,6 +187,7 @@ export function attachFreeFormDrag(
   ctx: LabelDragContext,
 ): void {
   let isDragging = false;
+  let pendingOffset: [number, number, number] | null = null;
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
   const dragPlane = new THREE.Plane();
@@ -206,6 +207,7 @@ export function attachFreeFormDrag(
     }
 
     isDragging = true;
+    pendingOffset = null;
     el.style.cursor = 'grabbing';
     ctx.controls.enabled = false;
 
@@ -265,11 +267,44 @@ export function attachFreeFormDrag(
       intersection.y - shellPos.y,
       intersection.z - shellPos.z,
     ];
+    pendingOffset = offset;
 
-    if (itemType === 'annotation') {
-      ctx.onAnnotationLabelOffsetChanged(itemId, offset);
-    } else {
-      ctx.onInspectionImageLabelOffsetChanged?.(itemId, offset);
+    // Imperatively update the CSS2D label position and leader line in the scene
+    // instead of triggering a full React state update + scene rebuild per frame
+    const vesselGroup = ctx.getVesselGroup();
+    if (vesselGroup) {
+      const newLabelPos = new THREE.Vector3(
+        shellPos.x + offset[0],
+        shellPos.y + offset[1],
+        shellPos.z + offset[2],
+      );
+
+      // Find and update the CSS2DObject label position
+      vesselGroup.traverse((obj) => {
+        if (obj instanceof CSS2DObject) {
+          const ud = obj.userData;
+          if (itemType === 'annotation' && ud.annotationId === itemId && ud.type === 'annotation-label') {
+            obj.position.copy(newLabelPos);
+          } else if (itemType === 'inspectionImage' && ud.inspectionImageId === itemId && ud.type === 'inspection-image-label') {
+            obj.position.copy(newLabelPos);
+          }
+        }
+      });
+
+      // Find and update the leader line endpoint
+      vesselGroup.traverse((obj) => {
+        if (obj.userData?.annotationLeaderId === itemId && itemType === 'annotation') {
+          obj.traverse((child) => {
+            if (child instanceof THREE.Line) {
+              const positions = child.geometry.attributes.position;
+              if (positions && positions.count === 2) {
+                positions.setXYZ(1, newLabelPos.x, newLabelPos.y, newLabelPos.z);
+                positions.needsUpdate = true;
+              }
+            }
+          });
+        }
+      });
     }
   };
 
@@ -278,6 +313,16 @@ export function attachFreeFormDrag(
     isDragging = false;
     el.style.cursor = '';
     ctx.controls.enabled = true;
+
+    // Commit the final offset to React state (single state update, not per-frame)
+    if (pendingOffset) {
+      if (itemType === 'annotation') {
+        ctx.onAnnotationLabelOffsetChanged(itemId, pendingOffset);
+      } else {
+        ctx.onInspectionImageLabelOffsetChanged?.(itemId, pendingOffset);
+      }
+    }
+
     ctx.onDragEnd();
     window.removeEventListener('pointermove', onPointerMove);
     window.removeEventListener('pointerup', onPointerUp);

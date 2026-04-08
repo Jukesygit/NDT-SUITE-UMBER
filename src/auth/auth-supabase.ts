@@ -40,6 +40,7 @@ export async function initializeSupabase(this: any): Promise<void> {
 
     // Listen for auth state changes
     const { data: { subscription } } = sb.auth.onAuthStateChange(async (event: string, session: any) => {
+        console.log(`[AUTH-DEBUG] onAuthStateChange: event=${event}, hasSession=${!!session}, hasUser=${!!session?.user}, currentUser=${!!this.currentUser}`);
         if (event === 'PASSWORD_RECOVERY') {
             window.dispatchEvent(new CustomEvent('passwordRecoveryMode', { detail: { active: true } }));
             return;
@@ -56,16 +57,32 @@ export async function initializeSupabase(this: any): Promise<void> {
             }
         } else if (event === 'SIGNED_OUT') {
             // Guard: verify session is truly gone before clearing state.
+            // Wait briefly to let any concurrent token refresh complete,
+            // as Supabase can fire spurious SIGNED_OUT during token rotation.
+            console.log('[AUTH-DEBUG] SIGNED_OUT received, waiting 500ms before verifying...');
+            await new Promise(resolve => setTimeout(resolve, 500));
             try {
                 const { data: { session: currentSession } } = await sb.auth.getSession();
                 if (currentSession?.user) {
+                    console.log('[AUTH-DEBUG] SIGNED_OUT was spurious - session still valid, ignoring');
                     return;
                 }
-            } catch {
+                console.log('[AUTH-DEBUG] SIGNED_OUT confirmed - session is truly gone');
+            } catch (e) {
+                console.log('[AUTH-DEBUG] SIGNED_OUT getSession failed:', e);
                 // If getSession fails, treat as truly signed out
             }
             this.currentUser = null;
             this.currentProfile = null;
+            window.dispatchEvent(new CustomEvent('authStateChanged'));
+        } else if (event === 'TOKEN_REFRESHED') {
+            // Token was refreshed successfully - update profile if needed
+            if (session?.user && this.currentUser) {
+                // Session is valid and user is loaded, nothing to do
+            } else if (session?.user && !this.currentUser) {
+                await this.loadUserProfile(session.user.id);
+                window.dispatchEvent(new CustomEvent('authStateChanged'));
+            }
         } else if (session?.user && !this.currentUser) {
             await this.loadUserProfile(session.user.id);
             window.dispatchEvent(new CustomEvent('authStateChanged'));
@@ -87,6 +104,7 @@ export async function loadUserProfile(
         .single();
 
     if (profileError || !profile) {
+        console.log(`[AUTH-DEBUG] loadUserProfile FAILED for ${userId}:`, profileError?.message || 'no profile found');
         return;
     }
 

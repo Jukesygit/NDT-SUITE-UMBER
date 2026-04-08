@@ -25,7 +25,7 @@ import { SCALE } from './materials';
 // Public Types
 // ---------------------------------------------------------------------------
 
-export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | 'annotation' | 'coverageRect' | 'inspectionImage' | 'weld' | 'scanGizmo' | null;
+export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | 'annotation' | 'coverageRect' | 'inspectionImage' | 'weld' | 'scanGizmo' | 'pipeSegment' | null;
 
 export interface InteractionCallbacks {
   onNozzleSelected: (index: number) => void;
@@ -54,6 +54,8 @@ export interface InteractionCallbacks {
   onScanCompositeHover: (id: string, thickness: number | null, scanMm: number, indexMm: number, screenX: number, screenY: number) => void;
   onScanGizmoDatumMoved: (compositeId: string, angleDeg: number, posMm: number) => void;
   onScanGizmoDirectionToggle: (compositeId: string, field: 'scanDirection' | 'indexDirection') => void;
+  onPipeSegmentSelected: (pipelineId: string, segmentIndex: number) => void;
+  onPipeConnectionPointClicked: (pipelineId: string) => void;
   onDragEnd: () => void;
   onNeedRebuild: () => void;
 }
@@ -98,6 +100,7 @@ export class InteractionManager {
   // Lock flags - public so the React layer can toggle them
   nozzlesLocked = false;
   saddlesLocked = false;
+  pipelinesLocked = false;
   texturesLocked = false;
   lugsLocked = false;
   weldsLocked = false;
@@ -263,7 +266,36 @@ export class InteractionManager {
       }
     }
 
+    // ----- Connection points: highest priority after gizmos ----- //
+    // Check for connection point rings before normal selection to prevent deselect-on-miss
+    if (this.vesselGroup) {
+      const cpMeshes: THREE.Object3D[] = [];
+      this.vesselGroup.traverse((child) => {
+        if (child.userData?.isConnectionPoint) {
+          cpMeshes.push(child);
+        }
+      });
+      if (cpMeshes.length > 0) {
+        const cpHits = this.raycaster.intersectObjects(cpMeshes, false);
+        if (cpHits.length > 0) {
+          const pipelineId = cpHits[0].object.userData?.pipelineId ?? '';
+          this.callbacks.onPipeConnectionPointClicked(pipelineId);
+          return; // consume event — no deselect, no drag
+        }
+      }
+    }
+
     // ----- Single-pass raycast against all interactable meshes ----- //
+    // Also include pipe segment meshes from the pipeline group
+    const pipeSegmentMeshes: THREE.Object3D[] = [];
+    if (this.vesselGroup) {
+      this.vesselGroup.traverse((child) => {
+        if (child.userData?.type === 'pipeSegment') {
+          pipeSegmentMeshes.push(child);
+        }
+      });
+    }
+
     const allInteractables: THREE.Object3D[] = [
       ...this.textureMeshes,
       ...this.annotationMeshes,
@@ -274,6 +306,7 @@ export class InteractionManager {
       ...this.weldMeshes,
       ...this.saddleMeshes,
       ...this.scanCompositeMeshes,
+      ...pipeSegmentMeshes,
     ];
 
     const hits = allInteractables.length > 0
@@ -378,6 +411,21 @@ export class InteractionManager {
 
       // --- Scan Composite (click-through, no selection action) ---
       if (entityData.type === 'scanComposite') {
+        continue;
+      }
+
+      // --- Pipe Segment ---
+      if (entityData.type === 'pipeSegment' && entityData.segmentId) {
+        if (this.pipelinesLocked) continue;
+        const segmentId = entityData.segmentId as string;
+        // Find pipeline and segment index from segmentId
+        for (const pl of this.vesselState.pipelines) {
+          const segIdx = pl.segments.findIndex(s => s.id === segmentId);
+          if (segIdx >= 0) {
+            this.callbacks.onPipeSegmentSelected(pl.id, segIdx);
+            return;
+          }
+        }
         continue;
       }
     }

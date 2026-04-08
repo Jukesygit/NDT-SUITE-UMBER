@@ -9,7 +9,6 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, Re
 import authManager from '../auth-manager.js';
 import { clearQueryCache, invalidateStaleQueries } from '../lib/query-client';
 import { sessionManager } from '../lib/session-manager';
-import { showToast } from '../utils/toast';
 
 // Types matching auth-manager
 export interface AuthUser {
@@ -124,6 +123,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // currentUser/currentProfile. We listen for the events it dispatches instead.
         const handleAuthChange = () => {
             if (mounted) {
+                const u = authManager.getCurrentUser();
+                console.log(`[AUTH-DEBUG] authStateChanged event → user=${u?.email || 'null'}`);
                 loadAuthState();
             }
         };
@@ -132,6 +133,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Listen for login events (dispatched AFTER profile is loaded in auth-manager)
         const handleLogin = () => {
             if (mounted) {
+                const u = authManager.getCurrentUser();
+                console.log(`[AUTH-DEBUG] userLoggedIn event → user=${u?.email || 'null'}`);
                 loadAuthState();
                 // Initialize session manager for proactive refresh
                 sessionManager.initialize();
@@ -142,6 +145,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Listen for logout events
         const handleLogout = () => {
             if (mounted) {
+                console.log('[AUTH-DEBUG] userLoggedOut event → clearing state');
                 // Stop session manager
                 sessionManager.stop();
                 setUser(null);
@@ -157,35 +161,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
             if (!mounted) return;
 
             if (event.type === 'refreshed') {
+                const u = authManager.getCurrentUser();
+                console.log(`[AUTH-DEBUG] sessionManager refreshed → user=${u?.email || 'null'}`);
                 loadAuthState();
                 // Invalidate stale queries (not all - prevents thundering herd)
                 invalidateStaleQueries();
-            } else if (event.type === 'expired') {
-                // Handle graceful logout with toast instead of blocking alert
-                handleGracefulLogout();
+            } else if (event.type === 'error') {
+                // Refresh failed but this does NOT mean the session is expired.
+                // Common cause: Supabase's auto-refresh consumed the token first.
+                // True session expiry is handled by the SIGNED_OUT event in auth-supabase.ts.
+                console.log('[AUTH-DEBUG] sessionManager refresh error - will retry next cycle');
             }
         });
-
-        // Graceful logout handler with non-blocking notification
-        const handleGracefulLogout = async () => {
-            // Stop session manager
-            sessionManager.stop();
-            // Clear state
-            await authManager.logout();
-            setUser(null);
-            setProfile(null);
-            clearQueryCache();
-            // Show non-blocking notification
-            showToast({
-                type: 'warning',
-                message: 'Your session has expired. Redirecting to login...',
-                duration: 3000
-            });
-            // Redirect after a short delay
-            setTimeout(() => {
-                window.location.href = '/login';
-            }, 2000);
-        };
 
         // Listen for legacy authError events (in case any component still dispatches them)
         // Delegate to session manager for coordinated handling

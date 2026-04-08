@@ -104,14 +104,6 @@ function createTextSprite(
   const h = (canvas.height / CANVAS_SCALE) * worldScale;
   const geometry = new THREE.PlaneGeometry(w, h);
 
-  // Flip UVs horizontally so text reads correctly when the plane faces the camera.
-  // PlaneGeometry default UVs assume viewing from +Z; in the exported GLB the
-  // labels are typically viewed from -Z, which mirrors the text.
-  const uv = geometry.attributes.uv;
-  for (let i = 0; i < uv.count; i++) {
-    uv.setX(i, 1 - uv.getX(i));
-  }
-
   const material = new THREE.MeshBasicMaterial({
     map: texture,
     transparent: true,
@@ -284,14 +276,6 @@ export function createNameplateSprite(
       -vesselRadius,           // ground level (bottom of vessel)
       vesselRadius * 1.8,     // in front of vessel
     );
-  }
-
-  // Undo the horizontal UV flip that createTextSprite applies (designed for
-  // annotation labels viewed from -Z). The nameplate is viewed from +Y so
-  // the default flip mirrors the text.
-  const uv = (mesh.geometry as THREE.PlaneGeometry).attributes.uv;
-  for (let i = 0; i < uv.count; i++) {
-    uv.setX(i, 1 - uv.getX(i));
   }
 
   // Rotate to lie flat on the ground plane, text facing up and readable

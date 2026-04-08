@@ -1,32 +1,49 @@
 import React from 'react';
 import { Trash2, Plus } from 'lucide-react';
 import type { VesselState, SaddleConfig } from '../types';
-import { SubSection } from './SliderRow';
+import { SliderRow, SubSection } from './SliderRow';
 
 export interface SaddleSectionProps {
     vesselState: VesselState;
     selectedSaddleIndex: number;
     onAddSaddle: (saddle: SaddleConfig) => void;
     onUpdateSaddle: (index: number, updates: Partial<SaddleConfig>) => void;
+    onUpdateAllSaddleHeights: (height: number) => void;
     onRemoveSaddle: (index: number) => void;
     onSelectSaddle: (index: number) => void;
 }
 
 export function SaddleSection({
     vesselState, selectedSaddleIndex,
-    onAddSaddle, onUpdateSaddle, onRemoveSaddle, onSelectSaddle,
+    onAddSaddle, onUpdateSaddle, onUpdateAllSaddleHeights, onRemoveSaddle, onSelectSaddle,
 }: SaddleSectionProps) {
     const sel = selectedSaddleIndex >= 0 ? vesselState.saddles[selectedSaddleIndex] : null;
+    const defaultHeight = Math.round(vesselState.id / 2 * 1.2);
+    const currentAllHeight = vesselState.saddles.length > 0
+        ? (vesselState.saddles[0].height ?? defaultHeight)
+        : defaultHeight;
 
     return (
         <SubSection title="Supports" count={vesselState.saddles.length}>
             <button
                 className="vm-btn"
-                onClick={() => onAddSaddle({ pos: vesselState.length / 2, color: '#2244ff' })}
+                onClick={() => onAddSaddle({ pos: vesselState.length / 2 })}
                 style={{ marginBottom: 8 }}
             >
                 <Plus size={14} /> Add Saddle Support
             </button>
+
+            {vesselState.saddles.length > 0 && (
+                <SliderRow
+                    label="All Support Heights"
+                    value={currentAllHeight}
+                    min={Math.round(vesselState.id / 2 * 0.5)}
+                    max={Math.round(vesselState.id / 2 * 3)}
+                    step={10}
+                    unit="mm"
+                    onChange={onUpdateAllSaddleHeights}
+                />
+            )}
 
             {vesselState.saddles.map((s, i) => (
                 <React.Fragment key={i}>
@@ -51,16 +68,6 @@ export function SaddleSection({
                                         className="vm-input"
                                         value={sel.pos}
                                         onChange={e => onUpdateSaddle(selectedSaddleIndex, { pos: Number(e.target.value) })}
-                                    />
-                                </div>
-                                <div className="vm-control-group">
-                                    <div className="vm-label"><span>Color</span></div>
-                                    <input
-                                        type="color"
-                                        className="vm-input"
-                                        value={sel.color}
-                                        onChange={e => onUpdateSaddle(selectedSaddleIndex, { color: e.target.value })}
-                                        style={{ height: 36, padding: 2 }}
                                     />
                                 </div>
                             </div>

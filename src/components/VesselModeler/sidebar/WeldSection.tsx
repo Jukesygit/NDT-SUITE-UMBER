@@ -61,11 +61,17 @@ export function WeldSection({
                 </div>
             </div>
 
-            {/* Add button */}
+            {/* Add button (draggable onto vessel) */}
             <button
                 className="vm-toggle-btn"
-                style={{ width: '100%', marginBottom: 8, justifyContent: 'center' }}
+                style={{ width: '100%', marginBottom: 8, justifyContent: 'center', cursor: 'grab' }}
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('application/x-weld', JSON.stringify({ type: weldType }));
+                    e.dataTransfer.effectAllowed = 'copy';
+                }}
                 onClick={addWeld}
+                title={`Drag onto vessel or click to add ${weldType === 'circumferential' ? 'circumferential' : 'longitudinal'} weld`}
             >
                 <Plus size={14} /> Add {weldType === 'circumferential' ? 'Circumferential' : 'Longitudinal'} Weld
             </button>

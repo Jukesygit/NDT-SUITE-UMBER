@@ -1,3 +1,4 @@
+import { Palette } from 'lucide-react';
 import type { VesselState, MaterialKey } from '../types';
 import { MATERIAL_PRESETS, SCENE_PRESETS } from '../types';
 import type { ScenePresetKey } from '../types';
@@ -19,7 +20,7 @@ export function VisualsSection({ vesselState, onUpdateDimensions }: VisualsSecti
     };
 
     return (
-        <Section title="Visuals" defaultOpen={false}>
+        <Section title="Visuals" defaultOpen={false} icon={<Palette size={14} style={{ marginRight: 6 }} />}>
             {/* Scene Presets */}
             <div className="vm-control-group">
                 <div className="vm-label"><span>Scene Preset</span></div>
@@ -143,6 +144,24 @@ export function VisualsSection({ vesselState, onUpdateDimensions }: VisualsSecti
                 <label className="vm-checkbox-row">
                     <input
                         type="checkbox"
+                        checked={v.enableShadows ?? true}
+                        onChange={e => updateVisuals({ enableShadows: e.target.checked })}
+                    />
+                    <span>Shadows</span>
+                </label>
+                {(v.enableShadows ?? true) && (
+                    <SliderRow
+                        label="Shadow Intensity"
+                        value={Math.round((v.shadowIntensity ?? 0.35) * 100)}
+                        min={5}
+                        max={100}
+                        unit="%"
+                        onChange={val => updateVisuals({ shadowIntensity: val / 100 })}
+                    />
+                )}
+                <label className="vm-checkbox-row">
+                    <input
+                        type="checkbox"
                         checked={v.useEnvironmentMap ?? false}
                         onChange={e => updateVisuals({ useEnvironmentMap: e.target.checked })}
                     />
@@ -156,6 +175,35 @@ export function VisualsSection({ vesselState, onUpdateDimensions }: VisualsSecti
                     />
                     <span>Cardinal Directions</span>
                 </label>
+                {v.showCardinalDirections && (
+                    <div style={{ marginTop: 4, paddingLeft: 4 }}>
+                        <SliderRow
+                            label="North Heading"
+                            value={v.cardinalRotation ?? 0}
+                            min={0}
+                            max={359}
+                            step={1}
+                            unit="°"
+                            onChange={val => updateVisuals({ cardinalRotation: val })}
+                        />
+                        <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                            {[0, 90, 180, 270].map(deg => (
+                                <button
+                                    key={deg}
+                                    className="vm-toggle-btn"
+                                    style={{
+                                        flex: 1, fontSize: 10, padding: '2px 0',
+                                        opacity: (v.cardinalRotation ?? 0) === deg ? 1 : 0.6,
+                                        borderColor: (v.cardinalRotation ?? 0) === deg ? 'rgba(255,255,255,0.3)' : undefined,
+                                    }}
+                                    onClick={() => updateVisuals({ cardinalRotation: deg as 0 | 90 | 180 | 270 })}
+                                >
+                                    {deg}°
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
         </Section>
     );
