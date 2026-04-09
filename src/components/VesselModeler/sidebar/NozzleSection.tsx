@@ -156,6 +156,20 @@ export function NozzleSection({
                                     ))}
                                 </div>
                             </div>
+                            <button
+                                className="vm-btn-sm"
+                                onClick={() => onRemoveNozzle(selectedNozzleIndex)}
+                                title="Delete this nozzle"
+                                style={{
+                                    fontSize: '0.7rem',
+                                    padding: '3px 8px',
+                                    marginTop: 8,
+                                    color: 'var(--color-danger, #ef4444)',
+                                    width: '100%',
+                                }}
+                            >
+                                Delete Nozzle
+                            </button>
                         </div>
                     )}
                 </React.Fragment>

@@ -428,12 +428,43 @@ export function PipingSection({
                                     </>
                                 )}
 
-                                {/* No pipeline yet — prompt */}
+                                {/* No pipeline yet — offer segment type buttons to start one */}
                                 {!pl && (
-                                    <div style={{ padding: '6px 0', fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)' }}>
-                                        No pipeline attached. Click + to start one.
+                                    <div style={{ padding: '6px 0' }}>
+                                        <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)', marginBottom: 6 }}>
+                                            No pipeline attached. Start with:
+                                        </div>
+                                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                            {LIBRARY_TYPES.map(({ type, label }) => (
+                                                <button
+                                                    key={type}
+                                                    className="vm-btn-sm"
+                                                    onClick={() => { onAddPipeline(index, type); setExpandedPoints(prev => new Set(prev).add(index)); }}
+                                                    title={`Start pipeline with ${label}`}
+                                                    style={{ fontSize: '0.7rem', padding: '2px 6px' }}
+                                                >
+                                                    + {label}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
+
+                                {/* Delete connection point */}
+                                <button
+                                    className="vm-btn-sm"
+                                    onClick={() => onRemoveNozzle(index)}
+                                    title="Delete this connection point and its pipeline"
+                                    style={{
+                                        fontSize: '0.7rem',
+                                        padding: '3px 8px',
+                                        marginTop: 8,
+                                        color: 'var(--color-danger, #ef4444)',
+                                        width: '100%',
+                                    }}
+                                >
+                                    Delete Connection Point
+                                </button>
                             </div>
                         )}
                     </div>
