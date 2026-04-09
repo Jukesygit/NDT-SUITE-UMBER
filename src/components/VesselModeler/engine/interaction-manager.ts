@@ -487,9 +487,6 @@ export class InteractionManager {
         const width = Math.max(axialDelta, 20);
         const height = Math.max(circumDelta, 20);
         this.callbacks.onCoverageRectPreview(centerPos, centerAngle, width, height);
-      } else if (this.drawMode === 'circle') {
-        const diameter = Math.max(axialDelta, circumDelta);
-        this.callbacks.onAnnotationPreview(this.drawMode, centerPos, centerAngle, diameter, diameter);
       } else {
         this.callbacks.onAnnotationPreview(this.drawMode!, centerPos, centerAngle, axialDelta, circumDelta);
       }
@@ -744,9 +741,6 @@ export class InteractionManager {
           const width = Math.max(axialDelta, minSize);
           const height = Math.max(circumDelta, minSize);
           this.callbacks.onCoverageRectCreated(centerPos, centerAngle, width, height);
-        } else if (this.drawMode === 'circle') {
-          const diameter = Math.max(axialDelta, circumDelta, minSize);
-          this.callbacks.onAnnotationCreated(this.drawMode, centerPos, centerAngle, diameter, diameter);
         } else {
           const width = Math.max(axialDelta, minSize);
           const height = Math.max(circumDelta, minSize);

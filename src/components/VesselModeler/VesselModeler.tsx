@@ -45,9 +45,31 @@ import InspectionPanel from './sidebar/InspectionPanel';
 import StatLeaderOverlay from './StatLeaderOverlay';
 import { PipePartPopup } from './sidebar/PipePartPopup';
 
+import {
+  generateReport,
+  downloadReport,
+  type ReportConfig,
+  type CompanionScanImageSet,
+} from './engine/report-generator';
+import {
+  captureVesselOverviews,
+  captureAnnotationContext,
+  captureAnnotationHeatmap,
+} from './engine/report-image-capture';
+
 const DrawingImportModal = lazy(() => import('./DrawingImportModal'));
 const ScreenshotMode = lazy(() => import('./ScreenshotMode'));
 const InspectionImageViewer = lazy(() => import('./InspectionImageViewer'));
+
+/** Guess the NDE source filename from a composite/CSV name.
+ *  Strips common suffixes like _extracted, _cscan, .csv and adds *.nde wildcard pattern. */
+function guessNdeFilename(name: string): string | undefined {
+    if (!name) return undefined;
+    // Remove file extension and common suffixes
+    const cleaned = name.replace(/\.(csv|txt)$/i, '').replace(/[_-](extracted|cscan|export)$/i, '');
+    // Replace underscores with spaces for NDE filename matching
+    return cleaned.replace(/_/g, ' ').trim() || undefined;
+}
 
 /** Clamp vessel dimensions and nozzle positions to safe ranges to prevent division-by-zero and NaN geometry. */
 function validateVesselState(state: VesselState): VesselState {
@@ -773,7 +795,7 @@ export default function VesselModeler() {
                 xAxis: composite.x_axis,
                 yAxis: composite.y_axis,
                 stats: composite.stats || { min: 0, max: 0, mean: 0, median: 0, stdDev: 0 },
-                indexStartMm: 0,
+                indexStartMm: composite.y_axis?.[0] ?? 0,
                 datumAngleDeg: 0,
                 scanDirection: placement.scanDirection,
                 indexDirection: placement.indexDirection,
@@ -782,6 +804,8 @@ export default function VesselModeler() {
                 rangeMin: null,
                 rangeMax: null,
                 opacity: 1,
+                sourceNdeFile: guessNdeFilename(composite.name),
+                sourceFiles: composite.source_files ?? undefined,
             };
             updateVessel(prev => ({ ...prev, scanComposites: [...prev.scanComposites, newConfig] }));
         } catch (err) {
@@ -817,16 +841,18 @@ export default function VesselModeler() {
         },
         onAnnotationCreated: (type, pos, angle, width, height) => {
             const id = getNextAnnotationId();
-            const annNum = vesselState.annotations.length + 1;
+            const isRestriction = type === 'restriction';
+            const prefix = isRestriction ? 'R' : 'A';
+            const count = vesselState.annotations.filter(a => a.type === type).length + 1;
             addAnnotation({
                 id,
-                name: `A${annNum}`,
+                name: `${prefix}${count}`,
                 type,
                 pos: Math.round(pos),
                 angle: Math.round(angle),
                 width: Math.round(width),
                 height: Math.round(height),
-                color: '#ff3333',
+                color: isRestriction ? '#facc15' : '#ff3333',
                 lineWidth: 2,
                 showLabel: true,
             });
@@ -843,7 +869,7 @@ export default function VesselModeler() {
                 angle: Math.round(angle),
                 width: Math.round(width),
                 height: Math.round(height),
-                color: '#ff3333',
+                color: type === 'restriction' ? '#facc15' : '#ff3333',
                 lineWidth: 2,
                 showLabel: false,
             }});
@@ -1023,6 +1049,8 @@ export default function VesselModeler() {
                 pos: a.pos, angle: a.angle, width: a.width, height: a.height,
                 color: a.color, lineWidth: a.lineWidth, showLabel: a.showLabel,
                 leaderLength: a.leaderLength, labelOffset: a.labelOffset, visible: a.visible, locked: a.locked,
+                restrictionNotes: a.restrictionNotes, restrictionImage: a.restrictionImage,
+                restrictionImageName: a.restrictionImageName, includeInReport: a.includeInReport,
             })),
             rulers: vesselState.rulers.map(r => ({
                 id: r.id, name: r.name,
@@ -1056,8 +1084,11 @@ export default function VesselModeler() {
                 rangeMin: sc.rangeMin,
                 rangeMax: sc.rangeMax,
                 opacity: sc.opacity,
+                sourceNdeFile: sc.sourceNdeFile,
+                sourceFiles: sc.sourceFiles,
             })),
             pipelines: vesselState.pipelines,
+            referenceDrawings: vesselState.referenceDrawings ?? [],
             measurementConfig: { ...vesselState.measurementConfig },
             visuals: { ...vesselState.visuals },
         };
@@ -1180,12 +1211,14 @@ export default function VesselModeler() {
                     })),
                     textures: loadedTextures,
                     annotations: (projectData.annotations || []).map((a: any) => ({
-                        id: a.id || 0, name: a.name || 'A', type: a.type || 'circle',
+                        id: a.id || 0, name: a.name || 'A', type: a.type === 'restriction' ? 'restriction' : 'scan',
                         pos: a.pos ?? 0, angle: a.angle ?? 90,
                         width: a.width ?? 100, height: a.height ?? 100,
                         color: a.color || '#ff3333', lineWidth: a.lineWidth ?? 2,
                         showLabel: a.showLabel !== false,
                         leaderLength: a.leaderLength, labelOffset: a.labelOffset, visible: a.visible, locked: a.locked,
+                        restrictionNotes: a.restrictionNotes, restrictionImage: a.restrictionImage,
+                        restrictionImageName: a.restrictionImageName, includeInReport: a.includeInReport,
                     })),
                     rulers: (projectData.rulers || []).map((r: any) => ({
                         id: r.id || 0, name: r.name || 'R',
@@ -1224,6 +1257,8 @@ export default function VesselModeler() {
                         rangeMin: sc.rangeMin ?? null,
                         rangeMax: sc.rangeMax ?? null,
                         opacity: sc.opacity ?? 1,
+                        sourceNdeFile: sc.sourceNdeFile,
+                        sourceFiles: sc.sourceFiles,
                     })),
                     pipelines: (projectData.pipelines || []).map((p: any) => ({
                         id: p.id || crypto.randomUUID(),
@@ -1238,6 +1273,9 @@ export default function VesselModeler() {
                             endDiameter: s.endDiameter, branchDiameter: s.branchDiameter, style: s.style,
                         })),
                         locked: p.locked, visible: p.visible,
+                    })),
+                    referenceDrawings: (projectData.referenceDrawings || []).map((d: any) => ({
+                        id: d.id || Date.now(), title: d.title || '', imageData: d.imageData || '', fileName: d.fileName || '',
                     })),
                     measurementConfig: {
                         ...DEFAULT_VESSEL_STATE.measurementConfig,
@@ -1400,14 +1438,64 @@ export default function VesselModeler() {
         dispatch({ type: 'CYCLE_INSPECTION', annotationId });
     }, [vesselState]);
 
-    // Sidebar annotation click: enter/cycle inspection mode when scan data exists
+    // Sidebar annotation click: enter/cycle inspection mode (scan annotations only)
     const handleSidebarAnnotationSelect = useCallback((id: number) => {
+        const ann = vesselState.annotations.find(a => a.id === id);
+        // Restriction annotations don't have an enhanced inspection view
+        if (ann?.type === 'restriction') {
+            dispatch({ type: 'SELECT_ANNOTATION', id });
+            return;
+        }
         if (ui.inspectingAnnotationId !== null && ui.inspectingAnnotationId !== id) {
             cycleInspection(id);
         } else if (ui.inspectingAnnotationId === null) {
             enterInspectionMode(id);
         }
-    }, [ui.inspectingAnnotationId, enterInspectionMode, cycleInspection]);
+    }, [ui.inspectingAnnotationId, enterInspectionMode, cycleInspection, vesselState.annotations]);
+
+    // --- Report generation handler ---
+    const handleGenerateReport = useCallback(async () => {
+        const viewportHandle = viewportRef.current;
+        if (!viewportHandle) return;
+
+        const renderer = viewportHandle.getRenderer();
+        const scene = viewportHandle.getScene();
+        const camera = viewportHandle.getCamera();
+        const controls = viewportHandle.getControls();
+        if (!renderer || !scene || !camera || !controls) return;
+
+        const vesselGroup = viewportHandle.getSceneManager()?.getVesselGroup() ?? undefined;
+        const captureCtx = { renderer, scene, camera, controls, vesselState, vesselGroup };
+
+        // 1. Capture vessel overview images
+        const vesselOverviews = await captureVesselOverviews(captureCtx);
+
+        // 2. Capture per-annotation context images and heatmaps
+        const reportAnnotations = vesselState.annotations.filter(a => a.includeInReport && a.type === 'scan');
+        const annotationContextImages = new Map<number, string>();
+        const heatmapImages = new Map<number, string>();
+        const companionScanImages = new Map<number, CompanionScanImageSet>();
+
+        for (const ann of reportAnnotations) {
+            annotationContextImages.set(ann.id, captureAnnotationContext(captureCtx, ann));
+            const heatmap = captureAnnotationHeatmap(ann, vesselState);
+            if (heatmap) heatmapImages.set(ann.id, heatmap);
+        }
+
+        // 3. Build report config
+        const config: ReportConfig = {
+            annotationIds: reportAnnotations.map(a => a.id),
+            companionAvailable: false,
+            vesselOverviews,
+            annotationContextImages,
+            companionScanImages,
+            heatmapImages,
+        };
+
+        // 4. Generate and download
+        const blob = await generateReport(vesselState, config);
+        downloadReport(blob, vesselState);
+    }, [vesselState]);
 
     // --- Escape key cancels draw mode or exits inspection mode ---
     useEffect(() => {
@@ -1790,7 +1878,7 @@ export default function VesselModeler() {
             return 'Drawing Coverage Rectangle - Click on vessel to start, drag to size | Press Esc to cancel';
         }
         if (drawModeState.annotation) {
-            return `Drawing ${drawModeState.annotation === 'circle' ? 'Circle' : 'Rectangle'} - Click on vessel to start, drag to size | Press Esc to cancel`;
+            return `Drawing ${drawModeState.annotation === 'restriction' ? 'Restriction' : 'Scan'} Annotation - Click on vessel to start, drag to size | Press Esc to cancel`;
         }
         const locked = [];
         if (locks.nozzles) locked.push('Nozzles');
@@ -1981,6 +2069,7 @@ export default function VesselModeler() {
                         onRemoveSegment={removeSegment}
                         onRemovePipeline={removePipeline}
                         onSelectPipeSegment={selectPipeSegment}
+                        onGenerateReport={handleGenerateReport}
                     />
                 </div>
 

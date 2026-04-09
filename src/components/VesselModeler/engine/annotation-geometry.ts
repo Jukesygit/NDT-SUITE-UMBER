@@ -81,45 +81,6 @@ function resolveOutlineColor(config: AnnotationShapeConfig): string {
 }
 
 // ---------------------------------------------------------------------------
-// Circle Outline
-// ---------------------------------------------------------------------------
-
-function createCircleOutline(
-  config: AnnotationShapeConfig,
-  vesselState: VesselState,
-  surfaceOffset: number,
-): THREE.Line {
-  const circumference = Math.PI * vesselState.id;
-  const centerAngle = (config.angle * Math.PI) / 180;
-  const radiusMm = config.width / 2;
-  const segments = 64;
-
-  const points: THREE.Vector3[] = [];
-
-  for (let i = 0; i <= segments; i++) {
-    const theta = (i / segments) * Math.PI * 2;
-    const axialOffset = radiusMm * Math.cos(theta);
-    const circumOffset = radiusMm * Math.sin(theta);
-    const angularOffset = (circumOffset / circumference) * Math.PI * 2;
-
-    points.push(shellPoint(
-      config.pos + axialOffset,
-      centerAngle + angularOffset,
-      vesselState,
-      surfaceOffset,
-    ));
-  }
-
-  const geometry = new THREE.BufferGeometry().setFromPoints(points);
-  const material = new THREE.LineBasicMaterial({
-    color: new THREE.Color(resolveOutlineColor(config)),
-    linewidth: 1, // WebGL limitation: linewidth > 1 only works on some backends
-  });
-
-  return new THREE.Line(geometry, material);
-}
-
-// ---------------------------------------------------------------------------
 // Rectangle Outline
 // ---------------------------------------------------------------------------
 
@@ -204,40 +165,13 @@ export function createRectFill(
       const u = ix / segX;
       const posOffset = -halfW + u * config.width;
 
-      // For circles, skip vertices outside the radius
-      if (config.type === 'circle') {
-        const nx = posOffset / halfW;
-        const ny = (angOffset / angularHalfH);
-        if (nx * nx + ny * ny > 1) {
-          // Place vertex at edge to keep index buffer valid
-          const clampAngle = Math.atan2(angOffset / angularHalfH, posOffset / halfW);
-          const clampPos = halfW * Math.cos(clampAngle);
-          const clampAng = angularHalfH * Math.sin(clampAngle);
-          const pt = shellPoint(
-            config.pos + clampPos,
-            centerAngle + clampAng,
-            vesselState,
-            surfaceOffset - 0.5,
-          );
-          vertices.push(pt.x, pt.y, pt.z);
-        } else {
-          const pt = shellPoint(
-            config.pos + posOffset,
-            centerAngle + angOffset,
-            vesselState,
-            surfaceOffset - 0.5,
-          );
-          vertices.push(pt.x, pt.y, pt.z);
-        }
-      } else {
-        const pt = shellPoint(
-          config.pos + posOffset,
-          centerAngle + angOffset,
-          vesselState,
-          surfaceOffset - 0.5,
-        );
-        vertices.push(pt.x, pt.y, pt.z);
-      }
+      const pt = shellPoint(
+        config.pos + posOffset,
+        centerAngle + angOffset,
+        vesselState,
+        surfaceOffset - 0.5,
+      );
+      vertices.push(pt.x, pt.y, pt.z);
     }
   }
 
@@ -284,10 +218,8 @@ export function createAnnotationShape(
   const group = new THREE.Group();
   const surfaceOffset = 3; // mm above shell (above textures at 2mm)
 
-  // Outline
-  const outline = config.type === 'circle'
-    ? createCircleOutline(config, vesselState, surfaceOffset)
-    : createRectOutline(config, vesselState, surfaceOffset);
+  // Outline (all annotations are rectangular)
+  const outline = createRectOutline(config, vesselState, surfaceOffset);
   outline.userData = { type: 'annotation', annotationId: config.id };
   group.add(outline);
 

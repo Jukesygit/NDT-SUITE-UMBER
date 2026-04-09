@@ -9,6 +9,7 @@ import { createAnnotationLabel, createAnnotationLeaderLine, createRulerLabel, ty
 import { createAllInspectionImageLabels, type InspectionImageClickHandler } from './engine/inspection-image-labels';
 import { createAllInspectionImageMarkers } from './engine/inspection-image-geometry';
 import { createWeldGeometry } from './engine/weld-geometry';
+import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { updateCameraAnimation } from './engine/camera-animation';
 import {
     createShellMaterial,
@@ -42,6 +43,7 @@ function structuralHash(s: VesselState): string {
         scanComposites: s.scanComposites.map(sc => ({ id: sc.id, hasData: sc.data.length > 0, indexStartMm: sc.indexStartMm, datumAngleDeg: sc.datumAngleDeg, scanDirection: sc.scanDirection, indexDirection: sc.indexDirection, orientationConfirmed: sc.orientationConfirmed, colorScale: sc.colorScale, rangeMin: sc.rangeMin, rangeMax: sc.rangeMax, opacity: sc.opacity })),
         pipelines: s.pipelines,
         hasModel: s.hasModel,
+        showNozzleLabels: s.visuals.showNozzleLabels,
     });
 }
 
@@ -299,7 +301,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         const coverageMeshes: THREE.Object3D[] = [];
         state.coverageRects.forEach((rect) => {
             const shapeConfig = {
-                id: rect.id, name: rect.name, type: 'rectangle' as const,
+                id: rect.id, name: rect.name, type: 'scan' as const,
                 pos: rect.pos, angle: rect.angle,
                 width: rect.width, height: rect.height,
                 color: rect.color, lineWidth: rect.lineWidth, showLabel: false,
@@ -339,6 +341,24 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             result.vesselGroup.add(weldGroup);
             weldMeshes.push(weldGroup);
         });
+
+        // -- Nozzle name labels (CSS2D) --
+        if (state.visuals.showNozzleLabels) {
+            result.nozzleMeshes.forEach((nozzleGroup, idx) => {
+                const nozzle = state.nozzles[idx];
+                if (!nozzle?.name) return;
+
+                const el = document.createElement('div');
+                el.className = 'vm-nozzle-label';
+                el.textContent = nozzle.name;
+
+                const label = new CSS2DObject(el);
+                // Position label slightly above the nozzle tip
+                label.position.copy(nozzleGroup.position);
+                label.userData = { type: 'nozzle-label', nozzleIdx: idx };
+                result.vesselGroup.add(label);
+            });
+        }
 
         // -- Inspection image dot markers --
         const inspectionImageDotMeshes: THREE.Object3D[] = [];
@@ -606,7 +626,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         if (previewCoverageRect) {
             const previewOutline = createRectOutline(
                 {
-                    id: -1, name: 'Preview', type: 'rectangle',
+                    id: -1, name: 'Preview', type: 'scan',
                     pos: previewCoverageRect.pos, angle: previewCoverageRect.angle,
                     width: previewCoverageRect.width, height: previewCoverageRect.height,
                     color: previewCoverageRect.color, lineWidth: 2, showLabel: false,
@@ -634,6 +654,17 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             updatePreviews();
         }
     }, [vesselState, textureObjects, rebuildScene, updatePreviews]);
+
+    // =========================================================================
+    // Inspection mode — rebuild to hide/show leader line dot
+    // =========================================================================
+    const prevInspectingIdRef = useRef(inspectingAnnotationId);
+    useEffect(() => {
+        if (prevInspectingIdRef.current !== inspectingAnnotationId) {
+            prevInspectingIdRef.current = inspectingAnnotationId;
+            rebuildScene();
+        }
+    }, [inspectingAnnotationId, rebuildScene]);
 
     // =========================================================================
     // Tier 2 effect — Selection highlight fast-path (no geometry rebuild)

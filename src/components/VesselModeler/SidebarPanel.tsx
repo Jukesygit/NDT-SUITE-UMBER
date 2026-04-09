@@ -32,6 +32,7 @@ import {
     InspectionImageSection,
     ProjectInfoSection,
     PipingSection,
+    ReportExportSection,
 } from './sidebar';
 
 // ---------------------------------------------------------------------------
@@ -128,6 +129,8 @@ export interface SidebarPanelProps {
     onRemoveSegment: (pipelineId: string, segmentIndex: number) => void;
     onRemovePipeline: (pipelineId: string) => void;
     onSelectPipeSegment: (pipelineId: string, segmentIndex: number) => void;
+    // Report generation
+    onGenerateReport: () => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -292,6 +295,11 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                         onToggleInspectionImageLocked={props.onToggleInspectionImageLocked}
                         onViewInspectionImage={props.onViewInspectionImage}
                         getNextInspectionImageId={props.getNextInspectionImageId}
+                    />
+                    <ReportExportSection
+                        vesselState={vesselState}
+                        onUpdateAnnotation={props.onUpdateAnnotation}
+                        onGenerateReport={props.onGenerateReport}
                     />
                 </Section>
             </div>
