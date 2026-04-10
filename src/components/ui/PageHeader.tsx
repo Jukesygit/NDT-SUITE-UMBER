@@ -1,20 +1,37 @@
+import type { ReactNode } from 'react';
+
 interface PageHeaderProps {
   title: string;
   subtitle: string;
+  icon?: ReactNode;
 }
 
-export function PageHeader({ title, subtitle }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, icon }: PageHeaderProps) {
   return (
-    <div
-      className="relative px-8 py-6 flex-shrink-0 overflow-hidden"
-      style={{
-        background: 'linear-gradient(135deg, rgba(15,23,42,0.95) 0%, rgba(30,41,59,0.9) 50%, rgba(51,65,85,0.85) 100%)',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
-      }}
-    >
-      <div className="relative z-10">
-        <h1 className="text-2xl font-bold text-white tracking-tight">{title}</h1>
-        <p className="mt-1 text-sm text-slate-400 font-medium">{subtitle}</p>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '32px 40px 0' }}>
+      {icon && (
+        <div
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 14,
+            background: 'linear-gradient(135deg, var(--accent-primary), rgba(110, 160, 255, 1))',
+            display: 'grid',
+            placeItems: 'center',
+            color: 'white',
+            flexShrink: 0,
+          }}
+        >
+          {icon}
+        </div>
+      )}
+      <div>
+        <h1 style={{ fontSize: '28px', fontWeight: 600, lineHeight: 1.2, color: 'rgba(255, 255, 255, 0.95)', margin: 0 }}>
+          {title}
+        </h1>
+        <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.75)', fontWeight: 300, margin: 0 }}>
+          {subtitle}
+        </p>
       </div>
     </div>
   );

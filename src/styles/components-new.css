@@ -560,7 +560,7 @@
   position: absolute;
   top: 100%;
   left: 0;
-  min-width: 12rem;
+  min-width: 18rem;
   margin-top: var(--spacing-2);
   padding: var(--spacing-2);
   background: var(--surface-elevated);

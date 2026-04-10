@@ -29,6 +29,8 @@ interface InspectionPanelProps {
   onUploadImage: (file: File) => void;
   onDeleteAttachment: (attachmentId: string) => void;
   getImageUrl: (storagePath: string) => string;
+  onSaveScanImages: (images: { cscan?: string; bscan?: string; dscan?: string; ascan?: string }) => Promise<void>;
+  onClearScanImages: () => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,6 +74,8 @@ export default function InspectionPanel({
   onUploadImage,
   onDeleteAttachment,
   getImageUrl,
+  onSaveScanImages,
+  onClearScanImages,
 }: InspectionPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [viewingImageUrl, setViewingImageUrl] = useState<string | null>(null);
@@ -214,6 +218,9 @@ export default function InspectionPanel({
         composite={overlappingComposite}
         vesselState={vesselState}
         onViewImage={setViewingImageUrl}
+        onSaveScanImages={onSaveScanImages}
+        onClearScanImages={onClearScanImages}
+        getImageUrl={getImageUrl}
       />
 
       {/* Mini Heatmap */}
@@ -265,17 +272,17 @@ export default function InspectionPanel({
       <div className="vm-inspection-section">
         <div className="vm-inspection-section-title">
           Attachments
-          {annotation.attachments && annotation.attachments.length > 0 && (
+          {annotation.attachments && annotation.attachments.filter(a => a.type !== 'scan-capture').length > 0 && (
             <span style={{ fontWeight: 400, fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginLeft: 6 }}>
-              ({annotation.attachments.length})
+              ({annotation.attachments.filter(a => a.type !== 'scan-capture').length})
             </span>
           )}
         </div>
 
-        {/* Thumbnail grid */}
-        {annotation.attachments && annotation.attachments.length > 0 && (
+        {/* Thumbnail grid (excludes scan-captures — shown in CompanionScanSection) */}
+        {annotation.attachments && annotation.attachments.filter(a => a.type !== 'scan-capture').length > 0 && (
           <div className="vm-inspection-attachments-grid">
-            {annotation.attachments.map(att => (
+            {annotation.attachments.filter(a => a.type !== 'scan-capture').map(att => (
               <div
                 key={att.id}
                 className="vm-inspection-thumbnail"
