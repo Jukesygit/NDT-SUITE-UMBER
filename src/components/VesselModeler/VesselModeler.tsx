@@ -653,6 +653,61 @@ export default function VesselModeler() {
         });
     }, [ui.inspectingAnnotationId, vesselState, updateAnnotation]);
 
+    /** Save companion B/D/A-scan data-URL images as scan-capture attachments */
+    const saveScanImages = useCallback(async (images: { cscan?: string; bscan?: string; dscan?: string; ascan?: string }) => {
+        if (ui.inspectingAnnotationId == null) return;
+        const ann = vesselState.annotations.find(a => a.id === ui.inspectingAnnotationId);
+        if (!ann) return;
+
+        // Remove previous scan-capture attachments (replace with new set)
+        const oldScans = (ann.attachments ?? []).filter(a => a.type === 'scan-capture');
+        for (const old of oldScans) {
+            await deleteAnnotationImage(old.storagePath).catch(() => {});
+        }
+
+        const keptAttachments = (ann.attachments ?? []).filter(a => a.type !== 'scan-capture');
+        const newAttachments = [...keptAttachments];
+
+        for (const [scanType, dataUrl] of Object.entries(images) as [string, string | undefined][]) {
+            if (!dataUrl) continue;
+            // Convert data URL to Blob without fetch() to avoid CSP connect-src restrictions
+            const [header, b64] = dataUrl.split(',');
+            const mime = header.match(/:(.*?);/)?.[1] ?? 'image/png';
+            const binary = atob(b64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const blob = new Blob([bytes], { type: mime });
+            const { storagePath, id } = await uploadAnnotationImage(
+                organizationId, vesselModelId, ui.inspectingAnnotationId, blob, 'scan-capture',
+            );
+            newAttachments.push({
+                id,
+                type: 'scan-capture' as const,
+                storagePath,
+                capturedAt: new Date().toISOString(),
+                scanType: scanType as 'cscan' | 'bscan' | 'dscan' | 'ascan',
+            });
+        }
+
+        updateAnnotation(ui.inspectingAnnotationId, { attachments: newAttachments });
+    }, [ui.inspectingAnnotationId, vesselState, organizationId, vesselModelId, updateAnnotation]);
+
+    /** Clear all scan-capture attachments from the current annotation */
+    const clearScanImages = useCallback(async () => {
+        if (ui.inspectingAnnotationId == null) return;
+        const ann = vesselState.annotations.find(a => a.id === ui.inspectingAnnotationId);
+        if (!ann) return;
+
+        const scanAttachments = (ann.attachments ?? []).filter(a => a.type === 'scan-capture');
+        for (const att of scanAttachments) {
+            await deleteAnnotationImage(att.storagePath).catch(() => {});
+        }
+
+        updateAnnotation(ui.inspectingAnnotationId, {
+            attachments: (ann.attachments ?? []).filter(a => a.type !== 'scan-capture'),
+        });
+    }, [ui.inspectingAnnotationId, vesselState, updateAnnotation]);
+
     // --- Annotation stats recomputation ---
     const recomputeAnnotationStats = useCallback(() => {
         const updatedAnnotations = recomputeAllAnnotationStats(vesselState);
@@ -1051,6 +1106,7 @@ export default function VesselModeler() {
                 leaderLength: a.leaderLength, labelOffset: a.labelOffset, visible: a.visible, locked: a.locked,
                 restrictionNotes: a.restrictionNotes, restrictionImage: a.restrictionImage,
                 restrictionImageName: a.restrictionImageName, includeInReport: a.includeInReport,
+                attachments: a.attachments,
             })),
             rulers: vesselState.rulers.map(r => ({
                 id: r.id, name: r.name,
@@ -1075,6 +1131,9 @@ export default function VesselModeler() {
                 id: sc.id,
                 name: sc.name,
                 cloudId: sc.cloudId,
+                xAxis: sc.xAxis,
+                yAxis: sc.yAxis,
+                stats: sc.stats,
                 indexStartMm: sc.indexStartMm,
                 datumAngleDeg: sc.datumAngleDeg,
                 scanDirection: sc.scanDirection,
@@ -1099,7 +1158,10 @@ export default function VesselModeler() {
         const filename = prompt('Enter filename:', defaultName);
         if (!filename) return;
 
-        const json = JSON.stringify(projectData, null, 2);
+        // Replace NaN/Infinity with null to avoid JSON.stringify issues
+        const json = JSON.stringify(projectData, (_key, value) =>
+            typeof value === 'number' && !Number.isFinite(value) ? null : value
+        , 2);
         const blob = new Blob([json], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1107,8 +1169,11 @@ export default function VesselModeler() {
         a.download = filename.endsWith('.json') ? filename : `${filename}.json`;
         document.body.appendChild(a);
         a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        // Delay cleanup so the download can start
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
     }, [vesselState]);
 
     const exportGLB = useCallback(async () => {
@@ -1219,6 +1284,7 @@ export default function VesselModeler() {
                         leaderLength: a.leaderLength, labelOffset: a.labelOffset, visible: a.visible, locked: a.locked,
                         restrictionNotes: a.restrictionNotes, restrictionImage: a.restrictionImage,
                         restrictionImageName: a.restrictionImageName, includeInReport: a.includeInReport,
+                        attachments: a.attachments ?? [],
                     })),
                     rulers: (projectData.rulers || []).map((r: any) => ({
                         id: r.id || 0, name: r.name || 'R',
@@ -1319,6 +1385,7 @@ export default function VesselModeler() {
                 );
                 for (const sc of compositesNeedingData) {
                     getScanComposite(sc.cloudId!).then((cloud) => {
+                        clearHeatmapCache(sc.id);
                         dispatch({ type: 'UPDATE_VESSEL_FN', updater: prev => ({
                             ...prev,
                             scanComposites: prev.scanComposites.map(existing =>
@@ -2200,6 +2267,8 @@ export default function VesselModeler() {
                                 onUploadImage={uploadImage}
                                 onDeleteAttachment={deleteAttachment}
                                 getImageUrl={getAnnotationImageUrl}
+                                onSaveScanImages={saveScanImages}
+                                onClearScanImages={clearScanImages}
                             />
                             {ann.thicknessStats && (
                                 <>

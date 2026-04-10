@@ -16,7 +16,7 @@ export async function uploadAnnotationImage(
   vesselModelId: string,
   annotationId: number,
   file: File | Blob,
-  _type: 'upload' | 'viewport-capture',
+  _type: 'upload' | 'viewport-capture' | 'scan-capture',
 ): Promise<{ storagePath: string; id: string }> {
   const id = crypto.randomUUID();
   const ext = file instanceof File ? (file.name.split('.').pop() ?? 'png') : 'png';

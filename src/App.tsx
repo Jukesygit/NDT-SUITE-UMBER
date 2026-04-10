@@ -24,6 +24,7 @@ const CscanVisualizerPage = lazy(() => import('./pages/CscanVisualizerPage'));
 const PersonnelPage = lazy(() => import('./pages/personnel/PersonnelPage.tsx'));
 const AdminPage = lazy(() => import('./pages/admin/index.tsx'));
 const VesselModelerPage = lazy(() => import('./pages/VesselModelerPage.tsx'));
+const DownloadsPage = lazy(() => import('./pages/DownloadsPage.tsx'));
 const DocumentsPage = lazy(() => import('./pages/documents/index.tsx'));
 
 interface SuspenseRoutesProps {
@@ -141,6 +142,11 @@ function App() {
                                         <Route path="/vessel-modeler" element={
                                             <RequireTabVisible tabId="tools">
                                                 <ErrorBoundary><VesselModelerPage /></ErrorBoundary>
+                                            </RequireTabVisible>
+                                        } />
+                                        <Route path="/downloads" element={
+                                            <RequireTabVisible tabId="tools">
+                                                <ErrorBoundary><DownloadsPage /></ErrorBoundary>
                                             </RequireTabVisible>
                                         } />
                                         {isMaintenanceMode ? (
