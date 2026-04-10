@@ -29,16 +29,31 @@ const LINE_HEIGHT = 36 * CANVAS_SCALE;
 const FONT_SIZE_NAME = 28 * CANVAS_SCALE;
 const FONT_SIZE_DETAIL = 24 * CANVAS_SCALE;
 const BORDER_WIDTH = 2 * CANVAS_SCALE;
+const IMAGE_MAX_W = 400 * CANVAS_SCALE;
+const IMAGE_MAX_H = 240 * CANVAS_SCALE;
+const IMAGE_PADDING = 8 * CANVAS_SCALE;
+
+/** Load a data URL into an HTMLImageElement. */
+function loadImage(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
 
 /**
  * Render multi-line styled text onto a hi-res canvas and return as a plane Mesh.
  * The canvas is auto-sized to fit the text content.
+ * If `image` is provided, it is drawn below the text.
  */
 function createTextSprite(
   lines: TextLine[],
   background: string,
   borderColor: string,
   worldScale: number,
+  image?: HTMLImageElement,
 ): THREE.Mesh {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
@@ -59,10 +74,26 @@ function createTextSprite(
     }
   }
 
+  // Compute image draw dimensions (fit within max bounds, preserving aspect ratio)
+  let imgDrawW = 0;
+  let imgDrawH = 0;
+  let imgSectionH = 0;
+  if (image) {
+    const aspect = image.width / image.height;
+    imgDrawW = Math.min(IMAGE_MAX_W, image.width * CANVAS_SCALE);
+    imgDrawH = imgDrawW / aspect;
+    if (imgDrawH > IMAGE_MAX_H) {
+      imgDrawH = IMAGE_MAX_H;
+      imgDrawW = imgDrawH * aspect;
+    }
+    maxWidth = Math.max(maxWidth, imgDrawW);
+    imgSectionH = imgDrawH + IMAGE_PADDING;
+  }
+
   const contentHeight = lines.length * LINE_HEIGHT;
   // Extra 10% margin to guard against measurement rounding
   canvas.width = Math.ceil((maxWidth + PADDING_X * 2 + BORDER_WIDTH * 2) * 1.1);
-  canvas.height = Math.ceil(contentHeight + PADDING_Y * 2 + BORDER_WIDTH * 2);
+  canvas.height = Math.ceil(contentHeight + imgSectionH + PADDING_Y * 2 + BORDER_WIDTH * 2);
 
   if (ctx) {
     // Background
@@ -90,6 +121,13 @@ function createTextSprite(
         PADDING_X + BORDER_WIDTH,
         PADDING_Y + BORDER_WIDTH + i * LINE_HEIGHT,
       );
+    }
+
+    // Draw image below text
+    if (image) {
+      const imgX = PADDING_X + BORDER_WIDTH;
+      const imgY = PADDING_Y + BORDER_WIDTH + contentHeight + IMAGE_PADDING;
+      ctx.drawImage(image, imgX, imgY, imgDrawW, imgDrawH);
     }
   }
 
@@ -121,48 +159,78 @@ function createTextSprite(
 
 /**
  * Create a billboard sprite matching the annotation label content.
- * Text: name, scan/index position, area.
+ * Text: name, scan/index position, area. Restriction labels include the
+ * uploaded photo baked into the canvas texture.
  */
-export function createAnnotationLabelSprite(
+export async function createAnnotationLabelSprite(
   config: AnnotationShapeConfig,
   vesselState: VesselState,
-): THREE.Mesh {
+): Promise<THREE.Mesh> {
   const scanMm = Math.round((config.angle / 360) * Math.PI * vesselState.id);
   const indexMm = Math.round(config.pos);
-  const areaSqM = config.type === 'circle'
-    ? (Math.PI * (config.width / 2) ** 2) / 1_000_000
-    : (config.width * config.height) / 1_000_000;
+  const areaSqM = (config.width * config.height) / 1_000_000;
 
-  const lines: TextLine[] = [
-    {
-      text: config.name,
-      font: `bold ${FONT_SIZE_NAME}px monospace`,
-      color: '#ffffff',
-    },
-    {
-      text: `Scan: ${scanMm}mm  Index: ${indexMm}mm`,
-      font: `${FONT_SIZE_DETAIL}px monospace`,
-      color: 'rgba(255, 255, 255, 0.65)',
-    },
-    {
-      text: `${areaSqM.toFixed(2)} m\u00b2`,
-      font: `${FONT_SIZE_DETAIL}px monospace`,
-      color: 'rgba(77, 184, 255, 0.9)',
-    },
-  ];
+  const lines: TextLine[] = config.type === 'restriction'
+    ? [
+        {
+          text: `\u26A0 ${config.name}`,
+          font: `bold ${FONT_SIZE_NAME}px monospace`,
+          color: '#facc15',
+        },
+        ...(config.restrictionNotes ? [{
+          text: config.restrictionNotes,
+          font: `${FONT_SIZE_DETAIL}px monospace`,
+          color: 'rgba(250, 204, 21, 0.9)',
+        }] : []),
+        {
+          text: `Scan: ${scanMm}mm  Index: ${indexMm}mm`,
+          font: `${FONT_SIZE_DETAIL}px monospace`,
+          color: 'rgba(255, 255, 255, 0.65)',
+        },
+      ]
+    : [
+        {
+          text: config.name,
+          font: `bold ${FONT_SIZE_NAME}px monospace`,
+          color: '#ffffff',
+        },
+        {
+          text: `Scan: ${scanMm}mm  Index: ${indexMm}mm`,
+          font: `${FONT_SIZE_DETAIL}px monospace`,
+          color: 'rgba(255, 255, 255, 0.65)',
+        },
+        {
+          text: `${areaSqM.toFixed(2)} m\u00b2`,
+          font: `${FONT_SIZE_DETAIL}px monospace`,
+          color: 'rgba(77, 184, 255, 0.9)',
+        },
+      ];
+
+  // Load restriction image if present
+  let image: HTMLImageElement | undefined;
+  if (config.type === 'restriction' && config.restrictionImage) {
+    try {
+      image = await loadImage(config.restrictionImage);
+    } catch {
+      // Image failed to load — proceed without it
+    }
+  }
 
   // Scale labels relative to vessel size so they're readable but not overwhelming
-  const worldScale = vesselState.id * SCALE * 0.001;
+  const worldScale = vesselState.id * SCALE * 0.005;
 
   const mesh = createTextSprite(
     lines,
     'rgba(10, 14, 20, 0.88)',
     'rgba(255, 255, 255, 0.15)',
     worldScale,
+    image,
   );
 
   const position = getAnnotationLeaderEndPosition(config, vesselState);
   mesh.position.copy(position);
+  // Flip 180° so text faces outward (plane default faces -Z in export viewers)
+  mesh.rotation.y = Math.PI;
   mesh.userData = { type: 'export-label', sourceType: 'annotation', sourceId: config.id };
 
   return mesh;
@@ -284,4 +352,55 @@ export function createNameplateSprite(
 
   mesh.userData = { type: 'export-nameplate' };
   return mesh;
+}
+
+// ---------------------------------------------------------------------------
+// Cardinal Direction Sprites (N / S / E / W)
+// ---------------------------------------------------------------------------
+
+/**
+ * Create baked N/S/E/W label meshes for glTF export.
+ * Positions mirror scene-manager.ts `setCardinalDirectionsVisible`.
+ */
+export function createCardinalDirectionSprites(
+  vesselState: VesselState,
+): THREE.Group {
+  const group = new THREE.Group();
+  group.userData = { type: 'export-cardinalDirections' };
+
+  const dist = 16; // matches scene-manager grid offset
+  const labels: { text: string; x: number; z: number; primary?: boolean }[] = [
+    { text: 'N', x: 0, z: -dist, primary: true },
+    { text: 'S', x: 0, z: dist },
+    { text: 'E', x: dist, z: 0 },
+    { text: 'W', x: -dist, z: 0 },
+  ];
+
+  const worldScale = vesselState.id * SCALE * 0.0025;
+
+  for (const { text, x, z, primary } of labels) {
+    const lines: TextLine[] = [{
+      text: ` ${text} `,
+      font: `bold ${FONT_SIZE_NAME}px sans-serif`,
+      color: primary ? '#ffffff' : 'rgba(255,255,255,0.7)',
+    }];
+
+    const mesh = createTextSprite(
+      lines,
+      primary ? 'rgba(10, 14, 20, 0.85)' : 'rgba(10, 14, 20, 0.6)',
+      primary ? 'rgba(100, 160, 255, 0.4)' : 'rgba(100, 160, 255, 0.15)',
+      worldScale,
+    );
+
+    mesh.position.set(x, 0.05, z);
+    // Lie flat on the ground, text facing up
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.userData = { type: 'export-cardinal', label: text };
+    group.add(mesh);
+  }
+
+  const rotation = vesselState.visuals.cardinalRotation ?? 0;
+  group.rotation.y = THREE.MathUtils.degToRad(rotation);
+
+  return group;
 }

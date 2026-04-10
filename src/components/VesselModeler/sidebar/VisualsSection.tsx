@@ -170,6 +170,14 @@ export function VisualsSection({ vesselState, onUpdateDimensions }: VisualsSecti
                 <label className="vm-checkbox-row">
                     <input
                         type="checkbox"
+                        checked={v.showNozzleLabels ?? false}
+                        onChange={e => updateVisuals({ showNozzleLabels: e.target.checked })}
+                    />
+                    <span>Nozzle Labels</span>
+                </label>
+                <label className="vm-checkbox-row">
+                    <input
+                        type="checkbox"
                         checked={v.showCardinalDirections ?? false}
                         onChange={e => updateVisuals({ showCardinalDirections: e.target.checked })}
                     />

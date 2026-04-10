@@ -5,6 +5,9 @@ import crypto from 'crypto'
 // Generate nonces for inline scripts that absolutely need them
 const generateNonce = () => crypto.randomBytes(16).toString('base64')
 
+// NDT Companion app localhost port range (CSP connect-src allowlist)
+const companionPorts = Array.from({ length: 10 }, (_, i) => `http://localhost:${18923 + i}`).join(' ')
+
 export default defineConfig({
   plugins: [
     react()
@@ -35,8 +38,8 @@ export default defineConfig({
         "font-src 'self' https://fonts.gstatic.com",
         // Images
         "img-src 'self' data: blob: https://*.supabase.co",
-        // Connections
-        "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://generativelanguage.googleapis.com",
+        // Connections (includes NDT Companion localhost ports)
+        `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://generativelanguage.googleapis.com ${companionPorts}`,
         // Workers
         "worker-src 'self' blob:",
         // Frames - allow embedding PDFs from Supabase storage
@@ -71,7 +74,7 @@ export default defineConfig({
         "style-src 'self' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com",
         "img-src 'self' data: blob: https://*.supabase.co",
-        "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://generativelanguage.googleapis.com",
+        `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://generativelanguage.googleapis.com ${companionPorts}`,
         "worker-src 'self' blob:",
         "frame-src 'self' https://*.supabase.co blob:",
         "object-src 'self' https://*.supabase.co blob:",

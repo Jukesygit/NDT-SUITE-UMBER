@@ -164,6 +164,41 @@ export function ScanCompositeSection({
                                             Re-adjust Orientation
                                         </button>
 
+                                        {/* --- Source NDE files (for companion app linking) --- */}
+                                        <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 10, paddingTop: 10 }}>
+                                            <div className="vm-control-group">
+                                                <div className="vm-label"><span>NDE Source Files</span></div>
+                                                {sc.sourceFiles && sc.sourceFiles.length > 0 ? (
+                                                    <div style={{ fontSize: '0.75rem', color: '#ccc' }}>
+                                                        {sc.sourceFiles.map((sf, i) => (
+                                                            <div key={i} style={{
+                                                                padding: '3px 6px', marginBottom: 2,
+                                                                background: 'rgba(255,255,255,0.05)', borderRadius: 3,
+                                                                display: 'flex', justifyContent: 'space-between',
+                                                            }}>
+                                                                <span>{sf.filename}</span>
+                                                                <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.65rem' }}>
+                                                                    Y: {Math.round(sf.minY)}–{Math.round(sf.maxY)}mm
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <input
+                                                        type="text"
+                                                        className="vm-input"
+                                                        placeholder="e.g. Strake 1"
+                                                        value={sc.sourceNdeFile ?? ''}
+                                                        onChange={e => onUpdateScanComposite(sc.id, { sourceNdeFile: e.target.value || undefined })}
+                                                        style={{ width: '100%', fontSize: '0.75rem' }}
+                                                    />
+                                                )}
+                                                <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
+                                                    Used for companion app file matching
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         {/* --- Step 2: Visualization (only after confirmation) --- */}
                                         <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 10, paddingTop: 10 }}>
                                             <div className="vm-control-group">

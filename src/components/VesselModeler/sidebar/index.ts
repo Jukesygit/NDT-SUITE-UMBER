@@ -13,3 +13,4 @@ export { CoverageSection } from './CoverageSection';
 export { InspectionImageSection } from './InspectionImageSection';
 export { ThresholdSection } from './ThresholdSection';
 export { PipingSection } from './PipingSection';
+export { ReportExportSection } from './ReportExportSection';

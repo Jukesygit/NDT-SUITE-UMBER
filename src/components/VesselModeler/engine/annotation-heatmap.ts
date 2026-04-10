@@ -238,15 +238,14 @@ export function createAnnotationHeatmapCanvas(
   const imageData = ctx.createImageData(canvasW, canvasH);
   const pixels = imageData.data;
 
-  const isCircle = ann.type === 'circle';
-  const radius = ann.width / 2;
-
   const axialStep = (axialEnd - axialStart) / canvasW;
   const angleStep = (angleEnd - angleStart) / canvasH;
 
-  // Match 3D texture orientation: flip based on scan/index direction
-  const flipV = composite.scanDirection === 'cw';   // texture-manager: v = 1-v for CW
-  const flipU = composite.indexDirection === 'forward'; // texture-manager: u = 1-u for forward
+  // 2D preview orientation: vertical (circumferential) is inverted from
+  // the 3D texture because wrapping around the outside mirrors that axis.
+  // Horizontal (axial) keeps the same direction as the 3D texture.
+  const flipV = composite.scanDirection !== 'cw';
+  const flipU = composite.indexDirection === 'forward';
 
   for (let py = 0; py < canvasH; py++) {
     const yFrac = flipV ? (canvasH - 1 - py) : py;
@@ -255,22 +254,6 @@ export function createAnnotationHeatmapCanvas(
       const xFrac = flipU ? (canvasW - 1 - px) : px;
       const axial = axialStart + (xFrac + 0.5) * axialStep;
       const idx = (py * canvasW + px) * 4;
-
-      // Circle hit test
-      if (isCircle) {
-        const dxMm = axial - ann.pos;
-        const dyDeg = angularDelta(ann.angle, angle);
-        const dyMm = (dyDeg / 360) * circumference;
-        const dist = Math.sqrt(dxMm * dxMm + dyMm * dyMm);
-        if (dist > radius) {
-          // transparent
-          pixels[idx] = 0;
-          pixels[idx + 1] = 0;
-          pixels[idx + 2] = 0;
-          pixels[idx + 3] = 0;
-          continue;
-        }
-      }
 
       const sampleAngle = normAngle(angle);
       const val = sampleComposite(composite, axial, sampleAngle, circumference);

@@ -58,6 +58,8 @@
     "@tanstack/react-query": "^5.90.11",
     "@tanstack/react-query-devtools": "^5.91.1",
     "autoprefixer": "^10.4.21",
+    "docx": "^9.6.1",
+    "exceljs": "^4.4.0",
     "fast-png": "^8.0.0",
     "lucide-react": "^0.554.0",
     "papaparse": "^5.5.3",
@@ -68,7 +70,6 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0",
     "tailwindcss": "^4.1.16",
-    "three": "^0.164.1",
-    "exceljs": "^4.4.0"
+    "three": "^0.164.1"
   }
 }

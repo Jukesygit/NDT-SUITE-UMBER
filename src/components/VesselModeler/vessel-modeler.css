@@ -1296,6 +1296,23 @@
     border-left: 3px solid #33cc33;
 }
 
+.vm-annotation-label-notes {
+    color: rgba(250, 204, 21, 0.9);
+    white-space: pre-wrap;
+    max-width: 220px;
+    margin-bottom: 2px;
+}
+
+.vm-annotation-label-img {
+    display: block;
+    max-width: 200px;
+    max-height: 120px;
+    border-radius: 4px;
+    margin-top: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    object-fit: cover;
+}
+
 /* ===========================================================================
    Ruler Labels
    =========================================================================== */
@@ -1313,6 +1330,28 @@
     transform: translate(-50%, -100%);
     text-shadow: none;
     letter-spacing: 0.3px;
+}
+
+/* ===========================================================================
+   Nozzle Labels
+   =========================================================================== */
+
+.vm-nozzle-label {
+    background: rgba(10, 14, 20, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #fff;
+    white-space: nowrap;
+    pointer-events: none;
+    transform: translate(-50%, -100%);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
 }
 
 /* ===========================================================================

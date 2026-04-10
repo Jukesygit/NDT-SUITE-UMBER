@@ -1,5 +1,5 @@
-import React from 'react';
-import { Trash2, Circle, Square, Plus, Eye, EyeOff, Lock, Unlock, Ruler } from 'lucide-react';
+import React, { useRef } from 'react';
+import { Trash2, Square, Eye, EyeOff, Lock, Unlock, Ruler, ShieldAlert, Upload, X, FileText } from 'lucide-react';
 import type {
     VesselState,
     AnnotationShapeConfig,
@@ -47,50 +47,61 @@ export function AnnotationSection({
     const selRuler = vesselState.rulers.find(r => r.id === selectedRulerId);
     const mc = vesselState.measurementConfig;
 
+    const restrictionImageRef = useRef<HTMLInputElement>(null);
+
     const addManual = (type: AnnotationShapeType) => {
         const id = getNextAnnotationId();
         onAddAnnotation({
             id,
-            name: `A${vesselState.annotations.length + 1}`,
+            name: type === 'restriction'
+                ? `R${vesselState.annotations.filter(a => a.type === 'restriction').length + 1}`
+                : `A${vesselState.annotations.filter(a => a.type === 'scan').length + 1}`,
             type,
             pos: vesselState.length / 2,
             angle: 90,
             width: 200,
-            height: type === 'circle' ? 200 : 150,
-            color: '#ff3333',
+            height: 150,
+            color: type === 'restriction' ? '#facc15' : '#ff3333',
             lineWidth: 2,
             showLabel: true,
         });
         onSelectAnnotation(id);
     };
 
+    const handleRestrictionImageUpload = (annId: number, e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            onUpdateAnnotation(annId, {
+                restrictionImage: reader.result as string,
+                restrictionImageName: file.name,
+            });
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    };
+
     return (
         <SubSection title="Annotations" count={vesselState.annotations.length + vesselState.rulers.length}>
             {/* Draw tool toggles */}
             <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', margin: '0 0 8px 0' }}>
-                Select a tool then click-drag on the vessel to draw
+                Select a tool then click-drag on the vessel to draw, or add manually
             </p>
             <div className="vm-toggle-group" style={{ marginBottom: 10 }}>
                 <button
-                    className={`vm-toggle-btn ${drawMode === 'circle' ? 'active' : ''}`}
-                    onClick={() => onSetDrawMode(drawMode === 'circle' ? null : 'circle')}
-                    title="Draw circle annotation"
+                    className={`vm-toggle-btn ${drawMode === 'scan' ? 'active' : ''}`}
+                    onClick={() => onSetDrawMode(drawMode === 'scan' ? null : 'scan')}
+                    title="Draw scan annotation"
                 >
-                    <Circle size={14} /> Circle
+                    <Square size={14} /> Scan
                 </button>
                 <button
-                    className={`vm-toggle-btn ${drawMode === 'rectangle' ? 'active' : ''}`}
-                    onClick={() => onSetDrawMode(drawMode === 'rectangle' ? null : 'rectangle')}
-                    title="Draw rectangle annotation"
+                    className={`vm-toggle-btn ${drawMode === 'restriction' ? 'active' : ''}`}
+                    onClick={() => onSetDrawMode(drawMode === 'restriction' ? null : 'restriction')}
+                    title="Draw restriction annotation"
                 >
-                    <Square size={14} /> Rect
-                </button>
-                <button
-                    className="vm-toggle-btn"
-                    onClick={() => addManual('circle')}
-                    title="Add circle at center"
-                >
-                    <Plus size={14} />
+                    <ShieldAlert size={14} /> Restriction
                 </button>
                 <button
                     className={`vm-toggle-btn ${rulerDrawMode ? 'active' : ''}`}
@@ -98,6 +109,14 @@ export function AnnotationSection({
                     title="Draw ruler measurement"
                 >
                     <Ruler size={14} /> Ruler
+                </button>
+            </div>
+            <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
+                <button className="vm-btn" onClick={() => addManual('scan')} style={{ flex: 1, fontSize: '0.75rem' }}>
+                    + Scan
+                </button>
+                <button className="vm-btn" onClick={() => addManual('restriction')} style={{ flex: 1, fontSize: '0.75rem' }}>
+                    + Restriction
                 </button>
             </div>
 
@@ -116,9 +135,17 @@ export function AnnotationSection({
                                     style={{ backgroundColor: { red: '#ff3333', yellow: '#ffaa00', green: '#33cc33' }[a.severityLevel] }}
                                 />
                             )}
-                            <strong>{a.name}</strong> &mdash; {a.type === 'circle' ? '\u25CB' : '\u25A1'} {Math.round(a.width)}mm @ {Math.round(a.pos)}mm
+                            <strong>{a.name}</strong> &mdash; {a.type === 'restriction' ? '\u26A0' : '\u25A1'} {Math.round(a.width)}mm @ {Math.round(a.pos)}mm
                         </div>
                         <div style={{ display: 'flex', gap: 2 }}>
+                            <button
+                                className="vm-btn-icon"
+                                onClick={e => { e.stopPropagation(); onUpdateAnnotation(a.id, { includeInReport: !(a.includeInReport ?? false) }); }}
+                                title={a.includeInReport ? 'Included in report' : 'Not in report'}
+                                style={{ opacity: a.includeInReport ? 1 : 0.3 }}
+                            >
+                                <FileText size={12} />
+                            </button>
                             <button className="vm-btn-icon" onClick={e => { e.stopPropagation(); onToggleAnnotationVisible(a.id); }} title={a.visible === false ? 'Show' : 'Hide'} style={{ color: a.visible === false ? 'rgba(255,255,255,0.25)' : undefined }}>
                                 {a.visible === false ? <EyeOff size={12} /> : <Eye size={12} />}
                             </button>
@@ -164,32 +191,25 @@ export function AnnotationSection({
                             </div>
                             <div className="vm-form-row">
                                 <div className="vm-control-group">
-                                    <div className="vm-label"><span>{sel.type === 'circle' ? 'Diameter' : 'Width'} (mm)</span></div>
+                                    <div className="vm-label"><span>Width (mm)</span></div>
                                     <input
                                         type="number"
                                         className="vm-input"
                                         value={sel.width}
                                         min={10}
-                                        onChange={e => {
-                                            const w = Number(e.target.value);
-                                            const updates: Partial<AnnotationShapeConfig> = { width: w };
-                                            if (sel.type === 'circle') updates.height = w;
-                                            onUpdateAnnotation(sel.id, updates);
-                                        }}
+                                        onChange={e => onUpdateAnnotation(sel.id, { width: Number(e.target.value) })}
                                     />
                                 </div>
-                                {sel.type === 'rectangle' && (
-                                    <div className="vm-control-group">
-                                        <div className="vm-label"><span>Height (mm)</span></div>
-                                        <input
-                                            type="number"
-                                            className="vm-input"
-                                            value={sel.height}
-                                            min={10}
-                                            onChange={e => onUpdateAnnotation(sel.id, { height: Number(e.target.value) })}
-                                        />
-                                    </div>
-                                )}
+                                <div className="vm-control-group">
+                                    <div className="vm-label"><span>Height (mm)</span></div>
+                                    <input
+                                        type="number"
+                                        className="vm-input"
+                                        value={sel.height}
+                                        min={10}
+                                        onChange={e => onUpdateAnnotation(sel.id, { height: Number(e.target.value) })}
+                                    />
+                                </div>
                             </div>
                             <div className="vm-form-row">
                                 <div className="vm-control-group">
@@ -233,6 +253,65 @@ export function AnnotationSection({
                                         </button>
                                     )}
                                 </>
+                            )}
+
+                            {/* Restriction-specific controls */}
+                            {sel.type === 'restriction' && (
+                                <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 8, paddingTop: 8 }}>
+                                    <div className="vm-control-group">
+                                        <div className="vm-label"><span>Restriction Notes</span></div>
+                                        <textarea
+                                            className="vm-input"
+                                            placeholder="e.g. Nozzle S2, structural steelwork..."
+                                            value={sel.restrictionNotes ?? ''}
+                                            onChange={e => onUpdateAnnotation(sel.id, { restrictionNotes: e.target.value })}
+                                            rows={3}
+                                            style={{ width: '100%', resize: 'vertical', fontFamily: 'inherit', fontSize: '0.8rem' }}
+                                        />
+                                    </div>
+                                    <div className="vm-control-group" style={{ marginTop: 6 }}>
+                                        <div className="vm-label"><span>Restriction Photo</span></div>
+                                        {sel.restrictionImage ? (
+                                            <div style={{ position: 'relative' }}>
+                                                <img
+                                                    src={sel.restrictionImage}
+                                                    alt={sel.restrictionImageName ?? 'Restriction'}
+                                                    style={{
+                                                        width: '100%', borderRadius: 4,
+                                                        border: '1px solid rgba(255,255,255,0.1)',
+                                                        maxHeight: 160, objectFit: 'cover',
+                                                    }}
+                                                />
+                                                <button
+                                                    className="vm-btn-icon"
+                                                    onClick={() => onUpdateAnnotation(sel.id, { restrictionImage: undefined, restrictionImageName: undefined })}
+                                                    title="Remove image"
+                                                    style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.6)', borderRadius: 4 }}
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
+                                                    {sel.restrictionImageName}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                className="vm-btn"
+                                                onClick={() => restrictionImageRef.current?.click()}
+                                                style={{ width: '100%' }}
+                                            >
+                                                <Upload size={14} /> Upload Photo
+                                            </button>
+                                        )}
+                                        <input
+                                            ref={restrictionImageRef}
+                                            type="file"
+                                            accept="image/*"
+                                            style={{ display: 'none' }}
+                                            onChange={e => handleRestrictionImageUpload(sel.id, e)}
+                                        />
+                                    </div>
+                                </div>
                             )}
                         </div>
                     )}

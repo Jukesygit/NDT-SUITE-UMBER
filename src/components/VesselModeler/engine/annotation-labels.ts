@@ -144,20 +144,35 @@ export function createAnnotationLabel(
   const indexMm = Math.round(config.pos);
 
   // Line 3: Area in m²
-  const areaSqM = config.type === 'circle'
-    ? (Math.PI * (config.width / 2) ** 2) / 1_000_000
-    : (config.width * config.height) / 1_000_000;
+  const areaSqM = (config.width * config.height) / 1_000_000;
 
   const el = document.createElement('div');
   el.className = `vm-annotation-label${isSelected ? ' selected' : ''}`;
   if (config.severityLevel) {
     el.dataset.severity = config.severityLevel;
   }
-  el.innerHTML = `
-    <div class="vm-annotation-label-name">${config.name}</div>
-    <div class="vm-annotation-label-pos">Scan: ${scanMm}mm \u00a0 Index: ${indexMm}mm</div>
-    <div class="vm-annotation-label-area">${areaSqM.toFixed(2)} m\u00b2</div>
-  `.trim();
+
+  if (config.type === 'restriction') {
+    // Restriction labels: name, notes, position, optional image
+    const notesHtml = config.restrictionNotes
+      ? `<div class="vm-annotation-label-notes">${config.restrictionNotes}</div>`
+      : '';
+    const imageHtml = config.restrictionImage
+      ? `<img class="vm-annotation-label-img" src="${config.restrictionImage}" />`
+      : '';
+    el.innerHTML = `
+      <div class="vm-annotation-label-name">\u26A0 ${config.name}</div>
+      ${notesHtml}
+      <div class="vm-annotation-label-pos">Scan: ${scanMm}mm \u00a0 Index: ${indexMm}mm</div>
+      ${imageHtml}
+    `.trim();
+  } else {
+    el.innerHTML = `
+      <div class="vm-annotation-label-name">${config.name}</div>
+      <div class="vm-annotation-label-pos">Scan: ${scanMm}mm \u00a0 Index: ${indexMm}mm</div>
+      <div class="vm-annotation-label-area">${areaSqM.toFixed(2)} m\u00b2</div>
+    `.trim();
+  }
 
   if (dragContext) {
     attachFreeFormDrag(el, config.id, 'annotation', dragContext);

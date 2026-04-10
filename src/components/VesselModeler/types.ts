@@ -200,13 +200,27 @@ export interface ScanCompositeConfig {
   rangeMax: number | null;
   /** Opacity 0-1 */
   opacity: number;
+  /** Original NDE filename for companion app matching (deprecated — use sourceFiles) */
+  sourceNdeFile?: string;
+  /** Source NDE files that make up this composite, with spatial bounds */
+  sourceFiles?: ScanCompositeSourceFile[];
+}
+
+export interface ScanCompositeSourceFile {
+  /** NDE filename (e.g. "Strake 1") */
+  filename: string;
+  /** Spatial bounds in the composite's coordinate space (mm) */
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
 }
 
 // ---------------------------------------------------------------------------
 // Annotation Shapes
 // ---------------------------------------------------------------------------
 
-export type AnnotationShapeType = 'circle' | 'rectangle';
+export type AnnotationShapeType = 'scan' | 'restriction';
 
 export interface AnnotationShapeConfig {
   id: number;
@@ -216,9 +230,9 @@ export interface AnnotationShapeConfig {
   pos: number;
   /** Center angle: degrees around circumference (90 = top) */
   angle: number;
-  /** Width in mm along vessel axis (diameter for circle) */
+  /** Width in mm along vessel axis */
   width: number;
-  /** Height in mm around circumference (= width for circle) */
+  /** Height in mm around circumference */
   height: number;
   /** Outline color hex string */
   color: string;
@@ -240,6 +254,14 @@ export interface AnnotationShapeConfig {
   attachments?: AnnotationAttachment[];
   /** Computed severity level based on thickness thresholds */
   severityLevel?: 'red' | 'yellow' | 'green' | null;
+  /** Free-text notes describing the restriction (only for type === 'restriction') */
+  restrictionNotes?: string;
+  /** Base64 image showing the restriction (only for type === 'restriction') */
+  restrictionImage?: string;
+  /** Original filename for restriction image */
+  restrictionImageName?: string;
+  /** Whether to include this annotation in the exported report */
+  includeInReport?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -389,6 +411,18 @@ export interface VisualSettings {
   enableShadows: boolean;
   /** Shadow opacity (0–1). Controls how dark shadows appear. */
   shadowIntensity: number;
+  /** Whether to show nozzle name labels in the 3D scene */
+  showNozzleLabels: boolean;
+}
+
+export interface ReferenceDrawing {
+  id: number;
+  /** Drawing title, e.g. "P&ID", "GA Drawing", "Plot Plan" */
+  title: string;
+  /** Base64-encoded image data */
+  imageData: string;
+  /** Original file name */
+  fileName: string;
 }
 
 export interface VesselState {
@@ -416,6 +450,8 @@ export interface VesselState {
   inspectionImages: InspectionImageConfig[];
   scanComposites: ScanCompositeConfig[];
   pipelines: Pipeline[];
+  /** Reference drawings for report appendix (base64 image data) */
+  referenceDrawings: ReferenceDrawing[];
   measurementConfig: MeasurementConfig;
   thicknessThresholds?: ThicknessThresholds;
   hasModel: boolean;
@@ -785,6 +821,7 @@ export const DEFAULT_VESSEL_STATE: VesselState = {
   inspectionImages: [],
   scanComposites: [],
   pipelines: [],
+  referenceDrawings: [],
   measurementConfig: {
     referenceTangent: 'left',
     circumDirection: 'CW',
@@ -805,6 +842,7 @@ export const DEFAULT_VESSEL_STATE: VesselState = {
     cardinalRotation: 0,
     enableShadows: true,
     shadowIntensity: 0.35,
+    showNozzleLabels: false,
   },
 };
 

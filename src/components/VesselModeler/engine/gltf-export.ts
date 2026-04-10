@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import type { VesselState } from '../types';
-import { createAnnotationLabelSprite, createRulerLabelSprite, createNameplateSprite } from './text-sprite';
+import { createAnnotationLabelSprite, createRulerLabelSprite, createNameplateSprite, createCardinalDirectionSprites } from './text-sprite';
 
 // ---------------------------------------------------------------------------
 // userData types to exclude from export
@@ -142,7 +142,7 @@ export async function exportVesselGLB(
     if (!ann.showLabel) continue;
     if (ann.visible === false) continue;
 
-    const sprite = createAnnotationLabelSprite(ann, vesselState);
+    const sprite = await createAnnotationLabelSprite(ann, vesselState);
     clone.add(sprite);
   }
 
@@ -158,6 +158,11 @@ export async function exportVesselGLB(
   const nameplate = createNameplateSprite(vesselState);
   if (nameplate) {
     clone.add(nameplate);
+  }
+
+  // 5b. Add cardinal direction labels if enabled
+  if (vesselState.visuals.showCardinalDirections) {
+    clone.add(createCardinalDirectionSprites(vesselState));
   }
 
   // 6. Export as GLB

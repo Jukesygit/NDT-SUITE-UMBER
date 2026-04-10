@@ -23,17 +23,6 @@ function normAngle(deg: number): number {
   return ((deg % 360) + 360) % 360;
 }
 
-/**
- * Signed shortest angular distance from `a` to `b` on a 360-degree circle.
- * Positive = counter-clockwise, Negative = clockwise.
- */
-function angularDelta(a: number, b: number): number {
-  let d = normAngle(b) - normAngle(a);
-  if (d > 180) d -= 360;
-  if (d < -180) d += 360;
-  return d;
-}
-
 // ---------------------------------------------------------------------------
 // Core: sample a single composite at a vessel surface point
 // ---------------------------------------------------------------------------
@@ -138,25 +127,12 @@ export function computeAnnotationThicknessStats(
   const degPerMm = 360 / circumference;
   const angleDegStep = STEP * degPerMm;
 
-  // Radius in mm for circle hit-testing
-  const isCircle = ann.type === 'circle';
-  const radius = ann.width / 2; // circles: width = height = diameter
-
-  // Collect readings
+  // Collect readings (all annotations are rectangular — grid bounds constrain the shape)
   const values: number[] = [];
   const positions: Array<{ pos: number; angle: number }> = [];
 
   for (let axial = axialStart; axial <= axialEnd; axial += STEP) {
     for (let angle = angleStart; angle <= angleEnd; angle += angleDegStep) {
-      // Hit test: is this sample point inside the annotation shape?
-      if (isCircle) {
-        const dxMm = axial - centerPos;
-        const dyDeg = angularDelta(centerAngle, angle);
-        const dyMm = (dyDeg / 360) * circumference;
-        const dist = Math.sqrt(dxMm * dxMm + dyMm * dyMm);
-        if (dist > radius) continue;
-      }
-      // Rectangle: the grid bounds already constrain to the rect shape
 
       const sampleAngle = normAngle(angle);
 

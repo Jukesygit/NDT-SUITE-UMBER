@@ -8,12 +8,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Camera, ChevronLeft, Upload, X } from 'lucide-react';
-import type { AnnotationShapeConfig, ThicknessThresholds, VesselState } from '../types';
+import type { AnnotationShapeConfig, AnnotationShapeType, ThicknessThresholds, VesselState } from '../types';
 import {
   createAnnotationHeatmapCanvas,
   findOverlappingComposite,
 } from '../engine/annotation-heatmap';
 import { ThresholdSection } from './ThresholdSection';
+import CompanionScanSection from './CompanionScanSection';
 
 interface InspectionPanelProps {
   annotation: AnnotationShapeConfig;
@@ -50,10 +51,7 @@ function scanPositionMm(angleDeg: number, innerDiameter: number): number {
 }
 
 /** Area in m² */
-function computeArea(type: 'circle' | 'rectangle', width: number, height: number): number {
-  if (type === 'circle') {
-    return (Math.PI * (width / 2) ** 2) / 1_000_000;
-  }
+function computeArea(_type: AnnotationShapeType, width: number, height: number): number {
   return (width * height) / 1_000_000;
 }
 
@@ -209,6 +207,14 @@ export default function InspectionPanel({
           </div>
         </div>
       )}
+
+      {/* Detailed Scan Data (Companion App) */}
+      <CompanionScanSection
+        annotation={annotation}
+        composite={overlappingComposite}
+        vesselState={vesselState}
+        onViewImage={setViewingImageUrl}
+      />
 
       {/* Mini Heatmap */}
       <div className="vm-inspection-section">

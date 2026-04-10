@@ -39,7 +39,7 @@ function makeAnnotation(overrides?: Partial<AnnotationShapeConfig>): AnnotationS
   return {
     id: 1,
     name: 'Test Annotation',
-    type: 'rectangle',
+    type: 'scan',
     pos: 4000,
     angle: 90,
     width: 200,
@@ -165,37 +165,39 @@ describe('text-sprite', () => {
   const vesselState = makeVesselState();
 
   describe('createAnnotationLabelSprite', () => {
-    it('returns a THREE.Sprite', () => {
-      const sprite = createAnnotationLabelSprite(makeAnnotation(), vesselState);
-      expect(sprite).toBeInstanceOf(THREE.Sprite);
+    it('returns a THREE.Mesh', async () => {
+      const sprite = await createAnnotationLabelSprite(makeAnnotation(), vesselState);
+      expect(sprite).toBeInstanceOf(THREE.Mesh);
     });
 
-    it('positions sprite at leader end position (not origin)', () => {
-      const sprite = createAnnotationLabelSprite(
+    it('positions sprite at leader end position (not origin)', async () => {
+      const sprite = await createAnnotationLabelSprite(
         makeAnnotation({ pos: 4000, angle: 90 }),
         vesselState,
       );
       expect(sprite.position.length()).toBeGreaterThan(0);
     });
 
-    it('has a SpriteMaterial with a texture map', () => {
-      const sprite = createAnnotationLabelSprite(makeAnnotation(), vesselState);
-      const mat = sprite.material as THREE.SpriteMaterial;
-      expect(mat).toBeInstanceOf(THREE.SpriteMaterial);
+    it('has a MeshBasicMaterial with a texture map', async () => {
+      const sprite = await createAnnotationLabelSprite(makeAnnotation(), vesselState);
+      const mat = sprite.material as THREE.MeshBasicMaterial;
+      expect(mat).toBeInstanceOf(THREE.MeshBasicMaterial);
       expect(mat.map).toBeTruthy();
       expect(mat.transparent).toBe(true);
     });
 
-    it('scales based on vessel diameter', () => {
+    it('scales based on vessel diameter', async () => {
       const annotation = makeAnnotation();
-      const smallSprite = createAnnotationLabelSprite(annotation, makeVesselState({ id: 500 }));
-      const largeSprite = createAnnotationLabelSprite(annotation, makeVesselState({ id: 4000 }));
-      expect(largeSprite.scale.x).toBeGreaterThan(smallSprite.scale.x);
-      expect(largeSprite.scale.y).toBeGreaterThan(smallSprite.scale.y);
+      const smallSprite = await createAnnotationLabelSprite(annotation, makeVesselState({ id: 500 }));
+      const largeSprite = await createAnnotationLabelSprite(annotation, makeVesselState({ id: 4000 }));
+      const smallGeo = smallSprite.geometry as THREE.PlaneGeometry;
+      const largeGeo = largeSprite.geometry as THREE.PlaneGeometry;
+      expect(largeGeo.parameters.width).toBeGreaterThan(smallGeo.parameters.width);
+      expect(largeGeo.parameters.height).toBeGreaterThan(smallGeo.parameters.height);
     });
 
-    it('sets export-label userData', () => {
-      const sprite = createAnnotationLabelSprite(makeAnnotation({ id: 42 }), vesselState);
+    it('sets export-label userData', async () => {
+      const sprite = await createAnnotationLabelSprite(makeAnnotation({ id: 42 }), vesselState);
       expect(sprite.userData).toEqual({
         type: 'export-label',
         sourceType: 'annotation',
@@ -203,10 +205,11 @@ describe('text-sprite', () => {
       });
     });
 
-    it('has non-zero scale dimensions', () => {
-      const sprite = createAnnotationLabelSprite(makeAnnotation(), vesselState);
-      expect(sprite.scale.x).toBeGreaterThan(0);
-      expect(sprite.scale.y).toBeGreaterThan(0);
+    it('has non-zero geometry dimensions', async () => {
+      const sprite = await createAnnotationLabelSprite(makeAnnotation(), vesselState);
+      const geo = sprite.geometry as THREE.PlaneGeometry;
+      expect(geo.parameters.width).toBeGreaterThan(0);
+      expect(geo.parameters.height).toBeGreaterThan(0);
     });
   });
 
@@ -330,7 +333,7 @@ describe('gltf-export filtering', () => {
     expect(kept).toContain('texture');
   });
 
-  it('annotation sprites are only created for visible labels', () => {
+  it('annotation sprites are only created for visible labels', async () => {
     const state = makeVesselState({
       annotations: [
         makeAnnotation({ id: 1, showLabel: true, visible: true }),
@@ -344,7 +347,7 @@ describe('gltf-export filtering', () => {
     for (const ann of state.annotations) {
       if (!ann.showLabel) continue;
       if (ann.visible === false) continue;
-      sprites.push(createAnnotationLabelSprite(ann, state));
+      sprites.push(await createAnnotationLabelSprite(ann, state));
     }
 
     // Only ids 1 and 4 qualify
