@@ -67,14 +67,20 @@ const navigationConfig: NavItem[] = [
       {
         id: 'cscan',
         path: '/cscan',
-        label: 'C-Scan Visualizer',
-        description: 'Ultrasonic inspection data visualization'
+        label: 'C-Scan Processor & Compositor',
+        description: 'Ultrasonic inspection data processing and visualization'
       },
       {
         id: 'vessel-modeler',
         path: '/vessel-modeler',
         label: 'Vessel Modeler',
         description: '3D pressure vessel modeling from GA drawings'
+      },
+      {
+        id: 'downloads',
+        path: '/downloads',
+        label: 'Downloads',
+        description: 'Desktop applications and companion tools'
       }
     ]
   },

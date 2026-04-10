@@ -18,6 +18,9 @@ interface CompanionScanSectionProps {
   composite: ScanCompositeConfig | undefined;
   vesselState: VesselState;
   onViewImage: (url: string) => void;
+  onSaveScanImages: (images: { cscan?: string; bscan?: string; dscan?: string; ascan?: string }) => Promise<void>;
+  onClearScanImages: () => Promise<void>;
+  getImageUrl: (storagePath: string) => string;
 }
 
 interface RenderResponse {
@@ -68,7 +71,7 @@ function annotationToNdeCoords(
 }
 
 export default function CompanionScanSection({
-  annotation, composite, vesselState, onViewImage,
+  annotation, composite, vesselState, onViewImage, onSaveScanImages, onClearScanImages, getImageUrl,
 }: CompanionScanSectionProps) {
   const vesselId = vesselState.id;
   const { connected, port } = useCompanionApp();
@@ -88,6 +91,9 @@ export default function CompanionScanSection({
 
   // NDE region bounds (set on connect)
   const [ndeCoords, setNdeCoords] = useState<ReturnType<typeof annotationToNdeCoords> | null>(null);
+
+  const [saving, setSaving] = useState(false);
+  const cscanContainerRef = useRef<HTMLDivElement>(null);
 
   const fetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -230,7 +236,119 @@ export default function CompanionScanSection({
     if (scanImages.ascanCenter) download(scanImages.ascanCenter, `${annotation.name}_ascan.png`);
   }, [scanImages, annotation.name]);
 
-  if (!connected) return null;
+  /** Render the C-scan heatmap + crosshair overlay into a single canvas data URL */
+  const captureCscanWithCrosshair = useCallback((): string | undefined => {
+    const container = cscanContainerRef.current;
+    if (!container || !crosshair || !composite) return undefined;
+
+    // Get the heatmap canvas from the AnnotationCscanMap child
+    const sourceCanvas = container.querySelector('canvas');
+    if (!sourceCanvas) return undefined;
+
+    const w = sourceCanvas.width;
+    const h = sourceCanvas.height;
+    const out = document.createElement('canvas');
+    out.width = w;
+    out.height = h;
+    const ctx = out.getContext('2d')!;
+
+    // Draw heatmap
+    ctx.drawImage(sourceCanvas, 0, 0);
+
+    // Draw crosshair lines
+    const cx = crosshair.x * w;
+    const cy = crosshair.y * h;
+
+    ctx.strokeStyle = 'rgba(255, 100, 100, 0.8)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx, 0);
+    ctx.lineTo(cx, h);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(100, 255, 100, 0.8)';
+    ctx.beginPath();
+    ctx.moveTo(0, cy);
+    ctx.lineTo(w, cy);
+    ctx.stroke();
+
+    // Draw yellow dot
+    ctx.fillStyle = 'rgba(255, 255, 0, 0.9)';
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    return out.toDataURL('image/png');
+  }, [crosshair, composite]);
+
+  const handleSaveScanImages = useCallback(async () => {
+    if (!scanImages) return;
+    setSaving(true);
+    try {
+      const cscanDataUrl = captureCscanWithCrosshair();
+      await onSaveScanImages({
+        cscan: cscanDataUrl,
+        dscan: scanImages.bscanAxial,
+        bscan: scanImages.bscanIndex,
+        ascan: scanImages.ascanCenter,
+      });
+    } finally {
+      setSaving(false);
+    }
+  }, [scanImages, onSaveScanImages, captureCscanWithCrosshair]);
+
+  // Saved scan-capture attachments for this annotation
+  const savedScans = annotation.attachments?.filter(a => a.type === 'scan-capture') ?? [];
+
+  // Renders saved scan images (used when no live companion images are showing)
+  const savedScansBlock = savedScans.length > 0 && !scanImages ? (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', marginBottom: 4 }}>
+        Saved Scan Images
+      </div>
+      {(['cscan', 'dscan', 'bscan', 'ascan'] as const).map(scanType => {
+        const att = savedScans.find(a => a.scanType === scanType);
+        if (!att) return null;
+        const label = scanType === 'cscan' ? 'C-scan' : scanType === 'dscan' ? 'D-scan' : scanType === 'bscan' ? 'B-scan' : 'A-scan';
+        return (
+          <div key={scanType} style={{ marginBottom: 6 }}>
+            <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', marginBottom: 2 }}>
+              {label}
+            </div>
+            <img
+              src={getImageUrl(att.storagePath)}
+              alt={label}
+              onClick={() => onViewImage(getImageUrl(att.storagePath))}
+              style={{ width: '100%', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }}
+            />
+          </div>
+        );
+      })}
+      <button
+        onClick={onClearScanImages}
+        style={{
+          width: '100%', padding: '4px 8px', marginTop: 4, fontSize: '0.75rem',
+          background: 'rgba(239, 68, 68, 0.1)', color: '#fca5a5',
+          border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: 4, cursor: 'pointer',
+        }}
+      >
+        Clear Saved Scans
+      </button>
+    </div>
+  ) : null;
+
+  if (!connected) {
+    if (savedScans.length === 0) return null;
+    return (
+      <div className="vm-inspection-section">
+        <div className="vm-inspection-section-title">Saved Scan Images</div>
+        {savedScansBlock}
+      </div>
+    );
+  }
 
   if (!companionFiles?.length) {
     return (
@@ -304,6 +422,9 @@ export default function CompanionScanSection({
         </button>
       )}
 
+      {/* Saved scans (shown until live scans replace them) */}
+      {savedScansBlock}
+
       {/* Error display */}
       {error && (
         <div style={{
@@ -325,6 +446,7 @@ export default function CompanionScanSection({
               {loading && <span style={{ color: '#93c5fd', marginLeft: 6 }}>updating...</span>}
             </div>
             <div
+              ref={cscanContainerRef}
               onClick={handleCscanClick}
               style={{
                 position: 'relative',
@@ -426,18 +548,33 @@ export default function CompanionScanSection({
             </div>
           )}
 
-          {/* Export button — only when images are loaded */}
+          {/* Action buttons — only when images are loaded */}
           {scanImages && (
-            <button
-              onClick={handleExportImages}
-              style={{
-                width: '100%', padding: '4px 8px', marginTop: 4, fontSize: '0.75rem',
-                background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)',
-                border: '1px solid rgba(255,255,255,0.15)', borderRadius: 4, cursor: 'pointer',
-              }}
-            >
-              Export Images
-            </button>
+            <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+              <button
+                onClick={handleExportImages}
+                style={{
+                  flex: 1, padding: '4px 8px', fontSize: '0.75rem',
+                  background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)',
+                  border: '1px solid rgba(255,255,255,0.15)', borderRadius: 4, cursor: 'pointer',
+                }}
+              >
+                Export Images
+              </button>
+              <button
+                onClick={handleSaveScanImages}
+                disabled={saving}
+                style={{
+                  flex: 1, padding: '4px 8px', fontSize: '0.75rem',
+                  background: saving ? 'rgba(59,130,246,0.15)' : 'rgba(59,130,246,0.2)',
+                  color: saving ? 'rgba(147,197,253,0.6)' : '#93c5fd',
+                  border: '1px solid rgba(59,130,246,0.3)', borderRadius: 4,
+                  cursor: saving ? 'default' : 'pointer',
+                }}
+              >
+                {saving ? 'Saving...' : savedScans.length > 0 ? 'Update Scans' : 'Attach Scans'}
+              </button>
+            </div>
           )}
         </div>
       )}

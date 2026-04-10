@@ -380,11 +380,13 @@ export interface AnnotationThicknessStats {
 
 export interface AnnotationAttachment {
   id: string;
-  type: 'upload' | 'viewport-capture';
+  type: 'upload' | 'viewport-capture' | 'scan-capture';
   /** Supabase Storage path */
   storagePath: string;
   caption?: string;
   capturedAt: string;
+  /** For scan-capture attachments: which scan view this image represents */
+  scanType?: 'cscan' | 'bscan' | 'dscan' | 'ascan';
 }
 
 export interface VisualSettings {
