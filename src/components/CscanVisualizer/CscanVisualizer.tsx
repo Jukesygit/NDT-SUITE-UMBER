@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Download,
   Image,
@@ -7,7 +8,8 @@ import {
   Layers,
   Grid3x3,
   Loader2,
-  CloudUpload
+  CloudUpload,
+  FolderOpen
 } from 'lucide-react';
 import CanvasViewport from './CanvasViewport';
 import FilePanel from './FilePanel';
@@ -29,6 +31,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import { isSupabaseConfigured } from '../../supabase-client';
 
 const CscanVisualizer: React.FC = () => {
+  // Project context from URL params
+  const [searchParams] = useSearchParams();
+  const projectId = searchParams.get('project');
+  const projectVesselId = searchParams.get('vessel');
+
   // Refs
   const canvasRef = useRef<{ exportImage: () => Promise<string | null>; exportCleanHeatmap: () => Promise<string | null> }>(null);
 
@@ -282,10 +289,12 @@ const CscanVisualizer: React.FC = () => {
         width: scanData.width,
         height: scanData.height,
         sourceFiles: scanData.sourceRegions || null,
+        projectVesselId: projectVesselId || undefined,
       });
       setShowSaveDialog(false);
       setSaveName('');
-      setStatusMessage({ type: 'success', message: 'Composite saved to cloud' });
+      const savedToLabel = projectVesselId ? 'Composite saved to project' : 'Composite saved to cloud';
+      setStatusMessage({ type: 'success', message: savedToLabel });
       setTimeout(() => setStatusMessage(null), 3000);
     } catch (err) {
       console.error('Failed to save composite:', err);
@@ -354,6 +363,15 @@ const CscanVisualizer: React.FC = () => {
 
   return (
     <div className="h-full w-full flex flex-col bg-gray-900 overflow-hidden">
+      {/* Project context banner */}
+      {projectId && (
+        <div className="flex items-center gap-2 px-4 py-1.5 text-xs border-b border-blue-500/20"
+          style={{ background: 'rgba(59,130,246,0.08)', color: '#60a5fa' }}>
+          <FolderOpen size={13} />
+          <span>Saving to project</span>
+          {projectVesselId && <span className="text-blue-400/60">| Vessel linked</span>}
+        </div>
+      )}
       {/* Fixed Toolbar */}
       <ToolBar
         activeTool={activeTool}

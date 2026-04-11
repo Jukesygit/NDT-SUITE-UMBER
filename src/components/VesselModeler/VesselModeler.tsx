@@ -1,5 +1,6 @@
 import { useState, useReducer, useRef, useCallback, useEffect, lazy, Suspense, type ChangeEvent } from 'react';
-import { Lock, Unlock, Save, Upload, RotateCcw, PanelLeftClose, PanelLeft, FileUp, Camera, AlertTriangle, MousePointer, PanelBottomClose, Box, ChevronDown, Settings2 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Lock, Unlock, Save, Upload, RotateCcw, PanelLeftClose, PanelLeft, FileUp, Camera, AlertTriangle, MousePointer, PanelBottomClose, Box, ChevronDown, Settings2, FolderOpen } from 'lucide-react';
 import ThreeViewport from './ThreeViewport';
 import ErrorBoundary from '../ErrorBoundary';
 import type { ThreeViewportHandle } from './ThreeViewport';
@@ -352,6 +353,11 @@ function vesselReducer(state: VesselModelerState, action: VesselAction): VesselM
 export default function VesselModeler() {
     const [state, dispatch] = useReducer(vesselReducer, INITIAL_STATE);
     const { vessel: vesselState, selection, locks, drawMode: drawModeState, previews, ui } = state;
+
+    // Project context from URL params
+    const [searchParams] = useSearchParams();
+    const projectId = searchParams.get('project');
+    const projectVesselId = searchParams.get('vessel');
 
     // Auth context for attachment uploads
     const { user } = useAuth();
@@ -1960,6 +1966,18 @@ export default function VesselModeler() {
 
     return (
         <div className="h-full w-full flex flex-col overflow-hidden" style={{ background: '#111111' }}>
+            {/* Project context banner */}
+            {projectId && (
+                <div className="flex items-center gap-2 px-4 py-1.5 text-xs border-b shrink-0"
+                    style={{ background: 'rgba(59,130,246,0.08)', borderColor: 'rgba(59,130,246,0.2)', color: '#60a5fa' }}>
+                    <FolderOpen size={13} />
+                    <span>Working in project context</span>
+                    <span style={{ color: 'rgba(96,165,250,0.5)' }}>|</span>
+                    <a href={`/projects/${projectId}`} style={{ color: '#60a5fa', textDecoration: 'underline' }}>
+                        Back to Project Hub
+                    </a>
+                </div>
+            )}
             {/* Main content area */}
             <div
                 ref={viewportContainerRef}

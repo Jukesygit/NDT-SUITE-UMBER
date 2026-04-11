@@ -78,6 +78,7 @@ export interface SaveScanCompositeParams {
     width: number;
     height: number;
     sourceFiles: ScanCompositeRecord['source_files'];
+    projectVesselId?: string;
 }
 
 // ============================================================================
@@ -158,9 +159,7 @@ export async function saveScanComposite(params: SaveScanCompositeParams): Promis
     }
 
     // 1. Insert metadata row first to get the ID
-    const { data: row, error: insertError } = await supabase!
-        .from('scan_composites')
-        .insert({
+    const insertData: Record<string, unknown> = {
             name: params.name,
             organization_id: params.organizationId,
             created_by: params.userId,
@@ -171,7 +170,14 @@ export async function saveScanComposite(params: SaveScanCompositeParams): Promis
             width: params.width,
             height: params.height,
             source_files: params.sourceFiles,
-        })
+        };
+    if (params.projectVesselId) {
+        insertData.project_vessel_id = params.projectVesselId;
+    }
+
+    const { data: row, error: insertError } = await supabase!
+        .from('scan_composites')
+        .insert(insertData)
         .select('id')
         .single();
 

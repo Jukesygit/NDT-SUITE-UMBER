@@ -26,6 +26,9 @@ const AdminPage = lazy(() => import('./pages/admin/index.tsx'));
 const VesselModelerPage = lazy(() => import('./pages/VesselModelerPage.tsx'));
 const DownloadsPage = lazy(() => import('./pages/DownloadsPage.tsx'));
 const DocumentsPage = lazy(() => import('./pages/documents/index.tsx'));
+const ProjectListPage = lazy(() => import('./pages/projects/ProjectListPage'));
+const ProjectSetupPage = lazy(() => import('./pages/projects/ProjectSetupPage'));
+const ProjectDetailPage = lazy(() => import('./pages/projects/ProjectDetailPage'));
 
 interface SuspenseRoutesProps {
     children: ReactNode;
@@ -147,6 +150,26 @@ function App() {
                                         <Route path="/downloads" element={
                                             <RequireTabVisible tabId="tools">
                                                 <ErrorBoundary><DownloadsPage /></ErrorBoundary>
+                                            </RequireTabVisible>
+                                        } />
+                                        <Route path="/projects" element={
+                                            <RequireTabVisible tabId="tools">
+                                                <ErrorBoundary><ProjectListPage /></ErrorBoundary>
+                                            </RequireTabVisible>
+                                        } />
+                                        <Route path="/projects/new" element={
+                                            <RequireTabVisible tabId="tools">
+                                                <ErrorBoundary><ProjectSetupPage /></ErrorBoundary>
+                                            </RequireTabVisible>
+                                        } />
+                                        <Route path="/projects/:id" element={
+                                            <RequireTabVisible tabId="tools">
+                                                <ErrorBoundary><ProjectDetailPage /></ErrorBoundary>
+                                            </RequireTabVisible>
+                                        } />
+                                        <Route path="/projects/:id/edit" element={
+                                            <RequireTabVisible tabId="tools">
+                                                <ErrorBoundary><ProjectSetupPage /></ErrorBoundary>
                                             </RequireTabVisible>
                                         } />
                                         {isMaintenanceMode ? (
