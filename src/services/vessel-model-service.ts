@@ -20,6 +20,7 @@ export interface VesselModelRecord {
     organization_id: string;
     created_by: string;
     config: Record<string, unknown>;
+    project_vessel_id: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -46,6 +47,7 @@ export interface SaveVesselModelParams {
     organizationId: string;
     userId: string;
     config: Record<string, unknown>;
+    projectVesselId?: string;
 }
 
 export interface SaveScanPlacementParams {
@@ -68,14 +70,19 @@ export async function saveVesselModel(params: SaveVesselModelParams): Promise<st
         throw new Error('Supabase not configured');
     }
 
+    const insertData: Record<string, unknown> = {
+        name: params.name,
+        organization_id: params.organizationId,
+        created_by: params.userId,
+        config: params.config,
+    };
+    if (params.projectVesselId) {
+        insertData.project_vessel_id = params.projectVesselId;
+    }
+
     const { data, error } = await supabase!
         .from('vessel_models')
-        .insert({
-            name: params.name,
-            organization_id: params.organizationId,
-            created_by: params.userId,
-            config: params.config,
-        })
+        .insert(insertData)
         .select('id')
         .single();
 
@@ -152,6 +159,42 @@ export async function deleteVesselModel(id: string): Promise<void> {
         .from('vessel_models')
         .delete()
         .eq('id', id);
+
+    if (error) throw error;
+}
+
+/**
+ * Find the vessel model linked to a project vessel
+ */
+export async function getVesselModelByProjectVessel(projectVesselId: string): Promise<VesselModelRecord | null> {
+    if (!isSupabaseConfigured()) {
+        throw new Error('Supabase not configured');
+    }
+
+    const { data, error } = await supabase!
+        .from('vessel_models')
+        .select('id, name, organization_id, created_by, config, project_vessel_id, created_at, updated_at')
+        .eq('project_vessel_id', projectVesselId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (error) throw error;
+    return data as VesselModelRecord | null;
+}
+
+/**
+ * Link a vessel model to a project vessel
+ */
+export async function linkVesselModelToProject(modelId: string, projectVesselId: string): Promise<void> {
+    if (!isSupabaseConfigured()) {
+        throw new Error('Supabase not configured');
+    }
+
+    const { error } = await supabase!
+        .from('vessel_models')
+        .update({ project_vessel_id: projectVesselId })
+        .eq('id', modelId);
 
     if (error) throw error;
 }
