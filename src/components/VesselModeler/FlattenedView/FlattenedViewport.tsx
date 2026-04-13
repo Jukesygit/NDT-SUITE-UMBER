@@ -250,7 +250,7 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
           // datumAngleDeg is user-facing (0=TDC). Vessel coords: 90=TDC.
           const datumCircMm = angleToCircumMm(
             composite.datumAngleDeg + 90,
-            state.id + (state.id > 0 ? 0 : 0), // use vessel OD (approx id for now — geometry-projection uses OD)
+            state.id,
           );
 
           ctx.globalAlpha = composite.opacity;
