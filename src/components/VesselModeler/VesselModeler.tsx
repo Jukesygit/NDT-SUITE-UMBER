@@ -862,7 +862,15 @@ export default function VesselModeler() {
                 sourceNdeFile: guessNdeFilename(composite.name),
                 sourceFiles: composite.source_files ?? undefined,
             };
-            updateVessel(prev => ({ ...prev, scanComposites: [...prev.scanComposites, newConfig] }));
+            updateVessel(prev => ({
+                ...prev,
+                scanComposites: [...prev.scanComposites, newConfig],
+                // Auto-populate global coordinate origin from the first loaded scan
+                ...(prev.scanComposites.length === 0 ? {
+                    coordinateOrigin: { indexMm: composite.y_axis?.[0] ?? 0, scanMm: composite.x_axis?.[0] ?? 0 },
+                    originSourceScanId: newConfig.id,
+                } : {}),
+            }));
         } catch (err) {
             console.error('Failed to import composite:', err);
         }
@@ -875,10 +883,21 @@ export default function VesselModeler() {
     }, [updateVessel, selection.scanCompositeId]);
 
     const handleUpdateScanComposite = useCallback((id: string, updates: Partial<ScanCompositeConfig>) => {
-        updateVessel(prev => ({
-            ...prev,
-            scanComposites: prev.scanComposites.map(sc => sc.id === id ? { ...sc, ...updates } : sc),
-        }));
+        updateVessel(prev => {
+            const updated = {
+                ...prev,
+                scanComposites: prev.scanComposites.map(sc => sc.id === id ? { ...sc, ...updates } : sc),
+            };
+            // Keep global origin in sync when the source scan's position changes
+            if (id === prev.originSourceScanId && (updates.indexStartMm !== undefined || updates.datumAngleDeg !== undefined)) {
+                const sc = updated.scanComposites.find(c => c.id === id)!;
+                updated.coordinateOrigin = {
+                    indexMm: sc.indexStartMm,
+                    scanMm: sc.xAxis[0] ?? 0,
+                };
+            }
+            return updated;
+        });
     }, [updateVessel]);
 
     // --- Interaction callbacks (from Three.js viewport) ---
@@ -1011,8 +1030,23 @@ export default function VesselModeler() {
                 updateWeld(idx, { pos: Math.round(pos), endPos: (weld.endPos ?? vesselState.length) + delta, angle: Math.round(angle) });
             }
         },
-        onScanCompositeHover: (_id, thickness, scanMm, indexMm, screenX, screenY) => {
-            dispatch({ type: 'SET_HOVER_DATA', data: thickness !== null ? { thickness, scanMm, indexMm } : null });
+        onScanCompositeHover: (id, thickness, rawScanMm, rawIndexMm, screenX, screenY) => {
+            const sc = vesselState.scanComposites.find(c => c.id === id);
+            let displayScan: number;
+            let displayIndex: number;
+            if (sc?.useGlobalOrigin) {
+                // Convert scan-space coords to vessel-space, then subtract global origin
+                const globalOrigin = vesselState.coordinateOrigin ?? { indexMm: 0, scanMm: 0 };
+                const indexDir = sc.indexDirection === 'forward' ? 1 : -1;
+                const vesselIndex = sc.indexStartMm + (rawIndexMm - (sc.yAxis[0] ?? 0)) * indexDir;
+                displayIndex = vesselIndex - globalOrigin.indexMm;
+                displayScan = rawScanMm - globalOrigin.scanMm;
+            } else {
+                // Per-scan: relative to this scan's own axis start
+                displayScan = rawScanMm - (sc?.xAxis[0] ?? 0);
+                displayIndex = rawIndexMm - (sc?.yAxis[0] ?? 0);
+            }
+            dispatch({ type: 'SET_HOVER_DATA', data: thickness !== null ? { thickness, scanMm: displayScan, indexMm: displayIndex } : null });
             // Update cursor-follow tooltip position via ref (avoids re-render lag)
             if (cursorTooltipRef.current) {
                 if (thickness !== null) {
@@ -1139,6 +1173,7 @@ export default function VesselModeler() {
                 scanDirection: sc.scanDirection,
                 indexDirection: sc.indexDirection,
                 orientationConfirmed: sc.orientationConfirmed,
+                useGlobalOrigin: sc.useGlobalOrigin,
                 colorScale: sc.colorScale,
                 rangeMin: sc.rangeMin,
                 rangeMax: sc.rangeMax,
@@ -1149,6 +1184,8 @@ export default function VesselModeler() {
             pipelines: vesselState.pipelines,
             referenceDrawings: vesselState.referenceDrawings ?? [],
             measurementConfig: { ...vesselState.measurementConfig },
+            coordinateOrigin: { ...vesselState.coordinateOrigin },
+            originSourceScanId: vesselState.originSourceScanId,
             visuals: { ...vesselState.visuals },
         };
 
@@ -1319,6 +1356,7 @@ export default function VesselModeler() {
                         scanDirection: sc.scanDirection || 'cw',
                         indexDirection: sc.indexDirection || 'forward',
                         orientationConfirmed: sc.orientationConfirmed ?? true,
+                        useGlobalOrigin: sc.useGlobalOrigin,
                         colorScale: sc.colorScale || 'Jet',
                         rangeMin: sc.rangeMin ?? null,
                         rangeMax: sc.rangeMax ?? null,
@@ -1347,6 +1385,11 @@ export default function VesselModeler() {
                         ...DEFAULT_VESSEL_STATE.measurementConfig,
                         ...(projectData.measurementConfig || {}),
                     },
+                    coordinateOrigin: {
+                        ...DEFAULT_VESSEL_STATE.coordinateOrigin,
+                        ...(projectData.coordinateOrigin || {}),
+                    },
+                    originSourceScanId: projectData.originSourceScanId,
                     hasModel: true,
                     visuals: { ...DEFAULT_VESSEL_STATE.visuals, ...(projectData.visuals || {}) },
                 };

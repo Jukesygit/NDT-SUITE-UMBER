@@ -192,6 +192,8 @@ export interface ScanCompositeConfig {
   indexDirection: 'forward' | 'reverse';
   /** Whether the user has confirmed the orientation (scan renders only after confirmation) */
   orientationConfirmed: boolean;
+  /** When true, hover tooltip uses the global vessel coordinateOrigin instead of per-scan axis start */
+  useGlobalOrigin?: boolean;
   /** Colorscale name */
   colorScale: string;
   /** Override min for color range (null = use stats.min) */
@@ -456,6 +458,11 @@ export interface VesselState {
   referenceDrawings: ReferenceDrawing[];
   measurementConfig: MeasurementConfig;
   thicknessThresholds?: ThicknessThresholds;
+  /** Global coordinate origin offset — displayed positions subtract these values.
+   *  Allows aligning vessel readouts with scan data that doesn't start at 0. */
+  coordinateOrigin: { indexMm: number; scanMm: number };
+  /** ID of the scan composite that drives the global coordinate origin (follows gizmo moves) */
+  originSourceScanId?: string;
   hasModel: boolean;
   visuals: VisualSettings;
 }
@@ -829,6 +836,7 @@ export const DEFAULT_VESSEL_STATE: VesselState = {
     circumDirection: 'CW',
     viewFromEnd: 'right',
   },
+  coordinateOrigin: { indexMm: 0, scanMm: 0 },
   hasModel: true,
   visuals: {
     material: 'ss',

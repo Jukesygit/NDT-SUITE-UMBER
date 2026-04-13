@@ -15,6 +15,7 @@ import type {
     PipeSegmentType,
 } from './types';
 import type { PipeSegment } from './types';
+import { useState, useCallback } from 'react';
 import { GitBranch, Layers, ClipboardCheck } from 'lucide-react';
 import type * as THREE from 'three';
 import {
@@ -140,6 +141,12 @@ export interface SidebarPanelProps {
 export default function SidebarPanel(props: SidebarPanelProps) {
     const { vesselState } = props;
 
+    // Accordion: only one parent section open at a time. Default to Project Info.
+    const [openSection, setOpenSection] = useState<string>('project-info');
+    const toggle = useCallback((id: string) => {
+        setOpenSection(prev => prev === id ? '' : id);
+    }, []);
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             {/* Title */}
@@ -154,16 +161,22 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                 <ProjectInfoSection
                     vesselState={vesselState}
                     onUpdateDimensions={props.onUpdateDimensions}
+                    open={openSection === 'project-info'}
+                    onToggle={() => toggle('project-info')}
                 />
                 <DimensionsSection
                     vesselState={vesselState}
                     onUpdateDimensions={props.onUpdateDimensions}
+                    open={openSection === 'dimensions'}
+                    onToggle={() => toggle('dimensions')}
                 />
                 <VisualsSection
                     vesselState={vesselState}
                     onUpdateDimensions={props.onUpdateDimensions}
+                    open={openSection === 'visuals'}
+                    onToggle={() => toggle('visuals')}
                 />
-                <Section title="Attachments" defaultOpen={false} icon={<GitBranch size={14} style={{ marginRight: 6 }} />} count={
+                <Section title="Attachments" icon={<GitBranch size={14} style={{ marginRight: 6 }} />} open={openSection === 'attachments'} onToggle={() => toggle('attachments')} count={
                     vesselState.nozzles.length +
                     vesselState.liftingLugs.length +
                     vesselState.welds.length +
@@ -220,7 +233,7 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                         onSelectPipeSegment={props.onSelectPipeSegment}
                     />
                 </Section>
-                <Section title="Scan Overlay" defaultOpen={false} icon={<Layers size={14} style={{ marginRight: 6 }} />} count={
+                <Section title="Scan Overlay" icon={<Layers size={14} style={{ marginRight: 6 }} />} open={openSection === 'scan-overlay'} onToggle={() => toggle('scan-overlay')} count={
                     vesselState.textures.length +
                     vesselState.scanComposites.length
                 }>
@@ -246,7 +259,7 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                         cloudCompositesError={props.cloudCompositesError}
                     />
                 </Section>
-                <Section title="Inspection" defaultOpen={false} icon={<ClipboardCheck size={14} style={{ marginRight: 6 }} />} count={
+                <Section title="Inspection" icon={<ClipboardCheck size={14} style={{ marginRight: 6 }} />} open={openSection === 'inspection'} onToggle={() => toggle('inspection')} count={
                     vesselState.annotations.length +
                     vesselState.rulers.length +
                     vesselState.coverageRects.length +

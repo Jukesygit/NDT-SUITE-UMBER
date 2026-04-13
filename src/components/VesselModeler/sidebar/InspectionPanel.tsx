@@ -80,7 +80,9 @@ export default function InspectionPanel({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [viewingImageUrl, setViewingImageUrl] = useState<string | null>(null);
   const stats = annotation.thicknessStats;
-  const scanMm = scanPositionMm(annotation.angle, vesselState.id);
+  const origin = vesselState.coordinateOrigin ?? { indexMm: 0, scanMm: 0 };
+  const scanMm = scanPositionMm(annotation.angle, vesselState.id) - origin.scanMm;
+  const indexMm = annotation.pos - origin.indexMm;
   const area = computeArea(annotation.type, annotation.width, annotation.height);
   const severityColor = annotation.severityLevel
     ? SEVERITY_COLORS[annotation.severityLevel]
@@ -159,7 +161,7 @@ export default function InspectionPanel({
         </div>
         <div className="vm-inspection-stat-row">
           <span>Index</span>
-          <span>{formatMm(annotation.pos)} mm</span>
+          <span>{formatMm(indexMm)} mm</span>
         </div>
         <div className="vm-inspection-stat-row">
           <span>Size</span>

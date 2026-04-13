@@ -139,9 +139,10 @@ export function createAnnotationLabel(
   isSelected: boolean,
   dragContext?: LabelDragContext,
 ): CSS2DObject {
-  // Line 2: Scan (circumferential mm) and Index (axial mm from tangent line)
-  const scanMm = Math.round((config.angle / 360) * Math.PI * vesselState.id);
-  const indexMm = Math.round(config.pos);
+  // Line 2: Scan (circumferential mm) and Index (axial mm) relative to global coordinate origin
+  const origin = vesselState.coordinateOrigin ?? { indexMm: 0, scanMm: 0 };
+  const scanMm = Math.round((config.angle / 360) * Math.PI * vesselState.id - origin.scanMm);
+  const indexMm = Math.round(config.pos - origin.indexMm);
 
   // Line 3: Area in m²
   const areaSqM = (config.width * config.height) / 1_000_000;

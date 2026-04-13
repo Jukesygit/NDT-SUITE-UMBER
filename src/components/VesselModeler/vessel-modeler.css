@@ -377,7 +377,7 @@
 /* Nozzle / Saddle / Texture list items */
 .vm-list-item {
     background: rgba(255, 255, 255, 0.04);
-    padding: 10px;
+    padding: 10px 10px 10px 24px;
     border-radius: 4px;
     margin-bottom: 8px;
     border-left: 3px solid rgba(255, 255, 255, 0.15);
@@ -386,6 +386,26 @@
     align-items: center;
     cursor: pointer;
     transition: border-color 0.2s, background 0.2s;
+    position: relative;
+}
+
+.vm-list-item::before {
+    content: '';
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    width: 0;
+    height: 0;
+    border-left: 4px solid rgba(255, 255, 255, 0.4);
+    border-top: 3px solid transparent;
+    border-bottom: 3px solid transparent;
+    transform: translateY(-50%);
+    transition: transform 0.2s ease;
+}
+
+.vm-list-item.selected::before {
+    border-left: 4px solid var(--color-primary-400, #60a5fa);
+    transform: translateY(-50%) rotate(90deg);
 }
 
 .vm-list-item.selected {
@@ -445,7 +465,7 @@
 .vm-pipe-accordion-body .vm-list-item.vm-pipe-segment {
     border-left-color: rgba(255, 255, 255, 0.15);
     margin-bottom: 4px;
-    padding: 6px 10px;
+    padding: 6px 10px 6px 24px;
     font-size: 0.8rem;
 }
 
@@ -1339,8 +1359,8 @@
 .vm-nozzle-label {
     background: rgba(10, 14, 20, 0.85);
     border: 1px solid rgba(255, 255, 255, 0.25);
-    border-radius: 4px;
-    padding: 2px 7px;
+    border-radius: 999px;
+    padding: 2px 10px;
     font-family: var(--font-mono, monospace);
     font-size: 0.65rem;
     font-weight: 700;

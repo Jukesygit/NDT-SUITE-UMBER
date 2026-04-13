@@ -48,17 +48,22 @@ export function SliderRow({ label, value, min, max, step = 1, unit = 'mm', onCha
 // Collapsible Section
 // ---------------------------------------------------------------------------
 
-export function Section({ title, icon, count, defaultOpen = true, children }: {
+export function Section({ title, icon, count, defaultOpen = true, open: controlledOpen, onToggle, children }: {
     title: string;
     icon?: React.ReactNode;
     count?: number;
     defaultOpen?: boolean;
+    /** When provided, the section is controlled (accordion mode). */
+    open?: boolean;
+    onToggle?: () => void;
     children: React.ReactNode;
 }) {
-    const [open, setOpen] = useState(defaultOpen);
+    const [localOpen, setLocalOpen] = useState(defaultOpen);
+    const isOpen = controlledOpen ?? localOpen;
+    const handleToggle = onToggle ?? (() => setLocalOpen(o => !o));
     return (
-        <div className={`vm-section ${open ? '' : 'collapsed'}`}>
-            <div className="vm-section-header" onClick={() => setOpen(o => !o)}>
+        <div className={`vm-section ${isOpen ? '' : 'collapsed'}`}>
+            <div className="vm-section-header" onClick={handleToggle}>
                 <h3 className="vm-section-title">
                     {icon}{title}
                     {count != null && count > 0 && <span className="vm-section-count">{count}</span>}

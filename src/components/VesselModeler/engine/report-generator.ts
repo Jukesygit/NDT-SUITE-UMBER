@@ -263,13 +263,15 @@ function buildAnnotationPage(
   // Section header
   children.push(sectionHeading(`Inspection Results — ${annotation.name}`));
 
-  // Position info
+  // Position info (offset by global coordinate origin)
+  const origin = vessel.coordinateOrigin ?? { indexMm: 0, scanMm: 0 };
   const circumference = Math.PI * vessel.id;
-  const scanMm = (annotation.angle / 360) * circumference;
+  const scanMm = (annotation.angle / 360) * circumference - origin.scanMm;
+  const indexMm = annotation.pos - origin.indexMm;
   children.push(new Paragraph({
     children: [
       textRun('Position: ', { bold: true }),
-      textRun(`Index ${annotation.pos.toFixed(0)}mm, Scan ${scanMm.toFixed(0)}mm (${annotation.angle.toFixed(0)}°)`),
+      textRun(`Index ${indexMm.toFixed(0)}mm, Scan ${scanMm.toFixed(0)}mm (${annotation.angle.toFixed(0)}°)`),
     ],
     spacing: { after: 40 },
   }));
@@ -596,10 +598,12 @@ function buildRestrictionsPage(vessel: VesselState): (Paragraph | Table)[] {
 
   children.push(sectionHeading('Scan Restrictions'));
 
+  const origin = vessel.coordinateOrigin ?? { indexMm: 0, scanMm: 0 };
   const circumference = Math.PI * vessel.id;
 
   for (const r of restrictions) {
-    const scanMm = (r.angle / 360) * circumference;
+    const scanMm = (r.angle / 360) * circumference - origin.scanMm;
+    const indexMm = r.pos - origin.indexMm;
 
     // Name and position
     children.push(new Paragraph({
@@ -609,7 +613,7 @@ function buildRestrictionsPage(vessel: VesselState): (Paragraph | Table)[] {
     children.push(new Paragraph({
       children: [
         textRun('Position: ', { bold: true }),
-        textRun(`Scan ${scanMm.toFixed(0)}mm, Index ${r.pos.toFixed(0)}mm`),
+        textRun(`Scan ${scanMm.toFixed(0)}mm, Index ${indexMm.toFixed(0)}mm`),
         textRun(`  |  Size: ${r.width.toFixed(0)} × ${r.height.toFixed(0)} mm`),
       ],
       spacing: { after: 40 },

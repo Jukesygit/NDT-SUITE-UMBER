@@ -7,9 +7,11 @@ import { SliderRow, Section } from './SliderRow';
 export interface VisualsSectionProps {
     vesselState: VesselState;
     onUpdateDimensions: (updates: Partial<VesselState>) => void;
+    open?: boolean;
+    onToggle?: () => void;
 }
 
-export function VisualsSection({ vesselState, onUpdateDimensions }: VisualsSectionProps) {
+export function VisualsSection({ vesselState, onUpdateDimensions, open, onToggle }: VisualsSectionProps) {
     const v = vesselState.visuals;
     const updateVisuals = (updates: Partial<typeof v>) =>
         onUpdateDimensions({ visuals: { ...v, ...updates } });
@@ -20,7 +22,7 @@ export function VisualsSection({ vesselState, onUpdateDimensions }: VisualsSecti
     };
 
     return (
-        <Section title="Visuals" defaultOpen={false} icon={<Palette size={14} style={{ marginRight: 6 }} />}>
+        <Section title="Visuals" icon={<Palette size={14} style={{ marginRight: 6 }} />} open={open} onToggle={onToggle}>
             {/* Scene Presets */}
             <div className="vm-control-group">
                 <div className="vm-label"><span>Scene Preset</span></div>

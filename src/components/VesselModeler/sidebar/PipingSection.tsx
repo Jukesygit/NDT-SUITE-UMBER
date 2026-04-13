@@ -219,7 +219,7 @@ export function PipingSection({
                             <div className="vm-pipe-accordion-body">
                                 {/* Nozzle edit form */}
                                 {isNozzleSelected && selectedNozzle && (
-                                    <div className="vm-form edit-mode" style={{ margin: '6px 0' }}>
+                                    <div className="vm-form edit-mode" style={{ margin: '6px 0', position: 'relative', zIndex: 1 }} onClick={e => e.stopPropagation()}>
                                         <div className="vm-control-group">
                                             <div className="vm-label"><span>Name</span></div>
                                             <input
@@ -321,7 +321,7 @@ export function PipingSection({
                                                     </div>
 
                                                     {isSegSelected && selectedSegment && (
-                                                        <div className="vm-form edit-mode" style={{ marginTop: 4, marginLeft: 8 }}>
+                                                        <div className="vm-form edit-mode" style={{ marginTop: 4, marginLeft: 8, position: 'relative', zIndex: 1 }} onClick={e => e.stopPropagation()}>
                                                             <SliderRow
                                                                 label="Rotation"
                                                                 value={seg.rotation}

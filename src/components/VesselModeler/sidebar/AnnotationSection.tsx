@@ -158,7 +158,7 @@ export function AnnotationSection({
                         </div>
                     </div>
                     {a.id === selectedAnnotationId && sel && (
-                        <div className="vm-form edit-mode" style={{ marginTop: 8 }}>
+                        <div className="vm-form edit-mode" style={{ marginTop: 8, position: 'relative', zIndex: 1 }} onClick={e => e.stopPropagation()}>
                             <div className="vm-control-group">
                                 <div className="vm-label"><span>Name</span></div>
                                 <input
@@ -340,7 +340,7 @@ export function AnnotationSection({
                                 {isRulerSelected && selRuler && (() => {
                                     const currentLength = Math.round(computeRulerDistance(selRuler, vesselState));
                                     return (
-                                        <div className="vm-form edit-mode" style={{ marginTop: 8 }}>
+                                        <div className="vm-form edit-mode" style={{ marginTop: 8, position: 'relative', zIndex: 1 }} onClick={e => e.stopPropagation()}>
                                             <div className="vm-form-row">
                                                 <div className="vm-control-group">
                                                     <div className="vm-label"><span>Length (mm)</span></div>

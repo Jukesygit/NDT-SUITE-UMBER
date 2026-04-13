@@ -23,7 +23,7 @@ import {
     createPipelineMaterial,
     createConnectionPointMaterial,
 } from './engine/materials';
-import { buildPipelineGroup } from './engine/pipeline-geometry';
+import { buildPipelineGroup, computeNozzleTipY } from './engine/pipeline-geometry';
 import * as THREE from 'three';
 
 // ---------------------------------------------------------------------------
@@ -344,6 +344,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
 
         // -- Nozzle name labels (CSS2D) --
         if (state.visuals.showNozzleLabels) {
+            const shellRadius = state.id / 2;
             result.nozzleMeshes.forEach((nozzleGroup, idx) => {
                 const nozzle = state.nozzles[idx];
                 if (!nozzle?.name) return;
@@ -353,8 +354,12 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
                 el.textContent = nozzle.name;
 
                 const label = new CSS2DObject(el);
-                // Position label slightly above the nozzle tip
-                label.position.copy(nozzleGroup.position);
+                // Position label at the flange end of the nozzle
+                nozzleGroup.updateMatrixWorld(true);
+                const tipY = computeNozzleTipY(nozzle, shellRadius);
+                const tipWorld = new THREE.Vector3(0, tipY, 0)
+                    .applyMatrix4(nozzleGroup.matrixWorld);
+                label.position.copy(tipWorld);
                 label.userData = { type: 'nozzle-label', nozzleIdx: idx };
                 result.vesselGroup.add(label);
             });
