@@ -193,7 +193,7 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
       ctx.clip();
 
       // 3a. Heatmap from scan composites
-      renderHeatmap(ctx, vesselState, circumference);
+      renderHeatmap(ctx, vesselState);
 
       // 3b. Geometry overlays
       renderGeometry(ctx, vesselState);
@@ -228,93 +228,111 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
     }, [vesselState, toCanvasX, toCanvasY]);
 
     // -----------------------------------------------------------------------
-    // Heatmap rendering helper
+    // Heatmap rendering helper — offscreen ImageData approach
     // -----------------------------------------------------------------------
 
     const renderHeatmap = useCallback(
       (
         ctx: CanvasRenderingContext2D,
         state: VesselState,
-        circumference: number,
       ) => {
         for (const composite of state.scanComposites) {
           if (!composite.orientationConfirmed) continue;
           if (composite.data.length === 0) continue;
 
+          const { yAxis, xAxis, data, indexStartMm, indexDirection, scanDirection } =
+            composite;
+          const rows = data.length;
+          const cols = data[0]?.length ?? 0;
+          if (rows === 0 || cols === 0) continue;
+
           const scale = getColorscale(composite.colorScale);
           const rMin = composite.rangeMin ?? composite.stats.min;
           const rMax = composite.rangeMax ?? composite.stats.max;
-          const range = rMax - rMin;
+          const range = rMax === rMin ? 1 : rMax - rMin;
+          const alpha = Math.round(Math.max(0, Math.min(1, composite.opacity)) * 255);
 
-          // Datum → circumferential mm from TDC
-          // datumAngleDeg is user-facing (0=TDC). Vessel coords: 90=TDC.
+          // --- Build an offscreen pixel buffer at native data resolution ---
+          const offscreen = document.createElement('canvas');
+          offscreen.width = cols;
+          offscreen.height = rows;
+          const offCtx = offscreen.getContext('2d');
+          if (!offCtx) continue;
+
+          const imageData = offCtx.createImageData(cols, rows);
+          const pixels = imageData.data;
+
+          for (let row = 0; row < rows; row++) {
+            const rowData = data[row];
+            if (!rowData) continue;
+            for (let col = 0; col < cols; col++) {
+              const value = rowData[col];
+              const idx = (row * cols + col) * 4;
+              if (value == null) {
+                pixels[idx + 3] = 0; // transparent
+                continue;
+              }
+              const t = (value - rMin) / range;
+              const [r, g, b] = interpolateColor(Math.max(0, Math.min(1, t)), scale);
+              pixels[idx] = r;
+              pixels[idx + 1] = g;
+              pixels[idx + 2] = b;
+              pixels[idx + 3] = alpha;
+            }
+          }
+          offCtx.putImageData(imageData, 0, 0);
+
+          // --- Compute bounding box in vessel mm ---
+          // Axial bounds from yAxis + indexStartMm
+          const yFirst = yAxis[0];
+          const yLast = yAxis[yAxis.length - 1];
+          const axialStart = indexDirection === 'forward'
+            ? indexStartMm + Math.min(yFirst, yLast)
+            : indexStartMm - Math.max(yFirst, yLast);
+          const axialEnd = indexDirection === 'forward'
+            ? indexStartMm + Math.max(yFirst, yLast)
+            : indexStartMm - Math.min(yFirst, yLast);
+
+          // Circumferential bounds from xAxis + datum
+          // datumAngleDeg: 0° = TDC in user coords. Convert to vessel angle: +90°
           const datumCircMm = angleToCircumMm(
             composite.datumAngleDeg + 90,
             state.id,
           );
+          const xFirst = xAxis[0];
+          const xLast = xAxis[xAxis.length - 1];
+          const scanMin = Math.min(xFirst, xLast);
+          const scanMax = Math.max(xFirst, xLast);
 
-          ctx.globalAlpha = composite.opacity;
-
-          const { yAxis, xAxis, data, indexStartMm, indexDirection, scanDirection } =
-            composite;
-
-          for (let row = 0; row < data.length; row++) {
-            const rowData = data[row];
-            if (!rowData) continue;
-
-            // Axial position
-            const axialMm =
-              indexDirection === 'forward'
-                ? indexStartMm + yAxis[row]
-                : indexStartMm - yAxis[row];
-
-            // Pixel width/height for this cell
-            const axialNext =
-              row + 1 < yAxis.length
-                ? indexDirection === 'forward'
-                  ? indexStartMm + yAxis[row + 1]
-                  : indexStartMm - yAxis[row + 1]
-                : axialMm + (row > 0 ? Math.abs(yAxis[row] - yAxis[row - 1]) : 1);
-
-            for (let col = 0; col < rowData.length; col++) {
-              const value = rowData[col];
-              if (value == null) continue;
-
-              // Circumferential position
-              const circumOffset =
-                scanDirection === 'cw' ? xAxis[col] : -xAxis[col];
-              let circumMm = datumCircMm + circumOffset;
-              // Wrap into [0, circumference)
-              circumMm = ((circumMm % circumference) + circumference) % circumference;
-
-              const circumNext =
-                col + 1 < xAxis.length
-                  ? xAxis[col + 1]
-                  : xAxis[col] + (col > 0 ? Math.abs(xAxis[col] - xAxis[col - 1]) : 1);
-              const circumNextOffset =
-                scanDirection === 'cw' ? circumNext : -circumNext;
-              let circumMmNext = datumCircMm + circumNextOffset;
-              circumMmNext =
-                ((circumMmNext % circumference) + circumference) % circumference;
-
-              // Normalize and color
-              const t = range > 0 ? (value - rMin) / range : 0.5;
-              const [r, g, b] = interpolateColor(t, scale);
-
-              const px = toCanvasX(axialMm);
-              const pxNext = toCanvasX(axialNext);
-              const py = toCanvasY(circumMm);
-              const pyNext = toCanvasY(circumMmNext);
-
-              const w = Math.abs(pxNext - px) || 1;
-              const h = Math.abs(pyNext - py) || 1;
-
-              ctx.fillStyle = `rgb(${r},${g},${b})`;
-              ctx.fillRect(Math.min(px, pxNext), Math.min(py, pyNext), w, h);
-            }
+          // CW: scan extends in positive circumMm direction from datum
+          // CCW: scan extends in negative circumMm direction from datum
+          let circumStart: number;
+          let circumEnd: number;
+          if (scanDirection === 'cw') {
+            circumStart = datumCircMm + scanMin;
+            circumEnd = datumCircMm + scanMax;
+          } else {
+            circumStart = datumCircMm - scanMax;
+            circumEnd = datumCircMm - scanMin;
           }
 
-          ctx.globalAlpha = 1;
+          // --- Draw the offscreen canvas onto the main canvas at correct position ---
+          const px0 = toCanvasX(axialStart);
+          const px1 = toCanvasX(axialEnd);
+          const py0 = toCanvasY(circumStart);
+          const py1 = toCanvasY(circumEnd);
+
+          const destW = Math.abs(px1 - px0) || 1;
+          const destH = Math.abs(py1 - py0) || 1;
+
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(
+            offscreen,
+            Math.min(px0, px1),
+            Math.min(py0, py1),
+            destW,
+            destH,
+          );
         }
       },
       [toCanvasX, toCanvasY],
