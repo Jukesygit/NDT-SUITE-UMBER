@@ -294,53 +294,43 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
             : indexStartMm - Math.min(yFirst, yLast);
 
           // Circumferential bounds from xAxis + datum
-          // datumAngleDeg: 0° = TDC in user coords. Convert to vessel angle: +90°
+          // Use raw offsets without wrapping to keep scans contiguous
           const datumCircMm = angleToCircumMm(
             composite.datumAngleDeg + 90,
             state.id,
           );
-          const circumference = getCircumference(state);
           const xFirst = xAxis[0];
           const xLast = xAxis[xAxis.length - 1];
           const scanMin = Math.min(xFirst, xLast);
           const scanMax = Math.max(xFirst, xLast);
-          const scanWidth = scanMax - scanMin;
 
           // CW: scan extends in positive circumMm direction from datum
           // CCW: scan extends in negative circumMm direction from datum
-          let circumStart: number;
-          if (scanDirection === 'cw') {
-            circumStart = datumCircMm + scanMin;
-          } else {
-            circumStart = datumCircMm - scanMax;
-          }
-          // Wrap start into [0, circumference) — cylinder wraps naturally in 3D,
-          // we need to do it explicitly in the flattened view
-          circumStart = ((circumStart % circumference) + circumference) % circumference;
-          const circumEnd = circumStart + scanWidth;
+          const circumStart = scanDirection === 'cw'
+            ? datumCircMm + scanMin
+            : datumCircMm - scanMax;
+          const circumEnd = scanDirection === 'cw'
+            ? datumCircMm + scanMax
+            : datumCircMm - scanMin;
 
           // --- Draw the offscreen canvas onto the main canvas ---
           ctx.imageSmoothingEnabled = false;
 
           const px0 = toCanvasX(axialStart);
           const px1 = toCanvasX(axialEnd);
-          const destW = Math.abs(px1 - px0) || 1;
-          const destX = Math.min(px0, px1);
-
           const py0 = toCanvasY(circumStart);
           const py1 = toCanvasY(circumEnd);
+
+          const destW = Math.abs(px1 - px0) || 1;
           const destH = Math.abs(py1 - py0) || 1;
 
-          ctx.drawImage(offscreen, destX, py0, destW, destH);
-
-          // If the scan wraps past the circumference boundary, draw a second
-          // copy shifted up by one full circumference so it appears at the top
-          if (circumEnd > circumference) {
-            const wrapPy0 = toCanvasY(circumStart - circumference);
-            const wrapPy1 = toCanvasY(circumEnd - circumference);
-            const wrapH = Math.abs(wrapPy1 - wrapPy0) || 1;
-            ctx.drawImage(offscreen, destX, wrapPy0, destW, wrapH);
-          }
+          ctx.drawImage(
+            offscreen,
+            Math.min(px0, px1),
+            Math.min(py0, py1),
+            destW,
+            destH,
+          );
         }
       },
       [toCanvasX, toCanvasY],
