@@ -267,8 +267,11 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
           const range = rMax === rMin ? 1 : rMax - rMin;
           const alpha = Math.round(Math.max(0, Math.min(1, composite.opacity)) * 255);
 
+          // datumAngleDeg is user-facing (0° = TDC). The +90 offset is only
+          // needed for the 3D internal coordinate system — the flattened view
+          // Y-axis uses the user convention directly.
           const datumCircMm = angleToCircumMm(
-            composite.datumAngleDeg + 90,
+            composite.datumAngleDeg,
             state.id,
           );
 
@@ -331,7 +334,7 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
               const cellY = Math.min(py, pyNext);
 
               const t = Math.max(0, Math.min(1, (value - rMin) / range));
-              const [r, g, b] = interpolateColor(t, scale);
+              const [r, g, b] = interpolateColor(t, scale, true);
 
               // Fill the rectangle in the pixel buffer
               const x0 = Math.max(0, Math.floor(cellX));
@@ -687,7 +690,7 @@ function findThicknessAt(
     const { yAxis, xAxis, data, indexStartMm, indexDirection, scanDirection } =
       composite;
 
-    const datumCircMm = angleToCircumMm(composite.datumAngleDeg + 90, vesselOD);
+    const datumCircMm = angleToCircumMm(composite.datumAngleDeg, vesselOD);
 
     // Find the closest row (axial)
     let bestRow = -1;
