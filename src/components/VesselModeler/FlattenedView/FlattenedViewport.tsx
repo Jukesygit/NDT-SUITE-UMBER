@@ -372,6 +372,27 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
       (ctx: CanvasRenderingContext2D, state: VesselState) => {
         const od = state.id; // geometry-projection functions accept vesselOD
 
+        // 12 o'clock reference line (vessel TDC = 90° in vessel coords, -90° shift = 0°)
+        const tdcMm = angleToCircumMm(0, od);
+        const tdcY = toCanvasY(tdcMm);
+        const x0 = toCanvasX(0);
+        const x1 = toCanvasX(state.length);
+        ctx.save();
+        ctx.strokeStyle = '#22c55e';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(x0, tdcY);
+        ctx.lineTo(x1, tdcY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#22c55e';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('12 o\'clock (TDC)', x0 + 4, tdcY - 3);
+        ctx.restore();
+
         // Welds
         ctx.lineWidth = 1.5;
         for (const weld of state.welds) {
