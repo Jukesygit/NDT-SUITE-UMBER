@@ -61,6 +61,7 @@ import {
 const DrawingImportModal = lazy(() => import('./DrawingImportModal'));
 const ScreenshotMode = lazy(() => import('./ScreenshotMode'));
 const InspectionImageViewer = lazy(() => import('./InspectionImageViewer'));
+const FlattenedViewport = lazy(() => import('./FlattenedView/FlattenedViewport'));
 
 /** Guess the NDE source filename from a composite/CSV name.
  *  Strips common suffixes like _extracted, _cscan, .csv and adds *.nde wildcard pattern. */
@@ -138,6 +139,7 @@ interface UIState {
     showDrawingImport: boolean;
     showScreenshotMode: boolean;
     viewingInspectionImageId: number;
+    viewMode: '3d' | 'flattened';
     hoverData: { thickness: number | null; scanMm: number; indexMm: number } | null;
     scanTooltipFollow: boolean;
     /** ID of annotation being inspected (null = not in inspection mode) */
@@ -188,6 +190,7 @@ const INITIAL_STATE: VesselModelerState = {
         scanTooltipFollow: false,
         inspectingAnnotationId: null,
         savedCameraState: null,
+        viewMode: '3d',
     },
 };
 
@@ -224,7 +227,8 @@ type VesselAction =
     | { type: 'UPDATE_THICKNESS_THRESHOLDS'; thresholds: VesselState['thicknessThresholds'] }
     | { type: 'ENTER_INSPECTION_MODE'; annotationId: number; cameraState: { position: [number, number, number]; target: [number, number, number] } }
     | { type: 'CYCLE_INSPECTION'; annotationId: number }
-    | { type: 'EXIT_INSPECTION_MODE' };
+    | { type: 'EXIT_INSPECTION_MODE' }
+    | { type: 'SET_VIEW_MODE'; mode: '3d' | 'flattened' };
 
 function vesselReducer(state: VesselModelerState, action: VesselAction): VesselModelerState {
     switch (action.type) {
@@ -341,6 +345,8 @@ function vesselReducer(state: VesselModelerState, action: VesselAction): VesselM
                     savedCameraState: null,
                 },
             };
+        case 'SET_VIEW_MODE':
+            return { ...state, ui: { ...state.ui, viewMode: action.mode } };
         default:
             return state;
     }
@@ -1978,6 +1984,22 @@ export default function VesselModeler() {
                     </a>
                 </div>
             )}
+            {/* View mode toggle */}
+            <div className="flex items-center gap-1 px-2 py-1 bg-gray-800 border-b border-gray-700">
+                <button
+                    className={`px-3 py-1 text-xs rounded transition-colors ${ui.viewMode === '3d' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                    onClick={() => dispatch({ type: 'SET_VIEW_MODE', mode: '3d' })}
+                >
+                    <Box className="w-3.5 h-3.5 inline mr-1" style={{ verticalAlign: '-2px' }} />
+                    3D
+                </button>
+                <button
+                    className={`px-3 py-1 text-xs rounded transition-colors ${ui.viewMode === 'flattened' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                    onClick={() => dispatch({ type: 'SET_VIEW_MODE', mode: 'flattened' })}
+                >
+                    Flattened
+                </button>
+            </div>
             {/* Main content area */}
             <div
                 ref={viewportContainerRef}
@@ -1985,6 +2007,8 @@ export default function VesselModeler() {
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
             >
+                {ui.viewMode === '3d' ? (
+                <>
                 {/* Three.js viewport (z-0) */}
                 <ErrorBoundary fallback={
                     <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
@@ -2034,6 +2058,12 @@ export default function VesselModeler() {
                         inspectingAnnotationId={ui.inspectingAnnotationId}
                     />
                 </ErrorBoundary>
+                </>
+                ) : (
+                    <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center bg-white text-gray-500 text-sm">Loading flattened view...</div>}>
+                        <FlattenedViewport vesselState={vesselState} />
+                    </Suspense>
+                )}
 
                 {/* Pipe part popup — shown when clicking a connection point */}
                 {pipePartPopup && (
