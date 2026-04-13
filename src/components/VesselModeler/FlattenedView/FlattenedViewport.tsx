@@ -214,7 +214,7 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
       if (firstComposite) {
         const legendConfig: LegendConfig = {
           colorScaleName: firstComposite.colorScale,
-          reverseScale: false,
+          reverseScale: true,
           rangeMin: firstComposite.rangeMin ?? firstComposite.stats.min,
           rangeMax: firstComposite.rangeMax ?? firstComposite.stats.max,
         };

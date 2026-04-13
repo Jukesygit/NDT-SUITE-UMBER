@@ -89,15 +89,21 @@ export function drawColorBar(
   ctx.strokeRect(x, y, width, height);
 
   // Labels to the right of the bar
-  const labelX = x + width + 6;
+  const labelX = x + width + 8;
   ctx.fillStyle = '#333';
-  ctx.font = '11px sans-serif';
+  ctx.font = 'bold 11px sans-serif';
+  ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
 
-  // Max label (top)
-  ctx.fillText(`${config.rangeMax.toFixed(1)}mm`, labelX, y + 6);
-  // Min label (bottom)
-  ctx.fillText(`${config.rangeMin.toFixed(1)}mm`, labelX, y + height - 6);
+  if (config.reverseScale) {
+    // Reversed: min at top, max at bottom
+    ctx.fillText(`${config.rangeMin.toFixed(1)}mm`, labelX, y + 6);
+    ctx.fillText(`${config.rangeMax.toFixed(1)}mm`, labelX, y + height - 6);
+  } else {
+    // Normal: max at top, min at bottom
+    ctx.fillText(`${config.rangeMax.toFixed(1)}mm`, labelX, y + 6);
+    ctx.fillText(`${config.rangeMin.toFixed(1)}mm`, labelX, y + height - 6);
+  }
 }
 
 /**
