@@ -193,7 +193,7 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
       ctx.clip();
 
       // 3a. Heatmap from scan composites
-      renderHeatmap(ctx, vesselState);
+      renderHeatmap(ctx, vesselState, circumference);
 
       // 3b. Geometry overlays
       renderGeometry(ctx, vesselState);
@@ -228,112 +228,137 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
     }, [vesselState, toCanvasX, toCanvasY]);
 
     // -----------------------------------------------------------------------
-    // Heatmap rendering helper — offscreen ImageData approach
+    // Heatmap rendering helper — per-pixel mapping to screen-space ImageData
     // -----------------------------------------------------------------------
 
     const renderHeatmap = useCallback(
       (
         ctx: CanvasRenderingContext2D,
         state: VesselState,
+        circumference: number,
       ) => {
+        const { drawWidth, drawHeight } = getDrawDimensions();
+        if (drawWidth <= 0 || drawHeight <= 0) return;
+
+        // Create a screen-sized buffer to paint scan pixels into
+        const bufW = Math.ceil(drawWidth);
+        const bufH = Math.ceil(drawHeight);
+        const offscreen = document.createElement('canvas');
+        offscreen.width = bufW;
+        offscreen.height = bufH;
+        const offCtx = offscreen.getContext('2d');
+        if (!offCtx) return;
+        const imageData = offCtx.createImageData(bufW, bufH);
+        const pixels = imageData.data;
+
+        const vesselLength = state.length;
+        const { zoom, offsetX, offsetY } = viewRef.current;
+        let hasData = false;
+
         for (const composite of state.scanComposites) {
           if (!composite.orientationConfirmed) continue;
           if (composite.data.length === 0) continue;
 
           const { yAxis, xAxis, data, indexStartMm, indexDirection, scanDirection } =
             composite;
-          const rows = data.length;
-          const cols = data[0]?.length ?? 0;
-          if (rows === 0 || cols === 0) continue;
-
           const scale = getColorscale(composite.colorScale);
           const rMin = composite.rangeMin ?? composite.stats.min;
           const rMax = composite.rangeMax ?? composite.stats.max;
           const range = rMax === rMin ? 1 : rMax - rMin;
           const alpha = Math.round(Math.max(0, Math.min(1, composite.opacity)) * 255);
 
-          // --- Build an offscreen pixel buffer at native data resolution ---
-          const offscreen = document.createElement('canvas');
-          offscreen.width = cols;
-          offscreen.height = rows;
-          const offCtx = offscreen.getContext('2d');
-          if (!offCtx) continue;
-
-          const imageData = offCtx.createImageData(cols, rows);
-          const pixels = imageData.data;
-
-          for (let row = 0; row < rows; row++) {
-            const rowData = data[row];
-            if (!rowData) continue;
-            for (let col = 0; col < cols; col++) {
-              const value = rowData[col];
-              const idx = (row * cols + col) * 4;
-              if (value == null) {
-                pixels[idx + 3] = 0; // transparent
-                continue;
-              }
-              const t = (value - rMin) / range;
-              const [r, g, b] = interpolateColor(Math.max(0, Math.min(1, t)), scale);
-              pixels[idx] = r;
-              pixels[idx + 1] = g;
-              pixels[idx + 2] = b;
-              pixels[idx + 3] = alpha;
-            }
-          }
-          offCtx.putImageData(imageData, 0, 0);
-
-          // --- Compute bounding box in vessel mm ---
-          // Axial bounds from yAxis + indexStartMm
-          const yFirst = yAxis[0];
-          const yLast = yAxis[yAxis.length - 1];
-          const axialStart = indexDirection === 'forward'
-            ? indexStartMm + Math.min(yFirst, yLast)
-            : indexStartMm - Math.max(yFirst, yLast);
-          const axialEnd = indexDirection === 'forward'
-            ? indexStartMm + Math.max(yFirst, yLast)
-            : indexStartMm - Math.min(yFirst, yLast);
-
-          // Circumferential bounds from xAxis + datum
-          // Use raw offsets without wrapping to keep scans contiguous
           const datumCircMm = angleToCircumMm(
             composite.datumAngleDeg + 90,
             state.id,
           );
-          const xFirst = xAxis[0];
-          const xLast = xAxis[xAxis.length - 1];
-          const scanMin = Math.min(xFirst, xLast);
-          const scanMax = Math.max(xFirst, xLast);
 
-          // CW: scan extends in positive circumMm direction from datum
-          // CCW: scan extends in negative circumMm direction from datum
-          const circumStart = scanDirection === 'cw'
-            ? datumCircMm + scanMin
-            : datumCircMm - scanMax;
-          const circumEnd = scanDirection === 'cw'
-            ? datumCircMm + scanMax
-            : datumCircMm - scanMin;
+          // Pre-compute axial pixel for each row
+          const rowPx: number[] = new Array(yAxis.length);
+          const rowPxNext: number[] = new Array(yAxis.length);
+          for (let row = 0; row < yAxis.length; row++) {
+            const axialMm = indexDirection === 'forward'
+              ? indexStartMm + yAxis[row]
+              : indexStartMm - yAxis[row];
+            const nextMm = row + 1 < yAxis.length
+              ? (indexDirection === 'forward'
+                ? indexStartMm + yAxis[row + 1]
+                : indexStartMm - yAxis[row + 1])
+              : axialMm + (row > 0 ? Math.abs(yAxis[row] - yAxis[row - 1]) : 1);
+            // Convert to buffer pixel (relative to PADDING.left)
+            rowPx[row] = (axialMm / vesselLength) * drawWidth * zoom + offsetX;
+            rowPxNext[row] = (nextMm / vesselLength) * drawWidth * zoom + offsetX;
+          }
 
-          // --- Draw the offscreen canvas onto the main canvas ---
-          ctx.imageSmoothingEnabled = false;
+          // Pre-compute circumferential pixel for each col
+          const colPy: number[] = new Array(xAxis.length);
+          const colPyNext: number[] = new Array(xAxis.length);
+          for (let col = 0; col < xAxis.length; col++) {
+            const circumOffset = scanDirection === 'cw' ? xAxis[col] : -xAxis[col];
+            let circumMm = datumCircMm + circumOffset;
+            circumMm = ((circumMm % circumference) + circumference) % circumference;
 
-          const px0 = toCanvasX(axialStart);
-          const px1 = toCanvasX(axialEnd);
-          const py0 = toCanvasY(circumStart);
-          const py1 = toCanvasY(circumEnd);
+            const nextOffset = col + 1 < xAxis.length
+              ? (scanDirection === 'cw' ? xAxis[col + 1] : -xAxis[col + 1])
+              : circumOffset + (col > 0
+                ? (scanDirection === 'cw' ? xAxis[col] - xAxis[col - 1] : xAxis[col - 1] - xAxis[col])
+                : 1);
+            let circumMmNext = datumCircMm + nextOffset;
+            circumMmNext = ((circumMmNext % circumference) + circumference) % circumference;
 
-          const destW = Math.abs(px1 - px0) || 1;
-          const destH = Math.abs(py1 - py0) || 1;
+            colPy[col] = (circumMm / circumference) * drawHeight * zoom + offsetY;
+            colPyNext[col] = (circumMmNext / circumference) * drawHeight * zoom + offsetY;
+          }
 
-          ctx.drawImage(
-            offscreen,
-            Math.min(px0, px1),
-            Math.min(py0, py1),
-            destW,
-            destH,
-          );
+          for (let row = 0; row < data.length; row++) {
+            const rowData = data[row];
+            if (!rowData) continue;
+            const px = rowPx[row];
+            const pxNext = rowPxNext[row];
+            const cellW = Math.abs(pxNext - px) || 1;
+            const cellX = Math.min(px, pxNext);
+
+            for (let col = 0; col < rowData.length; col++) {
+              const value = rowData[col];
+              if (value == null) continue;
+
+              const py = colPy[col];
+              const pyNext = colPyNext[col];
+              // Skip smearing: if the gap between adjacent pixels is > half the
+              // draw height, the wrapping crossed the boundary — skip that cell
+              if (Math.abs(pyNext - py) > drawHeight * 0.5) continue;
+
+              const cellH = Math.abs(pyNext - py) || 1;
+              const cellY = Math.min(py, pyNext);
+
+              const t = Math.max(0, Math.min(1, (value - rMin) / range));
+              const [r, g, b] = interpolateColor(t, scale);
+
+              // Fill the rectangle in the pixel buffer
+              const x0 = Math.max(0, Math.floor(cellX));
+              const y0 = Math.max(0, Math.floor(cellY));
+              const x1 = Math.min(bufW, Math.ceil(cellX + cellW));
+              const y1 = Math.min(bufH, Math.ceil(cellY + cellH));
+
+              for (let fy = y0; fy < y1; fy++) {
+                for (let fx = x0; fx < x1; fx++) {
+                  const idx = (fy * bufW + fx) * 4;
+                  pixels[idx] = r;
+                  pixels[idx + 1] = g;
+                  pixels[idx + 2] = b;
+                  pixels[idx + 3] = alpha;
+                }
+              }
+              hasData = true;
+            }
+          }
+        }
+
+        if (hasData) {
+          offCtx.putImageData(imageData, 0, 0);
+          ctx.drawImage(offscreen, PADDING.left, PADDING.top);
         }
       },
-      [toCanvasX, toCanvasY],
+      [getDrawDimensions, toCanvasX, toCanvasY],
     );
 
     // -----------------------------------------------------------------------
