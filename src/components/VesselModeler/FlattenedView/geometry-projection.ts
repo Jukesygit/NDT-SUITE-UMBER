@@ -89,7 +89,7 @@ export function projectNozzle(nozzle: NozzleConfig, vesselOD: number): FlatCircl
   return {
     label: nozzle.name,
     cx: nozzle.pos,
-    cy: angleToCircumMm(nozzle.angle, vesselOD),
+    cy: angleToCircumMm(nozzle.angle - 90, vesselOD),
     radius: nozzle.size / 2,
   };
 }
@@ -114,7 +114,7 @@ export function projectCircWeld(weld: WeldConfig, vesselOD: number): FlatLine {
  * circumferential angle, running from pos to endPos.
  */
 export function projectLongWeld(weld: WeldConfig, vesselOD: number): FlatLine {
-  const y = angleToCircumMm(weld.angle ?? 0, vesselOD);
+  const y = angleToCircumMm((weld.angle ?? 0) - 90, vesselOD);
   return {
     label: weld.name,
     x1: weld.pos,
@@ -136,8 +136,8 @@ export function projectSaddle(saddle: SaddleConfig, vesselOD: number): FlatRect 
   const arcHeight = circumference / 3;
   const axialWidth = 100; // placeholder mm
 
-  // Centre at 270° (bottom dead centre)
-  const centreMm = angleToCircumMm(270, vesselOD);
+  // Centre at 270° vessel angle (bottom dead centre), shifted -90° for flattened view
+  const centreMm = angleToCircumMm(270 - 90, vesselOD);
 
   return {
     label: `Saddle @ ${saddle.pos} mm`,
@@ -155,6 +155,6 @@ export function projectLiftingLug(lug: LiftingLugConfig, vesselOD: number): Flat
   return {
     label: lug.name,
     cx: lug.pos,
-    cy: angleToCircumMm(lug.angle, vesselOD),
+    cy: angleToCircumMm(lug.angle - 90, vesselOD),
   };
 }
