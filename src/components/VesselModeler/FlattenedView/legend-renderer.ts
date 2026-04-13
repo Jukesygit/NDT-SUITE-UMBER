@@ -95,15 +95,9 @@ export function drawColorBar(
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
 
-  if (config.reverseScale) {
-    // Reversed: min at top, max at bottom
-    ctx.fillText(`${config.rangeMin.toFixed(1)}mm`, labelX, y + 6);
-    ctx.fillText(`${config.rangeMax.toFixed(1)}mm`, labelX, y + height - 6);
-  } else {
-    // Normal: max at top, min at bottom
-    ctx.fillText(`${config.rangeMax.toFixed(1)}mm`, labelX, y + 6);
-    ctx.fillText(`${config.rangeMin.toFixed(1)}mm`, labelX, y + height - 6);
-  }
+  // Blue (thick) at top, red (thin) at bottom — always max at top, min at bottom
+  ctx.fillText(`${config.rangeMax.toFixed(1)}mm`, labelX, y + 6);
+  ctx.fillText(`${config.rangeMin.toFixed(1)}mm`, labelX, y + height - 6);
 }
 
 /**
