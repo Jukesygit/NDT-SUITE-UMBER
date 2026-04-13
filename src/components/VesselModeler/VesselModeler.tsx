@@ -1985,22 +1985,6 @@ export default function VesselModeler() {
                     </a>
                 </div>
             )}
-            {/* View mode toggle */}
-            <div className="flex items-center gap-1 px-2 py-1 bg-gray-800 border-b border-gray-700">
-                <button
-                    className={`px-3 py-1 text-xs rounded transition-colors ${ui.viewMode === '3d' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                    onClick={() => dispatch({ type: 'SET_VIEW_MODE', mode: '3d' })}
-                >
-                    <Box className="w-3.5 h-3.5 inline mr-1" style={{ verticalAlign: '-2px' }} />
-                    3D
-                </button>
-                <button
-                    className={`px-3 py-1 text-xs rounded transition-colors ${ui.viewMode === 'flattened' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                    onClick={() => dispatch({ type: 'SET_VIEW_MODE', mode: 'flattened' })}
-                >
-                    Flattened
-                </button>
-            </div>
             {/* Main content area */}
             <div
                 ref={viewportContainerRef}
@@ -2289,6 +2273,17 @@ export default function VesselModeler() {
                             </button>
                         </div>
                     )}
+                </div>
+
+                {/* View mode toggle (3D / 2D) */}
+                <div className="vm-popout-menu vm-popout-menu-right" style={{ top: 52 }}>
+                    <button
+                        className={`vm-popout-trigger ${ui.viewMode === 'flattened' ? 'open' : ''}`}
+                        onClick={() => dispatch({ type: 'SET_VIEW_MODE', mode: ui.viewMode === '3d' ? 'flattened' : '3d' })}
+                    >
+                        <Box size={14} />
+                        {ui.viewMode === '3d' ? '3D' : '2D'}
+                    </button>
                 </div>
 
                 {/* Coverage overlay */}
