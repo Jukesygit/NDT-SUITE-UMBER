@@ -2276,14 +2276,26 @@ export default function VesselModeler() {
                 </div>
 
                 {/* View mode toggle (3D / 2D) */}
-                <div className="vm-popout-menu vm-popout-menu-right" style={{ top: 52 }}>
-                    <button
-                        className={`vm-popout-trigger ${ui.viewMode === 'flattened' ? 'open' : ''}`}
-                        onClick={() => dispatch({ type: 'SET_VIEW_MODE', mode: ui.viewMode === '3d' ? 'flattened' : '3d' })}
-                    >
-                        <Box size={14} />
-                        {ui.viewMode === '3d' ? '3D' : '2D'}
-                    </button>
+                <div style={{ position: 'absolute', top: 52, right: 10, zIndex: 20, display: 'flex', gap: 2, background: 'rgba(20,25,35,0.85)', backdropFilter: 'blur(8px)', borderRadius: 8, padding: 2, border: '1px solid rgba(255,255,255,0.1)' }}>
+                    {(['3d', 'flattened'] as const).map(mode => (
+                        <button
+                            key={mode}
+                            onClick={() => dispatch({ type: 'SET_VIEW_MODE', mode })}
+                            style={{
+                                padding: '6px 14px',
+                                borderRadius: 6,
+                                border: 'none',
+                                fontSize: '0.8rem',
+                                fontWeight: 500,
+                                cursor: 'pointer',
+                                background: ui.viewMode === mode ? 'rgba(59,130,246,0.2)' : 'transparent',
+                                color: ui.viewMode === mode ? '#60a5fa' : 'rgba(255,255,255,0.5)',
+                                transition: 'all 0.15s',
+                            }}
+                        >
+                            {mode === '3d' ? '3D' : '2D'}
+                        </button>
+                    ))}
                 </div>
 
                 {/* Coverage overlay */}
