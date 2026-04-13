@@ -386,8 +386,9 @@ export default function VesselModeler() {
     const nextRulerIdRef = useRef(1);
     const nextInspectionImageIdRef = useRef(1);
 
-    // Viewport ref
+    // Viewport refs
     const viewportRef = useRef<ThreeViewportHandle>(null);
+    const flattenedViewportRef = useRef<{ exportImage: () => string | null }>(null);
     const viewportContainerRef = useRef<HTMLDivElement>(null);
     const cursorTooltipRef = useRef<HTMLDivElement>(null);
 
@@ -2061,7 +2062,7 @@ export default function VesselModeler() {
                 </>
                 ) : (
                     <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center bg-white text-gray-500 text-sm">Loading flattened view...</div>}>
-                        <FlattenedViewport vesselState={vesselState} />
+                        <FlattenedViewport ref={flattenedViewportRef} vesselState={vesselState} />
                     </Suspense>
                 )}
 
