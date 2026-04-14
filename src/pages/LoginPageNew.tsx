@@ -50,7 +50,7 @@ const getInitialMode = (): LoginMode => {
 
 function LoginPageNew() {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, twoFactorRequired } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -84,6 +84,13 @@ function LoginPageNew() {
       setTwoFALoading(false);
     }
   };
+
+  // Auto-switch to 2FA verify when context detects pending 2FA (e.g. page refresh with AAL1 session)
+  useEffect(() => {
+    if (twoFactorRequired && mode === 'login') {
+      setMode('verify-2fa');
+    }
+  }, [twoFactorRequired, mode]);
 
   useEffect(() => {
     // Check if we're in password reset mode (from sessionStorage)
@@ -130,8 +137,8 @@ function LoginPageNew() {
       }
     });
 
-    // Only redirect if logged in and NOT in password reset mode
-    if (isAuthenticated && !isPasswordResetMode && mode !== 'update-password') {
+    // Only redirect if logged in and NOT in password reset or 2FA verify mode
+    if (isAuthenticated && !isPasswordResetMode && mode !== 'update-password' && mode !== 'verify-2fa') {
       navigate('/');
     }
 

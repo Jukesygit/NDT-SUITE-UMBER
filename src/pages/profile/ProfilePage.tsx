@@ -64,7 +64,22 @@ export default function ProfilePage() {
 
     // 2FA state
     const [show2FASetup, setShow2FASetup] = useState(false);
+    const [isDisabling2FA, setIsDisabling2FA] = useState(false);
     const twoFactorStatus = useTwoFactorStatus();
+
+    const handleDisable2FA = async () => {
+        if (!twoFactorStatus.data?.factorId) return;
+        if (!window.confirm('Are you sure you want to disable two-factor authentication?')) return;
+        setIsDisabling2FA(true);
+        try {
+            await (await import('../../services/two-factor-service')).twoFactorService.unenroll(twoFactorStatus.data.factorId);
+            twoFactorStatus.refetch();
+        } catch (err: unknown) {
+            alert(err instanceof Error ? err.message : 'Failed to disable 2FA');
+        } finally {
+            setIsDisabling2FA(false);
+        }
+    };
 
     // React Query hooks - only enabled when user is loaded (hooks handle enabled internally)
     const profileQuery = useProfile(user?.id);
@@ -344,19 +359,31 @@ export default function ProfilePage() {
                                     )}
                                 </p>
                             </div>
-                            <button
-                                className="pf-btn"
-                                onClick={() => setShow2FASetup(true)}
-                                style={twoFactorStatus.data?.isEnabled ? {
-                                    color: 'var(--text-tertiary, #6b7280)',
-                                    borderColor: 'rgba(255,255,255,0.1)',
-                                } : {
-                                    color: '#60a5fa',
-                                    borderColor: 'rgba(96, 165, 250, 0.3)',
-                                }}
-                            >
-                                {twoFactorStatus.data?.isEnabled ? 'Reconfigure' : 'Set Up 2FA'}
-                            </button>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                    className="pf-btn"
+                                    onClick={() => setShow2FASetup(true)}
+                                    style={twoFactorStatus.data?.isEnabled ? {
+                                        color: 'var(--text-tertiary, #6b7280)',
+                                        borderColor: 'rgba(255,255,255,0.1)',
+                                    } : {
+                                        color: '#60a5fa',
+                                        borderColor: 'rgba(96, 165, 250, 0.3)',
+                                    }}
+                                >
+                                    {twoFactorStatus.data?.isEnabled ? 'Reconfigure' : 'Set Up 2FA'}
+                                </button>
+                                {twoFactorStatus.data?.isEnabled && (
+                                    <button
+                                        className="pf-btn"
+                                        onClick={handleDisable2FA}
+                                        disabled={isDisabling2FA}
+                                        style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                                    >
+                                        {isDisabling2FA ? 'Disabling...' : 'Disable'}
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
 

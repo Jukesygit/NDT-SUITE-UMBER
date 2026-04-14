@@ -45,11 +45,11 @@ export async function initializeSupabase(this: any): Promise<void> {
             window.dispatchEvent(new CustomEvent('passwordRecoveryMode', { detail: { active: true } }));
             return;
         } else if (event === 'SIGNED_IN') {
-            await this.loadUserProfile(session.user.id);
-
-            window.dispatchEvent(new CustomEvent('userLoggedIn', {
-                detail: { user: this.currentUser },
-            }));
+            // Don't load profile or dispatch events here.
+            // loginSupabase handles the full login flow including 2FA checks.
+            // Dispatching userLoggedIn here would set user in AuthContext before
+            // the 2FA status is known, briefly making isAuthenticated=true.
+            console.log('[AUTH-DEBUG] SIGNED_IN — deferring to loginSupabase');
         } else if (event === 'USER_UPDATED') {
             if (session?.user) {
                 await this.loadUserProfile(session.user.id);
@@ -155,6 +155,7 @@ export async function loginSupabase(
     }
 
     if (data.user) {
+        // Load profile directly — the SIGNED_IN handler will skip if already loaded
         await this.loadUserProfile(data.user.id);
 
         if (!this.currentUser) {
@@ -169,22 +170,14 @@ export async function loginSupabase(
 
         loginRateLimiter.reset(email.toLowerCase());
 
-        // Check 2FA status before completing login
-        const { data: aalData } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+        // Check 2FA — use listFactors (cached locally) instead of getAuthenticatorAssuranceLevel
+        // to avoid duplicate API calls racing with the SIGNED_IN handler
+        const { data: factors } = await sb.auth.mfa.listFactors();
+        const hasVerifiedTotp = factors?.totp?.some((f: { status: string }) => f.status === 'verified');
 
-        if (aalData && aalData.nextLevel === 'aal2' && aalData.currentLevel !== 'aal2') {
-            // User has TOTP enrolled but session is AAL1 — needs 2FA verification
+        if (hasVerifiedTotp) {
+            // User has TOTP — session is AAL1 right after password login
             return { success: true, requires2FA: true, user: this.currentUser };
-        }
-
-        if (aalData && aalData.nextLevel === 'aal1' && aalData.currentLevel === 'aal1') {
-            // No TOTP factor enrolled — check if enforcement requires setup
-            const { data: factorsData } = await sb.auth.mfa.listFactors();
-            const hasTotp = (factorsData?.totp?.length ?? 0) > 0;
-            if (!hasTotp) {
-                // No factor at all — flag for optional setup prompt
-                // (remove requires2FASetup if you don't want mandatory enforcement)
-            }
         }
 
         logActivity({

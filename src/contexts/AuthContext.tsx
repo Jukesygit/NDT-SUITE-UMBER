@@ -115,6 +115,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
                     // Initialize session manager if user is already logged in
                     if (authManager.isLoggedIn()) {
                         sessionManager.initialize();
+                        // Check 2FA status on init (handles page refresh)
+                        try {
+                            const status = await twoFactorService.getStatus();
+                            if (mounted) {
+                                setTwoFactorEnabled(status.isEnabled);
+                                setTwoFactorVerified(status.currentLevel === 'aal2');
+                            }
+                        } catch {
+                            // 2FA check failed — treat as not enabled
+                        }
                     }
                 }
             } catch (error) {
@@ -213,8 +223,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         };
     }, [loadAuthState]);
 
-    // Computed values
-    const isAuthenticated = !!user;
+    // Computed values — user is not "authenticated" until 2FA is satisfied
+    const isAuthenticated = !!user && !(twoFactorEnabled && !twoFactorVerified);
     const isSuperAdmin = user?.role === 'super_admin';
     const isAdmin = user?.role === 'admin' || isSuperAdmin;
     const isManager = user?.role === 'manager';
