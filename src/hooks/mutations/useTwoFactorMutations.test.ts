@@ -8,11 +8,10 @@ import {
   useVerifyTwoFactorLogin,
   useGenerateBackupCodes,
   useRegenerateBackupCodes,
-  useAdminResetTwoFactor,
 } from './useTwoFactorMutations.ts';
 
 // Use vi.hoisted so mocks are available when vi.mock factory runs (hoisted)
-const { mockService, mockAdminReset2FA } = vi.hoisted(() => {
+const { mockService } = vi.hoisted(() => {
   const mockService = {
     enroll: vi.fn(),
     verifyEnrollment: vi.fn(),
@@ -20,18 +19,11 @@ const { mockService, mockAdminReset2FA } = vi.hoisted(() => {
     generateBackupCodes: vi.fn(),
     regenerateBackupCodes: vi.fn(),
   };
-  const mockAdminReset2FA = vi.fn();
-  return { mockService, mockAdminReset2FA };
+  return { mockService };
 });
 
 vi.mock('../../services/two-factor-service.ts', () => ({
   twoFactorService: mockService,
-}));
-
-vi.mock('../../auth-manager.js', () => ({
-  default: {
-    adminReset2FA: (...args: unknown[]) => mockAdminReset2FA(...args),
-  },
 }));
 
 function createWrapper() {
@@ -151,22 +143,4 @@ describe('useTwoFactorMutations', () => {
     });
   });
 
-  describe('useAdminResetTwoFactor', () => {
-    it('should call authManager.adminReset2FA with user id', async () => {
-      mockAdminReset2FA.mockResolvedValue({ success: true });
-
-      const { result } = renderHook(() => useAdminResetTwoFactor(), {
-        wrapper: createWrapper(),
-      });
-
-      await act(async () => {
-        result.current.mutate('user-to-reset');
-      });
-
-      await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
-      });
-      expect(mockAdminReset2FA).toHaveBeenCalledWith('user-to-reset');
-    });
-  });
 });

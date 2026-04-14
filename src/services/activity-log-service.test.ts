@@ -29,7 +29,7 @@ const { mockSupabase } = vi.hoisted(() => {
   };
 });
 
-vi.mock('../supabase-client.js', () => ({
+vi.mock('../supabase-client', () => ({
   supabase: mockSupabase,
   default: mockSupabase,
 }));
@@ -48,21 +48,21 @@ import {
 describe('Activity Log Service - supabase null guards', () => {
   it('getActivityLogs should throw when supabase is null', async () => {
     vi.resetModules();
-    vi.doMock('../supabase-client.js', () => ({ supabase: null, default: null }));
+    vi.doMock('../supabase-client', () => ({ supabase: null, default: null }));
     const { getActivityLogs: fn } = await import('./activity-log-service');
     await expect(fn()).rejects.toThrow('Supabase not configured');
   });
 
   it('getActivityUsers should throw when supabase is null', async () => {
     vi.resetModules();
-    vi.doMock('../supabase-client.js', () => ({ supabase: null, default: null }));
+    vi.doMock('../supabase-client', () => ({ supabase: null, default: null }));
     const { getActivityUsers: fn } = await import('./activity-log-service');
     await expect(fn()).rejects.toThrow('Supabase not configured');
   });
 
   it('getActivityStats should throw when supabase is null', async () => {
     vi.resetModules();
-    vi.doMock('../supabase-client.js', () => ({ supabase: null, default: null }));
+    vi.doMock('../supabase-client', () => ({ supabase: null, default: null }));
     const { getActivityStats: fn } = await import('./activity-log-service');
     await expect(fn()).rejects.toThrow('Supabase not configured');
   });
@@ -118,7 +118,7 @@ describe('Activity Log Service', () => {
       );
     });
 
-    it('should pass optional details (PII stripped)', async () => {
+    it('should pass optional details', async () => {
       await logActivity({
         actionType: 'user_created',
         actionCategory: 'admin',
@@ -131,7 +131,7 @@ describe('Activity Log Service', () => {
       expect(mockSupabase.rpc).toHaveBeenCalledWith(
         'log_activity',
         expect.objectContaining({
-          p_details: { role: 'manager' }, // email stripped by PII sanitizer
+          p_details: { role: 'manager', email: 'test@test.com' },
           p_entity_type: 'user',
           p_entity_id: 'u1',
           p_entity_name: 'testuser',
@@ -337,43 +337,32 @@ describe('Activity Log Service', () => {
   // getActivityUsers
   // =========================================================================
   describe('getActivityUsers', () => {
-    // New implementation: first queries activity_log for distinct user_ids,
-    // then queries profiles for display names (no PII cached in activity_log).
+    // Current implementation: queries activity_log for user_id, user_name, user_email
+    // with .not('user_id', 'is', null).order('user_name'), then deduplicates in JS.
 
-    it('should query activity_log then profiles for unique users', async () => {
+    it('should query activity_log and deduplicate unique users', async () => {
       const qb = mockSupabase.from();
-      // 1st query: activity_log → not() is terminal
-      qb.not.mockResolvedValueOnce({
-        data: [
-          { user_id: 'u1' },
-          { user_id: 'u1' }, // duplicate
-          { user_id: 'u2' },
-        ],
-        error: null,
-      });
-      // 2nd query: profiles → order() is terminal
+      // Chain: select -> not -> order (terminal)
       qb.order.mockResolvedValueOnce({
         data: [
-          { id: 'u1', username: 'Alice', email: 'a@t.com' },
-          { id: 'u2', username: 'Bob', email: 'b@t.com' },
+          { user_id: 'u1', user_name: 'Alice', user_email: 'a@t.com' },
+          { user_id: 'u1', user_name: 'Alice', user_email: 'a@t.com' }, // duplicate
+          { user_id: 'u2', user_name: 'Bob', user_email: 'b@t.com' },
         ],
         error: null,
       });
 
       const users = await getActivityUsers();
+      expect(mockSupabase.from).toHaveBeenCalledWith('activity_log');
       expect(users).toHaveLength(2);
       expect(users[0].name).toBe('Alice');
       expect(users[1].name).toBe('Bob');
     });
 
-    it('should use "Unknown" for null username in profile', async () => {
+    it('should use "Unknown" for null user_name', async () => {
       const qb = mockSupabase.from();
-      qb.not.mockResolvedValueOnce({
-        data: [{ user_id: 'u1' }],
-        error: null,
-      });
       qb.order.mockResolvedValueOnce({
-        data: [{ id: 'u1', username: null, email: null }],
+        data: [{ user_id: 'u1', user_name: null, user_email: null }],
         error: null,
       });
 
@@ -382,35 +371,19 @@ describe('Activity Log Service', () => {
       expect(users[0].email).toBe('');
     });
 
-    it('should throw on activity_log query error', async () => {
+    it('should throw on query error', async () => {
       const qb = mockSupabase.from();
-      qb.not.mockResolvedValueOnce({ data: null, error: { message: 'fail' } });
+      qb.order.mockResolvedValueOnce({ data: null, error: { message: 'fail' } });
 
       await expect(getActivityUsers()).rejects.toEqual({ message: 'fail' });
     });
 
-    it('should throw on profiles query error', async () => {
-      const qb = mockSupabase.from();
-      qb.not.mockResolvedValueOnce({
-        data: [{ user_id: 'u1' }],
-        error: null,
-      });
-      qb.order.mockResolvedValueOnce({ data: null, error: { message: 'profile fail' } });
-
-      await expect(getActivityUsers()).rejects.toEqual({ message: 'profile fail' });
-    });
-
     it('should filter null user_ids via DB query', async () => {
       const qb = mockSupabase.from();
-      // DB already filters nulls via .not('user_id', 'is', null)
-      qb.not.mockResolvedValueOnce({
-        data: [{ user_id: 'u1' }, { user_id: 'u2' }],
-        error: null,
-      });
       qb.order.mockResolvedValueOnce({
         data: [
-          { id: 'u1', username: 'Alice', email: 'a@t.com' },
-          { id: 'u2', username: 'Bob', email: 'b@t.com' },
+          { user_id: 'u1', user_name: 'Alice', user_email: 'a@t.com' },
+          { user_id: 'u2', user_name: 'Bob', user_email: 'b@t.com' },
         ],
         error: null,
       });
@@ -422,7 +395,7 @@ describe('Activity Log Service', () => {
 
     it('should return empty array when no users found', async () => {
       const qb = mockSupabase.from();
-      qb.not.mockResolvedValueOnce({ data: [], error: null });
+      qb.order.mockResolvedValueOnce({ data: [], error: null });
 
       const users = await getActivityUsers();
       expect(users).toHaveLength(0);

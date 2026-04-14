@@ -18,9 +18,10 @@ const { mockMfa, mockFunctionsInvoke, mockSupabase } = vi.hoisted(() => {
   return { mockMfa, mockFunctionsInvoke, mockSupabase };
 });
 
-vi.mock('../supabase-client.js', () => ({
-  default: mockSupabase,
+vi.mock('../supabase-client', () => ({
+  getSupabase: () => mockSupabase,
   supabase: mockSupabase,
+  default: mockSupabase,
   isSupabaseConfigured: vi.fn(() => true),
 }));
 

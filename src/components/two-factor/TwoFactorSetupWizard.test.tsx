@@ -112,8 +112,8 @@ describe('TwoFactorSetupWizard', () => {
     });
   });
 
-  describe('Step 3: Backup Codes', () => {
-    it('should show backup codes after successful verification', async () => {
+  describe('Step 3: Done', () => {
+    it('should show done step after successful verification', async () => {
       const user = userEvent.setup();
       render(<TwoFactorSetupWizard {...defaultProps} />, { wrapper: createWrapper() });
 
@@ -134,9 +134,9 @@ describe('TwoFactorSetupWizard', () => {
         expect(mockVerifyEnrollment).toHaveBeenCalledWith('factor-new', '123456');
       });
 
-      // Should advance to backup codes step
+      // Should advance to done step
       await waitFor(() => {
-        expect(screen.getByText('ABCD-EFGH')).toBeInTheDocument();
+        expect(screen.getByText(/two-factor authentication enabled/i)).toBeInTheDocument();
       });
     });
   });
@@ -188,15 +188,12 @@ describe('TwoFactorSetupWizard', () => {
       });
       await user.type(screen.getByRole('textbox'), '123456');
 
-      // Wait for backup codes step
+      // Wait for done step
       await waitFor(() => {
-        expect(screen.getByText('ABCD-EFGH')).toBeInTheDocument();
+        expect(screen.getByText(/two-factor authentication enabled/i)).toBeInTheDocument();
       });
 
-      // Check the "I have saved these" checkbox and complete
-      const checkbox = screen.getByRole('checkbox');
-      await user.click(checkbox);
-
+      // Click Done button
       const doneButton = screen.getByRole('button', { name: /done|finish|complete/i });
       await user.click(doneButton);
 
