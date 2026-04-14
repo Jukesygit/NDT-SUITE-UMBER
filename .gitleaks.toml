@@ -7,6 +7,15 @@ paths = [
   '''package-lock\.json''',
   '''\.env\.example''',
   '''supabase/functions/README\.md''',
-  '''__tests__/.*\.test\.(js|ts|tsx)''',
-  '''\.test\.(js|ts|tsx)$''',
+  '''src/test/mocks/.*''',
 ]
+
+# Test files use fake JWT tokens like "eyJ...test" which trigger generic-api-key.
+# Rather than blanket-exclude all test files, we allowlist this specific rule+pattern.
+[[rules]]
+id = "generic-api-key"
+description = "generic-api-key"
+[rules.allowlist]
+description = "Fake test tokens"
+regexTarget = "match"
+regexes = ['''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.test''']
