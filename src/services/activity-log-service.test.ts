@@ -118,7 +118,7 @@ describe('Activity Log Service', () => {
       );
     });
 
-    it('should pass optional details', async () => {
+    it('should pass optional details (PII stripped)', async () => {
       await logActivity({
         actionType: 'user_created',
         actionCategory: 'admin',
@@ -131,7 +131,7 @@ describe('Activity Log Service', () => {
       expect(mockSupabase.rpc).toHaveBeenCalledWith(
         'log_activity',
         expect.objectContaining({
-          p_details: { role: 'manager', email: 'test@test.com' },
+          p_details: { role: 'manager' },
           p_entity_type: 'user',
           p_entity_id: 'u1',
           p_entity_name: 'testuser',
