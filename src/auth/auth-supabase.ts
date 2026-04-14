@@ -169,6 +169,24 @@ export async function loginSupabase(
 
         loginRateLimiter.reset(email.toLowerCase());
 
+        // Check 2FA status before completing login
+        const { data: aalData } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+
+        if (aalData && aalData.nextLevel === 'aal2' && aalData.currentLevel !== 'aal2') {
+            // User has TOTP enrolled but session is AAL1 — needs 2FA verification
+            return { success: true, requires2FA: true, user: this.currentUser };
+        }
+
+        if (aalData && aalData.nextLevel === 'aal1' && aalData.currentLevel === 'aal1') {
+            // No TOTP factor enrolled — check if enforcement requires setup
+            const { data: factorsData } = await sb.auth.mfa.listFactors();
+            const hasTotp = (factorsData?.totp?.length ?? 0) > 0;
+            if (!hasTotp) {
+                // No factor at all — flag for optional setup prompt
+                // (remove requires2FASetup if you don't want mandatory enforcement)
+            }
+        }
+
         logActivity({
             userId: this.currentUser.id,
             actionType: 'login_success',

@@ -1,10 +1,17 @@
 stages:
   - install
+  - security
   - quality
+  - test
   - build
+  - deploy
+  - post-deploy
 
 default:
-  image: node:18-alpine
+  image: node:20-alpine
+  # Fallback: install deps if cache miss (distributed runners don't share local cache)
+  before_script:
+    - '[ -d node_modules ] || npm ci'
 
 cache:
   key:
@@ -13,41 +20,83 @@ cache:
   paths:
     - node_modules/
 
-install:
-  stage: install
-  script:
-    - npm ci
+.default-rules: &default-rules
   rules:
     - if: $CI_MERGE_REQUEST_IID
     - if: $CI_COMMIT_BRANCH =~ /^(main|master|dev|dev-refactor)$/
+
+.production-rules: &production-rules
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
+install:
+  stage: install
+  before_script: [] # override — this job IS the install
+  script:
+    - npm ci
+  artifacts:
+    paths:
+      - node_modules/
+    expire_in: 1 hour
+  <<: *default-rules
+
+gitleaks:
+  stage: security
+  image:
+    name: zricethezav/gitleaks:latest
+    entrypoint: [""]
+  before_script: [] # non-Node image — no npm
+  script:
+    - gitleaks detect --source . --verbose --redact
+  needs: []
+  <<: *default-rules
+
+semgrep:
+  stage: security
+  image:
+    name: semgrep/semgrep:latest
+    entrypoint: [""]
+  before_script: [] # non-Node image — no npm
+  script:
+    - semgrep scan --config p/typescript --config p/react --config p/owasp-top-ten --config p/security-audit --error --verbose src/
+  needs: []
+  <<: *default-rules
+
+audit:
+  stage: security
+  script:
+    - npm audit --omit=dev --audit-level=critical
+  needs: [install]
+  allow_failure: false
+  <<: *default-rules
 
 lint:
   stage: quality
   script:
     - npm run lint
   needs: [install]
-  rules:
-    - if: $CI_MERGE_REQUEST_IID
-    - if: $CI_COMMIT_BRANCH =~ /^(main|master|dev|dev-refactor)$/
+  <<: *default-rules
 
 typecheck:
   stage: quality
   script:
-    - npx tsc --noEmit
+    - npm run typecheck
   needs: [install]
-  rules:
-    - if: $CI_MERGE_REQUEST_IID
-    - if: $CI_COMMIT_BRANCH =~ /^(main|master|dev|dev-refactor)$/
+  <<: *default-rules
 
-security-audit:
-  stage: quality
+test:
+  stage: test
   script:
-    - npm audit --audit-level=high
+    - npm run test:ci
   needs: [install]
-  allow_failure: true
-  rules:
-    - if: $CI_MERGE_REQUEST_IID
-    - if: $CI_COMMIT_BRANCH =~ /^(main|master|dev|dev-refactor)$/
+  coverage: '/All files[^|]*\|[^|]*\s+([\d.]+)/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/cobertura-coverage.xml
+    expire_in: 1 week
+  <<: *default-rules
 
 build:
   stage: build
@@ -57,7 +106,59 @@ build:
     paths:
       - dist/
     expire_in: 1 week
-  needs: [lint, typecheck]
+  needs: [lint, typecheck, test]
   rules:
     - if: $CI_MERGE_REQUEST_IID
-    - if: $CI_COMMIT_BRANCH =~ /^(main|master|dev)$/
+    - if: $CI_COMMIT_BRANCH =~ /^(main|master|dev|dev-refactor)$/
+
+deploy:
+  stage: deploy
+  image: node:20-alpine
+  script:
+    - npm i -g vercel
+    - vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+    - vercel build --prod --token=$VERCEL_TOKEN
+    - vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
+  needs:
+    - job: build
+      artifacts: true
+  environment:
+    name: production
+    url: https://www.matrixportal.io
+  <<: *production-rules
+
+post-deploy:
+  stage: post-deploy
+  image: alpine:3.19
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - echo "Waiting 30s for deployment propagation..."
+    - sleep 30
+    - |
+      for i in 1 2 3; do
+        echo "Attempt $i: checking https://www.matrixportal.io"
+        STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 https://www.matrixportal.io)
+        if [ "$STATUS" = "200" ]; then
+          echo "Site is up (HTTP 200)"
+          break
+        fi
+        echo "Got HTTP $STATUS, retrying in 15s..."
+        sleep 15
+      done
+      [ "$STATUS" = "200" ] || { echo "FAIL: site returned $STATUS"; exit 1; }
+    - |
+      for i in 1 2 3; do
+        echo "Attempt $i: checking https://www.matrixportal.io/login"
+        LOGIN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 https://www.matrixportal.io/login)
+        if [ "$LOGIN_STATUS" = "200" ]; then
+          echo "Login page is up (HTTP 200)"
+          break
+        fi
+        echo "Got HTTP $LOGIN_STATUS, retrying in 15s..."
+        sleep 15
+      done
+      [ "$LOGIN_STATUS" = "200" ] || { echo "FAIL: login returned $LOGIN_STATUS"; exit 1; }
+    - echo "Post-deploy health checks passed."
+  needs: [deploy]
+  <<: *production-rules

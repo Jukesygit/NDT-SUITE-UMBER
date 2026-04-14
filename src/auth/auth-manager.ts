@@ -46,6 +46,7 @@ import {
     onAuthStateChangeSupabase,
     logoutSupabase,
 } from './auth-supabase';
+import { getSupabase } from '../supabase-client';
 import { showPasswordResetForm } from './auth-password-reset-form';
 
 // ── User management ────────────────────────────────────────────────────────
@@ -208,6 +209,31 @@ class AuthManager {
 
     generateId(): string {
         return generateId();
+    }
+
+    // ── 2FA ───────────────────────────────────────────────────────────────
+
+    /**
+     * Complete 2FA login - dispatches userLoggedIn event after successful 2FA verification.
+     * Called after verifyLogin() or verifyBackupCode() succeeds.
+     */
+    complete2FALogin(): void {
+        window.dispatchEvent(
+            new CustomEvent('userLoggedIn', {
+                detail: { user: this.currentUser },
+            })
+        );
+    }
+
+    /**
+     * Admin reset 2FA for a user - calls admin-reset-2fa Edge Function.
+     */
+    async adminReset2FA(userId: string): Promise<{ success: boolean; error?: string }> {
+        const { data, error } = await getSupabase().functions.invoke('admin-reset-2fa', {
+            body: { userId },
+        });
+        if (error) return { success: false, error: error.message };
+        return data;
     }
 }
 
