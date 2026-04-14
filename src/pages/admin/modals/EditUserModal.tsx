@@ -19,6 +19,7 @@ import { useUpdateUser } from '../../../hooks/mutations/useUserMutations';
 import { useOrganizations } from '../../../hooks/queries/useAdminOrganizations';
 import type { AdminUser, UserRole as AdminUserRole } from '../../../types/admin';
 import { useAuth } from '../../../contexts/AuthContext';
+import authManager from '../../../auth-manager.js';
 
 export interface EditUserModalProps {
     isOpen: boolean;
@@ -251,6 +252,44 @@ export function EditUserModal({ isOpen, onClose, user }: EditUserModalProps) {
                     onChange={(e) => handleChange('isActive', e.target.checked)}
                     helperText="Inactive users cannot log in to the system"
                 />
+
+                {/* 2FA Reset */}
+                <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                        <div>
+                            <p style={{ margin: 0, fontSize: '14px', fontWeight: 500, color: 'var(--text-primary, #fff)' }}>
+                                Two-Factor Authentication
+                            </p>
+                            <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--text-tertiary, #6b7280)' }}>
+                                Unenroll this user's TOTP factor if they're locked out
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                if (!window.confirm(`Reset 2FA for ${user.username || user.email}? They will need to re-enroll.`)) return;
+                                const result = await authManager.adminReset2FA(user.id);
+                                if (result.success) {
+                                    alert('2FA has been reset. The user can now log in without a code and re-enroll.');
+                                } else {
+                                    alert('Failed to reset 2FA: ' + (result.error || 'Unknown error'));
+                                }
+                            }}
+                            style={{
+                                padding: '6px 14px',
+                                fontSize: '13px',
+                                color: '#f59e0b',
+                                background: 'rgba(245, 158, 11, 0.1)',
+                                border: '1px solid rgba(245, 158, 11, 0.3)',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                            Reset 2FA
+                        </button>
+                    </div>
+                </div>
             </form>
         </Modal>
     );

@@ -5,11 +5,13 @@ import supabase from '../supabase-client';
 import { LogoGradientShift } from '../components/MatrixLogoAnimated';
 import { RandomMatrixSpinner } from '../components/MatrixSpinners';
 import { useAuth } from '../contexts/AuthContext';
+import { twoFactorService } from '../services/two-factor-service';
+import { TwoFactorVerifyInput } from '../components/two-factor/TwoFactorVerifyInput';
 
 // Storage key for tracking password reset mode
 const PASSWORD_RESET_KEY = 'ndt_password_reset_pending';
 
-type LoginMode = 'login' | 'register' | 'reset' | 'verify-code' | 'update-password' | 'processing';
+type LoginMode = 'login' | 'register' | 'reset' | 'verify-code' | 'update-password' | 'processing' | 'verify-2fa';
 
 // Check for recovery mode before component mounts (synchronous check)
 const getInitialMode = (): LoginMode => {
@@ -48,7 +50,7 @@ const getInitialMode = (): LoginMode => {
 
 function LoginPageNew() {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, twoFactorRequired } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -60,6 +62,35 @@ function LoginPageNew() {
   const [successMessage, setSuccessMessage] = useState('');
   const [mode, setMode] = useState<LoginMode>(getInitialMode); // 'login', 'register', 'reset', 'verify-code', 'update-password'
   const isRedirectingRef = useRef(false); // Track if we're in the process of redirecting
+  const [twoFALoading, setTwoFALoading] = useState(false);
+  const [twoFAError, setTwoFAError] = useState('');
+
+  const handle2FAVerify = async (code: string) => {
+    setTwoFALoading(true);
+    setTwoFAError('');
+    try {
+      await twoFactorService.verifyLogin(code);
+      // 2FA verified — complete the login
+      authManager.complete2FALogin();
+      isRedirectingRef.current = true;
+      navigate('/');
+      setTimeout(() => {
+        if (window.location.pathname === '/login') {
+          window.location.href = '/';
+        }
+      }, 1000);
+    } catch (err: unknown) {
+      setTwoFAError(err instanceof Error ? err.message : 'Invalid code. Please try again.');
+      setTwoFALoading(false);
+    }
+  };
+
+  // Auto-switch to 2FA verify when context detects pending 2FA (e.g. page refresh with AAL1 session)
+  useEffect(() => {
+    if (twoFactorRequired && mode === 'login') {
+      setMode('verify-2fa');
+    }
+  }, [twoFactorRequired, mode]);
 
   useEffect(() => {
     // Check if we're in password reset mode (from sessionStorage)
@@ -106,8 +137,8 @@ function LoginPageNew() {
       }
     });
 
-    // Only redirect if logged in and NOT in password reset mode
-    if (isAuthenticated && !isPasswordResetMode && mode !== 'update-password') {
+    // Only redirect if logged in and NOT in password reset or 2FA verify mode
+    if (isAuthenticated && !isPasswordResetMode && mode !== 'update-password' && mode !== 'verify-2fa') {
       navigate('/');
     }
 
@@ -130,6 +161,13 @@ function LoginPageNew() {
           // Handle both string errors and object errors
           const errorMsg = typeof result.error === 'string' ? result.error : (result.error?.message || 'Login failed');
           setError(errorMsg);
+          setIsLoading(false);
+          return;
+        }
+        // Check if 2FA verification is required
+        if (result.requires2FA) {
+          setMode('verify-2fa');
+          setError('');
           setIsLoading(false);
           return;
         }
@@ -346,6 +384,7 @@ function LoginPageNew() {
               {mode === 'verify-code' && 'Enter code and new password'}
               {mode === 'update-password' && 'Enter your new password'}
               {mode === 'processing' && 'Processing your request...'}
+              {mode === 'verify-2fa' && 'Two-factor authentication'}
             </p>
           </div>
 
@@ -371,8 +410,35 @@ function LoginPageNew() {
             </div>
           )}
 
+          {/* 2FA Verify Mode */}
+          {mode === 'verify-2fa' && (
+            <div className="login-card__form">
+              <p style={{ color: 'var(--text-secondary, #9ca3af)', fontSize: '14px', marginBottom: '20px', textAlign: 'center' }}>
+                Enter the 6-digit code from your authenticator app
+              </p>
+              <TwoFactorVerifyInput
+                onSubmit={handle2FAVerify}
+                isLoading={twoFALoading}
+                error={twoFAError}
+              />
+              <div style={{ marginTop: '20px', textAlign: 'center' }}>
+                <button
+                  type="button"
+                  className="text-primary font-medium hover:underline"
+                  onClick={() => {
+                    setMode('login');
+                    setTwoFAError('');
+                  }}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-tertiary, #6b7280)', fontSize: '13px' }}
+                >
+                  Back to sign in
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Form */}
-          <form onSubmit={handleSubmit} className="login-card__form" style={{ display: mode === 'processing' ? 'none' : 'block' }}>
+          <form onSubmit={handleSubmit} className="login-card__form" style={{ display: (mode === 'processing' || mode === 'verify-2fa') ? 'none' : 'block' }}>
             {/* Email field - shown for login, register, reset modes */}
             {mode !== 'update-password' && mode !== 'verify-code' && (
               <div className="input-group">
@@ -542,7 +608,7 @@ function LoginPageNew() {
           </form>
 
           {/* Footer Links */}
-          <div className="login-card__footer">
+          <div className="login-card__footer" style={{ display: mode === 'verify-2fa' ? 'none' : undefined }}>
             {mode === 'login' && (
               <>
                 <button

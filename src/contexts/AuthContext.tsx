@@ -9,6 +9,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, Re
 import authManager from '../auth-manager.js';
 import { clearQueryCache, invalidateStaleQueries } from '../lib/query-client';
 import { sessionManager } from '../lib/session-manager';
+import { twoFactorService } from '../services/two-factor-service';
 
 // Types matching auth-manager
 export interface AuthUser {
@@ -51,6 +52,11 @@ interface AuthContextType {
     isEditor: boolean;
     hasElevatedAccess: boolean;  // super_admin, admin, or manager
 
+    // 2FA state
+    twoFactorEnabled: boolean;
+    twoFactorVerified: boolean;
+    twoFactorRequired: boolean;
+
     // Helper methods
     hasRole: (roles: UserRole | UserRole[]) => boolean;
     hasPermission: (permission: string) => boolean;
@@ -79,6 +85,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const [user, setUser] = useState<AuthUser | null>(null);
     const [profile, setProfile] = useState<AuthProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+    const [twoFactorVerified, setTwoFactorVerified] = useState(false);
     const isInitializedRef = useRef(false); // Track if auth has fully initialized (ref for event handlers)
 
     // Load auth state from authManager
@@ -107,6 +115,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
                     // Initialize session manager if user is already logged in
                     if (authManager.isLoggedIn()) {
                         sessionManager.initialize();
+                        // Check 2FA status on init (handles page refresh)
+                        try {
+                            const status = await twoFactorService.getStatus();
+                            if (mounted) {
+                                setTwoFactorEnabled(status.isEnabled);
+                                setTwoFactorVerified(status.currentLevel === 'aal2');
+                            }
+                        } catch {
+                            // 2FA check failed — treat as not enabled
+                        }
                     }
                 }
             } catch (error) {
@@ -132,13 +150,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
         window.addEventListener('authStateChanged', handleAuthChange);
 
         // Listen for login events (dispatched AFTER profile is loaded in auth-manager)
-        const handleLogin = () => {
+        const handleLogin = async () => {
             if (mounted) {
                 const u = authManager.getCurrentUser();
                 console.log(`[AUTH-DEBUG] userLoggedIn event → user=${u?.email || 'null'}`);
                 loadAuthState();
                 // Initialize session manager for proactive refresh
                 sessionManager.initialize();
+                // Check 2FA status
+                try {
+                    const status = await twoFactorService.getStatus();
+                    if (mounted) {
+                        setTwoFactorEnabled(status.isEnabled);
+                        setTwoFactorVerified(status.currentLevel === 'aal2');
+                    }
+                } catch {
+                    // 2FA check failed — treat as not enabled
+                }
             }
         };
         window.addEventListener('userLoggedIn', handleLogin);
@@ -151,6 +179,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 sessionManager.stop();
                 setUser(null);
                 setProfile(null);
+                setTwoFactorEnabled(false);
+                setTwoFactorVerified(false);
                 // Clear React Query cache to prevent stale data on next login
                 clearQueryCache();
             }
@@ -193,14 +223,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         };
     }, [loadAuthState]);
 
-    // Computed values
-    const isAuthenticated = !!user;
+    // Computed values — user is not "authenticated" until 2FA is satisfied
+    const isAuthenticated = !!user && !(twoFactorEnabled && !twoFactorVerified);
     const isSuperAdmin = user?.role === 'super_admin';
     const isAdmin = user?.role === 'admin' || isSuperAdmin;
     const isManager = user?.role === 'manager';
     const isOrgAdmin = user?.role === 'org_admin';
     const isEditor = user?.role === 'editor' || isAdmin || isManager || isOrgAdmin;
     const hasElevatedAccess = isAdmin || isManager;
+    const twoFactorRequired = twoFactorEnabled && !twoFactorVerified;
 
     // Check if user has one of the specified roles
     const hasRole = useCallback((roles: UserRole | UserRole[]): boolean => {
@@ -261,6 +292,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         isOrgAdmin,
         isEditor,
         hasElevatedAccess,
+        twoFactorEnabled,
+        twoFactorVerified,
+        twoFactorRequired,
         hasRole,
         hasPermission,
         logout,

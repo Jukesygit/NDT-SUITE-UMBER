@@ -1,0 +1,10 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Project-specific allowlist"
+paths = [
+  '''package-lock\.json''',
+  '''\.env\.example''',
+  '''supabase/functions/README\.md''',
+]
