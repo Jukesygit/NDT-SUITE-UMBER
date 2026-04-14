@@ -23,7 +23,7 @@ cache:
 .default-rules: &default-rules
   rules:
     - if: $CI_MERGE_REQUEST_IID
-    - if: $CI_COMMIT_BRANCH =~ /^(main|master|dev|dev-refactor)$/
+    - if: $CI_COMMIT_BRANCH =~ /^(main|master|dev|dev-refactor|feature\/.*)$/
 
 .production-rules: &production-rules
   rules:
@@ -109,7 +109,7 @@ build:
   needs: [lint, typecheck, test]
   rules:
     - if: $CI_MERGE_REQUEST_IID
-    - if: $CI_COMMIT_BRANCH =~ /^(main|master|dev|dev-refactor)$/
+    - if: $CI_COMMIT_BRANCH =~ /^(main|master|dev|dev-refactor|feature\/.*)$/
 
 deploy:
   stage: deploy
