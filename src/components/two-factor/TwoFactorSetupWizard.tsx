@@ -78,14 +78,34 @@ export function TwoFactorSetupWizard({
             <>
               <div
                 dangerouslySetInnerHTML={{ __html: enrollment.qr_code }}
-                style={{ display: 'flex', justifyContent: 'center', margin: '1rem 0' }}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  margin: '1rem auto',
+                  background: '#ffffff',
+                  borderRadius: '12px',
+                  padding: '16px',
+                  width: 'fit-content',
+                }}
               />
-              <p style={{ fontSize: '0.85rem' }}>
-                Or enter this secret manually: <code>{enrollment.secret}</code>
+              <p style={{ fontSize: '0.85rem', textAlign: 'center', marginTop: '0.75rem' }}>
+                Or enter this secret manually:
+                <br />
+                <code style={{
+                  display: 'inline-block',
+                  marginTop: '4px',
+                  padding: '4px 10px',
+                  background: 'rgba(255,255,255,0.08)',
+                  borderRadius: '6px',
+                  letterSpacing: '0.15em',
+                  wordBreak: 'break-all',
+                  userSelect: 'all',
+                }}>{enrollment.secret}</code>
               </p>
             </>
           )}
-          <button type="button" onClick={() => setStep('verify')}>
+          <button type="button" onClick={() => setStep('verify')} style={{ marginTop: '1rem', width: '100%' }}>
             Next
           </button>
         </div>
