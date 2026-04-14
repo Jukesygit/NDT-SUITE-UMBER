@@ -24,6 +24,10 @@ import type { Competency, CompetencyDefinition } from './CompetencyCard';
 // Auth - ES module import
 import authManager from '../../auth-manager.js';
 
+// 2FA
+import { useTwoFactorStatus } from '../../hooks/queries/useTwoFactor';
+import { TwoFactorSetupWizard } from '../../components/two-factor/TwoFactorSetupWizard';
+
 /**
  * ProfilePage component
  */
@@ -57,6 +61,10 @@ export default function ProfilePage() {
         definition?: CompetencyDefinition;
         isNew: boolean;
     } | null>(null);
+
+    // 2FA state
+    const [show2FASetup, setShow2FASetup] = useState(false);
+    const twoFactorStatus = useTwoFactorStatus();
 
     // React Query hooks - only enabled when user is loaded (hooks handle enabled internally)
     const profileQuery = useProfile(user?.id);
@@ -315,6 +323,51 @@ export default function ProfilePage() {
                         onAdd={handleAddCompetency}
                         onEdit={handleEditCompetency}
                         onDelete={handleDeleteCompetency}
+                    />
+
+                    {/* Security Section - 2FA */}
+                    <div className="pf-content-card" style={{ marginTop: '20px' }}>
+                        <div className="pf-section-header">
+                            <h2 className="pf-section-title">Security</h2>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                            <div style={{ flex: 1, minWidth: '200px' }}>
+                                <p style={{ color: 'var(--text-secondary, #9ca3af)', fontSize: '14px', margin: 0, lineHeight: '1.5' }}>
+                                    <strong>Two-Factor Authentication</strong>
+                                    <br />
+                                    {twoFactorStatus.isLoading ? (
+                                        'Checking status...'
+                                    ) : twoFactorStatus.data?.isEnabled ? (
+                                        <span style={{ color: '#10b981' }}>Enabled — your account is protected with TOTP</span>
+                                    ) : (
+                                        'Add an extra layer of security to your account'
+                                    )}
+                                </p>
+                            </div>
+                            <button
+                                className="pf-btn"
+                                onClick={() => setShow2FASetup(true)}
+                                style={twoFactorStatus.data?.isEnabled ? {
+                                    color: 'var(--text-tertiary, #6b7280)',
+                                    borderColor: 'rgba(255,255,255,0.1)',
+                                } : {
+                                    color: '#60a5fa',
+                                    borderColor: 'rgba(96, 165, 250, 0.3)',
+                                }}
+                            >
+                                {twoFactorStatus.data?.isEnabled ? 'Reconfigure' : 'Set Up 2FA'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* 2FA Setup Wizard Modal */}
+                    <TwoFactorSetupWizard
+                        isOpen={show2FASetup}
+                        onClose={() => setShow2FASetup(false)}
+                        onComplete={() => {
+                            setShow2FASetup(false);
+                            twoFactorStatus.refetch();
+                        }}
                     />
 
                     {/* Privacy & Data Section - GDPR Articles 15, 17, 20 */}
