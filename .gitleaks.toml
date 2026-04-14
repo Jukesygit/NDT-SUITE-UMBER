@@ -7,4 +7,6 @@ paths = [
   '''package-lock\.json''',
   '''\.env\.example''',
   '''supabase/functions/README\.md''',
+  '''__tests__/.*\.test\.(js|ts|tsx)''',
+  '''\.test\.(js|ts|tsx)$''',
 ]
