@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Modal } from '../ui/Modal/Modal';
 import { TwoFactorVerifyInput } from './TwoFactorVerifyInput';
-import { BackupCodesDisplay } from './BackupCodesDisplay';
 import { twoFactorService, type EnrollmentData } from '../../services/two-factor-service';
 
-type Step = 'qr' | 'verify' | 'backup' | 'done';
+type Step = 'qr' | 'verify' | 'done';
 
 interface TwoFactorSetupWizardProps {
   isOpen: boolean;
@@ -21,16 +20,13 @@ export function TwoFactorSetupWizard({
 }: TwoFactorSetupWizardProps) {
   const [step, setStep] = useState<Step>('qr');
   const [enrollment, setEnrollment] = useState<EnrollmentData | null>(null);
-  const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [savedCodes, setSavedCodes] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setStep('qr');
       setError('');
-      setSavedCodes(false);
       twoFactorService
         .enroll()
         .then(setEnrollment)
@@ -45,9 +41,7 @@ export function TwoFactorSetupWizard({
       setError('');
       try {
         await twoFactorService.verifyEnrollment(enrollment.factorId, code);
-        const codes = await twoFactorService.generateBackupCodes();
-        setBackupCodes(codes);
-        setStep('backup');
+        setStep('done');
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Verification failed');
       } finally {
@@ -56,10 +50,6 @@ export function TwoFactorSetupWizard({
     },
     [enrollment]
   );
-
-  const handleComplete = useCallback(() => {
-    onComplete();
-  }, [onComplete]);
 
   return (
     <Modal
@@ -103,6 +93,9 @@ export function TwoFactorSetupWizard({
                   userSelect: 'all',
                 }}>{enrollment.secret}</code>
               </p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary, #6b7280)', textAlign: 'center', marginTop: '0.5rem' }}>
+                Tip: Set up on a second device too for recovery
+              </p>
             </>
           )}
           <button type="button" onClick={() => setStep('verify')} style={{ marginTop: '1rem', width: '100%' }}>
@@ -118,20 +111,15 @@ export function TwoFactorSetupWizard({
         </div>
       )}
 
-      {step === 'backup' && (
-        <div className="two-factor-setup-backup">
-          <BackupCodesDisplay codes={backupCodes} />
-          <label
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1rem' }}
-          >
-            <input
-              type="checkbox"
-              checked={savedCodes}
-              onChange={(e) => setSavedCodes(e.target.checked)}
-            />
-            I have saved these codes
-          </label>
-          <button type="button" disabled={!savedCodes} onClick={handleComplete}>
+      {step === 'done' && (
+        <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>&#x2705;</div>
+          <h3 style={{ marginBottom: '0.5rem' }}>Two-factor authentication enabled</h3>
+          <p style={{ color: 'var(--text-secondary, #9ca3af)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+            You'll be asked for a code from your authenticator app each time you sign in.
+            For recovery, you can enroll a second device from this page.
+          </p>
+          <button type="button" onClick={onComplete} style={{ width: '100%' }}>
             Done
           </button>
         </div>
