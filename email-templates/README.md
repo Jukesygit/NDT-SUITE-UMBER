@@ -1,6 +1,6 @@
-# NDT Suite Email Templates
+# Matrix Portal Email Templates
 
-This folder contains professionally designed email templates for the NDT Suite application.
+This folder contains professionally designed email templates for the Matrix Portal application.
 
 ## Available Templates
 
@@ -79,9 +79,9 @@ Before templates will work, you need to configure your email provider:
 ## Design Features
 
 All templates include:
-- ✅ Dark theme matching NDT Suite's design system
+- ✅ Dark theme matching Matrix Portal's design system
 - ✅ Responsive design for mobile devices
-- ✅ Professional branding with NDT Suite logo
+- ✅ Professional branding with Matrix Portal logo
 - ✅ Security warnings where appropriate
 - ✅ Clear call-to-action buttons
 - ✅ Fallback text links for accessibility
@@ -133,4 +133,4 @@ For issues with these templates, contact:
 
 ---
 
-**Created for NDT Suite by Matrix Inspection Services**
+**Created for Matrix Portal by Matrix Inspection Services**

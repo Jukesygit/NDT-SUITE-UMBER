@@ -1,6 +1,6 @@
 # Supabase Integration Setup Guide
 
-This guide will walk you through setting up Supabase for authentication and profile management in the NDT Suite.
+This guide will walk you through setting up Supabase for authentication and profile management in the Matrix Portal.
 
 ## Prerequisites
 
@@ -13,7 +13,7 @@ This guide will walk you through setting up Supabase for authentication and prof
 2. Click "New Project"
 3. Choose your organization
 4. Enter project details:
-   - **Name**: NDT Suite (or your preferred name)
+   - **Name**: Matrix Portal (or your preferred name)
    - **Database Password**: Generate a strong password (save this!)
    - **Region**: Choose closest to your users
 5. Wait for the project to be created (2-3 minutes)
@@ -186,7 +186,7 @@ After setup:
 1. Create your organization(s)
 2. Add team members as users
 3. Configure roles and permissions
-4. Start using the NDT Suite with cloud-backed authentication!
+4. Start using the Matrix Portal with cloud-backed authentication!
 
 ## Support
 
@@ -194,6 +194,6 @@ For Supabase-specific issues:
 - Visit https://supabase.com/docs
 - Check https://github.com/supabase/supabase/discussions
 
-For NDT Suite issues:
+For Matrix Portal issues:
 - Check the application logs in browser console
 - Verify your database schema matches `../database/supabase-schema.sql`

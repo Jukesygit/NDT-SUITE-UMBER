@@ -160,7 +160,7 @@ function generateCompetencyExpirationEmail({
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Competency Expiration Notice - NDT Suite</title>
+    <title>Competency Expiration Notice - Matrix Portal</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #0f172a; color: #e2e8f0;">
     <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #0f172a;">
@@ -176,7 +176,7 @@ function generateCompetencyExpirationEmail({
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                                 </svg>
                             </div>
-                            <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #f8fafc; letter-spacing: -0.5px;">NDT Suite</h1>
+                            <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #f8fafc; letter-spacing: -0.5px;">Matrix Portal</h1>
                         </td>
                     </tr>
 
@@ -269,7 +269,7 @@ function generateCompetencyExpirationEmail({
                                 © ${new Date().getFullYear()} Matrix Inspection Services. All rights reserved.
                             </p>
                             <p style="margin: 12px 0 0; font-size: 11px; color: #475569;">
-                                You received this email because you have competencies tracked in NDT Suite.
+                                You received this email because you have competencies tracked in Matrix Portal.
                             </p>
                         </td>
                     </tr>

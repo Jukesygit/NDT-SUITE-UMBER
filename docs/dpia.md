@@ -10,7 +10,7 @@
 
 Under ICO guidance, a DPIA is required when processing is likely to result in a high risk to individuals. The following screening criteria are met:
 
-- **Employee data processed at scale**: NDT Suite manages personal data (contact details, qualifications, employment records) for multiple organisations across the NDT industry
+- **Employee data processed at scale**: Matrix Portal manages personal data (contact details, qualifications, employment records) for multiple organisations across the NDT industry
 - **Data affects livelihoods**: Competency records directly determine whether a technician is permitted to work. An inaccurate or missing record could prevent employment
 - **Multi-tenant architecture**: Data isolation failure between organisations could expose personal data to unauthorised parties
 - **Special category adjacent**: While not strictly special category data, employment qualifications and certifications are closely linked to professional standing and livelihood

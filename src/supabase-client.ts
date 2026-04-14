@@ -17,12 +17,12 @@ if (environmentConfig.isSupabaseConfigured()) {
                 persistSession: true,
                 detectSessionInUrl: true,
                 storage: window.localStorage, // Explicit storage for better control
-                storageKey: 'ndt-suite-auth', // Custom key to avoid conflicts
+                storageKey: 'matrix-portal-auth', // Custom key to avoid conflicts
                 flowType: 'pkce' // More secure flow for SPAs
             },
             global: {
                 headers: {
-                    'x-client-info': 'ndt-suite-web'
+                    'x-client-info': 'matrix-portal-web'
                 }
             },
             db: {

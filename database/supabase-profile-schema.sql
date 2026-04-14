@@ -1,4 +1,4 @@
--- Profile Management Schema for NDT Suite
+-- Profile Management Schema for Matrix Portal
 -- This enables users to request permission upgrades from admins
 
 -- Permission requests table

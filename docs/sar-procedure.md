@@ -60,7 +60,7 @@ Before disclosing personal data, verify the requester's identity:
 
 ### Step 3: Gather data (Days 5-20)
 
-Export the individual's data from NDT Suite:
+Export the individual's data from Matrix Portal:
 
 1. **If the user account still exists**: Use the admin panel or run the data export query directly:
    ```
@@ -105,7 +105,7 @@ Subject: Your Subject Access Request — Response
 Dear [Name],
 
 Thank you for your request dated [DATE] for a copy of your personal data
-held by [COMPANY NAME] via the NDT Suite platform.
+held by [COMPANY NAME] via the Matrix Portal platform.
 
 Please find attached a copy of all personal data we hold about you. This
 includes:

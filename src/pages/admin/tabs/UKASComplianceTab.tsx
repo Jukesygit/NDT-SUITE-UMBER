@@ -161,7 +161,7 @@ export default function UKASComplianceTab() {
             }}>
                 <div>
                     <h1 style={{ fontSize: '1.875rem', fontWeight: 800, color: '#1e3a8a', letterSpacing: '-0.025em', margin: 0 }}>
-                        NDT SUITE
+                        MATRIX PORTAL
                     </h1>
                     <p style={{ fontSize: '1rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0.25rem 0' }}>
                         Security & Data Protection
@@ -249,7 +249,7 @@ export default function UKASComplianceTab() {
                     Executive Summary
                 </h3>
                 <p style={{ color: '#475569', margin: 0, lineHeight: 1.6 }}>
-                    This self-assessment report verifies security and data protection controls implemented in the NDT Suite
+                    This self-assessment report verifies security and data protection controls implemented in the Matrix Portal
                     personnel competency and inspection management platform against UKAS accreditation standards.
                     All {totalItems} identified controls have been verified against the production source code and database schema.
                 </p>
@@ -438,7 +438,7 @@ export default function UKASComplianceTab() {
                 fontStyle: 'italic'
             }}>
                 This self-assessment report is generated for internal audit preparation purposes.
-                It verifies that the NDT Suite meets the technical requirements for UKAS accreditation standards.
+                It verifies that the Matrix Portal meets the technical requirements for UKAS accreditation standards.
             </div>
         </div>
     );

@@ -1,5 +1,5 @@
 /**
- * Database Type Definitions for NDT Suite
+ * Database Type Definitions for Matrix Portal
  * Auto-generated type definitions for Supabase tables
  */
 

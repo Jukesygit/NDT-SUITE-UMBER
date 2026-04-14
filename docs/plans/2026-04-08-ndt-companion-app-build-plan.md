@@ -5,7 +5,7 @@
 
 ## Overview
 
-We're building a standalone Python desktop app (`ndt-companion.exe`) that reads Evident HydroFORM NDE files (HDF5 format, ~650MB each) and does two things: (1) batch-exports C-scan thickness CSVs that the NDT Suite webapp can import directly, replacing the manual one-at-a-time Evident export workflow; (2) serves rendered B-scan/A-scan images to the webapp on demand when an inspector annotates a region on the 3D vessel model. The app runs as a system tray icon with a localhost API. All heavy processing stays local; only small PNG images cross the wire.
+We're building a standalone Python desktop app (`ndt-companion.exe`) that reads Evident HydroFORM NDE files (HDF5 format, ~650MB each) and does two things: (1) batch-exports C-scan thickness CSVs that the Matrix Portal webapp can import directly, replacing the manual one-at-a-time Evident export workflow; (2) serves rendered B-scan/A-scan images to the webapp on demand when an inspector annotates a region on the 3D vessel model. The app runs as a system tray icon with a localhost API. All heavy processing stays local; only small PNG images cross the wire.
 
 ## Prerequisites
 
@@ -15,7 +15,7 @@ We're building a standalone Python desktop app (`ndt-companion.exe`) that reads 
   - `NEV H-0310-2 3500-4000_2025_10_03 14h07m40s.nde`
   - `NEV H-0310-2 4000-4500_2025_10_03 14h24m50s.nde`
 - **Matching Evident CSV exports** for at least one of these files (for final accuracy validation)
-- **NDT Suite webapp** running locally for Phase 3 integration testing
+- **Matrix Portal webapp** running locally for Phase 3 integration testing
 - A folder for the companion app project. Recommended: `C:\Users\jonas\OneDrive\Desktop\ndt-companion\`
 
 ## Build Steps
@@ -527,7 +527,7 @@ if __name__ == "__main__":
 
 #### Step 11: Webapp connection hook
 
-**What:** Add `useCompanionApp` React Query hook to the NDT Suite webapp.
+**What:** Add `useCompanionApp` React Query hook to the Matrix Portal webapp.
 
 Create `src/hooks/queries/useCompanionApp.ts`:
 

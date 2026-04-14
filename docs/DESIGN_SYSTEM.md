@@ -1,4 +1,4 @@
-# NDT Suite - Unified Design System
+# Matrix Portal - Unified Design System
 
 **Version:** 2.0
 **Last Updated:** November 2025
@@ -19,7 +19,7 @@
 
 ## Overview
 
-The NDT Suite Unified Design System provides a consistent, scalable, and professional foundation for building interfaces. It consolidates three previous design systems into one cohesive solution.
+The Matrix Portal Unified Design System provides a consistent, scalable, and professional foundation for building interfaces. It consolidates three previous design systems into one cohesive solution.
 
 ### Key Principles
 

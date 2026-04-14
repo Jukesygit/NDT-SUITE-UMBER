@@ -1,5 +1,5 @@
 -- ============================================
--- NDT Suite - Assets, Vessels, and Scans Schema
+-- Matrix Portal - Assets, Vessels, and Scans Schema
 -- ============================================
 -- This schema creates tables to store actual asset data in Supabase
 -- allowing cross-device synchronization and sharing

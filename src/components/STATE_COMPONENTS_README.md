@@ -1,6 +1,6 @@
 # State Components Library
 
-Professional loading states and empty states for the NDT Suite application, designed to match the glassmorphic design system.
+Professional loading states and empty states for the Matrix Portal application, designed to match the glassmorphic design system.
 
 ## Table of Contents
 

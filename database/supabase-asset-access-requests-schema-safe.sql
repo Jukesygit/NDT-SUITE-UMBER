@@ -1,4 +1,4 @@
--- Asset Access Request Schema for NDT Suite (Safe Migration)
+-- Asset Access Request Schema for Matrix Portal (Safe Migration)
 -- This version checks for existing objects before creating them
 
 -- Asset access requests table

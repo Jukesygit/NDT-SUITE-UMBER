@@ -369,4 +369,4 @@ For questions or issues:
 
 ## License
 
-These components are part of the NDT Suite application and follow the project's license.
+These components are part of the Matrix Portal application and follow the project's license.

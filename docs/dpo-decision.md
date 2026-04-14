@@ -9,7 +9,7 @@
 Under UK GDPR Article 37, a DPO must be appointed if the organisation:
 
 1. **Is a public authority** — No. [YOUR COMPANY NAME] is a private company.
-2. **Carries out large-scale systematic monitoring of individuals** — No. NDT Suite logs user actions for security/audit but does not systematically monitor behaviour, location, or performance.
+2. **Carries out large-scale systematic monitoring of individuals** — No. Matrix Portal logs user actions for security/audit but does not systematically monitor behaviour, location, or performance.
 3. **Carries out large-scale processing of special category data** — No. The data processed (contact details, qualifications, employment records) is not special category data under Article 9.
 
 ## Decision

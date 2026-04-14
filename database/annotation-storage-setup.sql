@@ -1,5 +1,5 @@
 -- ============================================
--- NDT Suite - Vessel Annotations Storage Setup
+-- Matrix Portal - Vessel Annotations Storage Setup
 -- ============================================
 -- This script creates the storage bucket and RLS policies
 -- for annotation image attachments on vessel models.

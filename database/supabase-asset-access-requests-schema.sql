@@ -1,4 +1,4 @@
--- Asset Access Request Schema for NDT Suite
+-- Asset Access Request Schema for Matrix Portal
 -- Enables users to request access to specific shared assets
 
 -- Asset access requests table

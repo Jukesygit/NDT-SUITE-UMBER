@@ -26,7 +26,7 @@
 
 ## No Other Third-Party Processors
 
-NDT Suite does not use any other third-party services that process personal data:
+Matrix Portal does not use any other third-party services that process personal data:
 - No analytics services (no Google Analytics, no Mixpanel)
 - No tracking pixels or advertising
 - No third-party error tracking (errors stored locally)

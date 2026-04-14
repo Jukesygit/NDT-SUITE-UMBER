@@ -1,4 +1,4 @@
-# NDT Suite Design System Reference
+# Matrix Portal Design System Reference
 
 > **For Claude / future engineers:** Read this before writing ANY UI code.
 > Do not invent styles. Use existing classes and tokens documented here.

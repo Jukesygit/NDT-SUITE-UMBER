@@ -39,7 +39,7 @@ Get your vessels and assets syncing across devices in 5 minutes.
 
 ## Step 3: Test It (2 minutes)
 
-1. **Open your NDT Suite application**
+1. **Open your Matrix Portal application**
 2. **Login** with your account
 3. **Look for sync indicator** (bottom-right corner)
    - Should show spinning icon then "Synced"

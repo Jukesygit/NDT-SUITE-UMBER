@@ -288,7 +288,7 @@ function generateTestEmailHtml(
             <h3>Expiring Certifications:</h3>
             <ul>${competencyList}</ul>
             <p style="color: #94a3b8; font-size: 12px; margin-top: 20px;">
-                This is a test email from NDT Suite. No action required.
+                This is a test email from Matrix Portal. No action required.
             </p>
         </div>
     `;

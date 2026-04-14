@@ -1,4 +1,4 @@
--- Asset Sharing Schema for NDT Suite
+-- Asset Sharing Schema for Matrix Portal
 -- This enables admins to share assets and their subfolders/scans with other organizations
 
 -- Shared assets table

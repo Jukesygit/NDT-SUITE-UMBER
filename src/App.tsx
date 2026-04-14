@@ -115,7 +115,7 @@ function App() {
             <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
                 <div className="flex flex-col items-center gap-6">
                     <RandomMatrixSpinner size={280} />
-                    <div className="text-lg text-gray-400 font-medium animate-pulse">Loading NDT Suite...</div>
+                    <div className="text-lg text-gray-400 font-medium animate-pulse">Loading Matrix Portal...</div>
                 </div>
             </div>
         );

@@ -1,5 +1,5 @@
 -- ============================================
--- NDT Suite - Strakes Schema
+-- Matrix Portal - Strakes Schema
 -- ============================================
 -- This schema adds support for strakes (vessel sections) with coverage tracking
 

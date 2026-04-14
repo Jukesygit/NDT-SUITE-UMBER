@@ -1,5 +1,5 @@
 -- ============================================
--- NDT Suite - Supabase Storage Buckets Setup
+-- Matrix Portal - Supabase Storage Buckets Setup
 -- ============================================
 -- This script creates storage buckets for 3D models, images, and scan data
 

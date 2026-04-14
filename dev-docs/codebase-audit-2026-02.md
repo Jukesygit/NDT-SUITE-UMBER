@@ -1,4 +1,4 @@
-# NDT Suite - Full Codebase Audit Report
+# Matrix Portal - Full Codebase Audit Report
 **Date:** 2026-02-06
 **Purpose:** Identify deadweight, refactoring targets, and prepare for GitLab migration
 **Branch:** `dev`
@@ -7,7 +7,7 @@
 
 ## Executive Summary
 
-The NDT Suite is a **React 18 + Supabase** inspection management platform with **236 source files** (72% TypeScript). The modern architecture (React Query hooks, services layer, Tailwind CSS) is **solid and well-designed**. However, the codebase carries significant legacy baggage from its "vibe coded" origins that will confuse new engineers and bloat the repo.
+The Matrix Portal is a **React 18 + Supabase** inspection management platform with **236 source files** (72% TypeScript). The modern architecture (React Query hooks, services layer, Tailwind CSS) is **solid and well-designed**. However, the codebase carries significant legacy baggage from its "vibe coded" origins that will confuse new engineers and bloat the repo.
 
 ### Key Numbers
 | Metric | Value | Assessment |

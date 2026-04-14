@@ -91,7 +91,7 @@ CREATE POLICY "Only admins can manage competency categories"
     USING (
         EXISTS (
             SELECT 1 FROM profiles
-            WHERE id = auth.uid() AND role IN ('admin', 'org_admin')
+            WHERE id = auth.uid() AND role IN ('super_admin', 'admin', 'org_admin')
         )
     );
 
@@ -109,7 +109,7 @@ CREATE POLICY "Only admins can manage competency definitions"
     USING (
         EXISTS (
             SELECT 1 FROM profiles
-            WHERE id = auth.uid() AND role IN ('admin', 'org_admin')
+            WHERE id = auth.uid() AND role IN ('super_admin', 'admin', 'org_admin')
         )
     );
 
@@ -125,7 +125,7 @@ CREATE POLICY "Users can view competencies"
             SELECT 1 FROM profiles p
             WHERE p.id = auth.uid()
             AND (
-                p.role = 'admin'
+                p.role IN ('super_admin', 'admin')
                 OR (p.role = 'org_admin' AND p.organization_id IN (
                     SELECT organization_id FROM profiles WHERE id = employee_competencies.user_id
                 ))
@@ -144,7 +144,7 @@ CREATE POLICY "Users can create competencies"
             SELECT 1 FROM profiles p
             WHERE p.id = auth.uid()
             AND (
-                p.role = 'admin'
+                p.role IN ('super_admin', 'admin')
                 OR (p.role = 'org_admin' AND p.organization_id IN (
                     SELECT organization_id FROM profiles WHERE id = employee_competencies.user_id
                 ))
@@ -163,7 +163,7 @@ CREATE POLICY "Users can update competencies"
             SELECT 1 FROM profiles p
             WHERE p.id = auth.uid()
             AND (
-                p.role = 'admin'
+                p.role IN ('super_admin', 'admin')
                 OR (p.role = 'org_admin' AND p.organization_id IN (
                     SELECT organization_id FROM profiles WHERE id = employee_competencies.user_id
                 ))
@@ -178,7 +178,7 @@ CREATE POLICY "Admins can delete competencies"
     USING (
         EXISTS (
             SELECT 1 FROM profiles
-            WHERE id = auth.uid() AND role IN ('admin', 'org_admin')
+            WHERE id = auth.uid() AND role IN ('super_admin', 'admin', 'org_admin')
         )
     );
 
@@ -192,7 +192,7 @@ CREATE POLICY "Users can view competency history"
         OR
         EXISTS (
             SELECT 1 FROM profiles
-            WHERE id = auth.uid() AND role IN ('admin', 'org_admin')
+            WHERE id = auth.uid() AND role IN ('super_admin', 'admin', 'org_admin')
         )
     );
 

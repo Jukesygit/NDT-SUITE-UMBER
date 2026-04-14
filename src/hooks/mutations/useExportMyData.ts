@@ -62,7 +62,7 @@ function buildHtmlReport(data: UserDataExport): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>My Data Export — NDT Suite</title>
+<title>My Data Export — Matrix Portal</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8f9fa; color: #1a1a1a; line-height: 1.6; padding: 32px 20px; }
@@ -91,11 +91,11 @@ function buildHtmlReport(data: UserDataExport): string {
 <body>
 <div class="container">
   <h1>Your Personal Data</h1>
-  <p class="subtitle">Exported from NDT Suite on ${formatDateTime(data.exportedAt)}. This document contains all personal data held about you.</p>
+  <p class="subtitle">Exported from Matrix Portal on ${formatDateTime(data.exportedAt)}. This document contains all personal data held about you.</p>
 
   <div class="actions" style="margin-bottom: 24px;">
     <button class="btn" onclick="window.print()">Print / Save as PDF</button>
-    <a class="btn btn-primary" href="${jsonDataUri}" download="ndt-suite-my-data-${new Date().toISOString().split('T')[0]}.json">Download as JSON</a>
+    <a class="btn btn-primary" href="${jsonDataUri}" download="matrix-portal-my-data-${new Date().toISOString().split('T')[0]}.json">Download as JSON</a>
   </div>
 
   <div class="card">

@@ -1,4 +1,4 @@
--- Asset Sharing Schema for NDT Suite (Safe Migration)
+-- Asset Sharing Schema for Matrix Portal (Safe Migration)
 -- This version checks for existing objects before creating them
 
 -- Shared assets table

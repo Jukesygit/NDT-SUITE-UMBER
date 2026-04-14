@@ -1,4 +1,4 @@
--- NDT Suite Database Schema for Supabase
+-- Matrix Portal Database Schema for Supabase
 -- Run this in your Supabase SQL Editor (https://supabase.com/dashboard -> SQL Editor)
 
 -- Enable UUID extension

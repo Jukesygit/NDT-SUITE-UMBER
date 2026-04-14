@@ -2,7 +2,7 @@
 
 ## Overview
 
-We're hardening the NDT Suite frontend-exp branch with three categories of changes: (1) fixing genuine security vulnerabilities found during MR review — insecure randomness, hardcoded passwords, regex bugs, authorization bypasses, missing CSP headers; (2) adding CI/CD tooling — pre-commit hooks, secret scanning, and a full GitLab pipeline; (3) building compliance logging — PII sanitization, structured logging, and database migration to stop caching personal data in activity logs. All work happens on the `frontend-exp` branch. No 2FA in this session — that's Session 2.
+We're hardening the Matrix Portal frontend-exp branch with three categories of changes: (1) fixing genuine security vulnerabilities found during MR review — insecure randomness, hardcoded passwords, regex bugs, authorization bypasses, missing CSP headers; (2) adding CI/CD tooling — pre-commit hooks, secret scanning, and a full GitLab pipeline; (3) building compliance logging — PII sanitization, structured logging, and database migration to stop caching personal data in activity logs. All work happens on the `frontend-exp` branch. No 2FA in this session — that's Session 2.
 
 ## Prerequisites
 
@@ -741,7 +741,7 @@ npx lint-staged
 
 **Content:**
 ```toml
-title = "NDT Suite Gitleaks Config"
+title = "Matrix Portal Gitleaks Config"
 
 [allowlist]
   paths = [

@@ -6,7 +6,7 @@
 
 ## Problem
 
-NDE files from phased array UT instruments (e.g., Evident HydroFORM) are HDF5 containers holding full A-scan waveform data — typically 500-700MB per file. The NDT Suite webapp currently only works with CSV-derived C-scan data, losing access to A-scans and B-scans that are critical for wall loss characterization, flaw sizing, data validation, and reporting.
+NDE files from phased array UT instruments (e.g., Evident HydroFORM) are HDF5 containers holding full A-scan waveform data — typically 500-700MB per file. The Matrix Portal webapp currently only works with CSV-derived C-scan data, losing access to A-scans and B-scans that are critical for wall loss characterization, flaw sizing, data validation, and reporting.
 
 Additionally, techs must manually open each NDE file in vendor software and export CSVs one at a time — a tedious process for multi-strip vessel inspections.
 

@@ -2,7 +2,7 @@
 
 ## What Was Added
 
-Strakes and their associated areas will now automatically sync to the cloud just like all other features in your NDT Suite.
+Strakes and their associated areas will now automatically sync to the cloud just like all other features in your Matrix Portal.
 
 ## Changes Made
 
@@ -42,7 +42,7 @@ This will create:
 ### Step 2: Test the Sync
 
 1. **On your home computer:**
-   - Open the NDT Suite application
+   - Open the Matrix Portal application
    - Navigate to a vessel
    - Create a new strake with:
      - Name: "Test Strake"
@@ -56,7 +56,7 @@ This will create:
      ```
 
 2. **On your work computer:**
-   - Open the NDT Suite application
+   - Open the Matrix Portal application
    - Log in with the same account
    - The app will automatically download data from the cloud on startup
    - Navigate to the same vessel

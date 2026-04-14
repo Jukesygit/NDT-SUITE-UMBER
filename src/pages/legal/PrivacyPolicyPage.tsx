@@ -45,9 +45,9 @@ export default function PrivacyPolicyPage() {
                 <div style={{ color: 'var(--text-secondary, #d1d5db)', fontSize: '15px' }}>
                     <Section title="1. Who We Are">
                         <p>
-                            NDT Suite is a workforce competency and certification management platform
+                            Matrix Portal is a workforce competency and certification management platform
                             for the non-destructive testing industry. Your organisation is the data
-                            controller responsible for your personal data. NDT Suite provides the
+                            controller responsible for your personal data. Matrix Portal provides the
                             software platform under which your data is processed.
                         </p>
                     </Section>

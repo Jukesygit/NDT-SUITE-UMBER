@@ -1,6 +1,6 @@
 # Glassmorphic Theme Application Guide
 
-This guide shows how to apply the glassmorphic aesthetic with animated headers to all NDT Suite tools.
+This guide shows how to apply the glassmorphic aesthetic with animated headers to all Matrix Portal tools.
 
 ## What's Been Completed ✅
 

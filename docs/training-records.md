@@ -48,7 +48,7 @@ I confirm that I have received data protection training covering:
 - The principles of UK GDPR
 - How to recognise and escalate a Subject Access Request
 - How to report a data breach
-- System-specific data handling rules for NDT Suite
+- System-specific data handling rules for Matrix Portal
 
 I understand that I must:
 - Only access personal data that I need for my role

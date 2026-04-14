@@ -1,4 +1,4 @@
-# NDT Suite - Performance & Tech Debt Audit (April 2026)
+# Matrix Portal - Performance & Tech Debt Audit (April 2026)
 **Date:** April 2026
 **Builds on:** February 2026 audit (dev-docs/codebase-audit-2026-02.md)
 **Branch:** claude/audit-performance-debt-R4xgN

@@ -10,7 +10,7 @@
 
 | Field | Detail |
 |---|---|
-| **Purpose** | Verify user identity and manage access to the NDT Suite platform |
+| **Purpose** | Verify user identity and manage access to the Matrix Portal platform |
 | **Lawful Basis** | Article 6(1)(b) — Performance of contract (employment/service agreement) |
 | **Data Subjects** | Employees, contractors |
 | **Data Categories** | Email address, hashed password, login timestamps, IP address |
@@ -92,7 +92,7 @@
 
 ## Data Subject Rights
 
-The following rights are implemented in the NDT Suite platform:
+The following rights are implemented in the Matrix Portal platform:
 
 | Right | Implementation | Location |
 |---|---|---|

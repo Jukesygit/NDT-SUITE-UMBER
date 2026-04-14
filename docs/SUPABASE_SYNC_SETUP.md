@@ -1,6 +1,6 @@
 # Supabase Full Sync Integration Setup
 
-This guide explains how to set up complete data synchronization for the NDT Suite, enabling cross-device access to assets, vessels, and scans.
+This guide explains how to set up complete data synchronization for the Matrix Portal, enabling cross-device access to assets, vessels, and scans.
 
 ## Overview
 
@@ -444,6 +444,6 @@ VITE_SUPABASE_ANON_KEY=your_anon_key_here
 
 ## Congratulations!
 
-Your NDT Suite now has full cloud synchronization. All your inspection data is safely backed up and accessible from any device. Users can collaborate by sharing assets between organizations, and everything stays in sync automatically.
+Your Matrix Portal now has full cloud synchronization. All your inspection data is safely backed up and accessible from any device. Users can collaborate by sharing assets between organizations, and everything stays in sync automatically.
 
 For any issues, check the browser console logs and Supabase dashboard for detailed error messages.

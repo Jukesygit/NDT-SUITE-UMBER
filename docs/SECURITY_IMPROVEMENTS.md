@@ -1,7 +1,7 @@
 # Security & Architecture Improvements
 
 ## Overview
-This document outlines the critical security and architectural improvements made to the NDT Suite application to address vulnerabilities and establish production-ready standards.
+This document outlines the critical security and architectural improvements made to the Matrix Portal application to address vulnerabilities and establish production-ready standards.
 
 ## 🔐 Security Enhancements
 

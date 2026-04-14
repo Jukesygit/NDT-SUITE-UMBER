@@ -112,10 +112,10 @@ Complete after the exercise.
 Use these for future exercises (rotate annually):
 
 ### Scenario B: Stolen Laptop
-An employee's laptop is stolen from their car. They were logged into NDT Suite and had exported a CSV of personnel data to their desktop. The laptop was not encrypted.
+An employee's laptop is stolen from their car. They were logged into Matrix Portal and had exported a CSV of personnel data to their desktop. The laptop was not encrypted.
 
 ### Scenario C: Phishing Attack
-An administrator clicks a phishing link and enters their NDT Suite credentials. The attacker logs in and downloads competency records for 50 technicians before the account is locked.
+An administrator clicks a phishing link and enters their Matrix Portal credentials. The attacker logs in and downloads competency records for 50 technicians before the account is locked.
 
 ### Scenario D: Insider Threat
 An administrator who is about to leave the company downloads all personnel data via the "Download My Data" admin export. They email it to their personal email address. This is discovered in the activity logs two days later.

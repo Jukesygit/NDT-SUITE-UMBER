@@ -1,6 +1,6 @@
 # Profiles Table Schema
 
-Complete schema documentation for the `profiles` table in the NDT Suite database.
+Complete schema documentation for the `profiles` table in the Matrix Portal database.
 
 ## Table Overview
 

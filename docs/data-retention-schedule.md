@@ -1,4 +1,4 @@
-# NDT Suite - Data Retention Schedule
+# Matrix Portal - Data Retention Schedule
 
 > **Status**: Draft — requires business sign-off before implementation.
 > **Last updated**: 2026-02-20

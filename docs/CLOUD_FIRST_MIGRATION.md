@@ -2,7 +2,7 @@
 
 ## Overview
 
-The NDT Suite data layer has been refactored from **local-first** to **cloud-first** architecture. This ensures all data is saved directly to Supabase and accessible from any device when you log in.
+The Matrix Portal data layer has been refactored from **local-first** to **cloud-first** architecture. This ensures all data is saved directly to Supabase and accessible from any device when you log in.
 
 ---
 

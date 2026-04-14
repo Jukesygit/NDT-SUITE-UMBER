@@ -6,7 +6,7 @@
 
 ## 1. Scope
 
-This plan covers any breach of security leading to the accidental or unlawful destruction, loss, alteration, unauthorised disclosure of, or access to personal data processed by NDT Suite.
+This plan covers any breach of security leading to the accidental or unlawful destruction, loss, alteration, unauthorised disclosure of, or access to personal data processed by Matrix Portal.
 
 ## 2. Breach Classification
 
@@ -71,7 +71,7 @@ Subject: Important: Data Security Incident Notification
 
 Dear [Name],
 
-We are writing to inform you of a data security incident that may have affected your personal information held in our NDT Suite system.
+We are writing to inform you of a data security incident that may have affected your personal information held in our Matrix Portal system.
 
 What happened:
 [Brief factual description of the incident]
