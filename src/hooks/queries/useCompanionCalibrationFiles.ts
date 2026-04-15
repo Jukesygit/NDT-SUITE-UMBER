@@ -30,11 +30,17 @@ export function useCompanionCalibrationFiles(port: number | null) {
         queryKey: ['companion-calibration-files', port],
         queryFn: async (): Promise<CompanionCalibrationFile[]> => {
             if (!port) return [];
-            const res = await fetch(`http://localhost:${port}/calibration-files`);
-            const data = await res.json();
-            return data.files ?? [];
+            try {
+                const res = await fetch(`http://localhost:${port}/calibration-files`);
+                if (!res.ok) return [];
+                const data = await res.json();
+                return data.files ?? [];
+            } catch {
+                return [];
+            }
         },
         enabled: !!port,
+        retry: false,
         staleTime: 30_000,
         refetchInterval: 30_000,
     });
