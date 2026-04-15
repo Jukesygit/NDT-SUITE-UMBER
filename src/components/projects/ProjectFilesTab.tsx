@@ -289,7 +289,7 @@ export function ProjectFilesTab({ projectId, files, vessels, scanComposites, ves
 
             {/* Upload Modal */}
             {showUploadModal && (
-                <Modal title="Upload File" onClose={() => setShowUploadModal(false)}>
+                <Modal isOpen={true} title="Upload File" onClose={() => setShowUploadModal(false)}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 380 }}>
                         <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                             <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>Assign to Vessel</span>
@@ -343,7 +343,7 @@ export function ProjectFilesTab({ projectId, files, vessels, scanComposites, ves
 
             {/* Delete confirmation */}
             {deleteTarget && (
-                <Modal title="Delete File" onClose={() => setDeleteTarget(null)}>
+                <Modal isOpen={true} title="Delete File" onClose={() => setDeleteTarget(null)}>
                     <p style={{ color: 'rgba(255,255,255,0.7)', marginBottom: 16 }}>
                         Delete <strong>{deleteTarget.name}</strong>? This cannot be undone.
                     </p>

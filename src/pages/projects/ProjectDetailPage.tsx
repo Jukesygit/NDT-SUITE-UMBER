@@ -321,7 +321,7 @@ export default function ProjectDetailPage() {
 
             {/* Delete confirmation */}
             {showDeleteModal && (
-                <Modal title="Delete Project" onClose={() => setShowDeleteModal(false)}>
+                <Modal isOpen={true} title="Delete Project" onClose={() => setShowDeleteModal(false)}>
                     <p style={{ color: 'rgba(255,255,255,0.7)', marginBottom: 16 }}>
                         Are you sure you want to delete <strong>{project.name}</strong>?
                         This will remove all vessels, files, and data associated with this project.

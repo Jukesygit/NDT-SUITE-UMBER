@@ -179,4 +179,6 @@ export interface AuthResult<T = unknown> {
     retryAfter?: number;
     useCodeFlow?: boolean;
     results?: unknown[];
+    requires2FA?: boolean;
+    requires2FASetup?: boolean;
 }

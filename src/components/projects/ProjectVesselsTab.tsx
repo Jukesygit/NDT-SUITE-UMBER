@@ -163,6 +163,7 @@ export function ProjectVesselsTab({ projectId, vessels, compositeCountByVessel }
             {/* Add/Edit Modal */}
             {showAddModal && (
                 <Modal
+                    isOpen={true}
                     title={editingVessel ? 'Edit Vessel' : 'Add Vessel'}
                     onClose={() => { setShowAddModal(false); setEditingVessel(null); }}
                 >
@@ -248,7 +249,7 @@ export function ProjectVesselsTab({ projectId, vessels, compositeCountByVessel }
 
             {/* Delete confirmation */}
             {deleteTarget && (
-                <Modal title="Delete Vessel" onClose={() => setDeleteTarget(null)}>
+                <Modal isOpen={true} title="Delete Vessel" onClose={() => setDeleteTarget(null)}>
                     <p style={{ color: 'rgba(255,255,255,0.7)', marginBottom: 16 }}>
                         Delete <strong>{deleteTarget.vessel_tag ? `${deleteTarget.vessel_tag} ` : ''}{deleteTarget.vessel_name}</strong>?
                         This will unlink any associated composites and models.

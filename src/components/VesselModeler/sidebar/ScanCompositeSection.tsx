@@ -73,7 +73,7 @@ export function ScanCompositeSection({
                             </button>
                         </div>
                         {isSelected && (
-                            <div className="vm-form edit-mode" style={{ marginTop: 8 }}>
+                            <div className="vm-form edit-mode" style={{ marginTop: 8, position: 'relative', zIndex: 1 }} onClick={e => e.stopPropagation()}>
                                 {/* --- Step 1: Orientation (always visible) --- */}
                                 {!sc.orientationConfirmed && (
                                     <p style={{ fontSize: '0.8rem', color: '#facc15', margin: '0 0 8px', fontWeight: 600 }}>
@@ -166,6 +166,21 @@ export function ScanCompositeSection({
                                         >
                                             Re-adjust Orientation
                                         </button>
+
+                                        {/* --- Coordinate origin toggle --- */}
+                                        <div className="vm-control-group" style={{ marginTop: 8 }}>
+                                            <div className="vm-label"><span>Coord origin</span></div>
+                                            <div className="vm-toggle-group">
+                                                <button
+                                                    className={`vm-toggle-btn ${!sc.useGlobalOrigin ? 'active' : ''}`}
+                                                    onClick={() => onUpdateScanComposite(sc.id, { useGlobalOrigin: false })}
+                                                >Scan</button>
+                                                <button
+                                                    className={`vm-toggle-btn ${sc.useGlobalOrigin ? 'active' : ''}`}
+                                                    onClick={() => onUpdateScanComposite(sc.id, { useGlobalOrigin: true })}
+                                                >Global</button>
+                                            </div>
+                                        </div>
 
                                         {/* --- Source NDE files (for companion app linking) --- */}
                                         <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 10, paddingTop: 10 }}>

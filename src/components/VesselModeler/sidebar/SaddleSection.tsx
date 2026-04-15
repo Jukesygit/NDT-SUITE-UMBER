@@ -62,7 +62,7 @@ export function SaddleSection({
                         </button>
                     </div>
                     {i === selectedSaddleIndex && sel && (
-                        <div className="vm-form edit-mode" style={{ marginTop: 8 }}>
+                        <div className="vm-form edit-mode" style={{ marginTop: 8, position: 'relative', zIndex: 1 }} onClick={e => e.stopPropagation()}>
                             <div className="vm-form-row">
                                 <div className="vm-control-group">
                                     <div className="vm-label"><span>Position (mm)</span></div>

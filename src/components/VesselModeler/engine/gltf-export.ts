@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import type { VesselState } from '../types';
-import { createAnnotationLabelSprite, createRulerLabelSprite, createNameplateSprite, createCardinalDirectionSprites } from './text-sprite';
+import { createAnnotationLabelSprite, createNozzleLabelSprite, createRulerLabelSprite, createNameplateSprites, createCardinalDirectionSprites } from './text-sprite';
 
 // ---------------------------------------------------------------------------
 // userData types to exclude from export
@@ -154,10 +154,25 @@ export async function exportVesselGLB(
     clone.add(sprite);
   }
 
-  // 5. Add nameplate if project info is provided
-  const nameplate = createNameplateSprite(vesselState);
-  if (nameplate) {
-    clone.add(nameplate);
+  // 5. Add nozzle name labels at the flange end
+  if (vesselState.visuals.showNozzleLabels) {
+    const nozzleGroups = new Map<number, THREE.Group>();
+    clone.traverse((child) => {
+      if (child.userData?.type === 'nozzle' && child.userData?.nozzleIdx !== undefined) {
+        nozzleGroups.set(child.userData.nozzleIdx as number, child as THREE.Group);
+      }
+    });
+    for (const [idx, nozzleGroup] of nozzleGroups) {
+      const nozzle = vesselState.nozzles[idx];
+      if (!nozzle?.name) continue;
+      clone.add(createNozzleLabelSprite(nozzle, nozzleGroup, vesselState));
+    }
+  }
+
+  // 6. Add nameplates if project info is provided (one on each side)
+  const nameplates = createNameplateSprites(vesselState);
+  if (nameplates) {
+    clone.add(nameplates);
   }
 
   // 5b. Add cardinal direction labels if enabled

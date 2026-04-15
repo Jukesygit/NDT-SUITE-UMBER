@@ -109,7 +109,7 @@ export function CoverageSection({
                             </div>
                         </div>
                         {isSelected && sel && (
-                            <div className="vm-form edit-mode" style={{ marginTop: 8 }}>
+                            <div className="vm-form edit-mode" style={{ marginTop: 8, position: 'relative', zIndex: 1 }} onClick={e => e.stopPropagation()}>
                                 <div className="vm-control-group">
                                     <div className="vm-label"><span>Name</span></div>
                                     <input

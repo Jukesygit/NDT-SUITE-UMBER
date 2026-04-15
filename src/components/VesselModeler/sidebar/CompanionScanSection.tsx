@@ -97,6 +97,11 @@ export default function CompanionScanSection({
 
   const fetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Normalize a string for fuzzy filename comparison: lowercase, strip .nde/.csv
+  // extensions, and collapse underscores/spaces so "NEV_H_0310" matches "NEV H 0310".
+  const normName = (s: string) =>
+    s.toLowerCase().replace(/\.(nde|csv|txt)$/i, '').replace(/[_ ]+/g, ' ').trim();
+
   // Auto-match: prefer sourceFiles spatial match, fall back to sourceNdeFile string match
   const autoMatchedFile = (() => {
     if (!companionFiles?.length) return undefined;
@@ -115,17 +120,15 @@ export default function CompanionScanSection({
         rawIndex >= sf.minY && rawIndex <= sf.maxY
       );
       if (matched) {
-        const companion = companionFiles.find(f =>
-          f.filename.toLowerCase().includes(matched.filename.toLowerCase())
-        );
+        const norm = normName(matched.filename);
+        const companion = companionFiles.find(f => normName(f.filename).includes(norm));
         if (companion) return companion.filename;
       }
     }
     // Fall back to single sourceNdeFile string match
     if (composite?.sourceNdeFile) {
-      const companion = companionFiles.find(f =>
-        f.filename.toLowerCase().includes(composite.sourceNdeFile!.toLowerCase())
-      );
+      const norm = normName(composite.sourceNdeFile);
+      const companion = companionFiles.find(f => normName(f.filename).includes(norm));
       if (companion) return companion.filename;
     }
     return undefined;
@@ -222,6 +225,13 @@ export default function CompanionScanSection({
     setScanImages(null);
     setNdeCoords(null);
   }, [annotation.id, activeFile]);
+
+  // Auto-connect when file is auto-matched (no manual selection needed)
+  useEffect(() => {
+    if (autoMatchedFile && !selectedFile && !isConnected && composite) {
+      handleConnect();
+    }
+  }, [autoMatchedFile, selectedFile, isConnected, composite, handleConnect]);
 
   const handleExportImages = useCallback(() => {
     if (!scanImages) return;

@@ -4,6 +4,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { stripPiiFromObject } from '../utils/pii-sanitizer';
 // @ts-ignore - JS module without type declarations
 import * as supabaseModule from '../supabase-client';
 // @ts-ignore - accessing property from untyped module
@@ -154,13 +155,18 @@ export async function logActivity(params: LogActivityParams): Promise<void> {
         const { data: { user } } = await supabase.auth.getUser();
         const userId = params.userId || user?.id;
 
+        // Strip PII from details before logging
+        const sanitizedDetails = params.details && typeof params.details === 'object'
+            ? stripPiiFromObject(params.details)
+            : params.details || null;
+
         // Fire and forget - don't await the result
         supabase.rpc('log_activity', {
             p_user_id: userId || null,
             p_action_type: params.actionType,
             p_action_category: params.actionCategory,
             p_description: params.description,
-            p_details: params.details || null,
+            p_details: sanitizedDetails,
             p_entity_type: params.entityType || null,
             p_entity_id: params.entityId || null,
             p_entity_name: params.entityName || null,
