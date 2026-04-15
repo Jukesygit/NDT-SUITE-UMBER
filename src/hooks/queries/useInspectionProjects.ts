@@ -11,6 +11,12 @@ import {
     listProjectFiles,
     listProjectScanComposites,
     listProjectVesselModels,
+    listAllProjectVesselsWithProjects,
+    listProjectProcedures,
+    listVesselFiles,
+    listScanLogEntries,
+    listCalibrationLogEntries,
+    listProjectImages,
 } from '../../services/inspection-project-service';
 
 export type {
@@ -18,6 +24,11 @@ export type {
     InspectionProjectSummary,
     ProjectVessel,
     ProjectFile,
+    InspectionProcedure,
+    ScanLogEntry,
+    CalibrationLogEntry,
+    VesselWithProject,
+    ProjectImage,
 } from '../../types/inspection-project';
 
 export function useProjectList() {
@@ -78,6 +89,59 @@ export function useProjectVesselModels(projectVesselIds: string[]) {
         queryKey: ['projectVesselModels', projectVesselIds],
         queryFn: () => listProjectVesselModels(projectVesselIds),
         enabled: projectVesselIds.length > 0,
+        staleTime: 2 * 60 * 1000,
+    });
+}
+
+export function useAllVesselsWithProjects() {
+    return useQuery({
+        queryKey: ['allVesselsWithProjects'],
+        queryFn: () => listAllProjectVesselsWithProjects(),
+        staleTime: 2 * 60 * 1000,
+    });
+}
+
+export function useProjectProcedures(projectId: string | undefined) {
+    return useQuery({
+        queryKey: ['projectProcedures', projectId],
+        queryFn: () => listProjectProcedures(projectId!),
+        enabled: !!projectId,
+        staleTime: 2 * 60 * 1000,
+    });
+}
+
+export function useVesselFiles(vesselId: string | undefined) {
+    return useQuery({
+        queryKey: ['vesselFiles', vesselId],
+        queryFn: () => listVesselFiles(vesselId!),
+        enabled: !!vesselId,
+        staleTime: 2 * 60 * 1000,
+    });
+}
+
+export function useScanLogEntries(vesselId: string | undefined) {
+    return useQuery({
+        queryKey: ['scanLogEntries', vesselId],
+        queryFn: () => listScanLogEntries(vesselId!),
+        enabled: !!vesselId,
+        staleTime: 2 * 60 * 1000,
+    });
+}
+
+export function useCalibrationLogEntries(vesselId: string | undefined) {
+    return useQuery({
+        queryKey: ['calibrationLogEntries', vesselId],
+        queryFn: () => listCalibrationLogEntries(vesselId!),
+        enabled: !!vesselId,
+        staleTime: 2 * 60 * 1000,
+    });
+}
+
+export function useProjectImages(vesselId: string | undefined) {
+    return useQuery({
+        queryKey: ['projectImages', vesselId],
+        queryFn: () => listProjectImages(vesselId!),
+        enabled: !!vesselId,
         staleTime: 2 * 60 * 1000,
     });
 }

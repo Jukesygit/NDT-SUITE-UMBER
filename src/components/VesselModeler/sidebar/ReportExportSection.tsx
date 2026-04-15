@@ -11,6 +11,8 @@ export interface ReportExportSectionProps {
   vesselState: VesselState;
   onUpdateAnnotation: (id: number, updates: { includeInReport?: boolean }) => void;
   onGenerateReport: () => Promise<void>;
+  isOpen?: boolean;
+  onToggle?: () => void;
 }
 
 type GenerationPhase =
@@ -36,6 +38,8 @@ export function ReportExportSection({
   vesselState,
   onUpdateAnnotation,
   onGenerateReport,
+  isOpen,
+  onToggle,
 }: ReportExportSectionProps) {
   const [phase, setPhase] = useState<GenerationPhase>('idle');
 
@@ -70,7 +74,7 @@ export function ReportExportSection({
   const isGenerating = phase !== 'idle' && phase !== 'done' && phase !== 'error';
 
   return (
-    <SubSection title="Report Export" count={reportAnnotations.length}>
+    <SubSection title="Report Export" count={reportAnnotations.length} isOpen={isOpen} onToggle={onToggle}>
       {/* Annotation selection */}
       {scanAnnotations.length > 0 && (
         <>

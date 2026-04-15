@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Trash2, Plus } from 'lucide-react';
 import type { VesselState, WeldConfig, WeldType } from '../types';
-import { SubSection } from './SliderRow';
+import { SliderRow, SubSection } from './SliderRow';
 
 export interface WeldSectionProps {
     vesselState: VesselState;
@@ -10,27 +10,32 @@ export interface WeldSectionProps {
     onUpdateWeld: (index: number, updates: Partial<WeldConfig>) => void;
     onRemoveWeld: (index: number) => void;
     onSelectWeld: (index: number) => void;
+    isOpen?: boolean;
+    onToggle?: () => void;
 }
 
 export function WeldSection({
     vesselState, selectedWeldIndex,
     onAddWeld, onUpdateWeld, onRemoveWeld, onSelectWeld,
+    isOpen, onToggle,
 }: WeldSectionProps) {
     const [weldType, setWeldType] = useState<WeldType>('circumferential');
     const sel = selectedWeldIndex >= 0 ? vesselState.welds[selectedWeldIndex] : null;
 
     const addWeld = () => {
-        const num = vesselState.welds.length + 1;
+        const prefix = weldType === 'circumferential' ? 'CW' : 'LW';
+        const existingCount = vesselState.welds.filter(w => w.type === weldType).length;
+        const num = existingCount + 1;
         if (weldType === 'circumferential') {
             onAddWeld({
-                name: `W${num}`,
+                name: `${prefix}${num}`,
                 type: 'circumferential',
                 pos: vesselState.length / 2,
                 color: '#888888',
             });
         } else {
             onAddWeld({
-                name: `W${num}`,
+                name: `${prefix}${num}`,
                 type: 'longitudinal',
                 pos: vesselState.length * 0.25,
                 endPos: vesselState.length * 0.75,
@@ -41,7 +46,7 @@ export function WeldSection({
     };
 
     return (
-        <SubSection title="Welds" count={vesselState.welds.length}>
+        <SubSection title="Welds" count={vesselState.welds.length} isOpen={isOpen} onToggle={onToggle}>
             {/* Type toggle */}
             <div className="vm-control-group">
                 <div className="vm-label"><span>Type</span></div>
@@ -118,40 +123,34 @@ export function WeldSection({
                                     </button>
                                 </div>
                             </div>
-                            <div className="vm-form-row">
-                                <div className="vm-control-group">
-                                    <div className="vm-label"><span>{sel.type === 'circumferential' ? 'Position' : 'Start Pos'}</span></div>
-                                    <input
-                                        type="number"
-                                        className="vm-input"
-                                        value={sel.pos}
-                                        onChange={e => onUpdateWeld(selectedWeldIndex, { pos: Number(e.target.value) })}
-                                    />
-                                </div>
-                                {sel.type === 'longitudinal' && (
-                                    <div className="vm-control-group">
-                                        <div className="vm-label"><span>End Pos</span></div>
-                                        <input
-                                            type="number"
-                                            className="vm-input"
-                                            value={sel.endPos ?? vesselState.length}
-                                            onChange={e => onUpdateWeld(selectedWeldIndex, { endPos: Number(e.target.value) })}
-                                        />
-                                    </div>
-                                )}
-                            </div>
+                            <SliderRow
+                                label={sel.type === 'circumferential' ? 'Position' : 'Start Pos'}
+                                value={Math.round(sel.pos)}
+                                min={0}
+                                max={vesselState.length}
+                                step={1}
+                                onChange={v => onUpdateWeld(selectedWeldIndex, { pos: v })}
+                            />
                             {sel.type === 'longitudinal' && (
-                                <div className="vm-control-group">
-                                    <div className="vm-label"><span>Angle</span></div>
-                                    <input
-                                        type="number"
-                                        className="vm-input"
-                                        value={sel.angle ?? 90}
-                                        min={0}
-                                        max={360}
-                                        onChange={e => onUpdateWeld(selectedWeldIndex, { angle: Number(e.target.value) })}
-                                    />
-                                </div>
+                                <SliderRow
+                                    label="End Pos"
+                                    value={Math.round(sel.endPos ?? vesselState.length)}
+                                    min={0}
+                                    max={vesselState.length}
+                                    step={1}
+                                    onChange={v => onUpdateWeld(selectedWeldIndex, { endPos: v })}
+                                />
+                            )}
+                            {sel.type === 'longitudinal' && (
+                                <SliderRow
+                                    label="Angle"
+                                    value={Math.round(sel.angle ?? 90)}
+                                    min={0}
+                                    max={360}
+                                    step={1}
+                                    unit="°"
+                                    onChange={v => onUpdateWeld(selectedWeldIndex, { angle: v })}
+                                />
                             )}
                             <div className="vm-control-group">
                                 <div className="vm-label"><span>Color</span></div>

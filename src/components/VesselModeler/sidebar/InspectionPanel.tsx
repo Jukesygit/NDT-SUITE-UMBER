@@ -5,10 +5,12 @@
 // when the user enters inspection mode on an annotation shape.
 // =============================================================================
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Camera, ChevronLeft, Upload, X } from 'lucide-react';
+import { Camera, ChevronLeft, Upload, X, ImagePlus } from 'lucide-react';
 import type { AnnotationShapeConfig, AnnotationShapeType, ThicknessThresholds, VesselState } from '../types';
+import type { ProjectImage } from '../../../types/inspection-project';
+import { getProjectFileUrl } from '../../../services/inspection-project-service';
 import {
   createAnnotationHeatmapCanvas,
   findOverlappingComposite,
@@ -31,6 +33,7 @@ interface InspectionPanelProps {
   getImageUrl: (storagePath: string) => string;
   onSaveScanImages: (images: { cscan?: string; bscan?: string; dscan?: string; ascan?: string }) => Promise<void>;
   onClearScanImages: () => Promise<void>;
+  projectImages?: ProjectImage[];
 }
 
 // ---------------------------------------------------------------------------
@@ -58,6 +61,63 @@ function computeArea(_type: AnnotationShapeType, width: number, height: number):
 }
 
 // ---------------------------------------------------------------------------
+// Project image picker item
+// ---------------------------------------------------------------------------
+
+function ProjectImagePickerItem({
+  image,
+  onAttach,
+}: {
+  image: ProjectImage;
+  onAttach: (image: ProjectImage) => void;
+}) {
+  const [thumbUrl, setThumbUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getProjectFileUrl(image.storage_path, image.storage_bucket)
+      .then((url) => { if (!cancelled) setThumbUrl(url); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [image.storage_path, image.storage_bucket]);
+
+  return (
+    <button
+      onClick={() => onAttach(image)}
+      title={`Attach "${image.name}"`}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        width: '100%',
+        padding: '4px 6px',
+        background: 'rgba(255,255,255,0.04)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: 4,
+        cursor: 'pointer',
+        color: '#ccc',
+        fontSize: '0.72rem',
+        textAlign: 'left',
+      }}
+    >
+      {thumbUrl ? (
+        <img
+          src={thumbUrl}
+          alt={image.name}
+          style={{ width: 22, height: 22, objectFit: 'cover', borderRadius: 3, flexShrink: 0 }}
+        />
+      ) : (
+        <div style={{ width: 22, height: 22, background: 'rgba(255,255,255,0.06)', borderRadius: 3, flexShrink: 0 }} />
+      )}
+      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {image.name}
+      </span>
+      <ImagePlus size={11} style={{ flexShrink: 0, opacity: 0.5 }} />
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -76,9 +136,27 @@ export default function InspectionPanel({
   getImageUrl,
   onSaveScanImages,
   onClearScanImages,
+  projectImages,
 }: InspectionPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [viewingImageUrl, setViewingImageUrl] = useState<string | null>(null);
+  const [showProjectPicker, setShowProjectPicker] = useState(false);
+  const [loadingProjectImage, setLoadingProjectImage] = useState(false);
+
+  const handleAttachProjectImage = useCallback(async (pImg: ProjectImage) => {
+    setLoadingProjectImage(true);
+    try {
+      const url = await getProjectFileUrl(pImg.storage_path, pImg.storage_bucket);
+      const response = await fetch(url);
+      const blob = await response.blob();
+      onUploadImage(new File([blob], pImg.filename, { type: pImg.mime_type ?? 'image/png' }));
+      setShowProjectPicker(false);
+    } catch {
+      // Silently fail
+    } finally {
+      setLoadingProjectImage(false);
+    }
+  }, [onUploadImage]);
   const stats = annotation.thicknessStats;
   const scanMm = scanPositionMm(annotation.angle, vesselState.id);
   const area = computeArea(annotation.type, annotation.width, annotation.height);
@@ -359,6 +437,47 @@ export default function InspectionPanel({
             }}
           />
         </div>
+
+        {/* Project image pool */}
+        {projectImages && projectImages.length > 0 && (
+          <>
+            <button
+              onClick={() => setShowProjectPicker(p => !p)}
+              disabled={loadingProjectImage}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                padding: '6px 8px',
+                marginTop: 6,
+                background: 'rgba(59,130,246,0.08)',
+                border: '1px solid rgba(59,130,246,0.2)',
+                borderRadius: 4,
+                color: '#93c5fd',
+                cursor: loadingProjectImage ? 'wait' : 'pointer',
+                fontSize: '0.75rem',
+                opacity: loadingProjectImage ? 0.5 : 1,
+              }}
+              title="Attach an image from the project image pool"
+            >
+              <ImagePlus size={14} />
+              {loadingProjectImage ? 'Attaching...' : `From Project Pool (${projectImages.length})`}
+            </button>
+            {showProjectPicker && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6, maxHeight: 160, overflowY: 'auto' }}>
+                {projectImages.map((pImg) => (
+                  <ProjectImagePickerItem
+                    key={pImg.id}
+                    image={pImg}
+                    onAttach={handleAttachProjectImage}
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Navigation: Other annotations */}

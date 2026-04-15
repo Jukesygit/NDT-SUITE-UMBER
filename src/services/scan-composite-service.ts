@@ -51,6 +51,7 @@ export interface ScanCompositeRecord {
         minY: number;
         maxY: number;
     }[] | null;
+    section_type: string | null;
     created_at: string;
 }
 
@@ -63,6 +64,7 @@ export interface ScanCompositeSummary {
     x_axis: number[];
     y_axis: number[];
     source_files: ScanCompositeRecord['source_files'];
+    section_type: string | null;
     created_at: string;
     created_by: string;
 }
@@ -79,6 +81,7 @@ export interface SaveScanCompositeParams {
     height: number;
     sourceFiles: ScanCompositeRecord['source_files'];
     projectVesselId?: string;
+    sectionType?: string;
 }
 
 // ============================================================================
@@ -174,6 +177,9 @@ export async function saveScanComposite(params: SaveScanCompositeParams): Promis
     if (params.projectVesselId) {
         insertData.project_vessel_id = params.projectVesselId;
     }
+    if (params.sectionType) {
+        insertData.section_type = params.sectionType;
+    }
 
     const { data: row, error: insertError } = await supabase!
         .from('scan_composites')
@@ -225,7 +231,7 @@ export async function listScanComposites(): Promise<ScanCompositeSummary[]> {
 
     const { data, error } = await supabase!
         .from('scan_composites')
-        .select('id, name, width, height, stats, x_axis, y_axis, source_files, created_at, created_by')
+        .select('id, name, width, height, stats, x_axis, y_axis, source_files, section_type, created_at, created_by')
         .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -303,9 +309,36 @@ export async function deleteScanComposite(id: string): Promise<void> {
     }
 }
 
+/**
+ * Link an existing scan composite to a project vessel.
+ * Sets the project_vessel_id foreign key on the record.
+ */
+export async function linkCompositeToProjectVessel(
+    compositeId: string,
+    projectVesselId: string,
+    sectionType?: string,
+): Promise<void> {
+    if (!isSupabaseConfigured()) {
+        throw new Error('Supabase not configured');
+    }
+
+    const updates: Record<string, unknown> = { project_vessel_id: projectVesselId };
+    if (sectionType) {
+        updates.section_type = sectionType;
+    }
+
+    const { error } = await supabase!
+        .from('scan_composites')
+        .update(updates)
+        .eq('id', compositeId);
+
+    if (error) throw error;
+}
+
 export default {
     saveScanComposite,
     listScanComposites,
     getScanComposite,
     deleteScanComposite,
+    linkCompositeToProjectVessel,
 };

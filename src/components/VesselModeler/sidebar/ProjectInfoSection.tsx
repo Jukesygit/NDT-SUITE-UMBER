@@ -6,9 +6,11 @@ import { Section } from './SliderRow';
 export interface ProjectInfoSectionProps {
     vesselState: VesselState;
     onUpdateDimensions: (updates: Partial<VesselState>) => void;
+    isOpen?: boolean;
+    onToggle?: () => void;
 }
 
-export function ProjectInfoSection({ vesselState, onUpdateDimensions }: ProjectInfoSectionProps) {
+export function ProjectInfoSection({ vesselState, onUpdateDimensions, isOpen, onToggle }: ProjectInfoSectionProps) {
     const drawingInputRef = useRef<HTMLInputElement>(null);
 
     const handleDrawingUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -37,7 +39,7 @@ export function ProjectInfoSection({ vesselState, onUpdateDimensions }: ProjectI
     };
 
     return (
-        <Section title="Project Info" icon={<FileText size={14} style={{ marginRight: 6 }} />}>
+        <Section title="Project Info" icon={<FileText size={14} style={{ marginRight: 6 }} />} isOpen={isOpen} onToggle={onToggle}>
             <div className="vm-control-group">
                 <div className="vm-label"><span>Vessel Name</span></div>
                 <input

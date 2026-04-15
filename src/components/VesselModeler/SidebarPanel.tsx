@@ -1,3 +1,4 @@
+import { useState, useCallback } from 'react';
 import type {
     VesselState,
     NozzleConfig,
@@ -15,6 +16,7 @@ import type {
     PipeSegmentType,
 } from './types';
 import type { PipeSegment } from './types';
+import type { ProjectImage } from '../../types/inspection-project';
 import { GitBranch, Layers, ClipboardCheck } from 'lucide-react';
 import type * as THREE from 'three';
 import {
@@ -34,6 +36,11 @@ import {
     PipingSection,
     ReportExportSection,
 } from './sidebar';
+
+type SidebarSectionId = 'projectInfo' | 'dimensions' | 'visuals' | 'attachments' | 'scanOverlay' | 'inspection';
+type AttachmentSubId = 'nozzles' | 'liftingLugs' | 'welds' | 'supports' | 'piping';
+type ScanOverlaySubId = 'imageOverlays' | 'scanComposites';
+type InspectionSubId = 'annotations' | 'coverage' | 'inspectionImages' | 'reportExport';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -131,6 +138,8 @@ export interface SidebarPanelProps {
     onSelectPipeSegment: (pipelineId: string, segmentIndex: number) => void;
     // Report generation
     onGenerateReport: () => Promise<void>;
+    // Project image pool
+    projectImages?: ProjectImage[];
 }
 
 // ---------------------------------------------------------------------------
@@ -140,11 +149,40 @@ export interface SidebarPanelProps {
 export default function SidebarPanel(props: SidebarPanelProps) {
     const { vesselState } = props;
 
+    // Accordion: only one top-level section open at a time, PROJECT INFO by default
+    const [activeSection, setActiveSection] = useState<SidebarSectionId | null>('projectInfo');
+    const toggle = useCallback((id: SidebarSectionId) => {
+        setActiveSection(prev => prev === id ? null : id);
+    }, []);
+
+    // Sub-accordions — none open by default
+    const [activeAttachmentSub, setActiveAttachmentSub] = useState<AttachmentSubId | null>(null);
+    const toggleAttSub = useCallback((id: AttachmentSubId) => {
+        setActiveAttachmentSub(prev => prev === id ? null : id);
+    }, []);
+
+    const [activeScanOverlaySub, setActiveScanOverlaySub] = useState<ScanOverlaySubId | null>(null);
+    const toggleScanSub = useCallback((id: ScanOverlaySubId) => {
+        setActiveScanOverlaySub(prev => prev === id ? null : id);
+    }, []);
+
+    const [activeInspectionSub, setActiveInspectionSub] = useState<InspectionSubId | null>(null);
+    const toggleInspSub = useCallback((id: InspectionSubId) => {
+        setActiveInspectionSub(prev => prev === id ? null : id);
+    }, []);
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             {/* Title */}
-            <div style={{ padding: '12px 15px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                <h2 style={{ margin: 0, fontSize: '1rem', color: 'white', fontWeight: 600 }}>
+            <div style={{
+                padding: '14px 15px',
+                borderBottom: '1px solid rgba(255,255,255,0.1)',
+                background: 'rgba(255,255,255,0.03)',
+            }}>
+                <h2 style={{
+                    margin: 0, fontSize: '0.95rem', color: 'rgba(255,255,255,0.95)',
+                    fontWeight: 700, letterSpacing: '0.02em',
+                }}>
                     Vessel Modeler
                 </h2>
             </div>
@@ -154,16 +192,22 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                 <ProjectInfoSection
                     vesselState={vesselState}
                     onUpdateDimensions={props.onUpdateDimensions}
+                    isOpen={activeSection === 'projectInfo'}
+                    onToggle={() => toggle('projectInfo')}
                 />
                 <DimensionsSection
                     vesselState={vesselState}
                     onUpdateDimensions={props.onUpdateDimensions}
+                    isOpen={activeSection === 'dimensions'}
+                    onToggle={() => toggle('dimensions')}
                 />
                 <VisualsSection
                     vesselState={vesselState}
                     onUpdateDimensions={props.onUpdateDimensions}
+                    isOpen={activeSection === 'visuals'}
+                    onToggle={() => toggle('visuals')}
                 />
-                <Section title="Attachments" defaultOpen={false} icon={<GitBranch size={14} style={{ marginRight: 6 }} />} count={
+                <Section title="Attachments" defaultOpen={false} icon={<GitBranch size={14} style={{ marginRight: 6 }} />} isOpen={activeSection === 'attachments'} onToggle={() => toggle('attachments')} count={
                     vesselState.nozzles.length +
                     vesselState.liftingLugs.length +
                     vesselState.welds.length +
@@ -177,6 +221,8 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                         onUpdateNozzle={props.onUpdateNozzle}
                         onRemoveNozzle={props.onRemoveNozzle}
                         onSelectNozzle={props.onSelectNozzle}
+                        isOpen={activeAttachmentSub === 'nozzles'}
+                        onToggle={() => toggleAttSub('nozzles')}
                     />
                     <LiftingLugSection
                         vesselState={vesselState}
@@ -185,6 +231,8 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                         onUpdateLug={props.onUpdateLug}
                         onRemoveLug={props.onRemoveLug}
                         onSelectLug={props.onSelectLug}
+                        isOpen={activeAttachmentSub === 'liftingLugs'}
+                        onToggle={() => toggleAttSub('liftingLugs')}
                     />
                     <WeldSection
                         vesselState={vesselState}
@@ -193,6 +241,8 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                         onUpdateWeld={props.onUpdateWeld}
                         onRemoveWeld={props.onRemoveWeld}
                         onSelectWeld={props.onSelectWeld}
+                        isOpen={activeAttachmentSub === 'welds'}
+                        onToggle={() => toggleAttSub('welds')}
                     />
                     <SaddleSection
                         vesselState={vesselState}
@@ -202,6 +252,8 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                         onUpdateAllSaddleHeights={props.onUpdateAllSaddleHeights}
                         onRemoveSaddle={props.onRemoveSaddle}
                         onSelectSaddle={props.onSelectSaddle}
+                        isOpen={activeAttachmentSub === 'supports'}
+                        onToggle={() => toggleAttSub('supports')}
                     />
                     <PipingSection
                         vesselState={vesselState}
@@ -218,9 +270,11 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                         onRemoveSegment={props.onRemoveSegment}
                         onRemovePipeline={props.onRemovePipeline}
                         onSelectPipeSegment={props.onSelectPipeSegment}
+                        isOpen={activeAttachmentSub === 'piping'}
+                        onToggle={() => toggleAttSub('piping')}
                     />
                 </Section>
-                <Section title="Scan Overlay" defaultOpen={false} icon={<Layers size={14} style={{ marginRight: 6 }} />} count={
+                <Section title="Scan Overlay" defaultOpen={false} icon={<Layers size={14} style={{ marginRight: 6 }} />} isOpen={activeSection === 'scanOverlay'} onToggle={() => toggle('scanOverlay')} count={
                     vesselState.textures.length +
                     vesselState.scanComposites.length
                 }>
@@ -233,6 +287,8 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                         onSelectTexture={props.onSelectTexture}
                         getNextTextureId={props.getNextTextureId}
                         renderer={props.renderer}
+                        isOpen={activeScanOverlaySub === 'imageOverlays'}
+                        onToggle={() => toggleScanSub('imageOverlays')}
                     />
                     <ScanCompositeSection
                         vesselState={vesselState}
@@ -244,9 +300,11 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                         cloudComposites={props.cloudComposites}
                         cloudCompositesLoading={props.cloudCompositesLoading}
                         cloudCompositesError={props.cloudCompositesError}
+                        isOpen={activeScanOverlaySub === 'scanComposites'}
+                        onToggle={() => toggleScanSub('scanComposites')}
                     />
                 </Section>
-                <Section title="Inspection" defaultOpen={false} icon={<ClipboardCheck size={14} style={{ marginRight: 6 }} />} count={
+                <Section title="Inspection" defaultOpen={false} icon={<ClipboardCheck size={14} style={{ marginRight: 6 }} />} isOpen={activeSection === 'inspection'} onToggle={() => toggle('inspection')} count={
                     vesselState.annotations.length +
                     vesselState.rulers.length +
                     vesselState.coverageRects.length +
@@ -272,6 +330,9 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                         selectedRulerId={props.selectedRulerId}
                         onSelectRuler={props.onSelectRuler}
                         onUpdateThicknessThresholds={props.onUpdateThicknessThresholds}
+                        projectImages={props.projectImages}
+                        isOpen={activeInspectionSub === 'annotations'}
+                        onToggle={() => toggleInspSub('annotations')}
                     />
                     <CoverageSection
                         vesselState={vesselState}
@@ -283,6 +344,8 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                         onSelectCoverageRect={props.onSelectCoverageRect}
                         selectedCoverageRectId={props.selectedCoverageRectId}
                         getNextCoverageRectId={props.getNextCoverageRectId}
+                        isOpen={activeInspectionSub === 'coverage'}
+                        onToggle={() => toggleInspSub('coverage')}
                     />
                     <InspectionImageSection
                         vesselState={vesselState}
@@ -295,11 +358,16 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                         onToggleInspectionImageLocked={props.onToggleInspectionImageLocked}
                         onViewInspectionImage={props.onViewInspectionImage}
                         getNextInspectionImageId={props.getNextInspectionImageId}
+                        projectImages={props.projectImages}
+                        isOpen={activeInspectionSub === 'inspectionImages'}
+                        onToggle={() => toggleInspSub('inspectionImages')}
                     />
                     <ReportExportSection
                         vesselState={vesselState}
                         onUpdateAnnotation={props.onUpdateAnnotation}
                         onGenerateReport={props.onGenerateReport}
+                        isOpen={activeInspectionSub === 'reportExport'}
+                        onToggle={() => toggleInspSub('reportExport')}
                     />
                 </Section>
             </div>

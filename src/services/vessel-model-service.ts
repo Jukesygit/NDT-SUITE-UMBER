@@ -48,6 +48,7 @@ export interface SaveVesselModelParams {
     userId: string;
     config: Record<string, unknown>;
     projectVesselId?: string;
+    modelType?: string;
 }
 
 export interface SaveScanPlacementParams {
@@ -92,19 +93,23 @@ export async function saveVesselModel(params: SaveVesselModelParams): Promise<st
 }
 
 /**
- * Update an existing vessel model's config
+ * Update an existing vessel model's config (and optionally its name)
  */
 export async function updateVesselModel(
     id: string,
-    config: Record<string, unknown>
+    config: Record<string, unknown>,
+    name?: string
 ): Promise<void> {
     if (!isSupabaseConfigured()) {
         throw new Error('Supabase not configured');
     }
 
+    const updateData: Record<string, unknown> = { config, updated_at: new Date().toISOString() };
+    if (name) updateData.name = name;
+
     const { error } = await supabase!
         .from('vessel_models')
-        .update({ config, updated_at: new Date().toISOString() })
+        .update(updateData)
         .eq('id', id);
 
     if (error) throw error;

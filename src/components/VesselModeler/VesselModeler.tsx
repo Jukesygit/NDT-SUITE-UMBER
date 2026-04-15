@@ -1,6 +1,6 @@
 import { useState, useReducer, useRef, useCallback, useEffect, lazy, Suspense, type ChangeEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Lock, Unlock, Save, Upload, RotateCcw, PanelLeftClose, PanelLeft, FileUp, Camera, AlertTriangle, MousePointer, PanelBottomClose, Box, ChevronDown, Settings2, FolderOpen } from 'lucide-react';
+import { Lock, Unlock, Save, Upload, RotateCcw, PanelLeftClose, PanelLeft, FileUp, Camera, AlertTriangle, MousePointer, PanelBottomClose, Box, ChevronDown, Settings2, FolderOpen, FilePlus } from 'lucide-react';
 import ThreeViewport from './ThreeViewport';
 import ErrorBoundary from '../ErrorBoundary';
 import type { ThreeViewportHandle } from './ThreeViewport';
@@ -36,8 +36,13 @@ import { recomputeAllAnnotationStats } from './engine/annotation-stats';
 import { computeInspectionCameraTarget, animateCamera, cancelCameraAnimation } from './engine/camera-animation';
 import { useScanCompositeList } from '../../hooks/queries/useScanComposites';
 import { getScanComposite } from '../../services/scan-composite-service';
+import { useLinkScanCompositeToProject } from '../../hooks/mutations/useScanCompositeMutations';
 import { uploadAnnotationImage, deleteAnnotationImage, getAnnotationImageUrl } from '../../services/annotation-attachment-service';
 import { useAuth } from '../../contexts/AuthContext';
+import { useVesselModelByProjectVessel } from '../../hooks/queries/useVesselModels';
+import { useSaveVesselModel, useUpdateVesselModel } from '../../hooks/mutations/useVesselModelMutations';
+import { useProjectList, useProjectVessels, useProjectImages } from '../../hooks/queries/useInspectionProjects';
+import { getVesselModelByProjectVessel } from '../../services/vessel-model-service';
 import './vessel-modeler.css';
 import * as THREE from 'three';
 
@@ -368,11 +373,35 @@ export default function VesselModeler() {
     // Auth context for attachment uploads
     const { user } = useAuth();
     const organizationId = user?.organizationId ?? 'local';
-    const vesselModelIdRef = useRef(crypto.randomUUID());
-    const vesselModelId = vesselModelIdRef.current;
+    const vesselModelIdRef = useRef<string | null>(null);
+    const vesselModelId = vesselModelIdRef.current ?? `local-${crypto.randomUUID()}`;
+
+    // Fetch linked model when opened from project context
+    const { data: linkedModel, isLoading: linkedModelLoading } = useVesselModelByProjectVessel(projectVesselId);
+
+    // Save-to-project mutations
+    const saveModelMutation = useSaveVesselModel();
+    const updateModelMutation = useUpdateVesselModel();
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+    // Project/vessel picker (used for both save and load)
+    const [pickerMode, setPickerMode] = useState<'save' | 'load' | null>(null);
+    const [pickerProjectId, setPickerProjectId] = useState<string | null>(null);
+    const [pickerVesselId, setPickerVesselId] = useState<string | null>(null);
+    const [saveModelType, setSaveModelType] = useState<string>('blank');
+    const [saveModelTypeCustom, setSaveModelTypeCustom] = useState<string>('');
+    const { data: projectList } = useProjectList();
+    const { data: pickerVessels } = useProjectVessels(pickerProjectId ?? undefined);
+
+    // Effective project vessel ID: from URL params or from picker selection
+    const effectiveProjectVesselId = projectVesselId ?? pickerVesselId;
+
+    // Project image pool (images uploaded via inspection detail page)
+    const { data: projectImages } = useProjectImages(effectiveProjectVesselId ?? undefined);
 
     // Cloud composites query
     const { data: cloudComposites, error: cloudCompositesError, isLoading: cloudCompositesLoading } = useScanCompositeList();
+    const linkCompositeToProject = useLinkScanCompositeToProject();
     if (cloudCompositesError) console.error('Failed to fetch cloud composites:', cloudCompositesError);
 
     // Three.js texture objects (imperative, not React state)
@@ -403,6 +432,230 @@ export default function VesselModeler() {
 
     // Inspection panel: which stat row is hovered (highlights min/max point on vessel)
     const [visibleStatLines, setVisibleStatLines] = useState<{ min: boolean; max: boolean }>({ min: false, max: false });
+
+    // Shared helper: deserialize a model config into modeler state
+    const applyModelConfig = useCallback(async (config: Record<string, unknown>, modelId: string) => {
+        const projectData = config as any;
+        if (!projectData.vessel || !projectData.version) return;
+
+        // Dispose existing textures
+        for (const key of Object.keys(textureObjectsRef.current)) {
+            textureObjectsRef.current[Number(key)].dispose();
+        }
+        textureObjectsRef.current = {};
+
+        // Reconstruct Three.js textures
+        const renderer = viewportRef.current?.getRenderer();
+        const loadedTextures: TextureConfig[] = [];
+        const savedTextures = projectData.textures || [];
+
+        if (renderer && savedTextures.length > 0) {
+            for (const texData of savedTextures) {
+                if (!texData.imageData) continue;
+                try {
+                    const result = await loadTextureFromData(texData.imageData, renderer);
+                    textureObjectsRef.current[Number(texData.id)] = result.texture;
+                    loadedTextures.push({
+                        id: texData.id,
+                        name: texData.name || 'Untitled',
+                        imageData: texData.imageData,
+                        pos: texData.pos ?? 0,
+                        angle: texData.angle ?? 90,
+                        scaleX: texData.scaleX ?? 1.0,
+                        scaleY: texData.scaleY ?? 1.0,
+                        rotation: texData.rotation || 0,
+                        flipH: texData.flipH || false,
+                        flipV: texData.flipV || false,
+                        aspectRatio: result.aspectRatio,
+                    });
+                } catch {
+                    // Skip textures that fail to load
+                }
+            }
+        }
+
+        const newState: VesselState = {
+            id: projectData.vessel.id || 3000,
+            length: projectData.vessel.length || 8000,
+            headRatio: projectData.vessel.headRatio || 2.0,
+            orientation: projectData.vessel.orientation || 'horizontal',
+            vesselName: projectData.vessel.vesselName || '',
+            location: projectData.vessel.location || '',
+            inspectionDate: projectData.vessel.inspectionDate || '',
+            nozzles: (projectData.nozzles || []).map((n: any) => ({
+                name: n.name || 'N', pos: n.pos ?? 0, proj: n.proj ?? 200,
+                angle: n.angle ?? 90, size: n.size ?? 100,
+                orientationMode: n.orientationMode,
+                flangeOD: n.flangeOD, flangeThk: n.flangeThk, pipeOD: n.pipeOD, style: n.style,
+            })),
+            liftingLugs: (projectData.liftingLugs || []).map((l: any) => ({
+                name: l.name || 'L', pos: l.pos ?? 0, angle: l.angle ?? 90,
+                style: l.style || 'padEye', swl: l.swl || '5t',
+                width: l.width, height: l.height,
+                thickness: l.thickness, holeDiameter: l.holeDiameter,
+            })),
+            saddles: (projectData.saddles || []).map((s: any) =>
+                typeof s === 'number' ? { pos: s, color: '#2244ff' } : { pos: s.pos, color: s.color || '#2244ff', height: s.height }
+            ),
+            welds: (projectData.welds || []).map((w: any) => ({
+                name: w.name || 'W', type: w.type || 'circumferential',
+                pos: w.pos ?? 0, endPos: w.endPos, angle: w.angle,
+                color: w.color || '#888888',
+            })),
+            textures: loadedTextures,
+            annotations: (projectData.annotations || []).map((a: any) => ({
+                id: a.id || 0, name: a.name || 'A', type: a.type === 'restriction' ? 'restriction' : 'scan',
+                pos: a.pos ?? 0, angle: a.angle ?? 90,
+                width: a.width ?? 100, height: a.height ?? 100,
+                color: a.color || '#ff3333', lineWidth: a.lineWidth ?? 2,
+                showLabel: a.showLabel !== false,
+                leaderLength: a.leaderLength, labelOffset: a.labelOffset, visible: a.visible, locked: a.locked,
+                restrictionNotes: a.restrictionNotes, restrictionImage: a.restrictionImage,
+                restrictionImageName: a.restrictionImageName, includeInReport: a.includeInReport,
+                attachments: a.attachments ?? [],
+            })),
+            rulers: (projectData.rulers || []).map((r: any) => ({
+                id: r.id || 0, name: r.name || 'R',
+                startPos: r.startPos ?? 0, startAngle: r.startAngle ?? 90,
+                endPos: r.endPos ?? 100, endAngle: r.endAngle ?? 90,
+                color: r.color || '#ffaa00', showLabel: r.showLabel !== false,
+            })),
+            coverageRects: (projectData.coverageRects || []).map((r: any) => ({
+                id: r.id || 0, name: r.name || 'C',
+                pos: r.pos ?? 0, angle: r.angle ?? 90,
+                width: r.width ?? 300, height: r.height ?? 200,
+                color: r.color || '#00cc66', lineWidth: r.lineWidth ?? 2,
+                filled: r.filled ?? true, fillOpacity: r.fillOpacity ?? 0.2, locked: r.locked,
+            })),
+            inspectionImages: (projectData.inspectionImages || []).map((i: any) => ({
+                id: i.id || 0, name: i.name || 'IMG', imageData: i.imageData || '',
+                pos: i.pos ?? 0, angle: i.angle ?? 90,
+                description: i.description, date: i.date,
+                inspector: i.inspector, method: i.method, result: i.result,
+                leaderLength: i.leaderLength, labelOffset: i.labelOffset, visible: i.visible, locked: i.locked,
+            })),
+            scanComposites: (projectData.scanComposites || []).map((sc: any) => ({
+                id: sc.id || `sc_${Date.now()}`,
+                name: sc.name || 'Untitled',
+                cloudId: sc.cloudId,
+                data: sc.data || [],
+                xAxis: sc.xAxis || [],
+                yAxis: sc.yAxis || [],
+                stats: sc.stats || { min: 0, max: 0, mean: 0, median: 0, stdDev: 0 },
+                indexStartMm: sc.indexStartMm ?? 0,
+                datumAngleDeg: sc.datumAngleDeg ?? 0,
+                scanDirection: sc.scanDirection || 'cw',
+                indexDirection: sc.indexDirection || 'forward',
+                orientationConfirmed: sc.orientationConfirmed ?? true,
+                colorScale: sc.colorScale || 'Jet',
+                rangeMin: sc.rangeMin ?? null,
+                rangeMax: sc.rangeMax ?? null,
+                opacity: sc.opacity ?? 1,
+                sourceNdeFile: sc.sourceNdeFile,
+                sourceFiles: sc.sourceFiles,
+            })),
+            pipelines: (projectData.pipelines || []).map((p: any) => ({
+                id: p.id || crypto.randomUUID(),
+                nozzleIndex: p.nozzleIndex ?? 0,
+                pipeDiameter: p.pipeDiameter ?? 100,
+                color: p.color,
+                segments: (p.segments || []).map((s: any) => ({
+                    id: s.id || crypto.randomUUID(),
+                    type: s.type || 'straight',
+                    rotation: s.rotation ?? 0,
+                    length: s.length, angle: s.angle, bendRadius: s.bendRadius,
+                    endDiameter: s.endDiameter, branchDiameter: s.branchDiameter, style: s.style,
+                })),
+                locked: p.locked, visible: p.visible,
+            })),
+            referenceDrawings: (projectData.referenceDrawings || []).map((d: any) => ({
+                id: d.id || Date.now(), title: d.title || '', imageData: d.imageData || '', fileName: d.fileName || '',
+            })),
+            measurementConfig: {
+                ...DEFAULT_VESSEL_STATE.measurementConfig,
+                ...(projectData.measurementConfig || {}),
+            },
+            hasModel: true,
+            visuals: { ...DEFAULT_VESSEL_STATE.visuals, ...(projectData.visuals || {}) },
+        };
+
+        clearHeatmapCache();
+
+        const maxId = loadedTextures.reduce((max: number, t: TextureConfig) => Math.max(max, Number(t.id) || 0), 0);
+        nextTextureIdRef.current = maxId + 1;
+        const maxAnnId = newState.annotations.reduce((max: number, a: AnnotationShapeConfig) => Math.max(max, a.id || 0), 0);
+        nextAnnotationIdRef.current = maxAnnId + 1;
+        const maxCovId = newState.coverageRects.reduce((max: number, r: CoverageRectConfig) => Math.max(max, r.id || 0), 0);
+        nextCoverageRectIdRef.current = maxCovId + 1;
+        const maxRulerId = newState.rulers.reduce((max: number, r: RulerConfig) => Math.max(max, r.id || 0), 0);
+        nextRulerIdRef.current = maxRulerId + 1;
+        const maxImgId = newState.inspectionImages.reduce((max: number, i: InspectionImageConfig) => Math.max(max, i.id || 0), 0);
+        nextInspectionImageIdRef.current = maxImgId + 1;
+
+        vesselModelIdRef.current = modelId;
+        const validatedState = validateVesselState(newState);
+        dispatch({ type: 'SET_VESSEL', vessel: validatedState });
+        setTextureObjectsVersion(v => v + 1);
+
+        // Re-fetch thickness data from cloud for composites saved without inline data
+        const compositesNeedingData = validatedState.scanComposites.filter(
+            sc => sc.cloudId && (!sc.data || sc.data.length === 0),
+        );
+        for (const sc of compositesNeedingData) {
+            getScanComposite(sc.cloudId!).then((cloud) => {
+                clearHeatmapCache(sc.id);
+                dispatch({ type: 'UPDATE_VESSEL_FN', updater: prev => ({
+                    ...prev,
+                    scanComposites: prev.scanComposites.map(existing =>
+                        existing.id === sc.id
+                            ? {
+                                ...existing,
+                                data: cloud.thickness_data,
+                                xAxis: cloud.x_axis,
+                                yAxis: cloud.y_axis,
+                                stats: cloud.stats || existing.stats,
+                            }
+                            : existing,
+                    ),
+                })});
+            }).catch((err) => {
+                console.error(`Failed to fetch scan composite ${sc.cloudId}:`, err);
+            });
+        }
+
+        // Restore modelType from saved config
+        if (projectData.modelType) {
+            const knownTypes = ['blank', 'coverage', 'scan_overlayed', 'fully_annotated'];
+            if (knownTypes.includes(projectData.modelType)) {
+                setSaveModelType(projectData.modelType);
+                setSaveModelTypeCustom('');
+            } else {
+                setSaveModelType('other');
+                setSaveModelTypeCustom(projectData.modelType);
+            }
+        }
+    }, []);
+
+    // Auto-load linked model from database when opened from project context
+    const linkedModelLoadedRef = useRef(false);
+    useEffect(() => {
+        if (!linkedModel?.config || linkedModelLoadedRef.current) return;
+        linkedModelLoadedRef.current = true;
+        applyModelConfig(linkedModel.config, linkedModel.id);
+    }, [linkedModel, applyModelConfig]);
+
+    // Load a model from a project vessel (via picker)
+    const loadFromProject = useCallback(async (vesselId: string) => {
+        const model = await getVesselModelByProjectVessel(vesselId);
+        if (!model) {
+            alert('No model found for this vessel.');
+            return;
+        }
+        await applyModelConfig(model.config, model.id);
+        setPickerMode(null);
+        setPickerProjectId(null);
+        setPickerVesselId(null);
+    }, [applyModelConfig]);
 
     // Close popout menus on outside click
     useEffect(() => {
@@ -876,10 +1129,17 @@ export default function VesselModeler() {
                 sourceFiles: composite.source_files ?? undefined,
             };
             updateVessel(prev => ({ ...prev, scanComposites: [...prev.scanComposites, newConfig] }));
+
+            // Link composite to project vessel if in project context
+            if (effectiveProjectVesselId) {
+                linkCompositeToProject.mutate(
+                    { compositeId: composite.id, projectVesselId: effectiveProjectVesselId },
+                );
+            }
         } catch (err) {
             console.error('Failed to import composite:', err);
         }
-    }, [updateVessel]);
+    }, [updateVessel, effectiveProjectVesselId, linkCompositeToProject]);
 
     const handleRemoveScanComposite = useCallback((id: string) => {
         clearHeatmapCache(id);
@@ -1188,6 +1448,169 @@ export default function VesselModeler() {
             URL.revokeObjectURL(url);
         }, 100);
     }, [vesselState]);
+
+    // Build the serialized config from current vessel state
+    const buildSaveConfig = useCallback(() => {
+        const effectiveModelType = saveModelType === 'other' ? (saveModelTypeCustom || 'other') : saveModelType;
+        const config = {
+            version: 1,
+            timestamp: new Date().toISOString(),
+            modelType: effectiveModelType,
+            vessel: {
+                id: vesselState.id,
+                length: vesselState.length,
+                headRatio: vesselState.headRatio,
+                orientation: vesselState.orientation,
+                vesselName: vesselState.vesselName,
+                location: vesselState.location,
+                inspectionDate: vesselState.inspectionDate,
+            },
+            nozzles: vesselState.nozzles.map(n => ({
+                name: n.name, pos: n.pos, proj: n.proj,
+                angle: n.angle, size: n.size,
+                orientationMode: n.orientationMode,
+                flangeOD: n.flangeOD, flangeThk: n.flangeThk, pipeOD: n.pipeOD, style: n.style,
+            })),
+            liftingLugs: vesselState.liftingLugs.map(l => ({
+                name: l.name, pos: l.pos, angle: l.angle,
+                style: l.style, swl: l.swl,
+                width: l.width, height: l.height,
+                thickness: l.thickness, holeDiameter: l.holeDiameter,
+            })),
+            saddles: vesselState.saddles.map(s => ({
+                pos: s.pos, color: s.color || '#2244ff',
+                height: s.height,
+            })),
+            welds: vesselState.welds.map(w => ({
+                name: w.name, type: w.type, pos: w.pos,
+                endPos: w.endPos, angle: w.angle, color: w.color,
+            })),
+            textures: vesselState.textures.map(t => ({
+                id: t.id, name: t.name, imageData: t.imageData,
+                pos: t.pos, angle: t.angle,
+                scaleX: t.scaleX || 1.0, scaleY: t.scaleY || 1.0,
+                rotation: t.rotation || 0,
+                flipH: t.flipH || false, flipV: t.flipV || false,
+            })),
+            annotations: vesselState.annotations.map(a => ({
+                id: a.id, name: a.name, type: a.type,
+                pos: a.pos, angle: a.angle, width: a.width, height: a.height,
+                color: a.color, lineWidth: a.lineWidth, showLabel: a.showLabel,
+                leaderLength: a.leaderLength, labelOffset: a.labelOffset, visible: a.visible, locked: a.locked,
+                restrictionNotes: a.restrictionNotes, restrictionImage: a.restrictionImage,
+                restrictionImageName: a.restrictionImageName, includeInReport: a.includeInReport,
+                attachments: a.attachments,
+            })),
+            rulers: vesselState.rulers.map(r => ({
+                id: r.id, name: r.name,
+                startPos: r.startPos, startAngle: r.startAngle,
+                endPos: r.endPos, endAngle: r.endAngle,
+                color: r.color, showLabel: r.showLabel,
+            })),
+            coverageRects: vesselState.coverageRects.map(r => ({
+                id: r.id, name: r.name,
+                pos: r.pos, angle: r.angle, width: r.width, height: r.height,
+                color: r.color, lineWidth: r.lineWidth,
+                filled: r.filled, fillOpacity: r.fillOpacity, locked: r.locked,
+            })),
+            inspectionImages: vesselState.inspectionImages.map(i => ({
+                id: i.id, name: i.name, imageData: i.imageData,
+                pos: i.pos, angle: i.angle,
+                description: i.description, date: i.date,
+                inspector: i.inspector, method: i.method, result: i.result,
+                leaderLength: i.leaderLength, labelOffset: i.labelOffset, visible: i.visible, locked: i.locked,
+            })),
+            scanComposites: vesselState.scanComposites.map(sc => ({
+                id: sc.id, name: sc.name, cloudId: sc.cloudId,
+                xAxis: sc.xAxis, yAxis: sc.yAxis, stats: sc.stats,
+                indexStartMm: sc.indexStartMm, datumAngleDeg: sc.datumAngleDeg,
+                scanDirection: sc.scanDirection, indexDirection: sc.indexDirection,
+                orientationConfirmed: sc.orientationConfirmed,
+                colorScale: sc.colorScale, rangeMin: sc.rangeMin, rangeMax: sc.rangeMax,
+                opacity: sc.opacity, sourceNdeFile: sc.sourceNdeFile, sourceFiles: sc.sourceFiles,
+            })),
+            pipelines: vesselState.pipelines,
+            referenceDrawings: vesselState.referenceDrawings ?? [],
+            measurementConfig: { ...vesselState.measurementConfig },
+            visuals: { ...vesselState.visuals },
+        };
+
+        // Sanitize NaN/Infinity
+        return JSON.parse(JSON.stringify(config, (_key, value) =>
+            typeof value === 'number' && !Number.isFinite(value) ? null : value
+        ));
+    }, [vesselState, saveModelType, saveModelTypeCustom]);
+
+    // Save (update existing model)
+    const saveToProject = useCallback(async () => {
+        if (!effectiveProjectVesselId) {
+            setPickerMode('save');
+            return;
+        }
+        if (!user) return;
+        if (!vesselModelIdRef.current) {
+            // No existing model — fall through to save-as-new flow
+            setPickerMode('save');
+            return;
+        }
+
+        setSaveStatus('saving');
+        try {
+            const sanitized = buildSaveConfig();
+            const modelName = vesselState.vesselName || 'Untitled Vessel';
+
+            await updateModelMutation.mutateAsync({
+                id: vesselModelIdRef.current,
+                config: sanitized,
+                name: modelName,
+            });
+
+            setSaveStatus('saved');
+            setTimeout(() => setSaveStatus('idle'), 2000);
+        } catch (err: any) {
+            console.error('Save to project failed:', err);
+            alert(`Save failed: ${err?.message || 'Unknown error'}`);
+            setSaveStatus('error');
+            setTimeout(() => setSaveStatus('idle'), 3000);
+        }
+    }, [effectiveProjectVesselId, user, vesselState.vesselName, buildSaveConfig, updateModelMutation, saveModelType, saveModelTypeCustom]);
+
+    // Save as new model (always creates a new record)
+    const saveAsNewToProject = useCallback(async () => {
+        const targetVesselId = pickerVesselId || effectiveProjectVesselId;
+        if (!targetVesselId) {
+            setPickerMode('save');
+            return;
+        }
+        if (!user) { alert('Not authenticated'); return; }
+        if (!user.organizationId) { alert('No organization set on your profile'); return; }
+
+        setSaveStatus('saving');
+        try {
+            const sanitized = buildSaveConfig();
+            const modelName = vesselState.vesselName || 'Untitled Vessel';
+
+            const newId = await saveModelMutation.mutateAsync({
+                name: modelName,
+                organizationId: user.organizationId,
+                userId: user.id,
+                config: sanitized,
+                projectVesselId: targetVesselId,
+            });
+            vesselModelIdRef.current = newId;
+
+            setSaveStatus('saved');
+            setPickerMode(null);
+            setPickerProjectId(null);
+            setPickerVesselId(null);
+            setTimeout(() => setSaveStatus('idle'), 2000);
+        } catch (err: any) {
+            console.error('Save as new failed:', err);
+            alert(`Save failed: ${err?.message || JSON.stringify(err)}`);
+            setSaveStatus('error');
+            setTimeout(() => setSaveStatus('idle'), 3000);
+        }
+    }, [pickerVesselId, effectiveProjectVesselId, user, vesselState.vesselName, buildSaveConfig, saveModelMutation]);
 
     const exportGLB = useCallback(async () => {
         const hasProjectInfo = vesselState.vesselName || vesselState.location || vesselState.inspectionDate;
@@ -1980,9 +2403,15 @@ export default function VesselModeler() {
                     <FolderOpen size={13} />
                     <span>Working in project context</span>
                     <span style={{ color: 'rgba(96,165,250,0.5)' }}>|</span>
-                    <a href={`/projects/${projectId}`} style={{ color: '#60a5fa', textDecoration: 'underline' }}>
-                        Back to Project Hub
+                    <a href={projectVesselId ? `/projects/${projectId}/vessels/${projectVesselId}` : `/projects/${projectId}`} style={{ color: '#60a5fa', textDecoration: 'underline' }}>
+                        Back to Inspection
                     </a>
+                </div>
+            )}
+            {/* Loading overlay when fetching linked model */}
+            {linkedModelLoading && effectiveProjectVesselId && (
+                <div className="absolute inset-0 flex items-center justify-center z-50" style={{ background: 'rgba(0,0,0,0.7)' }}>
+                    <div style={{ color: '#60a5fa', fontSize: '0.9rem' }}>Loading model from project...</div>
                 </div>
             )}
             {/* Main content area */}
@@ -2046,7 +2475,7 @@ export default function VesselModeler() {
                 </>
                 ) : (
                     <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center bg-white text-gray-500 text-sm">Loading flattened view...</div>}>
-                        <FlattenedViewport ref={flattenedViewportRef} vesselState={vesselState} />
+                        <FlattenedViewport ref={flattenedViewportRef} vesselState={vesselState} selectedWeldIndex={selection.weldIndex} selectedNozzleIndex={selection.nozzleIndex} selectedSaddleIndex={selection.saddleIndex} selectedLugIndex={selection.lugIndex} />
                     </Suspense>
                 )}
 
@@ -2170,6 +2599,7 @@ export default function VesselModeler() {
                         onRemovePipeline={removePipeline}
                         onSelectPipeSegment={selectPipeSegment}
                         onGenerateReport={handleGenerateReport}
+                        projectImages={projectImages}
                     />
                 </div>
 
@@ -2282,11 +2712,41 @@ export default function VesselModeler() {
                                 <RotateCcw size={14} /> Reset Camera
                             </button>
                             <div className="vm-popout-divider" />
+                            <button
+                                className="vm-popout-item"
+                                onClick={() => { saveToProject(); setActionsMenuOpen(false); }}
+                                disabled={saveStatus === 'saving' || !vesselModelIdRef.current}
+                                title={!vesselModelIdRef.current ? 'No existing model — use Save as New' : undefined}
+                                style={!vesselModelIdRef.current ? { opacity: 0.4 } : undefined}
+                            >
+                                <Save size={14} />
+                                {saveStatus === 'saving' ? 'Updating...' : saveStatus === 'saved' ? 'Updated!' : saveStatus === 'error' ? 'Update Failed' : 'Update Current Model'}
+                            </button>
+                            <button
+                                className="vm-popout-item"
+                                onClick={() => {
+                                    // Pre-fill picker with current project context if available
+                                    if (projectId) setPickerProjectId(projectId);
+                                    if (projectVesselId) setPickerVesselId(projectVesselId);
+                                    setPickerMode('save');
+                                    setActionsMenuOpen(false);
+                                }}
+                                disabled={saveStatus === 'saving'}
+                            >
+                                <Save size={14} /> Save as New Model
+                            </button>
+                            <button
+                                className="vm-popout-item"
+                                onClick={() => { setPickerMode('load'); setActionsMenuOpen(false); }}
+                            >
+                                <FolderOpen size={14} /> Load from Project
+                            </button>
+                            <div className="vm-popout-divider" />
                             <button className="vm-popout-item" onClick={() => { saveProject(); setActionsMenuOpen(false); }}>
-                                <Save size={14} /> Save Project
+                                <Save size={14} /> Export JSON
                             </button>
                             <label className="vm-popout-item" style={{ cursor: 'pointer' }}>
-                                <Upload size={14} /> Load Project
+                                <Upload size={14} /> Import JSON
                                 <input type="file" accept=".json" onChange={(e) => { loadProject(e); setActionsMenuOpen(false); }} style={{ display: 'none' }} />
                             </label>
                             <div className="vm-popout-divider" />
@@ -2325,6 +2785,7 @@ export default function VesselModeler() {
                                 getImageUrl={getAnnotationImageUrl}
                                 onSaveScanImages={saveScanImages}
                                 onClearScanImages={clearScanImages}
+                                projectImages={projectImages}
                             />
                             {ann.thicknessStats && (
                                 <>
@@ -2445,6 +2906,138 @@ export default function VesselModeler() {
                     </Suspense>
                 );
             })()}
+
+            {/* Project picker modal (save or load) */}
+            {pickerMode && (
+                <div className="absolute inset-0 flex items-center justify-center z-50" style={{ background: 'rgba(0,0,0,0.6)' }}>
+                    <div style={{
+                        background: '#1e1e2e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12,
+                        padding: 24, minWidth: 340, maxWidth: 400,
+                    }}>
+                        <div style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', marginBottom: 16 }}>
+                            {pickerMode === 'save' ? 'Save as New Model' : 'Load from Project'}
+                        </div>
+
+                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', marginBottom: 6 }}>
+                            Project
+                        </label>
+                        <select
+                            value={pickerProjectId ?? ''}
+                            onChange={(e) => { setPickerProjectId(e.target.value || null); setPickerVesselId(null); }}
+                            style={{
+                                width: '100%', padding: '8px 10px', borderRadius: 6, marginBottom: 14,
+                                background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+                                color: '#fff', fontSize: '0.85rem',
+                            }}
+                        >
+                            <option value="">Select a project...</option>
+                            {(projectList ?? []).map(p => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                        </select>
+
+                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', marginBottom: 6 }}>
+                            Vessel
+                        </label>
+                        <select
+                            value={pickerVesselId ?? ''}
+                            onChange={(e) => setPickerVesselId(e.target.value || null)}
+                            disabled={!pickerProjectId}
+                            style={{
+                                width: '100%', padding: '8px 10px', borderRadius: 6, marginBottom: 14,
+                                background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+                                color: '#fff', fontSize: '0.85rem',
+                                opacity: pickerProjectId ? 1 : 0.4,
+                            }}
+                        >
+                            <option value="">Select a vessel...</option>
+                            {(pickerVessels ?? []).map(v => (
+                                <option key={v.id} value={v.id}>{v.vessel_name}</option>
+                            ))}
+                        </select>
+
+                        {pickerMode === 'save' && (
+                            <>
+                                <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', marginBottom: 6 }}>
+                                    Model Type
+                                </label>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: saveModelType === 'other' ? 8 : 20 }}>
+                                    {[
+                                        { value: 'blank', label: 'Blank' },
+                                        { value: 'coverage', label: 'Coverage' },
+                                        { value: 'scan_overlayed', label: 'Scan Overlayed' },
+                                        { value: 'fully_annotated', label: 'Fully Annotated' },
+                                        { value: 'other', label: 'Other' },
+                                    ].map(opt => (
+                                        <label
+                                            key={opt.value}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: 5,
+                                                padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+                                                fontSize: '0.8rem', color: saveModelType === opt.value ? '#fff' : 'rgba(255,255,255,0.5)',
+                                                background: saveModelType === opt.value ? 'rgba(59,130,246,0.25)' : 'rgba(255,255,255,0.04)',
+                                                border: `1px solid ${saveModelType === opt.value ? 'rgba(59,130,246,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                                            }}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name="modelType"
+                                                value={opt.value}
+                                                checked={saveModelType === opt.value}
+                                                onChange={() => setSaveModelType(opt.value)}
+                                                style={{ display: 'none' }}
+                                            />
+                                            {opt.label}
+                                        </label>
+                                    ))}
+                                </div>
+                                {saveModelType === 'other' && (
+                                    <input
+                                        type="text"
+                                        placeholder="Describe model type..."
+                                        value={saveModelTypeCustom}
+                                        onChange={(e) => setSaveModelTypeCustom(e.target.value)}
+                                        style={{
+                                            width: '100%', padding: '8px 10px', borderRadius: 6, marginBottom: 20,
+                                            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+                                            color: '#fff', fontSize: '0.85rem', boxSizing: 'border-box',
+                                        }}
+                                    />
+                                )}
+                            </>
+                        )}
+
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={() => { setPickerMode(null); setPickerProjectId(null); setPickerVesselId(null); setSaveModelType('blank'); setSaveModelTypeCustom(''); }}
+                                style={{
+                                    padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.12)',
+                                    background: 'transparent', color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', cursor: 'pointer',
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (pickerMode === 'save') saveAsNewToProject();
+                                    else if (pickerVesselId) loadFromProject(pickerVesselId);
+                                }}
+                                disabled={!pickerVesselId || (pickerMode === 'save' && saveStatus === 'saving')}
+                                style={{
+                                    padding: '8px 16px', borderRadius: 6, border: 'none',
+                                    background: pickerVesselId ? '#3b82f6' : 'rgba(59,130,246,0.3)',
+                                    color: '#fff', fontSize: '0.85rem', fontWeight: 500,
+                                    cursor: pickerVesselId ? 'pointer' : 'not-allowed',
+                                }}
+                            >
+                                {pickerMode === 'save'
+                                    ? (saveStatus === 'saving' ? 'Saving...' : 'Save as New')
+                                    : 'Load'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
         </div>
     );

@@ -32,6 +32,53 @@ import type {
 // Types
 // ---------------------------------------------------------------------------
 
+/** Inspection page data for populating the report front page */
+export interface InspectionReportData {
+  // Front page header
+  customerName?: string;
+  reportNumber?: string;
+  contractNumber?: string;
+  workOrderNumber?: string;
+  projectName?: string;
+  // Component details
+  description?: string;
+  drawingNumber?: string;
+  lineTagNumber?: string;
+  nominalThickness?: string;
+  material?: string;
+  operatingTemperature?: string;
+  stressRelief?: string;
+  corrosionAllowance?: string;
+  coatingType?: string;
+  // Procedure
+  procedureNumber?: string;
+  techniqueNumbers?: string;
+  acceptanceCriteria?: string;
+  applicableStandard?: string;
+  // Equipment
+  equipmentModel?: string;
+  serialNo?: string;
+  probe?: string;
+  wedge?: string;
+  calibrationBlocks?: string;
+  scannerFrame?: string;
+  refBlocks?: string;
+  couplant?: string;
+  equipmentChecksRef?: string;
+  beamsetConfig?: { group: string; type: string; active_elements: string; aperture: string; focal_depth: string; angle: string; skew: string; index_offset: string }[];
+  // Results + sign-off
+  resultsSummary?: string;
+  signoff?: {
+    technician?: { name?: string; qualification?: string; date?: string };
+    reviewer?: { name?: string; qualification?: string; date?: string };
+    client?: { name?: string; position?: string; date?: string };
+  };
+  // Scan log (enriched entries from DB)
+  scanLogEntries?: { filename: string; dateInspected?: string; setupFileName?: string; scanStartX?: number; scanEndX?: number; indexStartY?: number; indexEndY?: number; scanIndexDatum?: string; coatingCorrection?: string; minWt?: number; comments?: string }[];
+  // Calibration log (entries from DB)
+  calibrationLogEntries?: { filename: string; setupFile?: string; calDate?: string; scanStart?: string; scanEnd?: string; refAWt?: number; measAWt?: number; velocity?: number; comments?: string }[];
+}
+
 export interface ReportConfig {
   /** Which annotation IDs to include (from includeInReport flag) */
   annotationIds: number[];
@@ -47,6 +94,8 @@ export interface ReportConfig {
   companionScanImages: Map<number, CompanionScanImageSet>;
   /** Pre-rendered heatmap images (annotation ID → data URL) */
   heatmapImages: Map<number, string>;
+  /** Optional inspection page data for populating front page fields */
+  inspectionData?: InspectionReportData;
 }
 
 export interface VesselOverviewImage {
@@ -149,8 +198,9 @@ function sectionHeading(text: string): Paragraph {
 // Section Builders
 // ---------------------------------------------------------------------------
 
-function buildFrontPage(vessel: VesselState): (Paragraph | Table)[] {
+function buildFrontPage(vessel: VesselState, config: ReportConfig): (Paragraph | Table)[] {
   const children: (Paragraph | Table)[] = [];
+  const d = config.inspectionData; // shorthand, may be undefined
 
   // Title
   children.push(new Paragraph({
@@ -170,13 +220,16 @@ function buildFrontPage(vessel: VesselState): (Paragraph | Table)[] {
     layout: TableLayoutType.FIXED,
     rows: [
       new TableRow({ children: [
-        cellText('Customer:'), emptyCell(),
+        cellText('Customer:'), cellText(d?.customerName || ''),
         cellText('Location:'), cellText(vessel.location || ''),
-        cellText('Report No:'), emptyCell(),
+        cellText('Report No:'), cellText(d?.reportNumber || ''),
       ]}),
       new TableRow({ children: [
-        cellText('Contract No:'), emptyCell(),
-        cellText('WO No:'), emptyCell(),
+        cellText('Project:'), cellText(d?.projectName || ''),
+      ]}),
+      new TableRow({ children: [
+        cellText('Contract No:'), cellText(d?.contractNumber || ''),
+        cellText('WO No:'), cellText(d?.workOrderNumber || ''),
         cellText('Test Date:'), cellText(vessel.inspectionDate || ''),
       ]}),
     ],
@@ -189,12 +242,12 @@ function buildFrontPage(vessel: VesselState): (Paragraph | Table)[] {
     width: { size: 100, type: WidthType.PERCENTAGE },
     layout: TableLayoutType.FIXED,
     rows: [
-      new TableRow({ children: [cellText('Description'), emptyCell(), cellText('Drawing Number'), emptyCell()] }),
-      new TableRow({ children: [cellText('Line/Tag Number'), cellText(vessel.vesselName || ''), cellText('Nominal Thickness'), emptyCell()] }),
-      new TableRow({ children: [cellText('Material'), emptyCell(), cellText('Temperature'), emptyCell()] }),
-      new TableRow({ children: [cellText('Stress Relief'), emptyCell(), cellText('Coating Type'), emptyCell()] }),
-      new TableRow({ children: [cellText('Procedure No'), emptyCell(), cellText('Technique Nos'), emptyCell()] }),
-      new TableRow({ children: [cellText('Acceptance Criteria'), emptyCell(), cellText('Applicable Standard'), emptyCell()] }),
+      new TableRow({ children: [cellText('Description'), cellText(d?.description || ''), cellText('Drawing Number'), cellText(d?.drawingNumber || '')] }),
+      new TableRow({ children: [cellText('Line/Tag Number'), cellText(d?.lineTagNumber || vessel.vesselName || ''), cellText('Nominal Thickness'), cellText(d?.nominalThickness || '')] }),
+      new TableRow({ children: [cellText('Material'), cellText(d?.material || ''), cellText('Temperature'), cellText(d?.operatingTemperature || '')] }),
+      new TableRow({ children: [cellText('Stress Relief'), cellText(d?.stressRelief || ''), cellText('Coating Type'), cellText(d?.coatingType || '')] }),
+      new TableRow({ children: [cellText('Procedure No'), cellText(d?.procedureNumber || ''), cellText('Technique Nos'), cellText(d?.techniqueNumbers || '')] }),
+      new TableRow({ children: [cellText('Acceptance Criteria'), cellText(d?.acceptanceCriteria || ''), cellText('Applicable Standard'), cellText(d?.applicableStandard || '')] }),
     ],
   }));
 
@@ -204,15 +257,40 @@ function buildFrontPage(vessel: VesselState): (Paragraph | Table)[] {
     width: { size: 100, type: WidthType.PERCENTAGE },
     layout: TableLayoutType.FIXED,
     rows: [
-      new TableRow({ children: [cellText('Equip. Model'), emptyCell(), cellText('Serial No'), emptyCell()] }),
-      new TableRow({ children: [cellText('Probe'), emptyCell(), cellText('Wedge'), emptyCell()] }),
-      new TableRow({ children: [cellText('Calibration Blocks'), emptyCell(), cellText('Scanner Frame'), emptyCell()] }),
-      new TableRow({ children: [cellText('Ref Blocks'), emptyCell(), cellText('Couplant'), emptyCell()] }),
+      new TableRow({ children: [cellText('Equip. Model'), cellText(d?.equipmentModel || ''), cellText('Serial No'), cellText(d?.serialNo || '')] }),
+      new TableRow({ children: [cellText('Probe'), cellText(d?.probe || ''), cellText('Wedge'), cellText(d?.wedge || '')] }),
+      new TableRow({ children: [cellText('Calibration Blocks'), cellText(d?.calibrationBlocks || ''), cellText('Scanner Frame'), cellText(d?.scannerFrame || '')] }),
+      new TableRow({ children: [cellText('Ref Blocks'), cellText(d?.refBlocks || ''), cellText('Couplant'), cellText(d?.couplant || '')] }),
     ],
   }));
 
+  // Equipment checks note
+  if (d?.equipmentChecksRef) {
+    children.push(new Paragraph({
+      children: [textRun(`Equipment Checks in accordance with ${d.equipmentChecksRef} Equipment Checks completed: ☑`, { size: FONT_SIZE_SMALL })],
+      spacing: { before: 40, after: 40 },
+    }));
+  }
+
   // Beamset configuration
   children.push(sectionHeading('Phased Array Beamset Configuration'));
+  const beamsetRows = d?.beamsetConfig?.length
+    ? d.beamsetConfig.map(row =>
+        new TableRow({ children: [
+          cellText(row.group, { alignment: AlignmentType.CENTER }),
+          cellText(row.type, { alignment: AlignmentType.CENTER }),
+          cellText(row.active_elements, { alignment: AlignmentType.CENTER }),
+          cellText(row.aperture, { alignment: AlignmentType.CENTER }),
+          cellText(row.focal_depth, { alignment: AlignmentType.CENTER }),
+          cellText(row.angle, { alignment: AlignmentType.CENTER }),
+          cellText(row.skew, { alignment: AlignmentType.CENTER }),
+          cellText(row.index_offset, { alignment: AlignmentType.CENTER }),
+        ]}),
+      )
+    : Array.from({ length: 3 }, () =>
+        new TableRow({ children: Array.from({ length: 8 }, () => emptyCell()) }),
+      );
+
   children.push(new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     layout: TableLayoutType.FIXED,
@@ -222,28 +300,37 @@ function buildFrontPage(vessel: VesselState): (Paragraph | Table)[] {
         headerCell('Aperture'), headerCell('Focal Depth'), headerCell('Angle'),
         headerCell('Skew'), headerCell('Index Offset'),
       ]}),
-      ...Array.from({ length: 3 }, () =>
-        new TableRow({ children: Array.from({ length: 8 }, () => emptyCell()) }),
-      ),
+      ...beamsetRows,
     ],
   }));
 
-  // Inspection Results Summary (blank)
+  // Inspection Results Summary
   children.push(sectionHeading('Inspection Results Summary'));
-  for (let i = 0; i < 8; i++) {
-    children.push(new Paragraph({ children: [textRun(' ')] }));
+  if (d?.resultsSummary) {
+    const lines = d.resultsSummary.split('\n');
+    for (const line of lines) {
+      children.push(new Paragraph({ children: [textRun(line)], spacing: { after: 40 } }));
+    }
+  } else {
+    for (let i = 0; i < 8; i++) {
+      children.push(new Paragraph({ children: [textRun(' ')] }));
+    }
   }
 
   // Sign-off table
+  const tech = d?.signoff?.technician;
+  const rev = d?.signoff?.reviewer;
+  const client = d?.signoff?.client;
+
   children.push(new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     layout: TableLayoutType.FIXED,
     rows: [
       new TableRow({ children: [headerCell('Technician'), headerCell(''), headerCell('Reviewed'), headerCell(''), headerCell('Client Acceptance'), headerCell('')] }),
-      new TableRow({ children: [cellText('Name:'), emptyCell(), cellText('Name:'), emptyCell(), cellText('Name:'), emptyCell()] }),
-      new TableRow({ children: [cellText('Qualification:'), emptyCell(), cellText('Qualification:'), emptyCell(), cellText('Position:'), emptyCell()] }),
+      new TableRow({ children: [cellText('Name:'), cellText(tech?.name || ''), cellText('Name:'), cellText(rev?.name || ''), cellText('Name:'), cellText(client?.name || '')] }),
+      new TableRow({ children: [cellText('Qualification:'), cellText(tech?.qualification || ''), cellText('Qualification:'), cellText(rev?.qualification || ''), cellText('Position:'), cellText(client?.position || '')] }),
       new TableRow({ children: [cellText('Signature:'), emptyCell(), cellText('Signature:'), emptyCell(), cellText('Signature:'), emptyCell()] }),
-      new TableRow({ children: [cellText('Date:'), emptyCell(), cellText('Date:'), emptyCell(), cellText('Date:'), emptyCell()] }),
+      new TableRow({ children: [cellText('Date:'), cellText(tech?.date || ''), cellText('Date:'), cellText(rev?.date || ''), cellText('Date:'), cellText(client?.date || '')] }),
     ],
   }));
 
@@ -441,50 +528,88 @@ function buildVesselOverviewPage(config: ReportConfig): (Paragraph | Table)[] {
   return children;
 }
 
-function buildScanLogTable(vessel: VesselState): (Paragraph | Table)[] {
+function buildScanLogTable(vessel: VesselState, config: ReportConfig): (Paragraph | Table)[] {
   const children: (Paragraph | Table)[] = [];
 
   children.push(sectionHeading('Phased Array C-Scan Mapping Log'));
 
-  const confirmed = vessel.scanComposites.filter(sc => sc.orientationConfirmed);
-  if (confirmed.length === 0) {
-    children.push(new Paragraph({ children: [textRun('No scan composites loaded.')] }));
-    return children;
-  }
+  const scanLogEntries = config.inspectionData?.scanLogEntries;
 
-  const headerRow = new TableRow({
-    children: [
-      headerCell('File Name'), headerCell('Scan Range'), headerCell('Index Range'),
-      headerCell('Min WT'), headerCell('Avg WT'), headerCell('Anomaly Code'), headerCell('Comments'),
-    ],
-  });
-
-  const dataRows = confirmed.map(sc => {
-    const scanRange = sc.xAxis.length > 0
-      ? `${Math.round(sc.xAxis[0])} – ${Math.round(sc.xAxis[sc.xAxis.length - 1])}`
-      : 'N/A';
-    const indexRange = sc.yAxis.length > 0
-      ? `${Math.round(sc.yAxis[0])} – ${Math.round(sc.yAxis[sc.yAxis.length - 1])}`
-      : 'N/A';
-
-    return new TableRow({
+  // Use enriched scan log entries from inspection page if available
+  if (scanLogEntries && scanLogEntries.length > 0) {
+    const headerRow = new TableRow({
       children: [
-        cellText(sc.sourceNdeFile ?? sc.name, { alignment: AlignmentType.LEFT }),
-        cellText(scanRange, { alignment: AlignmentType.CENTER }),
-        cellText(indexRange, { alignment: AlignmentType.CENTER }),
-        cellText(`${sc.stats.min.toFixed(2)}`, { alignment: AlignmentType.CENTER }),
-        cellText(`${sc.stats.mean.toFixed(2)}`, { alignment: AlignmentType.CENTER }),
-        emptyCell(),
-        emptyCell(),
+        headerCell('File Name'), headerCell('Date Inspected'), headerCell('Setup File'),
+        headerCell('Scan Start(x)'), headerCell('Scan End(x)'), headerCell('Index Start(y)'), headerCell('Index End(y)'),
+        headerCell('Scan/Index Datum'), headerCell('Coating Correction'), headerCell('Min WT'), headerCell('Comments'),
       ],
     });
-  });
 
-  children.push(new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    layout: TableLayoutType.FIXED,
-    rows: [headerRow, ...dataRows],
-  }));
+    const dataRows = scanLogEntries.map(entry =>
+      new TableRow({
+        children: [
+          cellText(entry.filename, { alignment: AlignmentType.LEFT }),
+          cellText(entry.dateInspected || '', { alignment: AlignmentType.CENTER }),
+          cellText(entry.setupFileName || '', { alignment: AlignmentType.CENTER }),
+          cellText(entry.scanStartX?.toString() || '', { alignment: AlignmentType.CENTER }),
+          cellText(entry.scanEndX?.toString() || '', { alignment: AlignmentType.CENTER }),
+          cellText(entry.indexStartY?.toString() || '', { alignment: AlignmentType.CENTER }),
+          cellText(entry.indexEndY?.toString() || '', { alignment: AlignmentType.CENTER }),
+          cellText(entry.scanIndexDatum || '', { alignment: AlignmentType.CENTER }),
+          cellText(entry.coatingCorrection || '', { alignment: AlignmentType.CENTER }),
+          cellText(entry.minWt?.toFixed(1) || '', { alignment: AlignmentType.CENTER }),
+          cellText(entry.comments || '', { alignment: AlignmentType.LEFT }),
+        ],
+      }),
+    );
+
+    children.push(new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      layout: TableLayoutType.FIXED,
+      rows: [headerRow, ...dataRows],
+    }));
+  } else {
+    // Fallback: use scan composites directly (original behavior)
+    const confirmed = vessel.scanComposites.filter(sc => sc.orientationConfirmed);
+    if (confirmed.length === 0) {
+      children.push(new Paragraph({ children: [textRun('No scan composites loaded.')] }));
+      return children;
+    }
+
+    const headerRow = new TableRow({
+      children: [
+        headerCell('File Name'), headerCell('Scan Range'), headerCell('Index Range'),
+        headerCell('Min WT'), headerCell('Avg WT'), headerCell('Anomaly Code'), headerCell('Comments'),
+      ],
+    });
+
+    const dataRows = confirmed.map(sc => {
+      const scanRange = sc.xAxis.length > 0
+        ? `${Math.round(sc.xAxis[0])} – ${Math.round(sc.xAxis[sc.xAxis.length - 1])}`
+        : 'N/A';
+      const indexRange = sc.yAxis.length > 0
+        ? `${Math.round(sc.yAxis[0])} – ${Math.round(sc.yAxis[sc.yAxis.length - 1])}`
+        : 'N/A';
+
+      return new TableRow({
+        children: [
+          cellText(sc.sourceNdeFile ?? sc.name, { alignment: AlignmentType.LEFT }),
+          cellText(scanRange, { alignment: AlignmentType.CENTER }),
+          cellText(indexRange, { alignment: AlignmentType.CENTER }),
+          cellText(`${sc.stats.min.toFixed(2)}`, { alignment: AlignmentType.CENTER }),
+          cellText(`${sc.stats.mean.toFixed(2)}`, { alignment: AlignmentType.CENTER }),
+          emptyCell(),
+          emptyCell(),
+        ],
+      });
+    });
+
+    children.push(new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      layout: TableLayoutType.FIXED,
+      rows: [headerRow, ...dataRows],
+    }));
+  }
 
   children.push(new Paragraph({
     children: [textRun('All dimensions in mm. WT results include coating correction.', { size: FONT_SIZE_SMALL })],
@@ -494,24 +619,41 @@ function buildScanLogTable(vessel: VesselState): (Paragraph | Table)[] {
   return children;
 }
 
-function buildCalibrationLogTemplate(): (Paragraph | Table)[] {
+function buildCalibrationLogTemplate(config: ReportConfig): (Paragraph | Table)[] {
   const children: (Paragraph | Table)[] = [];
 
   children.push(sectionHeading('Phased Array Calibration Scan Log'));
 
+  const calEntries = config.inspectionData?.calibrationLogEntries;
+
+  const headerRow = new TableRow({ children: [
+    headerCell('File Name'), headerCell('Setup File'), headerCell('Date'),
+    headerCell('Scan Start'), headerCell('Scan End'), headerCell('Ref. A WT'),
+    headerCell('Meas. A WT'), headerCell('Velocity'), headerCell('Comments'),
+  ]});
+
+  const dataRows = calEntries && calEntries.length > 0
+    ? calEntries.map(entry =>
+        new TableRow({ children: [
+          cellText(entry.filename, { alignment: AlignmentType.LEFT }),
+          cellText(entry.setupFile || '', { alignment: AlignmentType.CENTER }),
+          cellText(entry.calDate || '', { alignment: AlignmentType.CENTER }),
+          cellText(entry.scanStart || '', { alignment: AlignmentType.CENTER }),
+          cellText(entry.scanEnd || '', { alignment: AlignmentType.CENTER }),
+          cellText(entry.refAWt?.toFixed(2) || '', { alignment: AlignmentType.CENTER }),
+          cellText(entry.measAWt?.toFixed(2) || '', { alignment: AlignmentType.CENTER }),
+          cellText(entry.velocity?.toFixed(0) || '', { alignment: AlignmentType.CENTER }),
+          cellText(entry.comments || '', { alignment: AlignmentType.LEFT }),
+        ]}),
+      )
+    : Array.from({ length: 6 }, () =>
+        new TableRow({ children: Array.from({ length: 9 }, () => emptyCell()) }),
+      );
+
   children.push(new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     layout: TableLayoutType.FIXED,
-    rows: [
-      new TableRow({ children: [
-        headerCell('File Name'), headerCell('Setup File'), headerCell('Date'),
-        headerCell('Scan Start'), headerCell('Scan End'), headerCell('Ref. A WT'),
-        headerCell('Meas. A WT'), headerCell('Velocity'), headerCell('Comments'),
-      ]}),
-      ...Array.from({ length: 6 }, () =>
-        new TableRow({ children: Array.from({ length: 9 }, () => emptyCell()) }),
-      ),
-    ],
+    rows: [headerRow, ...dataRows],
   }));
 
   children.push(new Paragraph({
@@ -679,8 +821,8 @@ export async function generateReport(
 
   const sections: (Paragraph | Table)[] = [];
 
-  // 1. Front page (blank template)
-  sections.push(...buildFrontPage(vessel));
+  // 1. Front page (populated from inspection data if available)
+  sections.push(...buildFrontPage(vessel, config));
   sections.push(new Paragraph({ children: [new PageBreak()] }));
 
   // 2. Per-annotation inspection results
@@ -703,11 +845,11 @@ export async function generateReport(
   }
 
   // 4. Scan log table
-  sections.push(...buildScanLogTable(vessel));
+  sections.push(...buildScanLogTable(vessel, config));
   sections.push(new Paragraph({ children: [new PageBreak()] }));
 
-  // 5. Calibration log (blank template)
-  sections.push(...buildCalibrationLogTemplate());
+  // 5. Calibration log (populated from inspection data if available)
+  sections.push(...buildCalibrationLogTemplate(config));
   sections.push(new Paragraph({ children: [new PageBreak()] }));
 
   // 6. Photographs

@@ -48,6 +48,10 @@ export interface FlattenedViewportHandle {
 
 interface Props {
   vesselState: VesselState;
+  selectedWeldIndex?: number;
+  selectedNozzleIndex?: number;
+  selectedSaddleIndex?: number;
+  selectedLugIndex?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -76,7 +80,7 @@ interface ViewState {
 // ---------------------------------------------------------------------------
 
 const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
-  function FlattenedViewport({ vesselState }, ref) {
+  function FlattenedViewport({ vesselState, selectedWeldIndex = -1, selectedNozzleIndex = -1, selectedSaddleIndex = -1, selectedLugIndex = -1 }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const viewRef = useRef<ViewState>({ zoom: 1, offsetX: 0, offsetY: 0 });
@@ -200,6 +204,121 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
 
       ctx.restore(); // un-clip
 
+      // 3c. Selection glow — drawn OUTSIDE clip so it radiates freely.
+      //     Uses concentric strokes with decreasing opacity for a soft halo.
+      const GLOW_LAYERS = [
+        { width: 20, alpha: 0.07 },
+        { width: 14, alpha: 0.12 },
+        { width: 8,  alpha: 0.2 },
+        { width: 4,  alpha: 0.35 },
+      ];
+
+      const od = vesselState.id;
+
+      // Saddle glow
+      if (selectedSaddleIndex >= 0 && selectedSaddleIndex < vesselState.saddles.length) {
+        const rect = projectSaddle(vesselState.saddles[selectedSaddleIndex], od);
+        const rx = toCanvasX(rect.x);
+        const ry = toCanvasY(rect.y);
+        const rw = toCanvasX(rect.x + rect.width) - rx;
+        const rh = toCanvasY(rect.y + rect.height) - ry;
+        ctx.save();
+        ctx.setLineDash([]);
+        for (const layer of GLOW_LAYERS) {
+          ctx.globalAlpha = layer.alpha;
+          ctx.strokeStyle = '#3b82f6';
+          ctx.lineWidth = layer.width;
+          ctx.strokeRect(rx, ry, rw, rh);
+        }
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
+
+      // Nozzle glow
+      if (selectedNozzleIndex >= 0 && selectedNozzleIndex < vesselState.nozzles.length) {
+        const circle = projectNozzle(vesselState.nozzles[selectedNozzleIndex], od);
+        const cx = toCanvasX(circle.cx);
+        const cy = toCanvasY(circle.cy);
+        const rPx = Math.abs(toCanvasX(circle.cx + circle.radius) - cx) || 4;
+        ctx.save();
+        for (const layer of GLOW_LAYERS) {
+          ctx.globalAlpha = layer.alpha;
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = layer.width;
+          ctx.beginPath();
+          ctx.arc(cx, cy, rPx, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
+
+      // Lug glow
+      if (selectedLugIndex >= 0 && selectedLugIndex < vesselState.liftingLugs.length) {
+        const marker = projectLiftingLug(vesselState.liftingLugs[selectedLugIndex], od);
+        const cx = toCanvasX(marker.cx);
+        const cy = toCanvasY(marker.cy);
+        ctx.save();
+        for (const layer of GLOW_LAYERS) {
+          ctx.globalAlpha = layer.alpha;
+          ctx.fillStyle = '#22c55e';
+          ctx.beginPath();
+          ctx.arc(cx, cy, layer.width, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
+
+      // 3d. Welds (drawn outside clip so they extend beyond vessel bounds)
+      ctx.save();
+      for (let wi = 0; wi < vesselState.welds.length; wi++) {
+        const weld = vesselState.welds[wi];
+        const isSelected = wi === selectedWeldIndex;
+        const projected =
+          weld.type === 'circumferential'
+            ? projectCircWeld(weld, od)
+            : projectLongWeld(weld, od);
+
+        const px = toCanvasX(projected.x1);
+
+        // Base weld line
+        ctx.strokeStyle = isSelected ? '#4ade80' : '#22c55e';
+        ctx.lineWidth = isSelected ? 2.5 : 1;
+        ctx.setLineDash(isSelected ? [8, 4] : [6, 4]);
+        ctx.globalAlpha = isSelected ? 1 : 0.7;
+
+        if (weld.type === 'circumferential') {
+          ctx.beginPath();
+          ctx.moveTo(px, y0 - 15);
+          ctx.lineTo(px, y1 + 15);
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(toCanvasX(projected.x1), toCanvasY(projected.y1));
+          ctx.lineTo(toCanvasX(projected.x2), toCanvasY(projected.y2));
+          ctx.stroke();
+        }
+
+        // Label — CW above chart, LW to the right of the line
+        ctx.globalAlpha = 1;
+        ctx.setLineDash([]);
+        ctx.fillStyle = isSelected ? '#16a34a' : '#333';
+        ctx.font = isSelected ? 'bold 11px sans-serif' : '10px sans-serif';
+        if (weld.type === 'circumferential') {
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(projected.label, px, y0 - 18);
+        } else {
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(projected.label, toCanvasX(projected.x2) + 6, toCanvasY(projected.y2));
+        }
+      }
+      ctx.globalAlpha = 1;
+      ctx.setLineDash([]);
+      ctx.restore();
+
       // 4. Dimension scales
       drawAxialScale(ctx, vesselLength, toCanvasX, y1 + 4);
       drawCircumScale(ctx, circumference, toCanvasY, x0 - 4);
@@ -225,7 +344,7 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
       }
 
       ctx.restore();
-    }, [vesselState, toCanvasX, toCanvasY]);
+    }, [vesselState, selectedWeldIndex, selectedNozzleIndex, selectedSaddleIndex, selectedLugIndex, toCanvasX, toCanvasY]);
 
     // -----------------------------------------------------------------------
     // Heatmap rendering helper — per-pixel mapping to screen-space ImageData
@@ -393,43 +512,20 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
         ctx.fillText('12 o\'clock (TDC)', x0 + 4, tdcY - 3);
         ctx.restore();
 
-        // Welds
-        ctx.lineWidth = 1.5;
-        for (const weld of state.welds) {
-          const projected =
-            weld.type === 'circumferential'
-              ? projectCircWeld(weld, od)
-              : projectLongWeld(weld, od);
-          ctx.strokeStyle = weld.color || '#ffff00';
-          ctx.beginPath();
-          ctx.moveTo(toCanvasX(projected.x1), toCanvasY(projected.y1));
-          ctx.lineTo(toCanvasX(projected.x2), toCanvasY(projected.y2));
-          ctx.stroke();
-
-          // Label
-          ctx.fillStyle = '#333';
-          ctx.font = '10px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'bottom';
-          ctx.fillText(
-            projected.label,
-            toCanvasX((projected.x1 + projected.x2) / 2),
-            toCanvasY(Math.min(projected.y1, projected.y2)) - 3,
-          );
-        }
+        // Welds are rendered outside the clip region (see main draw fn)
 
         // Saddles
         for (const saddle of state.saddles) {
           const rect = projectSaddle(saddle, od);
+          const rx = toCanvasX(rect.x);
+          const ry = toCanvasY(rect.y);
+          const rw = toCanvasX(rect.x + rect.width) - rx;
+          const rh = toCanvasY(rect.y + rect.height) - ry;
+
           ctx.strokeStyle = '#888';
           ctx.lineWidth = 1;
           ctx.setLineDash([4, 3]);
-          ctx.strokeRect(
-            toCanvasX(rect.x),
-            toCanvasY(rect.y),
-            toCanvasX(rect.x + rect.width) - toCanvasX(rect.x),
-            toCanvasY(rect.y + rect.height) - toCanvasY(rect.y),
-          );
+          ctx.strokeRect(rx, ry, rw, rh);
           ctx.setLineDash([]);
 
           ctx.fillStyle = '#666';
@@ -448,7 +544,6 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
           const circle = projectNozzle(nozzle, od);
           const cx = toCanvasX(circle.cx);
           const cy = toCanvasY(circle.cy);
-          // Scale radius by zoom
           const rPx =
             Math.abs(toCanvasX(circle.cx + circle.radius) - cx) || 4;
 

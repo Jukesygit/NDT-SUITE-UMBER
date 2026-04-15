@@ -166,12 +166,28 @@ export function createWeldMaterial(
 export function createWeldHighlightMaterial(): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
     color: 0x44ff88,
-    emissive: 0x115533,
-    roughness: 0.3,
-    metalness: 0.5,
+    emissive: 0x22cc66,
+    emissiveIntensity: 1.5,
+    roughness: 0.2,
+    metalness: 0.3,
     side: THREE.FrontSide,
     transparent: true,
     opacity: 1.0,
+  });
+}
+
+/**
+ * Create an additive-blended glow material for the weld selection halo.
+ * Rendered on a slightly oversized duplicate mesh to simulate light emanation.
+ */
+export function createWeldGlowMaterial(): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({
+    color: 0x44ff88,
+    transparent: true,
+    opacity: 0.25,
+    blending: THREE.AdditiveBlending,
+    side: THREE.FrontSide,
+    depthWrite: false,
   });
 }
 

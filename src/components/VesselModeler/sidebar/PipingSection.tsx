@@ -23,6 +23,8 @@ export interface PipingSectionProps {
     onRemoveSegment: (pipelineId: string, segmentIndex: number) => void;
     onRemovePipeline: (pipelineId: string) => void;
     onSelectPipeSegment: (pipelineId: string, segmentIndex: number) => void;
+    isOpen?: boolean;
+    onToggle?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -69,6 +71,8 @@ export function PipingSection({
     onRemoveSegment,
     onRemovePipeline,
     onSelectPipeSegment,
+    isOpen,
+    onToggle,
 }: PipingSectionProps) {
     const { pipelines, nozzles } = vesselState;
 
@@ -102,7 +106,7 @@ export function PipingSection({
         : null;
 
     return (
-        <SubSection title="Piping" count={connectionPoints.length} defaultOpen>
+        <SubSection title="Piping" count={connectionPoints.length} isOpen={isOpen} onToggle={onToggle}>
             {/* Parts library grid */}
             <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', margin: '0 0 8px 0' }}>
                 Drag a part onto a connection point, or click to add

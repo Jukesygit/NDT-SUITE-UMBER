@@ -37,10 +37,10 @@
     border-radius: 3px;
 }
 
-/* Sidebar sections */
+/* Sidebar sections — Top level */
 .vm-section {
-    padding: 15px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .vm-section-header {
@@ -49,7 +49,20 @@
     align-items: center;
     cursor: pointer;
     user-select: none;
-    padding: 4px 0;
+    padding: 12px 15px;
+    background: rgba(255, 255, 255, 0.04);
+    border-left: 3px solid transparent;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+/* Active (open) section header — distinct background */
+.vm-section:not(.collapsed) .vm-section-header {
+    background: rgba(255, 255, 255, 0.07);
+    border-left-color: var(--color-primary-500, #3b82f6);
+}
+
+.vm-section-header:hover {
+    background: rgba(255, 255, 255, 0.09);
 }
 
 .vm-section-header:hover .vm-section-title {
@@ -58,14 +71,19 @@
 
 .vm-section-title {
     margin: 0;
-    font-size: 0.85rem;
-    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.55);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.6px;
     font-weight: 600;
     display: flex;
     align-items: center;
     gap: 8px;
+}
+
+/* Active section title is brighter */
+.vm-section:not(.collapsed) .vm-section-title {
+    color: rgba(255, 255, 255, 0.9);
 }
 
 .vm-section-content {
@@ -73,13 +91,14 @@
     transition: max-height 0.3s ease, opacity 0.2s ease;
     max-height: 2000px;
     opacity: 1;
-    margin-top: 10px;
+    padding: 10px 15px 15px;
+    background: rgba(0, 0, 0, 0.12);
 }
 
 .vm-section.collapsed .vm-section-content {
     max-height: 0;
     opacity: 0;
-    margin-top: 0;
+    padding: 0 15px;
 }
 
 .vm-section.collapsed .vm-chevron {
@@ -88,8 +107,12 @@
 
 .vm-chevron {
     transition: transform 0.2s ease;
-    color: rgba(255, 255, 255, 0.45);
+    color: rgba(255, 255, 255, 0.35);
     font-size: 0.75rem;
+}
+
+.vm-section:not(.collapsed) .vm-chevron {
+    color: rgba(255, 255, 255, 0.55);
 }
 
 /* Section / subsection item count badges */
@@ -102,23 +125,31 @@
     height: 18px;
     padding: 0 5px;
     border-radius: 9px;
-    background: rgba(255, 255, 255, 0.12);
-    color: rgba(255, 255, 255, 0.6);
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--color-primary-400, #60a5fa);
     font-size: 0.7rem;
     font-weight: 600;
     line-height: 1;
     margin-left: 6px;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.vm-subsection-count {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.55);
+    border-color: transparent;
 }
 
 .vm-subsection-count.empty {
-    opacity: 0.4;
+    opacity: 0.35;
 }
 
 /* Sub-sections (nested within grouped sections) */
 .vm-subsection {
-    margin-bottom: 4px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.02);
+    margin-bottom: 6px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .vm-subsection-header {
@@ -127,20 +158,25 @@
     align-items: center;
     cursor: pointer;
     user-select: none;
-    padding: 8px 10px;
-    border-radius: 4px;
+    padding: 9px 10px;
+    border-radius: 6px;
     transition: background 0.15s;
 }
 
 .vm-subsection-header:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .vm-subsection-title {
     font-size: 0.78rem;
-    color: rgba(255, 255, 255, 0.75);
+    color: rgba(255, 255, 255, 0.65);
     font-weight: 500;
     letter-spacing: 0.3px;
+}
+
+/* Open sub-section title is brighter */
+.vm-subsection:not(.collapsed) .vm-subsection-title {
+    color: rgba(255, 255, 255, 0.85);
 }
 
 .vm-subsection-header:hover .vm-subsection-title {

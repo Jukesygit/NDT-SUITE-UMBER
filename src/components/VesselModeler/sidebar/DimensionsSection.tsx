@@ -5,11 +5,13 @@ import { SliderRow, Section } from './SliderRow';
 export interface DimensionsSectionProps {
     vesselState: VesselState;
     onUpdateDimensions: (updates: Partial<VesselState>) => void;
+    isOpen?: boolean;
+    onToggle?: () => void;
 }
 
-export function DimensionsSection({ vesselState, onUpdateDimensions }: DimensionsSectionProps) {
+export function DimensionsSection({ vesselState, onUpdateDimensions, isOpen, onToggle }: DimensionsSectionProps) {
     return (
-        <Section title="Dimensions" icon={<Ruler size={14} style={{ marginRight: 6 }} />}>
+        <Section title="Dimensions" icon={<Ruler size={14} style={{ marginRight: 6 }} />} isOpen={isOpen} onToggle={onToggle}>
             <SliderRow
                 label="Inner Diameter"
                 value={vesselState.id}

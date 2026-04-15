@@ -14,12 +14,14 @@ export interface ImageOverlaySectionProps {
     onSelectTexture: (id: number) => void;
     getNextTextureId: () => number;
     renderer: THREE.WebGLRenderer | null;
+    isOpen?: boolean;
+    onToggle?: () => void;
 }
 
 export function ImageOverlaySection({
     vesselState, selectedTextureId,
     onAddTexture, onUpdateTexture, onRemoveTexture, onSelectTexture,
-    getNextTextureId, renderer,
+    getNextTextureId, renderer, isOpen, onToggle,
 }: ImageOverlaySectionProps) {
     const sel = vesselState.textures.find(t => t.id === selectedTextureId);
 
@@ -60,7 +62,7 @@ export function ImageOverlaySection({
     };
 
     return (
-        <SubSection title="Image Overlays" count={vesselState.textures.length}>
+        <SubSection title="Image Overlays" count={vesselState.textures.length} isOpen={isOpen} onToggle={onToggle}>
             {/* Drop zone */}
             <label
                 className="vm-texture-import"

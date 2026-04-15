@@ -29,6 +29,7 @@ const DocumentsPage = lazy(() => import('./pages/documents/index.tsx'));
 const ProjectListPage = lazy(() => import('./pages/projects/ProjectListPage'));
 const ProjectSetupPage = lazy(() => import('./pages/projects/ProjectSetupPage'));
 const ProjectDetailPage = lazy(() => import('./pages/projects/ProjectDetailPage'));
+const InspectionDetailPage = lazy(() => import('./pages/projects/InspectionDetailPage'));
 
 interface SuspenseRoutesProps {
     children: ReactNode;
@@ -165,6 +166,11 @@ function App() {
                                         <Route path="/projects/:id" element={
                                             <RequireTabVisible tabId="tools">
                                                 <ErrorBoundary><ProjectDetailPage /></ErrorBoundary>
+                                            </RequireTabVisible>
+                                        } />
+                                        <Route path="/projects/:projectId/vessels/:vesselId" element={
+                                            <RequireTabVisible tabId="tools">
+                                                <ErrorBoundary><InspectionDetailPage /></ErrorBoundary>
                                             </RequireTabVisible>
                                         } />
                                         <Route path="/projects/:id/edit" element={

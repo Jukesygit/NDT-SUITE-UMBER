@@ -1,5 +1,5 @@
-import React, { useRef } from 'react';
-import { Trash2, Square, Eye, EyeOff, Lock, Unlock, Ruler, ShieldAlert, Upload, X, FileText } from 'lucide-react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { Trash2, Square, Eye, EyeOff, Lock, Unlock, Ruler, ShieldAlert, Upload, X, FileText, ImagePlus } from 'lucide-react';
 import type {
     VesselState,
     AnnotationShapeConfig,
@@ -8,6 +8,8 @@ import type {
     RulerConfig,
     ThicknessThresholds,
 } from '../types';
+import type { ProjectImage } from '../../../types/inspection-project';
+import { getProjectFileUrl } from '../../../services/inspection-project-service';
 import { computeRulerDistance } from '../engine/annotation-geometry';
 import { SliderRow, SubSection } from './SliderRow';
 import { ThresholdSection } from './ThresholdSection';
@@ -32,6 +34,66 @@ export interface AnnotationSectionProps {
     selectedRulerId: number;
     onSelectRuler: (id: number) => void;
     onUpdateThicknessThresholds: (thresholds: ThicknessThresholds) => void;
+    projectImages?: ProjectImage[];
+    isOpen?: boolean;
+    onToggle?: () => void;
+}
+
+// ---------------------------------------------------------------------------
+// Project image picker item for restriction photos
+// ---------------------------------------------------------------------------
+
+function RestrictionProjectImageItem({
+    image,
+    onAttach,
+}: {
+    image: ProjectImage;
+    onAttach: (image: ProjectImage) => void;
+}) {
+    const [thumbUrl, setThumbUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        getProjectFileUrl(image.storage_path, image.storage_bucket)
+            .then((url) => { if (!cancelled) setThumbUrl(url); })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, [image.storage_path, image.storage_bucket]);
+
+    return (
+        <button
+            onClick={() => onAttach(image)}
+            title={`Attach "${image.name}"`}
+            style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                width: '100%',
+                padding: '4px 6px',
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 4,
+                cursor: 'pointer',
+                color: '#ccc',
+                fontSize: '0.72rem',
+                textAlign: 'left',
+            }}
+        >
+            {thumbUrl ? (
+                <img
+                    src={thumbUrl}
+                    alt={image.name}
+                    style={{ width: 22, height: 22, objectFit: 'cover', borderRadius: 3, flexShrink: 0 }}
+                />
+            ) : (
+                <div style={{ width: 22, height: 22, background: 'rgba(255,255,255,0.06)', borderRadius: 3, flexShrink: 0 }} />
+            )}
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {image.name}
+            </span>
+            <ImagePlus size={11} style={{ flexShrink: 0, opacity: 0.5 }} />
+        </button>
+    );
 }
 
 export function AnnotationSection({
@@ -42,12 +104,38 @@ export function AnnotationSection({
     rulerDrawMode, onSetRulerDrawMode, onRemoveRuler,
     onUpdateRuler, selectedRulerId, onSelectRuler,
     onUpdateThicknessThresholds,
+    projectImages,
+    isOpen, onToggle,
 }: AnnotationSectionProps) {
     const sel = vesselState.annotations.find(a => a.id === selectedAnnotationId);
     const selRuler = vesselState.rulers.find(r => r.id === selectedRulerId);
     const mc = vesselState.measurementConfig;
 
     const restrictionImageRef = useRef<HTMLInputElement>(null);
+    const [showProjectPicker, setShowProjectPicker] = useState(false);
+    const [loadingProjectImage, setLoadingProjectImage] = useState(false);
+
+    const handleAttachProjectImage = useCallback(async (annId: number, pImg: ProjectImage) => {
+        setLoadingProjectImage(true);
+        try {
+            const url = await getProjectFileUrl(pImg.storage_path, pImg.storage_bucket);
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const reader = new FileReader();
+            reader.onload = () => {
+                onUpdateAnnotation(annId, {
+                    restrictionImage: reader.result as string,
+                    restrictionImageName: pImg.filename,
+                });
+            };
+            reader.readAsDataURL(blob);
+            setShowProjectPicker(false);
+        } catch {
+            // Silently fail
+        } finally {
+            setLoadingProjectImage(false);
+        }
+    }, [onUpdateAnnotation]);
 
     const addManual = (type: AnnotationShapeType) => {
         const id = getNextAnnotationId();
@@ -83,7 +171,7 @@ export function AnnotationSection({
     };
 
     return (
-        <SubSection title="Annotations" count={vesselState.annotations.length + vesselState.rulers.length}>
+        <SubSection title="Annotations" count={vesselState.annotations.length + vesselState.rulers.length} isOpen={isOpen} onToggle={onToggle}>
             {/* Draw tool toggles */}
             <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', margin: '0 0 8px 0' }}>
                 Select a tool then click-drag on the vessel to draw, or add manually
@@ -310,6 +398,46 @@ export function AnnotationSection({
                                             style={{ display: 'none' }}
                                             onChange={e => handleRestrictionImageUpload(sel.id, e)}
                                         />
+                                        {/* Project image pool */}
+                                        {projectImages && projectImages.length > 0 && (
+                                            <>
+                                                <button
+                                                    onClick={() => setShowProjectPicker(p => !p)}
+                                                    disabled={loadingProjectImage}
+                                                    style={{
+                                                        width: '100%',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: 6,
+                                                        padding: '6px 8px',
+                                                        marginTop: 6,
+                                                        background: 'rgba(59,130,246,0.08)',
+                                                        border: '1px solid rgba(59,130,246,0.2)',
+                                                        borderRadius: 4,
+                                                        color: '#93c5fd',
+                                                        cursor: loadingProjectImage ? 'wait' : 'pointer',
+                                                        fontSize: '0.75rem',
+                                                        opacity: loadingProjectImage ? 0.5 : 1,
+                                                    }}
+                                                    title="Attach an image from the project image pool"
+                                                >
+                                                    <ImagePlus size={14} />
+                                                    {loadingProjectImage ? 'Attaching...' : `From Project Pool (${projectImages.length})`}
+                                                </button>
+                                                {showProjectPicker && (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6, maxHeight: 160, overflowY: 'auto' }}>
+                                                        {projectImages.map((pImg) => (
+                                                            <RestrictionProjectImageItem
+                                                                key={pImg.id}
+                                                                image={pImg}
+                                                                onAttach={(img) => handleAttachProjectImage(sel.id, img)}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             )}

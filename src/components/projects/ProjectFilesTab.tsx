@@ -22,6 +22,8 @@ interface ProjectFilesTabProps {
 const FILE_TYPE_LABELS: Record<ProjectFileType, string> = {
     ga_drawing: 'GA Drawing',
     location_drawing: 'Location Drawing',
+    pid_drawing: 'P&ID Drawing',
+    rba_file: 'RBA File',
     photo: 'Photo',
     reference: 'Reference',
     report: 'Report',

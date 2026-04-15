@@ -20,6 +20,7 @@ import {
     createLugHighlightMaterial,
     createWeldMaterial,
     createWeldHighlightMaterial,
+    createWeldGlowMaterial,
     createPipelineMaterial,
     createConnectionPointMaterial,
 } from './engine/materials';
@@ -104,6 +105,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         lugHighlight: THREE.MeshStandardMaterial;
         weld: THREE.MeshStandardMaterial;
         weldHighlight: THREE.MeshStandardMaterial;
+        weldGlow: THREE.MeshBasicMaterial;
         pipeline: THREE.MeshStandardMaterial;
         connectionPoint: THREE.MeshStandardMaterial;
     } | null>(null);
@@ -114,6 +116,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
     // --- Tier 2: cached mesh arrays from the last build result ---
     const buildResultRef = useRef<BuildSceneResult | null>(null);
     const weldMeshesRef = useRef<THREE.Object3D[]>([]);
+    const weldGlowRef = useRef<THREE.Object3D | null>(null);
 
     // --- Tier 1: track textureObjects identity for forced rebuild ---
     const textureObjectsRef = useRef<Record<number, THREE.Texture>>(textureObjects);
@@ -162,9 +165,10 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         const lugHighlight = createLugHighlightMaterial();
         const weld = createWeldMaterial(vesselStateRef.current.visuals.material);
         const weldHighlight = createWeldHighlightMaterial();
+        const weldGlow = createWeldGlowMaterial();
         const pipeline = createPipelineMaterial(vesselStateRef.current.visuals.material);
         const connectionPoint = createConnectionPointMaterial();
-        materialsRef.current = { shell, nozzle, nozzleHighlight, saddleHighlight, lug, lugHighlight, weld, weldHighlight, pipeline, connectionPoint };
+        materialsRef.current = { shell, nozzle, nozzleHighlight, saddleHighlight, lug, lugHighlight, weld, weldHighlight, weldGlow, pipeline, connectionPoint };
 
         // Setup interaction manager
         const canvas = manager.getRenderer().domElement;
@@ -235,6 +239,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
                 materialsRef.current.lugHighlight.dispose();
                 materialsRef.current.weld.dispose();
                 materialsRef.current.weldHighlight.dispose();
+                materialsRef.current.weldGlow.dispose();
                 materialsRef.current.pipeline.dispose();
                 materialsRef.current.connectionPoint.dispose();
                 materialsRef.current = null;
@@ -537,15 +542,40 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             });
         });
 
-        // Welds: swap material on all child meshes
+        // Welds: swap material + add/remove glow mesh
+        // Remove previous glow mesh
+        if (weldGlowRef.current) {
+            weldGlowRef.current.parent?.remove(weldGlowRef.current);
+            weldGlowRef.current.traverse((child) => {
+                if (child instanceof THREE.Mesh) child.geometry.dispose();
+            });
+            weldGlowRef.current = null;
+        }
+
         weldMeshesRef.current.forEach((weldGroup) => {
             const idx = weldGroup.userData?.weldIdx as number | undefined;
-            const mat = idx === selectedWeldIndex ? materials.weldHighlight : materials.weld;
+            const isSelected = idx === selectedWeldIndex;
+            const mat = isSelected ? materials.weldHighlight : materials.weld;
             weldGroup.traverse((child) => {
                 if (child instanceof THREE.Mesh) {
                     child.material = mat;
                 }
             });
+
+            // Add glow halo on the selected weld
+            if (isSelected && idx !== undefined && idx >= 0 && idx < state.welds.length) {
+                const glowGroup = createWeldGeometry(state.welds[idx], state, materials.weldGlow as unknown as THREE.MeshStandardMaterial);
+                // Scale up slightly so it envelops the base weld
+                glowGroup.traverse((child) => {
+                    if (child instanceof THREE.Mesh) {
+                        child.material = materials.weldGlow;
+                        child.scale.set(1.08, 1.08, 1.08);
+                        child.renderOrder = -1;
+                    }
+                });
+                weldGroup.parent?.add(glowGroup);
+                weldGlowRef.current = glowGroup;
+            }
         });
 
         // Pipe segments: highlight selected segment with gold material

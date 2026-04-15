@@ -11,11 +11,14 @@ export interface NozzleSectionProps {
     onUpdateNozzle: (index: number, updates: Partial<NozzleConfig>) => void;
     onRemoveNozzle: (index: number) => void;
     onSelectNozzle: (index: number) => void;
+    isOpen?: boolean;
+    onToggle?: () => void;
 }
 
 export function NozzleSection({
     vesselState, selectedNozzleIndex,
     onAddNozzle, onUpdateNozzle, onRemoveNozzle, onSelectNozzle,
+    isOpen, onToggle,
 }: NozzleSectionProps) {
     // Filter out plain-pipe nozzles — those are managed in the Piping section
     const flangedNozzles = vesselState.nozzles
@@ -36,7 +39,7 @@ export function NozzleSection({
     };
 
     return (
-        <SubSection title="Nozzles" count={flangedNozzles.length} defaultOpen>
+        <SubSection title="Nozzles" count={flangedNozzles.length} isOpen={isOpen} onToggle={onToggle}>
             {/* Library grid - drag onto 3D canvas or click to add */}
             <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', margin: '0 0 8px 0' }}>
                 Drag a nozzle size onto the vessel

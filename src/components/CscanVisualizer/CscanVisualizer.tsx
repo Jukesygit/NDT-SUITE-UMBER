@@ -27,8 +27,11 @@ import {
 } from './utils/workerManager';
 import { useSaveScanComposite } from '../../hooks/mutations/useScanCompositeMutations';
 import { useAuth } from '../../contexts/AuthContext';
+import { useProjectVessels } from '../../hooks/queries/useInspectionProjects';
 // @ts-ignore - JS module without type declarations
 import { isSupabaseConfigured } from '../../supabase-client';
+
+const SECTION_OPTIONS = ['Shell', 'Dome End', 'Nozzle', 'Other'] as const;
 
 const CscanVisualizer: React.FC = () => {
   // Project context from URL params
@@ -58,6 +61,9 @@ const CscanVisualizer: React.FC = () => {
   // Save to cloud state
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [saveName, setSaveName] = useState('');
+  const [saveVesselId, setSaveVesselId] = useState(projectVesselId ?? '');
+  const [saveSectionType, setSaveSectionType] = useState('Shell');
+  const [saveCustomSection, setSaveCustomSection] = useState('');
 
   // Export progress state
   const [exportProgress, setExportProgress] = useState<{ progress: number; message: string } | null>(null);
@@ -77,6 +83,7 @@ const CscanVisualizer: React.FC = () => {
 
   // Cloud save hooks
   const saveComposite = useSaveScanComposite();
+  const { data: projectVessels } = useProjectVessels(projectId ?? undefined);
   const { user } = useAuth();
 
   // Helper to add scans to state
@@ -277,6 +284,8 @@ const CscanVisualizer: React.FC = () => {
   // Save to cloud handler
   const handleSaveToCloud = useCallback(async () => {
     if (!scanData || !user) return;
+    const effectiveVesselId = saveVesselId || undefined;
+    const sectionType = saveSectionType === 'Other' ? saveCustomSection : saveSectionType;
     try {
       await saveComposite.mutateAsync({
         name: saveName || scanData.filename || 'Untitled Composite',
@@ -289,11 +298,14 @@ const CscanVisualizer: React.FC = () => {
         width: scanData.width,
         height: scanData.height,
         sourceFiles: scanData.sourceRegions || null,
-        projectVesselId: projectVesselId || undefined,
+        projectVesselId: effectiveVesselId,
+        sectionType: sectionType || undefined,
       });
       setShowSaveDialog(false);
       setSaveName('');
-      const savedToLabel = projectVesselId ? 'Composite saved to project' : 'Composite saved to cloud';
+      setSaveSectionType('Shell');
+      setSaveCustomSection('');
+      const savedToLabel = effectiveVesselId ? 'Composite saved to project' : 'Composite saved to cloud';
       setStatusMessage({ type: 'success', message: savedToLabel });
       setTimeout(() => setStatusMessage(null), 3000);
     } catch (err) {
@@ -304,7 +316,7 @@ const CscanVisualizer: React.FC = () => {
       setStatusMessage({ type: 'error', message: `Failed to save composite${sizeMsg}` });
       setTimeout(() => setStatusMessage(null), 5000);
     }
-  }, [scanData, user, saveName, saveComposite]);
+  }, [scanData, user, saveName, saveVesselId, saveSectionType, saveCustomSection, saveComposite]);
 
   // Export handlers
   const handleExportImage = useCallback(async () => {
@@ -673,6 +685,8 @@ const CscanVisualizer: React.FC = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-white font-medium mb-4">Save Composite to Cloud</h3>
+
+            {/* Name */}
             <label className="block text-sm text-gray-400 mb-1">Name</label>
             <input
               type="text"
@@ -682,10 +696,57 @@ const CscanVisualizer: React.FC = () => {
               className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500 mb-4"
               autoFocus
               onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSaveToCloud();
                 if (e.key === 'Escape') setShowSaveDialog(false);
               }}
             />
+
+            {/* Vessel (dropdown — only shown when in project context) */}
+            {projectId && projectVessels && projectVessels.length > 0 && (
+              <>
+                <label className="block text-sm text-gray-400 mb-1">Vessel</label>
+                <select
+                  value={saveVesselId}
+                  onChange={(e) => setSaveVesselId(e.target.value)}
+                  className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white text-sm focus:outline-none focus:border-blue-500 mb-4"
+                >
+                  <option value="">— No vessel —</option>
+                  {projectVessels.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.vessel_tag || v.vessel_name || v.id}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+
+            {/* Section Type */}
+            <label className="block text-sm text-gray-400 mb-1">Section</label>
+            <div className="flex gap-2 mb-2">
+              {SECTION_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  onClick={() => setSaveSectionType(opt)}
+                  className={`px-3 py-1.5 text-xs rounded border transition-colors ${
+                    saveSectionType === opt
+                      ? 'bg-blue-600 border-blue-500 text-white'
+                      : 'bg-gray-700 border-gray-600 text-gray-300 hover:border-gray-500'
+                  }`}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+            {saveSectionType === 'Other' && (
+              <input
+                type="text"
+                value={saveCustomSection}
+                onChange={(e) => setSaveCustomSection(e.target.value)}
+                placeholder="Custom section name"
+                className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500 mb-4"
+              />
+            )}
+            {saveSectionType !== 'Other' && <div className="mb-4" />}
+
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowSaveDialog(false)}

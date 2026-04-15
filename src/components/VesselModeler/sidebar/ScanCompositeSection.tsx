@@ -13,6 +13,8 @@ export interface ScanCompositeSectionProps {
     cloudComposites: Array<{ id: string; name: string; width: number; height: number; created_at: string }> | undefined;
     cloudCompositesLoading: boolean;
     cloudCompositesError: Error | null;
+    isOpen?: boolean;
+    onToggle?: () => void;
 }
 
 export function ScanCompositeSection({
@@ -20,6 +22,7 @@ export function ScanCompositeSection({
     onSelectScanComposite, onImportComposite,
     onUpdateScanComposite, onRemoveScanComposite,
     cloudComposites, cloudCompositesLoading, cloudCompositesError,
+    isOpen, onToggle,
 }: ScanCompositeSectionProps) {
     const [showImport, setShowImport] = useState(false);
     const [importingId, setImportingId] = useState<string | null>(null);
@@ -31,7 +34,7 @@ export function ScanCompositeSection({
     };
 
     return (
-        <SubSection title="Scan Composites" count={vesselState.scanComposites.length}>
+        <SubSection title="Scan Composites" count={vesselState.scanComposites.length} isOpen={isOpen} onToggle={onToggle}>
             <button
                 className="vm-btn vm-btn-primary"
                 onClick={() => setShowImport(true)}

@@ -3,7 +3,7 @@
  */
 
 import { useNavigate } from 'react-router-dom';
-import { Box, FileBarChart, Trash2, Settings } from 'lucide-react';
+import { Box, FileBarChart, Trash2, Settings, ChevronRight } from 'lucide-react';
 import type { ProjectVessel } from '../../types/inspection-project';
 import { VESSEL_STATUS_LABELS, VESSEL_STATUS_COLORS } from '../../types/inspection-project';
 
@@ -30,8 +30,11 @@ export function VesselCard({ vessel, projectId, compositeCount, onDelete, onEdit
                 border: '1px solid rgba(255,255,255,0.08)',
             }}
         >
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+            {/* Header — clickable to inspection detail page */}
+            <div
+                onClick={() => navigate(`/projects/${projectId}/vessels/${vessel.id}`)}
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, cursor: 'pointer' }}
+            >
                 <div>
                     <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', margin: 0 }}>
                         {vessel.vessel_tag ? `${vessel.vessel_tag} ` : ''}{vessel.vessel_name}
@@ -58,6 +61,7 @@ export function VesselCard({ vessel, projectId, compositeCount, onDelete, onEdit
                     <span style={{ width: 5, height: 5, borderRadius: '50%', background: VESSEL_STATUS_COLORS[vessel.status] }} />
                     {VESSEL_STATUS_LABELS[vessel.status]}
                 </span>
+                <ChevronRight size={16} style={{ color: 'rgba(255,255,255,0.3)' }} />
             </div>
 
             {/* Coverage bar */}
