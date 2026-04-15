@@ -400,14 +400,27 @@ export async function listProjectVesselModels(projectVesselIds: string[]) {
 
     if (error) throw error;
 
-    return (data ?? []).map((row: any) => ({
-        id: row.id,
-        name: row.name,
-        model_type: (row.config as any)?.modelType ?? null,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        project_vessel_id: row.project_vessel_id,
-    }));
+    return (data ?? []).map((row: any) => {
+        const cfg = row.config as any;
+        return {
+            id: row.id,
+            name: row.name,
+            model_type: cfg?.modelType ?? null,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            project_vessel_id: row.project_vessel_id,
+            // Expose geometry for shell area computation
+            geometry: (typeof cfg?.id === 'number' && typeof cfg?.length === 'number' && typeof cfg?.headRatio === 'number')
+                ? {
+                    id: cfg.id as number,          // inner diameter mm
+                    length: cfg.length as number,  // tan-tan length mm
+                    headRatio: cfg.headRatio as number,
+                }
+                : null,
+            // Expose coverage rects for scoped coverage computation
+            coverageRects: Array.isArray(cfg?.coverageRects) ? cfg.coverageRects : [],
+        };
+    });
 }
 
 // ============================================================================

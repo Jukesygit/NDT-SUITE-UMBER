@@ -23,7 +23,7 @@ interface ModelsSectionProps {
     vessel: ProjectVessel;
     projectId: string;
     composites: { id: string; name: string; stats: any; section_type?: string | null; created_at: string; project_vessel_id: string | null }[];
-    vesselModels: { id: string; name: string; model_type?: string | null; updated_at: string; project_vessel_id: string | null }[];
+    vesselModels: { id: string; name: string; model_type?: string | null; updated_at: string; project_vessel_id: string | null; geometry?: any; coverageRects?: any[] }[];
 }
 
 export default function ModelsSection({ vessel, projectId, composites, vesselModels }: ModelsSectionProps) {
@@ -131,7 +131,7 @@ export default function ModelsSection({ vessel, projectId, composites, vesselMod
                                 </div>
 
                                 <a
-                                    href={`/vessel-modeler?project=${projectId}&vessel=${vessel.id}`}
+                                    href={`/vessel-modeler?project=${projectId}&vessel=${vessel.id}&model=${model.id}`}
                                     style={{
                                         display: 'inline-flex', alignItems: 'center', gap: 4,
                                         fontSize: '0.75rem', color: '#60a5fa', textDecoration: 'none',

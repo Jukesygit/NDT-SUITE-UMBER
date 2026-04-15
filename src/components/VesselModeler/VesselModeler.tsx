@@ -39,7 +39,7 @@ import { getScanComposite } from '../../services/scan-composite-service';
 import { useLinkScanCompositeToProject } from '../../hooks/mutations/useScanCompositeMutations';
 import { uploadAnnotationImage, deleteAnnotationImage, getAnnotationImageUrl } from '../../services/annotation-attachment-service';
 import { useAuth } from '../../contexts/AuthContext';
-import { useVesselModelByProjectVessel } from '../../hooks/queries/useVesselModels';
+import { useVesselModel, useVesselModelByProjectVessel } from '../../hooks/queries/useVesselModels';
 import { useSaveVesselModel, useUpdateVesselModel } from '../../hooks/mutations/useVesselModelMutations';
 import { useProjectList, useProjectVessels, useProjectImages } from '../../hooks/queries/useInspectionProjects';
 import { getVesselModelByProjectVessel } from '../../services/vessel-model-service';
@@ -369,6 +369,7 @@ export default function VesselModeler() {
     const [searchParams] = useSearchParams();
     const projectId = searchParams.get('project');
     const projectVesselId = searchParams.get('vessel');
+    const modelIdParam = searchParams.get('model');
 
     // Auth context for attachment uploads
     const { user } = useAuth();
@@ -376,8 +377,13 @@ export default function VesselModeler() {
     const vesselModelIdRef = useRef<string | null>(null);
     const vesselModelId = vesselModelIdRef.current ?? `local-${crypto.randomUUID()}`;
 
-    // Fetch linked model when opened from project context
-    const { data: linkedModel, isLoading: linkedModelLoading } = useVesselModelByProjectVessel(projectVesselId);
+    // Fetch specific model by ID, or fall back to latest model for the vessel
+    const { data: specificModel, isLoading: specificModelLoading } = useVesselModel(modelIdParam ?? undefined);
+    const { data: latestModel, isLoading: latestModelLoading } = useVesselModelByProjectVessel(
+        modelIdParam ? null : projectVesselId,
+    );
+    const linkedModel = specificModel ?? latestModel;
+    const linkedModelLoading = specificModelLoading || latestModelLoading;
 
     // Save-to-project mutations
     const saveModelMutation = useSaveVesselModel();

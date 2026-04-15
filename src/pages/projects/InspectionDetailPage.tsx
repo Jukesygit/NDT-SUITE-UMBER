@@ -4,9 +4,9 @@
  * Sections mirror the PAUT report structure for direct report generation.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Box, MapPin, Calendar, Pencil, Radio } from 'lucide-react';
+import { ArrowLeft, Box, MapPin, Calendar, Pencil, Radio, ChevronDown } from 'lucide-react';
 import { useUpdateProjectVessel } from '../../hooks/mutations/useInspectionProjectMutations';
 import { usePopulateFromCompanion } from '../../hooks/mutations/usePopulateFromCompanion';
 import {
@@ -22,6 +22,7 @@ import {
 } from '../../hooks/queries/useInspectionProjects';
 import { PageSpinner } from '../../components/ui/LoadingSpinner';
 import { VESSEL_STATUS_LABELS, VESSEL_STATUS_COLORS } from '../../types/inspection-project';
+import type { VesselStatus } from '../../types/inspection-project';
 import VesselDetailsSection from '../../components/projects/inspection-detail/VesselDetailsSection';
 import ProcedureSection from '../../components/projects/inspection-detail/ProcedureSection';
 import EquipmentSection from '../../components/projects/inspection-detail/EquipmentSection';
@@ -114,6 +115,32 @@ export default function InspectionDetailPage() {
             updateVessel.mutate({ id: vesselId!, params: { vesselTag: trimmed || undefined }, projectId: projectId! });
         }
     }, [tagDraft, vessel?.vessel_tag, vesselId, projectId, updateVessel]);
+
+    /* --- Status dropdown --- */
+    const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+    const statusMenuRef = useRef<HTMLDivElement>(null);
+
+    const handleStatusChange = useCallback((newStatus: VesselStatus) => {
+        setStatusMenuOpen(false);
+        if (newStatus !== vessel?.status) {
+            updateVessel.mutate({ id: vesselId!, params: { status: newStatus }, projectId: projectId! });
+        }
+    }, [vessel?.status, vesselId, projectId, updateVessel]);
+
+    /* --- Modeler dropdown --- */
+    const [modelerMenuOpen, setModelerMenuOpen] = useState(false);
+    const modelerMenuRef = useRef<HTMLDivElement>(null);
+    const linkedModels = vesselModels.filter((m) => m.project_vessel_id === vesselId);
+
+    /* Close dropdowns on outside click */
+    useEffect(() => {
+        const handleClick = (e: MouseEvent) => {
+            if (statusMenuRef.current && !statusMenuRef.current.contains(e.target as Node)) setStatusMenuOpen(false);
+            if (modelerMenuRef.current && !modelerMenuRef.current.contains(e.target as Node)) setModelerMenuOpen(false);
+        };
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, []);
 
     if (projectLoading || vesselLoading) return <PageSpinner message="Loading inspection details..." />;
 
@@ -309,16 +336,51 @@ export default function InspectionDetailPage() {
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 6,
-                            padding: '5px 14px', borderRadius: 'var(--radius-full)', fontSize: '0.8rem', fontWeight: 500,
-                            background: `${VESSEL_STATUS_COLORS[vessel.status]}20`,
-                            color: VESSEL_STATUS_COLORS[vessel.status],
-                            border: `1px solid ${VESSEL_STATUS_COLORS[vessel.status]}30`,
-                        }}>
-                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: VESSEL_STATUS_COLORS[vessel.status] }} />
-                            {VESSEL_STATUS_LABELS[vessel.status]}
-                        </span>
+                        {/* Status dropdown */}
+                        <div ref={statusMenuRef} style={{ position: 'relative' }}>
+                            <button
+                                onClick={() => setStatusMenuOpen(prev => !prev)}
+                                style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                                    padding: '5px 10px 5px 14px', borderRadius: 'var(--radius-full)', fontSize: '0.8rem', fontWeight: 500,
+                                    background: `${VESSEL_STATUS_COLORS[vessel.status]}20`,
+                                    color: VESSEL_STATUS_COLORS[vessel.status],
+                                    border: `1px solid ${VESSEL_STATUS_COLORS[vessel.status]}30`,
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: VESSEL_STATUS_COLORS[vessel.status] }} />
+                                {VESSEL_STATUS_LABELS[vessel.status]}
+                                <ChevronDown size={12} style={{ opacity: 0.6 }} />
+                            </button>
+
+                            {statusMenuOpen && (
+                                <div style={{
+                                    position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 50,
+                                    background: 'var(--surface-elevated)', border: '1px solid var(--border-subtle)',
+                                    borderRadius: 8, padding: 4, minWidth: 160, boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                                }}>
+                                    {(Object.keys(VESSEL_STATUS_LABELS) as VesselStatus[]).map((s) => (
+                                        <button
+                                            key={s}
+                                            onClick={() => handleStatusChange(s)}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                                                padding: '7px 12px', border: 'none', borderRadius: 6, cursor: 'pointer',
+                                                background: s === vessel.status ? `${VESSEL_STATUS_COLORS[s]}15` : 'transparent',
+                                                color: s === vessel.status ? VESSEL_STATUS_COLORS[s] : 'var(--text-secondary)',
+                                                fontSize: '0.8rem', textAlign: 'left',
+                                            }}
+                                            onMouseEnter={(e) => { if (s !== vessel.status) e.currentTarget.style.background = 'var(--surface-hover)'; }}
+                                            onMouseLeave={(e) => { if (s !== vessel.status) e.currentTarget.style.background = 'transparent'; }}
+                                        >
+                                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: VESSEL_STATUS_COLORS[s], flexShrink: 0 }} />
+                                            {VESSEL_STATUS_LABELS[s]}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
 
                         {companionConnected && (
                             <button
@@ -333,14 +395,76 @@ export default function InspectionDetailPage() {
                             </button>
                         )}
 
-                        <button
-                            onClick={() => navigate(`/vessel-modeler?project=${projectId}&vessel=${vesselId}`)}
-                            className="btn btn--primary btn--sm"
-                            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-                        >
-                            <Box size={14} />
-                            Open 3D Modeler
-                        </button>
+                        {/* Open 3D Modeler dropdown */}
+                        <div ref={modelerMenuRef} style={{ position: 'relative' }}>
+                            <button
+                                onClick={() => setModelerMenuOpen(prev => !prev)}
+                                className="btn btn--primary btn--sm"
+                                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                            >
+                                <Box size={14} />
+                                Open 3D Modeler
+                                <ChevronDown size={12} style={{ opacity: 0.7 }} />
+                            </button>
+
+                            {modelerMenuOpen && (
+                                <div style={{
+                                    position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 50,
+                                    background: 'var(--surface-elevated)', border: '1px solid var(--border-subtle)',
+                                    borderRadius: 8, padding: 4, minWidth: 220, boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                                }}>
+                                    {/* New model — always available */}
+                                    <button
+                                        onClick={() => { setModelerMenuOpen(false); navigate(`/vessel-modeler?project=${projectId}&vessel=${vesselId}`); }}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                                            padding: '7px 12px', border: 'none', borderRadius: 6, cursor: 'pointer',
+                                            background: 'transparent', color: 'var(--text-primary)',
+                                            fontSize: '0.8rem', textAlign: 'left', fontWeight: 500,
+                                        }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-hover)'; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                                    >
+                                        <Box size={12} style={{ flexShrink: 0 }} />
+                                        New Model
+                                    </button>
+
+                                    {/* Saved models */}
+                                    {linkedModels.length > 0 && (
+                                        <>
+                                            <div style={{ height: 1, background: 'var(--border-subtle)', margin: '4px 8px' }} />
+                                            <div style={{ padding: '6px 12px 4px', fontSize: '0.65rem', color: 'var(--text-quaternary)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                Saved Models
+                                            </div>
+                                            {linkedModels.map((m) => (
+                                                <button
+                                                    key={m.id}
+                                                    onClick={() => { setModelerMenuOpen(false); navigate(`/vessel-modeler?project=${projectId}&vessel=${vesselId}&model=${m.id}`); }}
+                                                    style={{
+                                                        display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                                                        padding: '7px 12px', border: 'none', borderRadius: 6, cursor: 'pointer',
+                                                        background: 'transparent', color: 'var(--text-secondary)',
+                                                        fontSize: '0.8rem', textAlign: 'left',
+                                                    }}
+                                                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-hover)'; }}
+                                                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                                                >
+                                                    <Box size={12} style={{ flexShrink: 0, opacity: 0.5 }} />
+                                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</div>
+                                                        {m.model_type && (
+                                                            <span style={{ fontSize: '0.65rem', color: 'var(--text-quaternary)' }}>
+                                                                {m.model_type}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
