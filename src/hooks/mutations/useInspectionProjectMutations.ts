@@ -82,7 +82,7 @@ export function useCreateProjectVessel() {
 export function useUpdateProjectVessel() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: ({ id, params, projectId }: { id: string; params: UpdateVesselParams; projectId: string }) =>
+        mutationFn: ({ id, params }: { id: string; params: UpdateVesselParams; projectId: string }) =>
             updateProjectVessel(id, params),
         onSuccess: (_data, vars) => {
             qc.invalidateQueries({ queryKey: ['projectVessels', vars.projectId] });
@@ -94,7 +94,7 @@ export function useUpdateProjectVessel() {
 export function useDeleteProjectVessel() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: ({ id, projectId }: { id: string; projectId: string }) =>
+        mutationFn: ({ id }: { id: string; projectId: string }) =>
             deleteProjectVessel(id),
         onSuccess: (_data, vars) => {
             qc.invalidateQueries({ queryKey: ['projectVessels', vars.projectId] });
@@ -119,7 +119,7 @@ export function useUploadProjectFile() {
 export function useDeleteProjectFile() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: ({ id, projectId, vesselId }: { id: string; projectId: string; vesselId?: string }) =>
+        mutationFn: ({ id }: { id: string; projectId: string; vesselId?: string }) =>
             deleteProjectFile(id),
         onSuccess: (_data, vars) => {
             qc.invalidateQueries({ queryKey: ['projectFiles', vars.projectId] });
@@ -147,7 +147,7 @@ export function useCreateProcedure() {
 export function useUpdateProcedure() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: ({ id, params, projectId }: { id: string; params: UpdateProcedureParams; projectId: string }) =>
+        mutationFn: ({ id, params }: { id: string; params: UpdateProcedureParams; projectId: string }) =>
             updateInspectionProcedure(id, params),
         onSuccess: (_data, vars) => {
             qc.invalidateQueries({ queryKey: ['projectProcedures', vars.projectId] });
@@ -158,7 +158,7 @@ export function useUpdateProcedure() {
 export function useDeleteProcedure() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: ({ id, projectId }: { id: string; projectId: string }) =>
+        mutationFn: ({ id }: { id: string; projectId: string }) =>
             deleteInspectionProcedure(id),
         onSuccess: (_data, vars) => {
             qc.invalidateQueries({ queryKey: ['projectProcedures', vars.projectId] });
@@ -183,7 +183,7 @@ export function useCreateScanLogEntry() {
 export function useUpdateScanLogEntry() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: ({ id, params, vesselId }: { id: string; params: UpdateScanLogEntryParams; vesselId: string }) =>
+        mutationFn: ({ id, params }: { id: string; params: UpdateScanLogEntryParams; vesselId: string }) =>
             updateScanLogEntry(id, params),
         onSuccess: (_data, vars) => {
             qc.invalidateQueries({ queryKey: ['scanLogEntries', vars.vesselId] });
@@ -194,7 +194,7 @@ export function useUpdateScanLogEntry() {
 export function useDeleteScanLogEntry() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: ({ id, vesselId }: { id: string; vesselId: string }) =>
+        mutationFn: ({ id }: { id: string; vesselId: string }) =>
             deleteScanLogEntry(id),
         onSuccess: (_data, vars) => {
             qc.invalidateQueries({ queryKey: ['scanLogEntries', vars.vesselId] });
@@ -219,7 +219,7 @@ export function useCreateCalibrationLogEntry() {
 export function useUpdateCalibrationLogEntry() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: ({ id, params, vesselId }: { id: string; params: UpdateCalibrationLogEntryParams; vesselId: string }) =>
+        mutationFn: ({ id, params }: { id: string; params: UpdateCalibrationLogEntryParams; vesselId: string }) =>
             updateCalibrationLogEntry(id, params),
         onSuccess: (_data, vars) => {
             qc.invalidateQueries({ queryKey: ['calibrationLogEntries', vars.vesselId] });
@@ -230,7 +230,7 @@ export function useUpdateCalibrationLogEntry() {
 export function useDeleteCalibrationLogEntry() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: ({ id, vesselId }: { id: string; vesselId: string }) =>
+        mutationFn: ({ id }: { id: string; vesselId: string }) =>
             deleteCalibrationLogEntry(id),
         onSuccess: (_data, vars) => {
             qc.invalidateQueries({ queryKey: ['calibrationLogEntries', vars.vesselId] });
@@ -255,7 +255,7 @@ export function useUploadProjectImage() {
 export function useUpdateProjectImageName() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: ({ id, name, vesselId }: { id: string; name: string; vesselId: string }) =>
+        mutationFn: ({ id, name }: { id: string; name: string; vesselId: string }) =>
             updateProjectImageName(id, name),
         onSuccess: (_data, vars) => {
             qc.invalidateQueries({ queryKey: ['projectImages', vars.vesselId] });
@@ -266,7 +266,7 @@ export function useUpdateProjectImageName() {
 export function useDeleteProjectImage() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: ({ id, vesselId }: { id: string; vesselId: string }) =>
+        mutationFn: ({ id }: { id: string; vesselId: string }) =>
             deleteProjectImage(id),
         onSuccess: (_data, vars) => {
             qc.invalidateQueries({ queryKey: ['projectImages', vars.vesselId] });

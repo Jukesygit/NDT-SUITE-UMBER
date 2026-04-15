@@ -60,7 +60,7 @@ export default function VesselDetailsSection({ vessel, projectId, files }: Vesse
                 }}
             >
                 {TEXT_FIELDS.map((f) => {
-                    let fieldValue = (vessel[f.key] as string) ?? '';
+                    const fieldValue = (vessel[f.key] as string) ?? '';
 
                     // For drawing number, show suggestion from GA file if empty
                     const showSuggestion = f.key === 'drawing_number' && !fieldValue && suggestedDrawingNumber;
