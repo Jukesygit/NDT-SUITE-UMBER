@@ -23,13 +23,12 @@ import type { DashboardPageProps } from './DashboardPage';
 import ReportHeader from './ReportHeader';
 import InspectionResultPage from './InspectionResultPage';
 import type { AnnotationShapeConfig, ThicknessThresholds } from '@/components/VesselModeler/types';
-// Pages created in subsequent tasks — uncomment as they become available
-// import PhotographsPage from './PhotographsPage';
-// import FlattenedProjectionPage from './FlattenedProjectionPage';
-// import VesselOverviewPage from './VesselOverviewPage';
-// import ScanLogPage from './ScanLogPage';
-// import CalibrationLogPage from './CalibrationLogPage';
-// import ReferenceDrawingPage from './ReferenceDrawingPage';
+import PhotographsPage from './PhotographsPage';
+import FlattenedProjectionPage from './FlattenedProjectionPage';
+import VesselOverviewPage from './VesselOverviewPage';
+import ScanLogPage from './ScanLogPage';
+import CalibrationLogPage from './CalibrationLogPage';
+import ReferenceDrawingPage from './ReferenceDrawingPage';
 
 export interface ReportDocumentProps {
     project: InspectionProject;
@@ -131,11 +130,7 @@ export default function ReportDocument({
                         vesselName={vesselName}
                         date={reportDate}
                     />
-                    {/* TODO: <PhotographsPage /> — Task 11 */}
-                    <div className="report-section-header">Photographs</div>
-                    <p style={{ color: 'var(--report-text-muted)', fontStyle: 'italic' }}>
-                        Photographs page placeholder — will be implemented in Task 11.
-                    </p>
+                    <PhotographsPage images={photos} figureCounter={figureCounter} />
                     <div className="page-break" />
                 </>
             )}
@@ -174,11 +169,10 @@ export default function ReportDocument({
                         vesselName={vesselName}
                         date={reportDate}
                     />
-                    {/* TODO: <FlattenedProjectionPage /> — Task 11 */}
-                    <div className="report-section-header">Flattened Projection</div>
-                    <p style={{ color: 'var(--report-text-muted)', fontStyle: 'italic' }}>
-                        Flattened projection page placeholder — will be implemented in Task 11.
-                    </p>
+                    <FlattenedProjectionPage
+                        flattenedView={flattenedView}
+                        figureCounter={figureCounter}
+                    />
                     <div className="page-break" />
                 </>
             )}
@@ -192,11 +186,10 @@ export default function ReportDocument({
                         vesselName={vesselName}
                         date={reportDate}
                     />
-                    {/* TODO: <VesselOverviewPage /> — Task 11 */}
-                    <div className="report-section-header">3D Vessel Overview</div>
-                    <p style={{ color: 'var(--report-text-muted)', fontStyle: 'italic' }}>
-                        3D overview page placeholder — will be implemented in Task 11.
-                    </p>
+                    <VesselOverviewPage
+                        overviewRenders={overviewRenders}
+                        figureCounter={figureCounter}
+                    />
                     <div className="page-break" />
                 </>
             )}
@@ -210,11 +203,10 @@ export default function ReportDocument({
                         vesselName={vesselName}
                         date={reportDate}
                     />
-                    {/* TODO: <ScanLogPage /> — Task 11 */}
-                    <div className="report-section-header">Scan Log</div>
-                    <p style={{ color: 'var(--report-text-muted)', fontStyle: 'italic' }}>
-                        Scan log page placeholder — will be implemented in Task 11.
-                    </p>
+                    <ScanLogPage
+                        entries={scanLogEntries}
+                        thresholds={thresholds as { mode?: string; redBelow?: number; yellowBelow?: number } | undefined}
+                    />
                     <div className="page-break" />
                 </>
             )}
@@ -228,11 +220,7 @@ export default function ReportDocument({
                         vesselName={vesselName}
                         date={reportDate}
                     />
-                    {/* TODO: <CalibrationLogPage /> — Task 11 */}
-                    <div className="report-section-header">Calibration Log</div>
-                    <p style={{ color: 'var(--report-text-muted)', fontStyle: 'italic' }}>
-                        Calibration log page placeholder — will be implemented in Task 11.
-                    </p>
+                    <CalibrationLogPage entries={calLogEntries} />
                     <div className="page-break" />
                 </>
             )}
@@ -246,11 +234,10 @@ export default function ReportDocument({
                         vesselName={vesselName}
                         date={reportDate}
                     />
-                    {/* TODO: <ReferenceDrawingPage /> — Task 11 */}
-                    <div className="report-section-header">Reference Drawings</div>
-                    <p style={{ color: 'var(--report-text-muted)', fontStyle: 'italic' }}>
-                        Reference drawings page placeholder — will be implemented in Task 11.
-                    </p>
+                    <ReferenceDrawingPage
+                        drawings={referenceDrawings}
+                        figureCounter={figureCounter}
+                    />
                 </>
             )}
         </div>
