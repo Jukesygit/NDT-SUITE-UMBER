@@ -70,25 +70,24 @@ export default function ReportDocument({
     modelConfig,
     reportAssets,
 }: ReportDocumentProps) {
-    // Extract model state and pre-rendered images from config
-    const modelState = modelConfig?.modelState as Record<string, unknown> | undefined;
-    const annotations = (modelState?.annotations ?? []) as Record<string, unknown>[];
-    // Will be used by InspectionResultPage (Task 10)
-    const _scanComposites = (modelConfig?.scanComposites ?? []) as Record<string, unknown>[];
-    void _scanComposites;
-    const thresholds = modelConfig?.thresholds as Record<string, unknown> | undefined;
+    // Extract model state from config (buildSaveConfig stores annotations/scanComposites at root)
+    const annotations = (modelConfig?.annotations ?? []) as Record<string, unknown>[];
+    const thresholds = (modelConfig?.vessel as Record<string, unknown> | undefined)?.thicknessThresholds as Record<string, unknown> | undefined;
 
     // Pre-rendered report images from reportAssets
-    const overviewRenders = (reportAssets?.overviewRenders ?? []) as string[];
+    // overviewRenders is { label: string; dataUrl: string }[] from captureVesselOverviews
+    const overviewRenders = (reportAssets?.overviewRenders ?? []) as Array<{ label: string; dataUrl: string }>;
     const flattenedView = reportAssets?.flattenedView as string | undefined;
-    const annotationRenders = (reportAssets?.annotationRenders ?? {}) as Record<string, string[]>;
+    // annotationHeatmaps and annotationContextImages are Record<number, string>
+    const annotationHeatmaps = (reportAssets?.annotationHeatmaps ?? {}) as Record<string, string>;
+    const annotationContextImages = (reportAssets?.annotationContextImages ?? {}) as Record<string, string>;
 
     // Figure numbering counter — passed to child pages
     const figureCounter = useMemo(() => createFigureCounter(), []);
 
     // Reference drawings from files
     const referenceDrawings = files.filter(
-        (f) => f.file_type === 'ga_drawing' || f.file_type === 'location_drawing'
+        (f) => f.file_type === 'pid_drawing' || f.file_type === 'reference' || (f.file_type as string) === 'ga_drawing' || (f.file_type as string) === 'location_drawing'
     );
 
     // Photos from images pool
@@ -138,7 +137,6 @@ export default function ReportDocument({
             {/* Per-annotation inspection result pages */}
             {annotations.map((annotation, idx) => {
                 const annotationId = String(annotation.id ?? idx);
-                const renders = annotationRenders[annotationId] ?? [];
                 return (
                     <div key={annotationId}>
                         <ReportHeader
@@ -150,8 +148,8 @@ export default function ReportDocument({
                         <InspectionResultPage
                             annotation={annotation as unknown as AnnotationShapeConfig}
                             index={idx}
-                            annotationHeatmap={renders[0]}
-                            annotationContextImage={renders[1]}
+                            annotationHeatmap={annotationHeatmaps[annotationId]}
+                            annotationContextImage={annotationContextImages[annotationId]}
                             thresholds={thresholds as ThicknessThresholds | undefined}
                             figureCounter={figureCounter}
                         />

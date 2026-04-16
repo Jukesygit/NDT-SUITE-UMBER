@@ -6,8 +6,8 @@
 import type { FigureCounter } from './ReportDocument';
 
 export interface VesselOverviewPageProps {
-    /** Array of pre-rendered 3D view image URLs (base64 data URIs or signed URLs) */
-    overviewRenders: string[];
+    /** Array of pre-rendered 3D views — { label, dataUrl } or plain URL string */
+    overviewRenders: Array<{ label: string; dataUrl: string } | string>;
     figureCounter: FigureCounter;
 }
 
@@ -28,8 +28,9 @@ export default function VesselOverviewPage({
         <div>
             <div className="report-section-header">3D Vessel Overview</div>
             <div className="report-image-grid">
-                {overviewRenders.map((url, idx) => {
-                    const label = VIEW_LABELS[idx] ?? `View ${idx + 1}`;
+                {overviewRenders.map((item, idx) => {
+                    const url = typeof item === 'string' ? item : item.dataUrl;
+                    const label = typeof item === 'string' ? (VIEW_LABELS[idx] ?? `View ${idx + 1}`) : item.label;
                     return (
                         <div key={idx} className="report-image-card">
                             <img src={url} alt={label} />
