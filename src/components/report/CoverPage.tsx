@@ -232,11 +232,13 @@ export default function CoverPage({ project, vessel, procedures }: CoverPageProp
             )}
 
             {/* Sign-off */}
+            <div className="no-break">
             <div className="report-section-header report-section-header--dark">Sign-off</div>
             <div className="report-signoff">
                 <SignoffColumn title="Technician" person={signoff.technician} />
                 <SignoffColumn title="Reviewer" person={signoff.reviewer} />
                 <SignoffColumn title="Client Acceptance" person={signoff.client} />
+            </div>
             </div>
         </div>
     );

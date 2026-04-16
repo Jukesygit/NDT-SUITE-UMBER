@@ -39,11 +39,49 @@
     font-family: 'Inter', 'Calibri', 'Segoe UI', sans-serif;
     font-size: 10pt;
     line-height: 1.5;
-    color: var(--report-text);
-    background: var(--report-page-bg);
+    color: #334155;
+    background: #ffffff;
     max-width: 210mm;
     margin: 0 auto;
     padding: 0;
+}
+
+/* Override dark-theme inherited colors — the app body uses white text on dark bg,
+   but the report needs dark text on white bg. */
+.report-document td,
+.report-document th,
+.report-document p,
+.report-document span,
+.report-document div,
+.report-document label {
+    color: inherit;
+}
+
+.report-document .report-table td {
+    color: #334155;
+}
+
+.report-document .report-table th {
+    color: #334155;
+}
+
+.report-document .report-table--branded th {
+    color: white;
+}
+
+.report-document .report-section-header {
+    color: white;
+}
+
+.report-document .report-cover__header,
+.report-document .report-cover__header * {
+    color: white;
+}
+
+.report-document .report-signoff__label,
+.report-document .report-signoff__title,
+.report-document .report-signoff__row {
+    color: #334155;
 }
 
 .report-document * {
@@ -236,15 +274,15 @@
     background: var(--report-navy);
     color: white;
     padding: 24px 28px;
-    margin: -18mm -18mm 24px -18mm;
+    margin: 0 0 24px 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
 }
 
-@media screen {
+@media print {
     .report-cover__header {
-        margin: -20mm -20mm 24px -20mm;
+        margin: -18mm -18mm 24px -18mm;
     }
 }
 
