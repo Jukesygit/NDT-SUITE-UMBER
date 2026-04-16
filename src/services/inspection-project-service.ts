@@ -402,6 +402,7 @@ export async function listProjectVesselModels(projectVesselIds: string[]) {
 
     return (data ?? []).map((row: any) => {
         const cfg = row.config as any;
+        const v = cfg?.vessel;
         return {
             id: row.id,
             name: row.name,
@@ -409,12 +410,12 @@ export async function listProjectVesselModels(projectVesselIds: string[]) {
             created_at: row.created_at,
             updated_at: row.updated_at,
             project_vessel_id: row.project_vessel_id,
-            // Expose geometry for shell area computation
-            geometry: (typeof cfg?.id === 'number' && typeof cfg?.length === 'number' && typeof cfg?.headRatio === 'number')
+            // Expose geometry for shell area computation (nested under config.vessel)
+            geometry: (typeof v?.id === 'number' && typeof v?.length === 'number' && typeof v?.headRatio === 'number')
                 ? {
-                    id: cfg.id as number,          // inner diameter mm
-                    length: cfg.length as number,  // tan-tan length mm
-                    headRatio: cfg.headRatio as number,
+                    id: v.id as number,          // inner diameter mm
+                    length: v.length as number,  // tan-tan length mm
+                    headRatio: v.headRatio as number,
                 }
                 : null,
             // Expose coverage rects for scoped coverage computation
