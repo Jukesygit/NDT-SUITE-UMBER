@@ -41,7 +41,7 @@ function StatusDot({ ready }: { ready: boolean }) {
 
 export default function ReportGenerationSection({
     vessel,
-    project: _project,
+    project,
     procedures,
     files,
     scanLogEntries,
@@ -155,6 +155,14 @@ export default function ReportGenerationSection({
                     width: '100%',
                     opacity: allReady ? 1 : 0.5,
                     cursor: allReady ? 'pointer' : 'not-allowed',
+                }}
+                onClick={() => {
+                    if (allReady) {
+                        window.open(
+                            `/projects/${project.id}/vessels/${vessel.id}/report`,
+                            '_blank',
+                        );
+                    }
                 }}
             >
                 Generate Report

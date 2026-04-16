@@ -30,6 +30,7 @@ const ProjectListPage = lazy(() => import('./pages/projects/ProjectListPage'));
 const ProjectSetupPage = lazy(() => import('./pages/projects/ProjectSetupPage'));
 const ProjectDetailPage = lazy(() => import('./pages/projects/ProjectDetailPage'));
 const InspectionDetailPage = lazy(() => import('./pages/projects/InspectionDetailPage'));
+const ReportPage = lazy(() => import('./pages/projects/ReportPage'));
 
 interface SuspenseRoutesProps {
     children: ReactNode;
@@ -215,6 +216,11 @@ function App() {
                                         )}
                                     </Route>
                                 </Route>
+                                <Route path="/projects/:projectId/vessels/:vesselId/report" element={
+                                    <ProtectedRoute>
+                                        <ErrorBoundary><ReportPage /></ErrorBoundary>
+                                    </ProtectedRoute>
+                                } />
                                 <Route path="*" element={<Navigate to="/" replace />} />
                             </Routes>
                         </SuspenseRoutes>
