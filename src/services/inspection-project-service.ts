@@ -254,6 +254,7 @@ export async function updateProjectVessel(id: string, params: UpdateVesselParams
     if (params.resultsSummary !== undefined) updates.results_summary = params.resultsSummary;
     if (params.signoffDetails !== undefined) updates.signoff_details = params.signoffDetails;
     if (params.procedureId !== undefined) updates.procedure_id = params.procedureId;
+    if (params.sectionFolderMap !== undefined) updates.section_folder_map = params.sectionFolderMap;
 
     const { error } = await sb
         .from('project_vessels')

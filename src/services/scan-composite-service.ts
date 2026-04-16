@@ -6,6 +6,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { CompositeStats, SourceFile, CompositeData } from '../types/companion';
 // @ts-ignore - JS module without type declarations
 import * as supabaseModule from '../supabase-client';
 // @ts-ignore - accessing property from untyped module
@@ -80,6 +81,21 @@ export interface SaveScanCompositeParams {
     width: number;
     height: number;
     sourceFiles: ScanCompositeRecord['source_files'];
+    projectVesselId?: string;
+    sectionType?: string;
+}
+
+export interface SaveScanCompositeBinaryParams {
+    binaryData: ArrayBuffer;
+    stats: CompositeStats;
+    width: number;
+    height: number;
+    xAxis: Float32Array;
+    yAxis: Float32Array;
+    sourceFiles: SourceFile[];
+    name: string;
+    organizationId: string;
+    userId: string;
     projectVesselId?: string;
     sectionType?: string;
 }
@@ -221,6 +237,149 @@ export async function saveScanComposite(params: SaveScanCompositeParams): Promis
 }
 
 /**
+ * Save a scan composite from companion binary data (already Float32).
+ * Uses atomic upsert (ON CONFLICT DO UPDATE) when projectVesselId + sectionType are provided.
+ * Skips the Float32 encoding step since data is already binary from the companion.
+ * @returns The id of the created/updated record
+ */
+export async function saveScanCompositeBinary(params: SaveScanCompositeBinaryParams): Promise<string> {
+    if (!isSupabaseConfigured()) {
+        throw new Error('Supabase not configured');
+    }
+
+    // Compress the binary data (already Float32, no encoding needed)
+    const binaryData = await compressBuffer(params.binaryData);
+    const storagePath = `${params.organizationId}/pending-${Date.now()}.bin`;
+
+    // Upload binary to storage first
+    const { error: uploadError } = await supabase!.storage
+        .from(STORAGE_BUCKET)
+        .upload(storagePath, binaryData, {
+            contentType: 'application/octet-stream',
+            upsert: true,
+        });
+
+    if (uploadError) throw uploadError;
+
+    // Upsert metadata row — uses the unique constraint on (project_vessel_id, section_type)
+    const row: Record<string, unknown> = {
+        name: params.name,
+        organization_id: params.organizationId,
+        created_by: params.userId,
+        thickness_data: storagePath,
+        x_axis: Array.from(params.xAxis),
+        y_axis: Array.from(params.yAxis),
+        stats: params.stats,
+        width: params.width,
+        height: params.height,
+        source_files: params.sourceFiles,
+    };
+    if (params.projectVesselId) row.project_vessel_id = params.projectVesselId;
+    if (params.sectionType) row.section_type = params.sectionType;
+
+    let compositeId: string;
+
+    if (params.projectVesselId && params.sectionType) {
+        // Atomic upsert via ON CONFLICT
+        const { data, error } = await supabase!
+            .from('scan_composites')
+            .upsert(row, { onConflict: 'project_vessel_id,section_type' })
+            .select('id')
+            .single();
+
+        if (error) {
+            // Clean up storage on DB failure
+            await supabase!.storage.from(STORAGE_BUCKET).remove([storagePath]);
+            throw error;
+        }
+        compositeId = data.id;
+    } else {
+        // No unique key — plain insert
+        const { data, error } = await supabase!
+            .from('scan_composites')
+            .insert(row)
+            .select('id')
+            .single();
+
+        if (error) {
+            await supabase!.storage.from(STORAGE_BUCKET).remove([storagePath]);
+            throw error;
+        }
+        compositeId = data.id;
+    }
+
+    // Rename storage file to use the actual composite ID
+    const finalPath = `${params.organizationId}/${compositeId}.bin`;
+    if (storagePath !== finalPath) {
+        const { data: blob } = await supabase!.storage.from(STORAGE_BUCKET).download(storagePath);
+        if (blob) {
+            const buf = await blob.arrayBuffer();
+            await supabase!.storage.from(STORAGE_BUCKET).upload(finalPath, buf, {
+                contentType: 'application/octet-stream',
+                upsert: true,
+            });
+            await supabase!.storage.from(STORAGE_BUCKET).remove([storagePath]);
+            await supabase!
+                .from('scan_composites')
+                .update({ thickness_data: finalPath })
+                .eq('id', compositeId);
+        }
+    }
+
+    return compositeId;
+}
+
+/**
+ * Fetch a single scan composite and return as CompositeData (Float32Array-based).
+ * Handles both NaN sentinels: the legacy 3.4028234663852886e+38 and IEEE NaN.
+ */
+export async function getScanCompositeData(id: string): Promise<CompositeData> {
+    if (!isSupabaseConfigured()) {
+        throw new Error('Supabase not configured');
+    }
+
+    const { data: row, error } = await supabase!
+        .from('scan_composites')
+        .select('id, name, organization_id, created_by, thickness_data, x_axis, y_axis, stats, width, height, source_files, section_type, created_at')
+        .eq('id', id)
+        .single();
+
+    if (error) throw error;
+
+    // Download binary
+    const storagePath = row.thickness_data as string;
+    const { data: blob, error: downloadError } = await supabase!.storage
+        .from(STORAGE_BUCKET)
+        .download(storagePath);
+
+    if (downloadError) throw downloadError;
+
+    const rawBuffer = await blob.arrayBuffer();
+    const buffer = isGzipCompressed(rawBuffer) ? await decompressBuffer(rawBuffer) : rawBuffer;
+
+    // Build Float32Array views — handle both sentinel and IEEE NaN
+    const matrix = new Float32Array(buffer, 0, row.width * row.height);
+
+    // Normalize: convert legacy sentinel to IEEE NaN
+    for (let i = 0; i < matrix.length; i++) {
+        if (matrix[i] >= NAN_SENTINEL) {
+            matrix[i] = NaN;
+        }
+    }
+
+    return {
+        matrix,
+        width: row.width,
+        height: row.height,
+        xAxis: new Float32Array(row.x_axis),
+        yAxis: new Float32Array(row.y_axis),
+        stats: row.stats ?? { min: 0, max: 0, mean: 0, std: 0, validCount: 0, totalCount: 0, coveragePct: 0 },
+        sourceFiles: row.source_files ?? [],
+        warnings: [],
+    };
+}
+
+/**
  * List all scan composites without thickness_data (lightweight)
  * Ordered by created_at descending (newest first)
  */
@@ -337,8 +496,10 @@ export async function linkCompositeToProjectVessel(
 
 export default {
     saveScanComposite,
+    saveScanCompositeBinary,
     listScanComposites,
     getScanComposite,
+    getScanCompositeData,
     deleteScanComposite,
     linkCompositeToProjectVessel,
 };

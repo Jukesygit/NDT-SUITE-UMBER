@@ -35,7 +35,7 @@ import { exportVesselGLB } from './engine/gltf-export';
 import { recomputeAllAnnotationStats } from './engine/annotation-stats';
 import { computeInspectionCameraTarget, animateCamera, cancelCameraAnimation } from './engine/camera-animation';
 import { useScanCompositeList } from '../../hooks/queries/useScanComposites';
-import { getScanComposite } from '../../services/scan-composite-service';
+import { getScanComposite, getScanCompositeData } from '../../services/scan-composite-service';
 import { useLinkScanCompositeToProject } from '../../hooks/mutations/useScanCompositeMutations';
 import { uploadAnnotationImage, deleteAnnotationImage, getAnnotationImageUrl } from '../../services/annotation-attachment-service';
 import { useAuth } from '../../contexts/AuthContext';
@@ -1115,16 +1115,58 @@ export default function VesselModeler() {
         placement: { scanDirection: 'cw' | 'ccw'; indexDirection: 'forward' | 'reverse' },
     ) => {
         try {
-            const composite = await getScanComposite(compositeId);
+            // Use binary-returning function for new companion-generated composites.
+            // Falls back to legacy format for older composites.
+            let name: string;
+            let cloudId: string;
+            let data: (number | null)[][];
+            let xAxis: number[];
+            let yAxis: number[];
+            let stats: ScanCompositeConfig['stats'];
+            let sourceFiles: ScanCompositeConfig['sourceFiles'];
+
+            try {
+                const cd = await getScanCompositeData(compositeId);
+                cloudId = compositeId;
+                name = `Composite ${compositeId.slice(0, 8)}`;
+                // Convert Float32Array → (number | null)[][] for modeller compatibility
+                xAxis = Array.from(cd.xAxis);
+                yAxis = Array.from(cd.yAxis);
+                data = [];
+                for (let row = 0; row < cd.height; row++) {
+                    const rowData: (number | null)[] = [];
+                    for (let col = 0; col < cd.width; col++) {
+                        const val = cd.matrix[row * cd.width + col];
+                        rowData.push(isNaN(val) ? null : val);
+                    }
+                    data.push(rowData);
+                }
+                stats = {
+                    min: cd.stats.min, max: cd.stats.max, mean: cd.stats.mean,
+                    median: cd.stats.mean, stdDev: cd.stats.std,
+                };
+                sourceFiles = cd.sourceFiles;
+            } catch {
+                // Fallback to legacy format
+                const composite = await getScanComposite(compositeId);
+                cloudId = composite.id;
+                name = composite.name;
+                data = composite.thickness_data;
+                xAxis = composite.x_axis;
+                yAxis = composite.y_axis;
+                stats = composite.stats || { min: 0, max: 0, mean: 0, median: 0, stdDev: 0 };
+                sourceFiles = composite.source_files ?? undefined;
+            }
+
             const newConfig: ScanCompositeConfig = {
                 id: `sc_${Date.now()}`,
-                name: composite.name,
-                cloudId: composite.id,
-                data: composite.thickness_data,
-                xAxis: composite.x_axis,
-                yAxis: composite.y_axis,
-                stats: composite.stats || { min: 0, max: 0, mean: 0, median: 0, stdDev: 0 },
-                indexStartMm: composite.y_axis?.[0] ?? 0,
+                name,
+                cloudId,
+                data,
+                xAxis,
+                yAxis,
+                stats,
+                indexStartMm: yAxis[0] ?? 0,
                 datumAngleDeg: 0,
                 scanDirection: placement.scanDirection,
                 indexDirection: placement.indexDirection,
@@ -1133,15 +1175,15 @@ export default function VesselModeler() {
                 rangeMin: null,
                 rangeMax: null,
                 opacity: 1,
-                sourceNdeFile: guessNdeFilename(composite.name),
-                sourceFiles: composite.source_files ?? undefined,
+                sourceNdeFile: guessNdeFilename(name),
+                sourceFiles,
             };
             updateVessel(prev => ({
                 ...prev,
                 scanComposites: [...prev.scanComposites, newConfig],
                 // Auto-populate global coordinate origin from the first loaded scan
                 ...(prev.scanComposites.length === 0 ? {
-                    coordinateOrigin: { indexMm: composite.y_axis?.[0] ?? 0, scanMm: composite.x_axis?.[0] ?? 0 },
+                    coordinateOrigin: { indexMm: yAxis[0] ?? 0, scanMm: xAxis[0] ?? 0 },
                     originSourceScanId: newConfig.id,
                 } : {}),
             }));
@@ -1149,7 +1191,7 @@ export default function VesselModeler() {
             // Link composite to project vessel if in project context
             if (effectiveProjectVesselId) {
                 linkCompositeToProject.mutate(
-                    { compositeId: composite.id, projectVesselId: effectiveProjectVesselId },
+                    { compositeId: cloudId, projectVesselId: effectiveProjectVesselId },
                 );
             }
         } catch (err) {

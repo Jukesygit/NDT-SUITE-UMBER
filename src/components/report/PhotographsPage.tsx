@@ -6,9 +6,9 @@
  */
 
 import { useEffect, useState } from 'react';
-import type { ProjectImage } from '@/types/inspection-project';
+import type { ProjectImage } from '../../types/inspection-project';
 import type { FigureCounter } from './ReportDocument';
-import { getProjectFileUrl } from '@/services/inspection-project-service';
+import { getProjectFileUrl } from '../../services/inspection-project-service';
 
 export interface PhotographsPageProps {
     images: ProjectImage[];

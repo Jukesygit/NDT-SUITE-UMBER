@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CollapsibleSection from './CollapsibleSection';
+import CompanionScanPanel from './CompanionScanPanel';
 import type { ProjectVessel } from '../../../types/inspection-project';
 import { computeCoverage } from '../../VesselModeler/engine/coverage-calculator';
 import type { CoverageRectConfig, VesselState } from '../../VesselModeler/types';
@@ -403,6 +404,8 @@ export default function ScopeSection({ vessel, projectId, composites, vesselMode
                     )}
                 </div>
             )}
+            {/* Companion scan folder pairing + composite generation */}
+            <CompanionScanPanel vessel={vessel} projectId={projectId} />
         </CollapsibleSection>
     );
 }

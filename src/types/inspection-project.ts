@@ -178,6 +178,7 @@ export interface ProjectVessel {
     results_summary: string | null;
     signoff_details: SignoffDetails;
     procedure_id: string | null;
+    section_folder_map: Record<string, string[]>;
     created_at: string;
     updated_at: string;
 }
@@ -222,6 +223,7 @@ export interface UpdateVesselParams {
     resultsSummary?: string | null;
     signoffDetails?: SignoffDetails;
     procedureId?: string | null;
+    sectionFolderMap?: Record<string, string[]>;
 }
 
 // ----------------------------------------------------------------------------
