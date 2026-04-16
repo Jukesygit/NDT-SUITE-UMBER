@@ -1,494 +1,432 @@
 /* =============================================================================
-   PAUT Inspection Report — Print-optimized CSS
-   =============================================================================
-   Designed for browser print-to-PDF (Ctrl+P → Save as PDF).
-   Uses @media print for pixel-perfect A4 output.
+   PAUT Inspection Report — Premium Print Stylesheet
    ============================================================================= */
 
-/* ---------------------------------------------------------------------------
-   CSS Custom Properties (Report Design Tokens)
-   --------------------------------------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
-    --report-navy: #0a1628;
-    --report-brand: #00875a;
-    --report-brand-light: #e6f4ee;
-    --report-accent: #0ea5e9;
-    --report-danger: #ef4444;
-    --report-danger-bg: #fef2f2;
-    --report-warning: #f59e0b;
-    --report-warning-bg: #fffbeb;
-    --report-safe: #22c55e;
-    --report-safe-bg: #f0fdf4;
-    --report-text: #334155;
-    --report-text-muted: #94a3b8;
-    --report-text-light: #64748b;
-    --report-border: #e2e8f0;
-    --report-border-dark: #cbd5e1;
-    --report-row-alt: #f8fafc;
-    --report-header-bg: #f1f5f9;
-    --report-white: #ffffff;
-    --report-page-bg: #ffffff;
+    --r-slate-950: #020617;
+    --r-slate-900: #0f172a;
+    --r-slate-800: #1e293b;
+    --r-slate-700: #334155;
+    --r-slate-600: #475569;
+    --r-slate-500: #64748b;
+    --r-slate-400: #94a3b8;
+    --r-slate-300: #cbd5e1;
+    --r-slate-200: #e2e8f0;
+    --r-slate-100: #f1f5f9;
+    --r-slate-50: #f8fafc;
+    --r-white: #ffffff;
+    --r-accent: #0d9488;
+    --r-accent-light: #ccfbf1;
+    --r-danger: #dc2626;
+    --r-danger-bg: #fef2f2;
+    --r-warning: #d97706;
+    --r-warning-bg: #fffbeb;
+    --r-safe: #16a34a;
+    --r-safe-bg: #f0fdf4;
+    --r-font: 'DM Sans', 'Segoe UI', system-ui, sans-serif;
+    --r-mono: 'JetBrains Mono', 'Consolas', 'SF Mono', monospace;
 }
 
-/* ---------------------------------------------------------------------------
-   Base / Reset
-   --------------------------------------------------------------------------- */
+/* --- Base ----------------------------------------------------------------- */
 
 .report-document {
-    font-family: 'Inter', 'Calibri', 'Segoe UI', sans-serif;
-    font-size: 10pt;
-    line-height: 1.5;
-    color: #334155;
-    background: #ffffff;
+    font-family: var(--r-font);
+    font-size: 9.5pt;
+    line-height: 1.6;
+    color: var(--r-slate-700);
+    background: var(--r-white);
     max-width: 210mm;
     margin: 0 auto;
     padding: 0;
+    -webkit-font-smoothing: antialiased;
 }
 
-/* Override dark-theme inherited colors — the app body uses white text on dark bg,
-   but the report needs dark text on white bg. */
+/* Force dark text — override app's dark-theme body color */
+.report-document,
 .report-document td,
 .report-document th,
 .report-document p,
 .report-document span,
 .report-document div,
 .report-document label {
-    color: inherit;
-}
-
-.report-document .report-table td {
-    color: #334155;
-}
-
-.report-document .report-table th {
-    color: #334155;
-}
-
-.report-document .report-table--branded th {
-    color: white;
-}
-
-.report-document .report-section-header {
-    color: white;
-}
-
-.report-document .report-cover__header,
-.report-document .report-cover__header * {
-    color: white;
-}
-
-.report-document .report-signoff__label,
-.report-document .report-signoff__title,
-.report-document .report-signoff__row {
-    color: #334155;
+    color: var(--r-slate-700);
 }
 
 .report-document * {
     box-sizing: border-box;
 }
 
-/* ---------------------------------------------------------------------------
-   Print Rules
-   --------------------------------------------------------------------------- */
+/* --- Print ---------------------------------------------------------------- */
 
 @media print {
-    @page {
-        size: A4 portrait;
-        margin: 18mm 18mm 22mm 18mm;
-    }
-
-    html, body {
-        margin: 0;
-        padding: 0;
-        background: white;
-    }
-
-    body {
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-    }
-
-    .report-document {
-        max-width: none;
-        padding: 0;
-    }
-
-    .no-print {
-        display: none !important;
-    }
-
-    .page-break {
-        page-break-after: always;
-        break-after: page;
-    }
-
-    .no-break {
-        page-break-inside: avoid;
-        break-inside: avoid;
-    }
-
-    .page-break-before {
-        page-break-before: always;
-        break-before: page;
-    }
-
-    thead {
-        display: table-header-group;
-    }
+    @page { size: A4 portrait; margin: 16mm 16mm 20mm 16mm; }
+    html, body { margin: 0; padding: 0; background: white; }
+    body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .report-document { max-width: none; padding: 0; }
+    .no-print { display: none !important; }
+    .page-break { page-break-after: always; break-after: page; }
+    .no-break { page-break-inside: avoid; break-inside: avoid; }
+    .page-break-before { page-break-before: always; break-before: page; }
+    thead { display: table-header-group; }
 }
 
-/* ---------------------------------------------------------------------------
-   Screen Preview
-   --------------------------------------------------------------------------- */
+/* --- Screen preview ------------------------------------------------------- */
 
 @media screen {
     .report-document {
-        padding: 20mm;
+        padding: 16mm;
         margin-top: 56px;
-        box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 8px 40px rgba(0,0,0,.04);
+        border: 1px solid var(--r-slate-200);
     }
-
     .page-break {
-        border-bottom: 2px dashed var(--report-border);
-        padding-bottom: 20mm;
-        margin-bottom: 20mm;
+        border-bottom: 1px dashed var(--r-slate-300);
+        padding-bottom: 16mm;
+        margin-bottom: 16mm;
     }
 }
 
-/* ---------------------------------------------------------------------------
-   Print Toolbar (screen only)
-   --------------------------------------------------------------------------- */
+/* --- Print toolbar -------------------------------------------------------- */
 
 .report-print-bar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 1000;
-    display: flex;
-    justify-content: center;
-    padding: 12px;
-    background: var(--report-navy);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    display: flex; align-items: center; justify-content: center; gap: 16px;
+    padding: 10px 24px;
+    background: var(--r-slate-900);
+    border-bottom: 1px solid var(--r-slate-700);
 }
 
 .report-print-btn {
-    padding: 10px 32px;
-    background: var(--report-brand);
+    padding: 8px 28px;
+    background: var(--r-accent);
     color: white;
     border: none;
-    border-radius: 6px;
-    font-size: 14px;
+    border-radius: 4px;
+    font-family: var(--r-font);
+    font-size: 13px;
     font-weight: 600;
+    letter-spacing: 0.02em;
     cursor: pointer;
-    transition: background 0.15s;
 }
+.report-print-btn:hover { background: #0f766e; }
 
-.report-print-btn:hover {
-    background: #006d49;
-}
-
-/* ---------------------------------------------------------------------------
-   Loading State
-   --------------------------------------------------------------------------- */
+/* --- Loading -------------------------------------------------------------- */
 
 .report-loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    font-family: 'Inter', sans-serif;
-    color: var(--report-text-muted);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100vh; font-family: var(--r-font); color: var(--r-slate-400);
 }
-
 .report-loading__spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid var(--report-border);
-    border-top-color: var(--report-brand);
+    width: 32px; height: 32px;
+    border: 2px solid var(--r-slate-200);
+    border-top-color: var(--r-accent);
     border-radius: 50%;
-    animation: report-spin 0.8s linear infinite;
-    margin-bottom: 16px;
+    animation: r-spin 0.7s linear infinite;
+    margin-bottom: 12px;
 }
+@keyframes r-spin { to { transform: rotate(360deg); } }
 
-@keyframes report-spin {
-    to { transform: rotate(360deg); }
-}
-
-/* ---------------------------------------------------------------------------
-   Page Header (repeating)
-   --------------------------------------------------------------------------- */
+/* --- Page header (repeating on interior pages) ---------------------------- */
 
 .report-page-header {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: space-between;
-    padding-bottom: 8px;
-    border-bottom: 2px solid var(--report-navy);
-    margin-bottom: 16px;
-}
-
-.report-page-header__logo {
-    height: 36px;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--r-slate-200);
 }
 
 .report-page-header__title {
-    font-size: 9pt;
+    font-size: 7.5pt;
     font-weight: 700;
-    color: var(--report-navy);
+    color: var(--r-slate-900);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.12em;
 }
 
 .report-page-header__meta {
-    font-size: 8pt;
-    color: var(--report-text-muted);
+    font-size: 7.5pt;
+    font-family: var(--r-mono);
+    color: var(--r-slate-400);
     text-align: right;
+    letter-spacing: 0.02em;
 }
 
-/* ---------------------------------------------------------------------------
-   Page Footer
-   --------------------------------------------------------------------------- */
-
-.report-page-footer {
-    display: flex;
-    justify-content: space-between;
-    padding-top: 8px;
-    border-top: 1px solid var(--report-border);
-    margin-top: auto;
-    font-size: 8pt;
-    color: var(--report-text-muted);
-}
-
-/* ---------------------------------------------------------------------------
-   Cover Page
-   --------------------------------------------------------------------------- */
+/* --- Cover page ----------------------------------------------------------- */
 
 .report-cover {
     position: relative;
 }
 
 .report-cover__header {
-    background: var(--report-navy);
-    color: white;
-    padding: 24px 28px;
-    margin: 0 0 24px 0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    background: var(--r-slate-900);
+    color: var(--r-white) !important;
+    padding: 40px 32px 36px;
+    margin: 0 0 28px 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.report-cover__header::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--r-accent), var(--r-accent) 40%, transparent 40%);
+}
+
+.report-cover__header * {
+    color: var(--r-white) !important;
 }
 
 @media print {
     .report-cover__header {
-        margin: -18mm -18mm 24px -18mm;
+        margin: -16mm -16mm 28px -16mm;
+        padding: 36px 16mm 32px;
     }
 }
 
-.report-cover__header-logo {
-    height: 48px;
-}
-
 .report-cover__header-title {
-    font-size: 16pt;
-    font-weight: 800;
-    line-height: 1.2;
-    text-align: right;
+    font-size: 20pt;
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
+    margin-bottom: 4px;
 }
 
-/* ---------------------------------------------------------------------------
-   Section Headers
-   --------------------------------------------------------------------------- */
+.report-cover__header-subtitle {
+    font-size: 9pt;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.5;
+}
+
+/* --- Section headers ------------------------------------------------------ */
 
 .report-section-header {
-    background: var(--report-brand);
-    color: white;
-    padding: 8px 14px;
-    font-size: 11pt;
+    font-size: 8pt;
     font-weight: 700;
-    margin: 20px 0 12px;
-    letter-spacing: 0.02em;
+    color: var(--r-slate-900) !important;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 0 0 6px 12px;
+    margin: 28px 0 14px;
+    border-left: 3px solid var(--r-accent);
+    border-bottom: 1px solid var(--r-slate-200);
+    background: none;
 }
 
 .report-section-header--dark {
-    background: var(--report-navy);
+    background: var(--r-slate-900);
+    color: var(--r-white) !important;
+    padding: 8px 14px;
+    border-left: none;
+    border-bottom: none;
+    letter-spacing: 0.08em;
 }
 
-/* ---------------------------------------------------------------------------
-   Tables
-   --------------------------------------------------------------------------- */
+/* --- Tables --------------------------------------------------------------- */
 
 .report-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 9pt;
+    font-size: 8.5pt;
     margin-bottom: 16px;
 }
 
 .report-table th {
-    background: var(--report-header-bg);
+    background: var(--r-slate-50);
     font-weight: 600;
+    font-size: 7pt;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
     text-align: left;
-    padding: 7px 10px;
-    border: 1px solid var(--report-border);
-    color: var(--report-text);
+    padding: 8px 10px;
+    color: var(--r-slate-500) !important;
+    border-bottom: 2px solid var(--r-slate-200);
+    border-top: none;
+    border-left: none;
+    border-right: none;
 }
 
 .report-table td {
-    padding: 6px 10px;
-    border: 1px solid var(--report-border);
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--r-slate-100);
+    border-top: none;
+    border-left: none;
+    border-right: none;
     vertical-align: top;
+    color: var(--r-slate-700) !important;
+}
+
+.report-table tr:last-child td {
+    border-bottom: 2px solid var(--r-slate-200);
 }
 
 .report-table tr:nth-child(even) td {
-    background: var(--report-row-alt);
+    background: var(--r-slate-50);
 }
 
+/* Branded table (beamset config etc.) */
 .report-table--branded th {
-    background: var(--report-brand);
-    color: white;
-    border-color: var(--report-brand);
+    background: var(--r-slate-900);
+    color: var(--r-white) !important;
+    border-bottom-color: var(--r-slate-900);
+    letter-spacing: 0.08em;
+}
+
+/* Key-value pair table */
+.report-table--pairs {
+    border: 1px solid var(--r-slate-200);
+}
+
+.report-table--pairs td {
+    border: 1px solid var(--r-slate-100);
+    padding: 6px 10px;
 }
 
 .report-table--pairs td:nth-child(odd) {
     font-weight: 600;
-    background: var(--report-header-bg);
-    width: 25%;
+    font-size: 7.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--r-slate-500) !important;
+    background: var(--r-slate-50);
+    width: 22%;
     white-space: nowrap;
 }
 
-/* ---------------------------------------------------------------------------
-   Executive Dashboard
-   --------------------------------------------------------------------------- */
+.report-table--pairs td:nth-child(even) {
+    color: var(--r-slate-800) !important;
+    font-weight: 500;
+}
+
+/* --- Executive Dashboard -------------------------------------------------- */
 
 .report-dashboard {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
-    margin: 16px 0 24px;
+    gap: 10px;
+    margin: 20px 0 28px;
 }
 
 .report-stat-card {
-    border: 1px solid var(--report-border);
-    border-radius: 8px;
-    padding: 16px;
+    background: var(--r-slate-900);
+    border: none;
+    border-radius: 6px;
+    padding: 18px 14px 14px;
     text-align: center;
     page-break-inside: avoid;
+    position: relative;
+    overflow: hidden;
+}
+
+.report-stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--r-slate-600);
 }
 
 .report-stat-card__value {
-    font-size: 22pt;
-    font-weight: 800;
-    line-height: 1.1;
-    margin-bottom: 4px;
+    font-family: var(--r-mono);
+    font-size: 24pt;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 6px;
     font-variant-numeric: tabular-nums;
+    color: var(--r-white) !important;
 }
 
 .report-stat-card__label {
-    font-size: 8pt;
-    color: var(--report-text-muted);
+    font-size: 6.5pt;
+    color: var(--r-slate-400) !important;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.12em;
     font-weight: 600;
 }
 
-.report-stat-card--danger {
-    border-color: var(--report-danger);
-    background: var(--report-danger-bg);
-}
-.report-stat-card--danger .report-stat-card__value {
-    color: var(--report-danger);
-}
+/* Threshold variants — change the top accent bar color */
+.report-stat-card--danger::before { background: var(--r-danger); }
+.report-stat-card--danger .report-stat-card__value { color: #fca5a5 !important; }
 
-.report-stat-card--warning {
-    border-color: var(--report-warning);
-    background: var(--report-warning-bg);
-}
-.report-stat-card--warning .report-stat-card__value {
-    color: var(--report-warning);
-}
+.report-stat-card--warning::before { background: var(--r-warning); }
+.report-stat-card--warning .report-stat-card__value { color: #fcd34d !important; }
 
-.report-stat-card--safe {
-    border-color: var(--report-safe);
-    background: var(--report-safe-bg);
-}
-.report-stat-card--safe .report-stat-card__value {
-    color: var(--report-safe);
-}
+.report-stat-card--safe::before { background: var(--r-safe); }
+.report-stat-card--safe .report-stat-card__value { color: #86efac !important; }
 
-.report-stat-card--neutral {
-    border-color: var(--report-accent);
-    background: #f0f9ff;
-}
-.report-stat-card--neutral .report-stat-card__value {
-    color: var(--report-accent);
-}
+.report-stat-card--neutral::before { background: var(--r-accent); }
+.report-stat-card--neutral .report-stat-card__value { color: #5eead4 !important; }
 
-/* ---------------------------------------------------------------------------
-   Threshold Badge (inline colored pill for WT values)
-   --------------------------------------------------------------------------- */
+/* --- WT Threshold badges -------------------------------------------------- */
 
 .report-wt-badge {
     display: inline-block;
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-weight: 700;
-    font-size: 8.5pt;
+    padding: 1px 7px;
+    border-radius: 3px;
+    font-family: var(--r-mono);
+    font-weight: 600;
+    font-size: 8pt;
     font-variant-numeric: tabular-nums;
 }
 
 .report-wt-badge--danger {
-    background: var(--report-danger-bg);
-    color: var(--report-danger);
-    border: 1px solid var(--report-danger);
+    background: var(--r-danger-bg);
+    color: var(--r-danger) !important;
 }
 
 .report-wt-badge--warning {
-    background: var(--report-warning-bg);
-    color: var(--report-warning);
-    border: 1px solid var(--report-warning);
+    background: var(--r-warning-bg);
+    color: var(--r-warning) !important;
 }
 
 .report-wt-badge--safe {
-    background: var(--report-safe-bg);
-    color: var(--report-safe);
-    border: 1px solid var(--report-safe);
+    background: var(--r-safe-bg);
+    color: var(--r-safe) !important;
 }
 
-/* ---------------------------------------------------------------------------
-   Inspection Result Page (per-annotation)
-   --------------------------------------------------------------------------- */
+/* --- Inspection result page ----------------------------------------------- */
 
 .report-result-header {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    margin-bottom: 12px;
-}
-
-.report-result-header__file {
-    font-size: 9pt;
-    color: var(--report-text-light);
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--r-slate-100);
 }
 
 .report-result-header__feature {
     font-size: 10pt;
-    font-weight: 600;
+    font-weight: 700;
+    color: var(--r-slate-900) !important;
+}
+
+.report-result-header__file {
+    font-size: 8pt;
+    font-family: var(--r-mono);
+    color: var(--r-slate-400) !important;
 }
 
 .report-result-images {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-bottom: 16px;
+    gap: 12px;
+    margin-bottom: 18px;
 }
 
 .report-result-image {
-    border: 1px solid var(--report-border);
-    border-radius: 4px;
+    border: 1px solid var(--r-slate-200);
+    border-radius: 3px;
     overflow: hidden;
     page-break-inside: avoid;
 }
@@ -499,64 +437,84 @@
 }
 
 .report-result-image__caption {
-    font-size: 8pt;
-    color: var(--report-text-muted);
-    padding: 4px 8px;
+    font-size: 7pt;
+    font-family: var(--r-mono);
+    color: var(--r-slate-400) !important;
+    padding: 5px 8px;
     text-align: center;
-    background: var(--report-header-bg);
+    background: var(--r-slate-50);
+    letter-spacing: 0.02em;
 }
 
+/* Stats box */
 .report-stats-box {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    gap: 1px;
-    background: var(--report-border);
-    border: 1px solid var(--report-border);
-    border-radius: 6px;
+    gap: 0;
+    border: 1px solid var(--r-slate-200);
+    border-radius: 4px;
     overflow: hidden;
-    margin-bottom: 16px;
+    margin-bottom: 18px;
 }
 
 .report-stats-box__item {
-    background: white;
-    padding: 8px 10px;
+    background: var(--r-white);
+    padding: 10px 8px;
     text-align: center;
+    border-right: 1px solid var(--r-slate-100);
+}
+
+.report-stats-box__item:last-child {
+    border-right: none;
 }
 
 .report-stats-box__item--highlight {
-    background: var(--report-danger-bg);
+    background: var(--r-slate-900);
+}
+
+.report-stats-box__item--highlight .report-stats-box__value {
+    color: var(--r-white) !important;
+}
+
+.report-stats-box__item--highlight .report-stats-box__label {
+    color: var(--r-slate-400) !important;
 }
 
 .report-stats-box__value {
-    font-size: 12pt;
+    font-family: var(--r-mono);
+    font-size: 13pt;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
+    color: var(--r-slate-800) !important;
+    line-height: 1.2;
 }
 
 .report-stats-box__label {
-    font-size: 7pt;
-    color: var(--report-text-muted);
+    font-size: 6pt;
+    color: var(--r-slate-400) !important;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    margin-top: 2px;
 }
 
+/* Analysis callout */
 .report-analysis {
-    margin: 12px 0;
-    padding: 10px 14px;
-    background: var(--report-header-bg);
-    border-left: 3px solid var(--report-brand);
-    font-size: 9.5pt;
-    line-height: 1.6;
+    margin: 16px 0;
+    padding: 12px 16px;
+    background: var(--r-slate-50);
+    border-left: 3px solid var(--r-accent);
+    font-size: 9pt;
+    line-height: 1.7;
+    color: var(--r-slate-700) !important;
 }
 
-/* ---------------------------------------------------------------------------
-   Image Pages
-   --------------------------------------------------------------------------- */
+/* --- Image pages ---------------------------------------------------------- */
 
 .report-full-image {
     width: 100%;
-    border: 1px solid var(--report-border);
-    border-radius: 4px;
+    border: 1px solid var(--r-slate-200);
+    border-radius: 3px;
 }
 
 .report-image-grid {
@@ -566,8 +524,8 @@
 }
 
 .report-image-card {
-    border: 1px solid var(--report-border);
-    border-radius: 4px;
+    border: 1px solid var(--r-slate-200);
+    border-radius: 3px;
     overflow: hidden;
     page-break-inside: avoid;
 }
@@ -578,79 +536,88 @@
 }
 
 .report-image-card__label {
-    font-size: 8pt;
-    color: var(--report-text-muted);
-    padding: 4px 8px;
+    font-size: 7pt;
+    font-family: var(--r-mono);
+    color: var(--r-slate-400) !important;
+    padding: 5px 8px;
     text-align: center;
-    background: var(--report-header-bg);
-    font-weight: 600;
+    background: var(--r-slate-50);
+    font-weight: 500;
+    letter-spacing: 0.02em;
 }
 
 .report-figure-caption {
-    font-size: 8pt;
-    color: var(--report-text-muted);
+    font-size: 7.5pt;
+    font-family: var(--r-mono);
+    color: var(--r-slate-400) !important;
     text-align: center;
-    margin-top: 6px;
-    font-style: italic;
+    margin-top: 8px;
+    letter-spacing: 0.01em;
 }
 
-/* ---------------------------------------------------------------------------
-   Sign-off Section
-   --------------------------------------------------------------------------- */
+/* --- Sign-off ------------------------------------------------------------- */
 
 .report-signoff {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    gap: 0;
-    border: 1px solid var(--report-border);
-    margin-top: 20px;
+    gap: 24px;
+    margin-top: 24px;
 }
 
 .report-signoff__col {
-    padding: 10px 14px;
-    border-right: 1px solid var(--report-border);
-}
-
-.report-signoff__col:last-child {
-    border-right: none;
+    padding: 0;
 }
 
 .report-signoff__title {
+    font-size: 7pt;
     font-weight: 700;
-    font-size: 9pt;
-    background: var(--report-header-bg);
-    margin: -10px -14px 10px;
-    padding: 6px 14px;
-    border-bottom: 1px solid var(--report-border);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--r-slate-500) !important;
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+    border-bottom: 2px solid var(--r-slate-900);
 }
 
 .report-signoff__row {
     display: flex;
     gap: 8px;
-    margin-bottom: 8px;
-    font-size: 9pt;
+    margin-bottom: 6px;
+    font-size: 8.5pt;
+    color: var(--r-slate-700) !important;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--r-slate-100);
+}
+
+.report-signoff__row:last-child {
+    border-bottom: none;
 }
 
 .report-signoff__label {
     font-weight: 600;
-    min-width: 80px;
+    min-width: 72px;
+    font-size: 7.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--r-slate-400) !important;
 }
 
-/* ---------------------------------------------------------------------------
-   Restriction highlight
-   --------------------------------------------------------------------------- */
+/* --- Restriction ---------------------------------------------------------- */
 
 .report-restriction {
-    background: var(--report-warning-bg);
-    border: 1px solid var(--report-warning);
-    border-radius: 4px;
-    padding: 8px 12px;
-    margin-top: 8px;
+    background: var(--r-warning-bg);
+    border-left: 3px solid var(--r-warning);
+    border-radius: 0;
+    padding: 10px 14px;
+    margin-top: 10px;
     font-size: 9pt;
 }
 
 .report-restriction__label {
     font-weight: 700;
-    color: var(--report-warning);
-    margin-bottom: 2px;
+    font-size: 7pt;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--r-warning) !important;
+    margin-bottom: 4px;
 }

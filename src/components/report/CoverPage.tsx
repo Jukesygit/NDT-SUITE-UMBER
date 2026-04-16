@@ -73,7 +73,10 @@ export default function CoverPage({ project, vessel, procedures }: CoverPageProp
             {/* Branded header bar */}
             <div className="report-cover__header">
                 <div className="report-cover__header-title">
-                    PAUT Inspection Report
+                    Phased Array Ultrasonic Testing
+                </div>
+                <div className="report-cover__header-subtitle">
+                    Inspection Report
                 </div>
             </div>
 
