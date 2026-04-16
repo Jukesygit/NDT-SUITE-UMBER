@@ -9,6 +9,8 @@ import {
     useProjectImages,
 } from '../../hooks/queries/useInspectionProjects';
 import { useVesselModelForReport } from '../../hooks/queries/useVesselModelForReport';
+import ReportDocument from '../../components/report/ReportDocument';
+import '../../components/report/report.css';
 
 export default function ReportPage() {
     const { projectId, vesselId } = useParams<{ projectId: string; vesselId: string }>();
@@ -26,17 +28,8 @@ export default function ReportPage() {
 
     if (isLoading) {
         return (
-            <div
-                style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: '100vh',
-                    fontFamily: 'Inter, sans-serif',
-                    color: '#94a3b8',
-                }}
-            >
+            <div className="report-loading">
+                <div className="report-loading__spinner" />
                 <p>Loading report data...</p>
             </div>
         );
@@ -44,17 +37,7 @@ export default function ReportPage() {
 
     if (!project || !vessel) {
         return (
-            <div
-                style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: '100vh',
-                    fontFamily: 'Inter, sans-serif',
-                    color: '#94a3b8',
-                }}
-            >
+            <div className="report-loading">
                 <p>Report data not found.</p>
             </div>
         );
@@ -63,60 +46,24 @@ export default function ReportPage() {
     const modelConfig = vesselModel?.config as Record<string, unknown> | undefined;
     const reportAssets = modelConfig?.reportAssets as Record<string, unknown> | undefined;
 
-    // Placeholder -- ReportDocument will be wired in Task 7
     return (
-        <div
-            style={{
-                maxWidth: '210mm',
-                margin: '60px auto',
-                padding: '20mm',
-                fontFamily: 'Inter, sans-serif',
-                background: 'white',
-            }}
-        >
-            <div
-                style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    zIndex: 1000,
-                    display: 'flex',
-                    justifyContent: 'center',
-                    padding: '12px',
-                    background: '#0a1628',
-                }}
-            >
-                <button
-                    onClick={() => window.print()}
-                    style={{
-                        padding: '10px 32px',
-                        background: '#00875a',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '6px',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                    }}
-                >
+        <>
+            <div className="report-print-bar no-print">
+                <button className="report-print-btn" onClick={() => window.print()}>
                     Save as PDF
                 </button>
             </div>
-            <h1>PAUT Inspection Report</h1>
-            <p>Project: {project.name}</p>
-            <p>Vessel: {vessel.vessel_name}</p>
-            <p>Scan log entries: {scanLogEntries.length}</p>
-            <p>Calibration log entries: {calLogEntries.length}</p>
-            <p>Files: {files.length}</p>
-            <p>Images: {images.length}</p>
-            <p>Procedures: {procedures.length}</p>
-            <p>Vessel model loaded: {vesselModel ? 'Yes' : 'No'}</p>
-            <p>Report assets available: {reportAssets ? 'Yes' : 'No'}</p>
-            {Array.isArray(reportAssets?.overviewRenders) && (
-                <p>Overview renders: {(reportAssets.overviewRenders as unknown[]).length}</p>
-            )}
-            {reportAssets?.flattenedView != null && <p>Flattened view: available</p>}
-        </div>
+            <ReportDocument
+                project={project}
+                vessel={vessel}
+                procedures={procedures}
+                files={files}
+                scanLogEntries={scanLogEntries}
+                calLogEntries={calLogEntries}
+                images={images}
+                modelConfig={modelConfig}
+                reportAssets={reportAssets}
+            />
+        </>
     );
 }
