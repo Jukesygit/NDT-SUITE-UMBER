@@ -18,10 +18,12 @@ import type {
 } from '@/types/inspection-project';
 
 import CoverPage from './CoverPage';
+import DashboardPage from './DashboardPage';
+import type { DashboardPageProps } from './DashboardPage';
 import ReportHeader from './ReportHeader';
+import InspectionResultPage from './InspectionResultPage';
+import type { AnnotationShapeConfig, ThicknessThresholds } from '@/components/VesselModeler/types';
 // Pages created in subsequent tasks — uncomment as they become available
-// import DashboardPage from './DashboardPage';
-// import InspectionResultPage from './InspectionResultPage';
 // import PhotographsPage from './PhotographsPage';
 // import FlattenedProjectionPage from './FlattenedProjectionPage';
 // import VesselOverviewPage from './VesselOverviewPage';
@@ -72,22 +74,18 @@ export default function ReportDocument({
     // Extract model state and pre-rendered images from config
     const modelState = modelConfig?.modelState as Record<string, unknown> | undefined;
     const annotations = (modelState?.annotations ?? []) as Record<string, unknown>[];
-    // Will be used by DashboardPage / InspectionResultPage (Tasks 9-10)
+    // Will be used by InspectionResultPage (Task 10)
     const _scanComposites = (modelConfig?.scanComposites ?? []) as Record<string, unknown>[];
-    const _thresholds = modelConfig?.thresholds as Record<string, unknown> | undefined;
     void _scanComposites;
-    void _thresholds;
+    const thresholds = modelConfig?.thresholds as Record<string, unknown> | undefined;
 
     // Pre-rendered report images from reportAssets
     const overviewRenders = (reportAssets?.overviewRenders ?? []) as string[];
     const flattenedView = reportAssets?.flattenedView as string | undefined;
-    // Will be used by InspectionResultPage (Task 10)
-    const _annotationRenders = (reportAssets?.annotationRenders ?? {}) as Record<string, string[]>;
-    void _annotationRenders;
+    const annotationRenders = (reportAssets?.annotationRenders ?? {}) as Record<string, string[]>;
 
-    // Figure numbering counter — will be passed to child pages in Tasks 9-11
-    const _figureCounter = useMemo(() => createFigureCounter(), []);
-    void _figureCounter;
+    // Figure numbering counter — passed to child pages
+    const figureCounter = useMemo(() => createFigureCounter(), []);
 
     // Reference drawings from files
     const referenceDrawings = files.filter(
@@ -116,11 +114,12 @@ export default function ReportDocument({
                 vesselName={vesselName}
                 date={reportDate}
             />
-            {/* TODO: <DashboardPage /> — Task 9 */}
-            <div className="report-section-header">Executive Dashboard</div>
-            <p style={{ color: 'var(--report-text-muted)', fontStyle: 'italic' }}>
-                Dashboard page placeholder — will be implemented in Task 9.
-            </p>
+            <DashboardPage
+                vessel={vessel}
+                scanLogEntries={scanLogEntries}
+                annotations={annotations}
+                thresholds={thresholds as DashboardPageProps['thresholds']}
+            />
             <div className="page-break" />
 
             {/* Page 3: Photographs */}
@@ -143,22 +142,24 @@ export default function ReportDocument({
 
             {/* Per-annotation inspection result pages */}
             {annotations.map((annotation, idx) => {
-                const annotationId = annotation.id as string;
+                const annotationId = String(annotation.id ?? idx);
+                const renders = annotationRenders[annotationId] ?? [];
                 return (
-                    <div key={annotationId ?? idx}>
+                    <div key={annotationId}>
                         <ReportHeader
                             reportTitle={reportTitle}
                             reportNumber={reportNumber}
                             vesselName={vesselName}
                             date={reportDate}
                         />
-                        {/* TODO: <InspectionResultPage /> — Task 10 */}
-                        <div className="report-section-header">
-                            Inspection Result — {(annotation.label as string) ?? `Area ${idx + 1}`}
-                        </div>
-                        <p style={{ color: 'var(--report-text-muted)', fontStyle: 'italic' }}>
-                            Inspection result page placeholder — will be implemented in Task 10.
-                        </p>
+                        <InspectionResultPage
+                            annotation={annotation as unknown as AnnotationShapeConfig}
+                            index={idx}
+                            annotationHeatmap={renders[0]}
+                            annotationContextImage={renders[1]}
+                            thresholds={thresholds as ThicknessThresholds | undefined}
+                            figureCounter={figureCounter}
+                        />
                         <div className="page-break" />
                     </div>
                 );
