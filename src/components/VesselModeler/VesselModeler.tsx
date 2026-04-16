@@ -1586,6 +1586,84 @@ export default function VesselModeler() {
         ));
     }, [vesselState, saveModelType, saveModelTypeCustom]);
 
+    /** Capture 3D + 2D images for PDF report generation */
+    const captureReportAssets = useCallback(async () => {
+        const assets: Record<string, unknown> = {};
+
+        // 1. Capture 3D viewport overviews
+        const viewport = viewportRef.current;
+        if (viewport) {
+            const renderer = viewport.getRenderer();
+            const scene = viewport.getScene();
+            const camera = viewport.getCamera();
+            const controls = viewport.getControls();
+            const sceneManager = viewport.getSceneManager();
+            if (renderer && scene && camera && controls && sceneManager) {
+                try {
+                    const overviews = await captureVesselOverviews({
+                        renderer, scene, camera, controls,
+                        vesselState,
+                        vesselGroup: sceneManager.getVesselGroup() ?? undefined,
+                    });
+                    assets.overviewRenders = overviews;
+                } catch (err) {
+                    console.warn('Failed to capture vessel overviews:', err);
+                }
+            }
+        }
+
+        // 2. Capture 2D flattened projection
+        const flatRef = flattenedViewportRef.current;
+        if (flatRef) {
+            try {
+                const flatImage = flatRef.exportImage();
+                if (flatImage) assets.flattenedView = flatImage;
+            } catch (err) {
+                console.warn('Failed to capture flattened view:', err);
+            }
+        }
+
+        // 3. Capture per-annotation heatmaps
+        const annotationHeatmaps: Record<number, string> = {};
+        for (const ann of vesselState.annotations) {
+            if (!ann.includeInReport && ann.type !== 'scan') continue;
+            const heatmap = captureAnnotationHeatmap(ann, vesselState);
+            if (heatmap) annotationHeatmaps[ann.id] = heatmap;
+        }
+        if (Object.keys(annotationHeatmaps).length > 0) {
+            assets.annotationHeatmaps = annotationHeatmaps;
+        }
+
+        // 4. Capture per-annotation 3D context images
+        if (viewport) {
+            const renderer = viewport.getRenderer();
+            const scene = viewport.getScene();
+            const camera = viewport.getCamera();
+            const controls = viewport.getControls();
+            const sceneManager = viewport.getSceneManager();
+            if (renderer && scene && camera && controls && sceneManager) {
+                const contextImages: Record<number, string> = {};
+                for (const ann of vesselState.annotations) {
+                    if (!ann.includeInReport && ann.type !== 'scan') continue;
+                    try {
+                        const ctx = captureAnnotationContext(
+                            { renderer, scene, camera, controls, vesselState, vesselGroup: sceneManager.getVesselGroup() ?? undefined },
+                            ann,
+                        );
+                        contextImages[ann.id] = ctx;
+                    } catch (err) {
+                        console.warn(`Failed to capture context for annotation ${ann.id}:`, err);
+                    }
+                }
+                if (Object.keys(contextImages).length > 0) {
+                    assets.annotationContextImages = contextImages;
+                }
+            }
+        }
+
+        return assets;
+    }, [vesselState]);
+
     // Save (update existing model)
     const saveToProject = useCallback(async () => {
         if (!effectiveProjectVesselId) {
@@ -1602,6 +1680,10 @@ export default function VesselModeler() {
         setSaveStatus('saving');
         try {
             const sanitized = buildSaveConfig();
+            // Capture report images
+            const reportAssets = await captureReportAssets();
+            sanitized.reportAssets = reportAssets;
+
             const modelName = vesselState.vesselName || 'Untitled Vessel';
 
             await updateModelMutation.mutateAsync({
@@ -1618,7 +1700,7 @@ export default function VesselModeler() {
             setSaveStatus('error');
             setTimeout(() => setSaveStatus('idle'), 3000);
         }
-    }, [effectiveProjectVesselId, user, vesselState.vesselName, buildSaveConfig, updateModelMutation, saveModelType, saveModelTypeCustom]);
+    }, [effectiveProjectVesselId, user, vesselState.vesselName, buildSaveConfig, captureReportAssets, updateModelMutation, saveModelType, saveModelTypeCustom]);
 
     // Save as new model (always creates a new record)
     const saveAsNewToProject = useCallback(async () => {
@@ -1633,6 +1715,10 @@ export default function VesselModeler() {
         setSaveStatus('saving');
         try {
             const sanitized = buildSaveConfig();
+            // Capture report images
+            const reportAssets = await captureReportAssets();
+            sanitized.reportAssets = reportAssets;
+
             const modelName = vesselState.vesselName || 'Untitled Vessel';
 
             const newId = await saveModelMutation.mutateAsync({
@@ -1655,7 +1741,7 @@ export default function VesselModeler() {
             setSaveStatus('error');
             setTimeout(() => setSaveStatus('idle'), 3000);
         }
-    }, [pickerVesselId, effectiveProjectVesselId, user, vesselState.vesselName, buildSaveConfig, saveModelMutation]);
+    }, [pickerVesselId, effectiveProjectVesselId, user, vesselState.vesselName, buildSaveConfig, captureReportAssets, saveModelMutation]);
 
     const exportGLB = useCallback(async () => {
         const hasProjectInfo = vesselState.vesselName || vesselState.location || vesselState.inspectionDate;
