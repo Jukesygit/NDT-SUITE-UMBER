@@ -3,7 +3,7 @@
  * for the PAUT inspection report.
  */
 
-import type { CalibrationLogEntry } from '@/types/inspection-project';
+import type { CalibrationLogEntry } from '../../types/inspection-project';
 
 export interface CalibrationLogPageProps {
     entries: CalibrationLogEntry[];

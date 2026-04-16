@@ -15,14 +15,14 @@ import type {
     ScanLogEntry,
     CalibrationLogEntry,
     ProjectImage,
-} from '@/types/inspection-project';
+} from '../../types/inspection-project';
 
 import CoverPage from './CoverPage';
 import DashboardPage from './DashboardPage';
 import type { DashboardPageProps } from './DashboardPage';
 import ReportHeader from './ReportHeader';
 import InspectionResultPage from './InspectionResultPage';
-import type { AnnotationShapeConfig, ThicknessThresholds } from '@/components/VesselModeler/types';
+import type { AnnotationShapeConfig, ThicknessThresholds } from '../VesselModeler/types';
 import PhotographsPage from './PhotographsPage';
 import FlattenedProjectionPage from './FlattenedProjectionPage';
 import VesselOverviewPage from './VesselOverviewPage';

@@ -12,7 +12,7 @@ import type {
     InspectionProcedure,
     BeamsetRow,
     SignoffPerson,
-} from '@/types/inspection-project';
+} from '../../types/inspection-project';
 
 interface CoverPageProps {
     project: InspectionProject;

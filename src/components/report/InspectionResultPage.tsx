@@ -10,7 +10,7 @@ import type {
     AnnotationShapeConfig,
     AnnotationThicknessStats,
     ThicknessThresholds,
-} from '@/components/VesselModeler/types';
+} from '../VesselModeler/types';
 
 // ---------------------------------------------------------------------------
 // Props

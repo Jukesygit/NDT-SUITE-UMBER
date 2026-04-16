@@ -3,7 +3,7 @@
  * with color-coded Min WT badges based on threshold values.
  */
 
-import type { ScanLogEntry } from '@/types/inspection-project';
+import type { ScanLogEntry } from '../../types/inspection-project';
 
 export interface ScanLogPageProps {
     entries: ScanLogEntry[];

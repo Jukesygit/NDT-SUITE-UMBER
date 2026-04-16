@@ -5,7 +5,7 @@
  * inspection results summary, and sign-off section.
  */
 
-import type { ProjectVessel, ScanLogEntry, SignoffDetails } from '@/types/inspection-project';
+import type { ProjectVessel, ScanLogEntry, SignoffDetails } from '../../types/inspection-project';
 
 // ---------------------------------------------------------------------------
 // Props
