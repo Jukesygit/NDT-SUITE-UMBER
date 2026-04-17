@@ -1,7 +1,10 @@
 /**
  * AscanWaveform — displays a companion-rendered A-scan image.
+ *
+ * Fills its parent container.
  */
 
+import { useEffect, useRef, useState } from 'react';
 import { useCompanionImage } from '../../../hooks/queries/useCompanionImage';
 import type { GateSettings } from '../../../types/companion';
 
@@ -11,8 +14,6 @@ interface AscanWaveformProps {
   scanMm: number;
   indexMm: number;
   gateSettings?: GateSettings;
-  width?: number;
-  height?: number;
 }
 
 export default function AscanWaveform({
@@ -21,26 +22,38 @@ export default function AscanWaveform({
   scanMm,
   indexMm,
   gateSettings,
-  width = 400,
-  height = 120,
 }: AscanWaveformProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 400, h: 120 });
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      const { width: w, height: h } = entries[0].contentRect;
+      if (w > 0 && h > 0) setSize({ w: Math.round(w), h: Math.round(h) });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const { blobUrl, isLoading } = useCompanionImage({
     port,
     type: 'ascan',
     folders,
     scanMm,
     indexMm,
-    width,
-    height,
+    width: size.w,
+    height: size.h,
     gateSettings,
     enabled: !!port && folders.length > 0,
   });
 
   return (
-    <div style={{
+    <div ref={containerRef} style={{
       position: 'relative',
-      width,
-      height,
+      width: '100%',
+      height: '100%',
       background: 'var(--surface-elevated)',
       borderRadius: 'var(--radius-sm)',
       overflow: 'hidden',

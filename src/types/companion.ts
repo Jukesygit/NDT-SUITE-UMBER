@@ -11,6 +11,18 @@
 
 export interface CompositeData {
   matrix: Float32Array;
+  /** Measurement gate amplitude % (0-200) per point, or null if companion doesn't provide it. */
+  amplitude: Float32Array | null;
+  /** Rectified envelope data (height * width * envelopeSamples) uint8, or null if not provided. */
+  envelope: Uint8Array | null;
+  /** Time samples per point in the envelope (e.g. 30). */
+  envelopeSamples: number;
+  /** Start of the envelope time axis in microseconds. */
+  timeStartUs: number;
+  /** End of the envelope time axis in microseconds. */
+  timeEndUs: number;
+  /** Sound velocity in m/s (used to convert time ↔ depth). */
+  velocity: number;
   width: number;
   height: number;
   xAxis: Float32Array;

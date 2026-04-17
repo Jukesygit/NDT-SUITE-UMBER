@@ -181,3 +181,24 @@ export function getAvailableColorscales(): string[] {
 export function getColorscale(name: string): ColorStop[] {
   return COLOR_SCALES[name] ?? COLOR_SCALES.Jet;
 }
+
+/**
+ * Build a 256-entry RGBA lookup table (Uint8ClampedArray of length 1024)
+ * from a named colorscale.  Used by the heatmap worker and color bar.
+ */
+export function buildColorLut(name: string, reverse = false): Uint8ClampedArray {
+  const scale = getColorscale(name);
+  const lut = new Uint8ClampedArray(256 * 4);
+
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255;
+    const [r, g, b] = interpolateColor(t, scale, reverse);
+    const offset = i * 4;
+    lut[offset] = r;
+    lut[offset + 1] = g;
+    lut[offset + 2] = b;
+    lut[offset + 3] = 255;
+  }
+
+  return lut;
+}

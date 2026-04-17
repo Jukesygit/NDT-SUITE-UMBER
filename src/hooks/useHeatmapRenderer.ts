@@ -14,6 +14,7 @@ interface RenderParams {
   viewportWidth: number;
   viewportHeight: number;
   colormap: string;
+  reverseColormap?: boolean;
   rangeMin?: number;
   rangeMax?: number;
   visibleRegion?: { x0: number; y0: number; x1: number; y1: number };
@@ -70,6 +71,7 @@ export function useHeatmapRenderer(): UseHeatmapRendererResult {
         viewportWidth: params.viewportWidth,
         viewportHeight: params.viewportHeight,
         colormap: params.colormap,
+        reverseColormap: params.reverseColormap,
         rangeMin: params.rangeMin,
         rangeMax: params.rangeMax,
         visibleRegion: params.visibleRegion,

@@ -4,76 +4,26 @@
  * Receives a Float32Array thickness matrix (transferred, not copied),
  * applies a colormap, downsamples to viewport dimensions, and returns
  * an ImageData (also transferred).
+ *
+ * Colormaps are sourced from the shared Plotly-compatible definitions in
+ * `src/utils/colorscales.ts` — the same scales used by the C-scan
+ * compositor and vessel modeler.
  */
 
+import { buildColorLut } from '../utils/colorscales';
+
 // ---------------------------------------------------------------------------
-// Colormap LUTs — 256 RGBA entries
+// LUT cache — keyed by "name|reverse"
 // ---------------------------------------------------------------------------
 
-type ColormapName = 'viridis' | 'jet' | 'plasma' | 'okabe-ito';
-
-function buildLut(name: ColormapName): Uint8ClampedArray {
-  const lut = new Uint8ClampedArray(256 * 4);
-
-  for (let i = 0; i < 256; i++) {
-    const t = i / 255;
-    let r: number, g: number, b: number;
-
-    switch (name) {
-      case 'jet':
-        r = clamp(1.5 - Math.abs(4.0 * t - 3.0));
-        g = clamp(1.5 - Math.abs(4.0 * t - 2.0));
-        b = clamp(1.5 - Math.abs(4.0 * t - 1.0));
-        break;
-      case 'plasma':
-        r = clamp(0.05 + 1.45 * t - 0.7 * t * t);
-        g = clamp(-0.2 + 1.5 * t * t);
-        b = clamp(0.55 - 0.5 * t + 0.7 * t * t);
-        break;
-      case 'okabe-ito':
-        // Diverging colormap: blue → white → orange
-        if (t < 0.5) {
-          const s = t * 2;
-          r = clamp(0.23 + 0.77 * s);
-          g = clamp(0.35 + 0.65 * s);
-          b = clamp(0.82 + 0.18 * s);
-        } else {
-          const s = (t - 0.5) * 2;
-          r = clamp(1.0 - 0.1 * s);
-          g = clamp(1.0 - 0.4 * s);
-          b = clamp(1.0 - 0.85 * s);
-        }
-        break;
-      case 'viridis':
-      default:
-        r = clamp(0.267 + 0.004 * t + 1.26 * t * t - 1.53 * t * t * t);
-        g = clamp(0.004 + 1.01 * t - 0.66 * t * t + 0.31 * t * t * t);
-        b = clamp(0.33 + 0.21 * t + 1.97 * t * t - 2.51 * t * t * t);
-        break;
-    }
-
-    const offset = i * 4;
-    lut[offset] = Math.round(r * 255);
-    lut[offset + 1] = Math.round(g * 255);
-    lut[offset + 2] = Math.round(b * 255);
-    lut[offset + 3] = 255;
-  }
-
-  return lut;
-}
-
-function clamp(v: number): number {
-  return Math.max(0, Math.min(1, v));
-}
-
-// Cache LUTs
 const lutCache = new Map<string, Uint8ClampedArray>();
 
-function getLut(name: ColormapName): Uint8ClampedArray {
-  let lut = lutCache.get(name);
+function getLut(name: string, reverse = false): Uint8ClampedArray {
+  const key = `${name}|${reverse}`;
+  let lut = lutCache.get(key);
   if (!lut) {
-    lut = buildLut(name);
-    lutCache.set(name, lut);
+    lut = buildColorLut(name, reverse);
+    lutCache.set(key, lut);
   }
   return lut;
 }
@@ -89,7 +39,8 @@ interface WorkerRequest {
   height: number;
   viewportWidth: number;
   viewportHeight: number;
-  colormap: ColormapName;
+  colormap: string;
+  reverseColormap?: boolean;
   rangeMin?: number;
   rangeMax?: number;
   visibleRegion?: { x0: number; y0: number; x1: number; y1: number };
@@ -101,7 +52,7 @@ interface WorkerRequest {
 
 function render(msg: WorkerRequest): ImageData {
   const { matrix, width, height, viewportWidth, viewportHeight, colormap, visibleRegion } = msg;
-  const lut = getLut(colormap);
+  const lut = getLut(colormap, msg.reverseColormap);
 
   // Determine visible data window (in data coordinates, row/col indices)
   let srcX0 = 0, srcY0 = 0, srcX1 = width, srcY1 = height;

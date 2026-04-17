@@ -2,9 +2,10 @@
  * BscanStrip — displays a companion-rendered B-scan image.
  *
  * Uses useCompanionImage for request coalescing.
- * Shows "Companion disconnected" overlay when unavailable.
+ * Fills its parent container; pass explicit width/height to override.
  */
 
+import { useEffect, useRef, useState } from 'react';
 import { useCompanionImage } from '../../../hooks/queries/useCompanionImage';
 import type { GateSettings } from '../../../types/companion';
 
@@ -15,8 +16,8 @@ interface BscanStripProps {
   scanMm: number;
   indexMm: number;
   gateSettings?: GateSettings;
-  width?: number;
-  height?: number;
+  /** When provided, use this blob URL directly and skip internal HTTP fetching. */
+  blobUrl?: string | null;
 }
 
 export default function BscanStrip({
@@ -26,28 +27,49 @@ export default function BscanStrip({
   scanMm,
   indexMm,
   gateSettings,
-  width = 400,
-  height = 150,
+  blobUrl: externalBlobUrl,
 }: BscanStripProps) {
-  const { blobUrl, isLoading, degraded } = useCompanionImage({
+  // Use internal HTTP fetch when no external blob URL is available.
+  // externalBlobUrl is undefined when prop not passed (project viewer),
+  // or null when WebSocket hasn't returned data yet — both mean "use HTTP".
+  const useInternalFetch = !externalBlobUrl;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 400, h: 150 });
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      const { width: w, height: h } = entries[0].contentRect;
+      if (w > 0 && h > 0) setSize({ w: Math.round(w), h: Math.round(h) });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // When an external blobUrl is provided (via WebSocket), skip HTTP fetching.
+  // The hook is always called (hooks can't be conditional) but disabled.
+  const { blobUrl: internalBlobUrl, isLoading, degraded } = useCompanionImage({
     port,
     type,
     folders,
     scanMm,
     indexMm,
-    width,
-    height,
+    width: size.w,
+    height: size.h,
     gateSettings,
-    enabled: !!port && folders.length > 0,
+    enabled: useInternalFetch && !!port && folders.length > 0,
   });
+
+  const blobUrl = useInternalFetch ? internalBlobUrl : externalBlobUrl;
 
   const label = type === 'bscan-axial' ? 'D-scan (axial)' : 'B-scan (index)';
 
   return (
-    <div style={{
+    <div ref={containerRef} style={{
       position: 'relative',
-      width,
-      height,
+      width: '100%',
+      height: '100%',
       background: 'var(--surface-elevated)',
       borderRadius: 'var(--radius-sm)',
       overflow: 'hidden',

@@ -87,7 +87,7 @@ const initialState: ScanViewerState = {
   cursorIndexMm: 0,
   gateSettings: { ...DEFAULT_GATE_SETTINGS },
   savedGateSettings: { ...DEFAULT_GATE_SETTINGS },
-  colormap: 'viridis',
+  colormap: 'Jet',
   companionPort: null,
   folders: [],
 };
@@ -293,6 +293,8 @@ export default function ScanViewerPage() {
                 cursorIndexMm={state.cursorIndexMm}
                 colormap={state.colormap}
                 onCursorMove={handleCursorMove}
+                thicknessMin={state.gateSettings.thicknessMin}
+                thicknessMax={state.gateSettings.thicknessMax}
               />
             </div>
 

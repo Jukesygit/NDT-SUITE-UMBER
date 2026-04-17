@@ -55,12 +55,20 @@ export const WarningsSchema = z.array(WarningSchema);
 /**
  * Parse a binary composite response from POST /create-composite.
  *
- * Body = gzip(concat(float32_matrix, float32_xAxis, float32_yAxis))
+ * Body = gzip(concat(float32_matrix, float32_amplitude, uint8_envelope, float32_xAxis, float32_yAxis))
+ * When X-Has-Amplitude header is absent (old companion), amplitude is omitted.
+ * When X-Has-Envelope header is present, uint8 envelope data follows amplitude.
  * Metadata in response headers: X-Matrix-Width, X-Matrix-Height, X-Stats, etc.
  */
 export async function parseCompositeResponse(response: Response): Promise<CompositeData> {
   const width = parseInt(response.headers.get('X-Matrix-Width') ?? '0', 10);
   const height = parseInt(response.headers.get('X-Matrix-Height') ?? '0', 10);
+  const hasAmplitude = response.headers.get('X-Has-Amplitude') === 'true';
+  const hasEnvelope = response.headers.get('X-Has-Envelope') === 'true';
+  const envelopeSamples = parseInt(response.headers.get('X-Envelope-Samples') ?? '0', 10);
+  const timeStartUs = parseFloat(response.headers.get('X-Time-Start-Us') ?? '0');
+  const timeEndUs = parseFloat(response.headers.get('X-Time-End-Us') ?? '1');
+  const velocity = parseFloat(response.headers.get('X-Velocity') ?? '5900');
 
   if (!width || !height) {
     throw new Error('Missing X-Matrix-Width or X-Matrix-Height headers');
@@ -90,25 +98,49 @@ export async function parseCompositeResponse(response: Response): Promise<Compos
     buffer = rawBuffer;
   }
 
-  // Validate buffer size
+  // Validate buffer size (mixed types: float32 sections + uint8 envelope)
   const matrixSize = width * height;
-  const expectedFloats = matrixSize + width + height; // matrix + xAxis + yAxis
-  const expectedBytes = expectedFloats * 4;
+  const amplitudeFloats = hasAmplitude ? matrixSize : 0;
+  const envelopeBytes = hasEnvelope ? matrixSize * envelopeSamples : 0;
+  // Float32 sections: matrix + amplitude + xAxis + yAxis (4 bytes each)
+  // Uint8 section: envelope (1 byte each)
+  const expectedBytes = (matrixSize + amplitudeFloats + width + height) * 4 + envelopeBytes;
 
   if (buffer.byteLength !== expectedBytes) {
     throw new Error(
       `Binary payload size mismatch: got ${buffer.byteLength} bytes, ` +
-      `expected ${expectedBytes} (${width}x${height} matrix + axes)`
+      `expected ${expectedBytes} (${width}x${height} matrix` +
+      `${hasAmplitude ? ' + amplitude' : ''}${hasEnvelope ? ' + envelope' : ''} + axes)`
     );
   }
 
-  // Create Float32Array views (zero-copy via subarray)
-  const fullArray = new Float32Array(buffer);
-  const matrix = fullArray.subarray(0, matrixSize);
-  const xAxis = fullArray.subarray(matrixSize, matrixSize + width);
-  const yAxis = fullArray.subarray(matrixSize + width, matrixSize + width + height);
+  // Parse using byte offsets (mixed float32/uint8 types)
+  let byteOffset = 0;
 
-  return { matrix, width, height, xAxis, yAxis, stats, sourceFiles, warnings };
+  const matrix = new Float32Array(buffer, byteOffset, matrixSize);
+  byteOffset += matrixSize * 4;
+
+  const amplitude = hasAmplitude
+    ? new Float32Array(buffer, byteOffset, matrixSize)
+    : null;
+  if (hasAmplitude) byteOffset += matrixSize * 4;
+
+  const envelope = hasEnvelope
+    ? new Uint8Array(buffer, byteOffset, envelopeBytes)
+    : null;
+  if (hasEnvelope) byteOffset += envelopeBytes;
+
+  // After uint8 envelope, byteOffset may not be 4-byte aligned.
+  // Use slice to create new aligned Float32Arrays for the axes.
+  const xAxis = new Float32Array(buffer.slice(byteOffset, byteOffset + width * 4));
+  byteOffset += width * 4;
+
+  const yAxis = new Float32Array(buffer.slice(byteOffset, byteOffset + height * 4));
+
+  return {
+    matrix, amplitude, envelope, envelopeSamples, timeStartUs, timeEndUs, velocity,
+    width, height, xAxis, yAxis, stats, sourceFiles, warnings,
+  };
 }
 
 // ---------------------------------------------------------------------------

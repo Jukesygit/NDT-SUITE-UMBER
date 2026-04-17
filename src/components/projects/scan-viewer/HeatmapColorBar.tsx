@@ -1,8 +1,12 @@
 /**
  * HeatmapColorBar — vertical gradient bar with thickness tick labels.
+ *
+ * Uses the shared Plotly-compatible colorscales from src/utils/colorscales.ts
+ * so the bar exactly matches the heatmap canvas.
  */
 
 import { useEffect, useRef } from 'react';
+import { getColorscale, interpolateColor } from '../../../utils/colorscales';
 
 interface HeatmapColorBarProps {
   min: number;
@@ -23,10 +27,12 @@ export default function HeatmapColorBar({ min, max, colormap, height = 256 }: He
     canvas.width = 20;
     canvas.height = height;
 
+    const scale = getColorscale(colormap);
+
     // Draw gradient (top = max, bottom = min)
     for (let y = 0; y < height; y++) {
       const t = 1 - y / (height - 1); // top=1, bottom=0
-      const [r, g, b] = colormapValue(t, colormap);
+      const [r, g, b] = interpolateColor(t, scale);
       ctx.fillStyle = `rgb(${r},${g},${b})`;
       ctx.fillRect(0, y, 20, 1);
     }
@@ -46,22 +52,4 @@ export default function HeatmapColorBar({ min, max, colormap, height = 256 }: He
       </div>
     </div>
   );
-}
-
-function colormapValue(t: number, name: string): [number, number, number] {
-  let r: number, g: number, b: number;
-  switch (name) {
-    case 'jet':
-      r = Math.max(0, Math.min(1, 1.5 - Math.abs(4.0 * t - 3.0)));
-      g = Math.max(0, Math.min(1, 1.5 - Math.abs(4.0 * t - 2.0)));
-      b = Math.max(0, Math.min(1, 1.5 - Math.abs(4.0 * t - 1.0)));
-      break;
-    case 'viridis':
-    default:
-      r = Math.max(0, Math.min(1, 0.267 + 0.004 * t + 1.26 * t * t - 1.53 * t ** 3));
-      g = Math.max(0, Math.min(1, 0.004 + 1.01 * t - 0.66 * t * t + 0.31 * t ** 3));
-      b = Math.max(0, Math.min(1, 0.33 + 0.21 * t + 1.97 * t * t - 2.51 * t ** 3));
-      break;
-  }
-  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
 }

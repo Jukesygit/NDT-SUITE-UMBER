@@ -135,12 +135,15 @@ describe('parseCompositeResponse', () => {
     expect(result.warnings).toEqual([]);
   });
 
-  it('creates zero-copy Float32Array subarray views', async () => {
+  it('creates correct typed array views from binary payload', async () => {
     const response = buildMockResponse(10, 5);
     const result = await parseCompositeResponse(response);
 
-    // All three arrays should share the same underlying buffer
-    expect(result.matrix.buffer).toBe(result.xAxis.buffer);
-    expect(result.matrix.buffer).toBe(result.yAxis.buffer);
+    // Axes are sliced into separate buffers for float32 alignment safety
+    // (envelope data is uint8, which can break 4-byte alignment)
+    expect(result.xAxis).toBeInstanceOf(Float32Array);
+    expect(result.yAxis).toBeInstanceOf(Float32Array);
+    expect(result.xAxis.length).toBe(10);
+    expect(result.yAxis.length).toBe(5);
   });
 });

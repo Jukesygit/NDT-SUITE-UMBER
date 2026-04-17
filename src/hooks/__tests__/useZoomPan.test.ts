@@ -31,15 +31,15 @@ describe('useZoomPan', () => {
     const pixel = result.current.dataToPixel(testX, testY);
     const data = result.current.pixelToData(pixel.px, pixel.py);
 
-    expect(data.scanMm).toBeCloseTo(testX, 1);
-    expect(data.indexMm).toBeCloseTo(testY, 1);
+    expect(data.dataX).toBeCloseTo(testX, 1);
+    expect(data.dataY).toBeCloseTo(testY, 1);
   });
 
   it('pixelToData returns center of data at center of viewport', () => {
     const { result } = renderHook(() => useZoomPan(defaultParams));
 
     const center = result.current.pixelToData(400, 200); // viewport center
-    expect(center.scanMm).toBeCloseTo(50, 0); // data center
-    expect(center.indexMm).toBeCloseTo(25, 0);
+    expect(center.dataX).toBeCloseTo(50, 0); // data center
+    expect(center.dataY).toBeCloseTo(25, 0);
   });
 });

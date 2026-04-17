@@ -14,7 +14,7 @@ interface ScanViewerToolbarProps {
   canEdit: boolean;
 }
 
-const COLORMAPS = ['viridis', 'jet', 'plasma', 'okabe-ito'];
+const COLORMAPS = ['Jet', 'Viridis', 'Plasma', 'Inferno', 'Hot', 'Blues', 'RdBu', 'Greys'];
 
 export default function ScanViewerToolbar({
   colormap,

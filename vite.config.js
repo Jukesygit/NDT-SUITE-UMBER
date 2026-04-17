@@ -5,8 +5,8 @@ import crypto from 'crypto'
 // Generate nonces for inline scripts that absolutely need them
 const generateNonce = () => crypto.randomBytes(16).toString('base64')
 
-// NDT Companion app localhost port range (CSP connect-src allowlist)
-const companionPorts = Array.from({ length: 10 }, (_, i) => `http://localhost:${18923 + i}`).join(' ')
+// NDT Companion app localhost port range (CSP connect-src allowlist — HTTP + WebSocket)
+const companionPorts = Array.from({ length: 10 }, (_, i) => `http://localhost:${18923 + i} ws://localhost:${18923 + i}`).join(' ')
 
 export default defineConfig({
   plugins: [

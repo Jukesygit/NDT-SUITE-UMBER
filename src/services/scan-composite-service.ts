@@ -369,6 +369,12 @@ export async function getScanCompositeData(id: string): Promise<CompositeData> {
 
     return {
         matrix,
+        amplitude: null,  // Supabase-stored composites don't include amplitude data
+        envelope: null,
+        envelopeSamples: 0,
+        timeStartUs: 0,
+        timeEndUs: 1,
+        velocity: 5900,
         width: row.width,
         height: row.height,
         xAxis: new Float32Array(row.x_axis),
