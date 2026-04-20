@@ -16,9 +16,17 @@ if (environmentConfig.isSupabaseConfigured()) {
                 autoRefreshToken: true,
                 persistSession: true,
                 detectSessionInUrl: true,
-                storage: window.localStorage, // Explicit storage for better control
-                storageKey: 'ndt-suite-auth', // Custom key to avoid conflicts
-                flowType: 'pkce' // More secure flow for SPAs
+                storage: window.localStorage,
+                storageKey: 'ndt-suite-auth',
+                flowType: 'pkce',
+                // Disable navigator.locks — the default lock mechanism deadlocks when
+                // DB queries (which call getSession() for the auth token) run immediately
+                // after signInWithPassword, because signInWithPassword holds the lock
+                // while notifying onAuthStateChange listeners. A no-op lock is safe here
+                // because this is a single-tab SPA (no cross-tab session coordination needed).
+                lock: async (_name: string, _acquireTimeout: number, fn: () => Promise<any>) => {
+                    return await fn();
+                },
             },
             global: {
                 headers: {

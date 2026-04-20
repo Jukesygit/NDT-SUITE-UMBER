@@ -81,6 +81,8 @@ export interface NozzleConfig {
   pipeOD?: number;
   /** Nozzle style: 'flanged' (default) or 'plain-pipe' (simple stub for piping) */
   style?: 'flanged' | 'plain-pipe';
+  /** Hide the weld neck at the shell junction (plain cylinder instead) */
+  hideRepad?: boolean;
 }
 
 export type LiftingLugStyle = 'padEye' | 'trunnion';
@@ -264,6 +266,8 @@ export interface AnnotationShapeConfig {
   restrictionImageName?: string;
   /** Whether to include this annotation in the exported report */
   includeInReport?: boolean;
+  /** Label display mode: 'flyout' (leader line + card) or 'table' (small label + table entry) */
+  labelMode?: 'flyout' | 'table';
 }
 
 // ---------------------------------------------------------------------------
@@ -464,6 +468,12 @@ export interface VesselState {
   /** ID of the scan composite that drives the global coordinate origin (follows gizmo moves) */
   originSourceScanId?: string;
   hasModel: boolean;
+  /** Whether the tidy (table) label mode is active */
+  labelsTidied?: boolean;
+  /** Saved position of the annotation summary table in world units [x, y, z] */
+  annotationTablePosition?: [number, number, number];
+  /** Saved size of the annotation summary table in px [width, height] */
+  annotationTableSize?: [number, number];
   visuals: VisualSettings;
 }
 
@@ -893,4 +903,6 @@ export interface VesselCallbacks {
   onPipeConnectionPointClicked?: (pipelineId: string) => void;
   onDeselect?: () => void;
   onDragEnd?: () => void;
+  onAnnotationTableMoved?: (position: [number, number, number]) => void;
+  onAnnotationTableResized?: (size: [number, number]) => void;
 }

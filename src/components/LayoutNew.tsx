@@ -43,6 +43,17 @@ const navigationConfig: NavItem[] = [
     )
   },
   {
+    id: 'projects',
+    path: '/projects',
+    label: 'Projects',
+    icon: (
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+          d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+      </svg>
+    )
+  },
+  {
     id: 'documents',
     path: '/documents',
     label: 'Documents',
@@ -75,6 +86,12 @@ const navigationConfig: NavItem[] = [
         path: '/vessel-modeler',
         label: 'Vessel Modeler',
         description: '3D pressure vessel modeling from GA drawings'
+      },
+      {
+        id: 'scan-viewer',
+        path: '/scan-viewer',
+        label: 'Scan Viewer',
+        description: 'Interactive C-scan heatmap with B-scan and A-scan cursors'
       },
       {
         id: 'downloads',
@@ -233,7 +250,7 @@ function LayoutNew() {
                   );
                 }
 
-                const isActive = location.pathname === item.path;
+                const isActive = location.pathname === item.path || (item.path && location.pathname.startsWith(item.path + '/'));
                 return (
                   <Link
                     key={item.id}

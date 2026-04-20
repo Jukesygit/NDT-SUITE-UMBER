@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
     listVesselModels,
     getVesselModel,
+    getVesselModelByProjectVessel,
     getVesselScanPlacements,
 } from '../../services/vessel-model-service';
 
@@ -38,6 +39,18 @@ export function useVesselModel(id: string | undefined) {
         queryFn: () => getVesselModel(id!),
         enabled: !!id,
         staleTime: 5 * 60 * 1000, // 5 minutes
+    });
+}
+
+/**
+ * Hook for fetching a vessel model linked to a specific project vessel
+ */
+export function useVesselModelByProjectVessel(projectVesselId: string | null) {
+    return useQuery({
+        queryKey: ['vesselModels', 'byProjectVessel', projectVesselId],
+        queryFn: () => getVesselModelByProjectVessel(projectVesselId!),
+        enabled: !!projectVesselId,
+        staleTime: 5 * 60 * 1000,
     });
 }
 

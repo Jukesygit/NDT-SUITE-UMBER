@@ -48,21 +48,21 @@ export function SliderRow({ label, value, min, max, step = 1, unit = 'mm', onCha
 // Collapsible Section
 // ---------------------------------------------------------------------------
 
-export function Section({ title, icon, count, defaultOpen = true, open: controlledOpen, onToggle, children }: {
+export function Section({ title, icon, count, defaultOpen = true, isOpen: controlledOpen, onToggle, children }: {
     title: string;
     icon?: React.ReactNode;
     count?: number;
     defaultOpen?: boolean;
-    /** When provided, the section is controlled (accordion mode). */
-    open?: boolean;
+    /** When provided, the section is controlled externally (accordion mode). */
+    isOpen?: boolean;
     onToggle?: () => void;
     children: React.ReactNode;
 }) {
     const [localOpen, setLocalOpen] = useState(defaultOpen);
-    const isOpen = controlledOpen ?? localOpen;
+    const open = controlledOpen !== undefined ? controlledOpen : localOpen;
     const handleToggle = onToggle ?? (() => setLocalOpen(o => !o));
     return (
-        <div className={`vm-section ${isOpen ? '' : 'collapsed'}`}>
+        <div className={`vm-section ${open ? '' : 'collapsed'}`}>
             <div className="vm-section-header" onClick={handleToggle}>
                 <h3 className="vm-section-title">
                     {icon}{title}
@@ -75,16 +75,21 @@ export function Section({ title, icon, count, defaultOpen = true, open: controll
     );
 }
 
-export function SubSection({ title, count, defaultOpen = false, children }: {
+export function SubSection({ title, count, defaultOpen = false, isOpen: controlledOpen, onToggle, children }: {
     title: string;
     count?: number;
     defaultOpen?: boolean;
+    /** When provided, the sub-section is controlled externally (accordion mode). */
+    isOpen?: boolean;
+    onToggle?: () => void;
     children: React.ReactNode;
 }) {
-    const [open, setOpen] = useState(defaultOpen);
+    const [localOpen, setLocalOpen] = useState(defaultOpen);
+    const open = controlledOpen !== undefined ? controlledOpen : localOpen;
+    const handleToggle = onToggle ?? (() => setLocalOpen(o => !o));
     return (
         <div className={`vm-subsection ${open ? '' : 'collapsed'}`}>
-            <div className="vm-subsection-header" onClick={() => setOpen(o => !o)}>
+            <div className="vm-subsection-header" onClick={handleToggle}>
                 <span className="vm-subsection-title">
                     {title}
                     {count != null && <span className={`vm-subsection-count${count === 0 ? ' empty' : ''}`}>{count}</span>}

@@ -654,8 +654,67 @@ export class SceneManager {
     this.animationFrameId = requestAnimationFrame(() => this.animate());
     this.onBeforeRender?.(this.camera, this.controls);
     this.controls.update(); // Required for damping
+    this.updateNozzleLabelOcclusion();
     this.renderer.render(this.scene, this.camera);
     this.css2DRenderer.render(this.scene, this.camera);
+  }
+
+  /**
+   * Hide nozzle labels when their nozzle faces away from the camera.
+   * Uses the nozzle group's outward direction (its local +Y transformed
+   * to world space) dotted against the camera direction.
+   */
+  private updateNozzleLabelOcclusion(): void {
+    if (!this.vesselGroup) return;
+
+    const camPos = this.camera.position;
+
+    // Build a lookup: nozzleIdx → nozzle group
+    const nozzleGroups = new Map<number, THREE.Object3D>();
+    this.vesselGroup.traverse((obj) => {
+      if (obj.userData?.type === 'nozzle' && obj.userData.nozzleIdx != null) {
+        nozzleGroups.set(obj.userData.nozzleIdx as number, obj);
+      }
+    });
+
+    this.vesselGroup.traverse((obj) => {
+      if (obj.userData?.type !== 'nozzle-label') return;
+
+      const nozzleIdx = obj.userData.nozzleIdx as number | undefined;
+      if (nozzleIdx == null) return;
+
+      const nozzleGroup = nozzleGroups.get(nozzleIdx);
+      if (!nozzleGroup) return;
+
+      // The nozzle is built along +Y and rotated to face outward from the shell.
+      // Extract its world-space outward direction.
+      const outward = new THREE.Vector3(0, 1, 0)
+        .transformDirection(nozzleGroup.matrixWorld)
+        .normalize();
+
+      // Vector from nozzle base to camera
+      const nozzleWorldPos = new THREE.Vector3();
+      nozzleGroup.getWorldPosition(nozzleWorldPos);
+      const toCamera = camPos.clone().sub(nozzleWorldPos).normalize();
+
+      // If nozzle points away from camera (dot < 0), the nozzle is on the far side
+      obj.visible = outward.dot(toCamera) >= 0;
+    });
+
+    // Annotation pill labels: use pre-computed outward normal stored in userData
+    this.vesselGroup.traverse((obj) => {
+      if (obj.userData?.type !== 'annotation-pill') return;
+
+      const outwardArr = obj.userData.outward as [number, number, number] | undefined;
+      if (!outwardArr) return;
+
+      const outward = new THREE.Vector3(...outwardArr);
+      const pillWorldPos = new THREE.Vector3();
+      obj.getWorldPosition(pillWorldPos);
+      const toCamera = camPos.clone().sub(pillWorldPos).normalize();
+
+      obj.visible = outward.dot(toCamera) >= 0;
+    });
   }
 
   // ---------------------------------------------------------------------------

@@ -36,8 +36,8 @@ export function useUpdateVesselModel() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: ({ id, config }: { id: string; config: Record<string, unknown> }) =>
-            updateVesselModel(id, config),
+        mutationFn: ({ id, config, name }: { id: string; config: Record<string, unknown>; name?: string }) =>
+            updateVesselModel(id, config, name),
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['vesselModels', variables.id] });
             queryClient.invalidateQueries({ queryKey: ['vesselModels'] });
@@ -55,6 +55,7 @@ export function useDeleteVesselModel() {
         mutationFn: (id: string) => deleteVesselModel(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['vesselModels'] });
+            queryClient.invalidateQueries({ queryKey: ['projectVesselModels'] });
         },
     });
 }

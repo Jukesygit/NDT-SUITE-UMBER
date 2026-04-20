@@ -11,11 +11,14 @@ export interface LiftingLugSectionProps {
     onUpdateLug: (index: number, updates: Partial<LiftingLugConfig>) => void;
     onRemoveLug: (index: number) => void;
     onSelectLug: (index: number) => void;
+    isOpen?: boolean;
+    onToggle?: () => void;
 }
 
 export function LiftingLugSection({
     vesselState, selectedLugIndex,
     onAddLug, onUpdateLug, onRemoveLug, onSelectLug,
+    isOpen, onToggle,
 }: LiftingLugSectionProps) {
     const [lugStyle, setLugStyle] = useState<LiftingLugStyle>('padEye');
     const sel = selectedLugIndex >= 0 ? vesselState.liftingLugs[selectedLugIndex] : null;
@@ -31,7 +34,7 @@ export function LiftingLugSection({
     };
 
     return (
-        <SubSection title="Lifting Lugs" count={vesselState.liftingLugs.length}>
+        <SubSection title="Lifting Lugs" count={vesselState.liftingLugs.length} isOpen={isOpen} onToggle={onToggle}>
             {/* Style toggle */}
             <div className="vm-control-group">
                 <div className="vm-label"><span>Style</span></div>

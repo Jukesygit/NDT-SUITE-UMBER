@@ -90,3 +90,10 @@ export {
     useReorderDocumentCategories,
 } from './useDocumentMutations';
 
+// Companion mutations
+export {
+    useCompanionComposite,
+    useSaveScanCompositeBinary,
+    useRefreshCompanionIndex,
+} from './useCompanionMutations';
+

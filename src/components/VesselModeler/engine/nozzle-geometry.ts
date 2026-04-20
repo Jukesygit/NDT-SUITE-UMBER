@@ -59,7 +59,7 @@ export function createFlangedNozzle(
   const penetrationDepth = shellRadius * SCALE * 0.12;
 
   // -- Reinforcing pad (curved disc that follows shell curvature) -----------
-  if (!isPlainPipe) {
+  if (!isPlainPipe && !nozzle.hideRepad) {
   const repadOD = pipeOD * 1.8; // Typically 1.5-2x pipe OD
   const repadRadius = (repadOD / 2) * SCALE;
   const repadThickness = 10 * SCALE; // ~10mm thick pad
@@ -85,8 +85,8 @@ export function createFlangedNozzle(
   // -- Inner stub (penetrates into the shell) --------------------------------
   const stubLength = penetrationDepth;
   const stubGeom = new THREE.CylinderGeometry(
-    pipeRadius * 1.1,
-    pipeRadius * 1.3,
+    nozzle.hideRepad ? pipeRadius : pipeRadius * 1.1,
+    nozzle.hideRepad ? pipeRadius : pipeRadius * 1.3,
     stubLength,
     32,
   );
@@ -96,16 +96,18 @@ export function createFlangedNozzle(
 
   // -- Weld neck (tapered section emerging from the pad) ---------------------
   // Fixed size based on pipe diameter, not projection length
-  const weldNeckLength = Math.min(pipeRadius * 0.8, 40 * SCALE);
-  const weldNeckGeom = new THREE.CylinderGeometry(
-    pipeRadius,
-    pipeRadius * 1.15,
-    weldNeckLength,
-    32,
-  );
-  const weldNeck = new THREE.Mesh(weldNeckGeom, material);
-  weldNeck.position.y = weldNeckLength / 2;
-  group.add(weldNeck);
+  const weldNeckLength = nozzle.hideRepad ? 0 : Math.min(pipeRadius * 0.8, 40 * SCALE);
+  if (!nozzle.hideRepad) {
+    const weldNeckGeom = new THREE.CylinderGeometry(
+      pipeRadius,
+      pipeRadius * 1.15,
+      weldNeckLength,
+      32,
+    );
+    const weldNeck = new THREE.Mesh(weldNeckGeom, material);
+    weldNeck.position.y = weldNeckLength / 2;
+    group.add(weldNeck);
+  }
 
   // -- Main pipe body --------------------------------------------------------
   const pipeLength = Math.max(0.01, nozzleLength - weldNeckLength - flangeThickness);

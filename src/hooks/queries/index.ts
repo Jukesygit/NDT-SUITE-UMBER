@@ -87,3 +87,6 @@ export {
     useDocumentReviewSchedule,
     documentKeys,
 } from './useDocuments';
+
+// Companion queries
+export { useCompanionFolders } from './useCompanionFolders';

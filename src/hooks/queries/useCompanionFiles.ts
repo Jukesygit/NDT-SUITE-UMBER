@@ -6,6 +6,34 @@ interface CompanionFileGate {
   detection: string;
 }
 
+interface CompanionFileProbe {
+  model: string;
+  serie: string;
+  frequencyMhz: number;
+}
+
+interface CompanionFileWedge {
+  model: string;
+  serie: string;
+}
+
+interface CompanionFileEquipment {
+  model: string;
+  serialNumber: string;
+  platform: string;
+}
+
+interface CompanionFileSpecimen {
+  materialName: string;
+  nominalThicknessMm: number;
+  longitudinalVelocity: number;
+}
+
+interface CompanionFileScanner {
+  name: string;
+  encoderMode: string;
+}
+
 export interface CompanionFile {
   filename: string;
   sizeMb: number;
@@ -14,6 +42,21 @@ export interface CompanionFile {
   gates: CompanionFileGate[];
   beamCount: number;
   validPointCount: number;
+  thicknessProcess: {
+    minMm: number | null;
+    maxMm: number | null;
+    gateIds: number[];
+    gateDetection: string;
+  } | null;
+  // Rich metadata
+  creationDate: string | null;
+  modificationDate: string | null;
+  probe: CompanionFileProbe | null;
+  wedge: CompanionFileWedge | null;
+  equipment: CompanionFileEquipment | null;
+  specimen: CompanionFileSpecimen | null;
+  scanner: CompanionFileScanner | null;
+  velocity: number;
 }
 
 export function useCompanionFiles(port: number | null) {

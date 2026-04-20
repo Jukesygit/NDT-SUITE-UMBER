@@ -147,11 +147,8 @@ describe('loginSupabase', () => {
     it('should return { requires2FA: true } and NOT dispatch userLoggedIn when TOTP factor is verified', async () => {
         stubProfileLookup();
         sb.auth.signInWithPassword.mockResolvedValue({
-            data: { user: { id: 'user-1' } },
+            data: { user: { id: 'user-1', factors: [{ id: 'f1', factor_type: 'totp', status: 'verified' }] } },
             error: null,
-        });
-        sb.auth.mfa.listFactors.mockResolvedValue({
-            data: { totp: [{ id: 'f1', status: 'verified' }] },
         });
 
         const result = await loginSupabase.call(authManager, email, password, rateLimiter);

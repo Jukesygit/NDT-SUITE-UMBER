@@ -11,11 +11,14 @@ export interface SaddleSectionProps {
     onUpdateAllSaddleHeights: (height: number) => void;
     onRemoveSaddle: (index: number) => void;
     onSelectSaddle: (index: number) => void;
+    isOpen?: boolean;
+    onToggle?: () => void;
 }
 
 export function SaddleSection({
     vesselState, selectedSaddleIndex,
     onAddSaddle, onUpdateSaddle, onUpdateAllSaddleHeights, onRemoveSaddle, onSelectSaddle,
+    isOpen, onToggle,
 }: SaddleSectionProps) {
     const sel = selectedSaddleIndex >= 0 ? vesselState.saddles[selectedSaddleIndex] : null;
     const defaultHeight = Math.round(vesselState.id / 2 * 1.2);
@@ -24,7 +27,7 @@ export function SaddleSection({
         : defaultHeight;
 
     return (
-        <SubSection title="Supports" count={vesselState.saddles.length}>
+        <SubSection title="Supports" count={vesselState.saddles.length} isOpen={isOpen} onToggle={onToggle}>
             <button
                 className="vm-btn-add"
                 onClick={() => onAddSaddle({ pos: vesselState.length / 2 })}

@@ -40,46 +40,34 @@ export async function initializeSupabase(this: any): Promise<void> {
 
     // Listen for auth state changes
     const { data: { subscription } } = sb.auth.onAuthStateChange(async (event: string, session: any) => {
-        console.log(`[AUTH-DEBUG] onAuthStateChange: event=${event}, hasSession=${!!session}, hasUser=${!!session?.user}, currentUser=${!!this.currentUser}`);
         if (event === 'PASSWORD_RECOVERY') {
             window.dispatchEvent(new CustomEvent('passwordRecoveryMode', { detail: { active: true } }));
             return;
         } else if (event === 'SIGNED_IN') {
-            // Don't load profile or dispatch events here.
             // loginSupabase handles the full login flow including 2FA checks.
             // Dispatching userLoggedIn here would set user in AuthContext before
             // the 2FA status is known, briefly making isAuthenticated=true.
-            console.log('[AUTH-DEBUG] SIGNED_IN — deferring to loginSupabase');
         } else if (event === 'USER_UPDATED') {
             if (session?.user) {
                 await this.loadUserProfile(session.user.id);
                 window.dispatchEvent(new CustomEvent('authStateChanged'));
             }
         } else if (event === 'SIGNED_OUT') {
-            // Guard: verify session is truly gone before clearing state.
-            // Wait briefly to let any concurrent token refresh complete,
-            // as Supabase can fire spurious SIGNED_OUT during token rotation.
-            console.log('[AUTH-DEBUG] SIGNED_OUT received, waiting 500ms before verifying...');
+            // Verify session is truly gone (Supabase can fire spurious SIGNED_OUT during token rotation)
             await new Promise(resolve => setTimeout(resolve, 500));
             try {
                 const { data: { session: currentSession } } = await sb.auth.getSession();
                 if (currentSession?.user) {
-                    console.log('[AUTH-DEBUG] SIGNED_OUT was spurious - session still valid, ignoring');
-                    return;
+                    return; // Spurious SIGNED_OUT — session is still valid
                 }
-                console.log('[AUTH-DEBUG] SIGNED_OUT confirmed - session is truly gone');
-            } catch (e) {
-                console.log('[AUTH-DEBUG] SIGNED_OUT getSession failed:', e);
+            } catch (_e) {
                 // If getSession fails, treat as truly signed out
             }
             this.currentUser = null;
             this.currentProfile = null;
             window.dispatchEvent(new CustomEvent('authStateChanged'));
         } else if (event === 'TOKEN_REFRESHED') {
-            // Token was refreshed successfully - update profile if needed
-            if (session?.user && this.currentUser) {
-                // Session is valid and user is loaded, nothing to do
-            } else if (session?.user && !this.currentUser) {
+            if (session?.user && !this.currentUser) {
                 await this.loadUserProfile(session.user.id);
                 window.dispatchEvent(new CustomEvent('authStateChanged'));
             }
@@ -155,12 +143,11 @@ export async function loginSupabase(
     }
 
     if (data.user) {
-        // Load profile directly — the SIGNED_IN handler will skip if already loaded
         await this.loadUserProfile(data.user.id);
 
         if (!this.currentUser) {
             await sb.auth.signOut();
-            return { success: false, error: 'Invalid email or password' };
+            return { success: false, error: 'Unable to load your profile. The database may be temporarily unavailable — please try again in a moment.' };
         }
 
         if (!this.currentUser.isActive) {
@@ -170,10 +157,12 @@ export async function loginSupabase(
 
         loginRateLimiter.reset(email.toLowerCase());
 
-        // Check 2FA — use listFactors (cached locally) instead of getAuthenticatorAssuranceLevel
-        // to avoid duplicate API calls racing with the SIGNED_IN handler
-        const { data: factors } = await sb.auth.mfa.listFactors();
-        const hasVerifiedTotp = factors?.totp?.some((f: { status: string }) => f.status === 'verified');
+        // Check 2FA — read factors directly from the user object returned by signInWithPassword
+        // to avoid an extra API call.
+        const userFactors = data.user.factors || [];
+        const hasVerifiedTotp = userFactors.some(
+            (f: { factor_type: string; status: string }) => f.factor_type === 'totp' && f.status === 'verified',
+        );
 
         if (hasVerifiedTotp) {
             // User has TOTP — session is AAL1 right after password login

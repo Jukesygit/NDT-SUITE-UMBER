@@ -26,6 +26,13 @@ const AdminPage = lazy(() => import('./pages/admin/index.tsx'));
 const VesselModelerPage = lazy(() => import('./pages/VesselModelerPage.tsx'));
 const DownloadsPage = lazy(() => import('./pages/DownloadsPage.tsx'));
 const DocumentsPage = lazy(() => import('./pages/documents/index.tsx'));
+const ProjectListPage = lazy(() => import('./pages/projects/ProjectListPage'));
+const ProjectSetupPage = lazy(() => import('./pages/projects/ProjectSetupPage'));
+const ProjectDetailPage = lazy(() => import('./pages/projects/ProjectDetailPage'));
+const InspectionDetailPage = lazy(() => import('./pages/projects/InspectionDetailPage'));
+const ReportPage = lazy(() => import('./pages/projects/ReportPage'));
+const ScanViewerPage = lazy(() => import('./pages/projects/ScanViewerPage'));
+const ScanViewerLandingPage = lazy(() => import('./pages/ScanViewerLandingPage'));
 
 interface SuspenseRoutesProps {
     children: ReactNode;
@@ -144,9 +151,44 @@ function App() {
                                                 <ErrorBoundary><VesselModelerPage /></ErrorBoundary>
                                             </RequireTabVisible>
                                         } />
+                                        <Route path="/scan-viewer" element={
+                                            <RequireTabVisible tabId="tools">
+                                                <ErrorBoundary><ScanViewerLandingPage /></ErrorBoundary>
+                                            </RequireTabVisible>
+                                        } />
                                         <Route path="/downloads" element={
                                             <RequireTabVisible tabId="tools">
                                                 <ErrorBoundary><DownloadsPage /></ErrorBoundary>
+                                            </RequireTabVisible>
+                                        } />
+                                        <Route path="/projects" element={
+                                            <RequireTabVisible tabId="tools">
+                                                <ErrorBoundary><ProjectListPage /></ErrorBoundary>
+                                            </RequireTabVisible>
+                                        } />
+                                        <Route path="/projects/new" element={
+                                            <RequireTabVisible tabId="tools">
+                                                <ErrorBoundary><ProjectSetupPage /></ErrorBoundary>
+                                            </RequireTabVisible>
+                                        } />
+                                        <Route path="/projects/:id" element={
+                                            <RequireTabVisible tabId="tools">
+                                                <ErrorBoundary><ProjectDetailPage /></ErrorBoundary>
+                                            </RequireTabVisible>
+                                        } />
+                                        <Route path="/projects/:projectId/vessels/:vesselId" element={
+                                            <RequireTabVisible tabId="tools">
+                                                <ErrorBoundary><InspectionDetailPage /></ErrorBoundary>
+                                            </RequireTabVisible>
+                                        } />
+                                        <Route path="/projects/:projectId/vessels/:vesselId/viewer" element={
+                                            <RequireTabVisible tabId="tools">
+                                                <ErrorBoundary><ScanViewerPage /></ErrorBoundary>
+                                            </RequireTabVisible>
+                                        } />
+                                        <Route path="/projects/:id/edit" element={
+                                            <RequireTabVisible tabId="tools">
+                                                <ErrorBoundary><ProjectSetupPage /></ErrorBoundary>
                                             </RequireTabVisible>
                                         } />
                                         {isMaintenanceMode ? (
@@ -186,6 +228,11 @@ function App() {
                                         )}
                                     </Route>
                                 </Route>
+                                <Route path="/projects/:projectId/vessels/:vesselId/report" element={
+                                    <ProtectedRoute>
+                                        <ErrorBoundary><ReportPage /></ErrorBoundary>
+                                    </ProtectedRoute>
+                                } />
                                 <Route path="*" element={<Navigate to="/" replace />} />
                             </Routes>
                         </SuspenseRoutes>

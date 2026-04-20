@@ -338,3 +338,18 @@ export async function fetchCompanionScanImages(
     return null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Flattened vessel view capture
+// ---------------------------------------------------------------------------
+
+/**
+ * Capture the flattened vessel view as a PNG data URL.
+ * The ref must expose an `exportImage()` method returning a data URL string.
+ */
+export function captureFlattenedView(
+  flattenedRef: { exportImage: () => string | null } | null,
+): string | null {
+  if (!flattenedRef) return null;
+  return flattenedRef.exportImage();
+}

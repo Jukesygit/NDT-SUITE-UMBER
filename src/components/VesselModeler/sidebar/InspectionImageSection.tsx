@@ -1,7 +1,9 @@
-import React from 'react';
-import { Trash2, Camera, Eye, EyeOff, Lock, Unlock, Maximize2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Trash2, Camera, Eye, EyeOff, Lock, Unlock, Maximize2, ImagePlus } from 'lucide-react';
 import type { VesselState, InspectionImageConfig } from '../types';
 import { SliderRow, SubSection } from './SliderRow';
+import type { ProjectImage } from '../../../types/inspection-project';
+import { getProjectFileUrl } from '../../../services/inspection-project-service';
 
 export interface InspectionImageSectionProps {
     vesselState: VesselState;
@@ -14,15 +16,103 @@ export interface InspectionImageSectionProps {
     onToggleInspectionImageLocked: (id: number) => void;
     onViewInspectionImage: (id: number) => void;
     getNextInspectionImageId: () => number;
+    projectImages?: ProjectImage[];
+    isOpen?: boolean;
+    onToggle?: () => void;
+}
+
+// Small thumbnail for a project image in the picker
+function ProjectImageThumb({
+    image,
+    onAdd,
+}: {
+    image: ProjectImage;
+    onAdd: (image: ProjectImage) => void;
+}) {
+    const [thumbUrl, setThumbUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        getProjectFileUrl(image.storage_path, image.storage_bucket)
+            .then((url) => { if (!cancelled) setThumbUrl(url); })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, [image.storage_path, image.storage_bucket]);
+
+    return (
+        <button
+            onClick={() => onAdd(image)}
+            title={`Add "${image.name}" to vessel`}
+            style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                width: '100%',
+                padding: '4px 6px',
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 4,
+                cursor: 'pointer',
+                color: '#ccc',
+                fontSize: '0.75rem',
+                textAlign: 'left',
+            }}
+        >
+            {thumbUrl ? (
+                <img
+                    src={thumbUrl}
+                    alt={image.name}
+                    style={{ width: 24, height: 24, objectFit: 'cover', borderRadius: 3, flexShrink: 0 }}
+                />
+            ) : (
+                <div style={{ width: 24, height: 24, background: 'rgba(255,255,255,0.06)', borderRadius: 3, flexShrink: 0 }} />
+            )}
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {image.name}
+            </span>
+            <ImagePlus size={12} style={{ flexShrink: 0, opacity: 0.5 }} />
+        </button>
+    );
 }
 
 export function InspectionImageSection({
     vesselState, selectedInspectionImageId,
     onAddInspectionImage, onUpdateInspectionImage, onRemoveInspectionImage,
     onSelectInspectionImage, onToggleInspectionImageVisible, onToggleInspectionImageLocked,
-    onViewInspectionImage, getNextInspectionImageId,
+    onViewInspectionImage, getNextInspectionImageId, projectImages,
+    isOpen, onToggle,
 }: InspectionImageSectionProps) {
     const sel = vesselState.inspectionImages.find(i => i.id === selectedInspectionImageId);
+    const [showProjectPicker, setShowProjectPicker] = useState(false);
+    const [loadingProjectImage, setLoadingProjectImage] = useState(false);
+
+    const handleAddProjectImage = async (pImg: ProjectImage) => {
+        setLoadingProjectImage(true);
+        try {
+            const url = await getProjectFileUrl(pImg.storage_path, pImg.storage_bucket);
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const imageData = e.target?.result as string;
+                if (!imageData) return;
+                const id = getNextInspectionImageId();
+                onAddInspectionImage({
+                    id,
+                    name: pImg.name,
+                    imageData,
+                    pos: vesselState.length / 2,
+                    angle: 90,
+                });
+                onSelectInspectionImage(id);
+            };
+            reader.readAsDataURL(blob);
+        } catch {
+            // Silently fail — signed URL may have expired
+        } finally {
+            setLoadingProjectImage(false);
+        }
+    };
 
     const handleFile = (file: File) => {
         if (!file.type.startsWith('image/')) return;
@@ -57,7 +147,7 @@ export function InspectionImageSection({
     };
 
     return (
-        <SubSection title="Inspection Images" count={vesselState.inspectionImages.length}>
+        <SubSection title="Inspection Images" count={vesselState.inspectionImages.length} isOpen={isOpen} onToggle={onToggle}>
             <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', margin: '0 0 8px 0' }}>
                 Attach photos to vessel points
             </p>
@@ -73,6 +163,41 @@ export function InspectionImageSection({
                 <div className="drop-sub">PNG, JPG</div>
                 <input type="file" accept="image/*" onChange={handleFileInput} style={{ display: 'none' }} />
             </label>
+
+            {/* Project image pool picker */}
+            {projectImages && projectImages.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                    <button
+                        className="vm-toggle-btn"
+                        onClick={() => setShowProjectPicker(p => !p)}
+                        style={{
+                            width: '100%',
+                            fontSize: '0.72rem',
+                            padding: '4px 8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            justifyContent: 'center',
+                            opacity: loadingProjectImage ? 0.5 : 1,
+                        }}
+                        disabled={loadingProjectImage}
+                    >
+                        <ImagePlus size={12} />
+                        {showProjectPicker ? 'Hide' : 'From'} Project Pool ({projectImages.length})
+                    </button>
+                    {showProjectPicker && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+                            {projectImages.map((pImg) => (
+                                <ProjectImageThumb
+                                    key={pImg.id}
+                                    image={pImg}
+                                    onAdd={handleAddProjectImage}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Image list */}
             {vesselState.inspectionImages.map((img) => {

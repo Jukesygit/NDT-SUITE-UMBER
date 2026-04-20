@@ -127,8 +127,12 @@ export const parseCscanFile = async (file: File): Promise<CscanData> => {
     }
   }
 
-  // If no "mm" marker found, try generic parsing
+  // If no "mm" marker found, check if this is a PAUT instrument format
+  // (has metadata like ScanStart/IndexStart but no "mm" marker line)
   if (dataStartIndex === -1) {
+    if (isPautInstrumentFormat(metadata)) {
+      return parsePautInstrumentFormat(file, lines, metadata);
+    }
     return parseGenericFormat(file, text, lines);
   }
 
@@ -181,6 +185,98 @@ export const parseCscanFile = async (file: File): Promise<CscanData> => {
     data,
     xAxis,
     yAxis,
+    stats,
+    metadata,
+    validPoints: stats.validPoints,
+    timestamp: new Date()
+  };
+};
+
+// Check if metadata indicates a PAUT instrument format
+// These files have key=value headers with scan/index resolution info but no "mm" marker
+const isPautInstrumentFormat = (metadata: Record<string, any>): boolean => {
+  return (
+    metadata['Scan Resol. (mm)'] !== undefined &&
+    metadata['Index Resol. (mm)'] !== undefined
+  );
+};
+
+// Parse PAUT instrument format files (e.g. from Olympus/Evident scanners)
+// Data grid has no axis labels — axes are computed from metadata
+const parsePautInstrumentFormat = async (
+  file: File,
+  lines: string[],
+  metadata: Record<string, any>
+): Promise<CscanData> => {
+  const scanStart = metadata['ScanStart (mm)'] ?? 0;
+  const scanQty = metadata['ScanQty (sample)'] ?? 0;
+  const scanResol = metadata['Scan Resol. (mm)'] ?? 1;
+  const indexStart = metadata['IndexStart (mm)'] ?? 0;
+  const indexQty = metadata['Index Qty. (sample)'] ?? 0;
+  const indexResol = metadata['Index Resol. (mm)'] ?? 1;
+
+  // Generate axes from metadata
+  const xAxis = Array.from({ length: scanQty }, (_, i) => scanStart + i * scanResol);
+  const yAxis = Array.from({ length: indexQty }, (_, i) => indexStart + i * indexResol);
+
+  // Find where data starts (after blank line following metadata)
+  let dataStartIndex = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    // Look for first blank line after metadata
+    if (line === '' && i > 0) {
+      dataStartIndex = i + 1;
+      break;
+    }
+  }
+
+  if (dataStartIndex === -1) {
+    throw new Error('Could not find data section in PAUT instrument file');
+  }
+
+  // Parse data rows
+  const data: (number | null)[][] = [];
+  for (let i = dataStartIndex; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.trim() === '') continue;
+
+    const rowData = line.split('\t').map(val => {
+      const trimmed = val.trim();
+      if (trimmed === 'NaN' || trimmed === 'ND' || trimmed === '' || trimmed === '-') {
+        return null;
+      }
+      const num = parseFloat(trimmed);
+      return isNaN(num) ? null : num;
+    });
+
+    data.push(rowData);
+  }
+
+  if (data.length === 0) {
+    throw new Error('No data rows found in PAUT instrument file');
+  }
+
+  // Use actual row count for yAxis if it differs from metadata
+  const actualYAxis = data.length !== yAxis.length
+    ? Array.from({ length: data.length }, (_, i) => indexStart + i * indexResol)
+    : yAxis;
+
+  // Use actual column count for xAxis if it differs from metadata
+  const actualWidth = data[0]?.length ?? 0;
+  const actualXAxis = actualWidth !== xAxis.length
+    ? Array.from({ length: actualWidth }, (_, i) => scanStart + i * scanResol)
+    : xAxis;
+
+  const stats = calculateStats(data, actualXAxis, actualYAxis);
+
+  return {
+    id: generateId(),
+    filename: file.name,
+    width: actualXAxis.length,
+    height: actualYAxis.length,
+    data,
+    xAxis: actualXAxis,
+    yAxis: actualYAxis,
     stats,
     metadata,
     validPoints: stats.validPoints,

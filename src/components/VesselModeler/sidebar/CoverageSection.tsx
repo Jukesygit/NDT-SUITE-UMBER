@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2, Square, Plus, Lock, Unlock } from 'lucide-react';
+import { Trash2, Square, Plus, Lock, Unlock, Copy } from 'lucide-react';
 import type { VesselState, CoverageRectConfig } from '../types';
 import { SubSection } from './SliderRow';
 
@@ -13,20 +13,30 @@ export interface CoverageSectionProps {
     onSelectCoverageRect: (id: number) => void;
     selectedCoverageRectId: number;
     getNextCoverageRectId: () => number;
+    isOpen?: boolean;
+    onToggle?: () => void;
 }
 
 export function CoverageSection({
     vesselState, coverageDrawMode, onSetCoverageDrawMode,
     onAddCoverageRect, onUpdateCoverageRect, onRemoveCoverageRect,
     onSelectCoverageRect, selectedCoverageRectId, getNextCoverageRectId,
+    isOpen, onToggle,
 }: CoverageSectionProps) {
     const sel = vesselState.coverageRects.find(r => r.id === selectedCoverageRectId);
+
+    const nextName = () => {
+        const used = new Set(vesselState.coverageRects.map(r => r.name));
+        let n = 1;
+        while (used.has(`C${n}`)) n++;
+        return `C${n}`;
+    };
 
     const addManual = () => {
         const id = getNextCoverageRectId();
         onAddCoverageRect({
             id,
-            name: `C${vesselState.coverageRects.length + 1}`,
+            name: nextName(),
             pos: vesselState.length / 2,
             angle: 90,
             width: 300,
@@ -39,8 +49,20 @@ export function CoverageSection({
         onSelectCoverageRect(id);
     };
 
+    const duplicateRect = (source: CoverageRectConfig) => {
+        const id = getNextCoverageRectId();
+        onAddCoverageRect({
+            ...source,
+            id,
+            name: nextName(),
+            pos: source.pos + 50,
+            locked: false,
+        });
+        onSelectCoverageRect(id);
+    };
+
     return (
-        <SubSection title="Coverage" count={vesselState.coverageRects.length}>
+        <SubSection title="Coverage" count={vesselState.coverageRects.length} isOpen={isOpen} onToggle={onToggle}>
             <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', margin: '0 0 8px 0' }}>
                 Draw or add rectangles to track shell coverage
             </p>
@@ -75,6 +97,9 @@ export function CoverageSection({
                                 <strong>{r.name}</strong> &mdash; {Math.round(r.width)}&times;{Math.round(r.height)}mm
                             </div>
                             <div style={{ display: 'flex', gap: 2 }}>
+                                <button className="vm-btn-icon" onClick={e => { e.stopPropagation(); duplicateRect(r); }} title="Duplicate">
+                                    <Copy size={12} />
+                                </button>
                                 <button className="vm-btn-icon" onClick={e => { e.stopPropagation(); onUpdateCoverageRect(r.id, { locked: !r.locked }); }} title={r.locked ? 'Unlock' : 'Lock'} style={{ color: r.locked ? '#3b82f6' : undefined }}>
                                     {r.locked ? <Lock size={12} /> : <Unlock size={12} />}
                                 </button>
@@ -93,48 +118,88 @@ export function CoverageSection({
                                         onChange={e => onUpdateCoverageRect(sel.id, { name: e.target.value })}
                                     />
                                 </div>
-                                <div className="vm-form-row">
-                                    <div className="vm-control-group">
-                                        <div className="vm-label"><span>Position (mm)</span></div>
-                                        <input
-                                            type="number"
-                                            className="vm-input"
-                                            value={sel.pos}
-                                            onChange={e => onUpdateCoverageRect(sel.id, { pos: Number(e.target.value) })}
-                                        />
-                                    </div>
-                                    <div className="vm-control-group">
-                                        <div className="vm-label"><span>Angle (&deg;)</span></div>
-                                        <input
-                                            type="number"
-                                            className="vm-input"
-                                            value={sel.angle}
-                                            min={0}
-                                            max={360}
-                                            onChange={e => onUpdateCoverageRect(sel.id, { angle: Number(e.target.value) })}
-                                        />
+                                <div className="vm-control-group">
+                                    <div className="vm-label"><span>Position (mm)</span></div>
+                                    <input
+                                        type="number"
+                                        className="vm-input"
+                                        value={sel.pos}
+                                        onChange={e => onUpdateCoverageRect(sel.id, { pos: Number(e.target.value) })}
+                                    />
+                                    <input
+                                        type="range"
+                                        min={0}
+                                        max={vesselState.length}
+                                        step={1}
+                                        value={sel.pos}
+                                        onChange={e => onUpdateCoverageRect(sel.id, { pos: Number(e.target.value) })}
+                                        className="vm-input"
+                                        style={{ height: 28, marginTop: 4 }}
+                                    />
+                                </div>
+                                <div className="vm-control-group">
+                                    <div className="vm-label"><span>Angle (&deg;)</span></div>
+                                    <input
+                                        type="number"
+                                        className="vm-input"
+                                        value={sel.angle}
+                                        min={0}
+                                        max={360}
+                                        onChange={e => onUpdateCoverageRect(sel.id, { angle: Number(e.target.value) })}
+                                    />
+                                    <input
+                                        type="range"
+                                        min={0}
+                                        max={360}
+                                        step={1}
+                                        value={sel.angle}
+                                        onChange={e => onUpdateCoverageRect(sel.id, { angle: Number(e.target.value) })}
+                                        className="vm-input"
+                                        style={{ height: 28, marginTop: 4 }}
+                                    />
+                                </div>
+                                <div className="vm-control-group">
+                                    <div className="vm-label"><span>Width (mm)</span></div>
+                                    <input
+                                        type="number"
+                                        className="vm-input"
+                                        value={sel.width}
+                                        min={10}
+                                        onChange={e => onUpdateCoverageRect(sel.id, { width: Number(e.target.value) })}
+                                    />
+                                    <div className="vm-toggle-group" style={{ marginTop: 4 }}>
+                                        {[500, 1000, 1500, 2000].map(v => (
+                                            <button
+                                                key={v}
+                                                className={`vm-toggle-btn ${sel.width === v ? 'active' : ''}`}
+                                                style={{ flex: 1, fontSize: '0.65rem', padding: '2px 0' }}
+                                                onClick={() => onUpdateCoverageRect(sel.id, { width: v })}
+                                            >
+                                                {v}
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
-                                <div className="vm-form-row">
-                                    <div className="vm-control-group">
-                                        <div className="vm-label"><span>Width (mm)</span></div>
-                                        <input
-                                            type="number"
-                                            className="vm-input"
-                                            value={sel.width}
-                                            min={10}
-                                            onChange={e => onUpdateCoverageRect(sel.id, { width: Number(e.target.value) })}
-                                        />
-                                    </div>
-                                    <div className="vm-control-group">
-                                        <div className="vm-label"><span>Height (mm)</span></div>
-                                        <input
-                                            type="number"
-                                            className="vm-input"
-                                            value={sel.height}
-                                            min={10}
-                                            onChange={e => onUpdateCoverageRect(sel.id, { height: Number(e.target.value) })}
-                                        />
+                                <div className="vm-control-group">
+                                    <div className="vm-label"><span>Height (mm)</span></div>
+                                    <input
+                                        type="number"
+                                        className="vm-input"
+                                        value={sel.height}
+                                        min={10}
+                                        onChange={e => onUpdateCoverageRect(sel.id, { height: Number(e.target.value) })}
+                                    />
+                                    <div className="vm-toggle-group" style={{ marginTop: 4 }}>
+                                        {[500, 1000, 1500, 2000].map(v => (
+                                            <button
+                                                key={v}
+                                                className={`vm-toggle-btn ${sel.height === v ? 'active' : ''}`}
+                                                style={{ flex: 1, fontSize: '0.65rem', padding: '2px 0' }}
+                                                onClick={() => onUpdateCoverageRect(sel.id, { height: v })}
+                                            >
+                                                {v}
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
                                 <div className="vm-form-row">
