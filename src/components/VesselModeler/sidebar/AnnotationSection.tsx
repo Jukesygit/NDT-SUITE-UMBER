@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Trash2, Square, Eye, EyeOff, Lock, Unlock, Ruler, ShieldAlert, Upload, X, FileText, ImagePlus } from 'lucide-react';
+import { Trash2, Square, Eye, EyeOff, Lock, Unlock, Ruler, ShieldAlert, Upload, X, FileText, ImagePlus, Tag, LayoutList } from 'lucide-react';
 import type {
     VesselState,
     AnnotationShapeConfig,
@@ -233,6 +233,14 @@ export function AnnotationSection({
                                 style={{ opacity: a.includeInReport ? 1 : 0.3 }}
                             >
                                 <FileText size={12} />
+                            </button>
+                            <button
+                                className="vm-btn-icon"
+                                onClick={e => { e.stopPropagation(); onUpdateAnnotation(a.id, { labelMode: (a.labelMode ?? 'flyout') === 'flyout' ? 'table' : 'flyout' }); }}
+                                title={a.labelMode === 'table' ? 'Switch to flyout label' : 'Switch to table label'}
+                                style={{ color: a.labelMode === 'table' ? '#60a5fa' : undefined }}
+                            >
+                                {a.labelMode === 'table' ? <LayoutList size={12} /> : <Tag size={12} />}
                             </button>
                             <button className="vm-btn-icon" onClick={e => { e.stopPropagation(); onToggleAnnotationVisible(a.id); }} title={a.visible === false ? 'Show' : 'Hide'} style={{ color: a.visible === false ? 'rgba(255,255,255,0.25)' : undefined }}>
                                 {a.visible === false ? <EyeOff size={12} /> : <Eye size={12} />}

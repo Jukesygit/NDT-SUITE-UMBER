@@ -54,6 +54,7 @@ export default function ScanViewerLandingPage() {
   const { data: foldersData, isLoading: foldersLoading } = useCompanionFolders(port);
   const refreshIndex = useRefreshCompanionIndex();
   const ws = useCompanionWebSocket(port);
+  const { tierTwoThickness, tierTwoProgress } = ws;
 
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
   const [composite, setComposite] = useState<CompositeData | null>(null);
@@ -119,6 +120,19 @@ export default function ScanViewerLandingPage() {
   });
 
   const hasGateOverrides = Object.keys(gateOverrides).length > 0;
+
+  // --- Tier 2: send full-res request to companion on gate release ---
+  const handleGateRelease = useCallback(() => {
+    if (!refGate || !measGate || selectedFolders.length === 0) return;
+    ws.sendGateAdjust({
+      tier: 2,
+      gates: { ref: refGate, meas: measGate },
+      folders: selectedFolders,
+    });
+  }, [ws, refGate, measGate, selectedFolders]);
+
+  // Use Tier 2 result when available, otherwise fall back to Tier 1 worker result
+  const effectiveThicknessOverride = tierTwoThickness ?? (hasGateOverrides ? workerThickness : null);
 
   const toggleFolder = useCallback((name: string) => {
     setSelectedFolders(prev =>
@@ -473,8 +487,19 @@ export default function ScanViewerLandingPage() {
             Scan Viewer
           </span>
         </div>
-        <div style={{ fontSize: '0.72rem', color: 'var(--text-quaternary)' }}>
-          {composite.width} x {composite.height} — {composite.sourceFiles.length} files — {composite.stats.coveragePct.toFixed(1)}% coverage
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: '0.72rem', color: 'var(--text-quaternary)' }}>
+          {tierTwoProgress && (
+            <span style={{ color: '#60a5fa' }}>
+              Tier 2: {tierTwoProgress.fileIndex + 1}/{tierTwoProgress.totalFiles} files
+            </span>
+          )}
+          {tierTwoThickness && !tierTwoProgress && hasGateOverrides && (
+            <span style={{ color: '#4ade80' }}>Tier 2 active</span>
+          )}
+          {hasGateOverrides && !tierTwoThickness && !tierTwoProgress && (
+            <span style={{ color: '#fbbf24' }}>Tier 1 (approx)</span>
+          )}
+          <span>{composite.width} x {composite.height} — {composite.sourceFiles.length} files — {composite.stats.coveragePct.toFixed(1)}% coverage</span>
         </div>
       </div>
 
@@ -512,7 +537,7 @@ export default function ScanViewerLandingPage() {
             thicknessMin={gateSettings.thicknessMin}
             thicknessMax={gateSettings.thicknessMax}
             amplitudeMin={amplitudeMin}
-            thicknessOverride={hasGateOverrides ? workerThickness : null}
+            thicknessOverride={effectiveThicknessOverride}
             onVisibleRegionChange={handleVisibleRegionChange}
           />
           {(isGenerating || isRegenerating) && (
@@ -556,6 +581,41 @@ export default function ScanViewerLandingPage() {
               )}
             </div>
           )}
+          {/* Tier 2 refinement progress — small pill in top-right corner */}
+          {tierTwoProgress && (
+            <div style={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              zIndex: 10,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              background: 'rgba(0,0,0,0.7)',
+              borderRadius: 12,
+              border: '1px solid rgba(59,130,246,0.3)',
+              pointerEvents: 'none',
+            }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#3b82f6', animation: 'pulse 1.5s infinite' }} />
+              <span style={{ fontSize: '0.68rem', color: '#93c5fd', whiteSpace: 'nowrap' }}>
+                Refining: {tierTwoProgress.fileIndex + 1}/{tierTwoProgress.totalFiles}
+              </span>
+              <div style={{
+                width: 40, height: 3, borderRadius: 2,
+                background: 'rgba(255,255,255,0.1)',
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  height: '100%',
+                  width: `${tierTwoProgress.progress * 100}%`,
+                  background: '#3b82f6',
+                  borderRadius: 2,
+                  transition: 'width 0.2s ease',
+                }} />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* A-scan / B-scan / D-scan — three equal panels along the bottom */}
@@ -567,6 +627,7 @@ export default function ScanViewerLandingPage() {
               timeMaxUs={ws.cursorData?.ascan.timeMaxUs ?? 1}
               gates={effectiveGates}
               onGateChange={handleGateChange}
+              onGateRelease={handleGateRelease}
             />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>

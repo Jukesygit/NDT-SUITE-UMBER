@@ -88,6 +88,12 @@ const navigationConfig: NavItem[] = [
         description: '3D pressure vessel modeling from GA drawings'
       },
       {
+        id: 'scan-viewer',
+        path: '/scan-viewer',
+        label: 'Scan Viewer',
+        description: 'Interactive C-scan heatmap with B-scan and A-scan cursors'
+      },
+      {
         id: 'downloads',
         path: '/downloads',
         label: 'Downloads',

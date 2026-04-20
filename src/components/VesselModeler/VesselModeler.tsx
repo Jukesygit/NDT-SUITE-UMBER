@@ -1,6 +1,6 @@
 import { useState, useReducer, useRef, useCallback, useEffect, lazy, Suspense, type ChangeEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Lock, Unlock, Save, Upload, RotateCcw, PanelLeftClose, PanelLeft, FileUp, Camera, AlertTriangle, MousePointer, PanelBottomClose, Box, ChevronDown, Settings2, FolderOpen } from 'lucide-react';
+import { Lock, Unlock, Save, Upload, RotateCcw, PanelLeftClose, PanelLeft, FileUp, Camera, AlertTriangle, MousePointer, PanelBottomClose, Box, ChevronDown, Settings2, FolderOpen, AlignVerticalDistributeCenter } from 'lucide-react';
 import ThreeViewport from './ThreeViewport';
 import ErrorBoundary from '../ErrorBoundary';
 import type { ThreeViewportHandle } from './ThreeViewport';
@@ -62,9 +62,10 @@ import {
   captureAnnotationContext,
   captureAnnotationHeatmap,
 } from './engine/report-image-capture';
+import { downloadScreenshot } from './engine/screenshot-renderer';
+import { captureViewportScreenshot } from './engine/viewport-screenshot';
 
 const DrawingImportModal = lazy(() => import('./DrawingImportModal'));
-const ScreenshotMode = lazy(() => import('./ScreenshotMode'));
 const InspectionImageViewer = lazy(() => import('./InspectionImageViewer'));
 const FlattenedViewport = lazy(() => import('./FlattenedView/FlattenedViewport'));
 
@@ -142,9 +143,9 @@ interface PreviewsState {
 interface UIState {
     sidebarOpen: boolean;
     showDrawingImport: boolean;
-    showScreenshotMode: boolean;
     viewingInspectionImageId: number;
     viewMode: '3d' | 'flattened';
+    labelsTidied: boolean;
     hoverData: { thickness: number | null; scanMm: number; indexMm: number } | null;
     scanTooltipFollow: boolean;
     /** ID of annotation being inspected (null = not in inspection mode) */
@@ -189,13 +190,13 @@ const INITIAL_STATE: VesselModelerState = {
     ui: {
         sidebarOpen: true,
         showDrawingImport: false,
-        showScreenshotMode: false,
         viewingInspectionImageId: -1,
         hoverData: null,
         scanTooltipFollow: false,
         inspectingAnnotationId: null,
         savedCameraState: null,
         viewMode: '3d',
+        labelsTidied: false,
     },
 };
 
@@ -224,7 +225,6 @@ type VesselAction =
     | { type: 'SET_SIDEBAR_OPEN'; open: boolean }
     | { type: 'TOGGLE_SIDEBAR' }
     | { type: 'SET_SHOW_DRAWING_IMPORT'; show: boolean }
-    | { type: 'SET_SHOW_SCREENSHOT_MODE'; show: boolean }
     | { type: 'SET_VIEWING_INSPECTION_IMAGE'; id: number }
     | { type: 'SET_HOVER_DATA'; data: UIState['hoverData'] }
     | { type: 'TOGGLE_SCAN_TOOLTIP_FOLLOW' }
@@ -233,12 +233,13 @@ type VesselAction =
     | { type: 'ENTER_INSPECTION_MODE'; annotationId: number; cameraState: { position: [number, number, number]; target: [number, number, number] } }
     | { type: 'CYCLE_INSPECTION'; annotationId: number }
     | { type: 'EXIT_INSPECTION_MODE' }
-    | { type: 'SET_VIEW_MODE'; mode: '3d' | 'flattened' };
+    | { type: 'SET_VIEW_MODE'; mode: '3d' | 'flattened' }
+    | { type: 'TOGGLE_LABELS_TIDIED' };
 
 function vesselReducer(state: VesselModelerState, action: VesselAction): VesselModelerState {
     switch (action.type) {
         case 'SET_VESSEL':
-            return { ...state, vessel: action.vessel };
+            return { ...state, vessel: action.vessel, ui: { ...state.ui, labelsTidied: action.vessel.labelsTidied ?? false } };
         case 'UPDATE_VESSEL_FN':
             return { ...state, vessel: action.updater(state.vessel) };
         case 'SELECT_NOZZLE':
@@ -306,8 +307,6 @@ function vesselReducer(state: VesselModelerState, action: VesselAction): VesselM
             return { ...state, ui: { ...state.ui, sidebarOpen: !state.ui.sidebarOpen } };
         case 'SET_SHOW_DRAWING_IMPORT':
             return { ...state, ui: { ...state.ui, showDrawingImport: action.show } };
-        case 'SET_SHOW_SCREENSHOT_MODE':
-            return { ...state, ui: { ...state.ui, showScreenshotMode: action.show } };
         case 'SET_VIEWING_INSPECTION_IMAGE':
             return { ...state, ui: { ...state.ui, viewingInspectionImageId: action.id } };
         case 'SET_HOVER_DATA':
@@ -352,6 +351,19 @@ function vesselReducer(state: VesselModelerState, action: VesselAction): VesselM
             };
         case 'SET_VIEW_MODE':
             return { ...state, ui: { ...state.ui, viewMode: action.mode } };
+        case 'TOGGLE_LABELS_TIDIED': {
+            const newTidied = !state.ui.labelsTidied;
+            const newMode = newTidied ? 'table' as const : 'flyout' as const;
+            return {
+                ...state,
+                vessel: {
+                    ...state.vessel,
+                    annotations: state.vessel.annotations.map(a => ({ ...a, labelMode: newMode })),
+                    labelsTidied: newTidied,
+                },
+                ui: { ...state.ui, labelsTidied: newTidied },
+            };
+        }
         default:
             return state;
     }
@@ -493,6 +505,7 @@ export default function VesselModeler() {
                 angle: n.angle ?? 90, size: n.size ?? 100,
                 orientationMode: n.orientationMode,
                 flangeOD: n.flangeOD, flangeThk: n.flangeThk, pipeOD: n.pipeOD, style: n.style,
+                hideRepad: n.hideRepad,
             })),
             liftingLugs: (projectData.liftingLugs || []).map((l: any) => ({
                 name: l.name || 'L', pos: l.pos ?? 0, angle: l.angle ?? 90,
@@ -585,6 +598,9 @@ export default function VesselModeler() {
             visuals: { ...DEFAULT_VESSEL_STATE.visuals, ...(projectData.visuals || {}) },
             coordinateOrigin: projectData.coordinateOrigin || { indexMm: 0, scanMm: 0 },
             originSourceScanId: projectData.originSourceScanId,
+            labelsTidied: projectData.labelsTidied ?? false,
+            annotationTablePosition: projectData.annotationTablePosition,
+            annotationTableSize: projectData.annotationTableSize,
         };
 
         clearHeatmapCache();
@@ -1413,6 +1429,12 @@ export default function VesselModeler() {
         onDragEnd: () => {
             // No-op, state is already updated per-move
         },
+        onAnnotationTableMoved: (position) => {
+            dispatch({ type: 'UPDATE_VESSEL_FN', updater: (v) => ({ ...v, annotationTablePosition: position }) });
+        },
+        onAnnotationTableResized: (size) => {
+            dispatch({ type: 'UPDATE_VESSEL_FN', updater: (v) => ({ ...v, annotationTableSize: size }) });
+        },
     };
 
     // --- Save/Load ---
@@ -1434,6 +1456,7 @@ export default function VesselModeler() {
                 angle: n.angle, size: n.size,
                 orientationMode: n.orientationMode,
                 flangeOD: n.flangeOD, flangeThk: n.flangeThk, pipeOD: n.pipeOD, style: n.style,
+                hideRepad: n.hideRepad,
             })),
             liftingLugs: vesselState.liftingLugs.map(l => ({
                 name: l.name, pos: l.pos, angle: l.angle,
@@ -1463,7 +1486,7 @@ export default function VesselModeler() {
                 leaderLength: a.leaderLength, labelOffset: a.labelOffset, visible: a.visible, locked: a.locked,
                 restrictionNotes: a.restrictionNotes, restrictionImage: a.restrictionImage,
                 restrictionImageName: a.restrictionImageName, includeInReport: a.includeInReport,
-                attachments: a.attachments,
+                attachments: a.attachments, labelMode: a.labelMode,
             })),
             rulers: vesselState.rulers.map(r => ({
                 id: r.id, name: r.name,
@@ -1509,6 +1532,9 @@ export default function VesselModeler() {
             measurementConfig: { ...vesselState.measurementConfig },
             coordinateOrigin: { ...vesselState.coordinateOrigin },
             originSourceScanId: vesselState.originSourceScanId,
+            labelsTidied: vesselState.labelsTidied,
+            annotationTablePosition: vesselState.annotationTablePosition,
+            annotationTableSize: vesselState.annotationTableSize,
             visuals: { ...vesselState.visuals },
         };
 
@@ -1557,6 +1583,7 @@ export default function VesselModeler() {
                 angle: n.angle, size: n.size,
                 orientationMode: n.orientationMode,
                 flangeOD: n.flangeOD, flangeThk: n.flangeThk, pipeOD: n.pipeOD, style: n.style,
+                hideRepad: n.hideRepad,
             })),
             liftingLugs: vesselState.liftingLugs.map(l => ({
                 name: l.name, pos: l.pos, angle: l.angle,
@@ -1586,7 +1613,7 @@ export default function VesselModeler() {
                 leaderLength: a.leaderLength, labelOffset: a.labelOffset, visible: a.visible, locked: a.locked,
                 restrictionNotes: a.restrictionNotes, restrictionImage: a.restrictionImage,
                 restrictionImageName: a.restrictionImageName, includeInReport: a.includeInReport,
-                attachments: a.attachments,
+                attachments: a.attachments, labelMode: a.labelMode,
             })),
             rulers: vesselState.rulers.map(r => ({
                 id: r.id, name: r.name,
@@ -1619,6 +1646,9 @@ export default function VesselModeler() {
             pipelines: vesselState.pipelines,
             referenceDrawings: vesselState.referenceDrawings ?? [],
             measurementConfig: { ...vesselState.measurementConfig },
+            labelsTidied: vesselState.labelsTidied,
+            annotationTablePosition: vesselState.annotationTablePosition,
+            annotationTableSize: vesselState.annotationTableSize,
             visuals: { ...vesselState.visuals },
         };
 
@@ -2871,6 +2901,23 @@ export default function VesselModeler() {
                             </button>
                         ))}
                     </div>
+                    {/* Tidy labels toggle */}
+                    <button
+                        onClick={() => dispatch({ type: 'TOGGLE_LABELS_TIDIED' })}
+                        title={ui.labelsTidied ? 'Switch all labels to flyout mode' : 'Switch all labels to table mode'}
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: 4,
+                            padding: '6px 10px', borderRadius: 6, border: 'none',
+                            fontSize: '0.8rem', fontWeight: 500, cursor: 'pointer',
+                            background: ui.labelsTidied ? 'rgba(59,130,246,0.2)' : 'rgba(20,25,35,0.85)',
+                            color: ui.labelsTidied ? '#60a5fa' : 'rgba(255,255,255,0.5)',
+                            backdropFilter: 'blur(8px)',
+                            transition: 'all 0.15s',
+                        }}
+                    >
+                        <AlignVerticalDistributeCenter size={14} />
+                        Tidy
+                    </button>
                     <button
                         className={`vm-popout-trigger ${actionsMenuOpen ? 'open' : ''}`}
                         onClick={() => { setActionsMenuOpen(!actionsMenuOpen); setLocksMenuOpen(false); }}
@@ -2884,8 +2931,20 @@ export default function VesselModeler() {
                             <button className="vm-popout-item" onClick={() => { dispatch({ type: 'SET_SHOW_DRAWING_IMPORT', show: true }); setActionsMenuOpen(false); }}>
                                 <FileUp size={14} /> Import GA
                             </button>
-                            <button className="vm-popout-item" onClick={() => { dispatch({ type: 'SET_SHOW_SCREENSHOT_MODE', show: true }); setActionsMenuOpen(false); }}>
-                                <Camera size={14} /> Screenshot
+                            <button className="vm-popout-item" onClick={async () => {
+                                setActionsMenuOpen(false);
+                                const renderer = viewportRef.current?.getRenderer();
+                                const scene = viewportRef.current?.getScene();
+                                const camera = viewportRef.current?.getCamera();
+                                if (!renderer || !scene || !camera) return;
+
+                                const dataUrl = await captureViewportScreenshot(renderer, scene, camera, 4);
+                                if (dataUrl) {
+                                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                                    downloadScreenshot(dataUrl, `vessel-screenshot-${timestamp}.png`);
+                                }
+                            }}>
+                                <Camera size={14} /> Screenshot (4×)
                             </button>
                             <button className="vm-popout-item" onClick={() => { viewportRef.current?.resetCamera(); setActionsMenuOpen(false); }}>
                                 <RotateCcw size={14} /> Reset Camera
@@ -3053,23 +3112,6 @@ export default function VesselModeler() {
                 </Suspense>
             )}
 
-            {/* Screenshot Mode Overlay */}
-            {ui.showScreenshotMode &&
-              viewportRef.current?.getRenderer() &&
-              viewportRef.current?.getScene() &&
-              viewportRef.current?.getCamera() &&
-              viewportRef.current?.getSceneManager()?.getControls() && (
-                <Suspense fallback={null}>
-                    <ScreenshotMode
-                        renderer={viewportRef.current.getRenderer()!}
-                        scene={viewportRef.current.getScene()!}
-                        camera={viewportRef.current.getCamera()!}
-                        controls={viewportRef.current.getSceneManager()!.getControls()!}
-                        vesselLength={vesselState.length}
-                        onExit={() => dispatch({ type: 'SET_SHOW_SCREENSHOT_MODE', show: false })}
-                    />
-                </Suspense>
-            )}
 
             {/* Inspection Image Viewer Modal */}
             {ui.viewingInspectionImageId >= 0 && (() => {

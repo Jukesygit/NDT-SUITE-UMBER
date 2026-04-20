@@ -5,22 +5,22 @@
 -- eliminating the data-loss window of delete-then-insert.
 -- ============================================================================
 
--- Step 1: De-duplicate existing rows — keep only the most recent per pair
+-- Step 1: De-duplicate existing rows — keep only the most recent per (vessel, section) pair
 DELETE FROM scan_composites sc
-WHERE sc.id NOT IN (
+WHERE sc.project_vessel_id IS NOT NULL
+  AND sc.section_type IS NOT NULL
+  AND sc.id NOT IN (
     SELECT DISTINCT ON (project_vessel_id, section_type) id
     FROM scan_composites
     WHERE project_vessel_id IS NOT NULL
       AND section_type IS NOT NULL
     ORDER BY project_vessel_id, section_type, created_at DESC
-)
-AND sc.project_vessel_id IS NOT NULL
-AND sc.section_type IS NOT NULL;
+  );
 
--- Step 2: Add unique constraint (NULLS NOT DISTINCT so NULL pairs also deduplicate)
-ALTER TABLE scan_composites
-    ADD CONSTRAINT uq_scan_composites_vessel_section
-    UNIQUE NULLS NOT DISTINCT (project_vessel_id, section_type);
+-- Step 2: Add unique index on non-null pairs only (allows multiple NULLs)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_scan_composites_vessel_section
+    ON scan_composites (project_vessel_id, section_type)
+    WHERE project_vessel_id IS NOT NULL AND section_type IS NOT NULL;
 
 -- Step 3: Add UPDATE RLS policy (needed for upsert ON CONFLICT DO UPDATE)
 CREATE POLICY "Owner or admin can update scan composites"
@@ -32,7 +32,7 @@ CREATE POLICY "Owner or admin can update scan composites"
             SELECT 1 FROM profiles
             WHERE profiles.id = auth.uid()
               AND profiles.organization_id = scan_composites.organization_id
-              AND profiles.role IN ('admin', 'org_admin')
+              AND profiles.role IN ('super_admin', 'admin', 'org_admin')
         )
     )
     WITH CHECK (
@@ -41,6 +41,6 @@ CREATE POLICY "Owner or admin can update scan composites"
             SELECT 1 FROM profiles
             WHERE profiles.id = auth.uid()
               AND profiles.organization_id = scan_composites.organization_id
-              AND profiles.role IN ('admin', 'org_admin')
+              AND profiles.role IN ('super_admin', 'admin', 'org_admin')
         )
     );

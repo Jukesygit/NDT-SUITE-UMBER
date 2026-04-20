@@ -5,7 +5,7 @@ import { SceneManager } from './engine/scene-manager';
 import { buildVesselScene, type BuildSceneResult } from './engine/vessel-geometry';
 import { InteractionManager } from './engine/interaction-manager';
 import { createAnnotationShape, createRectOutline, createRectFill, createRulerLine } from './engine/annotation-geometry';
-import { createAnnotationLabel, createAnnotationLeaderLine, createRulerLabel, type LabelDragContext } from './engine/annotation-labels';
+import { createAnnotationLabel, createAnnotationLeaderLine, createRulerLabel, getAnnotationShellPoint, type LabelDragContext } from './engine/annotation-labels';
 import { createAllInspectionImageLabels, type InspectionImageClickHandler } from './engine/inspection-image-labels';
 import { createAllInspectionImageMarkers } from './engine/inspection-image-geometry';
 import { createWeldGeometry } from './engine/weld-geometry';
@@ -418,13 +418,351 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
                 if (ann.visible === false) return;
                 // Hide leader line + label for the annotation being inspected
                 if (inspectingAnnotationId != null && ann.id === inspectingAnnotationId) return;
-                if (ann.showLabel) {
-                    const leaderGroup = createAnnotationLeaderLine(ann, state, ann.id === selectedAnnotationId);
+
+                const isSelected = ann.id === selectedAnnotationId;
+                const effectiveMode = ann.labelMode ?? 'flyout';
+
+                if (effectiveMode === 'table') {
+                    // Table mode: small pill label on the vessel surface (like nozzle labels)
+                    const shellPos = getAnnotationShellPoint(ann, state);
+                    const el = document.createElement('div');
+                    el.className = `vm-annotation-pill${isSelected ? ' selected' : ''}`;
+                    el.dataset.annType = ann.type;
+                    if (ann.severityLevel) el.dataset.severity = ann.severityLevel;
+                    el.textContent = ann.name;
+                    const label = new CSS2DObject(el);
+                    // Compute outward surface normal for occlusion testing
+                    const angleRad = (ann.angle * Math.PI) / 180;
+                    const isVert = state.orientation === 'vertical';
+                    let outward: THREE.Vector3;
+                    if (isVert) {
+                        outward = new THREE.Vector3(Math.cos(angleRad), 0, Math.sin(angleRad)).normalize();
+                    } else {
+                        outward = new THREE.Vector3(0, Math.sin(angleRad), Math.cos(angleRad)).normalize();
+                    }
+                    // Offset slightly above the shell surface
+                    const nudge = 0.05;
+                    label.position.set(
+                        shellPos.x + nudge * outward.x,
+                        shellPos.y + nudge * outward.y,
+                        shellPos.z + nudge * outward.z,
+                    );
+                    label.userData = {
+                        type: 'annotation-pill',
+                        annotationId: ann.id,
+                        outward: outward.toArray(),
+                    };
+                    result.vesselGroup.add(label);
+                } else if (ann.showLabel) {
+                    // Flyout mode: leader line + full card (original behavior)
+                    const leaderGroup = createAnnotationLeaderLine(ann, state, isSelected);
                     result.vesselGroup.add(leaderGroup);
-                    const label = createAnnotationLabel(ann, state, state.measurementConfig, ann.id === selectedAnnotationId, dragCtx);
+                    const label = createAnnotationLabel(ann, state, state.measurementConfig, isSelected, dragCtx);
                     result.vesselGroup.add(label);
                 }
             });
+
+            // Build annotation summary table as a CSS2D label in the scene
+            {
+                const tableAnnotations = state.annotations.filter(
+                    (a) => a.labelMode === 'table' && a.visible !== false,
+                );
+                if (tableAnnotations.length > 0) {
+                    const origin = state.coordinateOrigin ?? { indexMm: 0, scanMm: 0 };
+
+                    // Group by type
+                    const groups: Record<string, typeof tableAnnotations> = {};
+                    for (const ann of tableAnnotations) {
+                        (groups[ann.type] ??= []).push(ann);
+                    }
+
+                    const tableEl = document.createElement('div');
+                    tableEl.className = 'vm-annotation-table-label';
+
+                    const groupDefs = [
+                        { key: 'restriction', label: 'Restrictions' },
+                        { key: 'scan', label: 'Scan Areas' },
+                    ];
+
+                    for (const { key, label } of groupDefs) {
+                        const items = groups[key];
+                        if (!items || items.length === 0) continue;
+
+                        const header = document.createElement('div');
+                        header.className = 'vm-annotation-table-header';
+                        header.textContent = label;
+                        tableEl.appendChild(header);
+
+                        const table = document.createElement('table');
+                        table.className = 'vm-annotation-table';
+
+                        // Header row
+                        const thead = document.createElement('thead');
+                        const headRow = document.createElement('tr');
+                        for (const col of ['Name', 'Scan', 'Index', key === 'scan' ? 'Area' : 'Notes']) {
+                            const th = document.createElement('th');
+                            th.textContent = col;
+                            headRow.appendChild(th);
+                        }
+                        thead.appendChild(headRow);
+                        table.appendChild(thead);
+
+                        // Body rows
+                        const tbody = document.createElement('tbody');
+                        for (const ann of items) {
+                            const scanMm = Math.round(
+                                (ann.angle / 360) * Math.PI * state.id - origin.scanMm,
+                            );
+                            const indexMm = Math.round(ann.pos - origin.indexMm);
+                            const isSelected = ann.id === selectedAnnotationId;
+
+                            const row = document.createElement('tr');
+                            if (isSelected) row.className = 'selected';
+                            row.addEventListener('pointerdown', (e) => {
+                                e.stopPropagation();
+                                callbacksRef.current.onAnnotationSelected?.(ann.id);
+                            });
+
+                            // Name cell (with severity dot)
+                            const nameCell = document.createElement('td');
+                            if (ann.severityLevel) {
+                                const dot = document.createElement('span');
+                                dot.className = 'vm-severity-dot';
+                                dot.style.backgroundColor = { red: '#ff3333', yellow: '#ffaa00', green: '#33cc33' }[ann.severityLevel];
+                                nameCell.appendChild(dot);
+                            }
+                            nameCell.appendChild(document.createTextNode(ann.name));
+                            row.appendChild(nameCell);
+
+                            // Scan / Index cells
+                            const scanCell = document.createElement('td');
+                            scanCell.textContent = `${scanMm}mm`;
+                            row.appendChild(scanCell);
+
+                            const indexCell = document.createElement('td');
+                            indexCell.textContent = `${indexMm}mm`;
+                            row.appendChild(indexCell);
+
+                            // Area or Notes
+                            const extraCell = document.createElement('td');
+                            if (key === 'scan') {
+                                extraCell.textContent = `${((ann.width * ann.height) / 1_000_000).toFixed(2)} m\u00b2`;
+                            } else {
+                                extraCell.className = 'vm-annotation-table-notes';
+                                extraCell.textContent = ann.restrictionNotes || '\u2014';
+                            }
+                            row.appendChild(extraCell);
+
+                            tbody.appendChild(row);
+
+                            // Image row (hidden by default, toggled via button)
+                            if (ann.restrictionImage) {
+                                const imgRow = document.createElement('tr');
+                                imgRow.className = 'vm-annotation-table-img-row';
+                                imgRow.style.display = 'none';
+                                const imgCell = document.createElement('td');
+                                imgCell.colSpan = 4;
+                                imgCell.className = 'vm-annotation-table-img-cell';
+
+                                const img = document.createElement('img');
+                                img.src = ann.restrictionImage;
+                                img.className = 'vm-annotation-table-thumb';
+                                imgCell.appendChild(img);
+
+                                imgRow.appendChild(imgCell);
+                                tbody.appendChild(imgRow);
+
+                                // Add toggle icon to name cell
+                                const toggleBtn = document.createElement('button');
+                                toggleBtn.className = 'vm-annotation-table-img-toggle';
+                                toggleBtn.textContent = '\u25B6'; // right triangle
+                                toggleBtn.title = 'Show image';
+                                toggleBtn.addEventListener('pointerdown', (e) => {
+                                    e.stopPropagation();
+                                    const visible = imgRow.style.display !== 'none';
+                                    imgRow.style.display = visible ? 'none' : 'table-row';
+                                    toggleBtn.textContent = visible ? '\u25B6' : '\u25BC';
+                                    toggleBtn.title = visible ? 'Show image' : 'Hide image';
+                                });
+                                nameCell.insertBefore(toggleBtn, nameCell.firstChild);
+                            }
+                        }
+                        table.appendChild(tbody);
+                        tableEl.appendChild(table);
+                    }
+
+                    // Toolbar row (images toggle + light/dark toggle)
+                    const toolbarRow = document.createElement('div');
+                    toolbarRow.className = 'vm-annotation-table-toolbar';
+
+                    const imgToggleAll = document.createElement('button');
+                    imgToggleAll.className = 'vm-annotation-table-toolbar-btn';
+                    imgToggleAll.textContent = '\uD83D\uDDBC Images';
+                    imgToggleAll.title = 'Toggle all images';
+                    let allImagesShown = false;
+                    imgToggleAll.addEventListener('pointerdown', (e) => {
+                        e.stopPropagation();
+                        allImagesShown = !allImagesShown;
+                        const imgRows = tableEl.querySelectorAll('.vm-annotation-table-img-row');
+                        imgRows.forEach((r) => {
+                            (r as HTMLElement).style.display = allImagesShown ? 'table-row' : 'none';
+                        });
+                        const toggleBtns = tableEl.querySelectorAll('.vm-annotation-table-img-toggle');
+                        toggleBtns.forEach((btn) => {
+                            btn.textContent = allImagesShown ? '\u25BC' : '\u25B6';
+                        });
+                        imgToggleAll.style.color = allImagesShown ? '#60a5fa' : '';
+                    });
+                    toolbarRow.appendChild(imgToggleAll);
+
+                    const themeToggle = document.createElement('button');
+                    themeToggle.className = 'vm-annotation-table-toolbar-btn';
+                    themeToggle.textContent = '\u2600 Light';
+                    themeToggle.title = 'Toggle light/dark mode';
+                    themeToggle.addEventListener('pointerdown', (e) => {
+                        e.stopPropagation();
+                        const isLight = tableEl.classList.toggle('light');
+                        themeToggle.textContent = isLight ? '\u263E Dark' : '\u2600 Light';
+                    });
+                    toolbarRow.appendChild(themeToggle);
+
+                    tableEl.insertBefore(toolbarRow, tableEl.firstChild);
+
+                    // Add a drag handle bar at the top for moving
+                    const dragBar = document.createElement('div');
+                    dragBar.className = 'vm-annotation-table-drag-bar';
+                    dragBar.title = 'Drag to move';
+                    tableEl.insertBefore(dragBar, tableEl.firstChild);
+
+                    // Add a resize handle at the bottom-right corner
+                    const resizeHandle = document.createElement('div');
+                    resizeHandle.className = 'vm-annotation-table-resize-handle';
+                    resizeHandle.title = 'Drag to resize';
+                    tableEl.appendChild(resizeHandle);
+
+                    // Restore saved table size if present
+                    if (state.annotationTableSize) {
+                        tableEl.style.width = `${state.annotationTableSize[0]}px`;
+                        tableEl.style.maxHeight = `${state.annotationTableSize[1]}px`;
+                        tableEl.style.overflow = 'auto';
+                    }
+
+                    const tableLabel = new CSS2DObject(tableEl);
+                    // Restore saved position or compute default
+                    if (state.annotationTablePosition) {
+                        tableLabel.position.set(...state.annotationTablePosition);
+                    } else {
+                        const SCALE = 0.001;
+                        const isVertical = state.orientation === 'vertical';
+                        const vesselHalfLength = (state.length / 2) * SCALE;
+                        const vesselRadius = (state.id / 2) * SCALE;
+                        if (isVertical) {
+                            tableLabel.position.set(vesselRadius + 1.5, 0, 0);
+                        } else {
+                            tableLabel.position.set(vesselHalfLength + vesselRadius + 0.5, 0, 0);
+                        }
+                    }
+                    tableLabel.userData = { type: 'annotation-table' };
+                    result.vesselGroup.add(tableLabel);
+
+                    // --- Drag-to-move (camera-facing plane projection) ---
+                    if (manager) {
+                        const canvas = manager.getRenderer().domElement;
+                        const camera = manager.getCamera();
+                        const controls = manager.getControls();
+                        const raycaster = new THREE.Raycaster();
+                        const mouse = new THREE.Vector2();
+                        const dragPlane = new THREE.Plane();
+                        const intersection = new THREE.Vector3();
+                        let dragging = false;
+
+                        const onDragStart = (e: PointerEvent) => {
+                            e.stopPropagation();
+                            dragging = true;
+                            dragBar.style.cursor = 'grabbing';
+                            controls.enabled = false;
+
+                            const cameraDir = camera.getWorldDirection(new THREE.Vector3());
+                            dragPlane.setFromNormalAndCoplanarPoint(cameraDir, tableLabel.position.clone());
+
+                            window.addEventListener('pointermove', onDragMove);
+                            window.addEventListener('pointerup', onDragEnd);
+                        };
+
+                        const onDragMove = (e: PointerEvent) => {
+                            if (!dragging) return;
+                            const rect = canvas.getBoundingClientRect();
+                            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+                            raycaster.setFromCamera(mouse, camera);
+                            if (raycaster.ray.intersectPlane(dragPlane, intersection)) {
+                                tableLabel.position.copy(intersection);
+                            }
+                        };
+
+                        const onDragEnd = () => {
+                            dragging = false;
+                            dragBar.style.cursor = '';
+                            controls.enabled = true;
+                            window.removeEventListener('pointermove', onDragMove);
+                            window.removeEventListener('pointerup', onDragEnd);
+                            // Persist position
+                            const p = tableLabel.position;
+                            callbacksRef.current.onAnnotationTableMoved?.([p.x, p.y, p.z]);
+                        };
+
+                        dragBar.addEventListener('pointerdown', onDragStart);
+                    }
+
+                    // --- Resize handle ---
+                    {
+                        let resizing = false;
+                        let startX = 0;
+                        let startY = 0;
+                        let startW = 0;
+                        let startH = 0;
+
+                        const onResizeStart = (e: PointerEvent) => {
+                            e.stopPropagation();
+                            resizing = true;
+                            startX = e.clientX;
+                            startY = e.clientY;
+                            const rect = tableEl.getBoundingClientRect();
+                            startW = rect.width;
+                            startH = rect.height;
+                            resizeHandle.style.cursor = 'nwse-resize';
+                            if (manager) manager.getControls().enabled = false;
+
+                            window.addEventListener('pointermove', onResizeMove);
+                            window.addEventListener('pointerup', onResizeEnd);
+                        };
+
+                        const onResizeMove = (e: PointerEvent) => {
+                            if (!resizing) return;
+                            const dx = e.clientX - startX;
+                            const dy = e.clientY - startY;
+                            const newW = Math.max(200, startW + dx);
+                            const newH = Math.max(80, startH + dy);
+                            tableEl.style.width = `${newW}px`;
+                            tableEl.style.maxHeight = `${newH}px`;
+                            tableEl.style.overflow = 'auto';
+                        };
+
+                        const onResizeEnd = () => {
+                            resizing = false;
+                            resizeHandle.style.cursor = '';
+                            if (manager) manager.getControls().enabled = true;
+                            window.removeEventListener('pointermove', onResizeMove);
+                            window.removeEventListener('pointerup', onResizeEnd);
+                            // Persist size
+                            const rect = tableEl.getBoundingClientRect();
+                            callbacksRef.current.onAnnotationTableResized?.([rect.width, rect.height]);
+                        };
+
+                        resizeHandle.addEventListener('pointerdown', onResizeStart);
+                    }
+                }
+            }
 
             state.rulers.forEach((ruler) => {
                 const rulerGroup = createRulerLine(ruler, state);

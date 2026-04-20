@@ -27,6 +27,8 @@ interface AscanCanvasProps {
   timeMaxUs: number;
   gates: GateOverlay[];
   onGateChange?: (gateId: number, updates: Partial<GateOverlay>) => void;
+  /** Fires when the user finishes dragging a gate (mouseup). Use for Tier 2 refinement. */
+  onGateRelease?: () => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -60,6 +62,7 @@ export default function AscanCanvas({
   timeMaxUs,
   gates,
   onGateChange,
+  onGateRelease,
 }: AscanCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -165,19 +168,26 @@ export default function AscanCanvas({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onGateChange, gates, size, timeMinUs, timeMaxUs]);
 
-  const endDrag = useCallback((cancelled: boolean) => {
+  const commitDrag = useCallback(() => {
     const drag = dragRef.current;
     if (!drag) return;
-    if (!cancelled && onGateChange) {
+    if (onGateChange) {
       const g = drag.localGates.find((g) => g.id === drag.gateId);
       if (g) onGateChange(g.id, { startUs: g.startUs, endUs: g.endUs, thresholdPct: g.thresholdPct });
     }
+    if (onGateRelease) {
+      onGateRelease();
+    }
     dragRef.current = null;
     setRenderTick((t) => t + 1);
-  }, [onGateChange]);
+  }, [onGateChange, onGateRelease]);
 
-  const handleMouseUp = useCallback(() => endDrag(false), [endDrag]);
-  const handleMouseLeave = useCallback(() => endDrag(true), [endDrag]);
+  // Listen for mouseup on window so releasing outside the canvas still commits the drag
+  useEffect(() => {
+    const handleWindowMouseUp = () => { commitDrag(); };
+    window.addEventListener('mouseup', handleWindowMouseUp);
+    return () => window.removeEventListener('mouseup', handleWindowMouseUp);
+  }, [commitDrag]);
 
   /* ---- Main render ---- */
   useEffect(() => {
@@ -301,8 +311,6 @@ export default function AscanCanvas({
         style={{ display: 'block', width: '100%', height: '100%' }}
         onMouseMove={handleMouseMove}
         onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
       />
       <span
         style={{

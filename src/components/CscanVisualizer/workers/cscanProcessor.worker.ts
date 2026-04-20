@@ -190,6 +190,9 @@ function parseSingleFile(buffer: ArrayBuffer, filename: string): EfficientCscanD
 
   // Handle generic format if no 'mm' marker
   if (dataStartIndex === -1) {
+    if (isPautInstrumentFormat(metadata)) {
+      return parsePautInstrumentFormat(filename, lines, metadata);
+    }
     return parseGenericFormat(buffer, filename, lines);
   }
 
@@ -248,6 +251,115 @@ function parseSingleFile(buffer: ArrayBuffer, filename: string): EfficientCscanD
 
       if (val === null || isNaN(val as number) || !isFinite(val as number)) {
         // Set null bit
+        const byteIdx = Math.floor(idx / 8);
+        const bitIdx = idx % 8;
+        nullMask[byteIdx] |= (1 << bitIdx);
+        values[idx] = 0;
+      } else {
+        values[idx] = val;
+      }
+    }
+  }
+
+  const xAxis = Float32Array.from(xAxisArr);
+  const yAxis = Float32Array.from(yAxisArr);
+  const stats = calculateStats(values, nullMask, width, height, xAxis, yAxis);
+
+  return {
+    id: generateId(),
+    filename,
+    width,
+    height,
+    values,
+    nullMask,
+    xAxis,
+    yAxis,
+    stats,
+    metadata,
+    timestamp: Date.now()
+  };
+}
+
+/**
+ * Check if metadata indicates a PAUT instrument format
+ */
+function isPautInstrumentFormat(metadata: Record<string, unknown>): boolean {
+  return (
+    metadata['Scan Resol. (mm)'] !== undefined &&
+    metadata['Index Resol. (mm)'] !== undefined
+  );
+}
+
+/**
+ * Parse PAUT instrument format files (e.g. from Olympus/Evident scanners)
+ * Data grid has no axis labels — axes are computed from metadata
+ */
+function parsePautInstrumentFormat(
+  filename: string,
+  lines: string[],
+  metadata: Record<string, unknown>
+): EfficientCscanData {
+  const scanStart = (metadata['ScanStart (mm)'] as number) ?? 0;
+  const scanQty = (metadata['ScanQty (sample)'] as number) ?? 0;
+  const scanResol = (metadata['Scan Resol. (mm)'] as number) ?? 1;
+  const indexStart = (metadata['IndexStart (mm)'] as number) ?? 0;
+  const indexResol = (metadata['Index Resol. (mm)'] as number) ?? 1;
+
+  // Find where data starts (after blank line following metadata)
+  let dataStartIndex = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim() === '' && i > 0) {
+      dataStartIndex = i + 1;
+      break;
+    }
+  }
+
+  if (dataStartIndex === -1) {
+    throw new Error('Could not find data section in PAUT instrument file');
+  }
+
+  // Parse data rows
+  const dataRows: (number | null)[][] = [];
+  for (let i = dataStartIndex; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.trim() === '') continue;
+
+    const rowData = line.split('\t').map(val => {
+      const trimmed = val.trim();
+      if (trimmed === 'NaN' || trimmed === 'ND' || trimmed === '' || trimmed === '-') {
+        return null;
+      }
+      const num = parseFloat(trimmed);
+      return isNaN(num) ? null : num;
+    });
+
+    dataRows.push(rowData);
+  }
+
+  if (dataRows.length === 0) {
+    throw new Error('No data rows found in PAUT instrument file');
+  }
+
+  // Use actual dimensions, falling back to metadata
+  const height = dataRows.length;
+  const width = dataRows[0]?.length ?? scanQty;
+
+  // Generate axes from metadata, adjusted for actual dimensions
+  const xAxisArr = Array.from({ length: width }, (_, i) => scanStart + i * scanResol);
+  const yAxisArr = Array.from({ length: height }, (_, i) => indexStart + i * indexResol);
+
+  // Convert to efficient format
+  const totalCells = width * height;
+  const values = new Float32Array(totalCells);
+  const nullMaskBytes = Math.ceil(totalCells / 8);
+  const nullMask = new Uint8Array(nullMaskBytes);
+
+  for (let row = 0; row < height; row++) {
+    for (let col = 0; col < width; col++) {
+      const idx = row * width + col;
+      const val = dataRows[row]?.[col];
+
+      if (val === null || val === undefined || isNaN(val) || !isFinite(val)) {
         const byteIdx = Math.floor(idx / 8);
         const bitIdx = idx % 8;
         nullMask[byteIdx] |= (1 << bitIdx);

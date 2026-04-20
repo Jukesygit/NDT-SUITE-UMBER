@@ -138,6 +138,25 @@ export function NozzleSection({
                                 </div>
                             </div>
                             <div className="vm-control-group">
+                                <div className="vm-label"><span>Weld Neck</span></div>
+                                <div className="vm-toggle-group">
+                                    <button
+                                        className={`vm-toggle-btn ${!sel.hideRepad ? 'active' : ''}`}
+                                        onClick={() => onUpdateNozzle(selectedNozzleIndex, { hideRepad: false })}
+                                        title="Show weld neck at shell junction"
+                                    >
+                                        On
+                                    </button>
+                                    <button
+                                        className={`vm-toggle-btn ${sel.hideRepad ? 'active' : ''}`}
+                                        onClick={() => onUpdateNozzle(selectedNozzleIndex, { hideRepad: true })}
+                                        title="Hide weld neck (plain cylinder at junction)"
+                                    >
+                                        Off
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="vm-control-group">
                                 <div className="vm-label"><span>Orientation</span></div>
                                 <div className="vm-toggle-group">
                                     {([

@@ -395,6 +395,17 @@ export function createNozzleLabelSprite(
   tipWorld.addScaledVector(nozzleDir, worldScale * 20);
 
   mesh.position.copy(tipWorld);
+
+  // Orient the label to face radially outward from the vessel axis.
+  // Project the nozzle direction onto the XZ plane and rotate around Y
+  // so the label text faces away from the vessel centre.
+  const radialDir = new THREE.Vector3(nozzleDir.x, 0, nozzleDir.z);
+  if (radialDir.lengthSq() > 1e-6) {
+    radialDir.normalize();
+    // atan2 gives the angle from +Z towards +X; the mesh default faces +Z
+    mesh.rotation.y = Math.atan2(radialDir.x, radialDir.z);
+  }
+
   mesh.userData = { type: 'export-label', sourceType: 'nozzle', name: config.name };
 
   return mesh;
@@ -434,8 +445,11 @@ export function createNameplateSprites(
 
   const vesselRadius = (vesselState.id / 2) * SCALE;
   const vesselLength = vesselState.length * SCALE;
-  // Align with the bottom of the saddle supports (ground plane)
-  const floorY = getSaddleBaseY(vesselState);
+  const isVertical = vesselState.orientation === 'vertical';
+  // Align with the ground plane — saddle base for horizontal, bottom head for vertical
+  const floorY = isVertical
+    ? -(vesselState.length / 2 + (vesselState.headRatio > 0 ? vesselState.id / (2 * vesselState.headRatio) : 0)) * SCALE
+    : getSaddleBaseY(vesselState);
 
   const group = new THREE.Group();
   group.userData = { type: 'export-nameplate' };
@@ -449,30 +463,27 @@ export function createNameplateSprites(
       worldScale,
     );
 
-    if (vesselState.orientation === 'horizontal') {
+    if (isVertical) {
+      // Vertical vessel: nameplates on opposite sides (front & back along Z)
+      mesh.position.set(
+        0,                          // centred on vessel axis
+        floorY,                     // level with vessel base
+        side * vesselRadius * 1.8,  // front (+Z) and back (-Z)
+      );
+    } else {
       // Horizontal vessel: nameplates along Z axis (front and back)
       mesh.position.set(
         vesselLength * 0.5,         // centred on vessel length
         floorY,                     // level with saddle base
         side * vesselRadius * 1.8,  // front (+Z) and back (-Z)
       );
-    } else {
-      // Vertical vessel: nameplates along Z axis
-      mesh.position.set(
-        side * vesselRadius * 1.8,  // left and right of vessel
-        floorY,                     // level with saddle base
-        vesselRadius * 1.8,         // in front
-      );
     }
 
     // Lie flat on the ground plane
     mesh.rotation.x = -Math.PI / 2;
     // Orient text so it reads correctly for a viewer looking towards vessel centre.
-    // The front plane of the group already faces +Z (towards the viewer on that side).
-    // side +1 (front, +Z): text should face the outside viewer (looking towards -Z),
-    //   so we don't rotate — the default front face points at the viewer.
-    // side -1 (back, -Z): text should face the outside viewer (looking towards +Z),
-    //   so rotate 180° to flip the text around.
+    // side +1 (front, +Z): default face points at the viewer — no rotation needed.
+    // side -1 (back, -Z): rotate 180° so text faces the opposite viewer.
     mesh.rotation.z = side === 1 ? 0 : Math.PI;
 
     mesh.userData = { type: 'export-nameplate', side: side === 1 ? 'front' : 'back' };

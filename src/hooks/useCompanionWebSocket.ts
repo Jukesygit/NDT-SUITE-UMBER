@@ -31,10 +31,30 @@ export interface CursorResponse {
   renderMs: number;
 }
 
+export interface GateAdjustParams {
+  tier: 2;
+  gates: {
+    ref: { startUs: number; endUs: number; thresholdPct: number };
+    meas: { startUs: number; endUs: number; thresholdPct: number };
+  };
+  folders: string[];
+}
+
+export interface TierTwoProgress {
+  fileIndex: number;
+  totalFiles: number;
+  progress: number;
+  filename: string;
+}
+
 export interface UseCompanionWebSocketResult {
   connected: boolean;
   cursorData: CursorResponse | null;
   sendCursor: (params: CursorParams) => void;
+  sendGateAdjust: (params: GateAdjustParams) => void;
+  tierTwoThickness: Float32Array | null;
+  tierTwoProgress: TierTwoProgress | null;
+  tierTwoComplete: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -42,6 +62,7 @@ export interface UseCompanionWebSocketResult {
 // ---------------------------------------------------------------------------
 
 interface ParsedHeader {
+  type: string;
   seq: number;
   binaryFrames: number;
   ascan: {
@@ -51,6 +72,21 @@ interface ParsedHeader {
   };
   gates: GateOverlay[];
   renderMs: number;
+}
+
+interface TileHeader {
+  type: 'cscan-tile';
+  fileIndex: number;
+  totalFiles: number;
+  progress: number;
+  filename: string;
+}
+
+interface CompleteHeader {
+  type: 'cscan-complete';
+  computeMs: number;
+  width: number;
+  height: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -73,6 +109,9 @@ export function useCompanionWebSocket(
   // --- Render state (triggers UI updates) ---
   const [connected, setConnected] = useState(false);
   const [cursorData, setCursorData] = useState<CursorResponse | null>(null);
+  const [tierTwoThickness, setTierTwoThickness] = useState<Float32Array | null>(null);
+  const [tierTwoProgress, setTierTwoProgress] = useState<TierTwoProgress | null>(null);
+  const [tierTwoComplete, setTierTwoComplete] = useState(false);
 
   // --- Refs (internal, no re-renders) ---
   const wsRef = useRef<WebSocket | null>(null);
@@ -82,6 +121,9 @@ export function useCompanionWebSocket(
   // Multi-frame parser state
   const pendingHeaderRef = useRef<ParsedHeader | null>(null);
   const binaryFramesRef = useRef<ArrayBuffer[]>([]);
+
+  // Tier 2 tile parser state
+  const pendingTileHeaderRef = useRef<TileHeader | CompleteHeader | null>(null);
 
   // Blob URLs to revoke on next update / unmount
   const blobUrlsRef = useRef<string[]>([]);
@@ -186,21 +228,48 @@ export function useCompanionWebSocket(
 
     ws.onmessage = (event: MessageEvent) => {
       if (typeof event.data === 'string') {
-        // Text frame: JSON header for a new cursor-data response
         try {
-          const parsed = JSON.parse(event.data) as ParsedHeader & {
-            type: string;
-          };
-          if (parsed.type !== 'cursor-data') return;
+          const parsed = JSON.parse(event.data);
+          const msgType = parsed.type;
 
-          pendingHeaderRef.current = parsed;
-          binaryFramesRef.current = [];
+          if (msgType === 'cursor-data') {
+            // Cursor response — expect binary frames next
+            pendingHeaderRef.current = parsed as ParsedHeader;
+            binaryFramesRef.current = [];
+          } else if (msgType === 'cscan-tile' || msgType === 'cscan-complete') {
+            // Tier 2 tile/complete — expect one binary frame next
+            pendingTileHeaderRef.current = parsed as TileHeader | CompleteHeader;
+          }
         } catch {
           // Ignore malformed JSON
         }
       } else if (event.data instanceof Blob) {
-        // Binary frame
+        // Binary frame — route to the correct parser
         event.data.arrayBuffer().then((buffer) => {
+          // Check tile parser first (it takes priority since cursor data has 3 frames)
+          const tileHeader = pendingTileHeaderRef.current;
+          if (tileHeader) {
+            pendingTileHeaderRef.current = null;
+            const matrix = new Float32Array(buffer);
+
+            if (tileHeader.type === 'cscan-tile') {
+              setTierTwoThickness(matrix);
+              setTierTwoProgress({
+                fileIndex: tileHeader.fileIndex,
+                totalFiles: tileHeader.totalFiles,
+                progress: tileHeader.progress,
+                filename: tileHeader.filename,
+              });
+            } else {
+              // cscan-complete
+              setTierTwoThickness(matrix);
+              setTierTwoProgress(null);
+              setTierTwoComplete(true);
+            }
+            return;
+          }
+
+          // Cursor data frames
           const header = pendingHeaderRef.current;
           if (!header) return;
 
@@ -256,6 +325,16 @@ export function useCompanionWebSocket(
     // and will be sent when the timer fires.
   }, []);
 
+  const sendGateAdjust = useCallback((params: GateAdjustParams) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    // Reset tier 2 state for new computation
+    setTierTwoThickness(null);
+    setTierTwoProgress(null);
+    setTierTwoComplete(false);
+    ws.send(JSON.stringify({ type: 'gate-adjust', ...params }));
+  }, []);
+
   function flushSend() {
     const ws = wsRef.current;
     const params = pendingParamsRef.current;
@@ -305,5 +384,13 @@ export function useCompanionWebSocket(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [port]);
 
-  return { connected, cursorData, sendCursor };
+  return {
+    connected,
+    cursorData,
+    sendCursor,
+    sendGateAdjust,
+    tierTwoThickness,
+    tierTwoProgress,
+    tierTwoComplete,
+  };
 }
