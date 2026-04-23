@@ -892,10 +892,17 @@ export default function VesselModeler() {
         updateVessel(prev => ({ ...prev, annotations: prev.annotations.map(a => a.id === id ? { ...a, ...updates } : a) }));
     }, [updateVessel]);
 
-    const removeAnnotation = useCallback((id: number) => {
+    const removeAnnotation = useCallback(async (id: number) => {
+        // Clean up any Supabase Storage attachments before removing the annotation
+        const ann = vesselState.annotations.find(a => a.id === id);
+        if (ann?.attachments?.length) {
+            for (const att of ann.attachments) {
+                await deleteAnnotationImage(att.storagePath).catch(() => {});
+            }
+        }
         updateVessel(prev => ({ ...prev, annotations: prev.annotations.filter(a => a.id !== id) }));
         dispatch({ type: 'SELECT_ANNOTATION', id: -1 });
-    }, [updateVessel]);
+    }, [updateVessel, vesselState]);
 
     // --- Annotation attachment handlers ---
     const captureViewport = useCallback(async () => {

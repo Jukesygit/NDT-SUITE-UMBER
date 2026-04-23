@@ -114,6 +114,22 @@ export function AnnotationSection({
     const restrictionImageRef = useRef<HTMLInputElement>(null);
     const [showProjectPicker, setShowProjectPicker] = useState(false);
     const [loadingProjectImage, setLoadingProjectImage] = useState(false);
+    const [dragOver, setDragOver] = useState(false);
+
+    const handleRestrictionDrop = useCallback((annId: number, e: React.DragEvent) => {
+        e.preventDefault();
+        setDragOver(false);
+        const file = e.dataTransfer.files?.[0];
+        if (!file || !file.type.startsWith('image/')) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            onUpdateAnnotation(annId, {
+                restrictionImage: reader.result as string,
+                restrictionImageName: file.name,
+            });
+        };
+        reader.readAsDataURL(file);
+    }, [onUpdateAnnotation]);
 
     const handleAttachProjectImage = useCallback(async (annId: number, pImg: ProjectImage) => {
         setLoadingProjectImage(true);
@@ -368,7 +384,17 @@ export function AnnotationSection({
                                     <div className="vm-control-group" style={{ marginTop: 6 }}>
                                         <div className="vm-label"><span>Restriction Photo</span></div>
                                         {sel.restrictionImage ? (
-                                            <div style={{ position: 'relative' }}>
+                                            <div
+                                                style={{
+                                                    position: 'relative',
+                                                    border: dragOver ? '2px dashed #60a5fa' : '2px solid transparent',
+                                                    borderRadius: 6,
+                                                    transition: 'border-color 0.15s',
+                                                }}
+                                                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                                                onDragLeave={() => setDragOver(false)}
+                                                onDrop={e => handleRestrictionDrop(sel.id, e)}
+                                            >
                                                 <img
                                                     src={sel.restrictionImage}
                                                     alt={sel.restrictionImageName ?? 'Restriction'}
@@ -379,10 +405,15 @@ export function AnnotationSection({
                                                     }}
                                                 />
                                                 <button
-                                                    className="vm-btn-icon"
                                                     onClick={() => onUpdateAnnotation(sel.id, { restrictionImage: undefined, restrictionImageName: undefined })}
                                                     title="Remove image"
-                                                    style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.6)', borderRadius: 4 }}
+                                                    style={{
+                                                        position: 'absolute', top: 4, right: 4,
+                                                        background: 'rgba(0,0,0,0.7)', borderRadius: 4,
+                                                        border: 'none', color: '#fff', cursor: 'pointer',
+                                                        padding: 4, display: 'flex', alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                    }}
                                                 >
                                                     <X size={14} />
                                                 </button>
@@ -391,13 +422,26 @@ export function AnnotationSection({
                                                 </div>
                                             </div>
                                         ) : (
-                                            <button
-                                                className="vm-btn"
+                                            <div
                                                 onClick={() => restrictionImageRef.current?.click()}
-                                                style={{ width: '100%' }}
+                                                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                                                onDragLeave={() => setDragOver(false)}
+                                                onDrop={e => handleRestrictionDrop(sel.id, e)}
+                                                style={{
+                                                    width: '100%', padding: '16px 8px',
+                                                    display: 'flex', flexDirection: 'column',
+                                                    alignItems: 'center', justifyContent: 'center', gap: 6,
+                                                    background: dragOver ? 'rgba(96,165,250,0.12)' : 'rgba(255,255,255,0.04)',
+                                                    border: dragOver ? '2px dashed #60a5fa' : '2px dashed rgba(255,255,255,0.12)',
+                                                    borderRadius: 6, cursor: 'pointer',
+                                                    color: dragOver ? '#93c5fd' : 'rgba(255,255,255,0.5)',
+                                                    fontSize: '0.75rem',
+                                                    transition: 'all 0.15s',
+                                                }}
                                             >
-                                                <Upload size={14} /> Upload Photo
-                                            </button>
+                                                <Upload size={18} />
+                                                <span>Drop image or click to upload</span>
+                                            </div>
                                         )}
                                         <input
                                             ref={restrictionImageRef}
