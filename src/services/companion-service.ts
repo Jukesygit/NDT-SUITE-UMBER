@@ -10,6 +10,8 @@ import type {
   CompositeData,
   CompanionFolder,
   GateSettings,
+  BrowseDirectoryResult,
+  EddifyConvertResult,
 } from '../types/companion';
 
 // ---------------------------------------------------------------------------
@@ -220,6 +222,56 @@ export async function fetchAscan(
   signal?: AbortSignal,
 ): Promise<string> {
   return fetchImageEndpoint(port, '/ascan', params, signal);
+}
+
+/** Open native folder picker on companion and set directory. */
+export async function browseDirectory(
+  port: number,
+): Promise<BrowseDirectoryResult> {
+  const res = await fetch(`http://localhost:${port}/browse-directory`, {
+    method: 'POST',
+    signal: AbortSignal.timeout(120000),
+  });
+  if (!res.ok) {
+    throw new Error(`Browse directory failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+/** Set companion directory to a specific path. */
+export async function setDirectory(
+  port: number,
+  path: string,
+): Promise<{ fileCount: number }> {
+  const res = await fetch(`http://localhost:${port}/set-directory`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!res.ok) {
+    throw new Error(`Set directory failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+/** Convert eddify .capture_acq files to .nde in a named output folder. */
+export async function convertEddify(
+  port: number,
+  captureDirs: string[],
+  outputFolder: string,
+): Promise<EddifyConvertResult> {
+  const res = await fetch(`http://localhost:${port}/convert-eddify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ capture_dirs: captureDirs, output_folder: outputFolder }),
+    signal: AbortSignal.timeout(600000),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => res.statusText);
+    throw new Error(`Eddify conversion failed: ${detail}`);
+  }
+  return res.json();
 }
 
 /** Force-rescan the companion's current directory. */

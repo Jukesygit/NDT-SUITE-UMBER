@@ -3,38 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import CollapsibleSection from './CollapsibleSection';
 import CompanionScanPanel from './CompanionScanPanel';
 import type { ProjectVessel } from '../../../types/inspection-project';
-import { computeCoverage } from '../../VesselModeler/engine/coverage-calculator';
-import type { CoverageRectConfig, VesselState } from '../../VesselModeler/types';
-
-interface ModelGeometry {
-    id: number;       // inner diameter mm
-    length: number;   // tan-tan length mm
-    headRatio: number;
-}
-
-interface VesselModelWithGeometry {
-    id: string;
-    name: string;
-    model_type?: string | null;
-    updated_at: string;
-    project_vessel_id: string | null;
-    geometry: ModelGeometry | null;
-    coverageRects: CoverageRectConfig[];
-}
+import { calculateCoverage } from '../../../utils/coverage-calc';
+import type { VesselModelWithGeometry } from '../../../utils/coverage-calc';
 
 interface ScopeSectionProps {
     vessel: ProjectVessel;
     projectId: string;
     composites: { id: string; name: string; stats: any; created_at: string; project_vessel_id: string | null }[];
     vesselModels: VesselModelWithGeometry[];
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function toVesselState(geo: ModelGeometry): VesselState {
-    return { id: geo.id, length: geo.length, headRatio: geo.headRatio } as VesselState;
 }
 
 function fmtArea(val: number | null): string {
@@ -261,43 +237,24 @@ function RegionRow({ label, region }: { label: string; region: { covered: number
 export default function ScopeSection({ vessel, projectId, composites, vesselModels }: ScopeSectionProps) {
     const navigate = useNavigate();
 
-    // Find the coverage-tagged model for scoped coverage calculations
-    const linkedModels = useMemo(
-        () => vesselModels.filter(m => m.project_vessel_id === vessel.id && m.geometry != null),
-        [vesselModels, vessel.id],
+    // Coverage calculation (shared utility)
+    const {
+        shellAreaSqm,
+        scopedAreaSqm,
+        scopedPct,
+        scanAreaSqm,
+        achievedPct,
+        regionBreakdown: modelCoverage,
+    } = useMemo(
+        () => calculateCoverage(vesselModels, vessel.id, composites),
+        [vesselModels, vessel.id, composites],
     );
-    const coverageModel = useMemo(
-        () => linkedModels.find(m => m.model_type === 'coverage') ?? linkedModels[0] ?? null,
-        [linkedModels],
-    );
 
-    // Compute coverage from model geometry
-    const modelCoverage = useMemo(() => {
-        if (!coverageModel?.geometry) return null;
-        const vs = toVesselState(coverageModel.geometry);
-        return computeCoverage(coverageModel.coverageRects ?? [], vs);
-    }, [coverageModel]);
-
-    const shellAreaSqm = modelCoverage?.total.total ?? null;
-    const scopedAreaSqm = modelCoverage?.total.covered ?? 0;
-    const scopedPct = modelCoverage?.total.percent ?? 0;
-
-    // Achieved scan area from composites — validArea = area with real thickness data
-    const scanAreaSqm = useMemo(() => {
-        let total = 0;
-        for (const comp of composites) {
-            const s = comp.stats;
-            if (s && typeof s === 'object' && typeof s.validArea === 'number' && s.validArea > 0) {
-                total += s.validArea / 1_000_000;
-            }
-        }
-        return total;
-    }, [composites]);
-
-    const achievedPct =
-        shellAreaSqm && shellAreaSqm > 0 && scanAreaSqm > 0
-            ? (scanAreaSqm / shellAreaSqm) * 100
-            : null;
+    // Resolve the coverage model reference for the "Open in Modeler" link
+    const coverageModel = useMemo(() => {
+        const linked = vesselModels.filter(m => m.project_vessel_id === vessel.id && m.geometry != null);
+        return linked.find(m => m.model_type === 'coverage') ?? linked[0] ?? null;
+    }, [vesselModels, vessel.id]);
 
     const hasModel = coverageModel != null;
 

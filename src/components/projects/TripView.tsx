@@ -5,8 +5,10 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, MapPin, ChevronRight, ChevronDown, Ship } from 'lucide-react';
+import { Calendar, MapPin, ChevronRight, ChevronDown, Ship, Plus } from 'lucide-react';
 import { useProjectVessels } from '../../hooks/queries/useInspectionProjects';
+import { useCreateProjectVessel } from '../../hooks/mutations/useInspectionProjectMutations';
+import { Modal } from '../ui/Modal';
 import type { InspectionProjectSummary, ProjectStatus, ProjectVessel } from '../../types/inspection-project';
 import { PROJECT_STATUS_LABELS, PROJECT_STATUS_COLORS, VESSEL_STATUS_LABELS, VESSEL_STATUS_COLORS } from '../../types/inspection-project';
 
@@ -104,22 +106,147 @@ function VesselRow({ vessel, projectId }: { vessel: ProjectVessel; projectId: st
     );
 }
 
+const ADD_VESSEL_INPUT_STYLE: React.CSSProperties = {
+    padding: '8px 12px',
+    borderRadius: 8,
+    border: '1px solid rgba(255,255,255,0.12)',
+    background: 'rgba(255,255,255,0.04)',
+    color: '#fff',
+    fontSize: '0.85rem',
+    outline: 'none',
+    width: '100%',
+};
+
 function TripVessels({ projectId }: { projectId: string }) {
     const { data: vessels = [], isLoading } = useProjectVessels(projectId);
+    const createMutation = useCreateProjectVessel();
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [form, setForm] = useState({ vesselName: '', vesselTag: '', vesselType: '', coverageTargetPct: '' });
+
+    const handleAdd = async () => {
+        if (!form.vesselName.trim()) return;
+        const coverage = form.coverageTargetPct ? parseFloat(form.coverageTargetPct) : undefined;
+        await createMutation.mutateAsync({
+            projectId,
+            vesselName: form.vesselName,
+            vesselTag: form.vesselTag || undefined,
+            vesselType: form.vesselType || undefined,
+            coverageTargetPct: coverage,
+        });
+        setShowAddModal(false);
+        setForm({ vesselName: '', vesselTag: '', vesselType: '', coverageTargetPct: '' });
+    };
 
     if (isLoading) {
         return <div style={{ padding: '8px 0', fontSize: '0.75rem', color: 'rgba(255,255,255,0.3)' }}>Loading vessels...</div>;
     }
 
-    if (vessels.length === 0) {
-        return <div style={{ padding: '8px 0', fontSize: '0.75rem', color: 'rgba(255,255,255,0.3)' }}>No vessels in this trip</div>;
-    }
-
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {vessels.length === 0 && (
+                <div style={{ padding: '8px 0', fontSize: '0.75rem', color: 'rgba(255,255,255,0.3)' }}>No vessels in this trip</div>
+            )}
             {vessels.map(v => (
                 <VesselRow key={v.id} vessel={v} projectId={projectId} />
             ))}
+            <button
+                onClick={(e) => {
+                    e.stopPropagation();
+                    setForm({ vesselName: '', vesselTag: '', vesselType: '', coverageTargetPct: '' });
+                    setShowAddModal(true);
+                }}
+                style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '8px 12px', borderRadius: 8,
+                    border: '1px dashed rgba(255,255,255,0.12)',
+                    background: 'transparent', color: 'rgba(255,255,255,0.4)',
+                    fontSize: '0.8rem', cursor: 'pointer', width: '100%',
+                    transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => {
+                    e.currentTarget.style.borderColor = 'rgba(59,130,246,0.4)';
+                    e.currentTarget.style.color = '#3b82f6';
+                }}
+                onMouseLeave={e => {
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
+                    e.currentTarget.style.color = 'rgba(255,255,255,0.4)';
+                }}
+            >
+                <Plus size={14} />
+                Add Vessel
+            </button>
+
+            {showAddModal && (
+                <Modal isOpen={true} title="Add Vessel" onClose={() => setShowAddModal(false)}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 400 }}>
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>Vessel Name *</span>
+                            <input
+                                value={form.vesselName}
+                                onChange={e => setForm(f => ({ ...f, vesselName: e.target.value }))}
+                                placeholder="e.g., Feed Drum"
+                                autoFocus
+                                style={ADD_VESSEL_INPUT_STYLE}
+                            />
+                        </label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>Tag Number</span>
+                                <input
+                                    value={form.vesselTag}
+                                    onChange={e => setForm(f => ({ ...f, vesselTag: e.target.value }))}
+                                    placeholder="e.g., V-101"
+                                    style={ADD_VESSEL_INPUT_STYLE}
+                                />
+                            </label>
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>Type</span>
+                                <select
+                                    value={form.vesselType}
+                                    onChange={e => setForm(f => ({ ...f, vesselType: e.target.value }))}
+                                    style={ADD_VESSEL_INPUT_STYLE}
+                                >
+                                    <option value="">Select type...</option>
+                                    <option value="pressure_vessel">Pressure Vessel</option>
+                                    <option value="heat_exchanger">Heat Exchanger</option>
+                                    <option value="tank">Tank</option>
+                                    <option value="column">Column</option>
+                                    <option value="piping">Piping</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </label>
+                        </div>
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>Coverage Target (%)</span>
+                            <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="1"
+                                value={form.coverageTargetPct}
+                                onChange={e => setForm(f => ({ ...f, coverageTargetPct: e.target.value }))}
+                                placeholder="e.g., 40"
+                                style={ADD_VESSEL_INPUT_STYLE}
+                            />
+                        </label>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 8 }}>
+                            <button
+                                onClick={() => setShowAddModal(false)}
+                                style={{ padding: '6px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: 'rgba(255,255,255,0.7)', cursor: 'pointer' }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleAdd}
+                                disabled={!form.vesselName.trim() || createMutation.isPending}
+                                style={{ padding: '6px 16px', borderRadius: 6, border: 'none', background: '#3b82f6', color: '#fff', cursor: 'pointer', opacity: form.vesselName.trim() ? 1 : 0.5 }}
+                            >
+                                {createMutation.isPending ? 'Adding...' : 'Add Vessel'}
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
         </div>
     );
 }

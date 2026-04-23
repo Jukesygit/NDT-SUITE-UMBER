@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useCompanionApp } from '../hooks/queries/useCompanionApp';
 import { useCompanionFolders } from '../hooks/queries/useCompanionFolders';
-import { useRefreshCompanionIndex } from '../hooks/mutations/useCompanionMutations';
+import { useBrowseDirectory, useConvertEddify, useRefreshCompanionIndex } from '../hooks/mutations/useCompanionMutations';
 import { useCompanionWebSocket } from '../hooks/useCompanionWebSocket';
 import { useThicknessEngine } from '../hooks/useThicknessEngine';
 import type { GatePosition } from '../hooks/useThicknessEngine';
@@ -50,13 +50,17 @@ const SERVER_GATE_KEYS: (keyof GateSettings)[] = [
 ];
 
 export default function ScanViewerLandingPage() {
-  const { connected, port } = useCompanionApp();
+  const { connected, port, directory } = useCompanionApp();
   const { data: foldersData, isLoading: foldersLoading } = useCompanionFolders(port);
   const refreshIndex = useRefreshCompanionIndex();
+  const browseMutation = useBrowseDirectory();
+  const convertMutation = useConvertEddify();
   const ws = useCompanionWebSocket(port);
   const { tierTwoThickness, tierTwoProgress } = ws;
 
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
+  const [selectedEddifyFiles, setSelectedEddifyFiles] = useState<string[]>([]);
+  const [outputFolderName, setOutputFolderName] = useState('');
   const [composite, setComposite] = useState<CompositeData | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<{ pct: number; file: string; stage: string } | null>(null);
@@ -70,17 +74,44 @@ export default function ScanViewerLandingPage() {
   const prevServerSettingsRef = useRef<string>('');
 
   const folders = foldersData?.folders ?? [];
+  const ndeFolders = useMemo(() => folders.filter(f => f.type === 'nde'), [folders]);
+  const eddifyFiles = useMemo(() => folders.filter(f => f.type === 'eddify'), [folders]);
 
-  // Local gate overrides — persist user drag adjustments across WebSocket updates
+  const toggleEddify = useCallback((name: string) => {
+    setSelectedEddifyFiles(prev =>
+      prev.includes(name) ? prev.filter(f => f !== name) : [...prev, name],
+    );
+  }, []);
+
+  // Auto-populate output folder name from common prefix of selected eddify files
+  useEffect(() => {
+    if (selectedEddifyFiles.length === 0) { setOutputFolderName(''); return; }
+    // Strip .capture_acq extension, find common prefix
+    const cleaned = selectedEddifyFiles.map(n => n.replace(/\.capture_acq$/i, ''));
+    let prefix = cleaned[0];
+    for (let i = 1; i < cleaned.length; i++) {
+      while (cleaned[i].indexOf(prefix) !== 0 && prefix.length > 0) {
+        prefix = prefix.slice(0, -1);
+      }
+    }
+    // Clean trailing numbers, spaces, dashes, underscores
+    prefix = prefix.replace(/[\s\-_0-9]+$/, '').trim();
+    setOutputFolderName(prefix || 'Converted');
+  }, [selectedEddifyFiles]);
+
+  const handleConvert = useCallback(async () => {
+    if (!port || selectedEddifyFiles.length === 0 || !outputFolderName) return;
+    try {
+      await convertMutation.mutateAsync({ port, captureDirs: selectedEddifyFiles, outputFolder: outputFolderName });
+      setSelectedEddifyFiles([]);
+    } catch { /* error is in convertMutation.error */ }
+  }, [port, selectedEddifyFiles, outputFolderName, convertMutation]);
+
   const [gateOverrides, setGateOverrides] = useState<Record<number, Partial<GateOverlay>>>({});
-  // Visible region — stored as state so the expand effect in useThicknessEngine triggers,
-  // but only updated when the region actually changes (prevents infinite re-render loops).
   const [visibleRegion, setVisibleRegion] = useState<{ x0: number; y0: number; x1: number; y1: number } | undefined>(undefined);
   const handleVisibleRegionChange = useCallback((region: { x0: number; y0: number; x1: number; y1: number }) => {
     setVisibleRegion(prev => {
-      if (prev && prev.x0 === region.x0 && prev.y0 === region.y0 && prev.x1 === region.x1 && prev.y1 === region.y1) {
-        return prev; // same reference — no re-render
-      }
+      if (prev && prev.x0 === region.x0 && prev.y0 === region.y0 && prev.x1 === region.x1 && prev.y1 === region.y1) return prev;
       return region;
     });
   }, []);
@@ -89,14 +120,10 @@ export default function ScanViewerLandingPage() {
     setGateOverrides(prev => ({ ...prev, [gateId]: { ...prev[gateId], ...updates } }));
   }, []);
 
-  // Merge server gates with local overrides
   const effectiveGates = useMemo(() => {
-    const serverGates = ws.cursorData?.gates ?? [];
-    return serverGates.map(g => ({ ...g, ...gateOverrides[g.id] }));
+    return (ws.cursorData?.gates ?? []).map(g => ({ ...g, ...gateOverrides[g.id] }));
   }, [ws.cursorData?.gates, gateOverrides]);
 
-  // Derive amplitude filter from the measurement gate's threshold.
-  // The measurement gate is the second gate in A-I mode (id=1) or third in B-A mode (id=2).
   const amplitudeMin = useMemo(() => {
     const measGateId = gateSettings.gateMode === 'B-A' ? 2 : 1;
     const override = gateOverrides[measGateId];
@@ -121,7 +148,6 @@ export default function ScanViewerLandingPage() {
 
   const hasGateOverrides = Object.keys(gateOverrides).length > 0;
 
-  // --- Tier 2: send full-res request to companion on gate release ---
   const handleGateRelease = useCallback(() => {
     if (!refGate || !measGate || selectedFolders.length === 0) return;
     ws.sendGateAdjust({
@@ -131,7 +157,6 @@ export default function ScanViewerLandingPage() {
     });
   }, [ws, refGate, measGate, selectedFolders]);
 
-  // Use Tier 2 result when available, otherwise fall back to Tier 1 worker result
   const effectiveThicknessOverride = tierTwoThickness ?? (hasGateOverrides ? workerThickness : null);
 
   const toggleFolder = useCallback((name: string) => {
@@ -140,8 +165,7 @@ export default function ScanViewerLandingPage() {
     );
   }, []);
 
-  // Poll companion for generation progress while active
-  useEffect(() => {
+  useEffect(() => { // Poll generation progress
     if ((!isGenerating && !isRegenerating) || !port) {
       setGenerationProgress(null);
       return;
@@ -232,7 +256,6 @@ export default function ScanViewerLandingPage() {
     });
   }, [ws, selectedFolders, gateSettings]);
 
-  // --- Auto-regenerate when server-side gate settings change ---
   const regenerate = useCallback(async () => {
     if (!port || selectedFolders.length === 0) return;
 
@@ -290,25 +313,10 @@ export default function ScanViewerLandingPage() {
   if (!connected) {
     return (
       <div style={{ padding: 24, maxWidth: 900 }}>
-        <PageHeader
-          title="Scan Viewer"
-          subtitle="Interactive C-scan heatmap with B-scan and A-scan cursors"
-          icon={<ViewerIcon />}
-        />
-        <div style={{
-          padding: '40px 24px',
-          textAlign: 'center',
-          background: 'var(--surface-elevated)',
-          borderRadius: 'var(--radius-sm)',
-          border: '1px solid var(--border-subtle)',
-          marginTop: 20,
-        }}>
-          <div style={{ fontSize: '0.9rem', color: 'var(--text-tertiary)', marginBottom: 8 }}>
-            Companion app not connected
-          </div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-quaternary)', lineHeight: 1.5 }}>
-            Start the NDT Companion app and set the directory to a folder containing NDE file subfolders.
-          </div>
+        <PageHeader title="Scan Viewer" subtitle="Interactive C-scan heatmap with B-scan and A-scan cursors" icon={<ViewerIcon />} />
+        <div style={{ padding: '40px 24px', textAlign: 'center', background: 'var(--surface-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', marginTop: 20 }}>
+          <div style={{ fontSize: '0.9rem', color: 'var(--text-tertiary)', marginBottom: 8 }}>Companion app not connected</div>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-quaternary)', lineHeight: 1.5 }}>Start the NDT Companion app and set the directory to a folder containing NDE file subfolders.</div>
         </div>
       </div>
     );
@@ -316,142 +324,134 @@ export default function ScanViewerLandingPage() {
 
   // --- Connected, no composite yet ---
   if (!composite) {
+    const cardStyle: React.CSSProperties = { background: 'var(--surface-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)' };
+    const badgeBase: React.CSSProperties = { fontSize: '0.65rem', padding: '2px 6px', borderRadius: 3, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' };
+    const fileRowBase: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 'var(--radius-sm)', cursor: 'pointer', width: '100%', textAlign: 'left' };
+    const convertDisabled = convertMutation.isPending || !outputFolderName;
+
     return (
       <div style={{ padding: 24, maxWidth: 900 }}>
-        <PageHeader
-          title="Scan Viewer"
-          subtitle="Interactive C-scan heatmap with B-scan and A-scan cursors"
-          icon={<ViewerIcon />}
-        />
+        <PageHeader title="Scan Viewer" subtitle="Interactive C-scan heatmap with B-scan and A-scan cursors" icon={<ViewerIcon />} />
 
-        {/* Folder selection */}
-        <div style={{ marginTop: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-quaternary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Select scan folders ({selectedFolders.length} selected)
-            </span>
-            <button
-              onClick={() => port && refreshIndex.mutate(port)}
-              disabled={refreshIndex.isPending}
-              style={{ fontSize: '0.72rem', color: '#60a5fa', background: 'none', border: 'none', cursor: 'pointer' }}
-            >
-              {refreshIndex.isPending ? 'Refreshing...' : 'Refresh'}
-            </button>
-          </div>
+        {/* Directory bar */}
+        <div style={{ ...cardStyle, marginTop: 20, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
+          <FolderIcon />
+          <span style={{ flex: 1, fontSize: '0.82rem', color: directory ? 'var(--text-secondary)' : 'var(--text-quaternary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {directory || 'No directory set'}
+          </span>
+          <button onClick={() => port && browseMutation.mutate(port)} disabled={browseMutation.isPending}
+            style={{ fontSize: '0.75rem', padding: '4px 14px', borderRadius: 4, border: '1px solid #3b82f6', background: 'rgba(59,130,246,0.1)', color: '#93c5fd', cursor: browseMutation.isPending ? 'not-allowed' : 'pointer', opacity: browseMutation.isPending ? 0.5 : 1, flexShrink: 0 }}>
+            {browseMutation.isPending ? 'Opening...' : 'Browse'}
+          </button>
+        </div>
 
-          {foldersLoading && (
-            <div style={{ padding: 16, color: 'var(--text-tertiary)', fontSize: '0.8rem' }}>Loading folders...</div>
-          )}
-
-          {!foldersLoading && folders.length === 0 && (
-            <div style={{
-              padding: '24px 16px',
-              textAlign: 'center',
-              background: 'var(--surface-elevated)',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border-subtle)',
-              fontSize: '0.8rem',
-              color: 'var(--text-quaternary)',
-            }}>
-              No subfolders with .nde files found. Set the companion directory to a parent folder containing scan subfolders.
+        {directory ? (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-quaternary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Select scan folders ({selectedFolders.length} selected)
+              </span>
+              <button onClick={() => port && refreshIndex.mutate(port)} disabled={refreshIndex.isPending}
+                style={{ fontSize: '0.72rem', color: '#60a5fa', background: 'none', border: 'none', cursor: 'pointer' }}>
+                {refreshIndex.isPending ? 'Refreshing...' : 'Refresh'}
+              </button>
             </div>
-          )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {folders.map(f => {
-              const selected = selectedFolders.includes(f.name);
-              return (
-                <button
-                  key={f.name}
-                  onClick={() => toggleFolder(f.name)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '10px 14px',
-                    background: selected ? 'rgba(59,130,246,0.1)' : 'var(--surface-elevated)',
-                    border: `1px solid ${selected ? '#3b82f6' : 'var(--border-subtle)'}`,
-                    borderRadius: 'var(--radius-sm)',
-                    cursor: 'pointer',
-                    width: '100%',
-                    textAlign: 'left',
-                  }}
-                >
-                  <span style={{ fontSize: '0.85rem', color: selected ? '#93c5fd' : 'var(--text-secondary)' }}>
-                    {f.name}
-                  </span>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-quaternary)' }}>
-                    {f.fileCount} file{f.fileCount !== 1 ? 's' : ''}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Generate button */}
-          <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-            {isGenerating ? (
-              <button
-                onClick={handleCancel}
-                style={{
-                  fontSize: '0.82rem',
-                  padding: '8px 24px',
-                  borderRadius: 6,
-                  border: '1px solid #ef4444',
-                  background: 'rgba(239,68,68,0.1)',
-                  color: '#f87171',
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-            ) : (
-              <button
-                onClick={handleGenerate}
-                disabled={selectedFolders.length === 0}
-                style={{
-                  fontSize: '0.82rem',
-                  padding: '8px 24px',
-                  borderRadius: 6,
-                  border: '1px solid #3b82f6',
-                  background: 'rgba(59,130,246,0.15)',
-                  color: '#93c5fd',
-                  cursor: selectedFolders.length === 0 ? 'not-allowed' : 'pointer',
-                  opacity: selectedFolders.length === 0 ? 0.4 : 1,
-                }}
-              >
-                Generate Composite
-              </button>
-            )}
-            {isGenerating && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <RandomMatrixSpinner size={20} />
-                  <span style={{ fontSize: '0.78rem', color: '#93c5fd' }}>
-                    {generationProgress
-                      ? `${generationProgress.stage === 'envelope' ? 'Extracting envelopes' : 'Processing'}: ${generationProgress.file}`
-                      : `Generating composite from ${selectedFolders.length} folder${selectedFolders.length !== 1 ? 's' : ''}...`}
-                  </span>
-                </div>
-                <div style={{ width: 300, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
-                  <div style={{
-                    height: '100%',
-                    width: `${generationProgress?.pct ?? 0}%`,
-                    background: '#3b82f6',
-                    borderRadius: 2,
-                    transition: 'width 0.3s ease',
-                  }} />
-                </div>
+            {foldersLoading && <div style={{ padding: 16, color: 'var(--text-tertiary)', fontSize: '0.8rem' }}>Loading folders...</div>}
+            {!foldersLoading && folders.length === 0 && (
+              <div style={{ ...cardStyle, padding: '24px 16px', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-quaternary)' }}>
+                No scan files found in this directory. Choose a folder containing NDE subfolders or eddify .capture_acq files.
               </div>
             )}
-          </div>
 
-          {error && (
-            <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 6, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171', fontSize: '0.8rem' }}>
-              {error}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {ndeFolders.map(f => {
+                const sel = selectedFolders.includes(f.name);
+                return (
+                  <button key={f.name} onClick={() => toggleFolder(f.name)}
+                    style={{ ...fileRowBase, background: sel ? 'rgba(59,130,246,0.1)' : 'var(--surface-elevated)', border: `1px solid ${sel ? '#3b82f6' : 'var(--border-subtle)'}` }}>
+                    <FolderSmallIcon />
+                    <span style={{ flex: 1, fontSize: '0.85rem', color: sel ? '#93c5fd' : 'var(--text-secondary)' }}>{f.name}</span>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-quaternary)', marginRight: 8 }}>{f.fileCount} file{f.fileCount !== 1 ? 's' : ''}</span>
+                    <span style={{ ...badgeBase, background: 'rgba(59,130,246,0.15)', color: '#60a5fa' }}>NDE</span>
+                  </button>
+                );
+              })}
+              {eddifyFiles.map(f => {
+                const sel = selectedEddifyFiles.includes(f.name);
+                return (
+                  <button key={f.name} onClick={() => toggleEddify(f.name)}
+                    style={{ ...fileRowBase, background: sel ? 'rgba(217,119,6,0.1)' : 'var(--surface-elevated)', border: `1px solid ${sel ? '#d97706' : 'var(--border-subtle)'}` }}>
+                    <PackageIcon />
+                    <span style={{ flex: 1, fontSize: '0.85rem', color: sel ? '#fbbf24' : 'var(--text-secondary)' }}>{f.name}</span>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-quaternary)', marginRight: 8 }}>{f.fileCount} file{f.fileCount !== 1 ? 's' : ''}</span>
+                    <span style={{ ...badgeBase, background: 'rgba(217,119,6,0.15)', color: '#d97706' }}>EDDIFY</span>
+                  </button>
+                );
+              })}
             </div>
-          )}
-        </div>
+
+            {/* Eddify conversion panel */}
+            {selectedEddifyFiles.length > 0 && (
+              <div style={{ marginTop: 12, padding: '14px 16px', ...cardStyle, borderColor: 'rgba(217,119,6,0.3)' }}>
+                <div style={{ fontSize: '0.78rem', color: '#fbbf24', marginBottom: 10 }}>
+                  Convert {selectedEddifyFiles.length} eddify file{selectedEddifyFiles.length !== 1 ? 's' : ''} to NDE
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <label style={{ fontSize: '0.72rem', color: 'var(--text-quaternary)', flexShrink: 0 }}>Output folder:</label>
+                  <input type="text" value={outputFolderName} onChange={e => setOutputFolderName(e.target.value)}
+                    style={{ flex: 1, fontSize: '0.8rem', padding: '5px 10px', borderRadius: 4, border: '1px solid var(--border-subtle)', background: 'var(--surface-base)', color: 'var(--text-primary)', outline: 'none' }} />
+                  <button onClick={handleConvert} disabled={convertDisabled}
+                    style={{ fontSize: '0.75rem', padding: '5px 16px', borderRadius: 4, border: '1px solid #d97706', background: 'rgba(217,119,6,0.15)', color: '#fbbf24', cursor: convertDisabled ? 'not-allowed' : 'pointer', opacity: convertDisabled ? 0.5 : 1, flexShrink: 0 }}>
+                    {convertMutation.isPending ? 'Converting...' : 'Convert'}
+                  </button>
+                </div>
+                {convertMutation.isPending && (
+                  <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <RandomMatrixSpinner size={16} />
+                    <span style={{ fontSize: '0.75rem', color: '#fbbf24' }}>Converting files...</span>
+                  </div>
+                )}
+                {convertMutation.isSuccess && <div style={{ marginTop: 8, fontSize: '0.75rem', color: '#4ade80' }}>Conversion complete. New NDE folder should appear in the list above.</div>}
+                {convertMutation.isError && <div style={{ marginTop: 8, fontSize: '0.75rem', color: '#f87171' }}>Conversion failed: {convertMutation.error instanceof Error ? convertMutation.error.message : 'Unknown error'}</div>}
+              </div>
+            )}
+
+            {/* Generate button */}
+            <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+              {isGenerating ? (
+                <button onClick={handleCancel}
+                  style={{ fontSize: '0.82rem', padding: '8px 24px', borderRadius: 6, border: '1px solid #ef4444', background: 'rgba(239,68,68,0.1)', color: '#f87171', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+              ) : (
+                <button onClick={handleGenerate} disabled={selectedFolders.length === 0}
+                  style={{ fontSize: '0.82rem', padding: '8px 24px', borderRadius: 6, border: '1px solid #3b82f6', background: 'rgba(59,130,246,0.15)', color: '#93c5fd', cursor: selectedFolders.length === 0 ? 'not-allowed' : 'pointer', opacity: selectedFolders.length === 0 ? 0.4 : 1 }}>
+                  Generate Composite{selectedFolders.length > 0 ? ` (${selectedFolders.length} folder${selectedFolders.length !== 1 ? 's' : ''})` : ''}
+                </button>
+              )}
+              {isGenerating && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <RandomMatrixSpinner size={20} />
+                    <span style={{ fontSize: '0.78rem', color: '#93c5fd' }}>
+                      {generationProgress ? `${generationProgress.stage === 'envelope' ? 'Extracting envelopes' : 'Processing'}: ${generationProgress.file}` : `Generating composite from ${selectedFolders.length} folder${selectedFolders.length !== 1 ? 's' : ''}...`}
+                    </span>
+                  </div>
+                  <div style={{ width: 300, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${generationProgress?.pct ?? 0}%`, background: '#3b82f6', borderRadius: 2, transition: 'width 0.3s ease' }} />
+                  </div>
+                </div>
+              )}
+            </div>
+            {error && <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 6, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171', fontSize: '0.8rem' }}>{error}</div>}
+          </div>
+        ) : (
+          <div style={{ ...cardStyle, marginTop: 16, padding: '32px 24px', textAlign: 'center' }}>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: 6 }}>No directory selected</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-quaternary)', lineHeight: 1.5 }}>Click Browse above to choose a folder containing NDE subfolders or eddify .capture_acq files.</div>
+          </div>
+        )}
       </div>
     );
   }
@@ -671,20 +671,28 @@ export default function ScanViewerLandingPage() {
   );
 }
 
-function StatRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-      <span style={{ color: 'var(--text-tertiary)' }}>{label}</span>
-      <span style={{ color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
-    </div>
-  );
-}
+const StatRow = ({ label, value }: { label: string; value: string }) => (
+  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+    <span style={{ color: 'var(--text-tertiary)' }}>{label}</span>
+    <span style={{ color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+  </div>
+);
 
-function ViewerIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="2" width="20" height="20" rx="2" />
-      <path d="M2 12h20M12 2v20" />
-    </svg>
-  );
-}
+const svgProps = { fill: 'none' as const, strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+const folderPath = 'M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z';
+
+const ViewerIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" {...svgProps}><rect x="2" y="2" width="20" height="20" rx="2" /><path d="M2 12h20M12 2v20" /></svg>
+);
+const FolderIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" {...svgProps}><path d={folderPath} /></svg>
+);
+const FolderSmallIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" stroke="#60a5fa" {...svgProps}><path d={folderPath} /></svg>
+);
+const PackageIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" stroke="#d97706" {...svgProps}>
+    <path d="M16.5 9.4l-9-5.19M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+    <polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />
+  </svg>
+);

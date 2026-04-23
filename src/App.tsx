@@ -29,7 +29,8 @@ const DocumentsPage = lazy(() => import('./pages/documents/index.tsx'));
 const ProjectListPage = lazy(() => import('./pages/projects/ProjectListPage'));
 const ProjectSetupPage = lazy(() => import('./pages/projects/ProjectSetupPage'));
 const ProjectDetailPage = lazy(() => import('./pages/projects/ProjectDetailPage'));
-const InspectionDetailPage = lazy(() => import('./pages/projects/InspectionDetailPage'));
+const VesselOverviewPage = lazy(() => import('./pages/projects/VesselOverviewPage'));
+const ReportBuilderPage = lazy(() => import('./pages/projects/ReportBuilderPage'));
 const ReportPage = lazy(() => import('./pages/projects/ReportPage'));
 const ScanViewerPage = lazy(() => import('./pages/projects/ScanViewerPage'));
 const ScanViewerLandingPage = lazy(() => import('./pages/ScanViewerLandingPage'));
@@ -178,7 +179,12 @@ function App() {
                                         } />
                                         <Route path="/projects/:projectId/vessels/:vesselId" element={
                                             <RequireTabVisible tabId="tools">
-                                                <ErrorBoundary><InspectionDetailPage /></ErrorBoundary>
+                                                <ErrorBoundary><VesselOverviewPage /></ErrorBoundary>
+                                            </RequireTabVisible>
+                                        } />
+                                        <Route path="/projects/:projectId/vessels/:vesselId/report-builder" element={
+                                            <RequireTabVisible tabId="tools">
+                                                <ErrorBoundary><ReportBuilderPage /></ErrorBoundary>
                                             </RequireTabVisible>
                                         } />
                                         <Route path="/projects/:projectId/vessels/:vesselId/viewer" element={

@@ -1,12 +1,15 @@
 /**
- * InspectionDetailPage - Vessel Inspection Detail Hub
- * Central page for managing all inspection data for a single vessel within a project.
- * Sections mirror the PAUT report structure for direct report generation.
+ * VesselOverviewPage - Dashboard hub for vessel management.
+ * Provides identity, scope progress, report readiness, and quick actions.
+ * Navigates to Report Builder, Scan Viewer, and 3D Modeler.
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Box, MapPin, Calendar, Pencil, Radio, ChevronDown } from 'lucide-react';
+import {
+    ArrowLeft, Box, MapPin, Calendar, Pencil, Radio, ChevronDown,
+    ClipboardList, Eye, Cuboid,
+} from 'lucide-react';
 import { useUpdateProjectVessel } from '../../hooks/mutations/useInspectionProjectMutations';
 import { usePopulateFromCompanion } from '../../hooks/mutations/usePopulateFromCompanion';
 import {
@@ -14,8 +17,6 @@ import {
     useProjectVessel,
     useProjectProcedures,
     useVesselFiles,
-    useScanLogEntries,
-    useCalibrationLogEntries,
     useProjectScanComposites,
     useProjectVesselModels,
     useProjectImages,
@@ -23,20 +24,14 @@ import {
 import { PageSpinner } from '../../components/ui/LoadingSpinner';
 import { VESSEL_STATUS_LABELS, VESSEL_STATUS_COLORS } from '../../types/inspection-project';
 import type { VesselStatus } from '../../types/inspection-project';
-import VesselDetailsSection from '../../components/projects/inspection-detail/VesselDetailsSection';
-import ProcedureSection from '../../components/projects/inspection-detail/ProcedureSection';
-import EquipmentSection from '../../components/projects/inspection-detail/EquipmentSection';
-import ScopeSection from '../../components/projects/inspection-detail/ScopeSection';
-import ModelsSection from '../../components/projects/inspection-detail/ModelsSection';
+import { VesselIdentityCard } from '../../components/projects/vessel-overview/VesselIdentityCard';
+import { ScopeProgressCard } from '../../components/projects/vessel-overview/ScopeProgressCard';
+import { ReportReadinessCard } from '../../components/projects/vessel-overview/ReportReadinessCard';
 import DocumentsSection from '../../components/projects/inspection-detail/DocumentsSection';
 import ImagePoolSection from '../../components/projects/inspection-detail/ImagePoolSection';
-import CalibrationLogSection from '../../components/projects/inspection-detail/CalibrationLogSection';
-import ScanLogSection from '../../components/projects/inspection-detail/ScanLogSection';
-import ResultsSummarySection from '../../components/projects/inspection-detail/ResultsSummarySection';
-import SignoffSection from '../../components/projects/inspection-detail/SignoffSection';
-import ReportGenerationSection from '../../components/projects/inspection-detail/ReportGenerationSection';
+import ModelsSection from '../../components/projects/inspection-detail/ModelsSection';
 
-export default function InspectionDetailPage() {
+export default function VesselOverviewPage() {
     const { projectId, vesselId } = useParams<{ projectId: string; vesselId: string }>();
     const navigate = useNavigate();
 
@@ -44,8 +39,6 @@ export default function InspectionDetailPage() {
     const { data: vessel, isLoading: vesselLoading } = useProjectVessel(vesselId);
     const { data: procedures = [] } = useProjectProcedures(projectId);
     const { data: files = [] } = useVesselFiles(vesselId);
-    const { data: scanLogEntries = [] } = useScanLogEntries(vesselId);
-    const { data: calLogEntries = [] } = useCalibrationLogEntries(vesselId);
     const { data: images = [] } = useProjectImages(vesselId);
     const vesselIds = vesselId ? [vesselId] : [];
     const { data: composites = [] } = useProjectScanComposites(vesselIds);
@@ -65,7 +58,7 @@ export default function InspectionDetailPage() {
     const handlePopulateFromCompanion = useCallback(async () => {
         if (!vessel || !projectId) return;
         try {
-            const result = await populateFromCompanion(vessel, projectId, scanLogEntries, calLogEntries);
+            const result = await populateFromCompanion(vessel, projectId, [], []);
             const parts: string[] = [];
             if (result.equipmentUpdated) parts.push('equipment');
             if (result.vesselDetailsUpdated) parts.push('vessel details');
@@ -82,7 +75,7 @@ export default function InspectionDetailPage() {
             setPopulateMsg({ type: 'error', text: err instanceof Error ? err.message : 'Population failed' });
         }
         setTimeout(() => setPopulateMsg(null), 6000);
-    }, [vessel, projectId, scanLogEntries, calLogEntries, populateFromCompanion]);
+    }, [vessel, projectId, populateFromCompanion]);
 
     /* --- Inline editing for vessel name --- */
     const [editingName, setEditingName] = useState(false);
@@ -142,7 +135,7 @@ export default function InspectionDetailPage() {
         return () => document.removeEventListener('mousedown', handleClick);
     }, []);
 
-    if (projectLoading || vesselLoading) return <PageSpinner message="Loading inspection details..." />;
+    if (projectLoading || vesselLoading) return <PageSpinner message="Loading vessel overview..." />;
 
     if (!project || !vessel) {
         return (
@@ -171,9 +164,9 @@ export default function InspectionDetailPage() {
                 borderBottom: '1px solid var(--glass-border)',
                 background: 'var(--surface-raised)',
             }}>
-                {/* Back nav + trip context row */}
+                {/* Back nav to project detail */}
                 <button
-                    onClick={() => navigate('/projects')}
+                    onClick={() => navigate(`/projects/${projectId}`)}
                     style={{
                         display: 'flex', alignItems: 'center', gap: 6,
                         background: 'none', border: 'none', color: 'var(--text-tertiary)',
@@ -413,7 +406,6 @@ export default function InspectionDetailPage() {
                                     background: 'var(--surface-elevated)', border: '1px solid var(--border-subtle)',
                                     borderRadius: 8, padding: 4, minWidth: 220, boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
                                 }}>
-                                    {/* New model — always available */}
                                     <button
                                         onClick={() => { setModelerMenuOpen(false); navigate(`/vessel-modeler?project=${projectId}&vessel=${vesselId}`); }}
                                         style={{
@@ -429,7 +421,6 @@ export default function InspectionDetailPage() {
                                         New Model
                                     </button>
 
-                                    {/* Saved models */}
                                     {linkedModels.length > 0 && (
                                         <>
                                             <div style={{ height: 1, background: 'var(--border-subtle)', margin: '4px 8px' }} />
@@ -469,7 +460,7 @@ export default function InspectionDetailPage() {
                 </div>
             </div>
 
-            {/* Sections — ordered by inspection workflow */}
+            {/* Body */}
             <div style={{ padding: '24px 40px 40px', display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {populateMsg && (
                     <div style={{
@@ -486,26 +477,68 @@ export default function InspectionDetailPage() {
                         {populateMsg.text}
                     </div>
                 )}
-                <VesselDetailsSection vessel={vessel} projectId={projectId!} files={files} />
-                <ProcedureSection vessel={vessel} projectId={projectId!} procedures={procedures} />
-                <EquipmentSection vessel={vessel} projectId={projectId!} projectEquipment={project.equipment} />
-                <ScopeSection vessel={vessel} projectId={projectId!} composites={composites} vesselModels={vesselModels} />
-                <ModelsSection vessel={vessel} projectId={projectId!} composites={composites} vesselModels={vesselModels} />
+
+                {/* Two-column card grid */}
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))',
+                    gap: 16,
+                }}>
+                    {/* Row 1 */}
+                    <VesselIdentityCard vessel={vessel} projectId={projectId!} procedures={procedures} />
+
+                    {/* Quick Actions card */}
+                    <div className="glass-card" style={{ padding: '20px 24px' }}>
+                        <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 16px' }}>
+                            Quick Actions
+                        </h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            <button
+                                className="btn btn--primary"
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}
+                                onClick={() => navigate(`/projects/${projectId}/vessels/${vesselId}/report-builder`)}
+                            >
+                                <ClipboardList size={16} />
+                                Report Builder
+                            </button>
+                            <button
+                                className="btn btn--secondary"
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}
+                                onClick={() => navigate(`/projects/${projectId}/vessels/${vesselId}/viewer`)}
+                            >
+                                <Eye size={16} />
+                                Scan Viewer
+                            </button>
+                            <button
+                                className="btn btn--secondary"
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}
+                                onClick={() => navigate(`/vessel-modeler?project=${projectId}&vessel=${vesselId}`)}
+                            >
+                                <Cuboid size={16} />
+                                3D Modeler
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Row 2 */}
+                    <ScopeProgressCard
+                        vesselId={vesselId!}
+                        projectId={projectId!}
+                        composites={composites}
+                        vesselModels={vesselModels}
+                    />
+                    <ReportReadinessCard
+                        vessel={vessel}
+                        projectId={projectId!}
+                        files={files}
+                        compositeCount={composites.length}
+                    />
+                </div>
+
+                {/* Full-width sections */}
                 <DocumentsSection vessel={vessel} projectId={projectId!} files={files} />
                 <ImagePoolSection vesselId={vesselId!} projectId={projectId!} images={images} />
-                <CalibrationLogSection vesselId={vesselId!} entries={calLogEntries} />
-                <ScanLogSection vesselId={vesselId!} entries={scanLogEntries} composites={composites} />
-                <ResultsSummarySection vessel={vessel} projectId={projectId!} />
-                <SignoffSection vessel={vessel} projectId={projectId!} />
-                <ReportGenerationSection
-                    vessel={vessel}
-                    project={project}
-                    procedures={procedures}
-                    files={files}
-                    scanLogEntries={scanLogEntries}
-                    calLogEntries={calLogEntries}
-                    compositeCount={composites.length}
-                />
+                <ModelsSection vessel={vessel} projectId={projectId!} composites={composites} vesselModels={vesselModels} />
             </div>
         </div>
     );
