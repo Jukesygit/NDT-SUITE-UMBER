@@ -7,7 +7,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Camera, ChevronLeft, Upload, X, ImagePlus } from 'lucide-react';
+import { Camera, ChevronLeft, Upload, X, ImagePlus, Trash2 } from 'lucide-react';
 import type { AnnotationShapeConfig, AnnotationShapeType, ThicknessThresholds, VesselState } from '../types';
 import type { ProjectImage } from '../../../types/inspection-project';
 import { getProjectFileUrl } from '../../../services/inspection-project-service';
@@ -350,12 +350,37 @@ export default function InspectionPanel({
 
       {/* Attachments */}
       <div className="vm-inspection-section">
-        <div className="vm-inspection-section-title">
-          Attachments
+        <div className="vm-inspection-section-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>
+            Attachments
+            {annotation.attachments && annotation.attachments.filter(a => a.type !== 'scan-capture').length > 0 && (
+              <span style={{ fontWeight: 400, fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginLeft: 6 }}>
+                ({annotation.attachments.filter(a => a.type !== 'scan-capture').length})
+              </span>
+            )}
+          </span>
           {annotation.attachments && annotation.attachments.filter(a => a.type !== 'scan-capture').length > 0 && (
-            <span style={{ fontWeight: 400, fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginLeft: 6 }}>
-              ({annotation.attachments.filter(a => a.type !== 'scan-capture').length})
-            </span>
+            <button
+              onClick={() => {
+                const nonScan = annotation.attachments?.filter(a => a.type !== 'scan-capture') ?? [];
+                for (const att of nonScan) onDeleteAttachment(att.id);
+              }}
+              title="Clear all attachments"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '2px 6px',
+                background: 'rgba(239,68,68,0.1)',
+                border: '1px solid rgba(239,68,68,0.2)',
+                borderRadius: 4,
+                color: '#f87171',
+                cursor: 'pointer',
+                fontSize: '0.65rem',
+              }}
+            >
+              <Trash2 size={10} /> Clear All
+            </button>
           )}
         </div>
 
