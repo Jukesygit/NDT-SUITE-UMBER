@@ -496,6 +496,7 @@ export default function ReportBuilderPage() {
                     scanLogEntries={scanLogEntries}
                     calLogEntries={calLogEntries}
                     compositeCount={composites.length}
+                    overviewUrl={`/projects/${projectId}/vessels/${vesselId}`}
                 />
             </div>
         </div>

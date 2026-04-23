@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import CollapsibleSection from './CollapsibleSection';
 import type {
     ProjectVessel,
@@ -16,12 +17,14 @@ interface ReportGenerationSectionProps {
     scanLogEntries: ScanLogEntry[];
     calLogEntries: CalibrationLogEntry[];
     compositeCount: number;
+    overviewUrl?: string;
 }
 
 interface CheckItem {
     label: string;
     ready: boolean;
     info?: string;
+    external?: boolean;
 }
 
 function StatusDot({ ready }: { ready: boolean }) {
@@ -47,7 +50,9 @@ export default function ReportGenerationSection({
     scanLogEntries,
     calLogEntries,
     compositeCount,
+    overviewUrl,
 }: ReportGenerationSectionProps) {
+    const navigate = useNavigate();
     const checks: CheckItem[] = [
         {
             label: 'Component Details',
@@ -73,10 +78,12 @@ export default function ReportGenerationSection({
             label: 'Annotations',
             ready: true,
             info: `${compositeCount} composite${compositeCount !== 1 ? 's' : ''}`,
+            external: true,
         },
         {
             label: 'Documents',
             ready: files.length > 0,
+            external: true,
         },
         {
             label: 'Results Summary',
@@ -139,7 +146,27 @@ export default function ReportGenerationSection({
                                       : 'var(--text-quaternary)',
                             }}
                         >
-                            {item.info ?? (item.ready ? 'Ready' : 'Not filled')}
+                            {item.info ??
+                                (item.ready
+                                    ? 'Ready'
+                                    : overviewUrl && item.external
+                                      ? (
+                                            <a
+                                                href={overviewUrl}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    navigate(overviewUrl);
+                                                }}
+                                                style={{
+                                                    color: 'var(--accent-primary)',
+                                                    textDecoration: 'none',
+                                                    cursor: 'pointer',
+                                                }}
+                                            >
+                                                Manage on overview
+                                            </a>
+                                        )
+                                      : 'Not filled')}
                         </span>
                     </div>
                 ))}
