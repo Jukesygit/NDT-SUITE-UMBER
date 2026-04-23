@@ -3,7 +3,7 @@
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchComposite, refreshIndex } from '../../services/companion-service';
+import { fetchComposite, refreshIndex, browseDirectory, convertEddify } from '../../services/companion-service';
 import { saveScanCompositeBinary } from '../../services/scan-composite-service';
 import type { GateSettings } from '../../types/companion';
 import type { SaveScanCompositeBinaryParams } from '../../services/scan-composite-service';
@@ -45,6 +45,37 @@ export function useRefreshCompanionIndex() {
     mutationFn: (port: number) => refreshIndex(port),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['companion-folders'] });
+    },
+  });
+}
+
+/**
+ * Hook for opening the companion's native folder browser and setting the directory.
+ */
+export function useBrowseDirectory() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (port: number) => browseDirectory(port),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['companion-status'] });
+      qc.invalidateQueries({ queryKey: ['companion-folders'] });
+    },
+  });
+}
+
+/**
+ * Hook for converting eddify .capture_acq files to .nde format.
+ */
+export function useConvertEddify() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (params: { port: number; captureDirs: string[]; outputFolder: string }) =>
+      convertEddify(params.port, params.captureDirs, params.outputFolder),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['companion-folders'] });
+      qc.invalidateQueries({ queryKey: ['companion-status'] });
     },
   });
 }

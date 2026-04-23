@@ -76,6 +76,29 @@ export interface GateSettings {
 export interface CompanionFolder {
   name: string;
   fileCount: number;
+  type: 'nde' | 'eddify';
+}
+
+// ---------------------------------------------------------------------------
+// Eddify conversion (POST /convert-eddify)
+// ---------------------------------------------------------------------------
+
+export interface EddifyConvertResult {
+  output_folder: string;
+  results: Array<{
+    name: string;
+    status: 'ok' | 'error';
+    output?: string;
+    sizeMb?: number;
+    detail?: string;
+  }>;
+  files_converted: number;
+  files_failed: number;
+}
+
+export interface BrowseDirectoryResult {
+  path: string | null;
+  fileCount: number;
 }
 
 // ---------------------------------------------------------------------------
