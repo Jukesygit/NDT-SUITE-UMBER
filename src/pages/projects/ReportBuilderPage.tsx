@@ -1,7 +1,8 @@
 /**
- * InspectionDetailPage - Vessel Inspection Detail Hub
- * Central page for managing all inspection data for a single vessel within a project.
- * Sections mirror the PAUT report structure for direct report generation.
+ * ReportBuilderPage - Report Builder for a single vessel inspection.
+ * Contains report-specific sections: vessel details, procedure, equipment,
+ * calibration log, scan log, results summary, sign-off, and report generation.
+ * Scope, models, documents, and images have moved to VesselOverviewPage.
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -18,7 +19,6 @@ import {
     useCalibrationLogEntries,
     useProjectScanComposites,
     useProjectVesselModels,
-    useProjectImages,
 } from '../../hooks/queries/useInspectionProjects';
 import { PageSpinner } from '../../components/ui/LoadingSpinner';
 import { VESSEL_STATUS_LABELS, VESSEL_STATUS_COLORS } from '../../types/inspection-project';
@@ -26,17 +26,13 @@ import type { VesselStatus } from '../../types/inspection-project';
 import VesselDetailsSection from '../../components/projects/inspection-detail/VesselDetailsSection';
 import ProcedureSection from '../../components/projects/inspection-detail/ProcedureSection';
 import EquipmentSection from '../../components/projects/inspection-detail/EquipmentSection';
-import ScopeSection from '../../components/projects/inspection-detail/ScopeSection';
-import ModelsSection from '../../components/projects/inspection-detail/ModelsSection';
-import DocumentsSection from '../../components/projects/inspection-detail/DocumentsSection';
-import ImagePoolSection from '../../components/projects/inspection-detail/ImagePoolSection';
 import CalibrationLogSection from '../../components/projects/inspection-detail/CalibrationLogSection';
 import ScanLogSection from '../../components/projects/inspection-detail/ScanLogSection';
 import ResultsSummarySection from '../../components/projects/inspection-detail/ResultsSummarySection';
 import SignoffSection from '../../components/projects/inspection-detail/SignoffSection';
 import ReportGenerationSection from '../../components/projects/inspection-detail/ReportGenerationSection';
 
-export default function InspectionDetailPage() {
+export default function ReportBuilderPage() {
     const { projectId, vesselId } = useParams<{ projectId: string; vesselId: string }>();
     const navigate = useNavigate();
 
@@ -46,7 +42,6 @@ export default function InspectionDetailPage() {
     const { data: files = [] } = useVesselFiles(vesselId);
     const { data: scanLogEntries = [] } = useScanLogEntries(vesselId);
     const { data: calLogEntries = [] } = useCalibrationLogEntries(vesselId);
-    const { data: images = [] } = useProjectImages(vesselId);
     const vesselIds = vesselId ? [vesselId] : [];
     const { data: composites = [] } = useProjectScanComposites(vesselIds);
     const { data: vesselModels = [] } = useProjectVesselModels(vesselIds);
@@ -173,7 +168,7 @@ export default function InspectionDetailPage() {
             }}>
                 {/* Back nav + trip context row */}
                 <button
-                    onClick={() => navigate('/projects')}
+                    onClick={() => navigate(`/projects/${projectId}/vessels/${vesselId}`)}
                     style={{
                         display: 'flex', alignItems: 'center', gap: 6,
                         background: 'none', border: 'none', color: 'var(--text-tertiary)',
@@ -184,7 +179,7 @@ export default function InspectionDetailPage() {
                     onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-tertiary)'; }}
                 >
                     <ArrowLeft size={14} />
-                    {project.name}
+                    {vessel.vessel_tag ? `${vessel.vessel_tag} — ` : ''}{vessel.vessel_name}
                 </button>
 
                 {/* Trip context — client, site, dates */}
@@ -489,10 +484,6 @@ export default function InspectionDetailPage() {
                 <VesselDetailsSection vessel={vessel} projectId={projectId!} files={files} />
                 <ProcedureSection vessel={vessel} projectId={projectId!} procedures={procedures} />
                 <EquipmentSection vessel={vessel} projectId={projectId!} projectEquipment={project.equipment} />
-                <ScopeSection vessel={vessel} projectId={projectId!} composites={composites} vesselModels={vesselModels} />
-                <ModelsSection vessel={vessel} projectId={projectId!} composites={composites} vesselModels={vesselModels} />
-                <DocumentsSection vessel={vessel} projectId={projectId!} files={files} />
-                <ImagePoolSection vesselId={vesselId!} projectId={projectId!} images={images} />
                 <CalibrationLogSection vesselId={vesselId!} entries={calLogEntries} />
                 <ScanLogSection vesselId={vesselId!} entries={scanLogEntries} composites={composites} />
                 <ResultsSummarySection vessel={vessel} projectId={projectId!} />
