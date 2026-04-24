@@ -91,7 +91,7 @@ export function useCompanionImage(params: UseCompanionImageParams): UseCompanion
         }
       } else {
         consecutiveSlowRef.current = 0;
-        if (degraded) setDegraded(false);
+        setDegraded(false);
       }
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') return; // expected
@@ -100,7 +100,7 @@ export function useCompanionImage(params: UseCompanionImageParams): UseCompanion
         setIsLoading(false);
       }
     }
-  }, [port, type, folders, scanMm, indexMm, width, height, gateSettings, enabled, degraded]);
+  }, [port, type, folders, scanMm, indexMm, width, height, gateSettings, enabled]);
 
   // Fetch on param change
   useEffect(() => {

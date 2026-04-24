@@ -24,21 +24,6 @@ import ScanViewerToolbar from '../components/projects/scan-viewer/ScanViewerTool
 import type { CompositeData, GateSettings } from '../types/companion';
 import { DEFAULT_GATE_SETTINGS } from '../types/companion';
 
-function deriveRefGate(gates: GateOverlay[], gateMode: string): GatePosition | null {
-  // A-I mode: ref = Gate I (id 0). B-A mode: ref = Gate A (id 1)
-  const refId = gateMode === 'B-A' ? 1 : 0;
-  const gate = gates.find(g => g.id === refId);
-  if (!gate) return null;
-  return { startUs: gate.startUs, endUs: gate.endUs, thresholdPct: gate.thresholdPct };
-}
-
-function deriveMeasGate(gates: GateOverlay[], gateMode: string): GatePosition | null {
-  // A-I mode: meas = Gate A (id 1). B-A mode: meas = Gate B (id 2)
-  const measId = gateMode === 'B-A' ? 2 : 1;
-  const gate = gates.find(g => g.id === measId);
-  if (!gate) return null;
-  return { startUs: gate.startUs, endUs: gate.endUs, thresholdPct: gate.thresholdPct };
-}
 
 /** Gate settings that require companion reprocessing (server-side). */
 const SERVER_GATE_KEYS: (keyof GateSettings)[] = [
@@ -69,6 +54,7 @@ export default function ScanViewerLandingPage() {
   const [cursorIndexMm, setCursorIndexMm] = useState(0);
   const [gateSettings, setGateSettings] = useState<GateSettings>({ ...DEFAULT_GATE_SETTINGS });
   const [colormap, setColormap] = useState('Jet');
+  const [delayMm, setDelayMm] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const prevServerSettingsRef = useRef<string>('');
@@ -124,14 +110,31 @@ export default function ScanViewerLandingPage() {
     return (ws.cursorData?.gates ?? []).map(g => ({ ...g, ...gateOverrides[g.id] }));
   }, [ws.cursorData?.gates, gateOverrides]);
 
-  const amplitudeMin = useMemo(() => {
-    const measGateId = gateSettings.gateMode === 'B-A' ? 2 : 1;
-    const override = gateOverrides[measGateId];
-    return override?.thresholdPct ?? null;
-  }, [gateOverrides, gateSettings.gateMode]);
+  // Derive ref/meas gates from ONLY the relevant overrides so that moving
+  // an irrelevant gate (e.g. Gate B in A-I mode) doesn't create new object
+  // references and trigger the thickness engine.
+  const refId = gateSettings.gateMode === 'B-A' ? 1 : 0;
+  const measId = gateSettings.gateMode === 'B-A' ? 2 : 1;
+  const refOverride = gateOverrides[refId];
+  const measOverride = gateOverrides[measId];
 
-  const refGate = useMemo(() => deriveRefGate(effectiveGates, gateSettings.gateMode), [effectiveGates, gateSettings.gateMode]);
-  const measGate = useMemo(() => deriveMeasGate(effectiveGates, gateSettings.gateMode), [effectiveGates, gateSettings.gateMode]);
+  const amplitudeMin = useMemo(() => {
+    return measOverride?.thresholdPct ?? null;
+  }, [measOverride]);
+
+  const refGate = useMemo((): GatePosition | null => {
+    const base = (ws.cursorData?.gates ?? []).find(g => g.id === refId);
+    if (!base) return null;
+    const g = refOverride ? { ...base, ...refOverride } : base;
+    return { startUs: g.startUs, endUs: g.endUs, thresholdPct: g.thresholdPct };
+  }, [ws.cursorData?.gates, refId, refOverride]);
+
+  const measGate = useMemo((): GatePosition | null => {
+    const base = (ws.cursorData?.gates ?? []).find(g => g.id === measId);
+    if (!base) return null;
+    const g = measOverride ? { ...base, ...measOverride } : base;
+    return { startUs: g.startUs, endUs: g.endUs, thresholdPct: g.thresholdPct };
+  }, [ws.cursorData?.gates, measId, measOverride]);
 
   const { thickness: workerThickness } = useThicknessEngine({
     envelope: composite?.envelope ?? null,
@@ -146,10 +149,22 @@ export default function ScanViewerLandingPage() {
     visibleRegion,
   });
 
-  const hasGateOverrides = Object.keys(gateOverrides).length > 0;
+  // Only consider overrides on gates that affect the current measurement mode
+  const hasRelevantGateOverrides = useMemo(() => {
+    const refId = gateSettings.gateMode === 'B-A' ? 1 : 0;
+    const measId = gateSettings.gateMode === 'B-A' ? 2 : 1;
+    return gateOverrides[refId] !== undefined || gateOverrides[measId] !== undefined;
+  }, [gateOverrides, gateSettings.gateMode]);
+
+  // Track previous ref/meas gate values to avoid redundant Tier 2 requests
+  const prevGateKeyRef = useRef('');
 
   const handleGateRelease = useCallback(() => {
     if (!refGate || !measGate || selectedFolders.length === 0) return;
+    // Only trigger Tier 2 if the relevant gates actually changed
+    const key = `${refGate.startUs},${refGate.endUs},${refGate.thresholdPct},${measGate.startUs},${measGate.endUs},${measGate.thresholdPct}`;
+    if (key === prevGateKeyRef.current) return;
+    prevGateKeyRef.current = key;
     ws.sendGateAdjust({
       tier: 2,
       gates: { ref: refGate, meas: measGate },
@@ -157,7 +172,33 @@ export default function ScanViewerLandingPage() {
     });
   }, [ws, refGate, measGate, selectedFolders]);
 
-  const effectiveThicknessOverride = tierTwoThickness ?? (hasGateOverrides ? workerThickness : null);
+  const effectiveThicknessOverride = tierTwoThickness ?? (hasRelevantGateOverrides ? workerThickness : null);
+
+  // Recompute stats from override thickness when gates have been adjusted
+  const displayStats = useMemo(() => {
+    const source = effectiveThicknessOverride;
+    if (!source) return composite?.stats ?? { min: 0, max: 0, mean: 0, std: 0 };
+
+    let min = Infinity, max = -Infinity, sum = 0, count = 0;
+    for (let i = 0; i < source.length; i++) {
+      const v = source[i];
+      if (Number.isNaN(v)) continue;
+      if (v < min) min = v;
+      if (v > max) max = v;
+      sum += v;
+      count++;
+    }
+    if (count === 0) return { min: 0, max: 0, mean: 0, std: 0 };
+
+    const mean = sum / count;
+    let variance = 0;
+    for (let i = 0; i < source.length; i++) {
+      const v = source[i];
+      if (Number.isNaN(v)) continue;
+      variance += (v - mean) * (v - mean);
+    }
+    return { min, max, mean, std: Math.sqrt(variance / count) };
+  }, [effectiveThicknessOverride, composite?.stats]);
 
   const toggleFolder = useCallback((name: string) => {
     setSelectedFolders(prev =>
@@ -493,10 +534,10 @@ export default function ScanViewerLandingPage() {
               Tier 2: {tierTwoProgress.fileIndex + 1}/{tierTwoProgress.totalFiles} files
             </span>
           )}
-          {tierTwoThickness && !tierTwoProgress && hasGateOverrides && (
+          {tierTwoThickness && !tierTwoProgress && hasRelevantGateOverrides && (
             <span style={{ color: '#4ade80' }}>Tier 2 active</span>
           )}
-          {hasGateOverrides && !tierTwoThickness && !tierTwoProgress && (
+          {hasRelevantGateOverrides && !tierTwoThickness && !tierTwoProgress && (
             <span style={{ color: '#fbbf24' }}>Tier 1 (approx)</span>
           )}
           <span>{composite.width} x {composite.height} — {composite.sourceFiles.length} files — {composite.stats.coveragePct.toFixed(1)}% coverage</span>
@@ -510,16 +551,37 @@ export default function ScanViewerLandingPage() {
           onChange={updates => setGateSettings(prev => ({ ...prev, ...updates }))}
         />
 
+        {/* Probe delay */}
+        <div style={{ marginTop: 16, padding: 12, background: 'var(--surface-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-quaternary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+            Probe Delay
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+            <span style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem', flexShrink: 0 }}>Delay (mm)</span>
+            <input
+              type="number"
+              value={delayMm ?? ''}
+              onChange={e => setDelayMm(e.target.value ? Number(e.target.value) : null)}
+              step={0.1}
+              placeholder="auto"
+              style={{ fontSize: '0.72rem', padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border-subtle)', background: 'var(--surface-base)', color: 'var(--text-secondary)', width: 70, textAlign: 'right' }}
+            />
+          </div>
+          <div style={{ fontSize: '0.65rem', color: 'var(--text-quaternary)', lineHeight: 1.4 }}>
+            Sound path offset for 0mm reference. Leave empty for auto-detect from Gate I.
+          </div>
+        </div>
+
         {/* Stats card */}
         <div style={{ marginTop: 16, padding: 12, background: 'var(--surface-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-quaternary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
             Thickness Stats
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.75rem' }}>
-            <StatRow label="Min" value={`${composite.stats.min.toFixed(2)} mm`} />
-            <StatRow label="Max" value={`${composite.stats.max.toFixed(2)} mm`} />
-            <StatRow label="Mean" value={`${composite.stats.mean.toFixed(2)} mm`} />
-            <StatRow label="Std Dev" value={`${composite.stats.std.toFixed(3)} mm`} />
+            <StatRow label="Min" value={`${displayStats.min.toFixed(2)} mm`} />
+            <StatRow label="Max" value={`${displayStats.max.toFixed(2)} mm`} />
+            <StatRow label="Mean" value={`${displayStats.mean.toFixed(2)} mm`} />
+            <StatRow label="Std Dev" value={`${displayStats.std.toFixed(3)} mm`} />
           </div>
         </div>
       </div>
@@ -626,6 +688,12 @@ export default function ScanViewerLandingPage() {
               timeMinUs={ws.cursorData?.ascan.timeMinUs ?? 0}
               timeMaxUs={ws.cursorData?.ascan.timeMaxUs ?? 1}
               gates={effectiveGates}
+              velocity={composite?.velocity}
+              delayUs={
+                delayMm != null && composite?.velocity
+                  ? (ws.cursorData?.ascan.timeMinUs ?? 0) + delayMm * 2000 / composite.velocity
+                  : ws.cursorData?.ascan.delayUs ?? undefined
+              }
               onGateChange={handleGateChange}
               onGateRelease={handleGateRelease}
             />

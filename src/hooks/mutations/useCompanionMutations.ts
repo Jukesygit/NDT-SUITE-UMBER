@@ -51,21 +51,34 @@ export function useRefreshCompanionIndex() {
 
 /**
  * Hook for opening the companion's native folder browser and setting the directory.
+ * Updates companion-status cache directly instead of invalidating (which would
+ * trigger a /status refetch while the companion is busy indexing the new directory).
  */
 export function useBrowseDirectory() {
   const qc = useQueryClient();
 
   return useMutation({
     mutationFn: (port: number) => browseDirectory(port),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['companion-status'] });
+    onSuccess: (result) => {
+      // Update status cache directly with new directory info from the response.
+      // This avoids a /status refetch that would race with companion indexing.
+      qc.setQueryData(['companion-status'], (prev: Record<string, unknown> | undefined) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          directory: result.path ?? prev.directory,
+          fileCount: result.fileCount ?? prev.fileCount,
+        };
+      });
       qc.invalidateQueries({ queryKey: ['companion-folders'] });
+      qc.invalidateQueries({ queryKey: ['companion-files'] });
     },
   });
 }
 
 /**
  * Hook for converting eddify .capture_acq files to .nde format.
+ * Only invalidates folder listing — status will update on next regular poll.
  */
 export function useConvertEddify() {
   const qc = useQueryClient();
@@ -75,7 +88,7 @@ export function useConvertEddify() {
       convertEddify(params.port, params.captureDirs, params.outputFolder),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['companion-folders'] });
-      qc.invalidateQueries({ queryKey: ['companion-status'] });
+      qc.invalidateQueries({ queryKey: ['companion-files'] });
     },
   });
 }
