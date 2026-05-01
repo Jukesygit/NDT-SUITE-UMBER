@@ -7,87 +7,115 @@
 :root {
   /* ==========================================
      COLOR SYSTEM
-     Professional engineering palette
+     Industrial instrument palette
      ========================================== */
 
-  /* Primary - Tech Blue (Trust, precision, technical) */
-  --color-primary-950: #0a1628;
-  --color-primary-900: #0f2139;
-  --color-primary-800: #16304d;
-  --color-primary-700: #1e4168;
-  --color-primary-600: #2756;
-  --color-primary-500: #3b82f6;
-  --color-primary-400: #60a5fa;
-  --color-primary-300: #93c5fd;
-  --color-primary-200: #bfdbfe;
-  --color-primary-100: #dbeafe;
-  --color-primary-50: #eff6ff;
+  /* Primary - Instrument Green */
+  --color-primary-950: #0a2014;
+  --color-primary-900: #0f3520;
+  --color-primary-800: #16502e;
+  --color-primary-700: #206b3a;
+  --color-primary-600: #2d8a4e;
+  --color-primary-500: #35a058;
+  --color-primary-400: #4db870;
+  --color-primary-300: #7acc94;
+  --color-primary-200: #a8ddb8;
+  --color-primary-100: #d4eedd;
+  --color-primary-50: #eaf7ef;
 
-  /* Neutral - Professional grays */
-  --color-neutral-950: #09090b;
-  --color-neutral-900: #18181b;
-  --color-neutral-800: #27272a;
-  --color-neutral-700: #3f3f46;
-  --color-neutral-600: #52525b;
-  --color-neutral-500: #71717a;
-  --color-neutral-400: #a1a1aa;
-  --color-neutral-300: #d4d4d8;
-  --color-neutral-200: #e4e4e7;
-  --color-neutral-100: #f4f4f5;
-  --color-neutral-50: #fafafa;
-  --color-neutral-0: #ffffff;
+  /* Neutral - Warm umber grays */
+  --color-neutral-950: #0a0908;
+  --color-neutral-900: #1c1b18;
+  --color-neutral-800: #2e2c28;
+  --color-neutral-700: #4a4845;
+  --color-neutral-600: #5a5854;
+  --color-neutral-500: #7a7672;
+  --color-neutral-400: #9a968f;
+  --color-neutral-300: #b2b1ae;
+  --color-neutral-200: #c6c5c2;
+  --color-neutral-100: #dddcd9;
+  --color-neutral-50: #eeedeb;
+  --color-neutral-0: #f5f4f2;
 
   /* Semantic colors */
-  --color-success-dark: #15803d;
-  --color-success: #22c55e;
-  --color-success-light: #4ade80;
+  --color-success-dark: #206b3a;
+  --color-success: #2d8a4e;
+  --color-success-light: #35a058;
 
-  --color-warning-dark: #c2410c;
-  --color-warning: #f97316;
-  --color-warning-light: #fb923c;
+  --color-warning-dark: #b8860b;
+  --color-warning: #d4981e;
+  --color-warning-light: #e0a82e;
 
-  --color-danger-dark: #b91c1c;
-  --color-danger: #ef4444;
-  --color-danger-light: #f87171;
+  --color-danger-dark: #8e2a1e;
+  --color-danger: #c0392b;
+  --color-danger-light: #ef5350;
 
-  --color-info-dark: #1d4ed8;
-  --color-info: #3b82f6;
-  --color-info-light: #60a5fa;
+  --color-info-dark: #206b3a;
+  --color-info: #2d8a4e;
+  --color-info-light: #35a058;
 
-  /* Surface colors (dark theme) */
-  --surface-base: #0a0f1a;
-  --surface-raised: #121825;
-  --surface-elevated: #1a2332;
-  --surface-overlay: #222b3d;
-  --surface-hover: rgba(255, 255, 255, 0.04);
-  --surface-active: rgba(255, 255, 255, 0.08);
+  /* Surface colors (light industrial theme) */
+  --surface-base: #b2b1ae;
+  --surface-raised: #c6c5c2;
+  --surface-elevated: #d0cfcc;
+  --surface-overlay: #dddcd9;
+  --surface-hover: rgba(0, 0, 0, 0.04);
+  --surface-active: rgba(0, 0, 0, 0.08);
+
+  /* Chassis and panel */
+  --chassis: #504e4a;
+  --chassis-inner: #5a5854;
+  --panel-top: #c6c5c2;
+  --panel-mid: #b2b1ae;
+  --panel-bot: #9e9d9a;
+
+  /* Wells (recessed dark areas) */
+  --well-rim: #4a4844;
+  --well-mid: #312f2a;
+  --well-deep: #1a1816;
+  --well-floor: #0c0b0a;
+
+  /* Control surfaces */
+  --ctrl: #d6d3ce;
+  --ctrl-hi: #e4e1dc;
+  --ctrl-lo: #bcb9b4;
+
+  /* Instrument accents */
+  --green: #2d8a4e;
+  --green-bright: #35a058;
+  --green-dark: #206b3a;
+  --green-glow: rgba(45, 138, 78, 0.50);
+  --green-glow-soft: rgba(45, 138, 78, 0.25);
+  --amber: #d4981e;
+  --red: #c0392b;
 
   /* Border colors */
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-default: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.15);
-  --border-accent: rgba(59, 130, 246, 0.3);
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-default: rgba(0, 0, 0, 0.10);
+  --border-strong: rgba(0, 0, 0, 0.18);
+  --border-accent: rgba(45, 138, 78, 0.3);
 
-  /* Text colors */
-  --text-primary: rgba(255, 255, 255, 0.95);
-  --text-secondary: rgba(255, 255, 255, 0.75);
-  --text-tertiary: rgba(255, 255, 255, 0.55);
-  --text-quaternary: rgba(255, 255, 255, 0.38);
-  --text-disabled: rgba(255, 255, 255, 0.25);
-  --text-inverse: #09090b;
+  /* Text colors (dark on light) */
+  --text-primary: #1c1b18;
+  --text-secondary: #4a4845;
+  --text-tertiary: #7a7672;
+  --text-quaternary: #9a968f;
+  --text-disabled: #b2b1ae;
+  --text-inverse: #f5f4f2;
 
   /* Interactive states */
-  --interactive-default: var(--color-primary-500);
-  --interactive-hover: var(--color-primary-400);
-  --interactive-active: var(--color-primary-600);
-  --interactive-disabled: var(--color-neutral-700);
+  --interactive-default: var(--color-primary-600);
+  --interactive-hover: var(--color-primary-500);
+  --interactive-active: var(--color-primary-700);
+  --interactive-disabled: var(--color-neutral-400);
 
   /* ==========================================
      TYPOGRAPHY
      ========================================== */
 
   /* Font families */
-  --font-sans: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-sans: 'Barlow', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-label: 'Barlow Condensed', 'Barlow', sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
 
   /* Font sizes - Type scale (1.2 ratio) */
@@ -200,10 +228,10 @@
   --shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
 
   /* Colored shadows */
-  --shadow-primary: 0 4px 12px rgba(59, 130, 246, 0.15);
-  --shadow-success: 0 4px 12px rgba(34, 197, 94, 0.15);
-  --shadow-warning: 0 4px 12px rgba(249, 115, 22, 0.15);
-  --shadow-danger: 0 4px 12px rgba(239, 68, 68, 0.15);
+  --shadow-primary: 0 4px 12px rgba(45, 138, 78, 0.15);
+  --shadow-success: 0 4px 12px rgba(45, 138, 78, 0.15);
+  --shadow-warning: 0 4px 12px rgba(212, 152, 30, 0.15);
+  --shadow-danger: 0 4px 12px rgba(192, 57, 43, 0.15);
 
   /* ==========================================
      TRANSITIONS & ANIMATIONS
@@ -221,7 +249,7 @@
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --ease-out: cubic-bezier(0, 0, 0.2, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --ease-expo-out: cubic-bezier(0.16, 1, 0.3, 1);
 
   /* Transition presets */
   --transition-fast: var(--duration-fast) var(--ease-out);

@@ -97,7 +97,7 @@ export default function CreateRevisionModal({ isOpen, onClose, documentId }: Pro
                     onDragLeave={() => setIsDragging(false)}
                     onDrop={handleDrop}
                     className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
-                        isDragging ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)]/5' : 'border-gray-600 hover:border-gray-500'
+                        isDragging ? 'border-[var(--green)] bg-[var(--green)]/5' : 'border-gray-600 hover:border-gray-500'
                     }`}
                     onClick={() => document.getElementById('rev-file-input')?.click()}
                 >

@@ -46,7 +46,7 @@ function SortableHeader({
             className={`pm-table th ${isActive ? 'active' : ''} ${align === 'center' ? 'center' : ''} ${align === 'right' ? 'right' : ''}`}
             onClick={() => onSort(column)}
         >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: align === 'center' ? 'center' : 'flex-start' }}>
+            <div className={`pm-sort-header ${align === 'center' ? 'pm-sort-header--center' : ''}`}>
                 {label}
                 {isActive && <span className="pm-sort-indicator">{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>}
             </div>
@@ -109,21 +109,19 @@ export function PersonnelTable({
 
     if (personnel.length === 0) {
         return (
-            <div className="pm-table-card">
-                <div className="pm-empty">
-                    <div className="pm-empty-icon">
-                        <svg viewBox="0 0 24 24"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                    </div>
-                    <div className="pm-empty-title">No personnel found</div>
-                    <div className="pm-empty-text">Try adjusting your search or filter criteria</div>
+            <div className="pm-empty">
+                <div className="pm-empty-icon">
+                    <svg viewBox="0 0 24 24"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                 </div>
+                <div className="pm-empty-title">No personnel found</div>
+                <div className="pm-empty-text">Try adjusting your search or filter criteria</div>
             </div>
         );
     }
 
     return (
         <div className="pm-table-card">
-            <div style={{ overflowX: 'auto' }}>
+            <div className="pm-table-scroll">
                 <table className="pm-table">
                     <thead>
                         <tr>
@@ -217,7 +215,7 @@ export function PersonnelTable({
 
                                     {isExpanded && (
                                         <tr>
-                                            <td colSpan={8} style={{ padding: 0 }}>
+                                            <td colSpan={8} className="pm-expanded-td">
                                                 <PersonnelExpandedRow
                                                     person={person}
                                                     isAdmin={isAdmin}

@@ -371,6 +371,7 @@ function LoginPageNew() {
       {/* Content */}
       <div className="login-page__content">
         <div className="login-card animate-scaleIn">
+         <div className="login-card__panel">
           {/* Logo */}
           <div className="login-card__header">
             <div className="login-card__logo">
@@ -413,7 +414,7 @@ function LoginPageNew() {
           {/* 2FA Verify Mode */}
           {mode === 'verify-2fa' && (
             <div className="login-card__form">
-              <p style={{ color: 'var(--text-secondary, #9ca3af)', fontSize: '14px', marginBottom: '20px', textAlign: 'center' }}>
+              <p style={{ color: 'var(--color-neutral-400)', fontSize: '12px', marginBottom: '20px', textAlign: 'center', fontFamily: 'var(--font-label)', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', textShadow: '0 1px 0 rgba(255,255,255,0.35)' }}>
                 Enter the 6-digit code from your authenticator app
               </p>
               <TwoFactorVerifyInput
@@ -429,7 +430,7 @@ function LoginPageNew() {
                     setMode('login');
                     setTwoFAError('');
                   }}
-                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-tertiary, #6b7280)', fontSize: '13px' }}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--color-neutral-400)', fontSize: '11px', fontFamily: 'var(--font-label)', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', textShadow: '0 1px 0 rgba(255,255,255,0.30)' }}
                 >
                   Back to sign in
                 </button>
@@ -499,7 +500,7 @@ function LoginPageNew() {
                     required
                     autoComplete="one-time-code"
                     disabled={isLoading}
-                    style={{ letterSpacing: '0.5em', textAlign: 'center', fontSize: '1.25rem', fontFamily: 'monospace' }}
+                    style={{ letterSpacing: '0.5em', textAlign: 'center', fontSize: '1.25rem', fontFamily: 'var(--font-mono)' }}
                   />
                   <p className="text-xs text-tertiary mt-1">Check your email for the code</p>
                 </div>
@@ -734,27 +735,21 @@ function LoginPageNew() {
           </div>
 
           {/* Privacy Policy Link - always visible, GDPR Art. 13/14 */}
-          <div style={{
-            textAlign: 'center',
-            paddingTop: '16px',
-            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-            marginTop: '8px',
-          }}>
-            <a
-              href="/privacy"
-              style={{
-                color: 'var(--text-tertiary, #6b7280)',
-                fontSize: '12px',
-                textDecoration: 'none',
-              }}
-            >
-              Privacy Policy
-            </a>
+          <div className="login-card__privacy">
+            <a href="/privacy">Privacy Policy</a>
+          </div>
+         </div>{/* end .login-card__panel */}
+
+          {/* Nameplate bar */}
+          <div className="login-card__nameplate-bar">
+            <span className="login-card__nameplate">Matrix</span>
+            <span className="login-card__nameplate-model">NDT Suite v2.0</span>
           </div>
         </div>
       </div>
 
       <style>{`
+        /* ---- Chassis background (full page) ---- */
         .login-page {
           position: relative;
           min-height: 100vh;
@@ -762,16 +757,17 @@ function LoginPageNew() {
           align-items: center;
           justify-content: center;
           overflow: hidden;
-          background: var(--surface-base);
+          background: linear-gradient(180deg, var(--chassis-inner) 0%, var(--chassis) 100%);
         }
 
         .login-page__bg {
           position: absolute;
           inset: 0;
-          background:
-            radial-gradient(circle at 20% 50%, rgba(59, 130, 246, 0.08) 0%, transparent 50%),
-            radial-gradient(circle at 80% 20%, rgba(99, 102, 241, 0.06) 0%, transparent 50%),
-            radial-gradient(circle at 50% 80%, rgba(59, 130, 246, 0.06) 0%, transparent 50%);
+          background: repeating-linear-gradient(90deg,
+            transparent 0px, transparent 1px,
+            rgba(255, 255, 255, 0.008) 1px, rgba(255, 255, 255, 0.008) 2px,
+            transparent 2px, transparent 3px
+          );
           pointer-events: none;
         }
 
@@ -783,17 +779,69 @@ function LoginPageNew() {
           padding: var(--spacing-6);
         }
 
+        /* ---- Panel card (brushed metal surface) ---- */
         .login-card {
-          background: var(--surface-raised);
-          border: var(--border-width-thin) solid var(--border-default);
-          border-radius: var(--radius-2xl);
-          padding: var(--spacing-10);
-          box-shadow: var(--shadow-2xl);
+          border-radius: 14px;
+          padding: 10px;
+          background: linear-gradient(180deg, var(--chassis-inner) 0%, var(--chassis) 100%);
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.06),
+            inset 0 -1px 0 rgba(0, 0, 0, 0.20),
+            0 12px 40px rgba(0, 0, 0, 0.45),
+            0 2px 8px rgba(0, 0, 0, 0.25);
+        }
+
+        .login-card__panel {
+          border-radius: 8px;
+          padding: 32px 36px 24px;
+          position: relative;
+          overflow: hidden;
+          background:
+            linear-gradient(180deg, var(--panel-top) 0%, var(--panel-mid) 45%, var(--panel-bot) 100%);
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.45),
+            inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+        }
+
+        /* Brushed metal grain */
+        .login-card__panel::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: 8px;
+          background: repeating-linear-gradient(90deg,
+            transparent 0px, transparent 1px,
+            rgba(255, 255, 255, 0.004) 1px, rgba(255, 255, 255, 0.004) 2px,
+            transparent 2px, transparent 3px
+          );
+          pointer-events: none;
+        }
+
+        /* Specular highlight */
+        .login-card__panel::after {
+          content: '';
+          position: absolute;
+          top: -80px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 70%;
+          height: 200px;
+          border-radius: 50%;
+          background: radial-gradient(ellipse at 50% 50%,
+            rgba(255, 255, 255, 0.55) 0%,
+            rgba(255, 255, 255, 0.35) 20%,
+            rgba(255, 255, 255, 0.14) 40%,
+            rgba(255, 255, 255, 0.04) 60%,
+            transparent 80%);
+          pointer-events: none;
+          z-index: 0;
         }
 
         .login-card__header {
           text-align: center;
-          margin-bottom: var(--spacing-8);
+          margin-bottom: var(--spacing-6);
+          position: relative;
+          z-index: 1;
         }
 
         .login-card__logo {
@@ -801,24 +849,132 @@ function LoginPageNew() {
           display: flex;
           align-items: center;
           justify-content: center;
+          filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.50));
+          opacity: 0.70;
         }
 
         .login-card__title {
-          font-size: var(--text-3xl);
-          font-weight: var(--font-bold);
-          color: var(--text-primary);
+          font-family: var(--font-label);
+          font-size: 22px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.18em;
+          color: var(--color-neutral-700);
+          text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
           margin-bottom: var(--spacing-2);
-          letter-spacing: var(--tracking-tight);
         }
 
         .login-card__subtitle {
-          font-size: var(--text-base);
-          color: var(--text-tertiary);
+          font-family: var(--font-label);
+          font-size: 12px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: var(--color-neutral-400);
+          text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
           margin: 0;
         }
 
+        /* ---- Form area ---- */
         .login-card__form {
-          margin-bottom: var(--spacing-6);
+          margin-bottom: var(--spacing-4);
+          position: relative;
+          z-index: 1;
+        }
+
+        /* ---- Input wells (recessed LCD look) ---- */
+        .login-card__form .input-group__label {
+          font-family: var(--font-label);
+          font-size: 11px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: var(--color-neutral-500);
+          text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+        }
+
+        .login-card__form .input {
+          background:
+            radial-gradient(ellipse at 50% 95%, rgba(255, 255, 255, 0.02) 0%, transparent 50%),
+            linear-gradient(180deg, var(--well-mid) 0%, var(--well-deep) 30%, var(--well-floor) 100%);
+          border: 1px solid rgba(0, 0, 0, 0.25);
+          border-radius: 6px;
+          color: rgba(53, 160, 88, 0.70);
+          -webkit-text-fill-color: rgba(53, 160, 88, 0.70);
+          caret-color: rgba(53, 160, 88, 0.70);
+          font-family: var(--font-mono);
+          font-size: 14px;
+          text-shadow: 0 0 6px var(--green-glow-soft);
+          box-shadow:
+            inset 0 5px 14px rgba(0, 0, 0, 0.38),
+            inset 0 2px 4px rgba(0, 0, 0, 0.28),
+            inset 0 -2px 5px rgba(255, 255, 255, 0.03),
+            0 1px 0 rgba(255, 255, 255, 0.32);
+        }
+
+        .login-card__form .input::placeholder {
+          color: rgba(53, 160, 88, 0.25);
+          -webkit-text-fill-color: rgba(53, 160, 88, 0.25);
+          text-shadow: none;
+        }
+
+        .login-card__form .input:focus {
+          border-color: var(--green);
+          box-shadow:
+            inset 0 5px 14px rgba(0, 0, 0, 0.38),
+            inset 0 2px 4px rgba(0, 0, 0, 0.28),
+            inset 0 -2px 5px rgba(255, 255, 255, 0.03),
+            0 1px 0 rgba(255, 255, 255, 0.32),
+            0 0 0 3px rgba(45, 138, 78, 0.12);
+          color: rgba(53, 160, 88, 0.85);
+          -webkit-text-fill-color: rgba(53, 160, 88, 0.85);
+          caret-color: rgba(53, 160, 88, 0.85);
+        }
+
+        .login-card__form .input:-webkit-autofill,
+        .login-card__form .input:-webkit-autofill:hover,
+        .login-card__form .input:-webkit-autofill:focus {
+          -webkit-text-fill-color: rgba(53, 160, 88, 0.70) !important;
+          -webkit-box-shadow: 0 0 0 1000px var(--well-floor) inset !important;
+          box-shadow: 0 0 0 1000px var(--well-floor) inset !important;
+          caret-color: rgba(53, 160, 88, 0.70);
+        }
+
+        /* ---- Submit button (raised green control) ---- */
+        .login-card__form .btn--primary {
+          background:
+            linear-gradient(180deg, var(--green-bright) 0%, var(--green) 50%, var(--green-dark) 100%);
+          color: #fff;
+          border: 1px solid rgba(0, 0, 0, 0.18);
+          border-top: 1px solid rgba(255, 255, 255, 0.20);
+          border-radius: 6px;
+          font-family: var(--font-label);
+          font-weight: 700;
+          font-size: 13px;
+          text-transform: uppercase;
+          letter-spacing: 0.10em;
+          box-shadow:
+            0 3px 8px rgba(0, 0, 0, 0.20),
+            0 1px 2px rgba(0, 0, 0, 0.12),
+            inset 0 1px 0 rgba(255, 255, 255, 0.20);
+          text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.25);
+        }
+
+        .login-card__form .btn--primary:hover {
+          background:
+            linear-gradient(180deg, #3db668 0%, var(--green-bright) 50%, var(--green) 100%);
+          box-shadow:
+            0 4px 12px rgba(45, 138, 78, 0.30),
+            0 1px 3px rgba(0, 0, 0, 0.15),
+            inset 0 1px 0 rgba(255, 255, 255, 0.25);
+          transform: translateY(-1px);
+        }
+
+        .login-card__form .btn--primary:active {
+          transform: translateY(0);
+          box-shadow:
+            0 1px 4px rgba(0, 0, 0, 0.20),
+            inset 0 2px 4px rgba(0, 0, 0, 0.15);
         }
 
         .login-card__processing {
@@ -827,20 +983,153 @@ function LoginPageNew() {
           align-items: center;
           justify-content: center;
           padding: var(--spacing-8) 0;
+          position: relative;
+          z-index: 1;
         }
 
+        /* ---- Footer links ---- */
         .login-card__footer {
           display: flex;
           flex-direction: column;
           gap: var(--spacing-4);
           align-items: center;
-          padding-top: var(--spacing-6);
-          border-top: var(--border-width-thin) solid var(--border-subtle);
+          padding-top: var(--spacing-5);
+          border-top: 1px solid rgba(0, 0, 0, 0.06);
+          position: relative;
+          z-index: 1;
+        }
+
+        .login-card__footer .btn--ghost {
+          font-family: var(--font-label);
+          font-size: 11px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: var(--color-neutral-400);
+          text-shadow: 0 1px 0 rgba(255, 255, 255, 0.30);
+        }
+
+        .login-card__footer .btn--ghost:hover {
+          color: var(--green);
+          text-shadow: none;
+        }
+
+        /* ---- Nameplate bar ---- */
+        .login-card__nameplate-bar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 8px;
+          margin-top: 14px;
+          position: relative;
+          z-index: 1;
+        }
+
+        .login-card__nameplate {
+          font-family: var(--font-label);
+          font-weight: 700;
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.18em;
+          color: var(--color-neutral-500);
+          text-shadow: 0 1px 0 rgba(255, 255, 255, 0.40);
+        }
+
+        .login-card__nameplate-model {
+          font-family: var(--font-label);
+          font-weight: 600;
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: 0.12em;
+          color: var(--color-neutral-400);
+          text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+        }
+
+        /* ---- Alerts ---- */
+        .login-card .alert--danger {
+          background:
+            linear-gradient(180deg, var(--well-mid) 0%, var(--well-deep) 40%, var(--well-floor) 100%);
+          border: 1px solid rgba(192, 57, 43, 0.30);
+          border-radius: 6px;
+          color: rgba(239, 83, 80, 0.85);
+          font-family: var(--font-mono);
+          font-size: 12px;
+          text-shadow: 0 0 6px rgba(192, 57, 43, 0.30);
+          box-shadow:
+            inset 0 3px 10px rgba(0, 0, 0, 0.30),
+            inset 0 1px 3px rgba(0, 0, 0, 0.20),
+            0 1px 0 rgba(255, 255, 255, 0.25);
+        }
+
+        .login-card .alert--success {
+          background:
+            linear-gradient(180deg, var(--well-mid) 0%, var(--well-deep) 40%, var(--well-floor) 100%);
+          border: 1px solid rgba(45, 138, 78, 0.30);
+          border-radius: 6px;
+          color: rgba(53, 160, 88, 0.85);
+          font-family: var(--font-mono);
+          font-size: 12px;
+          text-shadow: 0 0 6px var(--green-glow-soft);
+          box-shadow:
+            inset 0 3px 10px rgba(0, 0, 0, 0.30),
+            inset 0 1px 3px rgba(0, 0, 0, 0.20),
+            0 1px 0 rgba(255, 255, 255, 0.25);
+        }
+
+        /* ---- Privacy link ---- */
+        .login-card__privacy {
+          text-align: center;
+          padding-top: 12px;
+          margin-top: 6px;
+          position: relative;
+          z-index: 1;
+          border-top: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        .login-card__privacy a {
+          font-family: var(--font-label);
+          font-size: 10px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: var(--color-neutral-400);
+          text-shadow: 0 1px 0 rgba(255, 255, 255, 0.30);
+          text-decoration: none;
+        }
+
+        .login-card__privacy a:hover {
+          color: var(--green);
+          text-shadow: none;
+        }
+
+        /* ---- Link buttons (green accented) ---- */
+        .login-card .text-primary {
+          color: var(--green) !important;
+          text-shadow: none;
+        }
+
+        .login-card .text-primary:hover {
+          color: var(--green-bright) !important;
+        }
+
+        .login-card .text-tertiary,
+        .login-card .text-sm.text-tertiary {
+          color: var(--color-neutral-400) !important;
+          text-shadow: 0 1px 0 rgba(255, 255, 255, 0.30);
+          font-family: var(--font-sans);
+          font-size: 12px;
+        }
+
+        /* ---- Hint text under inputs ---- */
+        .login-card .text-xs.text-tertiary {
+          color: var(--color-neutral-400) !important;
+          text-shadow: 0 1px 0 rgba(255, 255, 255, 0.30);
+          font-size: 10px;
         }
 
         @media (max-width: 640px) {
-          .login-card {
-            padding: var(--spacing-8) var(--spacing-6);
+          .login-card__panel {
+            padding: 24px 20px 20px;
           }
         }
       `}</style>

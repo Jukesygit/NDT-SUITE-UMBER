@@ -1,17 +1,70 @@
-/**
- * VesselIdentityCard - Compact editable grid of vessel identity fields.
- */
-
-import { useCallback } from 'react';
-import { InlineEditField } from '../../ui/InlineEditField';
+import { useState, useCallback } from 'react';
 import { useUpdateProjectVessel } from '../../../hooks/mutations/useInspectionProjectMutations';
-import type { ProjectVessel, ProjectFile } from '../../../types/inspection-project';
+import type { ProjectVessel } from '../../../types/inspection-project';
 
 interface VesselIdentityCardProps {
     vessel: ProjectVessel;
     projectId: string;
-    files?: ProjectFile[];
     procedures?: { id: string; procedure_number?: string | null }[];
+}
+
+function PanelField({
+    label,
+    value,
+    onSave,
+    fullWidth,
+}: {
+    label: string;
+    value: string;
+    onSave?: (v: string) => void;
+    fullWidth?: boolean;
+}) {
+    const [editing, setEditing] = useState(false);
+    const [draft, setDraft] = useState(value);
+
+    const commit = () => {
+        setEditing(false);
+        const trimmed = draft.trim();
+        if (trimmed !== value && onSave) onSave(trimmed);
+    };
+
+    const startEdit = () => {
+        if (!onSave) return;
+        setDraft(value);
+        setEditing(true);
+    };
+
+    if (editing) {
+        return (
+            <div className={`pj-panel-field${fullWidth ? ' full-width' : ''}`}>
+                <span className="pj-panel-field-label">{label}</span>
+                <input
+                    autoFocus
+                    className="pj-panel-field-input"
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onBlur={commit}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') commit();
+                        if (e.key === 'Escape') setEditing(false);
+                    }}
+                />
+            </div>
+        );
+    }
+
+    return (
+        <div
+            className={`pj-panel-field${fullWidth ? ' full-width' : ''}`}
+            onClick={startEdit}
+            style={onSave ? undefined : { cursor: 'default' }}
+        >
+            <span className="pj-panel-field-label">{label}</span>
+            <span className={`pj-panel-field-value${!value ? ' empty' : ''}`}>
+                {value || '—'}
+            </span>
+        </div>
+    );
 }
 
 export function VesselIdentityCard({ vessel, projectId, procedures }: VesselIdentityCardProps) {
@@ -33,64 +86,14 @@ export function VesselIdentityCard({ vessel, projectId, procedures }: VesselIden
         : null;
 
     return (
-        <div className="glass-card" style={{ padding: 20 }}>
-            <h4
-                style={{
-                    fontSize: '0.8rem',
-                    fontWeight: 600,
-                    color: 'var(--text-secondary)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
-                    margin: '0 0 16px 0',
-                }}
-            >
-                Vessel Identity
-            </h4>
-
-            <div
-                style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: 12,
-                }}
-            >
-                <InlineEditField
-                    label="Material"
-                    value={vessel.material ?? ''}
-                    onSave={(v) => save('material', v)}
-                />
-                <InlineEditField
-                    label="Nominal Thickness"
-                    value={vessel.nominal_thickness ?? ''}
-                    onSave={(v) => save('nominalThickness', v)}
-                />
-                <InlineEditField
-                    label="Drawing Number"
-                    value={vessel.drawing_number ?? ''}
-                    onSave={(v) => save('drawingNumber', v)}
-                />
-                <InlineEditField
-                    label="Description"
-                    value={vessel.description ?? ''}
-                    onSave={(v) => save('description', v)}
-                    fullWidth
-                />
-            </div>
-
+        <div className="pj-panel-fields">
+            <PanelField label="Material" value={vessel.material ?? ''} onSave={(v) => save('material', v)} />
+            <PanelField label="Nominal Thickness" value={vessel.nominal_thickness ?? ''} onSave={(v) => save('nominalThickness', v)} />
+            <PanelField label="Drawing Number" value={vessel.drawing_number ?? ''} onSave={(v) => save('drawingNumber', v)} />
             {linkedProcedure && (
-                <div
-                    style={{
-                        marginTop: 14,
-                        fontSize: '0.8rem',
-                        color: 'var(--text-secondary)',
-                    }}
-                >
-                    <span style={{ fontWeight: 500 }}>Procedure:</span>{' '}
-                    <span style={{ color: 'var(--text-primary)' }}>
-                        {linkedProcedure.procedure_number ?? 'Untitled'}
-                    </span>
-                </div>
+                <PanelField label="Procedure" value={linkedProcedure.procedure_number ?? 'Untitled'} />
             )}
+            <PanelField label="Description" value={vessel.description ?? ''} onSave={(v) => save('description', v)} fullWidth />
         </div>
     );
 }

@@ -58,50 +58,54 @@ export function ExpiringView({ expiringCompetencies, personnel }: ExpiringViewPr
             </div>
 
             {!hasExpiring ? (
-                <div className="pm-person-card">
-                    <div className="pm-empty">
-                        <div className="pm-empty-icon">
-                            <svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <div className="pm-display-well">
+                    <div className="pm-display">
+                        <div className="pm-empty">
+                            <div className="pm-empty-icon">
+                                <svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            </div>
+                            <div className="pm-empty-title">All clear</div>
+                            <div className="pm-empty-text">No certifications expiring in the next 30 days</div>
                         </div>
-                        <div className="pm-empty-title">All clear</div>
-                        <div className="pm-empty-text">No certifications expiring in the next 30 days</div>
                     </div>
                 </div>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div className="pm-card-list">
                     {Object.values(groupedByPerson).map(({ person, competencies }, index) => (
                         <div key={person.id} className="pm-person-card" style={{ animationDelay: `${index * 0.05}s` }}>
-                            <div className="pm-person-card-header">
-                                <div>
-                                    <div className="pm-person-card-name">{person.username}</div>
-                                    <div className="pm-person-card-meta">
-                                        {person.email} {person.organizations?.name && `\u00B7 ${person.organizations.name}`}
-                                    </div>
-                                </div>
-                                <span className="pm-badge expired no-dot">{competencies.length} expiring</span>
-                            </div>
-
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                {competencies.map((comp) => {
-                                    const daysUntilExpiry = getDaysUntilExpiry(comp.expiry_date);
-                                    const isUrgent = daysUntilExpiry <= 7;
-
-                                    return (
-                                        <div key={comp.id} className="pm-competency-item">
-                                            <div style={{ flex: 1 }}>
-                                                <div className="pm-competency-name">{comp.competency_name}</div>
-                                                <div className="pm-competency-meta">
-                                                    <span style={{ color: isUrgent ? '#ef4444' : '#f59e0b' }}>
-                                                        Expires: {new Date(comp.expiry_date).toLocaleDateString()} ({daysUntilExpiry} days)
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            {isUrgent && (
-                                                <span className="pm-badge urgent no-dot">URGENT</span>
-                                            )}
+                            <div className="pm-person-card-inner">
+                                <div className="pm-person-card-header">
+                                    <div>
+                                        <div className="pm-person-card-name">{person.username}</div>
+                                        <div className="pm-person-card-meta">
+                                            {person.email} {person.organizations?.name && `· ${person.organizations.name}`}
                                         </div>
-                                    );
-                                })}
+                                    </div>
+                                    <span className="pm-badge expired no-dot">{competencies.length} expiring</span>
+                                </div>
+
+                                <div className="pm-card-items">
+                                    {competencies.map((comp) => {
+                                        const daysUntilExpiry = getDaysUntilExpiry(comp.expiry_date);
+                                        const isUrgent = daysUntilExpiry <= 7;
+
+                                        return (
+                                            <div key={comp.id} className="pm-competency-item">
+                                                <div className="pm-comp-item-flex1">
+                                                    <div className="pm-competency-name">{comp.competency_name}</div>
+                                                    <div className="pm-competency-meta">
+                                                        <span className={isUrgent ? 'pm-cert-stat expired' : 'pm-cert-stat expiring'}>
+                                                            Expires: {new Date(comp.expiry_date).toLocaleDateString()} ({daysUntilExpiry} days)
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                {isUrgent && (
+                                                    <span className="pm-badge urgent no-dot">URGENT</span>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </div>
                     ))}

@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Industrial Instrument — Navigator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Chassis — dark frame visible around panel edges */
+    --chassis: #58554f;
+
+    /* Panel — brushed aluminum, strong top-lit gradient */
+    --panel-top: #e8e4de;
+    --panel-mid: #ccc8c2;
+    --panel-bot: #b0aca6;
+
+    /* Wells — dramatically deep, near-black */
+    --well-rim: #7a766e;
+    --well-mid: #3a3834;
+    --well-deep: #1e1d1a;
+    --well-floor: #141310;
+
+    /* Knob body — dark, like Big Knob reference */
+    --knob-top: #4a4844;
+    --knob-mid: #2c2a28;
+    --knob-bot: #1a1918;
+    --knob-rim: #5a5854;
+
+    /* Controls — raised, lighter than panel */
+    --ctrl: #dedad4;
+    --ctrl-hi: #eae6e0;
+    --ctrl-lo: #c0bcb6;
+
+    /* Green accent — LED only */
+    --green: #2d8a4e;
+    --green-bright: #35a058;
+    --green-dark: #206b3a;
+    --green-glow: rgba(45, 138, 78, 0.5);
+    --green-glow-soft: rgba(45, 138, 78, 0.2);
+
+    --amber: #b8861e;
+    --red: #c0392b;
+
+    --ink: #1c1b18;
+    --ink-mid: #4a4845;
+    --ink-light: #7a7672;
+    --ink-ghost: #9a968f;
+
+    --ff-display: 'Barlow', system-ui, sans-serif;
+    --ff-label: 'Barlow Condensed', 'Barlow', sans-serif;
+    --ff-mono: 'JetBrains Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    min-height: 100vh;
+    background: var(--chassis);
+    font-family: var(--ff-display);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+  }
+
+  .unit { width: 100%; max-width: 920px; }
+
+  /* ═══════════════════════════════════════════════════
+     PANEL — Brushed aluminum with strong top-light
+     Like the Big Knob: bright at top, darker at bottom,
+     with a subtle convex highlight in the center-top.
+     ═══════════════════════════════════════════════════ */
+  .panel {
+    border-radius: 8px;
+    padding: 32px 36px;
+    position: relative;
+    background:
+      /* Specular highlight: bright bloom at top center */
+      radial-gradient(ellipse 70% 40% at 50% 8%, rgba(255,255,255,0.35) 0%, transparent 100%),
+      /* Main top-to-bottom lighting gradient */
+      linear-gradient(180deg,
+        var(--panel-top) 0%,
+        var(--panel-mid) 45%,
+        var(--panel-bot) 100%
+      );
+    box-shadow:
+      /* Inner: top highlight edge */
+      inset 0 1px 0 rgba(255,255,255,0.4),
+      /* Inner: bottom shadow edge */
+      inset 0 -1px 0 rgba(0,0,0,0.08),
+      /* Outer: contact shadow */
+      0 1px 3px rgba(0,0,0,0.2),
+      /* Outer: depth shadow */
+      0 8px 24px rgba(0,0,0,0.25),
+      /* Outer: ambient */
+      0 20px 60px rgba(0,0,0,0.15);
+  }
+
+  /* Brushed aluminum grain texture */
+  .panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 8px;
+    background: repeating-linear-gradient(90deg,
+      transparent 0px,
+      transparent 1px,
+      rgba(255,255,255,0.015) 1px,
+      rgba(255,255,255,0.015) 2px,
+      transparent 2px,
+      transparent 4px
+    );
+    pointer-events: none;
+  }
+
+  /* ═══════════════════════════════════════════════════
+     HEADER
+     ═══════════════════════════════════════════════════ */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+
+  .header-led {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #5ec87a, var(--green) 55%, var(--green-dark));
+    box-shadow:
+      0 0 4px var(--green-glow),
+      0 0 14px var(--green-glow-soft),
+      inset 0 -1px 2px rgba(0,0,0,0.3),
+      inset 0 1px 1px rgba(255,255,255,0.35);
+  }
+
+  .header-title {
+    font-family: var(--ff-label);
+    font-weight: 700;
+    font-size: 18px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--ink-mid);
+    text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+  }
+
+  .header-model {
+    margin-left: auto;
+    font-family: var(--ff-display);
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--ink-light);
+    text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  }
+
+  /* ═══════════════════════════════════════════════════
+     GROOVE — machined line separator
+     ═══════════════════════════════════════════════════ */
+  .groove {
+    height: 1px;
+    background: linear-gradient(180deg,
+      rgba(0,0,0,0.10) 0%,
+      rgba(255,255,255,0.30) 100%
+    );
+    margin: 0 -8px;
+  }
+
+  .section-label {
+    font-family: var(--ff-label);
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--ink-light);
+    text-shadow: 0 1px 0 rgba(255,255,255,0.45);
+    margin-bottom: 14px;
+  }
+
+  /* ═══════════════════════════════════════════════════
+     WELL — Deep recessed area (Big Knob style)
+     Near-black interior, smooth gradient transition
+     from panel surface into the depths.
+     ═══════════════════════════════════════════════════ */
+  .well {
+    border-radius: 8px;
+    background:
+      /* Subtle bottom-center ambient bounce */
+      radial-gradient(ellipse at 50% 95%, rgba(255,255,255,0.03) 0%, transparent 50%),
+      /* Smooth gradient from rim into deep floor */
+      linear-gradient(180deg,
+        var(--well-mid) 0%,
+        var(--well-deep) 35%,
+        var(--well-floor) 100%
+      );
+    box-shadow:
+      /* Smooth outer shadow around the rim — the key to "flowing into" the surface */
+      inset 0 8px 20px rgba(0,0,0,0.35),
+      inset 0 3px 6px rgba(0,0,0,0.25),
+      inset 0 1px 2px rgba(0,0,0,0.20),
+      /* Bottom edge light catch */
+      inset 0 -2px 6px rgba(255,255,255,0.03),
+      /* Panel-level highlight below the well */
+      0 1px 0 rgba(255,255,255,0.25);
+  }
+
+  /* Lighter well variant for status tables */
+  .well--shallow {
+    background:
+      radial-gradient(ellipse at 50% 95%, rgba(255,255,255,0.04) 0%, transparent 50%),
+      linear-gradient(180deg, var(--well-rim) 0%, var(--well-mid) 100%);
+    box-shadow:
+      inset 0 6px 14px rgba(0,0,0,0.18),
+      inset 0 2px 4px rgba(0,0,0,0.12),
+      inset 0 -1px 4px rgba(255,255,255,0.04),
+      0 1px 0 rgba(255,255,255,0.25);
+  }
+
+  /* ═══════════════════════════════════════════════════
+     KNOB — Dark body in deep circular well
+     ═══════════════════════════════════════════════════ */
+  .knob-row {
+    display: flex;
+    gap: 32px;
+    justify-content: center;
+    align-items: flex-end;
+    padding: 8px 0;
+  }
+
+  .knob-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .knob-label {
+    font-family: var(--ff-label);
+    font-weight: 600;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--ink-light);
+    text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  }
+
+  .knob-value {
+    font-family: var(--ff-mono);
+    font-size: 11px;
+    color: var(--ink-mid);
+    text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+  }
+
+  /* Circular well housing */
+  .knob-housing {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 50% 50%,
+        var(--well-floor) 0%,
+        var(--well-deep) 40%,
+        var(--well-mid) 70%,
+        var(--well-rim) 100%
+      );
+    box-shadow:
+      inset 0 6px 16px rgba(0,0,0,0.40),
+      inset 0 2px 6px rgba(0,0,0,0.30),
+      inset 0 -3px 8px rgba(255,255,255,0.04),
+      0 1px 0 rgba(255,255,255,0.22);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .knob-housing--lg {
+    width: 96px;
+    height: 96px;
+  }
+
+  /* Dark knob body */
+  .knob {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background:
+      /* Specular highlight: small bright spot top-left */
+      radial-gradient(circle at 38% 28%, rgba(255,255,255,0.12) 0%, transparent 40%),
+      /* Body gradient */
+      linear-gradient(160deg, var(--knob-top) 0%, var(--knob-mid) 45%, var(--knob-bot) 100%);
+    box-shadow:
+      /* Rim highlight */
+      0 -1px 0 rgba(255,255,255,0.08),
+      /* Depth */
+      0 3px 8px rgba(0,0,0,0.35),
+      0 1px 2px rgba(0,0,0,0.25),
+      /* Soft inner edge */
+      inset 0 1px 0 rgba(255,255,255,0.06),
+      inset 0 -1px 0 rgba(0,0,0,0.15);
+    position: relative;
+  }
+
+  .knob-housing--lg .knob {
+    width: 68px;
+    height: 68px;
+  }
+
+  /* Indicator tick on knob */
+  .knob::after {
+    content: '';
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    height: 10px;
+    border-radius: 1px;
+    background: var(--green-bright);
+    box-shadow: 0 0 4px var(--green-glow);
+  }
+
+  .knob--amber::after {
+    background: #e0a82e;
+    box-shadow: 0 0 4px rgba(184,134,30,0.5);
+  }
+
+  /* ═══════════════════════════════════════════════════
+     TOGGLE SWITCH — Glossy capsule (Big Knob style)
+     ═══════════════════════════════════════════════════ */
+  .toggle-row {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+  }
+
+  .toggle-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .toggle-labels {
+    display: flex;
+    gap: 6px;
+    font-family: var(--ff-label);
+    font-weight: 600;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-ghost);
+    text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+  }
+
+  .toggle-well {
+    width: 36px;
+    height: 18px;
+    border-radius: 9px;
+    background:
+      linear-gradient(180deg, var(--well-deep) 0%, var(--well-mid) 100%);
+    box-shadow:
+      inset 0 3px 6px rgba(0,0,0,0.35),
+      inset 0 1px 2px rgba(0,0,0,0.25),
+      0 1px 0 rgba(255,255,255,0.18);
+    position: relative;
+    cursor: pointer;
+    overflow: hidden;
+  }
+
+  .toggle-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 40% 30%, rgba(255,255,255,0.30) 0%, transparent 60%),
+      linear-gradient(180deg, var(--knob-top) 0%, var(--knob-mid) 100%);
+    box-shadow:
+      0 2px 4px rgba(0,0,0,0.30),
+      0 1px 1px rgba(0,0,0,0.20),
+      inset 0 1px 0 rgba(255,255,255,0.10);
+    transition: left 0.2s ease;
+  }
+
+  .toggle-well--on .toggle-thumb {
+    left: 20px;
+  }
+
+  .toggle-well--on::before {
+    content: '';
+    position: absolute;
+    top: 4px; left: 5px;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--red);
+    box-shadow: 0 0 6px var(--red), 0 0 2px var(--red);
+  }
+
+  /* ═══════════════════════════════════════════════════
+     SLIDER — Deep narrow channel
+     ═══════════════════════════════════════════════════ */
+  .slider-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .slider-channel-v {
+    width: 8px;
+    height: 120px;
+    border-radius: 4px;
+    background:
+      linear-gradient(180deg, var(--well-floor) 0%, var(--well-deep) 40%, var(--well-mid) 100%);
+    box-shadow:
+      inset 2px 0 4px rgba(0,0,0,0.30),
+      inset -2px 0 4px rgba(0,0,0,0.30),
+      inset 0 2px 4px rgba(0,0,0,0.25),
+      0 1px 0 rgba(255,255,255,0.18);
+    position: relative;
+  }
+
+  .slider-fill-v {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    border-radius: 0 0 4px 4px;
+    background: linear-gradient(180deg, var(--green) 0%, var(--green-dark) 100%);
+    box-shadow: 0 0 6px var(--green-glow-soft);
+  }
+
+  .slider-fill-v--red {
+    background: linear-gradient(180deg, var(--red) 0%, #7a2a1e 100%);
+    box-shadow: 0 0 6px rgba(166,58,42,0.3);
+  }
+
+  .slider-thumb-v {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 16px;
+    height: 10px;
+    border-radius: 3px;
+    background:
+      radial-gradient(ellipse at 50% 25%, rgba(255,255,255,0.15) 0%, transparent 60%),
+      linear-gradient(180deg, var(--knob-top) 0%, var(--knob-mid) 60%, var(--knob-bot) 100%);
+    box-shadow:
+      0 2px 4px rgba(0,0,0,0.30),
+      0 1px 1px rgba(0,0,0,0.20),
+      inset 0 1px 0 rgba(255,255,255,0.10);
+    cursor: pointer;
+  }
+
+  .slider-label {
+    font-family: var(--ff-label);
+    font-weight: 600;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-ghost);
+    text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+  }
+
+  .slider-val {
+    font-family: var(--ff-mono);
+    font-size: 10px;
+    color: var(--ink-light);
+    text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+  }
+
+  /* ═══════════════════════════════════════════════════
+     DISPLAY — Dark LCD readout
+     ═══════════════════════════════════════════════════ */
+  .display {
+    border-radius: 6px;
+    padding: 14px 16px;
+    background: linear-gradient(180deg, #1a1918 0%, #141310 100%);
+    box-shadow:
+      inset 0 6px 16px rgba(0,0,0,0.50),
+      inset 0 2px 4px rgba(0,0,0,0.35),
+      0 1px 0 rgba(255,255,255,0.15);
+    color: var(--green-bright);
+    font-family: var(--ff-mono);
+    text-shadow: 0 0 6px var(--green-glow-soft);
+  }
+
+  /* ═══════════════════════════════════════════════════
+     LED
+     ═══════════════════════════════════════════════════ */
+  .led {
+    width: 6px; height: 6px; border-radius: 50%;
+  }
+
+  .led--on {
+    background: radial-gradient(circle at 35% 30%, #5ec87a, var(--green) 60%, var(--green-dark));
+    box-shadow: 0 0 4px var(--green-glow), 0 0 10px var(--green-glow-soft);
+  }
+
+  .led--off {
+    background: radial-gradient(circle at 45% 40%, #6a665e, #4a4640);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
+  }
+
+  /* ═══════════════════════════════════════════════════
+     BUTTON — Raised tactile
+     ═══════════════════════════════════════════════════ */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 9px 20px;
+    border: none;
+    border-radius: 5px;
+    background:
+      radial-gradient(ellipse at 50% 15%, rgba(255,255,255,0.10) 0%, transparent 60%),
+      linear-gradient(180deg, var(--ctrl-hi) 0%, var(--ctrl) 50%, var(--ctrl-lo) 100%);
+    box-shadow:
+      0 3px 8px rgba(0,0,0,0.18),
+      0 1px 2px rgba(0,0,0,0.10),
+      inset 0 1px 0 rgba(255,255,255,0.50),
+      inset 0 -1px 0 rgba(0,0,0,0.04);
+    color: var(--ink-mid);
+    font-family: var(--ff-label);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.45);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn:hover {
+    background:
+      radial-gradient(ellipse at 50% 15%, rgba(255,255,255,0.18) 0%, transparent 60%),
+      linear-gradient(180deg, #eceae4 0%, var(--ctrl-hi) 50%, var(--ctrl) 100%);
+    box-shadow:
+      0 4px 12px rgba(0,0,0,0.22),
+      0 1px 3px rgba(0,0,0,0.12),
+      inset 0 1px 0 rgba(255,255,255,0.55),
+      inset 0 -1px 0 rgba(0,0,0,0.04);
+  }
+
+  .btn:active {
+    background: linear-gradient(180deg, var(--ctrl-lo) 0%, var(--ctrl) 100%);
+    box-shadow: inset 0 3px 8px rgba(0,0,0,0.12), inset 0 1px 2px rgba(0,0,0,0.08);
+    transform: translateY(1px);
+  }
+
+  .btn--green {
+    background:
+      radial-gradient(ellipse at 50% 15%, rgba(255,255,255,0.10) 0%, transparent 60%),
+      linear-gradient(180deg, var(--green-bright) 0%, var(--green) 55%, var(--green-dark) 100%);
+    color: #eaf5ee;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+    box-shadow:
+      0 3px 8px rgba(45,138,78,0.25),
+      0 1px 2px rgba(0,0,0,0.12),
+      inset 0 1px 0 rgba(255,255,255,0.18),
+      inset 0 -1px 0 rgba(0,0,0,0.10);
+  }
+
+  /* ═══════════════════════════════════════════════════
+     STATUS LIST
+     ═══════════════════════════════════════════════════ */
+  .file-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 6px;
+  }
+
+  .file-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .file-row:hover {
+    background: rgba(255,255,255,0.06);
+  }
+
+  .file-row--selected {
+    background: rgba(45,138,78,0.12);
+  }
+
+  .file-icon {
+    width: 14px; height: 14px; flex-shrink: 0;
+    color: var(--green-bright);
+    text-shadow: 0 0 4px var(--green-glow-soft);
+    font-family: var(--ff-mono);
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .file-name {
+    flex: 1;
+    font-family: var(--ff-mono);
+    font-size: 12px;
+    color: var(--green-bright);
+    text-shadow: 0 0 4px var(--green-glow-soft);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .file-meta {
+    font-family: var(--ff-mono);
+    font-size: 10px;
+    color: rgba(53,160,88,0.45);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .file-badge {
+    display: inline-flex;
+    padding: 1px 6px;
+    border-radius: 2px;
+    font-family: var(--ff-label);
+    font-weight: 600;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    background: rgba(45,138,78,0.15);
+    color: var(--green-bright);
+    text-shadow: 0 0 4px var(--green-glow-soft);
+  }
+
+  /* ═══════════════════════════════════════════════════
+     PATH BAR
+     ═══════════════════════════════════════════════════ */
+  .path-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    font-family: var(--ff-mono);
+    font-size: 11px;
+    color: rgba(53,160,88,0.5);
+  }
+
+  .path-bar-text {
+    flex: 1;
+    color: var(--green-bright);
+    text-shadow: 0 0 4px var(--green-glow-soft);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .path-bar-sep {
+    color: rgba(53,160,88,0.3);
+  }
+
+  /* ═══════════════════════════════════════════════════
+     LAYOUT — Three-panel rack layout
+     ═══════════════════════════════════════════════════ */
+  .body-grid {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    grid-template-rows: auto 1fr auto;
+    gap: 20px;
+    margin-top: 20px;
+  }
+
+  .toolbar-area {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .sidebar-area { grid-row: 2 / 4; }
+
+  .main-area {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .controls-area {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding-top: 4px;
+  }
+
+  /* ═══════════════════════════════════════════════════
+     TOOLBAR — Inline controls strip
+     ═══════════════════════════════════════════════════ */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    background:
+      radial-gradient(ellipse at 50% 95%, rgba(255,255,255,0.04) 0%, transparent 50%),
+      linear-gradient(180deg, var(--well-rim) 0%, #6a665e 100%);
+    box-shadow:
+      inset 0 4px 12px rgba(0,0,0,0.15),
+      inset 0 1px 3px rgba(0,0,0,0.12),
+      0 1px 0 rgba(255,255,255,0.22);
+  }
+
+  .toolbar-sep {
+    width: 1px;
+    height: 20px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.15), rgba(255,255,255,0.08));
+  }
+
+  .toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px; height: 30px;
+    border: none;
+    border-radius: 5px;
+    background:
+      radial-gradient(ellipse at 50% 20%, rgba(255,255,255,0.08) 0%, transparent 60%),
+      linear-gradient(180deg, var(--knob-top) 0%, var(--knob-mid) 60%, var(--knob-bot) 100%);
+    box-shadow:
+      0 2px 4px rgba(0,0,0,0.25),
+      0 1px 1px rgba(0,0,0,0.15),
+      inset 0 1px 0 rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.6);
+    font-family: var(--ff-mono);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .toolbar-btn:hover {
+    background:
+      radial-gradient(ellipse at 50% 20%, rgba(255,255,255,0.12) 0%, transparent 60%),
+      linear-gradient(180deg, #5a5854 0%, var(--knob-top) 60%, var(--knob-mid) 100%);
+    box-shadow:
+      0 3px 6px rgba(0,0,0,0.30),
+      0 1px 2px rgba(0,0,0,0.18),
+      inset 0 1px 0 rgba(255,255,255,0.10);
+  }
+
+  .toolbar-btn:active {
+    background: linear-gradient(180deg, var(--knob-bot) 0%, var(--knob-mid) 100%);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.30);
+    transform: translateY(1px);
+  }
+
+  .toolbar-btn--active {
+    box-shadow:
+      0 2px 4px rgba(0,0,0,0.25),
+      0 1px 1px rgba(0,0,0,0.15),
+      inset 0 1px 0 rgba(255,255,255,0.08),
+      0 0 8px var(--green-glow-soft);
+  }
+
+  .toolbar-btn--active::after {
+    content: '';
+    position: absolute;
+    bottom: -6px;
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--green-bright);
+    box-shadow: 0 0 4px var(--green-glow);
+  }
+
+  .toolbar-text {
+    font-family: var(--ff-label);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-light);
+    text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+  }
+
+  .toolbar-spacer { flex: 1; }
+
+  /* ═══════════════════════════════════════════════════
+     STATUS ROW — Bottom info strip
+     ═══════════════════════════════════════════════════ */
+  .status-strip {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 4px 0;
+  }
+
+  .status-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--ff-mono);
+    font-size: 11px;
+    color: var(--ink-light);
+    text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+  }
+
+  .status-sep { flex: 1; }
+
+  /* ═══════════════════════════════════════════════════
+     TAG
+     ═══════════════════════════════════════════════════ */
+  .tag {
+    position: fixed; bottom: 16px; right: 16px;
+    padding: 6px 16px; border-radius: 6px;
+    background:
+      radial-gradient(ellipse at 50% 20%, rgba(255,255,255,0.08) 0%, transparent 60%),
+      linear-gradient(180deg, var(--panel-top) 0%, var(--panel-bot) 100%);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.20), 0 1px 2px rgba(0,0,0,0.12),
+      inset 0 1px 0 rgba(255,255,255,0.35);
+    font-family: var(--ff-label); font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ink-light); text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  }
+</style>
+</head>
+<body>
+
+<div class="unit">
+  <div class="panel">
+
+    <!-- HEADER -->
+    <div class="header">
+      <div class="header-led"></div>
+      <div class="header-title">Matrix Portal</div>
+      <div class="header-model">Scan Navigator</div>
+    </div>
+
+    <div class="groove"></div>
+
+    <div class="body-grid">
+
+      <!-- TOOLBAR -->
+      <div class="toolbar-area">
+        <div class="toolbar" style="flex: 1;">
+          <button class="toolbar-btn" title="Back" style="position: relative;">&#8592;</button>
+          <button class="toolbar-btn" title="Forward">&#8594;</button>
+          <button class="toolbar-btn" title="Up">&#8593;</button>
+          <div class="toolbar-sep"></div>
+          <button class="toolbar-btn toolbar-btn--active" title="Grid" style="position: relative;">&#9638;</button>
+          <button class="toolbar-btn" title="List">&#9776;</button>
+          <div class="toolbar-sep"></div>
+          <span class="toolbar-text">Sort: Name</span>
+          <div class="toolbar-spacer"></div>
+          <button class="toolbar-btn" title="Refresh">&#8635;</button>
+          <button class="toolbar-btn" title="Settings">&#9881;</button>
+        </div>
+      </div>
+
+      <!-- SIDEBAR -->
+      <div class="sidebar-area">
+        <div class="section-label">Locations</div>
+        <div class="well" style="padding: 8px;">
+          <div class="file-list">
+            <div class="file-row file-row--selected">
+              <div class="led led--on"></div>
+              <span class="file-name" style="color: var(--green-bright);">Recent Scans</span>
+              <span class="file-meta">24</span>
+            </div>
+            <div class="file-row">
+              <div class="led led--off"></div>
+              <span class="file-name" style="color: rgba(53,160,88,0.55);">Project Files</span>
+              <span class="file-meta">156</span>
+            </div>
+            <div class="file-row">
+              <div class="led led--off"></div>
+              <span class="file-name" style="color: rgba(53,160,88,0.55);">Calibrations</span>
+              <span class="file-meta">8</span>
+            </div>
+            <div class="file-row">
+              <div class="led led--off"></div>
+              <span class="file-name" style="color: rgba(53,160,88,0.55);">Templates</span>
+              <span class="file-meta">12</span>
+            </div>
+            <div class="file-row">
+              <div class="led led--off"></div>
+              <span class="file-name" style="color: rgba(53,160,88,0.55);">Archive</span>
+              <span class="file-meta">340</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 20px;">
+          <div class="section-label">Quick Settings</div>
+          <div class="well--shallow" style="border-radius: 8px; padding: 16px; background: radial-gradient(ellipse at 50% 95%, rgba(255,255,255,0.04) 0%, transparent 50%), linear-gradient(180deg, var(--well-rim) 0%, var(--well-mid) 100%); box-shadow: inset 0 6px 14px rgba(0,0,0,0.18), inset 0 2px 4px rgba(0,0,0,0.12), 0 1px 0 rgba(255,255,255,0.25);">
+            <div style="display: flex; flex-direction: column; gap: 14px;">
+              <div class="toggle-group" style="justify-content: space-between; width: 100%;">
+                <span class="knob-label" style="color: var(--ink-mid);">Auto-Convert</span>
+                <div class="toggle-well toggle-well--on">
+                  <div class="toggle-thumb"></div>
+                </div>
+              </div>
+              <div class="toggle-group" style="justify-content: space-between; width: 100%;">
+                <span class="knob-label" style="color: var(--ink-mid);">Show Hidden</span>
+                <div class="toggle-well">
+                  <div class="toggle-thumb"></div>
+                </div>
+              </div>
+              <div class="toggle-group" style="justify-content: space-between; width: 100%;">
+                <span class="knob-label" style="color: var(--ink-mid);">Verify Hash</span>
+                <div class="toggle-well toggle-well--on">
+                  <div class="toggle-thumb"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MAIN AREA -->
+      <div class="main-area">
+        <!-- Path bar -->
+        <div class="well" style="padding: 0;">
+          <div class="path-bar">
+            <span class="path-bar-sep">/</span>
+            <span class="path-bar-text">projects / FPSO-Marlim / zone-3 / scans</span>
+          </div>
+        </div>
+
+        <!-- File list -->
+        <div class="well" style="padding: 8px; flex: 1;">
+          <div class="file-list">
+            <div class="file-row">
+              <span class="file-icon">&#128193;</span>
+              <span class="file-name">circumferential-pass-01</span>
+              <span class="file-badge">NDE</span>
+              <span class="file-meta">2,400 pts</span>
+              <span class="file-meta">Today</span>
+            </div>
+            <div class="file-row file-row--selected">
+              <span class="file-icon">&#128193;</span>
+              <span class="file-name">circumferential-pass-02</span>
+              <span class="file-badge">NDE</span>
+              <span class="file-meta">1,847 pts</span>
+              <span class="file-meta">Today</span>
+            </div>
+            <div class="file-row">
+              <span class="file-icon">&#128196;</span>
+              <span class="file-name">zone3-calibration.cal</span>
+              <span class="file-meta">14 KB</span>
+              <span class="file-meta">Yesterday</span>
+            </div>
+            <div class="file-row">
+              <span class="file-icon">&#128196;</span>
+              <span class="file-name">scan-config-5mhz.json</span>
+              <span class="file-meta">2.3 KB</span>
+              <span class="file-meta">Yesterday</span>
+            </div>
+            <div class="file-row">
+              <span class="file-icon">&#128193;</span>
+              <span class="file-name">axial-pass-01</span>
+              <span class="file-badge">NDE</span>
+              <span class="file-meta">3,600 pts</span>
+              <span class="file-meta">Apr 28</span>
+            </div>
+            <div class="file-row">
+              <span class="file-icon">&#128193;</span>
+              <span class="file-name">axial-pass-02</span>
+              <span class="file-badge">NDE</span>
+              <span class="file-meta">3,200 pts</span>
+              <span class="file-meta">Apr 28</span>
+            </div>
+            <div class="file-row">
+              <span class="file-icon">&#128196;</span>
+              <span class="file-name">coverage-report.eddify</span>
+              <span class="file-meta">856 KB</span>
+              <span class="file-meta">Apr 27</span>
+            </div>
+            <div class="file-row">
+              <span class="file-icon">&#128196;</span>
+              <span class="file-name">thickness-map-z3.csv</span>
+              <span class="file-meta">1.2 MB</span>
+              <span class="file-meta">Apr 27</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Detail display -->
+        <div class="well" style="padding: 0;">
+          <div class="display">
+            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
+              <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(53,160,88,0.5);">Selected</span>
+              <span style="font-size: 10px; color: rgba(53,160,88,0.4);">circumferential-pass-02</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+              <div>
+                <div style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(53,160,88,0.4);">Points</div>
+                <div style="font-size: 16px; font-weight: 500; margin-top: 2px;">1,847</div>
+              </div>
+              <div>
+                <div style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(53,160,88,0.4);">Coverage</div>
+                <div style="font-size: 16px; font-weight: 500; margin-top: 2px;">77%</div>
+              </div>
+              <div>
+                <div style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(53,160,88,0.4);">Min Thk</div>
+                <div style="font-size: 16px; font-weight: 500; margin-top: 2px;">11.8<span style="font-size: 10px; color: rgba(53,160,88,0.5);"> mm</span></div>
+              </div>
+              <div>
+                <div style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(53,160,88,0.4);">Max Loss</div>
+                <div style="font-size: 16px; font-weight: 500; margin-top: 2px;">17.3<span style="font-size: 10px; color: rgba(53,160,88,0.5);"> %</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTTOM CONTROLS -->
+      <div class="controls-area">
+        <div class="groove" style="flex: 1; margin: 0;"></div>
+      </div>
+    </div>
+
+    <!-- STATUS STRIP -->
+    <div class="status-strip" style="margin-top: 12px;">
+      <div class="status-item">
+        <div class="led led--on"></div>
+        <span>Connected</span>
+      </div>
+      <div class="status-item">
+        <span style="color: var(--ink-ghost);">8 items</span>
+      </div>
+      <div class="status-sep"></div>
+      <div style="display: flex; gap: 10px;">
+        <button class="btn">Export</button>
+        <button class="btn btn--green">Open in Viewer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="tag">Industrial Instrument — Navigator</div>
+
+</body>
+</html>

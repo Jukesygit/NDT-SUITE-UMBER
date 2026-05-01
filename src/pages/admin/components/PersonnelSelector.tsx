@@ -91,7 +91,7 @@ export function PersonnelSelector({
                             transform: 'translateY(-50%)',
                             width: '16px',
                             height: '16px',
-                            color: 'rgba(255, 255, 255, 0.4)',
+                            color: 'rgba(53, 160, 88, 0.30)',
                         }}
                         fill="none"
                         stroke="currentColor"
@@ -139,23 +139,23 @@ export function PersonnelSelector({
 
             {/* Selection Actions */}
             <div className="flex items-center justify-between flex-wrap gap-2">
-                <span style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)' }}>
+                <span style={{ fontSize: '14px', color: 'rgba(53, 160, 88, 0.45)' }}>
                     Showing {personnel.length} people
                     {selectedIds.length > 0 && (
-                        <span style={{ color: '#60a5fa', marginLeft: '8px' }}>
+                        <span style={{ color: 'var(--green-bright)', marginLeft: '8px' }}>
                             ({selectedIds.length} selected)
                         </span>
                     )}
                 </span>
                 <div className="flex gap-2">
-                    <button onClick={selectAll} className="btn btn-secondary btn-sm">
+                    <button onClick={selectAll} className="ad-btn">
                         Select All
                     </button>
-                    <button onClick={deselectAll} className="btn btn-secondary btn-sm">
+                    <button onClick={deselectAll} className="ad-btn">
                         Deselect Visible
                     </button>
                     {selectedIds.length > 0 && (
-                        <button onClick={clearAll} className="btn btn-secondary btn-sm">
+                        <button onClick={clearAll} className="ad-btn">
                             Clear All
                         </button>
                     )}
@@ -167,17 +167,17 @@ export function PersonnelSelector({
                 style={{
                     maxHeight: '400px',
                     overflowY: 'auto',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    border: '1px solid rgba(53, 160, 88, 0.15)',
                     borderRadius: '8px',
                 }}
-                className="glass-scrollbar"
+                /* scrollbar handled by parent theme */
             >
                 {personnel.length === 0 ? (
                     <div
                         style={{
                             padding: '32px',
                             textAlign: 'center',
-                            color: 'rgba(255, 255, 255, 0.5)',
+                            color: 'rgba(53, 160, 88, 0.35)',
                         }}
                     >
                         No personnel found matching filters
@@ -194,20 +194,20 @@ export function PersonnelSelector({
                                     gap: '12px',
                                     padding: '12px 16px',
                                     cursor: 'pointer',
-                                    borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                                    borderBottom: '1px solid rgba(53, 160, 88, 0.05)',
                                     background: isSelected
-                                        ? 'rgba(59, 130, 246, 0.1)'
+                                        ? 'rgba(53, 160, 88, 0.10)'
                                         : 'transparent',
                                     transition: 'background 0.2s',
                                 }}
                                 onMouseEnter={(e) => {
                                     if (!isSelected) {
-                                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+                                        e.currentTarget.style.background = 'rgba(53, 160, 88, 0.03)';
                                     }
                                 }}
                                 onMouseLeave={(e) => {
                                     e.currentTarget.style.background = isSelected
-                                        ? 'rgba(59, 130, 246, 0.1)'
+                                        ? 'rgba(53, 160, 88, 0.10)'
                                         : 'transparent';
                                 }}
                             >
@@ -221,7 +221,7 @@ export function PersonnelSelector({
                                     <p
                                         style={{
                                             fontWeight: 500,
-                                            color: 'var(--text-primary)',
+                                            color: 'rgba(53, 160, 88, 0.70)',
                                             whiteSpace: 'nowrap',
                                             overflow: 'hidden',
                                             textOverflow: 'ellipsis',
@@ -232,7 +232,7 @@ export function PersonnelSelector({
                                     <p
                                         style={{
                                             fontSize: '13px',
-                                            color: 'rgba(255, 255, 255, 0.5)',
+                                            color: 'rgba(53, 160, 88, 0.35)',
                                             whiteSpace: 'nowrap',
                                             overflow: 'hidden',
                                             textOverflow: 'ellipsis',
@@ -249,8 +249,8 @@ export function PersonnelSelector({
                                             fontSize: '11px',
                                             fontWeight: 500,
                                             borderRadius: '4px',
-                                            background: 'rgba(255, 255, 255, 0.1)',
-                                            color: 'rgba(255, 255, 255, 0.7)',
+                                            background: 'rgba(53, 160, 88, 0.15)',
+                                            color: 'rgba(53, 160, 88, 0.45)',
                                             textTransform: 'capitalize',
                                         }}
                                     >
@@ -259,7 +259,7 @@ export function PersonnelSelector({
                                     <p
                                         style={{
                                             fontSize: '12px',
-                                            color: 'rgba(255, 255, 255, 0.4)',
+                                            color: 'rgba(53, 160, 88, 0.30)',
                                             marginTop: '4px',
                                         }}
                                     >

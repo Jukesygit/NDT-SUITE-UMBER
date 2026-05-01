@@ -127,7 +127,7 @@ export function EditOrganizationModal({ isOpen, onClose, organization }: EditOrg
                         type="button"
                         onClick={handleClose}
                         disabled={updateOrganization.isPending}
-                        className="btn btn-secondary"
+                        className="ad-btn"
                     >
                         Cancel
                     </button>
@@ -135,7 +135,7 @@ export function EditOrganizationModal({ isOpen, onClose, organization }: EditOrg
                         type="submit"
                         form="edit-organization-form"
                         disabled={updateOrganization.isPending}
-                        className="btn btn-primary flex items-center gap-2"
+                        className="ad-btn primary flex items-center gap-2"
                     >
                         {updateOrganization.isPending && <RandomMatrixSpinner size={16} />}
                         {updateOrganization.isPending ? 'Saving...' : 'Save Changes'}

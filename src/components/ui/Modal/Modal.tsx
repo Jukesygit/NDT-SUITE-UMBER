@@ -160,18 +160,23 @@ export function Modal({
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={title ? `${id || 'modal'}-title` : undefined}
-                className={`glass-panel relative w-full flex flex-col ${className}`}
+                className={`relative w-full flex flex-col ${className}`}
                 style={{
                     maxWidth: getMaxWidth(size),
                     maxHeight: '90vh',
                     animation: 'scaleIn 0.2s ease-out',
+                    borderRadius: '8px',
+                    background: 'linear-gradient(180deg, var(--ctrl-hi) 0%, var(--ctrl) 50%, var(--ctrl-lo) 100%)',
+                    border: '1px solid rgba(0, 0, 0, 0.06)',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.35)',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.25), 0 2px 8px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.40)',
                 }}
             >
                 {/* Header */}
                 {(title || showCloseButton) && (
                     <div
                         className="flex items-center justify-between px-6 py-4 flex-shrink-0"
-                        style={{ borderBottom: '1px solid var(--glass-border)' }}
+                        style={{ borderBottom: '1px solid rgba(0, 0, 0, 0.15)' }}
                     >
                         {title && (
                             <h2
@@ -208,7 +213,7 @@ export function Modal({
 
                 {/* Body */}
                 <div
-                    className="flex-1 overflow-y-auto px-6 py-4 glass-scrollbar"
+                    className="flex-1 overflow-y-auto px-6 py-4"
                     style={{ color: 'var(--text-primary)' }}
                 >
                     {children}
@@ -218,7 +223,7 @@ export function Modal({
                 {footer && (
                     <div
                         className="flex items-center justify-end gap-3 px-6 py-4 flex-shrink-0"
-                        style={{ borderTop: '1px solid var(--glass-border)' }}
+                        style={{ borderTop: '1px solid rgba(0, 0, 0, 0.15)' }}
                     >
                         {footer}
                     </div>

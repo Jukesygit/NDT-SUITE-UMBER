@@ -35,14 +35,14 @@ export function OrganizationCard({
     });
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+        <div style={{ padding: '24px', border: '1px solid rgba(53, 160, 88, 0.20)', borderRadius: '8px', background: 'rgba(53, 160, 88, 0.05)' }}>
             {/* Header with name and menu button */}
             <div className="flex items-start justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                <h3 className="text-lg font-semibold" style={{ color: 'var(--green-bright)' }}>
                     {organization.name}
                 </h3>
                 <button
-                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    style={{ padding: '4px', color: 'rgba(53, 160, 88, 0.45)', cursor: 'pointer', background: 'none', border: 'none' }}
                     aria-label="Organization menu"
                 >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -62,13 +62,13 @@ export function OrganizationCard({
                     <div className="flex items-center justify-center mb-1">
                         <StatusBadge variant="vessel">{userCount}</StatusBadge>
                     </div>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Users</p>
+                    <p className="text-xs" style={{ color: 'rgba(53, 160, 88, 0.45)' }}>Users</p>
                 </div>
             </div>
 
             {/* Footer with creation date */}
-            <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+            <div style={{ paddingTop: '16px', borderTop: '1px solid rgba(53, 160, 88, 0.15)' }}>
+                <p className="text-xs" style={{ color: 'rgba(53, 160, 88, 0.45)' }}>
                     Created {createdDate}
                 </p>
             </div>

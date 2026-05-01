@@ -2,6 +2,9 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { GateSettings } from '../types/companion';
 import type { GateOverlay } from '../components/projects/scan-viewer/AscanCanvas';
+import { classifyWsClose } from '../utils/companionError';
+import { getCompanionToken } from '../utils/companionFetch';
+import { useCompanionNotify } from '../contexts/CompanionNotificationContext';
 
 // ---------------------------------------------------------------------------
 // Debug logger — prefix all companion WebSocket logs
@@ -32,6 +35,7 @@ export interface CursorParams {
   scanMm: number;
   indexMm: number;
   folders: string[];
+  directory?: string | null;
   gateSettings: GateSettings;
   bscanWidth: number;
   bscanHeight: number;
@@ -70,11 +74,15 @@ export interface TierTwoProgress {
   filename: string;
 }
 
+export type BackpressureState = 'normal' | 'elevated' | 'degraded';
+
 export interface UseCompanionWebSocketResult {
   connected: boolean;
   cursorData: CursorResponse | null;
   sendCursor: (params: CursorParams) => void;
   sendGateAdjust: (params: GateAdjustParams) => void;
+  backpressure: BackpressureState;
+  avgProcessingMs: number;
   tierTwoThickness: Float32Array | null;
   tierTwoProgress: TierTwoProgress | null;
   tierTwoComplete: boolean;
@@ -96,6 +104,8 @@ interface ParsedHeader {
   };
   gates: GateOverlay[];
   renderMs: number;
+  processingMs?: number;
+  queueDepth?: number;
 }
 
 interface TileHeader {
@@ -117,9 +127,13 @@ interface CompleteHeader {
 // Constants
 // ---------------------------------------------------------------------------
 
-const THROTTLE_MS = 50;
+const THROTTLE_NORMAL_MS = 50;
+const THROTTLE_DEGRADED_MS = 200;
 const INITIAL_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 5_000;
+const ROLLING_WINDOW_SIZE = 10;
+const ELEVATED_THRESHOLD_MS = 100;
+const DEGRADED_THRESHOLD_MS = 300;
 
 /**
  * Backpressure: when true, a cursor request is in-flight and we should NOT
@@ -135,13 +149,22 @@ export function useCompanionWebSocket(
   port: number | null,
 ): UseCompanionWebSocketResult {
   const queryClient = useQueryClient();
+  const { push: pushNotification } = useCompanionNotify();
+  // Stable ref so the connect callback never becomes stale when push identity changes
+  const pushNotificationRef = useRef(pushNotification);
+  pushNotificationRef.current = pushNotification;
 
   // --- Render state (triggers UI updates) ---
   const [connected, setConnected] = useState(false);
   const [cursorData, setCursorData] = useState<CursorResponse | null>(null);
+  const [backpressure, setBackpressure] = useState<BackpressureState>('normal');
+  const [avgProcessingMs, setAvgProcessingMs] = useState(0);
   const [tierTwoThickness, setTierTwoThickness] = useState<Float32Array | null>(null);
   const [tierTwoProgress, setTierTwoProgress] = useState<TierTwoProgress | null>(null);
   const [tierTwoComplete, setTierTwoComplete] = useState(false);
+
+  // Rolling window for processingMs (P1.3 backpressure)
+  const processingMsWindowRef = useRef<number[]>([]);
 
   // --- Refs (internal, no re-renders) ---
   const wsRef = useRef<WebSocket | null>(null);
@@ -241,6 +264,21 @@ export function useCompanionWebSocket(
         renderMs: header.renderMs,
       });
 
+      // Update rolling processingMs window for backpressure detection
+      const pMs = header.processingMs ?? header.renderMs;
+      const window = processingMsWindowRef.current;
+      window.push(pMs);
+      if (window.length > ROLLING_WINDOW_SIZE) window.shift();
+      const avg = window.reduce((a, b) => a + b, 0) / window.length;
+      setAvgProcessingMs(Math.round(avg));
+      if (avg >= DEGRADED_THRESHOLD_MS) {
+        setBackpressure('degraded');
+      } else if (avg >= ELEVATED_THRESHOLD_MS) {
+        setBackpressure('elevated');
+      } else {
+        setBackpressure('normal');
+      }
+
       // Release backpressure — if there are pending params, flush immediately
       awaitingResponseRef.current = false;
       if (pendingParamsRef.current) {
@@ -275,10 +313,18 @@ export function useCompanionWebSocket(
     ws.onopen = () => {
       const elapsed = (performance.now() - connectTimeRef.current).toFixed(1);
       log(`✓ WebSocket OPEN (handshake: ${elapsed}ms, port: ${currentPort})`);
+      // Send auth token as first message (P2.2 — WS auth via first message)
+      const token = getCompanionToken();
+      if (token) {
+        ws.send(JSON.stringify({ type: 'auth', token }));
+        log('→ sent auth token as first WS message');
+      }
       setConnected(true);
       backoffRef.current = INITIAL_BACKOFF_MS;
-      // Reset backpressure on new connection
       awaitingResponseRef.current = false;
+      processingMsWindowRef.current = [];
+      setBackpressure('normal');
+      setAvgProcessingMs(0);
     };
 
     ws.onclose = (event: CloseEvent) => {
@@ -312,6 +358,17 @@ export function useCompanionWebSocket(
       const desc = codeDescriptions[event.code];
       if (desc) {
         warn(`close code ${event.code} = "${desc}"`);
+      }
+
+      // Dispatch a notification for any non-normal close (skip 1000 = intentional)
+      if (event.code !== 1000) {
+        const classified = classifyWsClose(event.code, 'websocket-cursor');
+        pushNotificationRef.current({
+          title: classified.severity === 'critical' ? 'Companion crashed' : 'Connection lost',
+          message: classified.message,
+          severity: classified.severity,
+          recovery: classified.recovery,
+        });
       }
 
       setConnected(false);
@@ -444,8 +501,12 @@ export function useCompanionWebSocket(
 
     const now = Date.now();
     const elapsed = now - lastSendRef.current;
+    const throttle = processingMsWindowRef.current.length > 0 &&
+      (processingMsWindowRef.current.reduce((a, b) => a + b, 0) / processingMsWindowRef.current.length) >= DEGRADED_THRESHOLD_MS
+      ? THROTTLE_DEGRADED_MS
+      : THROTTLE_NORMAL_MS;
 
-    if (elapsed >= THROTTLE_MS) {
+    if (elapsed >= throttle) {
       flushSend();
     } else if (throttleTimerRef.current === null) {
       throttleTimerRef.current = setTimeout(
@@ -453,7 +514,7 @@ export function useCompanionWebSocket(
           throttleTimerRef.current = null;
           flushSend();
         },
-        THROTTLE_MS - elapsed,
+        throttle - elapsed,
       );
     }
     // If a timer is already pending, the latest params are stored in the ref
@@ -539,6 +600,8 @@ export function useCompanionWebSocket(
     cursorData,
     sendCursor,
     sendGateAdjust,
+    backpressure,
+    avgProcessingMs,
     tierTwoThickness,
     tierTwoProgress,
     tierTwoComplete,

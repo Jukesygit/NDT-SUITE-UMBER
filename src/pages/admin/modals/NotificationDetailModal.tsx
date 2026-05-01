@@ -12,9 +12,9 @@ interface NotificationDetailModalProps {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-    sent: { bg: 'rgba(52, 211, 153, 0.15)', text: '#34d399' },
+    sent: { bg: 'rgba(53, 160, 88, 0.15)', text: 'var(--green-bright)' },
     pending: { bg: 'rgba(156, 163, 175, 0.15)', text: '#9ca3af' },
-    failed: { bg: 'rgba(248, 113, 113, 0.15)', text: '#f87171' },
+    failed: { bg: 'rgba(239, 68, 68, 0.15)', text: 'var(--red)' },
 };
 
 export function NotificationDetailModal({
@@ -32,7 +32,7 @@ export function NotificationDetailModal({
             ) : data ? (
                 <div className="space-y-6">
                     {/* Summary */}
-                    <div className="glass-card" style={{ padding: '16px' }}>
+                    <div style={{ padding: '16px', border: '1px solid rgba(53, 160, 88, 0.20)', borderRadius: '8px', background: 'rgba(53, 160, 88, 0.05)' }}>
                         <div
                             style={{
                                 display: 'grid',
@@ -44,13 +44,13 @@ export function NotificationDetailModal({
                                 <p
                                     style={{
                                         fontSize: '12px',
-                                        color: 'rgba(255, 255, 255, 0.5)',
+                                        color: 'rgba(53, 160, 88, 0.45)',
                                         marginBottom: '4px',
                                     }}
                                 >
                                     Subject
                                 </p>
-                                <p style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
+                                <p style={{ fontWeight: 500, color: 'rgba(53, 160, 88, 0.70)' }}>
                                     {data.notification.subject}
                                 </p>
                             </div>
@@ -58,13 +58,13 @@ export function NotificationDetailModal({
                                 <p
                                     style={{
                                         fontSize: '12px',
-                                        color: 'rgba(255, 255, 255, 0.5)',
+                                        color: 'rgba(53, 160, 88, 0.45)',
                                         marginBottom: '4px',
                                     }}
                                 >
                                     Sent By
                                 </p>
-                                <p style={{ color: 'var(--text-primary)' }}>
+                                <p style={{ color: 'rgba(53, 160, 88, 0.70)' }}>
                                     {data.notification.sent_by_name}
                                 </p>
                             </div>
@@ -72,13 +72,13 @@ export function NotificationDetailModal({
                                 <p
                                     style={{
                                         fontSize: '12px',
-                                        color: 'rgba(255, 255, 255, 0.5)',
+                                        color: 'rgba(53, 160, 88, 0.45)',
                                         marginBottom: '4px',
                                     }}
                                 >
                                     Date
                                 </p>
-                                <p style={{ color: 'var(--text-primary)' }}>
+                                <p style={{ color: 'rgba(53, 160, 88, 0.70)' }}>
                                     {new Date(data.notification.created_at).toLocaleString()}
                                 </p>
                             </div>
@@ -86,18 +86,18 @@ export function NotificationDetailModal({
                                 <p
                                     style={{
                                         fontSize: '12px',
-                                        color: 'rgba(255, 255, 255, 0.5)',
+                                        color: 'rgba(53, 160, 88, 0.45)',
                                         marginBottom: '4px',
                                     }}
                                 >
                                     Delivery
                                 </p>
-                                <p style={{ color: 'var(--text-primary)' }}>
-                                    <span style={{ color: '#34d399' }}>
+                                <p style={{ color: 'rgba(53, 160, 88, 0.70)' }}>
+                                    <span style={{ color: 'var(--green-bright)' }}>
                                         {data.notification.successful_count} sent
                                     </span>
                                     {data.notification.failed_count > 0 && (
-                                        <span style={{ color: '#f87171' }}>
+                                        <span style={{ color: 'var(--red)' }}>
                                             {' '}
                                             / {data.notification.failed_count} failed
                                         </span>
@@ -114,21 +114,23 @@ export function NotificationDetailModal({
                                 fontSize: '14px',
                                 fontWeight: 600,
                                 marginBottom: '8px',
-                                color: 'var(--text-primary)',
+                                color: 'var(--green-bright)',
                             }}
                         >
                             Message
                         </h4>
                         <div
-                            className="glass-card"
                             style={{
                                 padding: '16px',
                                 maxHeight: '200px',
                                 overflowY: 'auto',
                                 whiteSpace: 'pre-wrap',
-                                color: 'rgba(255, 255, 255, 0.85)',
+                                color: 'rgba(53, 160, 88, 0.70)',
                                 fontSize: '14px',
                                 lineHeight: '1.6',
+                                border: '1px solid rgba(53, 160, 88, 0.20)',
+                                borderRadius: '8px',
+                                background: 'rgba(53, 160, 88, 0.05)',
                             }}
                         >
                             {data.notification.body}
@@ -142,7 +144,7 @@ export function NotificationDetailModal({
                                 fontSize: '14px',
                                 fontWeight: 600,
                                 marginBottom: '8px',
-                                color: 'var(--text-primary)',
+                                color: 'var(--green-bright)',
                             }}
                         >
                             Recipients ({data.recipients.length})
@@ -151,10 +153,9 @@ export function NotificationDetailModal({
                             style={{
                                 maxHeight: '300px',
                                 overflowY: 'auto',
-                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                border: '1px solid rgba(53, 160, 88, 0.20)',
                                 borderRadius: '8px',
                             }}
-                            className="glass-scrollbar"
                         >
                             {data.recipients.map((recipient: NotificationRecipient) => (
                                 <div
@@ -164,14 +165,14 @@ export function NotificationDetailModal({
                                         alignItems: 'center',
                                         justifyContent: 'space-between',
                                         padding: '12px 16px',
-                                        borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                                        borderBottom: '1px solid rgba(53, 160, 88, 0.10)',
                                     }}
                                 >
                                     <div>
                                         <p
                                             style={{
                                                 fontWeight: 500,
-                                                color: 'var(--text-primary)',
+                                                color: 'rgba(53, 160, 88, 0.70)',
                                             }}
                                         >
                                             {recipient.recipient_name}
@@ -179,7 +180,7 @@ export function NotificationDetailModal({
                                         <p
                                             style={{
                                                 fontSize: '13px',
-                                                color: 'rgba(255, 255, 255, 0.5)',
+                                                color: 'rgba(53, 160, 88, 0.45)',
                                             }}
                                         >
                                             {recipient.recipient_email}
@@ -188,7 +189,7 @@ export function NotificationDetailModal({
                                             <p
                                                 style={{
                                                     fontSize: '12px',
-                                                    color: '#f87171',
+                                                    color: 'var(--red)',
                                                     marginTop: '4px',
                                                 }}
                                             >

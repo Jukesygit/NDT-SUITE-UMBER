@@ -71,7 +71,7 @@ function shouldShowCertificationFields(definition?: CompetencyDefinition): boole
 function UploadIcon() {
     return (
         <svg
-            style={{ width: '32px', height: '32px', color: 'rgba(255, 255, 255, 0.4)', marginBottom: '8px' }}
+            style={{ width: '28px', height: '28px', color: 'rgba(53, 160, 88, 0.30)', marginBottom: '8px' }}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -92,7 +92,7 @@ function UploadIcon() {
 function DocumentIcon() {
     return (
         <svg
-            style={{ width: '20px', height: '20px', color: '#10b981', flexShrink: 0 }}
+            style={{ width: '20px', height: '20px', color: 'rgba(53, 160, 88, 0.60)', flexShrink: 0 }}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -380,7 +380,7 @@ export function EditCompetencyModal({
                 <div>
                     <span className="pf-display-label" style={{ marginBottom: '6px', display: 'block' }}>
                         Certificate Document
-                        <span style={{ fontSize: '11px', fontWeight: '400', marginLeft: '8px', color: 'rgba(255, 255, 255, 0.3)' }}>
+                        <span style={{ fontSize: '9px', fontWeight: '400', marginLeft: '8px', letterSpacing: '0.06em' }}>
                             (PDF or image - max 10MB)
                         </span>
                     </span>

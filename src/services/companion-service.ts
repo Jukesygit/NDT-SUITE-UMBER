@@ -19,7 +19,8 @@ import type {
 // ---------------------------------------------------------------------------
 
 export const MIN_COMPANION_VERSION = 1;
-export const MAX_COMPANION_VERSION = 1;
+export const MAX_COMPANION_VERSION = 2;
+export const WEBAPP_API_VERSION = 2;
 
 // ---------------------------------------------------------------------------
 // Zod schemas — validate companion responses before use
@@ -178,6 +179,7 @@ export async function fetchComposite(
   folders: string[],
   gateSettings: GateSettings,
   signal?: AbortSignal,
+  directory?: string | null,
 ): Promise<CompositeData> {
   const res = await fetch(`http://localhost:${port}/create-composite`, {
     method: 'POST',
@@ -185,7 +187,11 @@ export async function fetchComposite(
       'Content-Type': 'application/json',
       'Accept': 'application/octet-stream',
     },
-    body: JSON.stringify({ folders, gateSettings }),
+    body: JSON.stringify({
+      folders,
+      gateSettings,
+      ...(directory != null && { directory }),
+    }),
     signal,
   });
 
@@ -298,13 +304,15 @@ export async function refreshIndex(
 async function fetchImageEndpoint(
   port: number,
   path: string,
-  params: { folders: string[]; scanMm: number; indexMm: number; width?: number; height?: number; gateSettings?: GateSettings },
+  params: { folders: string[]; scanMm: number; indexMm: number; width?: number; height?: number; gateSettings?: GateSettings; directory?: string | null },
   signal?: AbortSignal,
 ): Promise<string> {
+  const { directory, ...rest } = params;
+  const body = { ...rest, ...(directory != null && { directory }) };
   const res = await fetch(`http://localhost:${port}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params),
+    body: JSON.stringify(body),
     signal,
   });
 

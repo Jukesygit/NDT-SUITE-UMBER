@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Industrial Instrument — Control Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --chassis: #504e4a;
+    --chassis-inner: #5a5854;
+
+    --panel-top: #c6c5c2;
+    --panel-mid: #b2b1ae;
+    --panel-bot: #9e9d9a;
+
+    --well-rim: #4a4844;
+    --well-mid: #262420;
+    --well-deep: #141310;
+    --well-floor: #0a0908;
+
+    --knob-hi: #363432;
+    --knob-mid: #201e1c;
+    --knob-lo: #0e0e0c;
+    --knob-rim-light: rgba(255,255,255,0.10);
+
+    --ctrl: #d6d3ce;
+    --ctrl-hi: #e4e1dc;
+    --ctrl-lo: #bcb9b4;
+
+    --green: #2d8a4e;
+    --green-bright: #35a058;
+    --green-dark: #206b3a;
+    --green-glow: rgba(45,138,78,0.50);
+    --green-glow-soft: rgba(45,138,78,0.20);
+    --amber: #d4981e;
+    --red: #c0392b;
+    --red-bright: #ef5350;
+
+    --ink: #1c1b18;
+    --ink-mid: #4a4845;
+    --ink-light: #7a7672;
+    --ink-ghost: #9a968f;
+
+    --ff-display: 'Barlow', system-ui, sans-serif;
+    --ff-label: 'Barlow Condensed', 'Barlow', sans-serif;
+    --ff-mono: 'JetBrains Mono', monospace;
+  }
+
+  body {
+    min-height: 100vh;
+    background: #3a3836;
+    font-family: var(--ff-display);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    user-select: none;
+  }
+
+  .chassis {
+    width: 100%;
+    max-width: 780px;
+    padding: 10px;
+    border-radius: 14px;
+    background: linear-gradient(180deg, var(--chassis-inner) 0%, var(--chassis) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.06),
+      inset 0 -1px 0 rgba(0,0,0,0.20),
+      0 12px 40px rgba(0,0,0,0.45),
+      0 2px 8px rgba(0,0,0,0.25);
+  }
+
+  .panel {
+    border-radius: 8px;
+    padding: 32px 40px 28px;
+    position: relative;
+    overflow: hidden;
+    background:
+      linear-gradient(180deg, var(--panel-top) 0%, var(--panel-mid) 45%, var(--panel-bot) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.45),
+      inset 0 -1px 0 rgba(0,0,0,0.08);
+  }
+
+  .panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 8px;
+    background: repeating-linear-gradient(90deg,
+      transparent 0px, transparent 1px,
+      rgba(255,255,255,0.004) 1px, rgba(255,255,255,0.004) 2px,
+      transparent 2px, transparent 3px
+    );
+    pointer-events: none;
+  }
+
+  /* ═══ HEADER ═══ */
+  .header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 24px;
+  }
+
+  .header-led {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #5ec87a, var(--green) 55%, var(--green-dark));
+    box-shadow: 0 0 4px var(--green-glow), 0 0 14px var(--green-glow-soft),
+      inset 0 -1px 2px rgba(0,0,0,0.30), inset 0 1px 1px rgba(255,255,255,0.35);
+  }
+
+  .header-title {
+    font-family: var(--ff-label); font-weight: 700; font-size: 17px;
+    text-transform: uppercase; letter-spacing: 0.16em;
+    color: var(--ink-mid); text-shadow: 0 1px 0 rgba(255,255,255,0.50);
+  }
+
+  .header-model {
+    margin-left: auto;
+    font-family: var(--ff-label); font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--ink-ghost); text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+  }
+
+  .groove {
+    height: 1px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(255,255,255,0.25) 100%);
+    margin: 0 -8px;
+  }
+
+  .label {
+    font-family: var(--ff-label); font-weight: 700; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.16em;
+    color: var(--ink-light); text-shadow: 0 1px 0 rgba(255,255,255,0.40);
+    text-align: center;
+  }
+
+  .label--section {
+    font-size: 11px; letter-spacing: 0.14em;
+    text-align: left; margin-bottom: 14px;
+  }
+
+  .value {
+    font-family: var(--ff-mono); font-size: 11px;
+    color: var(--ink-mid); text-shadow: 0 1px 0 rgba(255,255,255,0.28);
+    text-align: center; font-variant-numeric: tabular-nums;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     SPECULAR BLOOM — Centered on well, halo effect
+     Bloom sits behind well (z-index 0 vs 1).
+     The well hides the center; only the bright ring shows.
+     ═══════════════════════════════════════════════════════ */
+  .bloom {
+    position: absolute;
+    pointer-events: none;
+    z-index: 0;
+    border-radius: 50%;
+  }
+
+  .bloom--sm {
+    width: 160px;
+    height: 100px;
+    top: -35px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: radial-gradient(ellipse at 50% 50%,
+      white 0%,
+      rgba(255,255,255,0.92) 28%,
+      rgba(255,255,255,0.55) 44%,
+      rgba(255,255,255,0.14) 62%,
+      rgba(255,255,255,0.02) 80%,
+      transparent 94%);
+  }
+
+  .bloom--lg {
+    width: 320px;
+    height: 180px;
+    top: -60px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: radial-gradient(ellipse at 50% 50%,
+      white 0%,
+      rgba(255,255,255,0.90) 28%,
+      rgba(255,255,255,0.50) 44%,
+      rgba(255,255,255,0.12) 62%,
+      rgba(255,255,255,0.02) 78%,
+      transparent 92%);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     KNOB — Dark body, fixed lighting, sharp dark rim
+     ═══════════════════════════════════════════════════════ */
+  .knob-area {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    position: relative;
+  }
+
+  .knob-well {
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: grab; position: relative; z-index: 1;
+  }
+
+  .knob-well:active { cursor: grabbing; }
+
+  .knob-well--sm {
+    width: 84px; height: 84px;
+    background: radial-gradient(circle,
+      var(--well-floor) 0%, var(--well-floor) 26%,
+      var(--well-deep) 44%, var(--well-mid) 60%,
+      var(--well-rim) 74%,
+      #1e1c1a 90%,
+      #161412 97%,
+      #1a1816 100%);
+    box-shadow:
+      inset 0 6px 16px rgba(0,0,0,0.55),
+      inset 0 2px 5px rgba(0,0,0,0.40),
+      inset 0 -3px 6px rgba(255,255,255,0.03),
+      0 4px 8px -2px rgba(0,0,0,0.15);
+  }
+
+  .knob-well--lg {
+    width: 200px; height: 200px;
+    background: radial-gradient(circle,
+      var(--well-floor) 0%, var(--well-floor) 28%,
+      var(--well-deep) 46%, var(--well-mid) 60%,
+      var(--well-rim) 72%,
+      #1e1c1a 88%,
+      #161412 96%,
+      #1a1816 100%);
+    box-shadow:
+      inset 0 10px 24px rgba(0,0,0,0.55),
+      inset 0 3px 8px rgba(0,0,0,0.40),
+      inset 0 -5px 10px rgba(255,255,255,0.03),
+      0 6px 12px -3px rgba(0,0,0,0.15);
+  }
+
+  .knob {
+    border-radius: 50%; position: relative;
+  }
+
+  .knob--sm {
+    width: 58px; height: 58px;
+    background:
+      radial-gradient(ellipse 45% 28% at 48% 16%,
+        rgba(255,255,255,0.18) 0%, transparent 100%),
+      conic-gradient(from 180deg,
+        transparent 70deg,
+        rgba(255,255,255,0.03) 135deg,
+        rgba(255,255,255,0.08) 170deg,
+        rgba(255,255,255,0.10) 180deg,
+        rgba(255,255,255,0.08) 190deg,
+        rgba(255,255,255,0.03) 225deg,
+        transparent 290deg),
+      linear-gradient(170deg, var(--knob-hi) 0%, var(--knob-mid) 35%, var(--knob-lo) 100%);
+    box-shadow:
+      0 4px 14px rgba(0,0,0,0.50),
+      0 1px 3px rgba(0,0,0,0.35),
+      inset 0 1px 0 var(--knob-rim-light),
+      inset 0 -1px 0 rgba(0,0,0,0.22);
+  }
+
+  .knob--lg {
+    width: 140px; height: 140px;
+    background:
+      radial-gradient(ellipse 30% 18% at 48% 18%,
+        rgba(255,255,255,0.07) 0%, transparent 100%),
+      conic-gradient(from 180deg,
+        transparent 80deg,
+        rgba(255,255,255,0.015) 145deg,
+        rgba(255,255,255,0.035) 175deg,
+        rgba(255,255,255,0.04) 180deg,
+        rgba(255,255,255,0.035) 185deg,
+        rgba(255,255,255,0.015) 215deg,
+        transparent 280deg),
+      linear-gradient(176deg, #262422 0%, var(--knob-lo) 40%, #080808 100%);
+    box-shadow:
+      0 4px 16px rgba(0,0,0,0.50),
+      0 2px 5px rgba(0,0,0,0.35),
+      inset 0 1px 0 rgba(255,255,255,0.06),
+      inset 0 -1px 0 rgba(0,0,0,0.22);
+  }
+
+  .knob-indicator {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .knob-indicator::after {
+    content: '';
+    position: absolute;
+    top: 5px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px; height: 13px;
+    border-radius: 1px;
+    background: var(--green-bright);
+    box-shadow: 0 0 6px var(--green-glow);
+  }
+
+  .knob--lg .knob-indicator::after {
+    top: 14px;
+    width: 3px; height: 22px;
+    border-radius: 1.5px;
+    box-shadow: 0 0 8px var(--green-glow);
+  }
+
+  .knob-indicator--amber::after {
+    background: var(--amber);
+    box-shadow: 0 0 6px rgba(212,152,30,0.45);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     VERTICAL SLIDER
+     ═══════════════════════════════════════════════════════ */
+  .vslider-group {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+
+  .vslider-scale {
+    font-family: var(--ff-mono); font-size: 8px;
+    color: var(--ink-ghost); text-shadow: 0 1px 0 rgba(255,255,255,0.28);
+  }
+
+  .vslider-channel {
+    width: 14px;
+    height: 165px;
+    border-radius: 7px;
+    background:
+      linear-gradient(180deg, var(--well-floor) 0%, var(--well-deep) 30%, var(--well-mid) 100%);
+    box-shadow:
+      inset 3px 0 6px rgba(0,0,0,0.45),
+      inset -3px 0 6px rgba(0,0,0,0.45),
+      inset 0 5px 10px rgba(0,0,0,0.45),
+      inset 0 -2px 4px rgba(255,255,255,0.02),
+      0 1px 0 rgba(255,255,255,0.14);
+    position: relative;
+    cursor: pointer;
+  }
+
+  .vslider-fill {
+    position: absolute; bottom: 0; left: 0; width: 100%;
+    border-radius: 0 0 7px 7px;
+    transition: height 0.05s linear;
+  }
+
+  .vslider-fill--green {
+    background: linear-gradient(180deg, #3dbc68 0%, var(--green) 35%, var(--green-dark) 100%);
+    box-shadow: 0 0 8px var(--green-glow-soft), inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+
+  .vslider-fill--red {
+    background: linear-gradient(180deg, var(--red-bright) 0%, var(--red) 35%, #7a2a1e 100%);
+    box-shadow: 0 0 8px rgba(192,57,43,0.30);
+  }
+
+  .vslider-thumb {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    width: 26px; height: 14px; border-radius: 7px;
+    cursor: grab;
+    background:
+      radial-gradient(ellipse 65% 40% at 50% 18%,
+        rgba(255,255,255,0.28) 0%, transparent 100%),
+      linear-gradient(180deg, #5c5a58 0%, #3a3836 28%, #1e1c1a 68%, #0e0e0c 100%);
+    box-shadow:
+      0 3px 8px rgba(0,0,0,0.50),
+      0 1px 2px rgba(0,0,0,0.35),
+      inset 0 1px 0 rgba(255,255,255,0.18),
+      inset 0 -1px 0 rgba(0,0,0,0.28);
+  }
+
+  .vslider-thumb:active { cursor: grabbing; }
+
+  .vslider-label {
+    font-family: var(--ff-label); font-weight: 600; font-size: 9px;
+    text-transform: uppercase; letter-spacing: 0.14em;
+    color: var(--ink-light); text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     HORIZONTAL TOGGLE — Labels below track
+     ═══════════════════════════════════════════════════════ */
+  .toggle-stack {
+    display: flex; flex-direction: column; gap: 8px;
+  }
+
+  .toggle-unit {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+  }
+
+  .toggle-labels {
+    display: flex;
+    justify-content: space-between;
+    width: 82px;
+    padding: 0 2px;
+  }
+
+  .toggle-text {
+    font-family: var(--ff-label); font-weight: 600; font-size: 8px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ink-ghost); text-shadow: 0 1px 0 rgba(255,255,255,0.28);
+  }
+
+  .htoggle {
+    width: 82px;
+    height: 28px;
+    border-radius: 14px;
+    background:
+      linear-gradient(180deg, var(--well-floor) 0%, var(--well-deep) 30%, var(--well-mid) 100%);
+    box-shadow:
+      inset 0 4px 10px rgba(0,0,0,0.55),
+      inset 0 1px 3px rgba(0,0,0,0.40),
+      inset 3px 0 6px rgba(0,0,0,0.20),
+      inset -3px 0 6px rgba(0,0,0,0.20),
+      0 1px 0 rgba(255,255,255,0.14);
+    position: relative;
+    cursor: pointer;
+    overflow: hidden;
+  }
+
+  .htoggle-body {
+    position: absolute;
+    top: 3px;
+    width: 38px;
+    height: 22px;
+    border-radius: 11px;
+    background:
+      radial-gradient(ellipse 60% 35% at 50% 15%,
+        rgba(255,255,255,0.16) 0%, transparent 100%),
+      linear-gradient(180deg, #4a4846 0%, var(--knob-mid) 45%, var(--knob-lo) 100%);
+    box-shadow:
+      0 2px 6px rgba(0,0,0,0.45),
+      0 1px 2px rgba(0,0,0,0.30),
+      inset 0 1px 0 rgba(255,255,255,0.12),
+      inset 0 -1px 0 rgba(0,0,0,0.20);
+    transition: left 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+                background 0.15s ease,
+                box-shadow 0.15s ease;
+  }
+
+  .htoggle[data-state="off"] .htoggle-body {
+    left: 3px;
+  }
+
+  .htoggle[data-state="on"] .htoggle-body {
+    left: 41px;
+    background:
+      radial-gradient(ellipse 60% 35% at 50% 18%,
+        rgba(255,255,255,0.14) 0%, transparent 100%),
+      linear-gradient(180deg, #ff5252 0%, var(--red-bright) 30%, var(--red) 70%, #8e2a1e 100%);
+    box-shadow:
+      0 2px 6px rgba(0,0,0,0.45),
+      0 0 14px rgba(239,83,80,0.40),
+      0 0 28px rgba(239,83,80,0.15),
+      inset 0 1px 0 rgba(255,255,255,0.16),
+      inset 0 -1px 0 rgba(0,0,0,0.20);
+  }
+
+  .toggle-fn {
+    font-family: var(--ff-label); font-weight: 600; font-size: 7px;
+    text-transform: uppercase; letter-spacing: 0.10em;
+    color: var(--ink-ghost); text-shadow: 0 1px 0 rgba(255,255,255,0.25);
+    text-align: center;
+    margin-top: 1px;
+  }
+
+  /* ═══ LAYOUT ═══ */
+  .top-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 24px; padding: 0 16px;
+  }
+
+  .top-center {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+  }
+
+  .top-center-logo {
+    font-family: var(--ff-display); font-weight: 600; font-size: 14px;
+    color: var(--ink-light); text-shadow: 0 1px 0 rgba(255,255,255,0.38);
+  }
+
+  .top-center-url {
+    font-family: var(--ff-mono); font-size: 9px;
+    color: var(--ink-ghost); text-shadow: 0 1px 0 rgba(255,255,255,0.28);
+  }
+
+  .main-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 28px; gap: 24px; padding: 0 8px;
+  }
+
+  .main-left { display: flex; gap: 14px; align-items: flex-end; }
+  .main-right { display: flex; flex-direction: column; align-items: flex-end; }
+
+  /* ═══ DISPLAY ═══ */
+  .display-well {
+    border-radius: 7px;
+    background:
+      radial-gradient(ellipse at 50% 95%, rgba(255,255,255,0.02) 0%, transparent 50%),
+      linear-gradient(180deg, var(--well-mid) 0%, var(--well-deep) 30%, var(--well-floor) 100%);
+    box-shadow:
+      inset 0 5px 14px rgba(0,0,0,0.38),
+      inset 0 2px 4px rgba(0,0,0,0.28),
+      inset 0 -2px 5px rgba(255,255,255,0.02),
+      0 1px 0 rgba(255,255,255,0.20);
+    padding: 4px;
+  }
+
+  .display {
+    border-radius: 4px; padding: 14px 16px;
+    background: linear-gradient(180deg, #131210 0%, #0c0b0a 100%);
+    color: var(--green-bright); font-family: var(--ff-mono);
+    text-shadow: 0 0 6px var(--green-glow-soft);
+  }
+
+  .display-row { display: flex; justify-content: space-between; align-items: baseline; }
+
+  .display-label {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em;
+    color: rgba(53,160,88,0.42);
+  }
+
+  .display-value {
+    font-size: 24px; font-weight: 600; letter-spacing: 0.04em;
+    text-shadow: 0 0 10px var(--green-glow); line-height: 1;
+  }
+
+  .display-unit { font-size: 11px; color: rgba(53,160,88,0.48); margin-left: 3px; }
+
+  .meter { display: flex; gap: 2px; align-items: flex-end; height: 32px; }
+  .meter-seg { width: 5px; border-radius: 1px; }
+  .meter-seg--green {
+    background: linear-gradient(180deg, var(--green-bright), var(--green));
+    box-shadow: 0 0 3px var(--green-glow-soft);
+  }
+  .meter-seg--amber {
+    background: linear-gradient(180deg, #e0a82e, var(--amber));
+    box-shadow: 0 0 3px rgba(184,134,30,0.25);
+  }
+  .meter-seg--dim { background: #1a1918; opacity: 0.5; }
+
+  .led { width: 6px; height: 6px; border-radius: 50%; }
+  .led--on {
+    background: radial-gradient(circle at 35% 30%, #5ec87a, var(--green) 60%, var(--green-dark));
+    box-shadow: 0 0 4px var(--green-glow), 0 0 10px var(--green-glow-soft);
+  }
+  .led--off {
+    background: radial-gradient(circle at 45% 40%, #5a5650, #3a3836);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.35);
+  }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 8px; padding: 8px 18px; border: none; border-radius: 5px;
+    background:
+      radial-gradient(ellipse at 50% 15%, rgba(255,255,255,0.08) 0%, transparent 60%),
+      linear-gradient(180deg, var(--ctrl-hi) 0%, var(--ctrl) 50%, var(--ctrl-lo) 100%);
+    box-shadow:
+      0 3px 8px rgba(0,0,0,0.16), 0 1px 2px rgba(0,0,0,0.08),
+      inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -1px 0 rgba(0,0,0,0.04);
+    color: var(--ink-mid); font-family: var(--ff-label); font-weight: 600;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.40);
+    cursor: pointer; transition: all 0.15s ease;
+  }
+  .btn:hover {
+    background:
+      radial-gradient(ellipse at 50% 15%, rgba(255,255,255,0.15) 0%, transparent 60%),
+      linear-gradient(180deg, #eae8e3 0%, var(--ctrl-hi) 50%, var(--ctrl) 100%);
+    box-shadow:
+      0 4px 12px rgba(0,0,0,0.20), 0 1px 3px rgba(0,0,0,0.10),
+      inset 0 1px 0 rgba(255,255,255,0.50), inset 0 -1px 0 rgba(0,0,0,0.04);
+  }
+  .btn:active {
+    background: linear-gradient(180deg, var(--ctrl-lo) 0%, var(--ctrl) 100%);
+    box-shadow: inset 0 3px 8px rgba(0,0,0,0.10), inset 0 1px 2px rgba(0,0,0,0.06);
+    transform: translateY(1px);
+  }
+  .btn--green {
+    background:
+      radial-gradient(ellipse at 50% 15%, rgba(255,255,255,0.10) 0%, transparent 60%),
+      linear-gradient(180deg, var(--green-bright) 0%, var(--green) 55%, var(--green-dark) 100%);
+    color: #eaf5ee; text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+    box-shadow:
+      0 3px 8px rgba(45,138,78,0.20), 0 1px 2px rgba(0,0,0,0.10),
+      inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -1px 0 rgba(0,0,0,0.08);
+  }
+  .btn--green:hover {
+    background:
+      radial-gradient(ellipse at 50% 15%, rgba(255,255,255,0.14) 0%, transparent 60%),
+      linear-gradient(180deg, #3dac64 0%, var(--green-bright) 55%, var(--green) 100%);
+  }
+
+  .nameplate {
+    font-family: var(--ff-label); font-weight: 700; font-size: 15px;
+    text-transform: uppercase; letter-spacing: 0.18em;
+    color: var(--ink-light); text-shadow: 0 1px 0 rgba(255,255,255,0.40);
+  }
+
+  .bottom-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 24px; padding-top: 2px;
+  }
+
+  .tag {
+    position: fixed; bottom: 16px; right: 16px;
+    padding: 6px 14px; border-radius: 6px;
+    background:
+      radial-gradient(ellipse at 50% 20%, rgba(255,255,255,0.06) 0%, transparent 60%),
+      linear-gradient(180deg, var(--panel-top) 0%, var(--panel-bot) 100%);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.22), 0 1px 2px rgba(0,0,0,0.12),
+      inset 0 1px 0 rgba(255,255,255,0.30);
+    font-family: var(--ff-label); font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ink-light); text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+  }
+</style>
+</head>
+<body>
+
+<div class="chassis">
+  <div class="panel">
+
+    <div class="header">
+      <div class="header-led"></div>
+      <div class="header-title">Matrix Portal</div>
+      <div class="header-model">Scan Configuration</div>
+    </div>
+
+    <div class="groove"></div>
+
+    <!-- TOP ROW -->
+    <div class="top-row">
+      <div class="knob-area">
+        <div class="bloom bloom--sm"></div>
+        <div class="knob-well knob-well--sm" data-knob data-min="-20" data-max="40" data-value="6" data-unit=" dB" data-prefix="+" data-label="gain">
+          <div class="knob knob--sm">
+            <div class="knob-indicator knob-indicator--amber"></div>
+          </div>
+        </div>
+        <div class="label">Gain</div>
+        <div class="value" data-knob-display="gain">+6.0 dB</div>
+      </div>
+      <div class="top-center">
+        <div class="top-center-logo">NDT Suite</div>
+        <div class="top-center-url">matrixportal.io</div>
+      </div>
+      <div class="knob-area">
+        <div class="bloom bloom--sm"></div>
+        <div class="knob-well knob-well--sm" data-knob data-min="10" data-max="500" data-value="125" data-unit=" mm" data-label="range">
+          <div class="knob knob--sm">
+            <div class="knob-indicator"></div>
+          </div>
+        </div>
+        <div class="label">Range</div>
+        <div class="value" data-knob-display="range">125 mm</div>
+      </div>
+    </div>
+
+    <!-- MAIN ROW -->
+    <div class="main-row">
+
+      <div class="main-left">
+        <div class="vslider-group">
+          <div class="vslider-scale">0 dB</div>
+          <div class="vslider-channel" data-slider data-min="0" data-max="100" data-value="65" data-color="green" data-label="in">
+            <div class="vslider-fill vslider-fill--green"></div>
+            <div class="vslider-thumb"></div>
+          </div>
+          <div class="vslider-label">In</div>
+        </div>
+        <div class="vslider-group">
+          <div class="vslider-scale">0 dB</div>
+          <div class="vslider-channel" data-slider data-min="0" data-max="100" data-value="45" data-color="red" data-label="out">
+            <div class="vslider-fill vslider-fill--red"></div>
+            <div class="vslider-thumb"></div>
+          </div>
+          <div class="vslider-label">Out</div>
+        </div>
+      </div>
+
+      <div class="knob-area">
+        <div class="bloom bloom--lg"></div>
+        <div class="knob-well knob-well--lg" data-knob data-min="1000" data-max="8000" data-value="5920" data-unit=" m/s" data-label="velocity">
+          <div class="knob knob--lg">
+            <div class="knob-indicator"></div>
+          </div>
+        </div>
+        <div class="label" style="font-size: 11px; margin-top: 4px;">Velocity</div>
+        <div class="value" data-knob-display="velocity">5920 m/s</div>
+      </div>
+
+      <div class="main-right">
+        <div class="toggle-stack">
+          <div class="toggle-unit">
+            <div class="htoggle" data-toggle data-state="off" data-label="rectify">
+              <div class="htoggle-body"></div>
+            </div>
+            <div class="toggle-labels">
+              <span class="toggle-text">OFF</span>
+              <span class="toggle-text">ON</span>
+            </div>
+            <div class="toggle-fn">Rectify</div>
+          </div>
+          <div class="toggle-unit">
+            <div class="htoggle" data-toggle data-state="on" data-label="filter">
+              <div class="htoggle-body"></div>
+            </div>
+            <div class="toggle-labels">
+              <span class="toggle-text">OFF</span>
+              <span class="toggle-text">ON</span>
+            </div>
+            <div class="toggle-fn">Filter</div>
+          </div>
+          <div class="toggle-unit">
+            <div class="htoggle" data-toggle data-state="off" data-label="peak-hold">
+              <div class="htoggle-body"></div>
+            </div>
+            <div class="toggle-labels">
+              <span class="toggle-text">OFF</span>
+              <span class="toggle-text">ON</span>
+            </div>
+            <div class="toggle-fn">Peak Hold</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="groove" style="margin-top: 28px;"></div>
+
+    <!-- DISPLAYS -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px;">
+      <div>
+        <div class="label label--section">Probe Status</div>
+        <div class="display-well">
+          <div class="display">
+            <div class="display-row" style="margin-bottom: 6px;">
+              <div class="display-label">Active Probe</div>
+              <div class="display-label">Freq</div>
+            </div>
+            <div class="display-row" style="margin-bottom: 10px;">
+              <div style="font-size: 15px; font-weight: 500;">DA312-R</div>
+              <div style="font-size: 15px;">5.0<span class="display-unit">MHz</span></div>
+            </div>
+            <div class="display-row">
+              <div>
+                <div class="display-label">Signal</div>
+                <div class="meter" style="margin-top: 6px;">
+                  <div class="meter-seg meter-seg--green" style="height: 10px"></div>
+                  <div class="meter-seg meter-seg--green" style="height: 14px"></div>
+                  <div class="meter-seg meter-seg--green" style="height: 18px"></div>
+                  <div class="meter-seg meter-seg--green" style="height: 22px"></div>
+                  <div class="meter-seg meter-seg--green" style="height: 26px"></div>
+                  <div class="meter-seg meter-seg--green" style="height: 30px"></div>
+                  <div class="meter-seg meter-seg--amber" style="height: 28px"></div>
+                  <div class="meter-seg meter-seg--amber" style="height: 22px"></div>
+                  <div class="meter-seg meter-seg--dim" style="height: 16px"></div>
+                  <div class="meter-seg meter-seg--dim" style="height: 12px"></div>
+                </div>
+              </div>
+              <div style="text-align: right;">
+                <div class="display-label">Amplitude</div>
+                <div class="display-value" style="margin-top: 4px;">87<span class="display-unit">%FSH</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="label label--section">Gate Settings</div>
+        <div class="display-well">
+          <div class="display">
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <div class="display-row">
+                <span class="display-label">Gate A Start</span>
+                <span style="font-size: 13px;">12.4<span class="display-unit">mm</span></span>
+              </div>
+              <div class="display-row">
+                <span class="display-label">Gate A Width</span>
+                <span style="font-size: 13px;">48.2<span class="display-unit">mm</span></span>
+              </div>
+              <div class="display-row">
+                <span class="display-label">Gate A Threshold</span>
+                <span style="font-size: 13px;">20<span class="display-unit">%</span></span>
+              </div>
+              <div style="margin-top: 4px;">
+                <div class="display-row" style="gap: 10px;">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <div class="led led--on"></div>
+                    <span style="font-size: 10px; color: rgba(53,160,88,0.52);">CH 1</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <div class="led led--on"></div>
+                    <span style="font-size: 10px; color: rgba(53,160,88,0.52);">CH 2</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <div class="led led--off"></div>
+                    <span style="font-size: 10px; color: rgba(53,160,88,0.28);">CH 3</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bottom-bar">
+      <div style="display: flex; gap: 10px;">
+        <button class="btn">Reset</button>
+        <button class="btn">Export</button>
+      </div>
+      <div class="nameplate">Scan Config</div>
+      <button class="btn btn--green">Apply &amp; Scan</button>
+    </div>
+
+  </div>
+</div>
+
+<div class="tag">Industrial Instrument v5</div>
+
+<script>
+(function() {
+  document.querySelectorAll('[data-knob]').forEach(function(well) {
+    var indicator = well.querySelector('.knob-indicator');
+    var min = parseFloat(well.dataset.min);
+    var max = parseFloat(well.dataset.max);
+    var value = parseFloat(well.dataset.value);
+    var unit = well.dataset.unit || '';
+    var prefix = well.dataset.prefix || '';
+    var label = well.dataset.label;
+    var displayEl = document.querySelector('[data-knob-display="' + label + '"]');
+    var minAngle = -135, maxAngle = 135;
+
+    function valueToAngle(v) {
+      return minAngle + ((v - min) / (max - min)) * (maxAngle - minAngle);
+    }
+
+    function updateVisual() {
+      indicator.style.transform = 'rotate(' + valueToAngle(value) + 'deg)';
+      if (displayEl) {
+        var s = value % 1 === 0 ? value.toString() : value.toFixed(1);
+        displayEl.textContent = prefix + s + unit;
+      }
+    }
+
+    updateVisual();
+
+    var dragging = false, startY = 0, startValue = 0;
+
+    well.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      dragging = true;
+      startY = e.clientY;
+      startValue = value;
+      document.body.style.cursor = 'grabbing';
+    });
+
+    well.addEventListener('wheel', function(e) {
+      e.preventDefault();
+      var step = (max - min) / 100;
+      value = Math.max(min, Math.min(max, value - e.deltaY * step * 0.1));
+      updateVisual();
+    }, { passive: false });
+
+    document.addEventListener('mousemove', function(e) {
+      if (!dragging) return;
+      var dy = startY - e.clientY;
+      value = Math.max(min, Math.min(max, startValue + dy * ((max - min) / 200)));
+      updateVisual();
+    });
+
+    document.addEventListener('mouseup', function() {
+      if (dragging) { dragging = false; document.body.style.cursor = ''; }
+    });
+  });
+
+  document.querySelectorAll('[data-slider]').forEach(function(channel) {
+    var fill = channel.querySelector('.vslider-fill');
+    var thumb = channel.querySelector('.vslider-thumb');
+    var min = parseFloat(channel.dataset.min);
+    var max = parseFloat(channel.dataset.max);
+    var value = parseFloat(channel.dataset.value);
+
+    function updateVisual() {
+      var pct = ((value - min) / (max - min)) * 100;
+      fill.style.height = pct + '%';
+      thumb.style.bottom = 'calc(' + pct + '% - 7px)';
+    }
+
+    updateVisual();
+
+    var dragging = false;
+
+    function setFromEvent(e) {
+      var rect = channel.getBoundingClientRect();
+      var pct = Math.max(0, Math.min(1, 1 - (e.clientY - rect.top) / rect.height));
+      value = min + pct * (max - min);
+      updateVisual();
+    }
+
+    thumb.addEventListener('mousedown', function(e) {
+      e.preventDefault(); e.stopPropagation();
+      dragging = true;
+      document.body.style.cursor = 'grabbing';
+    });
+
+    channel.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      dragging = true;
+      setFromEvent(e);
+      document.body.style.cursor = 'grabbing';
+    });
+
+    document.addEventListener('mousemove', function(e) {
+      if (!dragging) return;
+      setFromEvent(e);
+    });
+
+    document.addEventListener('mouseup', function() {
+      if (dragging) { dragging = false; document.body.style.cursor = ''; }
+    });
+  });
+
+  document.querySelectorAll('[data-toggle]').forEach(function(track) {
+    track.addEventListener('click', function() {
+      track.dataset.state = track.dataset.state === 'on' ? 'off' : 'on';
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

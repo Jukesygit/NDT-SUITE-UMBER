@@ -35,9 +35,9 @@ export function PersonDetail({
     onSave,
 }: PersonDetailProps) {
     return (
-        <div className="pm-expanded-section" style={{ marginBottom: '20px' }}>
+        <div className="pm-expanded-section pm-expanded-section--spaced">
             <h4 className="pm-expanded-title">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="pm-flex-center">
                     <UserIcon />
                     Personal Information
                 </div>
@@ -213,23 +213,13 @@ export function PersonDetail({
             </div>
 
             {editingPerson && (
-                <div style={{ marginTop: '16px' }}>
+                <div className="pm-edit-actions">
                     {saveError && (
-                        <div
-                            style={{
-                                padding: '12px',
-                                marginBottom: '12px',
-                                background: 'rgba(239, 68, 68, 0.1)',
-                                border: '1px solid rgba(239, 68, 68, 0.3)',
-                                borderRadius: '6px',
-                                color: '#ef4444',
-                                fontSize: '14px',
-                            }}
-                        >
+                        <div className="pm-error-alert">
                             {saveError}
                         </div>
                     )}
-                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                    <div className="pm-flex-end">
                         <button
                             onClick={onCancel}
                             className="pm-btn sm"

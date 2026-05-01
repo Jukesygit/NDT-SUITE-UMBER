@@ -208,14 +208,7 @@ export function CreateUserModal({ isOpen, onClose }: CreateUserModalProps) {
                         type="button"
                         onClick={handleClose}
                         disabled={createUser.isPending}
-                        className="
-                            px-4 py-2 rounded-lg
-                            bg-white/5 hover:bg-white/10
-                            border border-white/10
-                            text-white/80
-                            transition-colors
-                            disabled:opacity-50 disabled:cursor-not-allowed
-                        "
+                        className="ad-btn"
                     >
                         Cancel
                     </button>
@@ -223,14 +216,7 @@ export function CreateUserModal({ isOpen, onClose }: CreateUserModalProps) {
                         type="submit"
                         form="create-user-form"
                         disabled={createUser.isPending}
-                        className="
-                            px-4 py-2 rounded-lg
-                            bg-blue-600 hover:bg-blue-700
-                            text-white font-medium
-                            transition-colors
-                            disabled:opacity-50 disabled:cursor-not-allowed
-                            flex items-center gap-2
-                        "
+                        className="ad-btn primary flex items-center gap-2"
                     >
                         {createUser.isPending && <RandomMatrixSpinner size={16} />}
                         {createUser.isPending ? 'Creating...' : 'Create User'}

@@ -7,11 +7,10 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, FolderOpen } from 'lucide-react';
 import { useProjectList } from '../../hooks/queries/useInspectionProjects';
 import { PageSpinner } from '../../components/ui/LoadingSpinner';
-import { EmptyState } from '../../components/ui/EmptyState';
-import { PageHeader } from '../../components/ui/PageHeader';
 import { ProjectViewToggle, type ViewMode } from '../../components/projects/ProjectViewToggle';
 import { TripView } from '../../components/projects/TripView';
 import { AssetView } from '../../components/projects/AssetView';
+import './projects.css';
 
 type FilterStatus = 'all' | 'active' | 'completed' | 'archived';
 
@@ -32,9 +31,15 @@ export default function ProjectListPage() {
 
     if (error) {
         return (
-            <div style={{ padding: '32px 40px' }}>
-                <div style={{ color: '#ef4444', padding: 16, background: 'rgba(239,68,68,0.1)', borderRadius: 8 }}>
-                    Failed to load projects: {(error as Error).message}
+            <div className="pj-chassis">
+                <div className="pj-panel">
+                    <div className="pj-display-well">
+                        <div className="pj-display">
+                            <div className="pj-alert error">
+                                Failed to load projects: {(error as Error).message}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         );
@@ -49,81 +54,87 @@ export default function ProjectListPage() {
     });
 
     return (
-        <div>
-            <PageHeader
-                title="Projects"
-                subtitle="Manage inspection campaigns and reports"
-                icon={<FolderOpen size={24} />}
-            />
-
-            <div style={{ padding: '24px 40px' }}>
-                {/* Toolbar */}
-                <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: 20,
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <ProjectViewToggle viewMode={viewMode} onChange={handleViewModeChange} />
-                        <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.1)' }} />
-                        {(['all', 'active', 'completed', 'archived'] as FilterStatus[]).map(f => (
-                            <button
-                                key={f}
-                                onClick={() => setFilter(f)}
-                                style={{
-                                    padding: '6px 14px',
-                                    borderRadius: 8,
-                                    border: 'none',
-                                    fontSize: '0.8rem',
-                                    fontWeight: 500,
-                                    cursor: 'pointer',
-                                    background: filter === f ? 'rgba(59,130,246,0.2)' : 'transparent',
-                                    color: filter === f ? '#60a5fa' : 'rgba(255,255,255,0.5)',
-                                    transition: 'all 0.15s',
-                                }}
-                            >
-                                {f.charAt(0).toUpperCase() + f.slice(1)}
-                            </button>
-                        ))}
+        <div className="pj-chassis">
+            <div className="pj-panel">
+                {/* Header */}
+                <div className="pj-header">
+                    <div className="pj-header-left">
+                        <span className="pj-logo" />
+                        <div className="pj-header-text">
+                            <h1>Projects</h1>
+                            <div className="pj-subtitle">Manage inspection campaigns and reports</div>
+                        </div>
                     </div>
-
-                    <button
-                        onClick={() => navigate('/projects/new')}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            padding: '8px 16px',
-                            borderRadius: 8,
-                            border: 'none',
-                            background: '#3b82f6',
-                            color: '#fff',
-                            fontSize: '0.85rem',
-                            fontWeight: 500,
-                            cursor: 'pointer',
-                        }}
-                    >
-                        <Plus size={16} />
-                        New Project
-                    </button>
+                    <div className="pj-header-actions">
+                        <button onClick={() => navigate('/projects/new')} className="pj-btn primary">
+                            <Plus size={14} />
+                            New Project
+                        </button>
+                    </div>
                 </div>
 
-                {/* Project / Asset list */}
-                {viewMode === 'trips' ? (
-                    filtered.length === 0 ? (
-                        <EmptyState
-                            title={filter === 'all' ? 'No projects yet' : `No ${filter} projects`}
-                            message={filter === 'all' ? 'Create your first inspection project to get started.' : 'Try a different filter.'}
-                            icon="folder"
-                            action={filter === 'all' ? { label: 'New Project', onClick: () => navigate('/projects/new') } : undefined}
-                        />
-                    ) : (
-                        <TripView projects={filtered} />
-                    )
-                ) : (
-                    <AssetView statusFilter={filter} />
-                )}
+                <div className="pj-groove" />
+
+                {/* Toolbar */}
+                <div className="pj-toolbar">
+                    <div className="pj-toolbar-left">
+                        <ProjectViewToggle viewMode={viewMode} onChange={handleViewModeChange} />
+                        <div className="pj-groove-vertical" style={{ height: 20 }} />
+                        <div className="pj-filter-well">
+                            {(['all', 'active', 'completed', 'archived'] as FilterStatus[]).map(f => (
+                                <button
+                                    key={f}
+                                    onClick={() => setFilter(f)}
+                                    className={`pj-filter-chip ${filter === f ? 'active' : ''}`}
+                                >
+                                    {f.charAt(0).toUpperCase() + f.slice(1)}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Content */}
+                <div className="pj-display-well">
+                    <div className="pj-display" style={{ padding: viewMode === 'trips' && filtered.length === 0 ? undefined : 8 }}>
+                        {viewMode === 'trips' ? (
+                            filtered.length === 0 ? (
+                                <div className="pj-empty">
+                                    <div className="pj-empty-icon">
+                                        <FolderOpen size={32} />
+                                    </div>
+                                    <div className="pj-empty-title">
+                                        {filter === 'all' ? 'No projects yet' : `No ${filter} projects`}
+                                    </div>
+                                    <div className="pj-empty-text">
+                                        {filter === 'all' ? 'Create your first inspection project to get started.' : 'Try a different filter.'}
+                                    </div>
+                                    {filter === 'all' && (
+                                        <button
+                                            onClick={() => navigate('/projects/new')}
+                                            className="pj-btn primary"
+                                            style={{ marginTop: 14 }}
+                                        >
+                                            <Plus size={14} />
+                                            New Project
+                                        </button>
+                                    )}
+                                </div>
+                            ) : (
+                                <TripView projects={filtered} />
+                            )
+                        ) : (
+                            <AssetView statusFilter={filter} />
+                        )}
+                    </div>
+                </div>
+
+                {/* Nameplate */}
+                <div className="pj-groove" />
+                <div className="pj-nameplate-bar">
+                    <span className="pj-nameplate">Matrix Portal</span>
+                    <span className="pj-nameplate-model">Inspection Projects</span>
+                </div>
             </div>
         </div>
     );

@@ -1,6 +1,5 @@
 /**
  * TripView - Shows trips (projects) as expandable cards: Trip (Site + Date) → Vessels
- * Trip title is composed from site_name + date range.
  */
 
 import { useState } from 'react';
@@ -10,40 +9,28 @@ import { useProjectVessels } from '../../hooks/queries/useInspectionProjects';
 import { useCreateProjectVessel } from '../../hooks/mutations/useInspectionProjectMutations';
 import { Modal } from '../ui/Modal';
 import type { InspectionProjectSummary, ProjectStatus, ProjectVessel } from '../../types/inspection-project';
-import { PROJECT_STATUS_LABELS, PROJECT_STATUS_COLORS, VESSEL_STATUS_LABELS, VESSEL_STATUS_COLORS } from '../../types/inspection-project';
+import { PROJECT_STATUS_LABELS, VESSEL_STATUS_LABELS } from '../../types/inspection-project';
 
-function StatusBadge({ status }: { status: ProjectStatus }) {
-    return (
-        <span
-            style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '2px 10px', borderRadius: 12,
-                fontSize: '0.75rem', fontWeight: 500,
-                background: `${PROJECT_STATUS_COLORS[status]}20`,
-                color: PROJECT_STATUS_COLORS[status],
-            }}
-        >
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: PROJECT_STATUS_COLORS[status] }} />
-            {PROJECT_STATUS_LABELS[status]}
-        </span>
-    );
+function getProjectStatusClass(status: ProjectStatus): string {
+    switch (status) {
+        case 'completed': return 'active';
+        case 'in_progress': return 'info';
+        case 'mobilizing': return 'info';
+        case 'review': return 'warning';
+        case 'planned': return 'neutral';
+        case 'archived': return 'neutral';
+        default: return 'neutral';
+    }
 }
 
-function ProgressBar({ completed, total }: { completed: number; total: number }) {
-    const pct = total > 0 ? (completed / total) * 100 : 0;
-    return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                <div style={{
-                    width: `${pct}%`, height: '100%', borderRadius: 3,
-                    background: pct === 100 ? '#22c55e' : '#3b82f6', transition: 'width 0.3s',
-                }} />
-            </div>
-            <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap' }}>
-                {completed}/{total} vessels
-            </span>
-        </div>
-    );
+function getVesselStatusClass(status: string): string {
+    switch (status) {
+        case 'completed': return 'active';
+        case 'in_progress': return 'info';
+        case 'pending_review': return 'warning';
+        case 'not_started': return 'neutral';
+        default: return 'neutral';
+    }
 }
 
 function formatDateRange(start: string | null, end: string | null): string {
@@ -64,58 +51,30 @@ function buildTripTitle(project: InspectionProjectSummary): string {
 
 function VesselRow({ vessel, projectId }: { vessel: ProjectVessel; projectId: string }) {
     const navigate = useNavigate();
+    const statusClass = getVesselStatusClass(vessel.status);
 
     return (
         <button
             onClick={() => navigate(`/projects/${projectId}/vessels/${vessel.id}`)}
-            style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '10px 14px', borderRadius: 8,
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid rgba(255,255,255,0.06)',
-                cursor: 'pointer', textAlign: 'left', width: '100%',
-                transition: 'all 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
+            className="pj-vessel-row"
         >
-            <Ship size={14} style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }} />
+            <Ship size={13} className="pj-vessel-row-icon" />
             <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 500, color: '#fff' }}>
+                <div className="pj-vessel-row-name">
                     {vessel.vessel_tag ? `${vessel.vessel_tag} — ` : ''}{vessel.vessel_name}
                 </div>
                 {vessel.vessel_type && (
-                    <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', marginTop: 1 }}>
-                        {vessel.vessel_type}
-                    </div>
+                    <div className="pj-vessel-row-type">{vessel.vessel_type}</div>
                 )}
             </div>
-
-            <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-                padding: '2px 8px', borderRadius: 10, fontSize: '0.7rem', fontWeight: 500,
-                background: `${VESSEL_STATUS_COLORS[vessel.status]}20`,
-                color: VESSEL_STATUS_COLORS[vessel.status],
-            }}>
-                <span style={{ width: 5, height: 5, borderRadius: '50%', background: VESSEL_STATUS_COLORS[vessel.status] }} />
+            <span className={`pj-badge ${statusClass}`}>
+                <span className={`pj-led ${statusClass}`} />
                 {VESSEL_STATUS_LABELS[vessel.status]}
             </span>
-
-            <ChevronRight size={14} style={{ color: 'rgba(255,255,255,0.3)' }} />
+            <ChevronRight size={12} className="pj-vessel-row-chevron" />
         </button>
     );
 }
-
-const ADD_VESSEL_INPUT_STYLE: React.CSSProperties = {
-    padding: '8px 12px',
-    borderRadius: 8,
-    border: '1px solid rgba(255,255,255,0.12)',
-    background: 'rgba(255,255,255,0.04)',
-    color: '#fff',
-    fontSize: '0.85rem',
-    outline: 'none',
-    width: '100%',
-};
 
 function TripVessels({ projectId }: { projectId: string }) {
     const { data: vessels = [], isLoading } = useProjectVessels(projectId);
@@ -138,73 +97,60 @@ function TripVessels({ projectId }: { projectId: string }) {
     };
 
     if (isLoading) {
-        return <div style={{ padding: '8px 0', fontSize: '0.75rem', color: 'rgba(255,255,255,0.3)' }}>Loading vessels...</div>;
+        return <div style={{ padding: '8px 14px' }} className="pj-empty-text">Loading vessels...</div>;
     }
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
             {vessels.length === 0 && (
-                <div style={{ padding: '8px 0', fontSize: '0.75rem', color: 'rgba(255,255,255,0.3)' }}>No vessels in this trip</div>
+                <div style={{ padding: '8px 14px' }} className="pj-empty-text">No vessels in this trip</div>
             )}
             {vessels.map(v => (
                 <VesselRow key={v.id} vessel={v} projectId={projectId} />
             ))}
-            <button
-                onClick={(e) => {
-                    e.stopPropagation();
-                    setForm({ vesselName: '', vesselTag: '', vesselType: '', coverageTargetPct: '' });
-                    setShowAddModal(true);
-                }}
-                style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '8px 12px', borderRadius: 8,
-                    border: '1px dashed rgba(255,255,255,0.12)',
-                    background: 'transparent', color: 'rgba(255,255,255,0.4)',
-                    fontSize: '0.8rem', cursor: 'pointer', width: '100%',
-                    transition: 'all 0.15s',
-                }}
-                onMouseEnter={e => {
-                    e.currentTarget.style.borderColor = 'rgba(59,130,246,0.4)';
-                    e.currentTarget.style.color = '#3b82f6';
-                }}
-                onMouseLeave={e => {
-                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
-                    e.currentTarget.style.color = 'rgba(255,255,255,0.4)';
-                }}
-            >
-                <Plus size={14} />
-                Add Vessel
-            </button>
+            <div style={{ padding: '4px 14px 8px' }}>
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setForm({ vesselName: '', vesselTag: '', vesselType: '', coverageTargetPct: '' });
+                        setShowAddModal(true);
+                    }}
+                    className="pj-add-vessel-btn"
+                >
+                    <Plus size={12} />
+                    Add Vessel
+                </button>
+            </div>
 
             {showAddModal && (
                 <Modal isOpen={true} title="Add Vessel" onClose={() => setShowAddModal(false)}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 400 }}>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>Vessel Name *</span>
+                        <div className="pj-form-field">
+                            <span className="pj-form-label">Vessel Name *</span>
                             <input
                                 value={form.vesselName}
                                 onChange={e => setForm(f => ({ ...f, vesselName: e.target.value }))}
                                 placeholder="e.g., Feed Drum"
                                 autoFocus
-                                style={ADD_VESSEL_INPUT_STYLE}
+                                className="pj-form-input"
                             />
-                        </label>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>Tag Number</span>
+                        </div>
+                        <div className="pj-form-grid">
+                            <div className="pj-form-field">
+                                <span className="pj-form-label">Tag Number</span>
                                 <input
                                     value={form.vesselTag}
                                     onChange={e => setForm(f => ({ ...f, vesselTag: e.target.value }))}
                                     placeholder="e.g., V-101"
-                                    style={ADD_VESSEL_INPUT_STYLE}
+                                    className="pj-form-input"
                                 />
-                            </label>
-                            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>Type</span>
+                            </div>
+                            <div className="pj-form-field">
+                                <span className="pj-form-label">Type</span>
                                 <select
                                     value={form.vesselType}
                                     onChange={e => setForm(f => ({ ...f, vesselType: e.target.value }))}
-                                    style={ADD_VESSEL_INPUT_STYLE}
+                                    className="pj-form-input"
                                 >
                                     <option value="">Select type...</option>
                                     <option value="pressure_vessel">Pressure Vessel</option>
@@ -214,10 +160,10 @@ function TripVessels({ projectId }: { projectId: string }) {
                                     <option value="piping">Piping</option>
                                     <option value="other">Other</option>
                                 </select>
-                            </label>
+                            </div>
                         </div>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>Coverage Target (%)</span>
+                        <div className="pj-form-field">
+                            <span className="pj-form-label">Coverage Target (%)</span>
                             <input
                                 type="number"
                                 min="0"
@@ -226,20 +172,16 @@ function TripVessels({ projectId }: { projectId: string }) {
                                 value={form.coverageTargetPct}
                                 onChange={e => setForm(f => ({ ...f, coverageTargetPct: e.target.value }))}
                                 placeholder="e.g., 40"
-                                style={ADD_VESSEL_INPUT_STYLE}
+                                className="pj-form-input"
                             />
-                        </label>
+                        </div>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 8 }}>
-                            <button
-                                onClick={() => setShowAddModal(false)}
-                                style={{ padding: '6px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: 'rgba(255,255,255,0.7)', cursor: 'pointer' }}
-                            >
-                                Cancel
-                            </button>
+                            <button onClick={() => setShowAddModal(false)} className="pj-btn secondary">Cancel</button>
                             <button
                                 onClick={handleAdd}
                                 disabled={!form.vesselName.trim() || createMutation.isPending}
-                                style={{ padding: '6px 16px', borderRadius: 6, border: 'none', background: '#3b82f6', color: '#fff', cursor: 'pointer', opacity: form.vesselName.trim() ? 1 : 0.5 }}
+                                className="pj-btn primary"
+                                style={{ opacity: form.vesselName.trim() ? 1 : 0.5 }}
                             >
                                 {createMutation.isPending ? 'Adding...' : 'Add Vessel'}
                             </button>
@@ -255,63 +197,61 @@ function TripCard({ project }: { project: InspectionProjectSummary }) {
     const [expanded, setExpanded] = useState(false);
     const tripTitle = buildTripTitle(project);
     const hasSubtitle = tripTitle !== project.name;
+    const statusClass = getProjectStatusClass(project.status);
+
+    const pct = project.vessel_count > 0
+        ? (project.completed_vessel_count / project.vessel_count) * 100
+        : 0;
 
     return (
-        <div style={{
-            borderRadius: 12, background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden',
-            transition: 'all 0.15s',
-        }}>
-            {/* Trip header */}
-            <button
-                onClick={() => setExpanded(!expanded)}
-                style={{
-                    display: 'flex', flexDirection: 'column', gap: 10, padding: 20,
-                    width: '100%', background: 'none', border: 'none',
-                    cursor: 'pointer', textAlign: 'left',
-                }}
-            >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flex: 1, minWidth: 0 }}>
-                        {expanded
-                            ? <ChevronDown size={16} style={{ color: 'rgba(255,255,255,0.4)', marginTop: 2, flexShrink: 0 }} />
-                            : <ChevronRight size={16} style={{ color: 'rgba(255,255,255,0.4)', marginTop: 2, flexShrink: 0 }} />
-                        }
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', margin: 0, marginBottom: 4 }}>
-                                {tripTitle}
-                            </h3>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)' }}>
-                                {hasSubtitle && <span>{project.name}</span>}
-                                {project.client_name && <span>{project.client_name}</span>}
-                                {!hasSubtitle && project.site_name && (
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                                        <MapPin size={12} />{project.site_name}
-                                    </span>
-                                )}
-                                {!hasSubtitle && project.start_date && (
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                                        <Calendar size={12} />{formatDateRange(project.start_date, project.end_date)}
-                                    </span>
-                                )}
+        <div className="pj-card-well">
+            <div className="pj-card-display">
+                <button
+                    onClick={() => setExpanded(!expanded)}
+                    className="pj-trip-header"
+                >
+                    <div className="pj-trip-top-row">
+                        <div className="pj-trip-title-area">
+                            {expanded
+                                ? <ChevronDown size={14} style={{ color: 'rgba(53, 160, 88, 0.40)', marginTop: 1, flexShrink: 0 }} />
+                                : <ChevronRight size={14} style={{ color: 'rgba(53, 160, 88, 0.40)', marginTop: 1, flexShrink: 0 }} />
+                            }
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <h3 className="pj-trip-title">{tripTitle}</h3>
+                                <div className="pj-trip-meta">
+                                    {hasSubtitle && <span>{project.name}</span>}
+                                    {project.client_name && <span>{project.client_name}</span>}
+                                    {!hasSubtitle && project.site_name && (
+                                        <span><MapPin size={10} />{project.site_name}</span>
+                                    )}
+                                    {!hasSubtitle && project.start_date && (
+                                        <span><Calendar size={10} />{formatDateRange(project.start_date, project.end_date)}</span>
+                                    )}
+                                </div>
                             </div>
                         </div>
+                        <span className={`pj-badge ${statusClass}`}>
+                            <span className={`pj-led ${statusClass}`} />
+                            {PROJECT_STATUS_LABELS[project.status]}
+                        </span>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                        <StatusBadge status={project.status} />
+                    <div style={{ paddingLeft: 22 }}>
+                        <div className="pj-progress-wrap">
+                            <div className="pj-progress-track">
+                                <div
+                                    className={`pj-progress-fill ${pct >= 100 ? 'complete' : ''}`}
+                                    style={{ width: `${pct}%` }}
+                                />
+                            </div>
+                            <span className="pj-progress-label">
+                                {project.completed_vessel_count}/{project.vessel_count} vessels
+                            </span>
+                        </div>
                     </div>
-                </div>
-                <div style={{ paddingLeft: 26 }}>
-                    <ProgressBar completed={project.completed_vessel_count} total={project.vessel_count} />
-                </div>
-            </button>
+                </button>
 
-            {/* Expanded vessel list */}
-            {expanded && (
-                <div style={{ padding: '0 20px 16px', paddingLeft: 46 }}>
-                    <TripVessels projectId={project.id} />
-                </div>
-            )}
+                {expanded && <TripVessels projectId={project.id} />}
+            </div>
         </div>
     );
 }
@@ -322,7 +262,7 @@ interface TripViewProps {
 
 export function TripView({ projects }: TripViewProps) {
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="pj-card-list">
             {projects.map(project => (
                 <TripCard key={project.id} project={project} />
             ))}

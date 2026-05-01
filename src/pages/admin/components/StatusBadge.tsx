@@ -1,6 +1,6 @@
 /**
  * StatusBadge - Reusable badge component for displaying roles and statuses
- * Uses the glass-badge styling to match Personnel Management page
+ * Industrial LCD instrument theme - green-on-dark styling
  */
 
 type BadgeVariant =
@@ -25,22 +25,22 @@ interface StatusBadgeProps {
     className?: string;
 }
 
-// Map variants to badge color classes
-const variantColorClass: Record<BadgeVariant, string> = {
-    super_admin: 'badge-purple',
-    admin: 'badge-purple',
-    manager: 'badge-cyan',
-    org_admin: 'badge-blue',
-    editor: 'badge-green',
-    viewer: 'badge-gray',
-    active: 'badge-green',
-    inactive: 'badge-gray',
-    pending: 'badge-yellow',
-    view: 'badge-gray',
-    edit: 'badge-yellow',
-    asset: 'badge-blue',
-    vessel: 'badge-green',
-    scan: 'badge-purple',
+// Map variants to inline green-on-dark styles
+const variantStyles: Record<BadgeVariant, { background: string; color: string; border: string }> = {
+    super_admin: { background: 'rgba(53, 160, 88, 0.15)', color: 'var(--green-bright)', border: '1px solid rgba(53, 160, 88, 0.30)' },
+    admin: { background: 'rgba(53, 160, 88, 0.15)', color: 'var(--green-bright)', border: '1px solid rgba(53, 160, 88, 0.30)' },
+    manager: { background: 'rgba(53, 160, 88, 0.10)', color: 'var(--green)', border: '1px solid rgba(53, 160, 88, 0.25)' },
+    org_admin: { background: 'rgba(53, 160, 88, 0.10)', color: 'var(--green)', border: '1px solid rgba(53, 160, 88, 0.25)' },
+    editor: { background: 'rgba(53, 160, 88, 0.08)', color: 'rgba(53, 160, 88, 0.70)', border: '1px solid rgba(53, 160, 88, 0.20)' },
+    viewer: { background: 'rgba(53, 160, 88, 0.05)', color: 'rgba(53, 160, 88, 0.45)', border: '1px solid rgba(53, 160, 88, 0.15)' },
+    active: { background: 'rgba(53, 160, 88, 0.15)', color: 'var(--green-bright)', border: '1px solid rgba(53, 160, 88, 0.30)' },
+    inactive: { background: 'rgba(53, 160, 88, 0.05)', color: 'rgba(53, 160, 88, 0.35)', border: '1px solid rgba(53, 160, 88, 0.15)' },
+    pending: { background: 'rgba(245, 158, 11, 0.10)', color: 'var(--amber)', border: '1px solid rgba(245, 158, 11, 0.25)' },
+    view: { background: 'rgba(53, 160, 88, 0.05)', color: 'rgba(53, 160, 88, 0.45)', border: '1px solid rgba(53, 160, 88, 0.15)' },
+    edit: { background: 'rgba(245, 158, 11, 0.10)', color: 'var(--amber)', border: '1px solid rgba(245, 158, 11, 0.25)' },
+    asset: { background: 'rgba(53, 160, 88, 0.10)', color: 'var(--green)', border: '1px solid rgba(53, 160, 88, 0.25)' },
+    vessel: { background: 'rgba(53, 160, 88, 0.15)', color: 'var(--green-bright)', border: '1px solid rgba(53, 160, 88, 0.30)' },
+    scan: { background: 'rgba(53, 160, 88, 0.15)', color: 'var(--green-bright)', border: '1px solid rgba(53, 160, 88, 0.30)' },
 };
 
 const variantLabels: Record<BadgeVariant, string> = {
@@ -62,7 +62,7 @@ const variantLabels: Record<BadgeVariant, string> = {
 
 /**
  * StatusBadge - Displays role or status with appropriate styling
- * Uses glass-badge classes for consistent styling
+ * Uses inline green-on-dark styles for LCD instrument theme
  *
  * @example
  * <StatusBadge variant="admin" />
@@ -70,10 +70,24 @@ const variantLabels: Record<BadgeVariant, string> = {
  */
 export function StatusBadge({ variant, children, className = '' }: StatusBadgeProps) {
     const displayText = children || variantLabels[variant];
-    const colorClass = variantColorClass[variant];
+    const styles = variantStyles[variant];
 
     return (
-        <span className={`glass-badge ${colorClass} ${className}`}>
+        <span
+            className={className}
+            style={{
+                display: 'inline-block',
+                padding: '2px 10px',
+                fontSize: '12px',
+                fontWeight: 500,
+                borderRadius: '4px',
+                background: styles.background,
+                color: styles.color,
+                border: styles.border,
+                textTransform: 'capitalize',
+                letterSpacing: '0.025em',
+            }}
+        >
             {displayText}
         </span>
     );

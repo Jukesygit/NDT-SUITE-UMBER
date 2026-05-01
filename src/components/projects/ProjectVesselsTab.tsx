@@ -6,7 +6,6 @@ import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { VesselCard } from './VesselCard';
 import { Modal } from '../ui/Modal';
-import { EmptyState } from '../ui/EmptyState';
 import {
     useCreateProjectVessel,
     useUpdateProjectVessel,
@@ -34,17 +33,6 @@ const EMPTY_FORM: VesselFormState = {
     vesselType: '',
     coverageTargetPct: '',
     notes: '',
-};
-
-const INPUT_STYLE: React.CSSProperties = {
-    padding: '8px 12px',
-    borderRadius: 8,
-    border: '1px solid rgba(255,255,255,0.12)',
-    background: 'rgba(255,255,255,0.04)',
-    color: '#fff',
-    fontSize: '0.85rem',
-    outline: 'none',
-    width: '100%',
 };
 
 export function ProjectVesselsTab({ projectId, vessels, compositeCountByVessel }: ProjectVesselsTabProps) {
@@ -77,7 +65,6 @@ export function ProjectVesselsTab({ projectId, vessels, compositeCountByVessel }
 
     const handleSave = async () => {
         if (!form.vesselName.trim()) return;
-
         const coverage = form.coverageTargetPct ? parseFloat(form.coverageTargetPct) : undefined;
 
         if (editingVessel) {
@@ -113,40 +100,31 @@ export function ProjectVesselsTab({ projectId, vessels, compositeCountByVessel }
     };
 
     return (
-        <div>
+        <div className="pj-content">
             {/* Add vessel button */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-                <button
-                    onClick={openAddModal}
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '8px 16px',
-                        borderRadius: 8,
-                        border: 'none',
-                        background: '#3b82f6',
-                        color: '#fff',
-                        fontSize: '0.85rem',
-                        fontWeight: 500,
-                        cursor: 'pointer',
-                    }}
-                >
-                    <Plus size={16} />
+            <div className="pj-toolbar" style={{ justifyContent: 'flex-end' }}>
+                <button onClick={openAddModal} className="pj-btn primary">
+                    <Plus size={14} />
                     Add Vessel
                 </button>
             </div>
 
             {/* Vessel list */}
             {vessels.length === 0 ? (
-                <EmptyState
-                    title="No vessels yet"
-                    message="Add vessels to this project to begin inspection setup."
-                    icon="default"
-                    action={{ label: 'Add Vessel', onClick: openAddModal }}
-                />
+                <div className="pj-display-well">
+                    <div className="pj-display">
+                        <div className="pj-empty">
+                            <div className="pj-empty-title">No vessels yet</div>
+                            <div className="pj-empty-text">Add vessels to this project to begin inspection setup.</div>
+                            <button onClick={openAddModal} className="pj-btn primary" style={{ marginTop: 14 }}>
+                                <Plus size={14} />
+                                Add Vessel
+                            </button>
+                        </div>
+                    </div>
+                </div>
             ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: 12 }}>
+                <div className="pj-card-grid">
                     {vessels.map(v => (
                         <VesselCard
                             key={v.id}
@@ -168,32 +146,32 @@ export function ProjectVesselsTab({ projectId, vessels, compositeCountByVessel }
                     onClose={() => { setShowAddModal(false); setEditingVessel(null); }}
                 >
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 400 }}>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>Vessel Name *</span>
+                        <div className="pj-form-field">
+                            <span className="pj-form-label">Vessel Name *</span>
                             <input
                                 value={form.vesselName}
                                 onChange={e => setForm(f => ({ ...f, vesselName: e.target.value }))}
                                 placeholder="e.g., Feed Drum"
                                 autoFocus
-                                style={INPUT_STYLE}
+                                className="pj-form-input"
                             />
-                        </label>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>Tag Number</span>
+                        </div>
+                        <div className="pj-form-grid">
+                            <div className="pj-form-field">
+                                <span className="pj-form-label">Tag Number</span>
                                 <input
                                     value={form.vesselTag}
                                     onChange={e => setForm(f => ({ ...f, vesselTag: e.target.value }))}
                                     placeholder="e.g., V-101"
-                                    style={INPUT_STYLE}
+                                    className="pj-form-input"
                                 />
-                            </label>
-                            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>Type</span>
+                            </div>
+                            <div className="pj-form-field">
+                                <span className="pj-form-label">Type</span>
                                 <select
                                     value={form.vesselType}
                                     onChange={e => setForm(f => ({ ...f, vesselType: e.target.value }))}
-                                    style={INPUT_STYLE}
+                                    className="pj-form-input"
                                 >
                                     <option value="">Select type...</option>
                                     <option value="pressure_vessel">Pressure Vessel</option>
@@ -203,10 +181,10 @@ export function ProjectVesselsTab({ projectId, vessels, compositeCountByVessel }
                                     <option value="piping">Piping</option>
                                     <option value="other">Other</option>
                                 </select>
-                            </label>
+                            </div>
                         </div>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>Coverage Target (%)</span>
+                        <div className="pj-form-field">
+                            <span className="pj-form-label">Coverage Target (%)</span>
                             <input
                                 type="number"
                                 min="0"
@@ -215,30 +193,27 @@ export function ProjectVesselsTab({ projectId, vessels, compositeCountByVessel }
                                 value={form.coverageTargetPct}
                                 onChange={e => setForm(f => ({ ...f, coverageTargetPct: e.target.value }))}
                                 placeholder="e.g., 40"
-                                style={INPUT_STYLE}
+                                className="pj-form-input"
                             />
-                        </label>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>Notes</span>
+                        </div>
+                        <div className="pj-form-field">
+                            <span className="pj-form-label">Notes</span>
                             <textarea
                                 value={form.notes}
                                 onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                                 placeholder="Any notes for this vessel..."
                                 rows={2}
-                                style={{ ...INPUT_STYLE, resize: 'vertical' }}
+                                className="pj-form-input"
+                                style={{ resize: 'vertical' }}
                             />
-                        </label>
+                        </div>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 8 }}>
-                            <button
-                                onClick={() => { setShowAddModal(false); setEditingVessel(null); }}
-                                style={{ padding: '6px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: 'rgba(255,255,255,0.7)', cursor: 'pointer' }}
-                            >
-                                Cancel
-                            </button>
+                            <button onClick={() => { setShowAddModal(false); setEditingVessel(null); }} className="pj-btn secondary">Cancel</button>
                             <button
                                 onClick={handleSave}
                                 disabled={!form.vesselName.trim() || createMutation.isPending || updateMutation.isPending}
-                                style={{ padding: '6px 16px', borderRadius: 6, border: 'none', background: '#3b82f6', color: '#fff', cursor: 'pointer', opacity: form.vesselName.trim() ? 1 : 0.5 }}
+                                className="pj-btn primary"
+                                style={{ opacity: form.vesselName.trim() ? 1 : 0.5 }}
                             >
                                 {editingVessel ? 'Update' : 'Add Vessel'}
                             </button>
@@ -255,15 +230,8 @@ export function ProjectVesselsTab({ projectId, vessels, compositeCountByVessel }
                         This will unlink any associated composites and models.
                     </p>
                     <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                        <button onClick={() => setDeleteTarget(null)} style={{ padding: '6px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: 'rgba(255,255,255,0.7)', cursor: 'pointer' }}>
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleDelete}
-                            style={{ padding: '6px 16px', borderRadius: 6, border: 'none', background: '#ef4444', color: '#fff', cursor: 'pointer' }}
-                        >
-                            Delete
-                        </button>
+                        <button onClick={() => setDeleteTarget(null)} className="pj-btn secondary">Cancel</button>
+                        <button onClick={handleDelete} className="pj-btn danger">Delete</button>
                     </div>
                 </Modal>
             )}

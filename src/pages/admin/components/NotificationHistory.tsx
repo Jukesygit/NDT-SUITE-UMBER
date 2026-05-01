@@ -18,12 +18,12 @@ interface NotificationHistoryProps {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-    completed: { bg: 'rgba(52, 211, 153, 0.15)', text: '#34d399' },
-    sending: { bg: 'rgba(251, 191, 36, 0.15)', text: '#fbbf24' },
+    completed: { bg: 'rgba(53, 160, 88, 0.15)', text: 'var(--green-bright)' },
+    sending: { bg: 'rgba(245, 158, 11, 0.15)', text: 'var(--amber)' },
     pending: { bg: 'rgba(156, 163, 175, 0.15)', text: '#9ca3af' },
-    failed: { bg: 'rgba(248, 113, 113, 0.15)', text: '#f87171' },
-    sent: { bg: 'rgba(52, 211, 153, 0.15)', text: '#34d399' },
-    bounced: { bg: 'rgba(251, 191, 36, 0.15)', text: '#fbbf24' },
+    failed: { bg: 'rgba(239, 68, 68, 0.15)', text: 'var(--red)' },
+    sent: { bg: 'rgba(53, 160, 88, 0.15)', text: 'var(--green-bright)' },
+    bounced: { bg: 'rgba(245, 158, 11, 0.15)', text: 'var(--amber)' },
 };
 
 export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) {
@@ -61,13 +61,13 @@ export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) 
                         <p
                             style={{
                                 fontWeight: 500,
-                                color: 'var(--text-primary)',
+                                color: 'rgba(53, 160, 88, 0.70)',
                                 fontSize: '14px',
                             }}
                         >
                             {new Date(row.created_at).toLocaleDateString()}
                         </p>
-                        <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                        <p style={{ fontSize: '12px', color: 'rgba(53, 160, 88, 0.35)' }}>
                             {new Date(row.created_at).toLocaleTimeString()}
                         </p>
                     </div>
@@ -79,7 +79,7 @@ export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) 
                 render: (row) => (
                     <p
                         style={{
-                            color: 'var(--text-primary)',
+                            color: 'rgba(53, 160, 88, 0.70)',
                             fontSize: '14px',
                             maxWidth: '300px',
                             overflow: 'hidden',
@@ -97,7 +97,7 @@ export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) 
                 header: 'Sent By',
                 width: '150px',
                 render: (row) => (
-                    <span style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '14px' }}>
+                    <span style={{ color: 'rgba(53, 160, 88, 0.45)', fontSize: '14px' }}>
                         {row.sent_by_name || 'Unknown'}
                     </span>
                 ),
@@ -109,9 +109,9 @@ export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) 
                 align: 'center' as const,
                 render: (row) => (
                     <div style={{ fontSize: '14px' }}>
-                        <span style={{ color: '#34d399' }}>{row.successful_count}</span>
-                        <span style={{ color: 'rgba(255, 255, 255, 0.3)' }}> / </span>
-                        <span style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                        <span style={{ color: 'var(--green-bright)' }}>{row.successful_count}</span>
+                        <span style={{ color: 'rgba(53, 160, 88, 0.25)' }}> / </span>
+                        <span style={{ color: 'rgba(53, 160, 88, 0.45)' }}>
                             {row.recipient_count}
                         </span>
                     </div>
@@ -153,8 +153,8 @@ export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) 
                             padding: '6px 12px',
                             fontSize: '14px',
                             fontWeight: 500,
-                            color: '#60a5fa',
-                            background: 'rgba(96, 165, 250, 0.1)',
+                            color: 'var(--green-bright)',
+                            background: 'rgba(53, 160, 88, 0.10)',
                             borderRadius: '6px',
                             border: 'none',
                             cursor: 'pointer',
@@ -180,13 +180,13 @@ export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) 
                         <p
                             style={{
                                 fontWeight: 500,
-                                color: 'var(--text-primary)',
+                                color: 'rgba(53, 160, 88, 0.70)',
                                 fontSize: '14px',
                             }}
                         >
                             {new Date(row.sent_at).toLocaleDateString()}
                         </p>
-                        <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                        <p style={{ fontSize: '12px', color: 'rgba(53, 160, 88, 0.35)' }}>
                             {new Date(row.sent_at).toLocaleTimeString()}
                         </p>
                     </div>
@@ -197,10 +197,10 @@ export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) 
                 header: 'Recipient',
                 render: (row) => (
                     <div>
-                        <p style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '14px' }}>
+                        <p style={{ fontWeight: 500, color: 'rgba(53, 160, 88, 0.70)', fontSize: '14px' }}>
                             {row.profiles?.username || 'Unknown'}
                         </p>
-                        <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                        <p style={{ fontSize: '12px', color: 'rgba(53, 160, 88, 0.35)' }}>
                             {row.email_sent_to}
                         </p>
                     </div>
@@ -211,7 +211,7 @@ export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) 
                 header: 'Threshold',
                 width: '150px',
                 render: (row) => (
-                    <span style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '14px' }}>
+                    <span style={{ color: 'rgba(53, 160, 88, 0.45)', fontSize: '14px' }}>
                         {row.threshold_months === 0
                             ? 'Expired'
                             : `${row.threshold_months} month${row.threshold_months > 1 ? 's' : ''}`}
@@ -224,7 +224,7 @@ export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) 
                 width: '120px',
                 align: 'center' as const,
                 render: (row) => (
-                    <span style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '14px' }}>
+                    <span style={{ color: 'rgba(53, 160, 88, 0.45)', fontSize: '14px' }}>
                         {row.competency_ids?.length || 0}
                     </span>
                 ),
@@ -287,11 +287,11 @@ export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) 
                             borderRadius: '6px',
                             border:
                                 logType === 'custom'
-                                    ? '2px solid #60a5fa'
-                                    : '2px solid rgba(255, 255, 255, 0.1)',
+                                    ? '2px solid rgba(53, 160, 88, 0.60)'
+                                    : '2px solid rgba(53, 160, 88, 0.15)',
                             background:
-                                logType === 'custom' ? 'rgba(96, 165, 250, 0.2)' : 'transparent',
-                            color: logType === 'custom' ? '#60a5fa' : 'rgba(255, 255, 255, 0.7)',
+                                logType === 'custom' ? 'rgba(53, 160, 88, 0.15)' : 'transparent',
+                            color: logType === 'custom' ? 'var(--green-bright)' : 'rgba(53, 160, 88, 0.45)',
                             cursor: 'pointer',
                             transition: 'all 0.2s',
                         }}
@@ -310,11 +310,11 @@ export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) 
                             borderRadius: '6px',
                             border:
                                 logType === 'expiry'
-                                    ? '2px solid #60a5fa'
-                                    : '2px solid rgba(255, 255, 255, 0.1)',
+                                    ? '2px solid rgba(53, 160, 88, 0.60)'
+                                    : '2px solid rgba(53, 160, 88, 0.15)',
                             background:
-                                logType === 'expiry' ? 'rgba(96, 165, 250, 0.2)' : 'transparent',
-                            color: logType === 'expiry' ? '#60a5fa' : 'rgba(255, 255, 255, 0.7)',
+                                logType === 'expiry' ? 'rgba(53, 160, 88, 0.15)' : 'transparent',
+                            color: logType === 'expiry' ? 'var(--green-bright)' : 'rgba(53, 160, 88, 0.45)',
                             cursor: 'pointer',
                             transition: 'all 0.2s',
                         }}
@@ -326,7 +326,7 @@ export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) 
 
             {/* Filters (only for custom notifications) */}
             {logType === 'custom' && (
-                <div className="glass-card" style={{ padding: '16px' }}>
+                <div style={{ padding: '16px', border: '1px solid rgba(53, 160, 88, 0.20)', borderRadius: '8px', background: 'rgba(53, 160, 88, 0.05)' }}>
                     <div
                         style={{
                             display: 'grid',
@@ -341,7 +341,7 @@ export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) 
                                     fontSize: '13px',
                                     fontWeight: 500,
                                     marginBottom: '6px',
-                                    color: 'rgba(255, 255, 255, 0.7)',
+                                    color: 'rgba(53, 160, 88, 0.45)',
                                 }}
                             >
                                 Status
@@ -370,7 +370,7 @@ export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) 
                                     fontSize: '13px',
                                     fontWeight: 500,
                                     marginBottom: '6px',
-                                    color: 'rgba(255, 255, 255, 0.7)',
+                                    color: 'rgba(53, 160, 88, 0.45)',
                                 }}
                             >
                                 From Date
@@ -395,7 +395,7 @@ export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) 
                                     fontSize: '13px',
                                     fontWeight: 500,
                                     marginBottom: '6px',
-                                    color: 'rgba(255, 255, 255, 0.7)',
+                                    color: 'rgba(53, 160, 88, 0.45)',
                                 }}
                             >
                                 To Date
@@ -418,7 +418,7 @@ export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) 
             )}
 
             {/* DataTable */}
-            <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: 0, overflow: 'hidden', border: '1px solid rgba(53, 160, 88, 0.20)', borderRadius: '8px' }}>
                 {logType === 'custom' ? (
                     <>
                         <DataTable
@@ -438,14 +438,14 @@ export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) 
                             <div
                                 style={{
                                     padding: '16px 24px',
-                                    borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                                    borderTop: '1px solid rgba(53, 160, 88, 0.15)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'space-between',
                                 }}
                             >
                                 <div
-                                    style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)' }}
+                                    style={{ fontSize: '14px', color: 'rgba(53, 160, 88, 0.45)' }}
                                 >
                                     Showing {((currentPage - 1) * pageSize + 1).toLocaleString()} to{' '}
                                     {Math.min(currentPage * pageSize, count).toLocaleString()} of{' '}
@@ -455,7 +455,7 @@ export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) 
                                     <button
                                         onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                                         disabled={currentPage === 1}
-                                        className="btn btn-secondary"
+                                        className="ad-btn"
                                         style={{
                                             padding: '6px 12px',
                                             fontSize: '14px',
@@ -467,7 +467,7 @@ export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) 
                                     <span
                                         style={{
                                             fontSize: '14px',
-                                            color: 'rgba(255, 255, 255, 0.7)',
+                                            color: 'rgba(53, 160, 88, 0.45)',
                                         }}
                                     >
                                         Page {currentPage} of {totalPages}
@@ -477,7 +477,7 @@ export function NotificationHistory({ onViewDetail }: NotificationHistoryProps) 
                                             setCurrentPage((p) => Math.min(totalPages, p + 1))
                                         }
                                         disabled={currentPage === totalPages}
-                                        className="btn btn-secondary"
+                                        className="ad-btn"
                                         style={{
                                             padding: '6px 12px',
                                             fontSize: '14px',

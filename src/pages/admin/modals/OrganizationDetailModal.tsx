@@ -30,13 +30,13 @@ export function OrganizationDetailModal({ isOpen, onClose, organization }: Organ
             <div className="space-y-6">
                 {/* Organization Info */}
                 <div className="grid grid-cols-2 gap-4">
-                    <div className="glass-card p-4">
-                        <p className="text-xs mb-1" style={{ color: 'var(--text-dim)' }}>Users</p>
-                        <p className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>{organization.userCount || 0}</p>
+                    <div style={{ padding: '16px', border: '1px solid rgba(53, 160, 88, 0.20)', borderRadius: '8px', background: 'rgba(53, 160, 88, 0.05)' }}>
+                        <p className="text-xs mb-1" style={{ color: 'rgba(53, 160, 88, 0.45)' }}>Users</p>
+                        <p className="text-2xl font-bold" style={{ color: 'var(--green-bright)' }}>{organization.userCount || 0}</p>
                     </div>
-                    <div className="glass-card p-4">
-                        <p className="text-xs mb-1" style={{ color: 'var(--text-dim)' }}>Created</p>
-                        <p className="text-lg font-medium" style={{ color: 'var(--text-primary)' }}>{createdDate}</p>
+                    <div style={{ padding: '16px', border: '1px solid rgba(53, 160, 88, 0.20)', borderRadius: '8px', background: 'rgba(53, 160, 88, 0.05)' }}>
+                        <p className="text-xs mb-1" style={{ color: 'rgba(53, 160, 88, 0.45)' }}>Created</p>
+                        <p className="text-lg font-medium" style={{ color: 'rgba(53, 160, 88, 0.70)' }}>{createdDate}</p>
                     </div>
                 </div>
             </div>

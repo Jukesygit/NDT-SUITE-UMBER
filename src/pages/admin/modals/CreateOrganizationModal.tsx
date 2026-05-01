@@ -103,7 +103,7 @@ export function CreateOrganizationModal({ isOpen, onClose }: CreateOrganizationM
                         type="button"
                         onClick={handleClose}
                         disabled={createOrganization.isPending}
-                        className="btn btn-secondary"
+                        className="ad-btn"
                     >
                         Cancel
                     </button>
@@ -111,7 +111,7 @@ export function CreateOrganizationModal({ isOpen, onClose }: CreateOrganizationM
                         type="submit"
                         form="create-organization-form"
                         disabled={createOrganization.isPending}
-                        className="btn btn-primary flex items-center gap-2"
+                        className="ad-btn primary flex items-center gap-2"
                     >
                         {createOrganization.isPending && <RandomMatrixSpinner size={16} />}
                         {createOrganization.isPending ? 'Creating...' : 'Create Organization'}

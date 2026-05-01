@@ -15,7 +15,7 @@ import authManager from '../../auth-manager.js';
 export function UserIcon() {
     return (
         <svg
-            style={{ width: '20px', height: '20px', color: 'var(--accent-primary)' }}
+            className="pm-icon-20"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -36,7 +36,7 @@ export function UserIcon() {
 export function CertIcon() {
     return (
         <svg
-            style={{ width: '20px', height: '20px', color: 'var(--accent-primary)' }}
+            className="pm-icon-20"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -78,7 +78,7 @@ export function EditIcon({ size = 14 }: { size?: number }) {
 export function WitnessIcon() {
     return (
         <svg
-            style={{ width: '14px', height: '14px', color: '#10b981', flexShrink: 0 }}
+            className="pm-witness-icon"
             fill="currentColor"
             viewBox="0 0 20 20"
         >
@@ -122,7 +122,7 @@ export function WitnessCheckButtonIcon({ witnessed }: { witnessed: boolean }) {
  */
 export function DocumentIcon() {
     return (
-        <svg style={{ width: '14px', height: '14px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="pm-icon-14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -250,23 +250,14 @@ export function MaskedField({
     return (
         <div className="pm-display-field">
             <div className="pm-display-label">{label}</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="pm-masked-field-row">
                 <div className={`pm-display-value${!value || value === '-' ? ' muted' : ''}`}>
                     {displayValue}
                 </div>
                 {canReveal && (
                     <button
                         onClick={handleReveal}
-                        style={{
-                            background: 'none',
-                            border: '1px solid rgba(255,255,255,0.15)',
-                            borderRadius: '4px',
-                            color: 'var(--text-secondary, #9ca3af)',
-                            fontSize: '11px',
-                            padding: '2px 8px',
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap',
-                        }}
+                        className="pm-reveal-btn"
                         title={revealed ? 'Hide value' : 'Reveal value (logged for audit)'}
                     >
                         {revealed ? 'Hide' : 'Reveal'}

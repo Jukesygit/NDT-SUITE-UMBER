@@ -35,7 +35,7 @@ export default function NotificationsTab() {
                 <p
                     style={{
                         fontSize: '14px',
-                        color: 'rgba(255, 255, 255, 0.6)',
+                        color: 'rgba(53, 160, 88, 0.45)',
                         marginTop: '4px',
                     }}
                 >
@@ -48,7 +48,7 @@ export default function NotificationsTab() {
                 style={{
                     display: 'flex',
                     gap: '4px',
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderBottom: '1px solid rgba(53, 160, 88, 0.12)',
                     paddingBottom: '0',
                 }}
             >
@@ -61,12 +61,12 @@ export default function NotificationsTab() {
                             fontSize: '14px',
                             fontWeight: 500,
                             color:
-                                viewMode === tab.id ? 'var(--accent-primary)' : 'rgba(255, 255, 255, 0.6)',
+                                viewMode === tab.id ? 'var(--green-bright)' : 'rgba(53, 160, 88, 0.45)',
                             background: 'transparent',
                             border: 'none',
                             borderBottom:
                                 viewMode === tab.id
-                                    ? '2px solid var(--accent-primary)'
+                                    ? '2px solid var(--green-bright)'
                                     : '2px solid transparent',
                             cursor: 'pointer',
                             transition: 'all 0.2s',

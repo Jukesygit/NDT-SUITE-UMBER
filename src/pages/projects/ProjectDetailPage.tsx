@@ -1,6 +1,5 @@
 /**
  * ProjectDetailPage - The Project Hub
- * Central management page for an inspection project.
  */
 
 import { useState } from 'react';
@@ -19,44 +18,22 @@ import { Modal } from '../../components/ui/Modal';
 import { ProjectVesselsTab } from '../../components/projects/ProjectVesselsTab';
 import { ProjectFilesTab } from '../../components/projects/ProjectFilesTab';
 import { VesselCard } from '../../components/projects/VesselCard';
-import { EmptyState } from '../../components/ui/EmptyState';
 import type { ProjectStatus } from '../../types/inspection-project';
-import { PROJECT_STATUS_LABELS, PROJECT_STATUS_COLORS } from '../../types/inspection-project';
+import { PROJECT_STATUS_LABELS } from '../../types/inspection-project';
+import './projects.css';
 
 type Tab = 'overview' | 'vessels' | 'files';
 
-function TabButton({ active, label, count, onClick }: { active: boolean; label: string; count?: number; onClick: () => void }) {
-    return (
-        <button
-            onClick={onClick}
-            style={{
-                padding: '10px 20px',
-                borderRadius: 0,
-                border: 'none',
-                borderBottom: `2px solid ${active ? '#3b82f6' : 'transparent'}`,
-                background: 'transparent',
-                color: active ? '#fff' : 'rgba(255,255,255,0.5)',
-                fontSize: '0.85rem',
-                fontWeight: active ? 600 : 400,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-            }}
-        >
-            {label}
-            {count != null && (
-                <span style={{
-                    marginLeft: 6,
-                    padding: '1px 6px',
-                    borderRadius: 8,
-                    fontSize: '0.7rem',
-                    background: active ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.06)',
-                    color: active ? '#60a5fa' : 'rgba(255,255,255,0.4)',
-                }}>
-                    {count}
-                </span>
-            )}
-        </button>
-    );
+function getProjectStatusClass(status: ProjectStatus): string {
+    switch (status) {
+        case 'completed': return 'active';
+        case 'in_progress': return 'info';
+        case 'mobilizing': return 'info';
+        case 'review': return 'warning';
+        case 'planned': return 'neutral';
+        case 'archived': return 'neutral';
+        default: return 'neutral';
+    }
 }
 
 export default function ProjectDetailPage() {
@@ -81,9 +58,15 @@ export default function ProjectDetailPage() {
 
     if (projectError || !project) {
         return (
-            <div style={{ padding: '32px 40px' }}>
-                <div style={{ color: '#ef4444', padding: 16, background: 'rgba(239,68,68,0.1)', borderRadius: 8 }}>
-                    Failed to load project: {(projectError as Error)?.message ?? 'Not found'}
+            <div className="pj-chassis">
+                <div className="pj-panel">
+                    <div className="pj-display-well">
+                        <div className="pj-display">
+                            <div className="pj-alert error">
+                                Failed to load project: {(projectError as Error)?.message ?? 'Not found'}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         );
@@ -99,9 +82,10 @@ export default function ProjectDetailPage() {
     const dateRange = [project.start_date, project.end_date]
         .filter(Boolean)
         .map(d => new Date(d!).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }))
-        .join(' \u2013 ');
+        .join(' – ');
 
     const completedVessels = vessels.filter(v => v.status === 'completed').length;
+    const statusClass = getProjectStatusClass(project.status);
 
     const handleStatusChange = async (status: ProjectStatus) => {
         setShowStatusMenu(false);
@@ -114,46 +98,25 @@ export default function ProjectDetailPage() {
     };
 
     return (
-        <div>
-            {/* Header */}
-            <div style={{ padding: '24px 40px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                <button
-                    onClick={() => navigate('/projects')}
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        background: 'none',
-                        border: 'none',
-                        color: 'rgba(255,255,255,0.4)',
-                        fontSize: '0.8rem',
-                        cursor: 'pointer',
-                        padding: 0,
-                        marginBottom: 16,
-                    }}
-                >
-                    <ArrowLeft size={14} />
+        <div className="pj-chassis">
+            <div className="pj-panel">
+                {/* Back nav */}
+                <button onClick={() => navigate('/projects')} className="pj-back-btn">
+                    <ArrowLeft size={12} />
                     Projects
                 </button>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div>
-                        <h1 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#fff', margin: 0, marginBottom: 6 }}>
-                            {project.name}
-                        </h1>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)' }}>
+                {/* Header */}
+                <div className="pj-header">
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <h1 className="pj-page-title">{project.name}</h1>
+                        <div className="pj-page-meta">
                             {project.client_name && <span>{project.client_name}</span>}
                             {project.site_name && (
-                                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <MapPin size={13} />
-                                    {project.site_name}
-                                </span>
+                                <span><MapPin size={11} />{project.site_name}</span>
                             )}
                             {dateRange && (
-                                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <Calendar size={13} />
-                                    {dateRange}
-                                </span>
+                                <span><Calendar size={11} />{dateRange}</span>
                             )}
                             <span>{vessels.length} vessel{vessels.length !== 1 ? 's' : ''}</span>
                             {vessels.length > 0 && (
@@ -162,66 +125,33 @@ export default function ProjectDetailPage() {
                         </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div className="pj-header-actions">
                         {/* Status dropdown */}
-                        <div style={{ position: 'relative' }}>
+                        <div className="pj-status-dropdown">
                             <button
                                 onClick={() => setShowStatusMenu(!showStatusMenu)}
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 6,
-                                    padding: '4px 12px',
-                                    borderRadius: 12,
-                                    border: 'none',
-                                    fontSize: '0.8rem',
-                                    fontWeight: 500,
-                                    background: `${PROJECT_STATUS_COLORS[project.status]}20`,
-                                    color: PROJECT_STATUS_COLORS[project.status],
-                                    cursor: 'pointer',
-                                }}
+                                className={`pj-status-trigger ${statusClass}`}
                             >
-                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: PROJECT_STATUS_COLORS[project.status] }} />
+                                <span className={`pj-led ${statusClass}`} />
                                 {PROJECT_STATUS_LABELS[project.status]}
                             </button>
                             {showStatusMenu && (
-                                <div
-                                    style={{
-                                        position: 'absolute',
-                                        top: '100%',
-                                        right: 0,
-                                        marginTop: 4,
-                                        padding: 4,
-                                        borderRadius: 8,
-                                        background: '#1a1a1a',
-                                        border: '1px solid rgba(255,255,255,0.12)',
-                                        zIndex: 10,
-                                        minWidth: 160,
-                                    }}
-                                >
-                                    {(['planned', 'mobilizing', 'in_progress', 'review', 'completed', 'archived'] as ProjectStatus[]).map(s => (
-                                        <button
-                                            key={s}
-                                            onClick={() => handleStatusChange(s)}
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: 8,
-                                                width: '100%',
-                                                padding: '6px 10px',
-                                                borderRadius: 4,
-                                                border: 'none',
-                                                background: s === project.status ? 'rgba(255,255,255,0.06)' : 'transparent',
-                                                color: PROJECT_STATUS_COLORS[s],
-                                                fontSize: '0.8rem',
-                                                cursor: 'pointer',
-                                                textAlign: 'left',
-                                            }}
-                                        >
-                                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: PROJECT_STATUS_COLORS[s] }} />
-                                            {PROJECT_STATUS_LABELS[s]}
-                                        </button>
-                                    ))}
+                                <div className="pj-status-menu">
+                                    {(['planned', 'mobilizing', 'in_progress', 'review', 'completed', 'archived'] as ProjectStatus[]).map(s => {
+                                        const sc = getProjectStatusClass(s);
+                                        return (
+                                            <button
+                                                key={s}
+                                                onClick={() => handleStatusChange(s)}
+                                                className={`pj-status-option ${s === project.status ? 'current' : ''}`}
+                                            >
+                                                <span className={`pj-led ${sc}`} />
+                                                <span style={{ color: s === project.status ? 'var(--green-bright)' : 'rgba(53, 160, 88, 0.65)' }}>
+                                                    {PROJECT_STATUS_LABELS[s]}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
@@ -229,94 +159,96 @@ export default function ProjectDetailPage() {
                         <button
                             onClick={() => navigate(`/projects/${project.id}/edit`)}
                             title="Edit project"
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                padding: 8,
-                                borderRadius: 6,
-                                border: '1px solid rgba(255,255,255,0.1)',
-                                background: 'transparent',
-                                color: 'rgba(255,255,255,0.5)',
-                                cursor: 'pointer',
-                            }}
+                            className="pj-btn secondary icon-only"
                         >
-                            <Settings size={16} />
+                            <Settings size={14} />
                         </button>
                         <button
                             onClick={() => setShowDeleteModal(true)}
                             title="Delete project"
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                padding: 8,
-                                borderRadius: 6,
-                                border: '1px solid rgba(239,68,68,0.2)',
-                                background: 'transparent',
-                                color: 'rgba(239,68,68,0.6)',
-                                cursor: 'pointer',
-                            }}
+                            className="pj-btn danger icon-only"
                         >
-                            <Trash2 size={16} />
+                            <Trash2 size={14} />
                         </button>
                     </div>
                 </div>
-            </div>
 
-            {/* Tabs */}
-            <div style={{
-                display: 'flex',
-                gap: 0,
-                padding: '0 40px',
-                borderBottom: '1px solid rgba(255,255,255,0.06)',
-            }}>
-                <TabButton active={activeTab === 'overview'} label="Overview" count={vessels.length} onClick={() => setActiveTab('overview')} />
-                <TabButton active={activeTab === 'vessels'} label="Vessels" count={vessels.length} onClick={() => setActiveTab('vessels')} />
-                <TabButton active={activeTab === 'files'} label="Files" count={files.length + composites.length + models.length} onClick={() => setActiveTab('files')} />
-            </div>
+                <div className="pj-groove" />
 
-            {/* Tab content */}
-            <div style={{ padding: '24px 40px' }}>
-                {activeTab === 'overview' && (
-                    vessels.length === 0 ? (
-                        <EmptyState
-                            title="No vessels yet"
-                            message="Add vessels to start setting up this inspection project."
-                            icon="default"
-                            action={{ label: 'Add Vessel', onClick: () => setActiveTab('vessels') }}
+                {/* Tabs */}
+                <div className="pj-toolbar">
+                    <div className="pj-tabs-well">
+                        <button className={`pj-tab ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>
+                            Overview
+                            <span className="pj-tab-count">{vessels.length}</span>
+                        </button>
+                        <button className={`pj-tab ${activeTab === 'vessels' ? 'active' : ''}`} onClick={() => setActiveTab('vessels')}>
+                            Vessels
+                            <span className="pj-tab-count">{vessels.length}</span>
+                        </button>
+                        <button className={`pj-tab ${activeTab === 'files' ? 'active' : ''}`} onClick={() => setActiveTab('files')}>
+                            Files
+                            <span className="pj-tab-count">{files.length + composites.length + models.length}</span>
+                        </button>
+                    </div>
+                </div>
+
+                {/* Tab content */}
+                <div className="pj-content">
+                    {activeTab === 'overview' && (
+                        vessels.length === 0 ? (
+                            <div className="pj-display-well">
+                                <div className="pj-display">
+                                    <div className="pj-empty">
+                                        <div className="pj-empty-title">No vessels yet</div>
+                                        <div className="pj-empty-text">Add vessels to start setting up this inspection project.</div>
+                                        <button onClick={() => setActiveTab('vessels')} className="pj-btn primary" style={{ marginTop: 14 }}>
+                                            Add Vessel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="pj-card-grid">
+                                {vessels.map(v => (
+                                    <VesselCard
+                                        key={v.id}
+                                        vessel={v}
+                                        projectId={project.id}
+                                        compositeCount={compositeCountByVessel.get(v.id) ?? 0}
+                                        onEdit={() => setActiveTab('vessels')}
+                                        onDelete={() => setActiveTab('vessels')}
+                                    />
+                                ))}
+                            </div>
+                        )
+                    )}
+
+                    {activeTab === 'vessels' && (
+                        <ProjectVesselsTab
+                            projectId={project.id}
+                            vessels={vessels}
+                            compositeCountByVessel={compositeCountByVessel}
                         />
-                    ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: 12 }}>
-                            {vessels.map(v => (
-                                <VesselCard
-                                    key={v.id}
-                                    vessel={v}
-                                    projectId={project.id}
-                                    compositeCount={compositeCountByVessel.get(v.id) ?? 0}
-                                    onEdit={() => setActiveTab('vessels')}
-                                    onDelete={() => setActiveTab('vessels')}
-                                />
-                            ))}
-                        </div>
-                    )
-                )}
+                    )}
 
-                {activeTab === 'vessels' && (
-                    <ProjectVesselsTab
-                        projectId={project.id}
-                        vessels={vessels}
-                        compositeCountByVessel={compositeCountByVessel}
-                    />
-                )}
+                    {activeTab === 'files' && (
+                        <ProjectFilesTab
+                            projectId={project.id}
+                            files={files}
+                            vessels={vessels}
+                            scanComposites={composites}
+                            vesselModels={models}
+                        />
+                    )}
+                </div>
 
-                {activeTab === 'files' && (
-                    <ProjectFilesTab
-                        projectId={project.id}
-                        files={files}
-                        vessels={vessels}
-                        scanComposites={composites}
-                        vesselModels={models}
-                    />
-                )}
+                {/* Nameplate */}
+                <div className="pj-groove" />
+                <div className="pj-nameplate-bar">
+                    <span className="pj-nameplate">Matrix Portal</span>
+                    <span className="pj-nameplate-model">Project Hub</span>
+                </div>
             </div>
 
             {/* Delete confirmation */}
@@ -328,16 +260,11 @@ export default function ProjectDetailPage() {
                         This action cannot be undone.
                     </p>
                     <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                        <button
-                            onClick={() => setShowDeleteModal(false)}
-                            style={{ padding: '6px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: 'rgba(255,255,255,0.7)', cursor: 'pointer' }}
-                        >
-                            Cancel
-                        </button>
+                        <button onClick={() => setShowDeleteModal(false)} className="pj-btn secondary">Cancel</button>
                         <button
                             onClick={handleDelete}
                             disabled={deleteMutation.isPending}
-                            style={{ padding: '6px 16px', borderRadius: 6, border: 'none', background: '#ef4444', color: '#fff', cursor: 'pointer' }}
+                            className="pj-btn danger"
                         >
                             {deleteMutation.isPending ? 'Deleting...' : 'Delete Project'}
                         </button>

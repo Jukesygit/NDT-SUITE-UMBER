@@ -1,0 +1,876 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&display=swap');
+
+/* ============================================================
+   INDUSTRIAL INSTRUMENT — Design System
+   Skeuomorphic, physically-grounded UI language.
+   Warm neutrals tinted toward green (brand hue).
+   References: Mackie Big Knob, Softube FXR-805.
+   ============================================================ */
+
+.ind {
+  --chassis: #706c66;
+  --chassis-light: #858178;
+
+  --panel: #ccc8c2;
+  --panel-top: #d8d4ce;
+  --panel-bot: #c0bcb6;
+  --panel-edge-hi: #dedad4;
+  --panel-edge-lo: #b0aca6;
+
+  --well: #b4b0aa;
+  --well-deep: #a29e98;
+  --well-floor: #96928c;
+
+  --ctrl: #dedad4;
+  --ctrl-top: #e6e2dc;
+  --ctrl-edge-hi: #eae6e0;
+  --ctrl-edge-lo: #bab6b0;
+
+  --green: #2d8a4e;
+  --green-bright: #35a058;
+  --green-dark: #206b3a;
+  --green-glow-a: rgba(45, 138, 78, 0.45);
+  --green-glow-b: rgba(45, 138, 78, 0.2);
+  --green-subtle: rgba(45, 138, 78, 0.08);
+
+  --amber: #b8861e;
+  --red: #a63a2a;
+
+  --ink: #1c1b18;
+  --ink-mid: #4a4845;
+  --ink-light: #7a7672;
+  --ink-ghost: #9a968f;
+  --ink-on-green: #eaf5ee;
+
+  --ff-display: 'Barlow', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --ff-label: 'Barlow Condensed', 'Barlow', sans-serif;
+  --ff-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+
+  --shadow: rgba(0, 0, 0, 0.22);
+  --shadow-soft: rgba(0, 0, 0, 0.1);
+  --hi: rgba(255, 255, 255, 0.4);
+  --hi-strong: rgba(255, 255, 255, 0.55);
+
+  --speed: 150ms;
+  --ease: cubic-bezier(0, 0, 0.2, 1);
+}
+
+
+/* ============================================================
+   CHASSIS — Page background
+   ============================================================ */
+
+.ind {
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 50% 25%, rgba(255,255,255,0.07) 0%, transparent 65%),
+    var(--chassis);
+  color: var(--ink);
+  font-family: var(--ff-display);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+
+/* ============================================================
+   HEADER — Stamped nameplate
+   ============================================================ */
+
+.ind-header {
+  padding: 28px 32px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ind-header__led {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: radial-gradient(circle at 35% 30%, #5ec87a 0%, var(--green) 55%, var(--green-dark) 100%);
+  box-shadow:
+    0 0 5px var(--green-glow-a),
+    0 0 14px var(--green-glow-b),
+    inset 0 -1px 2px rgba(0,0,0,0.2),
+    inset 0 1px 1px rgba(255,255,255,0.35),
+    0 1px 0 var(--hi);
+}
+
+.ind-header__title {
+  font-family: var(--ff-label);
+  font-weight: 700;
+  font-size: 22px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-mid);
+  text-shadow: 0 1px 0 var(--hi);
+  margin: 0;
+  line-height: 1;
+}
+
+.ind-header__sub {
+  font-family: var(--ff-display);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink-light);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+  margin: 3px 0 0;
+}
+
+
+/* ============================================================
+   PLATE — Raised machined panel
+   ============================================================ */
+
+.ind-plate {
+  background: linear-gradient(180deg, var(--panel-top) 0%, var(--panel-bot) 100%);
+  border-style: solid;
+  border-width: 1.5px;
+  border-color:
+    var(--panel-edge-hi)
+    var(--panel-edge-lo)
+    var(--panel-edge-lo)
+    var(--panel-edge-hi);
+  border-radius: 6px;
+  box-shadow:
+    0 3px 8px var(--shadow),
+    0 1px 2px var(--shadow-soft),
+    inset 0 1px 0 var(--hi-strong);
+}
+
+
+/* ============================================================
+   WELL — Recessed area within a plate
+   ============================================================ */
+
+.ind-well {
+  background: var(--well);
+  border-style: solid;
+  border-width: 1px;
+  border-color:
+    var(--well-deep)
+    var(--panel-edge-hi)
+    var(--panel-edge-hi)
+    var(--well-deep);
+  border-radius: 4px;
+  box-shadow:
+    inset 0 2px 6px var(--shadow),
+    inset 0 1px 2px var(--shadow-soft);
+}
+
+
+/* ============================================================
+   GROOVE — Thin machined separator line
+   ============================================================ */
+
+.ind-groove {
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(180deg,
+    rgba(0,0,0,0.12) 0%,
+    rgba(0,0,0,0.05) 50%,
+    rgba(255,255,255,0.35) 100%
+  );
+}
+
+
+/* ============================================================
+   BUTTONS — Raised controls
+   ============================================================ */
+
+.ind-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 18px;
+  background: linear-gradient(180deg, var(--ctrl-top) 0%, var(--ctrl) 40%, var(--ctrl-edge-lo) 100%);
+  border-style: solid;
+  border-width: 1px;
+  border-color:
+    var(--ctrl-edge-hi)
+    var(--ctrl-edge-lo)
+    var(--ctrl-edge-lo)
+    var(--ctrl-edge-hi);
+  border-radius: 4px;
+  box-shadow:
+    0 2px 4px var(--shadow),
+    0 1px 1px var(--shadow-soft),
+    inset 0 1px 0 var(--hi-strong);
+  color: var(--ink-mid);
+  font-family: var(--ff-label);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  cursor: pointer;
+  transition:
+    box-shadow var(--speed) var(--ease),
+    background var(--speed) var(--ease);
+  white-space: nowrap;
+}
+
+.ind-btn:hover {
+  background: linear-gradient(180deg, var(--ctrl-edge-hi) 0%, var(--ctrl-top) 40%, var(--ctrl) 100%);
+  box-shadow:
+    0 3px 6px var(--shadow),
+    0 1px 2px var(--shadow-soft),
+    inset 0 1px 0 var(--hi-strong);
+}
+
+.ind-btn:active {
+  background: linear-gradient(180deg, var(--ctrl-edge-lo) 0%, var(--ctrl) 100%);
+  border-color:
+    var(--ctrl-edge-lo)
+    var(--ctrl-edge-hi)
+    var(--ctrl-edge-hi)
+    var(--ctrl-edge-lo);
+  box-shadow:
+    inset 0 2px 4px var(--shadow),
+    inset 0 1px 1px var(--shadow-soft);
+}
+
+.ind-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.ind-btn--sm {
+  padding: 5px 12px;
+  font-size: 11px;
+  border-radius: 3px;
+}
+
+.ind-btn--green {
+  background: linear-gradient(180deg, var(--green-bright) 0%, var(--green) 55%, var(--green-dark) 100%);
+  border-color:
+    rgba(53,160,88,0.6)
+    var(--green-dark)
+    var(--green-dark)
+    rgba(53,160,88,0.5);
+  color: var(--ink-on-green);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+  box-shadow:
+    0 2px 6px rgba(45,138,78,0.3),
+    0 1px 2px var(--shadow-soft),
+    inset 0 1px 0 rgba(255,255,255,0.2);
+}
+
+.ind-btn--green:hover {
+  background: linear-gradient(180deg, #3dac64 0%, var(--green-bright) 55%, var(--green) 100%);
+  box-shadow:
+    0 3px 10px rgba(45,138,78,0.4),
+    0 1px 3px var(--shadow-soft),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+}
+
+.ind-btn--green:active {
+  background: linear-gradient(180deg, var(--green-dark) 0%, var(--green) 100%);
+  border-color:
+    var(--green-dark)
+    rgba(53,160,88,0.4)
+    rgba(53,160,88,0.4)
+    var(--green-dark);
+  box-shadow:
+    inset 0 2px 4px rgba(0,0,0,0.3),
+    inset 0 1px 1px rgba(0,0,0,0.15);
+}
+
+.ind-btn--green:disabled {
+  background: var(--ctrl);
+  border-color: var(--ctrl-edge-lo);
+  color: var(--ink-ghost);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  box-shadow:
+    0 1px 2px var(--shadow-soft),
+    inset 0 1px 0 var(--hi);
+  opacity: 0.7;
+}
+
+.ind-btn--lg {
+  padding: 12px 28px;
+  font-size: 14px;
+  border-radius: 5px;
+}
+
+.ind-btn--full {
+  width: 100%;
+}
+
+
+/* ============================================================
+   INPUT — Recessed text field
+   ============================================================ */
+
+.ind-input {
+  background: var(--well-deep);
+  border-style: solid;
+  border-width: 1px;
+  border-color:
+    rgba(0,0,0,0.15)
+    rgba(255,255,255,0.2)
+    rgba(255,255,255,0.25)
+    rgba(0,0,0,0.12);
+  border-radius: 3px;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.12);
+  color: var(--ink);
+  font-family: var(--ff-mono);
+  font-size: 13px;
+  padding: 8px 12px;
+  transition: box-shadow var(--speed) var(--ease);
+}
+
+.ind-input:focus {
+  outline: none;
+  box-shadow:
+    inset 0 2px 4px rgba(0,0,0,0.12),
+    0 0 0 2px rgba(45,138,78,0.3);
+}
+
+.ind-input::placeholder {
+  color: var(--ink-ghost);
+}
+
+
+/* ============================================================
+   LED — Status indicator dot
+   ============================================================ */
+
+.ind-led {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: all var(--speed) var(--ease);
+}
+
+.ind-led--off {
+  background: radial-gradient(circle at 45% 40%, var(--well) 0%, var(--well-deep) 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(0,0,0,0.3),
+    0 1px 0 var(--hi);
+}
+
+.ind-led--on {
+  background: radial-gradient(circle at 35% 30%, #5ec87a 0%, var(--green) 55%, var(--green-dark) 100%);
+  box-shadow:
+    0 0 5px var(--green-glow-a),
+    0 0 12px var(--green-glow-b),
+    inset 0 -1px 2px rgba(0,0,0,0.2),
+    inset 0 1px 1px rgba(255,255,255,0.3),
+    0 1px 0 var(--hi);
+}
+
+
+/* ============================================================
+   TYPOGRAPHY — Stamped and engraved text
+   ============================================================ */
+
+.ind-stamp {
+  font-family: var(--ff-label);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-light);
+  text-shadow: 0 1px 0 var(--hi);
+  margin: 0;
+}
+
+.ind-mono {
+  font-family: var(--ff-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ind-text-meta {
+  font-family: var(--ff-display);
+  font-size: 12px;
+  color: var(--ink-light);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+}
+
+
+/* ============================================================
+   BADGE — Small raised type plate
+   ============================================================ */
+
+.ind-badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--ff-label);
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, var(--ctrl-top) 0%, var(--ctrl) 100%);
+  border-style: solid;
+  border-width: 1px;
+  border-color:
+    var(--ctrl-edge-hi)
+    var(--ctrl-edge-lo)
+    var(--ctrl-edge-lo)
+    var(--ctrl-edge-hi);
+  box-shadow:
+    0 1px 2px var(--shadow-soft),
+    inset 0 1px 0 rgba(255,255,255,0.3);
+  color: var(--ink-mid);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+}
+
+.ind-badge--nde {
+  color: var(--green-dark);
+}
+
+.ind-badge--eddify {
+  color: #8a6418;
+}
+
+
+/* ============================================================
+   DIRECTORY BAR — Recessed path display
+   ============================================================ */
+
+.ind-dirbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.ind-dirbar__icon {
+  color: var(--ink-light);
+  flex-shrink: 0;
+}
+
+.ind-dirbar__path {
+  flex: 1;
+  font-family: var(--ff-mono);
+  font-size: 12px;
+  color: var(--ink-mid);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ind-dirbar__actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+
+/* ============================================================
+   FOLDER ITEM — Selectable row with LED
+   ============================================================ */
+
+.ind-folder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background var(--speed) var(--ease);
+  background: transparent;
+}
+
+.ind-folder:hover {
+  background: rgba(255,255,255,0.12);
+}
+
+.ind-folder--selected {
+  background: rgba(255,255,255,0.08);
+}
+
+.ind-folder__name {
+  font-family: var(--ff-mono);
+  font-size: 13px;
+  color: var(--ink);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ind-folder__meta {
+  font-size: 11px;
+  color: var(--ink-light);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+
+/* ============================================================
+   COUNT PILL
+   ============================================================ */
+
+.ind-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ind-count--active {
+  background: var(--green);
+  color: var(--ink-on-green);
+  box-shadow: 0 0 4px var(--green-glow-b);
+}
+
+.ind-count--zero {
+  background: var(--well-deep);
+  color: var(--ink-ghost);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.15);
+}
+
+
+/* ============================================================
+   VARIANT TAG — Bottom-right nameplate
+   ============================================================ */
+
+.ind-tag {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  padding: 5px 14px;
+  background: linear-gradient(180deg, var(--panel-top) 0%, var(--panel-bot) 100%);
+  border-style: solid;
+  border-width: 1px;
+  border-color:
+    var(--panel-edge-hi)
+    var(--panel-edge-lo)
+    var(--panel-edge-lo)
+    var(--panel-edge-hi);
+  border-radius: 4px;
+  box-shadow:
+    0 2px 6px var(--shadow),
+    inset 0 1px 0 var(--hi);
+  font-family: var(--ff-label);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-light);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  z-index: 900;
+}
+
+
+/* ============================================================
+   VARIATION A — SPLIT PANEL
+   Two machined plates side by side on the chassis.
+   Visible seam/channel between them.
+   ============================================================ */
+
+.ind-a__body {
+  display: grid;
+  grid-template-columns: 1fr 4px 1fr;
+  padding: 0 24px 24px;
+  min-height: calc(100vh - 80px);
+  gap: 0;
+}
+
+.ind-a__seam {
+  background: var(--chassis);
+  box-shadow:
+    inset 1px 0 3px rgba(0,0,0,0.35),
+    inset -1px 0 3px rgba(0,0,0,0.35);
+  align-self: stretch;
+  margin: 8px 0;
+}
+
+.ind-a__panel {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ind-a__panel--right {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ind-a__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.ind-a__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 12px;
+}
+
+.ind-a__footer-text {
+  font-size: 12px;
+  color: var(--ink-light);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+}
+
+
+/* ============================================================
+   VARIATION B — FOCUSED SEQUENCE
+   Single centered panel with groove separators.
+   Monolithic instrument face.
+   ============================================================ */
+
+.ind-b__body {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 0 24px 48px;
+}
+
+.ind-b__panel {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ind-b__section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ind-b__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ind-b__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 6px;
+  padding: 8px;
+}
+
+.ind-b__card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background var(--speed) var(--ease);
+  background: rgba(255,255,255,0.06);
+}
+
+.ind-b__card:hover {
+  background: rgba(255,255,255,0.14);
+}
+
+.ind-b__card--selected {
+  background: var(--green-subtle);
+}
+
+.ind-b__card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ind-b__eddify-well {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ind-b__convert-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ind-b__convert-row .ind-input {
+  flex: 1;
+}
+
+
+/* ============================================================
+   VARIATION C — FILE COMMANDER
+   Rack-mounted multi-panel layout.
+   Narrow sidebar + wide table + bottom action strip.
+   ============================================================ */
+
+.ind-c__body {
+  display: grid;
+  grid-template-columns: 210px 1fr;
+  grid-template-rows: 1fr auto;
+  padding: 0 24px 24px;
+  gap: 4px;
+  min-height: calc(100vh - 80px);
+}
+
+.ind-c__sidebar {
+  grid-row: 1 / 3;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.ind-c__sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ind-c__sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 3px;
+  font-family: var(--ff-display);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-mid);
+  cursor: pointer;
+  transition: background var(--speed) var(--ease), color var(--speed) var(--ease);
+  background: transparent;
+  border: none;
+  text-align: left;
+  width: 100%;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+}
+
+.ind-c__sidebar-item:hover {
+  background: rgba(255,255,255,0.12);
+  color: var(--ink);
+}
+
+.ind-c__sidebar-item--active {
+  background: rgba(255,255,255,0.15);
+  color: var(--ink);
+}
+
+.ind-c__sidebar-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.ind-c__main {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.ind-c__table-head {
+  display: grid;
+  grid-template-columns: 22px 1fr 70px 80px 80px;
+  gap: 10px;
+  padding: 0 12px 8px;
+  font-family: var(--ff-label);
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-light);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+}
+
+.ind-c__table-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+}
+
+.ind-c__table-row {
+  display: grid;
+  grid-template-columns: 22px 1fr 70px 80px 80px;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background var(--speed) var(--ease);
+}
+
+.ind-c__table-row:hover {
+  background: rgba(255,255,255,0.12);
+}
+
+.ind-c__table-row--selected {
+  background: rgba(255,255,255,0.08);
+}
+
+.ind-c__cell {
+  font-size: 12px;
+  color: var(--ink-light);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.ind-c__cell--name {
+  font-family: var(--ff-mono);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.ind-c__cell--mono {
+  font-family: var(--ff-mono);
+  font-size: 11px;
+}
+
+.ind-c__action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+}
+
+.ind-c__action-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--ink-mid);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+}
+
+.ind-c__convert-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 3px;
+}
+
+.ind-c__convert-row .ind-input {
+  width: 160px;
+}

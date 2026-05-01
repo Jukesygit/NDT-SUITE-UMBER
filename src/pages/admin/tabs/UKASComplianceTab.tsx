@@ -143,58 +143,47 @@ export default function UKASComplianceTab() {
         <div style={{
             maxWidth: '900px',
             margin: '0 auto',
-            background: 'white',
+            background: 'transparent',
             padding: '2rem',
             borderRadius: '8px',
-            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
-            color: '#1e293b',
-            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+            color: 'rgba(53, 160, 88, 0.70)',
+            fontFamily: "'JetBrains Mono', 'Courier New', monospace"
         }}>
             {/* Header */}
             <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'flex-start',
-                borderBottom: '2px solid #e2e8f0',
+                borderBottom: '1px solid rgba(53, 160, 88, 0.30)',
                 paddingBottom: '1.5rem',
                 marginBottom: '2rem'
             }}>
                 <div>
-                    <h1 style={{ fontSize: '1.875rem', fontWeight: 800, color: '#1e3a8a', letterSpacing: '-0.025em', margin: 0 }}>
+                    <h1 style={{ fontSize: '1.875rem', fontWeight: 800, color: 'var(--green-bright)', letterSpacing: '-0.025em', margin: 0 }}>
                         NDT SUITE
                     </h1>
-                    <p style={{ fontSize: '1rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0.25rem 0' }}>
+                    <p style={{ fontSize: '1rem', fontWeight: 600, color: 'rgba(53, 160, 88, 0.45)', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0.25rem 0' }}>
                         Security & Data Protection
                     </p>
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginTop: '1rem', margin: '1rem 0 0 0' }}>
+                    <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginTop: '1rem', margin: '1rem 0 0 0', color: 'rgba(53, 160, 88, 0.70)' }}>
                         UKAS Standards Self-Assessment Report
                     </h2>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                     <button
                         onClick={expandAll}
+                        className="ad-btn"
                         style={{
-                            padding: '0.5rem 1rem',
                             fontSize: '0.875rem',
-                            background: '#f1f5f9',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            color: '#475569'
                         }}
                     >
                         Expand All
                     </button>
                     <button
                         onClick={collapseAll}
+                        className="ad-btn"
                         style={{
-                            padding: '0.5rem 1rem',
                             fontSize: '0.875rem',
-                            background: '#f1f5f9',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            color: '#475569'
                         }}
                     >
                         Collapse All
@@ -208,30 +197,30 @@ export default function UKASComplianceTab() {
                 gridTemplateColumns: '1fr 1fr',
                 gap: '1.5rem',
                 marginBottom: '2rem',
-                background: '#f8fafc',
+                background: 'rgba(53, 160, 88, 0.05)',
                 padding: '1rem',
                 borderRadius: '8px',
-                border: '1px solid #e2e8f0',
+                border: '1px solid rgba(53, 160, 88, 0.30)',
                 fontSize: '0.875rem',
-                color: '#1e293b'
+                color: 'rgba(53, 160, 88, 0.70)'
             }}>
                 <div>
-                    <p style={{ margin: 0, color: '#1e293b' }}>
-                        <span style={{ fontWeight: 700, color: '#64748b', textTransform: 'uppercase', fontSize: '0.75rem', display: 'block' }}>Document Reference</span>
+                    <p style={{ margin: 0, color: 'rgba(53, 160, 88, 0.70)' }}>
+                        <span style={{ fontWeight: 700, color: 'rgba(53, 160, 88, 0.45)', textTransform: 'uppercase', fontSize: '0.75rem', display: 'block' }}>Document Reference</span>
                         UKAS-CHK-001
                     </p>
-                    <p style={{ marginTop: '0.5rem', marginBottom: 0, color: '#1e293b' }}>
-                        <span style={{ fontWeight: 700, color: '#64748b', textTransform: 'uppercase', fontSize: '0.75rem', display: 'block' }}>Version</span>
+                    <p style={{ marginTop: '0.5rem', marginBottom: 0, color: 'rgba(53, 160, 88, 0.70)' }}>
+                        <span style={{ fontWeight: 700, color: 'rgba(53, 160, 88, 0.45)', textTransform: 'uppercase', fontSize: '0.75rem', display: 'block' }}>Version</span>
                         1.0
                     </p>
                 </div>
                 <div>
-                    <p style={{ margin: 0, color: '#1e293b' }}>
-                        <span style={{ fontWeight: 700, color: '#64748b', textTransform: 'uppercase', fontSize: '0.75rem', display: 'block' }}>Date</span>
+                    <p style={{ margin: 0, color: 'rgba(53, 160, 88, 0.70)' }}>
+                        <span style={{ fontWeight: 700, color: 'rgba(53, 160, 88, 0.45)', textTransform: 'uppercase', fontSize: '0.75rem', display: 'block' }}>Date</span>
                         29 January 2026
                     </p>
-                    <p style={{ marginTop: '0.5rem', marginBottom: 0, color: '#1e293b' }}>
-                        <span style={{ fontWeight: 700, color: '#64748b', textTransform: 'uppercase', fontSize: '0.75rem', display: 'block' }}>Verification Method</span>
+                    <p style={{ marginTop: '0.5rem', marginBottom: 0, color: 'rgba(53, 160, 88, 0.70)' }}>
+                        <span style={{ fontWeight: 700, color: 'rgba(53, 160, 88, 0.45)', textTransform: 'uppercase', fontSize: '0.75rem', display: 'block' }}>Verification Method</span>
                         Automated Code Analysis
                     </p>
                 </div>
@@ -242,13 +231,13 @@ export default function UKASComplianceTab() {
                 <h3 style={{
                     fontSize: '1.125rem',
                     fontWeight: 700,
-                    borderLeft: '4px solid #1e3a8a',
+                    borderLeft: '2px solid var(--green-bright)',
                     paddingLeft: '0.75rem',
                     marginBottom: '0.75rem'
                 }}>
                     Executive Summary
                 </h3>
-                <p style={{ color: '#475569', margin: 0, lineHeight: 1.6 }}>
+                <p style={{ color: 'rgba(53, 160, 88, 0.45)', margin: 0, lineHeight: 1.6 }}>
                     This self-assessment report verifies security and data protection controls implemented in the NDT Suite
                     personnel competency and inspection management platform against UKAS accreditation standards.
                     All {totalItems} identified controls have been verified against the production source code and database schema.
@@ -260,16 +249,16 @@ export default function UKASComplianceTab() {
                 <h3 style={{
                     fontSize: '1.125rem',
                     fontWeight: 700,
-                    borderLeft: '4px solid #1e3a8a',
+                    borderLeft: '2px solid var(--green-bright)',
                     paddingLeft: '0.75rem',
                     marginBottom: '0.75rem'
                 }}>
                     Verification Summary
                 </h3>
-                <div style={{ overflow: 'hidden', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <table style={{ width: '100%', textAlign: 'left', fontSize: '0.875rem', borderCollapse: 'collapse', color: '#1e293b' }}>
+                <div style={{ overflow: 'hidden', borderRadius: '8px', border: '1px solid rgba(53, 160, 88, 0.30)' }}>
+                    <table style={{ width: '100%', textAlign: 'left', fontSize: '0.875rem', borderCollapse: 'collapse', color: 'rgba(53, 160, 88, 0.70)' }}>
                         <thead>
-                            <tr style={{ background: '#1e3a8a', color: 'white' }}>
+                            <tr style={{ background: 'rgba(53, 160, 88, 0.15)', color: 'var(--green-bright)' }}>
                                 <th style={{ padding: '0.75rem 1rem' }}>Section</th>
                                 <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Items</th>
                                 <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Passed</th>
@@ -279,24 +268,24 @@ export default function UKASComplianceTab() {
                         </thead>
                         <tbody>
                             {complianceSections.map((section, idx) => (
-                                <tr key={section.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                                    <td style={{ padding: '0.5rem 1rem', fontWeight: 500, color: '#1e293b' }}>{idx + 1}. {section.title}</td>
-                                    <td style={{ padding: '0.5rem 1rem', textAlign: 'center', color: '#1e293b' }}>{section.items.length}</td>
-                                    <td style={{ padding: '0.5rem 1rem', textAlign: 'center', color: '#059669', fontWeight: 700 }}>
+                                <tr key={section.id} style={{ borderBottom: '1px solid rgba(53, 160, 88, 0.15)' }}>
+                                    <td style={{ padding: '0.5rem 1rem', fontWeight: 500, color: 'rgba(53, 160, 88, 0.70)' }}>{idx + 1}. {section.title}</td>
+                                    <td style={{ padding: '0.5rem 1rem', textAlign: 'center', color: 'rgba(53, 160, 88, 0.70)' }}>{section.items.length}</td>
+                                    <td style={{ padding: '0.5rem 1rem', textAlign: 'center', color: 'var(--green-bright)', fontWeight: 700 }}>
                                         {section.items.filter(i => i.verified).length}
                                     </td>
-                                    <td style={{ padding: '0.5rem 1rem', textAlign: 'center', color: '#1e293b' }}>
+                                    <td style={{ padding: '0.5rem 1rem', textAlign: 'center', color: 'rgba(53, 160, 88, 0.70)' }}>
                                         {section.items.filter(i => !i.verified).length}
                                     </td>
-                                    <td style={{ padding: '0.5rem 1rem', color: '#64748b', fontStyle: 'italic', fontSize: '0.75rem' }}>Verified</td>
+                                    <td style={{ padding: '0.5rem 1rem', color: 'rgba(53, 160, 88, 0.45)', fontStyle: 'italic', fontSize: '0.75rem' }}>Verified</td>
                                 </tr>
                             ))}
-                            <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid #cbd5e1' }}>
-                                <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>TOTAL</td>
-                                <td style={{ padding: '0.75rem 1rem', textAlign: 'center', textDecoration: 'underline', color: '#1e293b' }}>{totalItems}</td>
-                                <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: '#059669', textDecoration: 'underline' }}>{passedItems}</td>
-                                <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: '#1e293b' }}>0</td>
-                                <td style={{ padding: '0.75rem 1rem', color: '#059669' }}>100% PASS RATE</td>
+                            <tr style={{ background: 'rgba(53, 160, 88, 0.08)', fontWeight: 700, borderTop: '1px solid rgba(53, 160, 88, 0.30)' }}>
+                                <td style={{ padding: '0.75rem 1rem', color: 'rgba(53, 160, 88, 0.70)' }}>TOTAL</td>
+                                <td style={{ padding: '0.75rem 1rem', textAlign: 'center', textDecoration: 'underline', color: 'rgba(53, 160, 88, 0.70)' }}>{totalItems}</td>
+                                <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: 'var(--green-bright)', textDecoration: 'underline' }}>{passedItems}</td>
+                                <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: 'rgba(53, 160, 88, 0.70)' }}>0</td>
+                                <td style={{ padding: '0.75rem 1rem', color: 'var(--green-bright)' }}>100% PASS RATE</td>
                             </tr>
                         </tbody>
                     </table>
@@ -318,18 +307,18 @@ export default function UKASComplianceTab() {
                                     alignItems: 'center',
                                     fontSize: '1rem',
                                     fontWeight: 700,
-                                    color: '#1e3a8a',
-                                    background: '#eff6ff',
+                                    color: 'var(--green-bright)',
+                                    background: 'rgba(53, 160, 88, 0.08)',
                                     padding: '0.5rem 0.75rem',
                                     borderRadius: '6px',
-                                    border: 'none',
+                                    border: '1px solid rgba(53, 160, 88, 0.20)',
                                     cursor: 'pointer',
                                     textAlign: 'left'
                                 }}
                             >
                                 <span style={{
-                                    background: '#1e3a8a',
-                                    color: 'white',
+                                    background: 'rgba(53, 160, 88, 0.25)',
+                                    color: 'var(--green-bright)',
                                     width: '1.5rem',
                                     height: '1.5rem',
                                     display: 'flex',
@@ -343,7 +332,7 @@ export default function UKASComplianceTab() {
                                     {sectionIdx + 1}
                                 </span>
                                 {section.title}
-                                <span style={{ marginLeft: 'auto', color: '#64748b', fontSize: '0.875rem' }}>
+                                <span style={{ marginLeft: 'auto', color: 'rgba(53, 160, 88, 0.45)', fontSize: '0.875rem' }}>
                                     {isExpanded ? '▼' : '▶'}
                                 </span>
                             </button>
@@ -352,18 +341,18 @@ export default function UKASComplianceTab() {
                                 <ul style={{ listStyle: 'none', padding: 0, margin: '1rem 0 0 0.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                     {section.items.map((item, itemIdx) => (
                                         <li key={itemIdx} style={{ display: 'flex', alignItems: 'flex-start' }}>
-                                            <span style={{ color: '#10b981', fontWeight: 700, marginRight: '0.5rem', fontSize: '1rem' }}>☑</span>
+                                            <span style={{ color: 'var(--green-bright)', fontWeight: 700, marginRight: '0.5rem', fontSize: '1rem' }}>☑</span>
                                             <div>
-                                                <p style={{ fontWeight: 600, margin: 0, fontSize: '0.875rem', color: '#1e293b' }}>{item.title}</p>
-                                                <p style={{ color: '#64748b', fontSize: '0.75rem', margin: '0.25rem 0 0 0' }}>
+                                                <p style={{ fontWeight: 600, margin: 0, fontSize: '0.875rem', color: 'rgba(53, 160, 88, 0.70)' }}>{item.title}</p>
+                                                <p style={{ color: 'rgba(53, 160, 88, 0.45)', fontSize: '0.75rem', margin: '0.25rem 0 0 0' }}>
                                                     Verified: <code style={{
                                                         fontFamily: "'JetBrains Mono', monospace",
-                                                        background: '#f8fafc',
-                                                        border: '1px solid #e2e8f0',
+                                                        background: 'rgba(53, 160, 88, 0.05)',
+                                                        border: '1px solid rgba(53, 160, 88, 0.20)',
                                                         padding: '1px 4px',
                                                         borderRadius: '3px',
                                                         fontSize: '0.75rem',
-                                                        color: '#475569'
+                                                        color: 'rgba(53, 160, 88, 0.45)'
                                                     }}>{item.evidence}</code>
                                                 </p>
                                             </div>
@@ -381,18 +370,18 @@ export default function UKASComplianceTab() {
                 <h3 style={{
                     fontSize: '1.125rem',
                     fontWeight: 700,
-                    borderLeft: '4px solid #1e3a8a',
+                    borderLeft: '2px solid var(--green-bright)',
                     paddingLeft: '0.75rem',
                     marginBottom: '0.75rem'
                 }}>
                     Evidence Files Reference
                 </h3>
-                <div style={{ overflow: 'hidden', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <table style={{ width: '100%', textAlign: 'left', fontSize: '0.875rem', borderCollapse: 'collapse', color: '#1e293b' }}>
+                <div style={{ overflow: 'hidden', borderRadius: '8px', border: '1px solid rgba(53, 160, 88, 0.30)' }}>
+                    <table style={{ width: '100%', textAlign: 'left', fontSize: '0.875rem', borderCollapse: 'collapse', color: 'rgba(53, 160, 88, 0.70)' }}>
                         <thead>
-                            <tr style={{ background: '#f1f5f9' }}>
-                                <th style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#475569' }}>Check Area</th>
-                                <th style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#475569' }}>Primary Evidence File</th>
+                            <tr style={{ background: 'rgba(53, 160, 88, 0.10)' }}>
+                                <th style={{ padding: '0.75rem 1rem', fontWeight: 600, color: 'rgba(53, 160, 88, 0.70)' }}>Check Area</th>
+                                <th style={{ padding: '0.75rem 1rem', fontWeight: 600, color: 'rgba(53, 160, 88, 0.70)' }}>Primary Evidence File</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -407,17 +396,17 @@ export default function UKASComplianceTab() {
                                 ['Multi-Tenant', 'database/supabase-schema.sql'],
                                 ['Email Reminders', 'database/email-reminder-schema.sql'],
                             ].map(([area, file], idx) => (
-                                <tr key={idx} style={{ borderTop: '1px solid #e2e8f0' }}>
-                                    <td style={{ padding: '0.5rem 1rem', color: '#1e293b' }}>{area}</td>
+                                <tr key={idx} style={{ borderTop: '1px solid rgba(53, 160, 88, 0.15)' }}>
+                                    <td style={{ padding: '0.5rem 1rem', color: 'rgba(53, 160, 88, 0.70)' }}>{area}</td>
                                     <td style={{ padding: '0.5rem 1rem' }}>
                                         <code style={{
                                             fontFamily: "'JetBrains Mono', monospace",
-                                            background: '#f8fafc',
-                                            border: '1px solid #e2e8f0',
+                                            background: 'rgba(53, 160, 88, 0.05)',
+                                            border: '1px solid rgba(53, 160, 88, 0.20)',
                                             padding: '2px 6px',
                                             borderRadius: '4px',
                                             fontSize: '0.8rem',
-                                            color: '#475569'
+                                            color: 'rgba(53, 160, 88, 0.45)'
                                         }}>{file}</code>
                                     </td>
                                 </tr>
@@ -431,10 +420,10 @@ export default function UKASComplianceTab() {
             <div style={{
                 marginTop: '3rem',
                 paddingTop: '1.5rem',
-                borderTop: '1px solid #e2e8f0',
+                borderTop: '1px solid rgba(53, 160, 88, 0.20)',
                 textAlign: 'center',
                 fontSize: '0.75rem',
-                color: '#94a3b8',
+                color: 'rgba(53, 160, 88, 0.30)',
                 fontStyle: 'italic'
             }}>
                 This self-assessment report is generated for internal audit preparation purposes.

@@ -25,8 +25,11 @@
 /* 4. Reusable component styles */
 @import './components-new.css';
 
-/* 5. Glassmorphic theme (buttons, cards, inputs for dark theme) */
+/* 5. Glassmorphic theme (buttons, cards, inputs) */
 @import './glassmorphic.css';
+
+/* 5b. Industrial instrument theme overrides */
+@import './industrial-theme.css';
 
 /* ==========================================
    UTILITIES & HELPERS
@@ -90,7 +93,7 @@ select:focus,
 textarea:focus {
   outline: none;
   border-color: var(--interactive-default);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px rgba(45, 138, 78, 0.12);
 }
 
 /* Select options */

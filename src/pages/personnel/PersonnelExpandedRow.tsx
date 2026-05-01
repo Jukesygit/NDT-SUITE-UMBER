@@ -111,13 +111,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
             />
 
             {/* Divider */}
-            <div
-                style={{
-                    height: '1px',
-                    background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent)',
-                    margin: '20px 0',
-                }}
-            />
+            <div className="pm-expanded-divider" />
 
             {/* Competencies Section */}
             <CompetencySection

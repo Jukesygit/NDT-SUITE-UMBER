@@ -158,14 +158,7 @@ export function EditUserModal({ isOpen, onClose, user }: EditUserModalProps) {
                         type="button"
                         onClick={handleClose}
                         disabled={updateUser.isPending}
-                        className="
-                            px-4 py-2 rounded-lg
-                            bg-white/5 hover:bg-white/10
-                            border border-white/10
-                            text-white/80
-                            transition-colors
-                            disabled:opacity-50 disabled:cursor-not-allowed
-                        "
+                        className="ad-btn"
                     >
                         Cancel
                     </button>
@@ -173,14 +166,7 @@ export function EditUserModal({ isOpen, onClose, user }: EditUserModalProps) {
                         type="submit"
                         form="edit-user-form"
                         disabled={updateUser.isPending}
-                        className="
-                            px-4 py-2 rounded-lg
-                            bg-blue-600 hover:bg-blue-700
-                            text-white font-medium
-                            transition-colors
-                            disabled:opacity-50 disabled:cursor-not-allowed
-                            flex items-center gap-2
-                        "
+                        className="ad-btn primary flex items-center gap-2"
                     >
                         {updateUser.isPending && <RandomMatrixSpinner size={16} />}
                         {updateUser.isPending ? 'Saving...' : 'Save Changes'}
@@ -197,18 +183,18 @@ export function EditUserModal({ isOpen, onClose, user }: EditUserModalProps) {
                 )}
 
                 {/* Read-only User Information */}
-                <div className="mb-6 p-4 rounded-lg bg-white/5 border border-white/10">
-                    <h3 className="text-sm font-medium text-white/60 mb-3">User Information</h3>
+                <div className="mb-6 p-4 rounded-lg" style={{ background: 'rgba(53, 160, 88, 0.05)', border: '1px solid rgba(53, 160, 88, 0.20)' }}>
+                    <h3 className="text-sm font-medium mb-3" style={{ color: 'rgba(53, 160, 88, 0.45)' }}>User Information</h3>
 
                     <div className="space-y-2">
                         <div className="flex justify-between">
-                            <span className="text-sm text-white/40">Username:</span>
-                            <span className="text-sm text-white font-medium">{user.username}</span>
+                            <span className="text-sm" style={{ color: 'rgba(53, 160, 88, 0.35)' }}>Username:</span>
+                            <span className="text-sm font-medium" style={{ color: 'rgba(53, 160, 88, 0.70)' }}>{user.username}</span>
                         </div>
 
                         <div className="flex justify-between">
-                            <span className="text-sm text-white/40">Email:</span>
-                            <span className="text-sm text-white font-medium">{user.email}</span>
+                            <span className="text-sm" style={{ color: 'rgba(53, 160, 88, 0.35)' }}>Email:</span>
+                            <span className="text-sm font-medium" style={{ color: 'rgba(53, 160, 88, 0.70)' }}>{user.email}</span>
                         </div>
                     </div>
                 </div>
@@ -254,13 +240,13 @@ export function EditUserModal({ isOpen, onClose, user }: EditUserModalProps) {
                 />
 
                 {/* 2FA Reset */}
-                <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(53, 160, 88, 0.15)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
                         <div>
-                            <p style={{ margin: 0, fontSize: '14px', fontWeight: 500, color: 'var(--text-primary, #fff)' }}>
+                            <p style={{ margin: 0, fontSize: '14px', fontWeight: 500, color: 'rgba(53, 160, 88, 0.70)' }}>
                                 Two-Factor Authentication
                             </p>
-                            <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--text-tertiary, #6b7280)' }}>
+                            <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'rgba(53, 160, 88, 0.45)' }}>
                                 Unenroll this user's TOTP factor if they're locked out
                             </p>
                         </div>
@@ -278,7 +264,7 @@ export function EditUserModal({ isOpen, onClose, user }: EditUserModalProps) {
                             style={{
                                 padding: '6px 14px',
                                 fontSize: '13px',
-                                color: '#f59e0b',
+                                color: 'var(--amber)',
                                 background: 'rgba(245, 158, 11, 0.1)',
                                 border: '1px solid rgba(245, 158, 11, 0.3)',
                                 borderRadius: '6px',

@@ -1,5 +1,6 @@
 /**
  * CompetencyCard - Display card for a single competency/certification
+ * Industrial theme: lives inside a display well, uses green-on-dark text
  */
 
 import { useMemo, useState, useEffect } from 'react';
@@ -42,141 +43,48 @@ export interface Competency {
 }
 
 interface CompetencyCardProps {
-    /** The competency data */
     competency: Competency;
-    /** The competency definition */
     definition?: CompetencyDefinition;
-    /** Callback when edit is clicked */
     onEdit?: (competency: Competency) => void;
-    /** Callback when delete is clicked */
     onDelete?: (competency: Competency) => void;
-    /** Whether the card is in a compact view */
     compact?: boolean;
 }
 
-/**
- * Calculate days until expiry and status color
- */
 function useExpiryStatus(expiryDate?: string) {
     return useMemo(() => {
-        if (!expiryDate) return { daysUntil: null, status: 'none', color: 'rgba(255, 255, 255, 0.6)' };
-
+        if (!expiryDate) return { daysUntil: null, status: 'none', badgeClass: '' };
         const today = new Date();
         const expiry = new Date(expiryDate);
         const diffTime = expiry.getTime() - today.getTime();
         const daysUntil = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-        if (daysUntil < 0) {
-            return { daysUntil, status: 'expired', color: '#ef4444' };
-        } else if (daysUntil <= 30) {
-            return { daysUntil, status: 'expiring-soon', color: '#f59e0b' };
-        } else if (daysUntil <= 90) {
-            return { daysUntil, status: 'expiring', color: '#eab308' };
-        } else {
-            return { daysUntil, status: 'valid', color: '#10b981' };
-        }
+        if (daysUntil < 0) return { daysUntil, status: 'expired', badgeClass: 'expired' };
+        if (daysUntil <= 30) return { daysUntil, status: 'expiring-soon', badgeClass: 'expiring-soon' };
+        if (daysUntil <= 90) return { daysUntil, status: 'expiring', badgeClass: 'expiring' };
+        return { daysUntil, status: 'valid', badgeClass: 'valid' };
     }, [expiryDate]);
 }
 
-/**
- * Get approval status display info
- */
 function getApprovalStatus(status?: Competency['status']) {
     switch (status) {
-        case 'pending_approval':
-            return { label: 'Pending Approval', color: '#f59e0b', show: true };
-        case 'rejected':
-            return { label: 'Rejected', color: '#ef4444', show: true };
-        case 'changes_requested':
-            return { label: 'Changes Requested', color: '#f97316', show: true };
-        case 'expired':
-            return { label: 'Expired', color: '#ef4444', show: true };
-        case 'active':
-        default:
-            return { label: '', color: '', show: false };
+        case 'pending_approval': return { label: 'Pending Approval', badgeClass: 'pending', show: true };
+        case 'rejected': return { label: 'Rejected', badgeClass: 'rejected', show: true };
+        case 'changes_requested': return { label: 'Changes Requested', badgeClass: 'changes-requested', show: true };
+        case 'expired': return { label: 'Expired', badgeClass: 'expired', show: true };
+        default: return { label: '', badgeClass: '', show: false };
     }
 }
 
-/**
- * Format date for display
- */
 function formatDate(dateString?: string): string {
     if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-    });
+    return new Date(dateString).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-/**
- * Certificate icon
- */
-function CertificateIcon() {
-    return (
-        <svg
-            style={{ width: '20px', height: '20px' }}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-        >
-            <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
-            />
-        </svg>
-    );
-}
-
-/**
- * Edit icon
- */
-function EditIcon() {
-    return (
-        <svg style={{ width: '16px', height: '16px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-            />
-        </svg>
-    );
-}
-
-/**
- * Document icon
- */
-function DocumentIcon() {
-    return (
-        <svg style={{ width: '14px', height: '14px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-            />
-        </svg>
-    );
-}
-
-/**
- * CompetencyCard component
- *
- * @example
- * <CompetencyCard
- *     competency={competency}
- *     definition={competencyDefs.find(d => d.id === competency.competency_id)}
- *     onEdit={(c) => setEditingCompetency(c)}
- * />
- */
 export function CompetencyCard({
     competency,
     definition,
     onEdit,
-    onDelete: _onDelete, // Reserved for future use
+    onDelete: _onDelete,
     compact = false,
 }: CompetencyCardProps) {
     const expiryStatus = useExpiryStatus(competency.expiry_date);
@@ -187,44 +95,21 @@ export function CompetencyCard({
     const name = definition?.name || 'Unknown Certification';
     const isCertification = definition?.is_certification !== false;
 
-    // Use approval status color if not active, otherwise use expiry status color
-    const displayColor = approvalStatus.show ? approvalStatus.color : expiryStatus.color;
-
-    // Resolve document URL - handles both full URLs and storage paths
     useEffect(() => {
         async function resolveUrl() {
-            if (!competency.document_url) {
-                setResolvedDocumentUrl(null);
-                return;
-            }
-
-            // If it's already a full URL, use it directly
-            if (competency.document_url.startsWith('http')) {
-                setResolvedDocumentUrl(competency.document_url);
-                return;
-            }
-
-            // It's a storage path - get a signed URL from the 'documents' bucket
+            if (!competency.document_url) { setResolvedDocumentUrl(null); return; }
+            if (competency.document_url.startsWith('http')) { setResolvedDocumentUrl(competency.document_url); return; }
             try {
                 const { data, error } = await supabaseClient.storage
                     .from('documents')
-                    .createSignedUrl(competency.document_url, 3600); // 1 hour expiry
-
-                if (error) {
-                    setResolvedDocumentUrl(null);
-                    return;
-                }
-
+                    .createSignedUrl(competency.document_url, 3600);
+                if (error) { setResolvedDocumentUrl(null); return; }
                 setResolvedDocumentUrl(data.signedUrl);
-            } catch {
-                setResolvedDocumentUrl(null);
-            }
+            } catch { setResolvedDocumentUrl(null); }
         }
-
         resolveUrl();
     }, [competency.document_url]);
 
-    // Determine if document is an image or PDF
     const getDocumentType = (url?: string): 'image' | 'pdf' | 'other' => {
         if (!url) return 'other';
         const lower = url.toLowerCase();
@@ -233,48 +118,36 @@ export function CompetencyCard({
         return 'other';
     };
 
-    // Use the original URL for type detection (has extension), resolved URL for display
     const documentType = getDocumentType(competency.document_url);
 
     return (
         <div className={`pf-competency-card${compact ? ' compact' : ''}`}>
-            {/* Header */}
             <div className="pf-card-header">
                 <div className="pf-card-header-left">
-                    <div
-                        className="pf-card-icon"
-                        style={{
-                            background: `linear-gradient(135deg, ${displayColor}20, ${displayColor}10)`,
-                            color: displayColor,
-                        }}
-                    >
-                        <CertificateIcon />
+                    <div className="pf-card-icon">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                        </svg>
                     </div>
                     <div style={{ minWidth: 0, flex: '1 1 auto' }}>
                         <h4 className="pf-card-title">{name}</h4>
                         {definition?.category && (
                             <span className="pf-card-category">
-                                {typeof definition.category === 'object'
-                                    ? definition.category.name
-                                    : definition.category}
+                                {typeof definition.category === 'object' ? definition.category.name : definition.category}
                             </span>
                         )}
                     </div>
                 </div>
 
-                {/* Edit Button */}
                 {onEdit && (
-                    <button
-                        onClick={() => onEdit(competency)}
-                        className="pf-card-edit-btn"
-                        title="Edit"
-                    >
-                        <EditIcon />
+                    <button onClick={() => onEdit(competency)} className="pf-card-edit-btn" title="Edit">
+                        <svg style={{ width: '14px', height: '14px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
                     </button>
                 )}
             </div>
 
-            {/* Details */}
             {isCertification && (
                 <div className="pf-card-details">
                     {competency.level && (
@@ -304,43 +177,38 @@ export function CompetencyCard({
                     {competency.expiry_date && (
                         <div>
                             <span className="pf-detail-label">Expires</span>
-                            <span className="pf-detail-value" style={{ color: expiryStatus.color, fontWeight: '500' }}>
-                                {formatDate(competency.expiry_date)}
-                            </span>
+                            <span className="pf-detail-value">{formatDate(competency.expiry_date)}</span>
                         </div>
                     )}
                 </div>
             )}
 
-            {/* Non-certification value display */}
             {!isCertification && competency.field_value && (
-                <div className="pf-detail-value" style={{ fontSize: '14px' }}>{competency.field_value}</div>
+                <div className="pf-detail-value">{competency.field_value}</div>
             )}
 
-            {/* Document Link */}
             {competency.document_url && (
                 <button className="pf-doc-link" onClick={() => setShowDocumentModal(true)}>
-                    <DocumentIcon />
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ width: '12px', height: '12px' }}>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
                     View Certificate
                 </button>
             )}
 
-            {/* Status Badges - approval status takes priority over expiry status */}
             {approvalStatus.show ? (
-                <div className={`pf-badge ${competency.status === 'pending_approval' ? 'pending' : competency.status === 'changes_requested' ? 'changes-requested' : competency.status || ''}`}>
+                <div className={`pf-badge ${approvalStatus.badgeClass}`}>
                     {approvalStatus.label}
                 </div>
             ) : competency.expiry_date && expiryStatus.status !== 'none' ? (
-                <div className={`pf-badge ${expiryStatus.status}`}>
+                <div className={`pf-badge ${expiryStatus.badgeClass}`}>
                     {expiryStatus.status === 'expired' && 'Expired'}
-                    {expiryStatus.status === 'expiring-soon' &&
-                        `Expires in ${expiryStatus.daysUntil} days`}
+                    {expiryStatus.status === 'expiring-soon' && `Expires in ${expiryStatus.daysUntil} days`}
                     {expiryStatus.status === 'expiring' && `Expires in ${expiryStatus.daysUntil} days`}
                     {expiryStatus.status === 'valid' && 'Valid'}
                 </div>
             ) : null}
 
-            {/* Document Viewer Modal */}
             {showDocumentModal && competency.document_url && (
                 <Modal
                     isOpen={showDocumentModal}
@@ -351,44 +219,26 @@ export function CompetencyCard({
                     <div style={{ minHeight: '400px' }}>
                         {!resolvedDocumentUrl && (
                             <div style={{ textAlign: 'center', padding: '40px' }}>
-                                <p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                                    Loading document...
-                                </p>
+                                <p className="pf-info-text">Loading document...</p>
                             </div>
                         )}
                         {resolvedDocumentUrl && documentType === 'image' && (
                             <img
                                 src={resolvedDocumentUrl}
                                 alt={`${name} certificate`}
-                                style={{
-                                    width: '100%',
-                                    height: 'auto',
-                                    maxHeight: '70vh',
-                                    objectFit: 'contain',
-                                    borderRadius: '8px',
-                                }}
+                                style={{ width: '100%', height: 'auto', maxHeight: '70vh', objectFit: 'contain', borderRadius: '4px' }}
                                 onError={(e) => {
-                                    // Hide broken image and show fallback
                                     const target = e.target as HTMLImageElement;
                                     target.style.display = 'none';
-                                    // Show fallback message
                                     const fallback = target.nextElementSibling as HTMLElement;
                                     if (fallback) fallback.style.display = 'block';
                                 }}
                             />
                         )}
-                        {/* Fallback for failed image load */}
                         {resolvedDocumentUrl && documentType === 'image' && (
                             <div style={{ display: 'none', textAlign: 'center', padding: '40px' }}>
-                                <p style={{ color: 'rgba(255, 255, 255, 0.7)', marginBottom: '16px' }}>
-                                    Unable to load image preview.
-                                </p>
-                                <a
-                                    href={resolvedDocumentUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="btn btn--primary"
-                                >
+                                <p className="pf-info-text" style={{ marginBottom: '12px' }}>Unable to load image preview.</p>
+                                <a href={resolvedDocumentUrl} target="_blank" rel="noopener noreferrer" className="pf-btn sm primary">
                                     Open Image in New Tab
                                 </a>
                             </div>
@@ -397,45 +247,25 @@ export function CompetencyCard({
                             <iframe
                                 src={resolvedDocumentUrl}
                                 title={`${name} certificate`}
-                                style={{
-                                    width: '100%',
-                                    height: '70vh',
-                                    border: 'none',
-                                    borderRadius: '8px',
-                                }}
+                                style={{ width: '100%', height: '70vh', border: 'none', borderRadius: '4px' }}
                             />
                         )}
                         {resolvedDocumentUrl && documentType === 'other' && (
                             <div style={{ textAlign: 'center', padding: '40px' }}>
-                                <p style={{ color: 'rgba(255, 255, 255, 0.7)', marginBottom: '16px' }}>
-                                    This document type cannot be previewed.
-                                </p>
-                                <a
-                                    href={resolvedDocumentUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="btn btn--primary"
-                                >
+                                <p className="pf-info-text" style={{ marginBottom: '12px' }}>This document type cannot be previewed.</p>
+                                <a href={resolvedDocumentUrl} target="_blank" rel="noopener noreferrer" className="pf-btn sm primary">
                                     Download Document
                                 </a>
                             </div>
                         )}
                     </div>
-                    <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                    <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                         {resolvedDocumentUrl && (
-                            <a
-                                href={resolvedDocumentUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="btn btn--outline btn--sm"
-                            >
+                            <a href={resolvedDocumentUrl} target="_blank" rel="noopener noreferrer" className="pf-btn sm">
                                 Open in New Tab
                             </a>
                         )}
-                        <button
-                            onClick={() => setShowDocumentModal(false)}
-                            className="btn btn--primary btn--sm"
-                        >
+                        <button onClick={() => setShowDocumentModal(false)} className="pf-btn sm primary">
                             Close
                         </button>
                     </div>

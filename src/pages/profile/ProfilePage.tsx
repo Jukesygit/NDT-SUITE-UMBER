@@ -1,8 +1,6 @@
 /**
  * ProfilePage - User profile page using React Query
- *
- * This is the modernized version of ProfilePageNew.jsx
- * Uses React Query for data fetching and extracted components
+ * Industrial instrument theme: chassis > panel > wells
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -28,15 +26,10 @@ import authManager from '../../auth-manager.js';
 import { useTwoFactorStatus } from '../../hooks/queries/useTwoFactor';
 import { TwoFactorSetupWizard } from '../../components/two-factor/TwoFactorSetupWizard';
 
-/**
- * ProfilePage component
- */
 export default function ProfilePage() {
-    // Get current user from auth manager
     const [user, setUser] = useState<{ id: string; username: string | null; email: string | null; role?: string; organizationId?: string | null; isActive?: boolean } | null>(null);
     const [isInitialized, setIsInitialized] = useState(false);
 
-    // Initialize user on mount
     useEffect(() => {
         const currentUser = authManager.getCurrentUser();
         if (!currentUser) {
@@ -47,22 +40,16 @@ export default function ProfilePage() {
         setIsInitialized(true);
     }, []);
 
-    // Profile editing state
     const [isEditingProfile, setIsEditingProfile] = useState(false);
-
-    // Competency picker modal state
     const [showCompetencyPicker, setShowCompetencyPicker] = useState(false);
     const [pickerSearchTerm, setPickerSearchTerm] = useState('');
     const [pickerCategory, setPickerCategory] = useState('all');
-
-    // Competency editing state
     const [editingCompetency, setEditingCompetency] = useState<{
         competency?: Competency;
         definition?: CompetencyDefinition;
         isNew: boolean;
     } | null>(null);
 
-    // 2FA state
     const [show2FASetup, setShow2FASetup] = useState(false);
     const [isDisabling2FA, setIsDisabling2FA] = useState(false);
     const twoFactorStatus = useTwoFactorStatus();
@@ -81,29 +68,23 @@ export default function ProfilePage() {
         }
     };
 
-    // React Query hooks - only enabled when user is loaded (hooks handle enabled internally)
     const profileQuery = useProfile(user?.id);
     const competenciesQuery = useCompetencies(user?.id);
     const definitionsQuery = useCompetencyDefinitions();
     const categoriesQuery = useCompetencyCategories();
 
-    // Mutations
     const updateProfileMutation = useUpdateProfile();
     const uploadAvatarMutation = useUploadAvatar();
     const createCompetencyMutation = useCreateCompetency();
     const updateCompetencyMutation = useUpdateCompetency();
     const deleteCompetencyMutation = useDeleteCompetency();
     const uploadDocumentMutation = useUploadCompetencyDocument();
-
-    // GDPR mutations
     const exportMyData = useExportMyData();
     const deleteMyAccount = useDeleteMyAccount();
 
-    // Delete account confirmation state
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
-    // Handle avatar upload
     const handleAvatarUpload = useCallback(
         (file: File) => {
             if (!user?.id) return;
@@ -119,14 +100,11 @@ export default function ProfilePage() {
         [user?.id, uploadAvatarMutation]
     );
 
-    // Handle document upload for competencies
     const handleDocumentUpload = useCallback(
         async (file: File): Promise<{ url: string; name: string }> => {
             if (!user?.id || !editingCompetency?.definition?.name) {
                 throw new Error('User or competency not available');
             }
-            // Use mutateAsync instead of wrapping mutate in a Promise
-            // This avoids stale callback issues when the component re-renders during upload
             return uploadDocumentMutation.mutateAsync({
                 userId: user.id,
                 competencyName: editingCompetency.definition?.name || 'certificate',
@@ -136,13 +114,9 @@ export default function ProfilePage() {
         [user?.id, editingCompetency?.definition?.name, uploadDocumentMutation]
     );
 
-    // Handle profile save
     const handleProfileSave = useCallback(
         (data: ProfileFormData) => {
             if (!user?.id) return;
-
-            // Filter out fields that shouldn't be sent to the profiles table
-            // email and username are read-only (email is in auth.users, username is set separately)
             const profileUpdateData = {
                 mobile_number: data.mobile_number,
                 email_address: data.email_address,
@@ -152,35 +126,28 @@ export default function ProfilePage() {
                 next_of_kin_emergency_contact_number: data.next_of_kin_emergency_contact_number,
                 date_of_birth: data.date_of_birth || undefined,
             };
-
             updateProfileMutation.mutate(
                 { userId: user.id, data: profileUpdateData },
                 {
-                    onSuccess: () => {
-                        setIsEditingProfile(false);
-                    },
-                    onError: () => {
-                    },
+                    onSuccess: () => { setIsEditingProfile(false); },
+                    onError: () => {},
                 }
             );
         },
         [user?.id, updateProfileMutation]
     );
 
-    // Handle add competency - show picker
     const handleAddCompetency = useCallback(() => {
         setPickerSearchTerm('');
         setPickerCategory('all');
         setShowCompetencyPicker(true);
     }, []);
 
-    // Handle selecting a competency type from picker
     const handleSelectCompetencyType = useCallback((definition: CompetencyDefinition) => {
         setShowCompetencyPicker(false);
         setEditingCompetency({ definition, isNew: true });
     }, []);
 
-    // Handle edit competency
     const handleEditCompetency = useCallback(
         (competency: Competency) => {
             const definition = definitionsQuery.data?.find(
@@ -191,21 +158,15 @@ export default function ProfilePage() {
         [definitionsQuery.data]
     );
 
-    // Handle save competency
     const handleSaveCompetency = useCallback(
         (data: CompetencyFormData) => {
             if (!user?.id) return;
-
             if (editingCompetency?.isNew) {
                 createCompetencyMutation.mutate(
                     { userId: user.id, data },
                     {
-                        onSuccess: () => {
-                            setEditingCompetency(null);
-                        },
-                        onError: () => {
-                            alert('Failed to save competency. Please try again.');
-                        },
+                        onSuccess: () => { setEditingCompetency(null); },
+                        onError: () => { alert('Failed to save competency. Please try again.'); },
                     }
                 );
             } else if (editingCompetency?.competency) {
@@ -216,12 +177,8 @@ export default function ProfilePage() {
                         data,
                     },
                     {
-                        onSuccess: () => {
-                            setEditingCompetency(null);
-                        },
-                        onError: () => {
-                            alert('Failed to save competency. Please try again.');
-                        },
+                        onSuccess: () => { setEditingCompetency(null); },
+                        onError: () => { alert('Failed to save competency. Please try again.'); },
                     }
                 );
             }
@@ -229,31 +186,24 @@ export default function ProfilePage() {
         [user?.id, editingCompetency, createCompetencyMutation, updateCompetencyMutation]
     );
 
-    // Handle delete competency
     const handleDeleteCompetency = useCallback(
         (competency: Competency) => {
             if (!user?.id) return;
-            // Find the definition name for the confirm message
             const definition = definitionsQuery.data?.find(
                 (d: CompetencyDefinition) => d.id === competency.competency_id
             );
             const name = definition?.name || 'this certification';
-            if (!window.confirm(`Are you sure you want to delete "${name}"?`)) {
-                return;
-            }
+            if (!window.confirm(`Are you sure you want to delete "${name}"?`)) return;
             deleteCompetencyMutation.mutate(
                 { competencyId: competency.id, userId: user.id },
                 {
-                    onError: () => {
-                        alert('Failed to delete competency. Please try again.');
-                    },
+                    onError: () => { alert('Failed to delete competency. Please try again.'); },
                 }
             );
         },
         [user?.id, deleteCompetencyMutation, definitionsQuery.data]
     );
 
-    // Build profile form data
     const profileFormData: ProfileFormData = {
         username: user?.username || '',
         email: user?.email || '',
@@ -267,7 +217,6 @@ export default function ProfilePage() {
         vantage_number: profileQuery.data?.vantage_number || '',
     };
 
-    // Loading state
     if (!isInitialized || profileQuery.isLoading) {
         return (
             <div className="h-full flex items-center justify-center">
@@ -276,7 +225,6 @@ export default function ProfilePage() {
         );
     }
 
-    // Error state
     if (profileQuery.error) {
         return (
             <div className="h-full flex items-center justify-center p-6">
@@ -290,44 +238,44 @@ export default function ProfilePage() {
     }
 
     return (
-        <div className="h-full flex flex-col overflow-hidden">
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto glass-scrollbar" style={{ padding: '32px 40px' }}>
-                <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-                    {/* Custom Header */}
+        <div className="h-full overflow-y-auto" style={{ scrollbarGutter: 'stable' }}>
+            <div className="pf-chassis">
+                <div className="pf-panel">
+                    {/* Header */}
                     <div className="pf-header">
                         <div className="pf-header-left">
-                            <div className="pf-logo">
-                                <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                </svg>
-                            </div>
+                            <div className="pf-logo" />
                             <div className="pf-header-text">
                                 <h1>Profile Settings</h1>
-                                <p>Manage your profile, competencies, and personal information</p>
+                                <p>Manage profile, competencies and personal information</p>
                             </div>
                         </div>
                     </div>
 
-                    {/* Profile Card with Avatar + Personal Details */}
-                    <div className="pf-content-card" style={{ marginBottom: '20px' }}>
-                        <ProfileAvatar
-                            avatarUrl={profileQuery.data?.avatar_url ?? undefined}
-                            username={user?.username || ''}
-                            email={user?.email || ''}
-                            isUploading={uploadAvatarMutation.isPending}
-                            onUpload={handleAvatarUpload}
-                        />
+                    <div className="pf-groove" />
 
-                        <ProfilePersonalDetails
-                            data={profileFormData}
-                            isEditing={isEditingProfile}
-                            isSaving={updateProfileMutation.isPending}
-                            onEditToggle={() => setIsEditingProfile(!isEditingProfile)}
-                            onSave={handleProfileSave}
-                            onCancel={() => setIsEditingProfile(false)}
-                        />
-                    </div>
+                    {/* Avatar Section */}
+                    <ProfileAvatar
+                        avatarUrl={profileQuery.data?.avatar_url ?? undefined}
+                        username={user?.username || ''}
+                        email={user?.email || ''}
+                        isUploading={uploadAvatarMutation.isPending}
+                        onUpload={handleAvatarUpload}
+                    />
+
+                    <div className="pf-groove" />
+
+                    {/* Personal Details */}
+                    <ProfilePersonalDetails
+                        data={profileFormData}
+                        isEditing={isEditingProfile}
+                        isSaving={updateProfileMutation.isPending}
+                        onEditToggle={() => setIsEditingProfile(!isEditingProfile)}
+                        onSave={handleProfileSave}
+                        onCancel={() => setIsEditingProfile(false)}
+                    />
+
+                    <div className="pf-groove" />
 
                     {/* Competencies Section */}
                     <CompetenciesSection
@@ -340,45 +288,38 @@ export default function ProfilePage() {
                         onDelete={handleDeleteCompetency}
                     />
 
+                    <div className="pf-groove" />
+
                     {/* Security Section - 2FA */}
-                    <div className="pf-content-card" style={{ marginTop: '20px' }}>
+                    <div className="pf-info-block">
                         <div className="pf-section-header">
                             <h2 className="pf-section-title">Security</h2>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
                             <div style={{ flex: 1, minWidth: '200px' }}>
-                                <p style={{ color: 'var(--text-secondary, #9ca3af)', fontSize: '14px', margin: 0, lineHeight: '1.5' }}>
-                                    <strong>Two-Factor Authentication</strong>
-                                    <br />
+                                <span className="pf-info-label">Two-Factor Authentication</span>
+                                <p className="pf-info-text" style={{ marginTop: '4px' }}>
                                     {twoFactorStatus.isLoading ? (
                                         'Checking status...'
                                     ) : twoFactorStatus.data?.isEnabled ? (
-                                        <span style={{ color: '#10b981' }}>Enabled — your account is protected with TOTP</span>
+                                        <span className="pf-status-active">
+                                            <span className="pf-led active" style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+                                            Enabled — account protected with TOTP
+                                        </span>
                                     ) : (
                                         'Add an extra layer of security to your account'
                                     )}
                                 </p>
                             </div>
                             <div style={{ display: 'flex', gap: '8px' }}>
-                                <button
-                                    className="pf-btn"
-                                    onClick={() => setShow2FASetup(true)}
-                                    style={twoFactorStatus.data?.isEnabled ? {
-                                        color: 'var(--text-tertiary, #6b7280)',
-                                        borderColor: 'rgba(255,255,255,0.1)',
-                                    } : {
-                                        color: '#60a5fa',
-                                        borderColor: 'rgba(96, 165, 250, 0.3)',
-                                    }}
-                                >
+                                <button className="pf-btn sm" onClick={() => setShow2FASetup(true)}>
                                     {twoFactorStatus.data?.isEnabled ? 'Reconfigure' : 'Set Up 2FA'}
                                 </button>
                                 {twoFactorStatus.data?.isEnabled && (
                                     <button
-                                        className="pf-btn"
+                                        className="pf-btn sm danger"
                                         onClick={handleDisable2FA}
                                         disabled={isDisabling2FA}
-                                        style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)' }}
                                     >
                                         {isDisabling2FA ? 'Disabling...' : 'Disable'}
                                     </button>
@@ -387,7 +328,6 @@ export default function ProfilePage() {
                         </div>
                     </div>
 
-                    {/* 2FA Setup Wizard Modal */}
                     <TwoFactorSetupWizard
                         isOpen={show2FASetup}
                         onClose={() => setShow2FASetup(false)}
@@ -397,47 +337,55 @@ export default function ProfilePage() {
                         }}
                     />
 
-                    {/* Privacy & Data Section - GDPR Articles 15, 17, 20 */}
-                    <div className="pf-content-card" style={{ marginTop: '20px' }}>
+                    <div className="pf-groove" />
+
+                    {/* Privacy & Data Section */}
+                    <div className="pf-info-block">
                         <div className="pf-section-header">
                             <h2 className="pf-section-title">Privacy & Data</h2>
                         </div>
-                        <p style={{ color: 'var(--text-secondary, #9ca3af)', fontSize: '14px', marginBottom: '16px', lineHeight: '1.5' }}>
+                        <p className="pf-info-text">
                             Manage your personal data in accordance with UK GDPR.
                             You can download a copy of all your data or permanently delete your account.
                         </p>
-                        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                             <button
-                                className="pf-btn"
+                                className="pf-btn sm"
                                 onClick={() => user?.id && exportMyData.mutate(user.id)}
                                 disabled={exportMyData.isPending}
                             >
                                 {exportMyData.isPending ? 'Exporting...' : 'Download My Data'}
                             </button>
                             <button
-                                className="pf-btn"
-                                style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                                className="pf-btn sm danger"
                                 onClick={() => setShowDeleteConfirm(true)}
                             >
                                 Delete My Account
                             </button>
                             <a
                                 href="/privacy"
-                                style={{ color: 'var(--text-tertiary, #6b7280)', fontSize: '13px', textDecoration: 'underline' }}
+                                className="pf-btn sm ghost"
                             >
                                 Privacy Policy
                             </a>
                         </div>
                         {exportMyData.isSuccess && (
-                            <p style={{ color: '#10b981', fontSize: '13px', marginTop: '12px' }}>
+                            <p className="pf-info-text pf-status-active" style={{ marginTop: '10px' }}>
                                 Your data has been downloaded.
                             </p>
                         )}
                         {exportMyData.isError && (
-                            <p style={{ color: '#ef4444', fontSize: '13px', marginTop: '12px' }}>
+                            <p className="pf-info-text pf-status-danger" style={{ marginTop: '10px' }}>
                                 Failed to export data. Please try again.
                             </p>
                         )}
+                    </div>
+
+                    {/* Nameplate */}
+                    <div className="pf-groove" />
+                    <div className="pf-nameplate-bar">
+                        <span className="pf-nameplate">Matrix Portal</span>
+                        <span className="pf-nameplate-model">Profile Settings</span>
                     </div>
                 </div>
             </div>
@@ -449,18 +397,18 @@ export default function ProfilePage() {
                 title="Delete Your Account"
                 size="medium"
             >
-                <div style={{ color: 'var(--text-secondary, #d1d5db)', lineHeight: '1.6' }}>
-                    <p style={{ marginBottom: '16px', fontWeight: '600', color: '#ef4444' }}>
+                <div style={{ lineHeight: '1.6' }}>
+                    <p className="pf-info-text pf-status-danger" style={{ fontWeight: '600', marginBottom: '12px' }}>
                         This action is permanent and cannot be undone.
                     </p>
-                    <p style={{ marginBottom: '12px' }}>Deleting your account will:</p>
-                    <ul style={{ paddingLeft: '20px', marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '14px' }}>
-                        <li>Remove your profile and all personal information</li>
-                        <li>Delete all your competency records and certificates</li>
-                        <li>Remove your uploaded documents</li>
-                        <li>Anonymise your activity history (for audit compliance)</li>
+                    <p className="pf-info-text" style={{ marginBottom: '10px' }}>Deleting your account will:</p>
+                    <ul style={{ paddingLeft: '20px', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <li className="pf-info-text" style={{ margin: 0 }}>Remove your profile and all personal information</li>
+                        <li className="pf-info-text" style={{ margin: 0 }}>Delete all your competency records and certificates</li>
+                        <li className="pf-info-text" style={{ margin: 0 }}>Remove your uploaded documents</li>
+                        <li className="pf-info-text" style={{ margin: 0 }}>Anonymise your activity history (for audit compliance)</li>
                     </ul>
-                    <p style={{ marginBottom: '8px', fontSize: '14px' }}>
+                    <p className="pf-info-text" style={{ marginBottom: '8px' }}>
                         We recommend downloading your data first. Type <strong>DELETE</strong> to confirm:
                     </p>
                     <input
@@ -469,32 +417,19 @@ export default function ProfilePage() {
                         onChange={(e) => setDeleteConfirmText(e.target.value)}
                         placeholder="Type DELETE"
                         autoComplete="off"
-                        style={{
-                            width: '100%',
-                            padding: '10px 14px',
-                            backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                            border: '1px solid rgba(255, 255, 255, 0.15)',
-                            borderRadius: '8px',
-                            color: 'var(--text-primary, #fff)',
-                            fontSize: '14px',
-                            marginBottom: '20px',
-                        }}
+                        className="pf-inline-input"
+                        style={{ marginBottom: '16px' }}
                     />
-                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                         <button
-                            className="pf-btn"
+                            className="pf-btn sm"
                             onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}
                             disabled={deleteMyAccount.isPending}
                         >
                             Cancel
                         </button>
                         <button
-                            className="pf-btn"
-                            style={{
-                                backgroundColor: deleteConfirmText === 'DELETE' ? '#ef4444' : 'rgba(239, 68, 68, 0.2)',
-                                color: '#fff',
-                                borderColor: 'rgba(239, 68, 68, 0.5)',
-                            }}
+                            className="pf-btn sm danger"
                             disabled={deleteConfirmText !== 'DELETE' || deleteMyAccount.isPending}
                             onClick={() => user?.id && deleteMyAccount.mutate(user.id)}
                         >
@@ -502,7 +437,7 @@ export default function ProfilePage() {
                         </button>
                     </div>
                     {deleteMyAccount.isError && (
-                        <p style={{ color: '#ef4444', fontSize: '13px', marginTop: '12px', textAlign: 'center' }}>
+                        <p className="pf-info-text pf-status-danger" style={{ marginTop: '10px', textAlign: 'center' }}>
                             {deleteMyAccount.error instanceof Error ? deleteMyAccount.error.message : 'Failed to delete account. Please try again.'}
                         </p>
                     )}
@@ -516,8 +451,7 @@ export default function ProfilePage() {
                 title="Add Certification"
                 size="large"
             >
-                {/* Search */}
-                <div className="pf-search" style={{ marginBottom: '16px' }}>
+                <div className="pf-search" style={{ marginBottom: '12px' }}>
                     <svg viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                     <input
                         type="text"
@@ -527,8 +461,7 @@ export default function ProfilePage() {
                     />
                 </div>
 
-                {/* Category Filter */}
-                <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '4px', marginBottom: '12px', flexWrap: 'wrap' }}>
                     <button
                         onClick={() => setPickerCategory('all')}
                         className={`pf-filter-chip${pickerCategory === 'all' ? ' active' : ''}`}
@@ -548,23 +481,19 @@ export default function ProfilePage() {
                         ))}
                 </div>
 
-                {/* Competency List */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }} className="glass-scrollbar">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '400px', overflowY: 'auto' }}>
                     {((definitionsQuery.data as CompetencyDefinition[]) || [])
                         .filter((def) => {
                             const categoryName = typeof def.category === 'object' ? def.category?.name : def.category;
                             if (categoryName?.toLowerCase().includes('personal details')) return false;
-
                             if (pickerCategory !== 'all') {
                                 const defCategoryId = typeof def.category === 'object' ? def.category?.id : null;
                                 if (defCategoryId !== pickerCategory) return false;
                             }
-
                             if (pickerSearchTerm) {
                                 const search = pickerSearchTerm.toLowerCase();
                                 if (!def.name.toLowerCase().includes(search)) return false;
                             }
-
                             return true;
                         })
                         .map((def) => (

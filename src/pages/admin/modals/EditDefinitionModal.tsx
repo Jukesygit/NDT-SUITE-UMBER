@@ -101,10 +101,10 @@ export function EditDefinitionModal({ isOpen, onClose, definition, categories }:
             size="medium"
             footer={
                 <>
-                    <button type="button" onClick={onClose} disabled={updateDefinition.isPending} className="btn btn-secondary">
+                    <button type="button" onClick={onClose} disabled={updateDefinition.isPending} className="ad-btn">
                         Cancel
                     </button>
-                    <button type="submit" form="edit-definition-form" disabled={updateDefinition.isPending} className="btn btn-primary flex items-center gap-2">
+                    <button type="submit" form="edit-definition-form" disabled={updateDefinition.isPending} className="ad-btn primary flex items-center gap-2">
                         {updateDefinition.isPending && <RandomMatrixSpinner size={16} />}
                         {updateDefinition.isPending ? 'Saving...' : 'Save Changes'}
                     </button>

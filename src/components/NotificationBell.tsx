@@ -357,7 +357,7 @@ export function NotificationBell() {
                                 style={{
                                     background: 'none',
                                     border: 'none',
-                                    color: 'var(--accent-primary, #60a5fa)',
+                                    color: 'var(--green)',
                                     fontSize: '13px',
                                     fontWeight: '500',
                                     cursor: 'pointer',

@@ -54,11 +54,10 @@ function ContextMenu({ isOpen, onClose, onEdit, onDelete, position }: ContextMen
             style={{
                 position: 'absolute',
                 zIndex: 50,
-                background: 'rgba(30, 41, 59, 0.95)',
-                backdropFilter: 'blur(12px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '8px',
-                boxShadow: '0 10px 40px rgba(0, 0, 0, 0.4)',
+                background: 'rgba(10, 15, 10, 0.95)',
+                border: '1px solid rgba(53, 160, 88, 0.20)',
+                borderRadius: '4px',
+                boxShadow: '0 10px 40px rgba(0, 0, 0, 0.6)',
                 padding: '4px 0',
                 minWidth: '120px',
                 left: position.x,
@@ -75,13 +74,13 @@ function ContextMenu({ isOpen, onClose, onEdit, onDelete, position }: ContextMen
                     padding: '8px 16px',
                     textAlign: 'left',
                     fontSize: '14px',
-                    color: 'var(--text-primary)',
+                    color: 'rgba(53, 160, 88, 0.70)',
                     background: 'transparent',
                     border: 'none',
                     cursor: 'pointer',
                     transition: 'background 0.2s'
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(53, 160, 88, 0.10)'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
             >
                 Edit
@@ -96,13 +95,13 @@ function ContextMenu({ isOpen, onClose, onEdit, onDelete, position }: ContextMen
                     padding: '8px 16px',
                     textAlign: 'left',
                     fontSize: '14px',
-                    color: '#f87171',
+                    color: 'var(--red)',
                     background: 'transparent',
                     border: 'none',
                     cursor: 'pointer',
                     transition: 'background 0.2s'
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(248, 113, 113, 0.1)'}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
             >
                 Delete
@@ -147,19 +146,22 @@ function OrganizationCard({ org, userCount, onClick, onEdit, onDelete }: Organiz
 
     return (
         <div
-            className="glass-card"
             style={{
                 position: 'relative',
                 transition: 'border-color 0.2s, box-shadow 0.2s',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                background: 'rgba(10, 15, 10, 0.60)',
+                border: '1px solid rgba(53, 160, 88, 0.15)',
+                borderRadius: '4px',
+                padding: 'var(--spacing-lg)'
             }}
             onClick={onClick}
             onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'var(--accent-primary)';
-                e.currentTarget.style.boxShadow = '0 4px 20px rgba(139, 92, 246, 0.15)';
+                e.currentTarget.style.borderColor = 'var(--green)';
+                e.currentTarget.style.boxShadow = '0 4px 20px rgba(53, 160, 88, 0.15)';
             }}
             onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                e.currentTarget.style.borderColor = 'rgba(53, 160, 88, 0.15)';
                 e.currentTarget.style.boxShadow = 'none';
             }}
         >
@@ -178,12 +180,12 @@ function OrganizationCard({ org, userCount, onClick, onEdit, onDelete }: Organiz
                     cursor: 'pointer',
                     transition: 'background 0.2s'
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(53, 160, 88, 0.10)'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                 aria-label="More options"
             >
                 <svg
-                    style={{ width: '20px', height: '20px', color: 'rgba(255, 255, 255, 0.7)' }}
+                    style={{ width: '20px', height: '20px', color: 'rgba(53, 160, 88, 0.50)' }}
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -206,19 +208,19 @@ function OrganizationCard({ org, userCount, onClick, onEdit, onDelete }: Organiz
             />
 
             {/* Organization name */}
-            <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '16px', paddingRight: '32px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'rgba(53, 160, 88, 0.70)', marginBottom: '16px', paddingRight: '32px' }}>
                 {org.organization.name}
             </h3>
 
             {/* Stats */}
             <div style={{ marginBottom: '16px' }}>
-                <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.5)' }}>Users</p>
-                <p style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>{userCount}</p>
+                <p style={{ fontSize: '14px', color: 'rgba(53, 160, 88, 0.45)' }}>Users</p>
+                <p style={{ fontSize: '24px', fontWeight: 700, color: 'var(--green-bright)' }}>{userCount}</p>
             </div>
 
             {/* Created date */}
-            <div style={{ paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
+            <div style={{ paddingTop: '16px', borderTop: '1px solid rgba(53, 160, 88, 0.15)' }}>
+                <p style={{ fontSize: '12px', color: 'rgba(53, 160, 88, 0.45)' }}>
                     Created {createdDate}
                 </p>
             </div>
@@ -261,8 +263,8 @@ export default function OrganizationsTab() {
     if (error) {
         return (
             <div className="text-center py-8">
-                <p className="text-red-400">Failed to load organizations</p>
-                <p className="text-sm text-white/50 mt-2">{error.message}</p>
+                <p style={{ color: 'var(--red)' }}>Failed to load organizations</p>
+                <p style={{ fontSize: '14px', color: 'rgba(53, 160, 88, 0.30)', marginTop: '8px' }}>{error.message}</p>
             </div>
         );
     }
@@ -272,16 +274,16 @@ export default function OrganizationsTab() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'rgba(53, 160, 88, 0.70)' }}>
                         Organizations
                     </h2>
-                    <p style={{ color: 'rgba(255, 255, 255, 0.7)', marginTop: '4px' }}>
+                    <p style={{ color: 'rgba(53, 160, 88, 0.45)', marginTop: '4px' }}>
                         Manage organizations and their resources
                     </p>
                 </div>
                 <button
                     onClick={() => setCreateModalOpen(true)}
-                    className="btn btn-primary"
+                    className="ad-btn primary"
                     style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

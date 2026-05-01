@@ -26,7 +26,7 @@ export default function ImportProgressStage({ progress }: ImportProgressStagePro
             style={{
               width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%`,
               height: '100%',
-              background: 'linear-gradient(90deg, var(--accent-primary), var(--accent-secondary))',
+              background: 'linear-gradient(90deg, var(--green), var(--green-bright))',
               transition: 'width 0.3s ease'
             }}
           ></div>

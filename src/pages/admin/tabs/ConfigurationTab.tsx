@@ -60,10 +60,10 @@ function downloadJson(content: string, filename: string) {
 
 // Announcement type options
 const announcementTypes = [
-    { value: 'info', label: 'Info', color: '#60a5fa' },
-    { value: 'warning', label: 'Warning', color: '#fbbf24' },
-    { value: 'success', label: 'Success', color: '#22c55e' },
-    { value: 'error', label: 'Error', color: '#ef4444' },
+    { value: 'info', label: 'Info', color: 'var(--green)' },
+    { value: 'warning', label: 'Warning', color: 'var(--amber)' },
+    { value: 'success', label: 'Success', color: 'var(--green-bright)' },
+    { value: 'error', label: 'Error', color: 'var(--red)' },
 ] as const;
 
 export default function ConfigurationTab() {
@@ -265,20 +265,20 @@ export default function ConfigurationTab() {
     return (
         <div className="space-y-8">
             {/* System Announcement Section */}
-            <div className="glass-card" style={{ padding: '24px' }}>
+            <div style={{ padding: '24px', border: '1px solid rgba(53, 160, 88, 0.12)', borderRadius: '8px', background: 'rgba(0, 0, 0, 0.20)' }}>
                 <div className="flex items-start justify-between mb-4">
                     <div>
-                        <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--green-bright)', fontFamily: 'var(--font-mono)' }}>
                             System Announcement
                         </h2>
-                        <p style={{ marginTop: '4px', fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)' }}>
+                        <p style={{ marginTop: '4px', fontSize: '14px', fontFamily: 'var(--font-mono)', color: 'rgba(53, 160, 88, 0.45)' }}>
                             Display a message to all users below the header
                         </p>
                     </div>
                     {!announcementEditing && (
                         <button
                             onClick={loadAnnouncementToForm}
-                            className="btn btn-primary"
+                            className="ad-btn primary"
                         >
                             {announcement?.is_active ? 'Edit Announcement' : 'Create Announcement'}
                         </button>
@@ -286,14 +286,14 @@ export default function ConfigurationTab() {
                 </div>
 
                 {announcementLoading ? (
-                    <div style={{ padding: '20px', textAlign: 'center', color: 'rgba(255, 255, 255, 0.6)' }}>
+                    <div style={{ padding: '20px', textAlign: 'center', fontFamily: 'var(--font-mono)', color: 'rgba(53, 160, 88, 0.45)' }}>
                         Loading...
                     </div>
                 ) : announcementEditing ? (
                     <form onSubmit={handleSaveAnnouncement} className="space-y-4">
                         {/* Title (optional) */}
                         <div>
-                            <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: 'rgba(255, 255, 255, 0.8)', marginBottom: '6px' }}>
+                            <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, fontFamily: 'var(--font-mono)', color: 'rgba(53, 160, 88, 0.60)', marginBottom: '6px' }}>
                                 Title (optional)
                             </label>
                             <input
@@ -301,14 +301,14 @@ export default function ConfigurationTab() {
                                 value={announcementTitle}
                                 onChange={(e) => setAnnouncementTitle(e.target.value)}
                                 placeholder="e.g., System Maintenance"
-                                className="glass-input"
+                                className="ad-input"
                                 style={{ width: '100%' }}
                             />
                         </div>
 
                         {/* Message (required) */}
                         <div>
-                            <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: 'rgba(255, 255, 255, 0.8)', marginBottom: '6px' }}>
+                            <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, fontFamily: 'var(--font-mono)', color: 'rgba(53, 160, 88, 0.60)', marginBottom: '6px' }}>
                                 Message *
                             </label>
                             <textarea
@@ -317,14 +317,14 @@ export default function ConfigurationTab() {
                                 placeholder="Enter your announcement message..."
                                 required
                                 rows={3}
-                                className="glass-input"
+                                className="ad-input"
                                 style={{ width: '100%', resize: 'vertical' }}
                             />
                         </div>
 
                         {/* Type selector */}
                         <div>
-                            <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: 'rgba(255, 255, 255, 0.8)', marginBottom: '6px' }}>
+                            <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, fontFamily: 'var(--font-mono)', color: 'rgba(53, 160, 88, 0.60)', marginBottom: '6px' }}>
                                 Type
                             </label>
                             <div className="flex gap-2">
@@ -337,10 +337,11 @@ export default function ConfigurationTab() {
                                             padding: '8px 16px',
                                             fontSize: '14px',
                                             fontWeight: 500,
+                                            fontFamily: 'var(--font-mono)',
                                             borderRadius: '6px',
-                                            border: announcementType === type.value ? `2px solid ${type.color}` : '2px solid rgba(255, 255, 255, 0.1)',
+                                            border: announcementType === type.value ? `2px solid ${type.color}` : '2px solid rgba(53, 160, 88, 0.12)',
                                             background: announcementType === type.value ? `${type.color}20` : 'transparent',
-                                            color: announcementType === type.value ? type.color : 'rgba(255, 255, 255, 0.7)',
+                                            color: announcementType === type.value ? type.color : 'rgba(53, 160, 88, 0.45)',
                                             cursor: 'pointer',
                                             transition: 'all 0.2s',
                                         }}
@@ -360,7 +361,7 @@ export default function ConfigurationTab() {
                                     onChange={(e) => setAnnouncementActive(e.target.checked)}
                                     style={{ width: '18px', height: '18px' }}
                                 />
-                                <span style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.8)' }}>
+                                <span style={{ fontSize: '14px', fontFamily: 'var(--font-mono)', color: 'rgba(53, 160, 88, 0.60)' }}>
                                     Active (visible to users)
                                 </span>
                             </label>
@@ -371,7 +372,7 @@ export default function ConfigurationTab() {
                                     onChange={(e) => setAnnouncementDismissible(e.target.checked)}
                                     style={{ width: '18px', height: '18px' }}
                                 />
-                                <span style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.8)' }}>
+                                <span style={{ fontSize: '14px', fontFamily: 'var(--font-mono)', color: 'rgba(53, 160, 88, 0.60)' }}>
                                     Dismissible (users can hide)
                                 </span>
                             </label>
@@ -382,14 +383,14 @@ export default function ConfigurationTab() {
                             <button
                                 type="submit"
                                 disabled={!announcementMessage.trim() || updateAnnouncementMutation.isPending}
-                                className="btn btn-primary"
+                                className="ad-btn primary"
                             >
                                 {updateAnnouncementMutation.isPending ? 'Saving...' : 'Save Announcement'}
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setAnnouncementEditing(false)}
-                                className="btn btn-secondary"
+                                className="ad-btn"
                             >
                                 Cancel
                             </button>
@@ -397,7 +398,7 @@ export default function ConfigurationTab() {
                                 <button
                                     type="button"
                                     onClick={() => setClearAnnouncementOpen(true)}
-                                    className="btn btn-danger"
+                                    className="ad-btn danger"
                                     style={{ marginLeft: 'auto' }}
                                 >
                                     Clear Announcement
@@ -421,6 +422,7 @@ export default function ConfigurationTab() {
                                     padding: '2px 8px',
                                     fontSize: '12px',
                                     fontWeight: 600,
+                                    fontFamily: 'var(--font-mono)',
                                     borderRadius: '4px',
                                     background: announcementTypes.find(t => t.value === announcement.type)?.color + '30',
                                     color: announcementTypes.find(t => t.value === announcement.type)?.color,
@@ -430,17 +432,17 @@ export default function ConfigurationTab() {
                                 {announcement.type}
                             </span>
                             {announcement.is_dismissible && (
-                                <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                                <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: 'rgba(53, 160, 88, 0.30)' }}>
                                     Dismissible
                                 </span>
                             )}
                         </div>
                         {announcement.title && (
-                            <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                            <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--green-bright)', fontFamily: 'var(--font-mono)', marginBottom: '4px' }}>
                                 {announcement.title}
                             </div>
                         )}
-                        <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.85)' }}>
+                        <div style={{ fontSize: '14px', fontFamily: 'var(--font-mono)', color: 'rgba(53, 160, 88, 0.70)' }}>
                             {announcement.message}
                         </div>
                     </div>
@@ -459,10 +461,10 @@ export default function ConfigurationTab() {
                 {/* Header */}
                 <div className="flex items-start justify-between">
                     <div>
-                        <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--green-bright)', fontFamily: 'var(--font-mono)' }}>
                             Report Field Configuration
                         </h2>
-                        <p style={{ marginTop: '4px', fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)' }}>
+                        <p style={{ marginTop: '4px', fontSize: '14px', fontFamily: 'var(--font-mono)', color: 'rgba(53, 160, 88, 0.45)' }}>
                             Manage suggested values for report fields across the system
                         </p>
                     </div>
@@ -471,19 +473,19 @@ export default function ConfigurationTab() {
                     <div className="flex items-center gap-2">
                         <button
                             onClick={handleExport}
-                            className="btn btn-secondary"
+                            className="ad-btn"
                         >
                             Export Config
                         </button>
                         <button
                             onClick={handleImportClick}
-                            className="btn btn-secondary"
+                            className="ad-btn"
                         >
                             Import Config
                         </button>
                         <button
                             onClick={() => setResetAllOpen(true)}
-                            className="btn btn-danger"
+                            className="ad-btn danger"
                         >
                             Reset All
                         </button>
@@ -514,23 +516,22 @@ export default function ConfigurationTab() {
                     return (
                         <div
                             key={listName}
-                            className="glass-card"
-                            style={{ padding: 0, overflow: 'hidden' }}
+                            style={{ padding: 0, overflow: 'hidden', border: '1px solid rgba(53, 160, 88, 0.12)', borderRadius: '8px', background: 'rgba(0, 0, 0, 0.20)' }}
                         >
                             {/* Card header */}
                             <div style={{
                                 padding: '12px 16px',
-                                borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                                background: 'rgba(255, 255, 255, 0.03)'
+                                borderBottom: '1px solid rgba(53, 160, 88, 0.12)',
+                                background: 'rgba(0, 0, 0, 0.20)'
                             }}>
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                         <span style={{ fontSize: '18px' }}>{listMeta.icon}</span>
                                         <div>
-                                            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--green-bright)', fontFamily: 'var(--font-mono)' }}>
                                                 {listMeta.label}
                                             </h3>
-                                            <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                                            <p style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: 'rgba(53, 160, 88, 0.30)' }}>
                                                 {listData.length} {listData.length === 1 ? 'item' : 'items'}
                                             </p>
                                         </div>
@@ -547,8 +548,9 @@ export default function ConfigurationTab() {
                                                 padding: '4px 12px',
                                                 fontSize: '12px',
                                                 fontWeight: 500,
-                                                color: '#fff',
-                                                background: 'var(--accent-primary)',
+                                                fontFamily: 'var(--font-mono)',
+                                                color: '#0a0a0a',
+                                                background: 'var(--green)',
                                                 borderRadius: '4px',
                                                 border: 'none',
                                                 cursor: 'pointer',
@@ -564,8 +566,9 @@ export default function ConfigurationTab() {
                                                 padding: '4px 12px',
                                                 fontSize: '12px',
                                                 fontWeight: 500,
-                                                color: '#fff',
-                                                background: '#d97706',
+                                                fontFamily: 'var(--font-mono)',
+                                                color: '#0a0a0a',
+                                                background: 'var(--amber)',
                                                 borderRadius: '4px',
                                                 border: 'none',
                                                 cursor: 'pointer',
@@ -579,13 +582,13 @@ export default function ConfigurationTab() {
                             </div>
 
                             {/* List items */}
-                            <div className="max-h-80 overflow-y-auto glass-scrollbar">
+                            <div className="max-h-80 overflow-y-auto">
                                 {/* Add item form */}
                                 {isAdding && (
                                     <div style={{
                                         padding: '8px 16px',
-                                        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                                        background: 'rgba(96, 165, 250, 0.1)'
+                                        borderBottom: '1px solid rgba(53, 160, 88, 0.12)',
+                                        background: 'rgba(53, 160, 88, 0.10)'
                                     }}>
                                         <input
                                             type="text"
@@ -599,7 +602,7 @@ export default function ConfigurationTab() {
                                             }}
                                             placeholder="Enter value and press Enter"
                                             autoFocus
-                                            className="glass-input"
+                                            className="ad-input"
                                             style={{ height: '32px', fontSize: '14px' }}
                                         />
                                     </div>
@@ -627,11 +630,11 @@ export default function ConfigurationTab() {
                                                     key={`${item}-${index}`}
                                                     style={{
                                                         padding: '8px 16px',
-                                                        borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                                                        borderBottom: '1px solid rgba(53, 160, 88, 0.04)',
                                                         transition: 'background 0.2s'
                                                     }}
                                                     className="group"
-                                                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)'}
+                                                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(53, 160, 88, 0.04)'}
                                                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                                                 >
                                                     {isEditing ? (
@@ -642,12 +645,12 @@ export default function ConfigurationTab() {
                                                             onKeyDown={handleEditKeyDown}
                                                             onBlur={handleUpdateItem}
                                                             autoFocus
-                                                            className="glass-input"
+                                                            className="ad-input"
                                                             style={{ height: '32px', fontSize: '14px' }}
                                                         />
                                                     ) : (
                                                         <div className="flex items-center justify-between">
-                                                            <span style={{ fontSize: '14px', color: 'var(--text-primary)' }}>
+                                                            <span style={{ fontSize: '14px', color: 'var(--green-bright)', fontFamily: 'var(--font-mono)' }}>
                                                                 {item}
                                                             </span>
 
@@ -661,8 +664,9 @@ export default function ConfigurationTab() {
                                                                     style={{
                                                                         padding: '4px 8px',
                                                                         fontSize: '12px',
-                                                                        color: '#60a5fa',
-                                                                        background: 'rgba(96, 165, 250, 0.1)',
+                                                                        fontFamily: 'var(--font-mono)',
+                                                                        color: 'var(--green)',
+                                                                        background: 'rgba(53, 160, 88, 0.10)',
                                                                         borderRadius: '4px',
                                                                         border: 'none',
                                                                         cursor: 'pointer',
@@ -677,8 +681,9 @@ export default function ConfigurationTab() {
                                                                     style={{
                                                                         padding: '4px 8px',
                                                                         fontSize: '12px',
-                                                                        color: '#f87171',
-                                                                        background: 'rgba(248, 113, 113, 0.1)',
+                                                                        fontFamily: 'var(--font-mono)',
+                                                                        color: 'var(--red)',
+                                                                        background: 'rgba(220, 50, 50, 0.10)',
                                                                         borderRadius: '4px',
                                                                         border: 'none',
                                                                         cursor: 'pointer',
@@ -745,7 +750,7 @@ export default function ConfigurationTab() {
                 title="Reset All Configuration"
                 message={
                     <>
-                        <strong className="text-red-400">Warning: This is a destructive action!</strong>
+                        <strong style={{ color: 'var(--red)', fontFamily: 'var(--font-mono)' }}>Warning: This is a destructive action!</strong>
                         <br />
                         <br />
                         Are you sure you want to reset ALL configuration lists to default values?

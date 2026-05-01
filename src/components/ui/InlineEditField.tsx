@@ -23,7 +23,7 @@ const labelStyle: React.CSSProperties = {
 const inputStyle: React.CSSProperties = {
     fontSize: '0.875rem',
     color: 'var(--text-primary)',
-    background: 'var(--surface-elevated)',
+    background: 'linear-gradient(180deg, #131210 0%, #0c0b0a 100%)',
     border: '1px solid var(--border-default)',
     borderRadius: 'var(--radius-sm)',
     padding: '8px 10px',

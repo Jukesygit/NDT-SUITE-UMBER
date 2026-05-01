@@ -32,10 +32,6 @@ function isPdfFile(name: string, mime: string | null): boolean {
     return /\.pdf$/i.test(name);
 }
 
-// ---------------------------------------------------------------------------
-// PDF thumbnail renderer (uses pdfjs-dist, same pattern as drawing-parser.ts)
-// ---------------------------------------------------------------------------
-
 async function renderPdfThumbnail(url: string): Promise<string> {
     const pdfjsLib = await import('pdfjs-dist');
     const pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.mjs?url');
@@ -45,7 +41,6 @@ async function renderPdfThumbnail(url: string): Promise<string> {
     const pdf = await loadingTask.promise;
     const page = await pdf.getPage(1);
 
-    // Render at a scale that gives ~200px wide thumbnail
     const desiredWidth = 200;
     const unscaledViewport = page.getViewport({ scale: 1 });
     const scale = desiredWidth / unscaledViewport.width;
@@ -62,18 +57,13 @@ async function renderPdfThumbnail(url: string): Promise<string> {
     return canvas.toDataURL('image/png');
 }
 
-// ---------------------------------------------------------------------------
-// Thumbnail component — renders actual content preview
-// ---------------------------------------------------------------------------
-
-function FileThumbnail({ file, signedUrl, onClick, height = 160 }: { file: ProjectFile; signedUrl: string | null; onClick: () => void; height?: number }) {
+function FileThumbnail({ file, signedUrl, onClick }: { file: ProjectFile; signedUrl: string | null; onClick: () => void }) {
     const [thumbUrl, setThumbUrl] = useState<string | null>(null);
     const isPdf = isPdfFile(file.filename, file.mime_type);
     const isImage = isImageFile(file.filename, file.mime_type);
 
     useEffect(() => {
         let cancelled = false;
-
         if (!signedUrl) {
             setThumbUrl(null);
         } else if (isImage) {
@@ -85,45 +75,26 @@ function FileThumbnail({ file, signedUrl, onClick, height = 160 }: { file: Proje
         } else {
             setThumbUrl(null);
         }
-
         return () => { cancelled = true; };
     }, [signedUrl, isPdf, isImage]);
 
     return (
-        <div
-            onClick={onClick}
-            style={{
-                width: '100%', height, borderRadius: 6, overflow: 'hidden',
-                background: 'var(--surface-elevated)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', border: '1px solid var(--border-subtle)',
-            }}
-            title="Click to preview"
-        >
+        <div className="pj-doc-thumb" onClick={onClick} title="Click to preview">
             {thumbUrl ? (
-                <img
-                    src={thumbUrl}
-                    alt={file.filename}
-                    style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 4 }}
-                />
+                <img src={thumbUrl} alt={file.filename} />
             ) : (
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-disabled)', textTransform: 'uppercase' }}>
-                    {isPdf ? 'Loading PDF...' : file.filename.split('.').pop()?.toUpperCase() || 'FILE'}
-                </span>
+                <div className="pj-doc-thumb-empty">
+                    <span>{isPdf ? 'Loading...' : file.filename.split('.').pop()?.toUpperCase() || 'FILE'}</span>
+                </div>
             )}
         </div>
     );
 }
 
-// ---------------------------------------------------------------------------
-// Preview modal — matches Documents tab pattern (iframe for PDF, img for image)
-// ---------------------------------------------------------------------------
-
 function PreviewModal({ file, signedUrl, onClose }: { file: ProjectFile; signedUrl: string; onClose: () => void }) {
     const isPdf = isPdfFile(file.filename, file.mime_type);
     const isImage = isImageFile(file.filename, file.mime_type);
 
-    // Close on Escape
     useEffect(() => {
         const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
         window.addEventListener('keydown', handler);
@@ -144,69 +115,35 @@ function PreviewModal({ file, signedUrl, onClose }: { file: ProjectFile; signedU
                 onClick={e => e.stopPropagation()}
                 style={{
                     position: 'relative',
-                    width: '90vw', maxWidth: 1000,
-                    height: '85vh',
-                    background: '#1a1a1a',
-                    borderRadius: 12,
-                    border: '1px solid var(--border-default)',
-                    overflow: 'hidden',
-                    display: 'flex', flexDirection: 'column',
+                    width: '90vw', maxWidth: 1000, height: '85vh',
+                    background: '#0c0b0a', borderRadius: 8,
+                    border: '1px solid rgba(53, 160, 88, 0.15)',
+                    overflow: 'hidden', display: 'flex', flexDirection: 'column',
                 }}
             >
-                {/* Header */}
                 <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '12px 16px',
-                    borderBottom: '1px solid var(--border-subtle)',
+                    padding: '10px 14px', borderBottom: '1px solid rgba(53, 160, 88, 0.10)',
                 }}>
-                    <span style={{ fontSize: '0.9rem', color: 'var(--text-primary)', fontWeight: 500 }}>
-                        {file.filename}
-                    </span>
-                    <button
-                        onClick={onClose}
-                        style={{
-                            background: 'none', border: 'none', color: 'var(--text-tertiary)',
-                            cursor: 'pointer', padding: 4,
-                        }}
-                    >
+                    <span className="pj-doc-filename">{file.filename}</span>
+                    <button onClick={onClose} style={{
+                        background: 'none', border: 'none',
+                        color: 'rgba(53, 160, 88, 0.50)', cursor: 'pointer', padding: 4,
+                    }}>
                         <X size={18} />
                     </button>
                 </div>
-
-                {/* Preview content */}
                 <div style={{ flex: 1, overflow: 'hidden' }}>
                     {isPdf ? (
-                        <iframe
-                            src={signedUrl}
-                            style={{ width: '100%', height: '100%', border: 'none', background: '#fff' }}
-                            title={`Preview of ${file.filename}`}
-                        />
+                        <iframe src={signedUrl} style={{ width: '100%', height: '100%', border: 'none', background: '#fff' }} title={`Preview of ${file.filename}`} />
                     ) : isImage ? (
-                        <div style={{
-                            width: '100%', height: '100%',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            padding: 24, overflow: 'auto',
-                        }}>
-                            <img
-                                src={signedUrl}
-                                alt={file.filename}
-                                style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 8 }}
-                            />
+                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, overflow: 'auto' }}>
+                            <img src={signedUrl} alt={file.filename} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 4 }} />
                         </div>
                     ) : (
-                        <div style={{
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                            height: '100%', color: 'var(--text-quaternary)',
-                        }}>
-                            <p>Preview not available for this file type</p>
-                            <button
-                                onClick={() => window.open(signedUrl, '_blank')}
-                                style={{
-                                    marginTop: 12, padding: '8px 16px', borderRadius: 6,
-                                    background: '#3b82f6', color: 'var(--text-primary)', border: 'none',
-                                    cursor: 'pointer', fontSize: '0.85rem',
-                                }}
-                            >
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                            <span className="pj-empty-text">Preview not available for this file type</span>
+                            <button onClick={() => window.open(signedUrl, '_blank')} className="pj-quick-action-btn primary" style={{ marginTop: 12 }}>
                                 Download to View
                             </button>
                         </div>
@@ -217,13 +154,8 @@ function PreviewModal({ file, signedUrl, onClose }: { file: ProjectFile; signedU
     );
 }
 
-// ---------------------------------------------------------------------------
-// Hook to fetch signed URL for a file
-// ---------------------------------------------------------------------------
-
 function useSignedUrl(file: ProjectFile | undefined) {
     const [url, setUrl] = useState<string | null>(null);
-
     useEffect(() => {
         if (!file) { setUrl(null); return; }
         let cancelled = false;
@@ -232,19 +164,11 @@ function useSignedUrl(file: ProjectFile | undefined) {
             .catch(() => { if (!cancelled) setUrl(null); });
         return () => { cancelled = true; };
     }, [file?.id]);
-
     return url;
 }
 
-// ---------------------------------------------------------------------------
-// File slot row
-// ---------------------------------------------------------------------------
-
 function FileSlot({
-    label, type, existing,
-    onUpload, onDelete, onPreview,
-    uploadingType,
-    inputRef,
+    label, type, existing, onUpload, onDelete, onPreview, uploadingType, inputRef,
 }: {
     label: string;
     type: ProjectFileType;
@@ -259,76 +183,40 @@ function FileSlot({
     const signedUrl = useSignedUrl(existing);
 
     return (
-        <div
-            style={{
-                display: 'flex', flexDirection: 'column',
-                background: 'var(--surface-elevated)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 10, overflow: 'hidden',
-            }}
-        >
-            {/* Thumbnail area */}
+        <div className="pj-doc-slot">
             {existing ? (
-                <FileThumbnail file={existing} signedUrl={signedUrl} onClick={() => onPreview(existing)} height={160} />
+                <FileThumbnail file={existing} signedUrl={signedUrl} onClick={() => onPreview(existing)} />
             ) : (
-                <div style={{
-                    width: '100%', height: 160,
-                    background: 'var(--surface-raised)',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                    gap: 8, borderBottom: '1px solid rgba(255,255,255,0.05)',
-                }}>
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--glass-border)" strokeWidth="1.5">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                        <polyline points="14,2 14,8 20,8" />
-                    </svg>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-disabled)' }}>
-                        No file
-                    </span>
+                <div className="pj-doc-thumb">
+                    <div className="pj-doc-thumb-empty">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14,2 14,8 20,8" />
+                        </svg>
+                        <span>No file</span>
+                    </div>
                 </div>
             )}
 
-            {/* Info + actions bar */}
-            <div style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div className="pj-doc-info">
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginBottom: 2 }}>
-                        {label}
-                    </div>
-                    <div style={{
-                        fontSize: '0.8rem',
-                        color: existing ? '#fff' : 'var(--text-disabled)',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                        {existing ? existing.filename : '\u2014'}
+                    <div className="pj-doc-label">{label}</div>
+                    <div className="pj-doc-filename">
+                        {existing ? existing.filename : '—'}
                     </div>
                     {existing?.size_bytes ? (
-                        <div style={{ fontSize: '0.65rem', color: 'var(--text-disabled)', marginTop: 1 }}>
+                        <div className="pj-doc-size">
                             {(existing.size_bytes / 1024 / 1024).toFixed(1)} MB
                         </div>
                     ) : null}
                 </div>
 
                 {existing ? (
-                    <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                        <button
-                            type="button"
-                            onClick={() => onPreview(existing)}
-                            style={{
-                                padding: '4px 8px', background: 'var(--border-subtle)',
-                                border: '1px solid var(--glass-border)',
-                                borderRadius: 5, color: '#60a5fa', fontSize: '0.7rem', cursor: 'pointer',
-                            }}
-                        >
+                    <div className="pj-doc-actions">
+                        <button type="button" onClick={() => onPreview(existing)} className="pj-vessel-action-btn ghost">
                             Preview
                         </button>
-                        <button
-                            type="button"
-                            onClick={() => onDelete(existing)}
-                            style={{
-                                padding: '4px 8px', background: 'rgba(239,68,68,0.1)',
-                                border: '1px solid rgba(239,68,68,0.2)',
-                                borderRadius: 5, color: '#ef4444', fontSize: '0.7rem', cursor: 'pointer',
-                            }}
-                        >
+                        <button type="button" onClick={() => onDelete(existing)} className="pj-vessel-action-btn danger-ghost">
                             Remove
                         </button>
                     </div>
@@ -348,12 +236,7 @@ function FileSlot({
                             type="button"
                             onClick={() => hiddenInputRef.current?.click()}
                             disabled={uploadingType !== null}
-                            style={{
-                                padding: '4px 10px', background: 'var(--border-subtle)',
-                                border: '1px solid var(--glass-border)',
-                                borderRadius: 5, color: 'var(--text-secondary)', fontSize: '0.7rem',
-                                cursor: uploadingType !== null ? 'wait' : 'pointer', flexShrink: 0,
-                            }}
+                            className="pj-vessel-action-btn"
                         >
                             {uploadingType === type ? 'Uploading...' : 'Upload'}
                         </button>
@@ -363,10 +246,6 @@ function FileSlot({
         </div>
     );
 }
-
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
 
 export default function DocumentsSection({ vessel, projectId, files }: DocumentsSectionProps) {
     const { user } = useAuth();
@@ -385,12 +264,8 @@ export default function DocumentsSection({ vessel, projectId, files }: Documents
         setUploadError(null);
         try {
             await uploadFile.mutateAsync({
-                projectId,
-                projectVesselId: vessel.id,
-                userId: user.id,
-                name: file.name,
-                fileType: type,
-                file,
+                projectId, projectVesselId: vessel.id, userId: user.id,
+                name: file.name, fileType: type, file,
             });
         } catch (err) {
             setUploadError(`${type}: ${(err as Error).message}`);
@@ -421,15 +296,11 @@ export default function DocumentsSection({ vessel, projectId, files }: Documents
     return (
         <CollapsibleSection title="Documents & Drawings">
             {uploadError && (
-                <div style={{
-                    padding: '8px 12px', marginBottom: 10, borderRadius: 6,
-                    background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)',
-                    color: '#ef4444', fontSize: '0.8rem',
-                }}>
+                <div className="pj-alert error" style={{ marginBottom: 10 }}>
                     Upload error: {uploadError}
                 </div>
             )}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+            <div className="pj-doc-grid">
                 {FILE_SLOTS.map(({ label, type }) => (
                     <FileSlot
                         key={type}
@@ -445,7 +316,6 @@ export default function DocumentsSection({ vessel, projectId, files }: Documents
                 ))}
             </div>
 
-            {/* Preview modal */}
             {previewFile && previewUrl && (
                 <PreviewModal file={previewFile} signedUrl={previewUrl} onClose={closePreview} />
             )}

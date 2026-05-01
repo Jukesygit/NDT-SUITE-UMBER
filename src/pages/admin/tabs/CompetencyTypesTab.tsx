@@ -123,7 +123,7 @@ export default function CompetencyTypesTab() {
                     <div>
                         <p style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{cat.name}</p>
                         {cat.description && (
-                            <p style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                            <p style={{ fontSize: '13px', color: 'rgba(53, 160, 88, 0.45)' }}>
                                 {cat.description}
                             </p>
                         )}
@@ -136,7 +136,7 @@ export default function CompetencyTypesTab() {
                 align: 'center',
                 render: (cat) => {
                     const count = definitions.filter((d) => d.category_id === cat.id).length;
-                    return <span style={{ color: 'rgba(255, 255, 255, 0.7)' }}>{count}</span>;
+                    return <span style={{ color: 'rgba(53, 160, 88, 0.45)' }}>{count}</span>;
                 },
             },
             {
@@ -203,7 +203,7 @@ export default function CompetencyTypesTab() {
                     <div>
                         <p style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{def.name}</p>
                         {def.description && (
-                            <p style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                            <p style={{ fontSize: '13px', color: 'rgba(53, 160, 88, 0.45)' }}>
                                 {def.description}
                             </p>
                         )}
@@ -214,7 +214,7 @@ export default function CompetencyTypesTab() {
                 key: 'category',
                 header: 'Category',
                 render: (def) => (
-                    <span style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.7)' }}>
+                    <span style={{ fontSize: '14px', color: 'rgba(53, 160, 88, 0.45)' }}>
                         {def.category?.name || 'Unknown'}
                     </span>
                 ),
@@ -224,7 +224,7 @@ export default function CompetencyTypesTab() {
                 header: 'Type',
                 align: 'center',
                 render: (def) => (
-                    <span className="glass-badge" style={{ fontSize: '12px' }}>
+                    <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(53, 160, 88, 0.12)', color: 'var(--green)', border: '1px solid rgba(53, 160, 88, 0.20)' }}>
                         {FIELD_TYPE_LABELS[def.field_type] || def.field_type}
                     </span>
                 ),
@@ -234,7 +234,7 @@ export default function CompetencyTypesTab() {
                 header: 'Doc Required',
                 align: 'center',
                 render: (def) => (
-                    <span style={{ color: def.requires_document ? '#10b981' : 'rgba(255,255,255,0.4)' }}>
+                    <span style={{ color: def.requires_document ? 'var(--green-bright)' : 'rgba(53, 160, 88, 0.30)' }}>
                         {def.requires_document ? 'Yes' : 'No'}
                     </span>
                 ),
@@ -277,13 +277,13 @@ export default function CompetencyTypesTab() {
     return (
         <div className="space-y-8">
             {/* Categories Section */}
-            <section className="glass-card p-6">
+            <section style={{ padding: '24px', borderRadius: '8px', background: 'rgba(53, 160, 88, 0.04)', border: '1px solid rgba(53, 160, 88, 0.12)' }}>
                 <div className="flex items-center justify-between mb-4">
                     <div>
-                        <h2 className="text-lg font-semibold text-white">Categories</h2>
-                        <p className="text-sm text-white/50">Organize certification types into categories</p>
+                        <h2 className="text-lg font-semibold" style={{ color: 'var(--green-bright)' }}>Categories</h2>
+                        <p className="text-sm" style={{ color: 'rgba(53, 160, 88, 0.45)' }}>Organize certification types into categories</p>
                     </div>
-                    <button onClick={() => setCreateCategoryOpen(true)} className="btn btn--primary">
+                    <button onClick={() => setCreateCategoryOpen(true)} className="ad-btn primary">
                         + New Category
                     </button>
                 </div>
@@ -296,18 +296,17 @@ export default function CompetencyTypesTab() {
             </section>
 
             {/* Definitions Section */}
-            <section className="glass-card p-6">
+            <section style={{ padding: '24px', borderRadius: '8px', background: 'rgba(53, 160, 88, 0.04)', border: '1px solid rgba(53, 160, 88, 0.12)' }}>
                 <div className="flex items-center justify-between mb-4">
                     <div>
-                        <h2 className="text-lg font-semibold text-white">Certification Types</h2>
-                        <p className="text-sm text-white/50">Define the certifications users can add to their profiles</p>
+                        <h2 className="text-lg font-semibold" style={{ color: 'var(--green-bright)' }}>Certification Types</h2>
+                        <p className="text-sm" style={{ color: 'rgba(53, 160, 88, 0.45)' }}>Define the certifications users can add to their profiles</p>
                     </div>
                     <div className="flex items-center gap-3">
                         <select
                             value={categoryFilter}
                             onChange={(e) => setCategoryFilter(e.target.value)}
-                            className="glass-input"
-                            style={{ minWidth: '180px' }}
+                            style={{ minWidth: '180px', padding: '6px 12px', borderRadius: '4px', background: 'rgba(53, 160, 88, 0.08)', border: '1px solid rgba(53, 160, 88, 0.20)', color: 'var(--green)', fontSize: '14px' }}
                         >
                             <option value="all">All Categories</option>
                             {categories.filter((c) => c.is_active).map((cat) => (
@@ -316,7 +315,7 @@ export default function CompetencyTypesTab() {
                                 </option>
                             ))}
                         </select>
-                        <button onClick={() => setCreateDefinitionOpen(true)} className="btn btn--primary">
+                        <button onClick={() => setCreateDefinitionOpen(true)} className="ad-btn primary">
                             + New Cert Type
                         </button>
                     </div>

@@ -74,10 +74,10 @@ export function EditCategoryModal({ isOpen, onClose, category }: EditCategoryMod
             size="small"
             footer={
                 <>
-                    <button type="button" onClick={onClose} disabled={updateCategory.isPending} className="btn btn-secondary">
+                    <button type="button" onClick={onClose} disabled={updateCategory.isPending} className="ad-btn">
                         Cancel
                     </button>
-                    <button type="submit" form="edit-category-form" disabled={updateCategory.isPending} className="btn btn-primary flex items-center gap-2">
+                    <button type="submit" form="edit-category-form" disabled={updateCategory.isPending} className="ad-btn primary flex items-center gap-2">
                         {updateCategory.isPending && <RandomMatrixSpinner size={16} />}
                         {updateCategory.isPending ? 'Saving...' : 'Save Changes'}
                     </button>

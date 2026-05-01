@@ -36,21 +36,13 @@ export function CompetencySection({
     return (
         <div className="pm-expanded-section">
             <h4 className="pm-expanded-title">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="pm-comp-section-title-row">
                     <CertIcon />
                     Competencies & Certifications ({competencies?.length || 0})
                 </div>
                 {isAdmin && (
-                    <button
-                        onClick={onAddCompetency}
-                        className="pm-btn primary sm"
-                    >
-                        <svg
-                            style={{ width: '12px', height: '12px', marginRight: '4px' }}
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
+                    <button onClick={onAddCompetency} className="pm-btn primary sm">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                         </svg>
                         Add Certification
@@ -73,105 +65,41 @@ export function CompetencySection({
                     <div className="pm-empty-title">No competencies recorded</div>
                 </div>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div className="pm-category-list">
                     {categories.map((categoryName) => (
                         <div key={categoryName}>
-                            {/* Category Header */}
-                            <div
-                                style={{
-                                    marginBottom: '8px',
-                                    paddingBottom: '6px',
-                                    borderBottom: '2px solid rgba(255, 255, 255, 0.1)',
-                                }}
-                            >
-                                <h5
-                                    style={{
-                                        fontSize: '16px',
-                                        fontWeight: '600',
-                                        color: 'rgba(255, 255, 255, 0.9)',
-                                        margin: 0,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                    }}
-                                >
+                            <div className="pm-category-header">
+                                <h5 className="pm-category-title">
                                     {categoryName}
-                                    <span className="pm-badge no-dot" style={{ fontSize: '11px', padding: '2px 8px' }}>
+                                    <span className="pm-badge pm-badge--xs no-dot">
                                         {competenciesByCategory[categoryName].length}
                                     </span>
                                 </h5>
                             </div>
 
-                            {/* Competencies Grid */}
-                            <div
-                                style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                                    gap: '8px',
-                                }}
-                            >
+                            <div className="pm-competency-grid">
                                 {competenciesByCategory[categoryName].map((comp) => {
                                     const status = getCompetencyStatus(comp);
                                     const needsWitness = requiresWitnessCheck(comp);
 
                                     return (
-                                        <div
-                                            key={comp.id}
-                                            className="pm-expanded-comp-item"
-                                            style={{
-                                                flexDirection: 'column',
-                                                alignItems: 'stretch',
-                                                borderLeft: `3px solid ${status.color}`,
-                                                borderColor: status.bgColor,
-                                                borderLeftColor: status.color,
-                                                borderLeftWidth: '3px',
-                                            }}
-                                        >
-                                            {/* Header */}
-                                            <div
-                                                style={{
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    alignItems: 'center',
-                                                    marginBottom: '6px',
-                                                    gap: '8px',
-                                                }}
-                                            >
-                                                <div
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '6px',
-                                                        flex: 1,
-                                                        overflow: 'hidden',
-                                                    }}
-                                                >
-                                                    <div
-                                                        className="pm-competency-name"
-                                                        style={{
-                                                            overflow: 'hidden',
-                                                            textOverflow: 'ellipsis',
-                                                            whiteSpace: 'nowrap',
-                                                            fontSize: '13px',
-                                                            marginBottom: 0,
-                                                        }}
-                                                        title={comp.competency?.name}
-                                                    >
+                                        <div key={comp.id} className="pm-comp-card">
+                                            <div className="pm-comp-card-header">
+                                                <div className="pm-comp-card-name-row">
+                                                    <span className={`pm-comp-status-dot ${status.cssClass}`} />
+                                                    <div className="pm-comp-card-name" title={comp.competency?.name}>
                                                         {comp.competency?.name || 'Unknown Competency'}
                                                     </div>
-                                                    {needsWitness && comp.witness_checked && (
-                                                        <WitnessIcon />
-                                                    )}
+                                                    {needsWitness && comp.witness_checked && <WitnessIcon />}
                                                 </div>
                                                 <div className="pm-competency-actions">
-                                                    <span className={`pm-badge ${status.cssClass}`} style={{ fontSize: '10px', padding: '2px 6px' }}>
+                                                    <span className={`pm-badge pm-badge--status ${status.cssClass}`}>
                                                         {status.label}
                                                     </span>
                                                     {isAdmin && needsWitness && (
                                                         <button
                                                             onClick={() => onWitnessCheck(comp)}
-                                                            className="btn-icon"
-                                                            style={{ padding: '2px' }}
+                                                            className="btn-icon pm-btn-icon"
                                                             title={comp.witness_checked ? 'Update witness check' : 'Mark as witnessed'}
                                                         >
                                                             <WitnessCheckButtonIcon witnessed={!!comp.witness_checked} />
@@ -180,16 +108,10 @@ export function CompetencySection({
                                                     {isAdmin && (
                                                         <button
                                                             onClick={() => onEditCompetency(comp)}
-                                                            className="btn-icon"
-                                                            style={{ padding: '2px', marginLeft: '4px' }}
+                                                            className="btn-icon pm-btn-icon--ml"
                                                             title="Edit certification"
                                                         >
-                                                            <svg
-                                                                style={{ width: '12px', height: '12px' }}
-                                                                fill="none"
-                                                                stroke="currentColor"
-                                                                viewBox="0 0 24 24"
-                                                            >
+                                                            <svg className="pm-icon-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                 <path
                                                                     strokeLinecap="round"
                                                                     strokeLinejoin="round"
@@ -202,59 +124,41 @@ export function CompetencySection({
                                                 </div>
                                             </div>
 
-                                            {/* Competency Details */}
-                                            <div className="pm-competency-meta" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '2px', fontSize: '11px' }}>
+                                            <div className="pm-comp-card-meta">
                                                 {comp.level && (
                                                     <div>
-                                                        <span style={{ color: 'rgba(255, 255, 255, 0.4)' }}>
-                                                            Level:
-                                                        </span>{' '}
-                                                        <span style={{ fontWeight: '600' }}>{comp.level}</span>
+                                                        <span className="pm-comp-meta-label">Level:</span>{' '}
+                                                        <span className="pm-comp-meta-value--bold">{comp.level}</span>
                                                     </div>
                                                 )}
                                                 {comp.issuing_body && (
                                                     <div>
-                                                        <span style={{ color: 'rgba(255, 255, 255, 0.4)' }}>
-                                                            Issued by:
-                                                        </span>{' '}
+                                                        <span className="pm-comp-meta-label">Issued by:</span>{' '}
                                                         {comp.issuing_body}
                                                     </div>
                                                 )}
                                                 {comp.certification_id && (
                                                     <div>
-                                                        <span style={{ color: 'rgba(255, 255, 255, 0.4)' }}>
-                                                            Cert ID:
-                                                        </span>{' '}
+                                                        <span className="pm-comp-meta-label">Cert ID:</span>{' '}
                                                         {comp.certification_id}
                                                     </div>
                                                 )}
                                                 {comp.expiry_date && (
                                                     <div>
-                                                        <span style={{ color: 'rgba(255, 255, 255, 0.4)' }}>
-                                                            Expires:
-                                                        </span>{' '}
+                                                        <span className="pm-comp-meta-label">Expires:</span>{' '}
                                                         {new Date(comp.expiry_date).toLocaleDateString('en-GB')}
                                                     </div>
                                                 )}
                                                 {comp.document_url && (
-                                                        <button
-                                                            onClick={() => onViewCertificate(comp)}
-                                                            className="pm-competency-doc"
-                                                            style={{
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: '4px',
-                                                                background: 'none',
-                                                                border: 'none',
-                                                                cursor: 'pointer',
-                                                                padding: 0,
-                                                            }}
-                                                        >
-                                                            <DocumentIcon />
-                                                            View Certificate
-                                                        </button>
-                                                    )}
-                                                </div>
+                                                    <button
+                                                        onClick={() => onViewCertificate(comp)}
+                                                        className="pm-view-cert-btn"
+                                                    >
+                                                        <DocumentIcon />
+                                                        View Certificate
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     );
                                 })}

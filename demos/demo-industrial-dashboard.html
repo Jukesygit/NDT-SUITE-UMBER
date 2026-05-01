@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Industrial Instrument — Measurement Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --chassis: #58554f;
+
+    --panel: #ccc8c2;
+    --panel-hi: #e8e4de;
+    --panel-lo: #b0aca6;
+
+    --well-rim: #7a766e;
+    --well-mid: #3a3834;
+    --well-deep: #1e1d1a;
+    --well-floor: #141310;
+
+    --ctrl: #dedad4;
+    --ctrl-hi: #e6e2dc;
+    --ctrl-lo: #c8c4be;
+
+    --green: #2d8a4e;
+    --green-bright: #35a058;
+    --green-dark: #206b3a;
+    --green-glow: rgba(45, 138, 78, 0.45);
+    --green-glow-soft: rgba(45, 138, 78, 0.2);
+
+    --amber: #b8861e;
+    --red: #a63a2a;
+
+    --ink: #1c1b18;
+    --ink-mid: #4a4845;
+    --ink-light: #7a7672;
+    --ink-ghost: #9a968f;
+
+    --ff-display: 'Barlow', system-ui, sans-serif;
+    --ff-label: 'Barlow Condensed', 'Barlow', sans-serif;
+    --ff-mono: 'JetBrains Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.06) 0%, transparent 50%),
+      repeating-linear-gradient(90deg,
+        transparent 0px, transparent 3px,
+        rgba(0,0,0,0.02) 3px, rgba(0,0,0,0.02) 4px
+      ),
+      var(--chassis);
+    font-family: var(--ff-display);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 24px;
+  }
+
+  .unit {
+    width: 100%;
+    max-width: 960px;
+  }
+
+  /* ── PANEL (strong top-light, Big Knob style) ── */
+  .panel {
+    border-radius: 8px;
+    padding: 28px 32px;
+    background:
+      radial-gradient(ellipse 70% 40% at 50% 8%, rgba(255,255,255,0.35) 0%, transparent 100%),
+      linear-gradient(180deg, var(--panel-hi) 0%, var(--panel) 45%, var(--panel-lo) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.4),
+      inset 0 -1px 0 rgba(0,0,0,0.08),
+      0 1px 3px rgba(0,0,0,0.2),
+      0 8px 24px rgba(0,0,0,0.25),
+      0 20px 60px rgba(0,0,0,0.15);
+    position: relative;
+  }
+
+  .panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 8px;
+    background: repeating-linear-gradient(90deg,
+      transparent 0px, transparent 1px,
+      rgba(255,255,255,0.015) 1px, rgba(255,255,255,0.015) 2px,
+      transparent 2px, transparent 4px
+    );
+    pointer-events: none;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+
+  .header-led {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #5ec87a 0%, var(--green) 55%, var(--green-dark) 100%);
+    box-shadow: 0 0 6px var(--green-glow), 0 0 18px var(--green-glow-soft),
+      inset 0 -1px 2px rgba(0,0,0,0.25), inset 0 1px 1px rgba(255,255,255,0.35);
+  }
+
+  .header-title {
+    font-family: var(--ff-label); font-weight: 700; font-size: 20px;
+    text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--ink-mid); text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+  }
+
+  .header-sub {
+    margin-left: auto;
+    font-family: var(--ff-label); font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--ink-ghost); text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  }
+
+  .groove {
+    height: 2px; border-radius: 1px; margin: 0 -4px;
+    background: linear-gradient(180deg,
+      rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.04) 50%, rgba(255,255,255,0.35) 100%);
+  }
+
+  .section-label {
+    font-family: var(--ff-label); font-weight: 700; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--ink-light); text-shadow: 0 1px 0 rgba(255,255,255,0.45);
+    margin-bottom: 12px;
+  }
+
+  /* ── WELL (deep recessed, near-black) ── */
+  .well {
+    border-radius: 8px;
+    background:
+      radial-gradient(ellipse at 50% 95%, rgba(255,255,255,0.03) 0%, transparent 50%),
+      linear-gradient(180deg, var(--well-mid) 0%, var(--well-deep) 35%, var(--well-floor) 100%);
+    box-shadow:
+      inset 0 8px 20px rgba(0,0,0,0.35),
+      inset 0 3px 6px rgba(0,0,0,0.25),
+      inset 0 1px 2px rgba(0,0,0,0.20),
+      inset 0 -2px 6px rgba(255,255,255,0.03),
+      0 1px 0 rgba(255,255,255,0.25);
+  }
+
+  /* ── DISPLAY (deep LCD screen) ── */
+  .display {
+    border-radius: 6px;
+    padding: 14px 18px;
+    background: linear-gradient(180deg, #1a1918 0%, #141310 100%);
+    box-shadow:
+      inset 0 6px 16px rgba(0,0,0,0.50),
+      inset 0 2px 4px rgba(0,0,0,0.35),
+      0 1px 0 rgba(255,255,255,0.15);
+    color: var(--green-bright);
+    font-family: var(--ff-mono);
+    text-shadow: 0 0 6px var(--green-glow-soft);
+  }
+
+  .display--amber {
+    color: #e0a82e;
+    text-shadow: 0 0 6px rgba(184,134,30,0.3);
+  }
+
+  /* ── DASHBOARD GRID ── */
+  .dash-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    margin-top: 20px;
+  }
+
+  .dash-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .dash-card--wide { grid-column: span 2; }
+
+  /* ── BIG NUMBER READOUT ── */
+  .readout {
+    text-align: center;
+    padding: 16px;
+  }
+
+  .readout-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(53,160,88,0.5);
+    margin-bottom: 4px;
+  }
+
+  .readout-value {
+    font-size: 36px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-shadow: 0 0 12px var(--green-glow);
+    line-height: 1;
+  }
+
+  .readout-unit {
+    font-size: 14px;
+    color: rgba(53,160,88,0.55);
+    margin-left: 4px;
+  }
+
+  .readout-sub {
+    font-size: 11px;
+    color: rgba(53,160,88,0.4);
+    margin-top: 6px;
+  }
+
+  /* ── SPARK LINE (CSS-only bar chart) ── */
+  .spark {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 36px;
+    padding: 0 4px;
+  }
+
+  .spark-bar {
+    flex: 1;
+    border-radius: 1px 1px 0 0;
+    background: var(--green);
+    opacity: 0.7;
+    box-shadow: 0 0 3px var(--green-glow-soft);
+  }
+
+  /* ── STATUS TABLE ── */
+  .status-table {
+    width: 100%;
+  }
+
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .status-row:last-child { border-bottom: none; }
+
+  .status-led {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  }
+
+  .status-led--ok {
+    background: radial-gradient(circle at 35% 30%, #5ec87a 0%, var(--green) 100%);
+    box-shadow: 0 0 4px var(--green-glow-soft);
+  }
+
+  .status-led--warn {
+    background: radial-gradient(circle at 35% 30%, #e0a82e 0%, var(--amber) 100%);
+    box-shadow: 0 0 4px rgba(184,134,30,0.3);
+  }
+
+  .status-led--err {
+    background: radial-gradient(circle at 35% 30%, #d4534a 0%, var(--red) 100%);
+    box-shadow: 0 0 4px rgba(166,58,42,0.3);
+  }
+
+  .status-led--off {
+    background: radial-gradient(circle at 45% 40%, #6a665e 0%, #4a4640 100%);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
+  }
+
+  .status-name {
+    flex: 1;
+    font-family: var(--ff-display); font-size: 13px; font-weight: 500;
+    color: var(--ink); text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+  }
+
+  .status-val {
+    font-family: var(--ff-mono); font-size: 12px;
+    color: var(--ink-mid);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .status-badge {
+    display: inline-flex; align-items: center;
+    padding: 2px 8px; border-radius: 3px;
+    font-family: var(--ff-label); font-weight: 600; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    background: linear-gradient(180deg, var(--ctrl-hi) 0%, var(--ctrl) 100%);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.3);
+    color: var(--ink-mid);
+    text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+  }
+
+  .status-badge--active {
+    background: linear-gradient(180deg, var(--green-bright) 0%, var(--green) 100%);
+    color: #eaf5ee;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.2);
+    box-shadow: 0 1px 3px rgba(45,138,78,0.25), inset 0 1px 0 rgba(255,255,255,0.15);
+  }
+
+  /* ── GAUGE (circular, CSS-only) ── */
+  .gauge-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 16px;
+  }
+
+  .gauge {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 50% 50%, var(--well-floor) 0%, var(--well-deep) 40%, var(--well-mid) 70%, var(--well-rim) 100%);
+    box-shadow:
+      inset 0 6px 18px rgba(0,0,0,0.40),
+      inset 0 2px 6px rgba(0,0,0,0.30),
+      inset 0 -3px 8px rgba(255,255,255,0.04),
+      0 1px 0 rgba(255,255,255,0.2);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .gauge-inner {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    background: linear-gradient(180deg, #1a1918 0%, #141310 100%);
+    box-shadow:
+      inset 0 4px 12px rgba(0,0,0,0.50),
+      inset 0 1px 3px rgba(0,0,0,0.35),
+      0 1px 0 rgba(255,255,255,0.06);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--green-bright);
+    font-family: var(--ff-mono);
+    text-shadow: 0 0 8px var(--green-glow-soft);
+  }
+
+  .gauge-value {
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .gauge-unit {
+    font-size: 9px;
+    color: rgba(53,160,88,0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 2px;
+  }
+
+  .gauge-label {
+    font-family: var(--ff-label); font-weight: 600; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--ink-light);
+    text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  }
+
+  .gauge-ring {
+    position: absolute;
+    inset: 4px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: var(--green);
+    border-right-color: var(--green);
+    border-bottom-color: transparent;
+    border-left-color: transparent;
+    transform: rotate(-45deg);
+    opacity: 0.6;
+    filter: drop-shadow(0 0 3px var(--green-glow-soft));
+  }
+
+  .gauge-ring--75 {
+    border-bottom-color: var(--green);
+    transform: rotate(-30deg);
+  }
+
+  /* ── PROGRESS BAR ── */
+  .progress-wrap {
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .progress-label {
+    font-family: var(--ff-label); font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ink-light); text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  }
+
+  .progress-value {
+    font-family: var(--ff-mono); font-size: 12px;
+    color: var(--ink-mid);
+  }
+
+  .progress-track {
+    height: 10px;
+    border-radius: 5px;
+    background: linear-gradient(180deg, var(--well-floor) 0%, var(--well-deep) 50%, var(--well-mid) 100%);
+    box-shadow:
+      inset 0 3px 8px rgba(0,0,0,0.35),
+      inset 0 1px 2px rgba(0,0,0,0.25),
+      0 1px 0 rgba(255,255,255,0.20);
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 5px;
+    background: linear-gradient(180deg, var(--green-bright) 0%, var(--green) 60%, var(--green-dark) 100%);
+    box-shadow: 0 0 8px var(--green-glow-soft), inset 0 1px 0 rgba(255,255,255,0.15);
+    position: relative;
+  }
+
+  .progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.15) 0%, transparent 100%);
+    border-radius: 5px 5px 0 0;
+  }
+
+  /* ── LOG FEED ── */
+  .log-feed {
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 160px;
+    overflow-y: auto;
+  }
+
+  .log-line {
+    display: flex;
+    gap: 10px;
+    font-family: var(--ff-mono);
+    font-size: 11px;
+    line-height: 1.6;
+  }
+
+  .log-time {
+    color: rgba(53,160,88,0.45);
+    white-space: nowrap;
+  }
+
+  .log-msg {
+    color: var(--green-bright);
+  }
+
+  .log-msg--dim {
+    color: rgba(53,160,88,0.55);
+  }
+
+  /* ── SCREW ── */
+  .screw {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, rgba(255,255,255,0.20) 0%, transparent 50%),
+      linear-gradient(160deg, var(--panel-hi) 0%, var(--panel-lo) 100%);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.15), 0 1px 0 rgba(255,255,255,0.25);
+    position: relative;
+  }
+  .screw::after {
+    content: '';
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%,-50%) rotate(25deg);
+    width: 8px; height: 1px;
+    background: var(--ink-ghost);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.25);
+  }
+  .screws { display: flex; justify-content: space-between; padding: 0 4px; }
+  .screws--top { margin-bottom: -10px; position: relative; z-index: 1; }
+  .screws--bot { margin-top: -10px; }
+
+  /* ── TAG ── */
+  .tag {
+    position: fixed; bottom: 16px; right: 16px;
+    padding: 6px 16px; border-radius: 6px;
+    background: radial-gradient(ellipse at 50% 20%, rgba(255,255,255,0.08) 0%, transparent 60%),
+      linear-gradient(180deg, var(--panel-hi) 0%, var(--panel-lo) 100%);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.20), 0 1px 2px rgba(0,0,0,0.12),
+      inset 0 1px 0 rgba(255,255,255,0.35);
+    font-family: var(--ff-label); font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ink-light); text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  }
+</style>
+</head>
+<body>
+
+<div class="unit">
+  <div class="screws screws--top">
+    <div class="screw"></div>
+    <div class="screw"></div>
+  </div>
+
+  <div class="panel">
+    <div class="header">
+      <div class="header-led"></div>
+      <div class="header-title">Matrix Portal</div>
+      <div class="header-sub">Inspection Dashboard</div>
+    </div>
+
+    <div class="groove"></div>
+
+    <div class="dash-grid">
+
+      <!-- THICKNESS READOUT -->
+      <div class="dash-card">
+        <div class="section-label">Wall Thickness</div>
+        <div class="well">
+          <div class="display">
+            <div class="readout">
+              <div class="readout-label">Measured</div>
+              <div class="readout-value">12.42<span class="readout-unit">mm</span></div>
+              <div class="readout-sub">Nominal: 14.27 mm &bull; Loss: 13.0%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VELOCITY -->
+      <div class="dash-card">
+        <div class="section-label">Sound Velocity</div>
+        <div class="well">
+          <div class="display display--amber">
+            <div class="readout">
+              <div class="readout-label" style="color: rgba(224,168,46,0.5);">Material</div>
+              <div class="readout-value" style="color: #e0a82e; text-shadow: 0 0 12px rgba(184,134,30,0.4);">5920<span class="readout-unit" style="color: rgba(224,168,46,0.5);">m/s</span></div>
+              <div class="readout-sub" style="color: rgba(224,168,46,0.4);">Carbon Steel &bull; Longitudinal</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GAUGES -->
+      <div class="dash-card">
+        <div class="section-label">Coupling</div>
+        <div class="well">
+          <div class="gauge-wrap">
+            <div class="gauge">
+              <div class="gauge-ring gauge-ring--75"></div>
+              <div class="gauge-inner">
+                <div class="gauge-value">94</div>
+                <div class="gauge-unit">percent</div>
+              </div>
+            </div>
+            <div class="gauge-label">Contact Quality</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCAN PROGRESS (wide) -->
+      <div class="dash-card dash-card--wide">
+        <div class="section-label">Scan Progress</div>
+        <div class="well">
+          <div class="progress-wrap">
+            <div class="progress-header">
+              <span class="progress-label">Zone 3 — Circumferential Pass</span>
+              <span class="progress-value">1,847 / 2,400 pts</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" style="width: 77%"></div>
+            </div>
+          </div>
+          <div class="progress-wrap" style="padding-top: 0;">
+            <div class="progress-header">
+              <span class="progress-label">Overall Coverage</span>
+              <span class="progress-value">62%</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" style="width: 62%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HISTORY (wide) -->
+      <div class="dash-card dash-card--wide">
+        <div class="section-label">Measurement History</div>
+        <div class="well">
+          <div class="display">
+            <div class="spark">
+              <div class="spark-bar" style="height: 60%"></div>
+              <div class="spark-bar" style="height: 72%"></div>
+              <div class="spark-bar" style="height: 68%"></div>
+              <div class="spark-bar" style="height: 85%"></div>
+              <div class="spark-bar" style="height: 78%"></div>
+              <div class="spark-bar" style="height: 92%"></div>
+              <div class="spark-bar" style="height: 88%"></div>
+              <div class="spark-bar" style="height: 76%"></div>
+              <div class="spark-bar" style="height: 82%"></div>
+              <div class="spark-bar" style="height: 90%"></div>
+              <div class="spark-bar" style="height: 95%"></div>
+              <div class="spark-bar" style="height: 88%"></div>
+              <div class="spark-bar" style="height: 80%"></div>
+              <div class="spark-bar" style="height: 70%"></div>
+              <div class="spark-bar" style="height: 65%"></div>
+              <div class="spark-bar" style="height: 75%"></div>
+              <div class="spark-bar" style="height: 82%"></div>
+              <div class="spark-bar" style="height: 78%"></div>
+              <div class="spark-bar" style="height: 85%"></div>
+              <div class="spark-bar" style="height: 90%"></div>
+              <div class="spark-bar" style="height: 86%"></div>
+              <div class="spark-bar" style="height: 92%"></div>
+              <div class="spark-bar" style="height: 88%"></div>
+              <div class="spark-bar" style="height: 95%"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 8px; padding: 0 4px;">
+              <span style="font-size: 10px; color: rgba(53,160,88,0.4);">-24 readings</span>
+              <span style="font-size: 10px; color: rgba(53,160,88,0.4);">latest →</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- EQUIPMENT STATUS -->
+      <div class="dash-card">
+        <div class="section-label">Equipment Status</div>
+        <div class="well">
+          <div class="status-table">
+            <div class="status-row">
+              <div class="status-led status-led--ok"></div>
+              <span class="status-name">Probe DA312-R</span>
+              <span class="status-badge status-badge--active">Active</span>
+            </div>
+            <div class="status-row">
+              <div class="status-led status-led--ok"></div>
+              <span class="status-name">Encoder X</span>
+              <span class="status-val">1,847 pulses</span>
+            </div>
+            <div class="status-row">
+              <div class="status-led status-led--warn"></div>
+              <span class="status-name">Battery</span>
+              <span class="status-val">34%</span>
+            </div>
+            <div class="status-row">
+              <div class="status-led status-led--ok"></div>
+              <span class="status-name">Storage</span>
+              <span class="status-val">2.4 GB free</span>
+            </div>
+            <div class="status-row">
+              <div class="status-led status-led--off"></div>
+              <span class="status-name">Encoder Y</span>
+              <span class="status-badge">Idle</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LOG (wide) -->
+      <div class="dash-card dash-card--wide">
+        <div class="section-label">Activity Log</div>
+        <div class="well">
+          <div class="display">
+            <div class="log-feed">
+              <div class="log-line">
+                <span class="log-time">14:32:08</span>
+                <span class="log-msg">Scan zone 3 started — circumferential pass</span>
+              </div>
+              <div class="log-line">
+                <span class="log-time">14:31:55</span>
+                <span class="log-msg log-msg--dim">Calibration verified — deviation 0.02mm</span>
+              </div>
+              <div class="log-line">
+                <span class="log-time">14:31:42</span>
+                <span class="log-msg log-msg--dim">Probe coupled — contact quality 94%</span>
+              </div>
+              <div class="log-line">
+                <span class="log-time">14:31:20</span>
+                <span class="log-msg">Gate A threshold set to 20% FSH</span>
+              </div>
+              <div class="log-line">
+                <span class="log-time">14:30:58</span>
+                <span class="log-msg log-msg--dim">Encoder X reset — position zero</span>
+              </div>
+              <div class="log-line">
+                <span class="log-time">14:30:15</span>
+                <span class="log-msg">Zone 2 completed — 2,400/2,400 pts — coverage 100%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="screws screws--bot">
+    <div class="screw"></div>
+    <div class="screw"></div>
+  </div>
+</div>
+
+<div class="tag">Industrial Instrument — Measurement Dashboard</div>
+
+</body>
+</html>

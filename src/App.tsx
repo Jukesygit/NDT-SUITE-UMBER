@@ -8,6 +8,7 @@ import { initializeTheme } from './themes';
 import authManager from './auth-manager.js';
 import { AnimatedBackground } from './animated-background';
 import { AuthProvider } from './contexts/AuthContext';
+import { CompanionNotificationProvider } from './contexts/CompanionNotificationContext';
 import GlobalErrorBoundary from './components/GlobalErrorBoundary';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
 import Layout from './components/LayoutNew';
@@ -34,6 +35,10 @@ const ReportBuilderPage = lazy(() => import('./pages/projects/ReportBuilderPage'
 const ReportPage = lazy(() => import('./pages/projects/ReportPage'));
 const ScanViewerPage = lazy(() => import('./pages/projects/ScanViewerPage'));
 const ScanViewerLandingPage = lazy(() => import('./pages/ScanViewerLandingPage'));
+const ScanViewerDemoA = lazy(() => import('./pages/demos/ScanViewerDemoA'));
+const ScanViewerDemoB = lazy(() => import('./pages/demos/ScanViewerDemoB'));
+const ScanViewerDemoC = lazy(() => import('./pages/demos/ScanViewerDemoC'));
+const LogoShowcase = lazy(() => import('./pages/demos/LogoShowcase'));
 
 interface SuspenseRoutesProps {
     children: ReactNode;
@@ -132,6 +137,7 @@ function App() {
     return (
         <QueryClientProvider client={queryClient}>
             <AuthProvider>
+                <CompanionNotificationProvider>
                 <GlobalErrorBoundary>
                     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                         <BackgroundManager />
@@ -157,6 +163,10 @@ function App() {
                                                 <ErrorBoundary><ScanViewerLandingPage /></ErrorBoundary>
                                             </RequireTabVisible>
                                         } />
+                                        <Route path="/demos/scan-viewer-a" element={<ErrorBoundary><ScanViewerDemoA /></ErrorBoundary>} />
+                                        <Route path="/demos/scan-viewer-b" element={<ErrorBoundary><ScanViewerDemoB /></ErrorBoundary>} />
+                                        <Route path="/demos/scan-viewer-c" element={<ErrorBoundary><ScanViewerDemoC /></ErrorBoundary>} />
+                                        <Route path="/demos/logos" element={<ErrorBoundary><LogoShowcase /></ErrorBoundary>} />
                                         <Route path="/downloads" element={
                                             <RequireTabVisible tabId="tools">
                                                 <ErrorBoundary><DownloadsPage /></ErrorBoundary>
@@ -244,6 +254,7 @@ function App() {
                         </SuspenseRoutes>
                     </BrowserRouter>
                 </GlobalErrorBoundary>
+                </CompanionNotificationProvider>
             </AuthProvider>
             <ReactQueryDevtools initialIsOpen={false} />
         </QueryClientProvider>

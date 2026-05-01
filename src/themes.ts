@@ -335,8 +335,8 @@ export function applyTheme(themeId: string): void {
         root.style.setProperty(`--${key}`, value);
     });
 
-    // Apply background gradient
-    document.body.style.background = `linear-gradient(135deg, ${theme.colors['bg-dark-1']} 0%, ${theme.colors['bg-dark-2']} 50%, ${theme.colors['bg-dark-3']} 100%)`;
+    // Background is now handled by industrial-theme.css — don't set inline
+    document.body.style.removeProperty('background');
 
 }
 

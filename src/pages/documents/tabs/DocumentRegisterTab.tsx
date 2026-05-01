@@ -68,13 +68,8 @@ export default function DocumentRegisterTab({ canManage, search }: Props) {
 
     return (
         <>
-            <DocumentFilters
-                filters={filters}
-                onFilterChange={setFilters}
-            />
-
             {canManage && (
-                <div style={{ padding: '12px 24px', borderBottom: '1px solid rgba(255, 255, 255, 0.06)', display: 'flex', justifyContent: 'flex-end' }}>
+                <div style={{ padding: '12px 0', display: 'flex', justifyContent: 'flex-end' }}>
                     <button
                         className="dc-btn primary"
                         onClick={() => setShowCreate(true)}
@@ -84,7 +79,14 @@ export default function DocumentRegisterTab({ canManage, search }: Props) {
                 </div>
             )}
 
-            <div className="dc-doc-list glass-scrollbar">
+            <div className="dc-display-well">
+                <div className="dc-display">
+                    <DocumentFilters
+                        filters={filters}
+                        onFilterChange={setFilters}
+                    />
+
+                    <div className="dc-doc-list glass-scrollbar">
                 {isLoading ? (
                     Array.from({ length: 5 }).map((_, i) => (
                         <div key={i} className="dc-skeleton-row">
@@ -166,6 +168,8 @@ export default function DocumentRegisterTab({ canManage, search }: Props) {
                         );
                     })
                 )}
+                    </div>
+                </div>
             </div>
 
             {showCreate && (

@@ -2,19 +2,70 @@
  * React Query mutation hooks for companion app operations.
  */
 
+import { useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchComposite, refreshIndex, browseDirectory, convertEddify } from '../../services/companion-service';
 import { saveScanCompositeBinary } from '../../services/scan-composite-service';
 import type { GateSettings } from '../../types/companion';
 import type { SaveScanCompositeBinaryParams } from '../../services/scan-composite-service';
+import { classifyCompanionError } from '../../utils/companionError';
+import { useCompanionNotify } from '../../contexts/CompanionNotificationContext';
+
+// ---------------------------------------------------------------------------
+// Shared error-handler factory
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns a stable onError callback that classifies the thrown error and
+ * pushes a notification via useCompanionNotify.
+ *
+ * @param operation  Human-readable name for the operation (e.g. "create-composite")
+ */
+function useCompanionErrorHandler(operation: string) {
+  const { push } = useCompanionNotify();
+
+  return useCallback(
+    (err: unknown) => {
+      const classified = classifyCompanionError(err, operation);
+      // Info-level errors (e.g. user cancelled) are intentionally silent
+      if (classified.severity === 'info') return;
+
+      push({
+        title: getOperationTitle(operation),
+        message: classified.message,
+        severity: classified.severity,
+        recovery: classified.recovery,
+      });
+    },
+    [operation, push],
+  );
+}
+
+/** Maps internal operation keys to user-facing titles. */
+function getOperationTitle(operation: string): string {
+  const titles: Record<string, string> = {
+    'create-composite': 'Composite generation failed',
+    'refresh-index': 'Index refresh failed',
+    'browse-directory': 'Folder selection failed',
+    'convert-eddify': 'Eddify conversion failed',
+    'save-composite': 'Save failed',
+  };
+  return titles[operation] ?? 'Companion error';
+}
+
+// ---------------------------------------------------------------------------
+// Hooks
+// ---------------------------------------------------------------------------
 
 /**
  * Hook for generating a composite via the companion app.
  */
 export function useCompanionComposite() {
+  const onError = useCompanionErrorHandler('create-composite');
   return useMutation({
     mutationFn: (params: { port: number; folders: string[]; gateSettings: GateSettings; signal?: AbortSignal }) =>
       fetchComposite(params.port, params.folders, params.gateSettings, params.signal),
+    onError,
   });
 }
 
@@ -40,12 +91,14 @@ export function useSaveScanCompositeBinary() {
  */
 export function useRefreshCompanionIndex() {
   const qc = useQueryClient();
+  const onError = useCompanionErrorHandler('refresh-index');
 
   return useMutation({
     mutationFn: (port: number) => refreshIndex(port),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['companion-folders'] });
     },
+    onError,
   });
 }
 
@@ -56,6 +109,7 @@ export function useRefreshCompanionIndex() {
  */
 export function useBrowseDirectory() {
   const qc = useQueryClient();
+  const onError = useCompanionErrorHandler('browse-directory');
 
   return useMutation({
     mutationFn: (port: number) => browseDirectory(port),
@@ -73,6 +127,7 @@ export function useBrowseDirectory() {
       qc.invalidateQueries({ queryKey: ['companion-folders'] });
       qc.invalidateQueries({ queryKey: ['companion-files'] });
     },
+    onError,
   });
 }
 
@@ -82,6 +137,7 @@ export function useBrowseDirectory() {
  */
 export function useConvertEddify() {
   const qc = useQueryClient();
+  const onError = useCompanionErrorHandler('convert-eddify');
 
   return useMutation({
     mutationFn: (params: { port: number; captureDirs: string[]; outputFolder: string }) =>
@@ -90,5 +146,6 @@ export function useConvertEddify() {
       qc.invalidateQueries({ queryKey: ['companion-folders'] });
       qc.invalidateQueries({ queryKey: ['companion-files'] });
     },
+    onError,
   });
 }

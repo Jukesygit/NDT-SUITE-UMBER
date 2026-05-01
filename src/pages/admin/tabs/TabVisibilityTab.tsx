@@ -19,8 +19,8 @@ export default function TabVisibilityTab() {
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-lg font-semibold text-white mb-1">Tab Visibility</h2>
-                <p className="text-sm text-white/50">
+                <h2 className="text-lg font-semibold mb-1" style={{ color: 'var(--green-bright)' }}>Tab Visibility</h2>
+                <p className="text-sm" style={{ color: 'rgba(53, 160, 88, 0.45)' }}>
                     Control which navigation tabs are visible to all users. Super admins always see all tabs regardless of these settings.
                 </p>
             </div>
@@ -35,15 +35,15 @@ export default function TabVisibilityTab() {
                             justifyContent: 'space-between',
                             padding: '16px',
                             borderRadius: '8px',
-                            backgroundColor: 'rgba(255,255,255,0.05)',
-                            border: '1px solid rgba(255,255,255,0.1)',
+                            backgroundColor: 'rgba(53, 160, 88, 0.04)',
+                            border: '1px solid rgba(53, 160, 88, 0.12)',
                         }}
                     >
                         <div>
-                            <span style={{ fontSize: '14px', fontWeight: 500, color: 'white' }}>
+                            <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--green-bright)' }}>
                                 {setting.tab_label}
                             </span>
-                            <span style={{ marginLeft: '12px', fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>
+                            <span style={{ marginLeft: '12px', fontSize: '12px', color: 'rgba(53, 160, 88, 0.30)' }}>
                                 ({setting.tab_id})
                             </span>
                         </div>
@@ -62,7 +62,7 @@ export default function TabVisibilityTab() {
                                 borderRadius: '9999px',
                                 cursor: updateMutation.isPending ? 'not-allowed' : 'pointer',
                                 border: 'none',
-                                backgroundColor: setting.is_visible ? '#2563eb' : 'rgba(255,255,255,0.25)',
+                                backgroundColor: setting.is_visible ? 'var(--green-bright)' : 'rgba(53, 160, 88, 0.20)',
                                 transition: 'background-color 200ms',
                                 opacity: updateMutation.isPending ? 0.5 : 1,
                             }}
@@ -74,7 +74,7 @@ export default function TabVisibilityTab() {
                                     height: '22px',
                                     width: '22px',
                                     borderRadius: '50%',
-                                    backgroundColor: 'white',
+                                    backgroundColor: setting.is_visible ? '#0a1a10' : 'var(--green-bright)',
                                     boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
                                     transform: setting.is_visible ? 'translateX(26px)' : 'translateX(3px)',
                                     transition: 'transform 200ms',
@@ -85,15 +85,15 @@ export default function TabVisibilityTab() {
                 ))}
 
                 {settings.length === 0 && (
-                    <div className="text-center py-8 text-white/40 text-sm">
+                    <div className="text-center py-8 text-sm" style={{ color: 'rgba(53, 160, 88, 0.30)' }}>
                         No tab visibility settings found. Run the database migration to seed default settings.
                     </div>
                 )}
             </div>
 
             {updateMutation.isError && (
-                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/50">
-                    <p className="text-sm text-red-400">
+                <div className="p-3 rounded-lg" style={{ background: 'rgba(239, 68, 68, 0.10)', border: '1px solid rgba(239, 68, 68, 0.40)' }}>
+                    <p className="text-sm" style={{ color: 'var(--red)' }}>
                         Failed to update tab visibility. Please try again.
                     </p>
                 </div>

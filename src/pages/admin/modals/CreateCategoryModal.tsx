@@ -68,10 +68,10 @@ export function CreateCategoryModal({ isOpen, onClose }: CreateCategoryModalProp
             size="small"
             footer={
                 <>
-                    <button type="button" onClick={handleClose} disabled={createCategory.isPending} className="btn btn-secondary">
+                    <button type="button" onClick={handleClose} disabled={createCategory.isPending} className="ad-btn">
                         Cancel
                     </button>
-                    <button type="submit" form="create-category-form" disabled={createCategory.isPending} className="btn btn-primary flex items-center gap-2">
+                    <button type="submit" form="create-category-form" disabled={createCategory.isPending} className="ad-btn primary flex items-center gap-2">
                         {createCategory.isPending && <RandomMatrixSpinner size={16} />}
                         {createCategory.isPending ? 'Creating...' : 'Create Category'}
                     </button>

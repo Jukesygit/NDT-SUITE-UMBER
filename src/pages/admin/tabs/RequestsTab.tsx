@@ -60,12 +60,12 @@ function RejectModal({ isOpen, onClose, onConfirm, isLoading, type }: RejectModa
             closeOnEscape={!isLoading}
         >
             <div className="space-y-4">
-                <p className="text-sm text-white/70">
+                <p style={{ fontSize: '13px', color: 'rgba(53, 160, 88, 0.45)' }}>
                     Provide an optional reason for rejecting this request. This will be sent to the requester.
                 </p>
 
                 <div>
-                    <label htmlFor="reject-reason" className="block text-sm font-medium text-white mb-2">
+                    <label htmlFor="reject-reason" style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'rgba(53, 160, 88, 0.70)', marginBottom: '8px' }}>
                         Reason (Optional)
                     </label>
                     <textarea
@@ -74,7 +74,19 @@ function RejectModal({ isOpen, onClose, onConfirm, isLoading, type }: RejectModa
                         onChange={(e) => setReason(e.target.value)}
                         disabled={isLoading}
                         rows={4}
-                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed resize-none"
+                        style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            background: 'rgba(0, 0, 0, 0.3)',
+                            border: '1px solid rgba(53, 160, 88, 0.20)',
+                            borderRadius: '4px',
+                            color: 'rgba(53, 160, 88, 0.70)',
+                            fontFamily: 'inherit',
+                            fontSize: '13px',
+                            resize: 'none' as const,
+                            outline: 'none',
+                        }}
+                        className="disabled:opacity-50 disabled:cursor-not-allowed"
                         placeholder="Enter reason for rejection..."
                     />
                 </div>
@@ -83,14 +95,15 @@ function RejectModal({ isOpen, onClose, onConfirm, isLoading, type }: RejectModa
                     <button
                         onClick={handleClose}
                         disabled={isLoading}
-                        className="px-4 py-2 text-sm font-medium text-white bg-white/10 hover:bg-white/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="ad-btn sm"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleConfirm}
                         disabled={isLoading}
-                        className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        className="ad-btn danger sm"
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                     >
                         {isLoading && <RandomMatrixSpinner size={16} />}
                         Reject Request
@@ -149,9 +162,9 @@ export default function RequestsTab() {
 
     if (hasError) {
         return (
-            <div className="text-center py-8">
-                <p className="text-red-400">Failed to load requests</p>
-                <p className="text-sm text-white/50 mt-2">
+            <div style={{ textAlign: 'center', padding: '32px 0' }}>
+                <p style={{ color: 'var(--red)' }}>Failed to load requests</p>
+                <p style={{ fontSize: '13px', color: 'rgba(53, 160, 88, 0.30)', marginTop: '8px' }}>
                     {accountError?.message || permissionError?.message}
                 </p>
             </div>
@@ -166,8 +179,8 @@ export default function RequestsTab() {
         <div className="space-y-8">
             {/* Header */}
             <div>
-                <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>Requests</h2>
-                <p style={{ color: 'rgba(255, 255, 255, 0.7)', marginTop: '4px' }}>
+                <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'rgba(53, 160, 88, 0.70)' }}>Requests</h2>
+                <p style={{ color: 'rgba(53, 160, 88, 0.45)', marginTop: '4px' }}>
                     Review and manage account and permission requests
                 </p>
             </div>
@@ -176,10 +189,20 @@ export default function RequestsTab() {
             {hasPendingPermissions && (
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                        <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'rgba(53, 160, 88, 0.70)' }}>
                             Pending Permission Requests
                         </h3>
-                        <span className="glass-badge badge-purple">
+                        <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            padding: '2px 10px',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: 'var(--green-bright)',
+                            background: 'rgba(53, 160, 88, 0.12)',
+                            border: '1px solid rgba(53, 160, 88, 0.25)',
+                            borderRadius: '3px',
+                        }}>
                             {permissionRequests.length}
                         </span>
                     </div>
@@ -203,11 +226,21 @@ export default function RequestsTab() {
             {/* Account Requests Section */}
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                    <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'rgba(53, 160, 88, 0.70)' }}>
                         Pending Account Requests
                     </h3>
                     {hasPendingAccounts && (
-                        <span className="glass-badge badge-purple">
+                        <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            padding: '2px 10px',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: 'var(--green-bright)',
+                            background: 'rgba(53, 160, 88, 0.12)',
+                            border: '1px solid rgba(53, 160, 88, 0.25)',
+                            borderRadius: '3px',
+                        }}>
                             {accountRequests.length}
                         </span>
                     )}

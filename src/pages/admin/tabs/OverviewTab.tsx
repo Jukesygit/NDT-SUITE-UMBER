@@ -1,6 +1,6 @@
 /**
  * OverviewTab - Admin dashboard overview with stats and summaries
- * Uses Personnel Management page styling patterns
+ * Industrial instrument theme — green-on-dark LCD display
  */
 
 import { useMemo } from 'react';
@@ -14,7 +14,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { MatrixLogoRacer } from '../../../components/MatrixLogoLoader';
 
 /**
- * Icons for stat cards - matching Personnel Management page style
+ * Icons for stat cards
  */
 const BuildingIcon = () => (
     <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -53,12 +53,12 @@ export default function OverviewTab() {
         return { pendingRequests, topOrganizations, recentUsers };
     }, [organizations, users, stats]);
 
-    // Show loading state with Matrix logo like Personnel page
+    // Show loading state with Matrix logo
     if (statsLoading) {
         return (
             <div className="flex flex-col items-center justify-center h-full gap-4">
                 <MatrixLogoRacer size={160} duration={4} />
-                <div className="text-gray-400 animate-pulse">Loading dashboard statistics...</div>
+                <div style={{ color: 'rgba(53, 160, 88, 0.45)', fontFamily: 'var(--font-mono)', fontSize: '12px' }} className="animate-pulse">Loading dashboard statistics...</div>
             </div>
         );
     }
@@ -71,7 +71,7 @@ export default function OverviewTab() {
 
     return (
         <div>
-            {/* Stats Row - using Personnel Management compact style */}
+            {/* Stats Row */}
             <div className="stats-compact" style={{ marginBottom: '24px' }}>
                 <StatCard
                     label="Organizations"
@@ -93,14 +93,23 @@ export default function OverviewTab() {
                 />
             </div>
 
-            {/* Two Column Layout - using glass-card style */}
+            {/* Two Column Layout - display wells inside the LCD */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Organizations List */}
-                <div className="glass-card">
+                <div style={{
+                    borderRadius: '6px',
+                    padding: '16px',
+                    background: 'rgba(53, 160, 88, 0.03)',
+                    border: '1px solid rgba(53, 160, 88, 0.10)',
+                }}>
                     <h3 style={{
-                        fontSize: '16px',
+                        fontSize: '13px',
                         fontWeight: 600,
-                        color: 'var(--text-primary)',
+                        fontFamily: 'var(--font-mono)',
+                        color: 'rgba(53, 160, 88, 0.70)',
+                        textShadow: '0 0 6px var(--green-glow-soft)',
+                        textTransform: 'uppercase' as const,
+                        letterSpacing: '0.06em',
                         marginBottom: '16px',
                         display: 'flex',
                         alignItems: 'center',
@@ -116,8 +125,9 @@ export default function OverviewTab() {
                         </div>
                     ) : topOrganizations.length === 0 ? (
                         <p style={{
-                            fontSize: '14px',
-                            color: 'rgba(255, 255, 255, 0.5)',
+                            fontSize: '12px',
+                            fontFamily: 'var(--font-mono)',
+                            color: 'rgba(53, 160, 88, 0.30)',
                             textAlign: 'center',
                             padding: '32px 0'
                         }}>
@@ -128,31 +138,33 @@ export default function OverviewTab() {
                             {topOrganizations.map((org) => (
                                 <div
                                     key={org.organization.id}
-                                    className="list-item-hover"
                                     style={{
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'space-between',
-                                        padding: '12px 16px',
-                                        background: 'rgba(255, 255, 255, 0.03)',
-                                        borderRadius: '8px',
-                                        border: '1px solid rgba(255, 255, 255, 0.06)',
-                                        transition: 'all 0.2s ease',
+                                        padding: '8px 12px',
+                                        background: 'rgba(53, 160, 88, 0.02)',
+                                        borderRadius: '4px',
+                                        borderBottom: '1px solid rgba(53, 160, 88, 0.06)',
+                                        transition: 'background 0.15s ease',
                                         cursor: 'pointer',
                                     }}
                                 >
                                     <div style={{ flex: 1 }}>
                                         <p style={{
                                             fontWeight: 500,
-                                            color: 'var(--text-primary)',
-                                            marginBottom: '4px',
-                                            fontSize: '14px'
+                                            fontFamily: 'var(--font-mono)',
+                                            color: 'rgba(53, 160, 88, 0.70)',
+                                            textShadow: '0 0 6px var(--green-glow-soft)',
+                                            marginBottom: '2px',
+                                            fontSize: '12px'
                                         }}>
                                             {org.organization.name}
                                         </p>
                                         <p style={{
-                                            fontSize: '12px',
-                                            color: 'rgba(255, 255, 255, 0.5)'
+                                            fontSize: '10px',
+                                            fontFamily: 'var(--font-mono)',
+                                            color: 'rgba(53, 160, 88, 0.45)'
                                         }}>
                                             {org.userCount || 0} users
                                         </p>
@@ -164,11 +176,20 @@ export default function OverviewTab() {
                 </div>
 
                 {/* Recent Users List */}
-                <div className="glass-card">
+                <div style={{
+                    borderRadius: '6px',
+                    padding: '16px',
+                    background: 'rgba(53, 160, 88, 0.03)',
+                    border: '1px solid rgba(53, 160, 88, 0.10)',
+                }}>
                     <h3 style={{
-                        fontSize: '16px',
+                        fontSize: '13px',
                         fontWeight: 600,
-                        color: 'var(--text-primary)',
+                        fontFamily: 'var(--font-mono)',
+                        color: 'rgba(53, 160, 88, 0.70)',
+                        textShadow: '0 0 6px var(--green-glow-soft)',
+                        textTransform: 'uppercase' as const,
+                        letterSpacing: '0.06em',
                         marginBottom: '16px',
                         display: 'flex',
                         alignItems: 'center',
@@ -184,8 +205,9 @@ export default function OverviewTab() {
                         </div>
                     ) : recentUsers.length === 0 ? (
                         <p style={{
-                            fontSize: '14px',
-                            color: 'rgba(255, 255, 255, 0.5)',
+                            fontSize: '12px',
+                            fontFamily: 'var(--font-mono)',
+                            color: 'rgba(53, 160, 88, 0.30)',
                             textAlign: 'center',
                             padding: '32px 0'
                         }}>
@@ -196,31 +218,33 @@ export default function OverviewTab() {
                             {recentUsers.map((user) => (
                                 <div
                                     key={user.id}
-                                    className="list-item-hover"
                                     style={{
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'space-between',
-                                        padding: '12px 16px',
-                                        background: 'rgba(255, 255, 255, 0.03)',
-                                        borderRadius: '8px',
-                                        border: '1px solid rgba(255, 255, 255, 0.06)',
-                                        transition: 'all 0.2s ease',
+                                        padding: '8px 12px',
+                                        background: 'rgba(53, 160, 88, 0.02)',
+                                        borderRadius: '4px',
+                                        borderBottom: '1px solid rgba(53, 160, 88, 0.06)',
+                                        transition: 'background 0.15s ease',
                                         cursor: 'pointer',
                                     }}
                                 >
                                     <div style={{ flex: 1 }}>
                                         <p style={{
                                             fontWeight: 500,
-                                            color: 'var(--text-primary)',
-                                            marginBottom: '4px',
-                                            fontSize: '14px'
+                                            fontFamily: 'var(--font-mono)',
+                                            color: 'rgba(53, 160, 88, 0.70)',
+                                            textShadow: '0 0 6px var(--green-glow-soft)',
+                                            marginBottom: '2px',
+                                            fontSize: '12px'
                                         }}>
                                             {user.username}
                                         </p>
                                         <p style={{
-                                            fontSize: '12px',
-                                            color: 'rgba(255, 255, 255, 0.5)'
+                                            fontSize: '10px',
+                                            fontFamily: 'var(--font-mono)',
+                                            color: 'rgba(53, 160, 88, 0.45)'
                                         }}>
                                             {user.email}
                                         </p>

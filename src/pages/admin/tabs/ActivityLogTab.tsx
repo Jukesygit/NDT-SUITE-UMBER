@@ -69,15 +69,15 @@ const ACTION_TYPES: { value: ActionType | ''; label: string; category?: ActionCa
     { value: 'share_deleted', label: 'Share Deleted', category: 'config' },
 ];
 
-// Category badge colors
+// Category badge colors (industrial green-on-dark theme)
 const CATEGORY_COLORS: Record<ActionCategory, { bg: string; text: string }> = {
-    auth: { bg: 'rgba(96, 165, 250, 0.15)', text: '#60a5fa' },
-    profile: { bg: 'rgba(167, 139, 250, 0.15)', text: '#a78bfa' },
-    competency: { bg: 'rgba(52, 211, 153, 0.15)', text: '#34d399' },
-    admin: { bg: 'rgba(251, 191, 36, 0.15)', text: '#fbbf24' },
-    asset: { bg: 'rgba(56, 189, 248, 0.15)', text: '#38bdf8' },
-    config: { bg: 'rgba(156, 163, 175, 0.15)', text: '#9ca3af' },
-    document: { bg: 'rgba(245, 158, 11, 0.15)', text: '#f59e0b' },
+    auth: { bg: 'rgba(53, 160, 88, 0.18)', text: 'var(--green-bright)' },
+    profile: { bg: 'rgba(53, 160, 88, 0.12)', text: 'var(--green)' },
+    competency: { bg: 'rgba(53, 160, 88, 0.18)', text: 'var(--green-bright)' },
+    admin: { bg: 'rgba(245, 158, 11, 0.15)', text: 'var(--amber)' },
+    asset: { bg: 'rgba(53, 160, 88, 0.14)', text: 'var(--green)' },
+    config: { bg: 'rgba(53, 160, 88, 0.10)', text: 'rgba(53, 160, 88, 0.45)' },
+    document: { bg: 'rgba(245, 158, 11, 0.15)', text: 'var(--amber)' },
 };
 
 // Format action type for display
@@ -172,10 +172,10 @@ export default function ActivityLogTab() {
                 width: '160px',
                 render: (row) => (
                     <div>
-                        <p style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '14px' }}>
+                        <p style={{ fontWeight: 500, color: 'rgba(53, 160, 88, 0.70)', fontSize: '14px' }}>
                             {new Date(row.created_at).toLocaleDateString()}
                         </p>
-                        <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                        <p style={{ fontSize: '12px', color: 'rgba(53, 160, 88, 0.45)' }}>
                             {new Date(row.created_at).toLocaleTimeString()}
                         </p>
                     </div>
@@ -187,10 +187,10 @@ export default function ActivityLogTab() {
                 width: '200px',
                 render: (row) => (
                     <div>
-                        <p style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '14px' }}>
+                        <p style={{ fontWeight: 500, color: 'rgba(53, 160, 88, 0.70)', fontSize: '14px' }}>
                             {row.user_name || 'System'}
                         </p>
-                        <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)' }}>
+                        <p style={{ fontSize: '12px', color: 'rgba(53, 160, 88, 0.45)' }}>
                             {row.user_email || '-'}
                         </p>
                     </div>
@@ -210,8 +210,8 @@ export default function ActivityLogTab() {
                                 borderRadius: '12px',
                                 fontSize: '12px',
                                 fontWeight: 500,
-                                backgroundColor: colors?.bg || 'rgba(156, 163, 175, 0.15)',
-                                color: colors?.text || '#9ca3af',
+                                backgroundColor: colors?.bg || 'rgba(53, 160, 88, 0.10)',
+                                color: colors?.text || 'rgba(53, 160, 88, 0.45)',
                             }}
                         >
                             {formatCategory(row.action_category)}
@@ -224,7 +224,7 @@ export default function ActivityLogTab() {
                 header: 'Action',
                 width: '160px',
                 render: (row) => (
-                    <span style={{ color: 'rgba(255, 255, 255, 0.9)', fontSize: '14px' }}>
+                    <span style={{ color: 'rgba(53, 160, 88, 0.70)', fontSize: '14px' }}>
                         {formatActionType(row.action_type)}
                     </span>
                 ),
@@ -235,7 +235,7 @@ export default function ActivityLogTab() {
                 render: (row) => (
                     <p
                         style={{
-                            color: 'rgba(255, 255, 255, 0.7)',
+                            color: 'rgba(53, 160, 88, 0.45)',
                             fontSize: '14px',
                             maxWidth: '300px',
                             overflow: 'hidden',
@@ -255,12 +255,12 @@ export default function ActivityLogTab() {
                 render: (row) =>
                     row.entity_name ? (
                         <div>
-                            <p style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.4)', textTransform: 'uppercase' }}>
+                            <p style={{ fontSize: '11px', color: 'rgba(53, 160, 88, 0.30)', textTransform: 'uppercase' }}>
                                 {row.entity_type}
                             </p>
                             <p
                                 style={{
-                                    color: 'var(--text-primary)',
+                                    color: 'rgba(53, 160, 88, 0.70)',
                                     fontSize: '13px',
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
@@ -272,7 +272,7 @@ export default function ActivityLogTab() {
                             </p>
                         </div>
                     ) : (
-                        <span style={{ color: 'rgba(255, 255, 255, 0.3)' }}>-</span>
+                        <span style={{ color: 'rgba(53, 160, 88, 0.30)' }}>-</span>
                     ),
             },
         ],
@@ -296,22 +296,22 @@ export default function ActivityLogTab() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'rgba(53, 160, 88, 0.70)' }}>
                         Activity Log
                     </h2>
-                    <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)', marginTop: '4px' }}>
+                    <p style={{ fontSize: '14px', color: 'rgba(53, 160, 88, 0.45)', marginTop: '4px' }}>
                         {count.toLocaleString()} {count === 1 ? 'entry' : 'entries'}
                     </p>
                 </div>
                 {hasActiveFilters && (
-                    <button onClick={clearFilters} className="btn btn-secondary">
+                    <button onClick={clearFilters} className="ad-btn">
                         Clear Filters
                     </button>
                 )}
             </div>
 
             {/* Filters */}
-            <div className="glass-card" style={{ padding: '16px' }}>
+            <div style={{ padding: '16px', border: '1px solid rgba(53, 160, 88, 0.30)', borderRadius: '6px', background: 'rgba(53, 160, 88, 0.05)' }}>
                 <div
                     style={{
                         display: 'grid',
@@ -327,7 +327,7 @@ export default function ActivityLogTab() {
                                 fontSize: '13px',
                                 fontWeight: 500,
                                 marginBottom: '6px',
-                                color: 'rgba(255, 255, 255, 0.7)',
+                                color: 'rgba(53, 160, 88, 0.45)',
                             }}
                         >
                             User
@@ -335,7 +335,7 @@ export default function ActivityLogTab() {
                         <select
                             value={filters.userId || ''}
                             onChange={(e) => updateFilter('userId', e.target.value)}
-                            className="glass-input"
+                            className="ad-input"
                             style={{ width: '100%' }}
                         >
                             <option value="">All Users</option>
@@ -355,7 +355,7 @@ export default function ActivityLogTab() {
                                 fontSize: '13px',
                                 fontWeight: 500,
                                 marginBottom: '6px',
-                                color: 'rgba(255, 255, 255, 0.7)',
+                                color: 'rgba(53, 160, 88, 0.45)',
                             }}
                         >
                             Category
@@ -363,7 +363,7 @@ export default function ActivityLogTab() {
                         <select
                             value={filters.actionCategory || ''}
                             onChange={(e) => updateFilter('actionCategory', e.target.value)}
-                            className="glass-input"
+                            className="ad-input"
                             style={{ width: '100%' }}
                         >
                             {ACTION_CATEGORIES.map((cat) => (
@@ -382,7 +382,7 @@ export default function ActivityLogTab() {
                                 fontSize: '13px',
                                 fontWeight: 500,
                                 marginBottom: '6px',
-                                color: 'rgba(255, 255, 255, 0.7)',
+                                color: 'rgba(53, 160, 88, 0.45)',
                             }}
                         >
                             Action Type
@@ -390,7 +390,7 @@ export default function ActivityLogTab() {
                         <select
                             value={filters.actionType || ''}
                             onChange={(e) => updateFilter('actionType', e.target.value)}
-                            className="glass-input"
+                            className="ad-input"
                             style={{ width: '100%' }}
                         >
                             {filteredActionTypes.map((at) => (
@@ -409,7 +409,7 @@ export default function ActivityLogTab() {
                                 fontSize: '13px',
                                 fontWeight: 500,
                                 marginBottom: '6px',
-                                color: 'rgba(255, 255, 255, 0.7)',
+                                color: 'rgba(53, 160, 88, 0.45)',
                             }}
                         >
                             Date Range
@@ -419,20 +419,20 @@ export default function ActivityLogTab() {
                                 type="date"
                                 value={startDate}
                                 onChange={(e) => setStartDate(e.target.value)}
-                                className="glass-input"
+                                className="ad-input"
                                 style={{ flex: 1 }}
                             />
-                            <span style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '12px' }}>to</span>
+                            <span style={{ color: 'rgba(53, 160, 88, 0.45)', fontSize: '12px' }}>to</span>
                             <input
                                 type="date"
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
-                                className="glass-input"
+                                className="ad-input"
                                 style={{ flex: 1 }}
                             />
                             <button
                                 onClick={applyDateFilter}
-                                className="btn btn-primary"
+                                className="ad-btn primary"
                                 style={{ padding: '8px 12px', fontSize: '13px' }}
                             >
                                 Apply
@@ -443,7 +443,7 @@ export default function ActivityLogTab() {
             </div>
 
             {/* DataTable */}
-            <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: 0, overflow: 'hidden', border: '1px solid rgba(53, 160, 88, 0.30)', borderRadius: '6px', background: 'rgba(53, 160, 88, 0.05)' }}>
                 <DataTable
                     data={logs}
                     columns={columns}
@@ -462,13 +462,13 @@ export default function ActivityLogTab() {
                     <div
                         style={{
                             padding: '16px 24px',
-                            borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderTop: '1px solid rgba(53, 160, 88, 0.30)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
                         }}
                     >
-                        <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)' }}>
+                        <div style={{ fontSize: '14px', color: 'rgba(53, 160, 88, 0.45)' }}>
                             Showing {((currentPage - 1) * pageSize + 1).toLocaleString()} to{' '}
                             {Math.min(currentPage * pageSize, count).toLocaleString()} of{' '}
                             {count.toLocaleString()} entries
@@ -477,18 +477,18 @@ export default function ActivityLogTab() {
                             <button
                                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                                 disabled={currentPage === 1}
-                                className="btn btn-secondary"
+                                className="ad-btn"
                                 style={{ padding: '6px 12px', fontSize: '14px' }}
                             >
                                 Previous
                             </button>
-                            <span style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.7)' }}>
+                            <span style={{ fontSize: '14px', color: 'rgba(53, 160, 88, 0.45)' }}>
                                 Page {currentPage} of {totalPages}
                             </span>
                             <button
                                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                                 disabled={currentPage === totalPages}
-                                className="btn btn-secondary"
+                                className="ad-btn"
                                 style={{ padding: '6px 12px', fontSize: '14px' }}
                             >
                                 Next

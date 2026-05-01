@@ -96,7 +96,7 @@ export function CompetencyPickerModal({
                             className="pm-expanded-comp-item"
                             style={{ cursor: 'pointer' }}
                             onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = 'var(--accent-primary)';
+                                e.currentTarget.style.borderColor = 'var(--green)';
                             }}
                             onMouseLeave={(e) => {
                                 e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.04)';
@@ -108,7 +108,7 @@ export function CompetencyPickerModal({
                                     <div className="pm-competency-meta">{def.description}</div>
                                 )}
                             </div>
-                            <svg style={{ width: '18px', height: '18px', color: 'var(--accent-primary)', flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg style={{ width: '18px', height: '18px', color: 'var(--green)', flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                             </svg>
                         </div>

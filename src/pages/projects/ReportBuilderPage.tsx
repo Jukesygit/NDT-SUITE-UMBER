@@ -159,11 +159,11 @@ export default function ReportBuilderPage() {
         : null;
 
     return (
-        <div className="h-full overflow-y-auto glass-scrollbar">
+        <div className="h-full overflow-y-auto">
             {/* Header */}
             <div style={{
                 padding: '24px 40px 20px',
-                borderBottom: '1px solid var(--glass-border)',
+                borderBottom: '1px solid rgba(0, 0, 0, 0.15)',
                 background: 'var(--surface-raised)',
             }}>
                 {/* Back nav + trip context row */}
@@ -237,7 +237,7 @@ export default function ReportBuilderPage() {
                                     placeholder="Tag"
                                     style={{
                                         fontSize: '1.5rem', fontWeight: 600, color: 'var(--text-primary)',
-                                        background: 'var(--surface-elevated)',
+                                        background: 'rgba(0, 0, 0, 0.20)',
                                         border: '1px solid var(--border-default)',
                                         borderRadius: 'var(--radius-sm)',
                                         padding: '2px 8px', width: 120, outline: 'none',
@@ -274,7 +274,7 @@ export default function ReportBuilderPage() {
                                     }}
                                     style={{
                                         fontSize: '1.5rem', fontWeight: 600, color: 'var(--text-primary)',
-                                        background: 'var(--surface-elevated)',
+                                        background: 'rgba(0, 0, 0, 0.20)',
                                         border: '1px solid var(--border-default)',
                                         borderRadius: 'var(--radius-sm)',
                                         padding: '2px 8px', flex: 1, minWidth: 200, outline: 'none',
@@ -352,7 +352,7 @@ export default function ReportBuilderPage() {
                             {statusMenuOpen && (
                                 <div style={{
                                     position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 50,
-                                    background: 'var(--surface-elevated)', border: '1px solid var(--border-subtle)',
+                                    background: 'rgba(0, 0, 0, 0.20)', border: '1px solid var(--border-subtle)',
                                     borderRadius: 8, padding: 4, minWidth: 160, boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
                                 }}>
                                     {(Object.keys(VESSEL_STATUS_LABELS) as VesselStatus[]).map((s) => (
@@ -405,7 +405,7 @@ export default function ReportBuilderPage() {
                             {modelerMenuOpen && (
                                 <div style={{
                                     position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 50,
-                                    background: 'var(--surface-elevated)', border: '1px solid var(--border-subtle)',
+                                    background: 'rgba(0, 0, 0, 0.20)', border: '1px solid var(--border-subtle)',
                                     borderRadius: 8, padding: 4, minWidth: 220, boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
                                 }}>
                                     {/* New model — always available */}

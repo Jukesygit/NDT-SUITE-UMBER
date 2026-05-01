@@ -15,7 +15,7 @@ export function PageHeader({ title, subtitle, icon }: PageHeaderProps) {
             width: 48,
             height: 48,
             borderRadius: 14,
-            background: 'linear-gradient(135deg, var(--accent-primary), rgba(110, 160, 255, 1))',
+            background: 'linear-gradient(135deg, var(--green), var(--green-bright))',
             display: 'grid',
             placeItems: 'center',
             color: 'white',

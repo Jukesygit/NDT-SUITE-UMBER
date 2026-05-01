@@ -1,12 +1,69 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, type FC } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import authManager from '../auth-manager.js';
 import environmentConfig from '../config/environment';
-import { LogoGradientShift } from './MatrixLogoAnimated';
+import {
+  LogoGradientShift,
+  LogoGradientWave,
+  LogoGradientPulse,
+  LogoGradientSweep,
+  LogoGradientBreathe,
+  LogoGradientSplit,
+  LogoGradientShimmer,
+  LogoGradientAurora,
+  LogoGlitchRain,
+  LogoGlitchRGB,
+  LogoGlitchScanline,
+  LogoGlitchNeon,
+  LogoGlitchCorrupt,
+  LogoGlitchStrobe,
+  LogoGlitchNoise,
+  LogoGlitchFragment,
+  LogoGlitchMelt,
+  LogoGlitchHex,
+  LogoStatic,
+} from './MatrixLogoAnimated';
 import { NotificationBell } from './NotificationBell';
 import { AnnouncementBanner } from './AnnouncementBanner';
 import { useTabVisibility } from '../hooks/queries/useTabVisibility';
+
+interface LogoVariant {
+  id: string;
+  label: string;
+  component: FC<{ size?: number; className?: string }>;
+}
+
+const LOGO_VARIANTS: LogoVariant[] = [
+  { id: 'gradient-shift', label: 'Gradient Shift', component: LogoGradientShift },
+  { id: 'gradient-wave', label: 'Gradient Wave', component: LogoGradientWave },
+  { id: 'gradient-pulse', label: 'Gradient Pulse', component: LogoGradientPulse },
+  { id: 'gradient-sweep', label: 'Gradient Sweep', component: LogoGradientSweep },
+  { id: 'gradient-breathe', label: 'Gradient Breathe', component: LogoGradientBreathe },
+  { id: 'gradient-split', label: 'Gradient Split', component: LogoGradientSplit },
+  { id: 'gradient-shimmer', label: 'Gradient Shimmer', component: LogoGradientShimmer },
+  { id: 'gradient-aurora', label: 'Gradient Aurora', component: LogoGradientAurora },
+  { id: 'glitch-rain', label: 'Glitch Rain', component: LogoGlitchRain },
+  { id: 'glitch-rgb', label: 'Glitch RGB', component: LogoGlitchRGB },
+  { id: 'glitch-scanline', label: 'Glitch Scanline', component: LogoGlitchScanline },
+  { id: 'glitch-neon', label: 'Glitch Neon', component: LogoGlitchNeon },
+  { id: 'glitch-corrupt', label: 'Glitch Corrupt', component: LogoGlitchCorrupt },
+  { id: 'glitch-strobe', label: 'Glitch Strobe', component: LogoGlitchStrobe },
+  { id: 'glitch-noise', label: 'Glitch Noise', component: LogoGlitchNoise },
+  { id: 'glitch-fragment', label: 'Glitch Fragment', component: LogoGlitchFragment },
+  { id: 'glitch-melt', label: 'Glitch Melt', component: LogoGlitchMelt },
+  { id: 'glitch-hex', label: 'Glitch Hex', component: LogoGlitchHex },
+  { id: 'static', label: 'Static', component: LogoStatic },
+];
+
+function getStoredLogoId(): string {
+  try { return localStorage.getItem('dev-logo-variant') || 'gradient-shift'; }
+  catch { return 'gradient-shift'; }
+}
+
+function getLogoComponent(id: string): FC<{ size?: number; className?: string }> {
+  return LOGO_VARIANTS.find(v => v.id === id)?.component ?? LogoGradientShift;
+}
 
 const isMaintenanceMode = environmentConfig.isMaintenanceMode();
 
@@ -135,6 +192,14 @@ function LayoutNew() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [hasElevatedAccess, setHasElevatedAccess] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [logoId, setLogoId] = useState(getStoredLogoId);
+
+  const ActiveLogo = getLogoComponent(logoId);
+
+  const handleLogoChange = (id: string) => {
+    setLogoId(id);
+    try { localStorage.setItem('dev-logo-variant', id); } catch {}
+  };
 
   // Fetch tab visibility settings from DB
   const { data: tabVisibilitySettings = [] } = useTabVisibility();
@@ -197,7 +262,7 @@ function LayoutNew() {
       <header className="header">
         <div className="header__container">
           <Link to={isMaintenanceMode ? "/cscan" : "/profile"} className="header__brand">
-            <LogoGradientShift size={44} />
+            <ActiveLogo size={44} />
             <span>Matrix Portal</span>
           </Link>
 
@@ -297,6 +362,165 @@ function LayoutNew() {
           <Outlet />
         </div>
       </main>
+
+      {import.meta.env.DEV && (
+        <div style={{ position: 'fixed', bottom: 12, right: 12, zIndex: 99999, display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          <DevLogoPicker logoId={logoId} onLogoChange={handleLogoChange} />
+          <DevColorPicker />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DevLogoPicker({ logoId, onLogoChange }: { logoId: string; onLogoChange: (id: string) => void }) {
+  const [collapsed, setCollapsed] = useState(true);
+  const [open, setOpen] = useState(false);
+  const current = LOGO_VARIANTS.find(v => v.id === logoId);
+
+  if (collapsed) {
+    return (
+      <button
+        onClick={() => setCollapsed(false)}
+        title="Logo picker"
+        style={{
+          width: 28, height: 28, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)',
+          background: '#1a1a2e', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 0,
+        }}
+      >
+        <svg viewBox="0 0 2256 1202" width={16} height={9} fill="#10b981" style={{ display: 'block' }}>
+          <path d="M36 1199.2 c-17.1-4.5-30.8-18.8-34-35.7-0.8-4.4-1-75-0.8-266l0.3-260 3.3-9.5c4-11.5 10.6-22.3 18.1-29.9 5.6-5.6 778.3-585.2 787.1-590.3 7-4.1 16.1-6.1 25-5.5 19 1.3 34.9 13.6 41.1 31.7l2.2 6.5 0.8 239.5z" />
+        </svg>
+      </button>
+    );
+  }
+
+  return (
+    <div style={{
+      background: 'linear-gradient(180deg, #c6c5c2, #b2b1ae)',
+      borderRadius: 8, padding: '10px 14px',
+      boxShadow: '0 4px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.45)',
+      fontFamily: 'var(--font-mono)', fontSize: 11, color: '#4a4845',
+      position: 'relative',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button
+          onClick={() => setOpen(!open)}
+          style={{
+            background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.08)',
+            borderRadius: 4, padding: '3px 8px', fontFamily: 'inherit', fontSize: 11,
+            color: '#4a4845', cursor: 'pointer', minWidth: 120, textAlign: 'left',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
+          }}
+        >
+          {current?.label ?? 'Gradient Shift'}
+          <span style={{ fontSize: 8 }}>{open ? '▲' : '▼'}</span>
+        </button>
+        <span style={{ fontSize: 9, color: '#9a968f', textTransform: 'uppercase', letterSpacing: '0.06em' }}>LOGO</span>
+        <button
+          onClick={() => { setCollapsed(true); setOpen(false); }}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: '#9a968f', fontSize: 14, lineHeight: 1, padding: '0 2px',
+          }}
+        >&times;</button>
+      </div>
+
+      {open && (
+        <div style={{
+          position: 'absolute', bottom: '100%', left: 0, marginBottom: 6,
+          background: 'linear-gradient(180deg, #d4d3d0, #c2c1be)',
+          borderRadius: 8, padding: 6,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.45)',
+          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4,
+          width: 320, maxHeight: 400, overflowY: 'auto',
+        }}>
+          {LOGO_VARIANTS.map((v) => (
+            <button
+              key={v.id}
+              onClick={() => { onLogoChange(v.id); setOpen(false); }}
+              style={{
+                background: v.id === logoId ? 'rgba(16,185,129,0.15)' : 'rgba(0,0,0,0.04)',
+                border: v.id === logoId ? '2px solid #10b981' : '1px solid rgba(0,0,0,0.06)',
+                borderRadius: 6, padding: '8px 4px 4px', cursor: 'pointer',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+              }}
+            >
+              <div style={{
+                width: 60, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: v.id.startsWith('glitch') ? '#111' : 'transparent', borderRadius: 3,
+              }}>
+                <v.component size={56} />
+              </div>
+              <span style={{
+                fontSize: 8, color: v.id === logoId ? '#10b981' : '#6a6865',
+                textAlign: 'center', lineHeight: 1.2, fontWeight: v.id === logoId ? 600 : 400,
+              }}>
+                {v.label}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DevColorPicker() {
+  const [color, setColor] = useState('#3a3836');
+  const [collapsed, setCollapsed] = useState(false);
+
+  const applyColor = (c: string) => {
+    setColor(c);
+    document.body.style.background = c;
+  };
+
+  if (collapsed) {
+    return (
+      <button
+        onClick={() => setCollapsed(false)}
+        style={{
+          width: 28, height: 28, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)',
+          background: color, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+        }}
+      />
+    );
+  }
+
+  return (
+    <div style={{
+      background: 'linear-gradient(180deg, #c6c5c2, #b2b1ae)',
+      borderRadius: 8, padding: '10px 14px',
+      boxShadow: '0 4px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.45)',
+      fontFamily: 'var(--font-mono)', fontSize: 11, color: '#4a4845',
+      display: 'flex', alignItems: 'center', gap: 10,
+    }}>
+      <input
+        type="color"
+        value={color}
+        onChange={(e) => applyColor(e.target.value)}
+        style={{ width: 28, height: 28, border: 'none', borderRadius: 4, cursor: 'pointer', padding: 0 }}
+      />
+      <input
+        type="text"
+        value={color}
+        onChange={(e) => { if (/^#[0-9a-f]{0,6}$/i.test(e.target.value)) { setColor(e.target.value); if (e.target.value.length === 7) applyColor(e.target.value); } }}
+        style={{
+          width: 72, background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.08)',
+          borderRadius: 4, padding: '3px 6px', fontFamily: 'inherit', fontSize: 11,
+          color: '#4a4845', textAlign: 'center',
+        }}
+      />
+      <span style={{ fontSize: 9, color: '#9a968f', textTransform: 'uppercase', letterSpacing: '0.06em' }}>BG</span>
+      <button
+        onClick={() => setCollapsed(true)}
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: '#9a968f', fontSize: 14, lineHeight: 1, padding: '0 2px',
+        }}
+      >&times;</button>
     </div>
   );
 }

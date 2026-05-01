@@ -241,13 +241,13 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Left: Personnel Selector */}
-            <div className="glass-card" style={{ padding: '24px' }}>
+            <div style={{ padding: '24px', border: '1px solid rgba(53, 160, 88, 0.20)', borderRadius: '8px', background: 'rgba(53, 160, 88, 0.05)' }}>
                 <h3
                     style={{
                         fontSize: '18px',
                         fontWeight: 600,
                         marginBottom: '16px',
-                        color: 'var(--text-primary)',
+                        color: 'var(--green-bright)',
                     }}
                 >
                     Select Recipients
@@ -269,13 +269,13 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
             </div>
 
             {/* Right: Email Compose */}
-            <div className="glass-card" style={{ padding: '24px' }}>
+            <div style={{ padding: '24px', border: '1px solid rgba(53, 160, 88, 0.20)', borderRadius: '8px', background: 'rgba(53, 160, 88, 0.05)' }}>
                 <h3
                     style={{
                         fontSize: '18px',
                         fontWeight: 600,
                         marginBottom: '16px',
-                        color: 'var(--text-primary)',
+                        color: 'var(--green-bright)',
                     }}
                 >
                     Compose Email
@@ -285,8 +285,8 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
                 <div
                     style={{
                         padding: '16px',
-                        background: 'rgba(139, 92, 246, 0.1)',
-                        border: '1px solid rgba(139, 92, 246, 0.2)',
+                        background: 'rgba(53, 160, 88, 0.08)',
+                        border: '1px solid rgba(53, 160, 88, 0.20)',
                         borderRadius: '8px',
                         marginBottom: '16px',
                     }}
@@ -295,7 +295,7 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
                         style={{
                             margin: '0 0 12px',
                             fontSize: '13px',
-                            color: 'rgba(255, 255, 255, 0.7)',
+                            color: 'rgba(53, 160, 88, 0.45)',
                         }}
                     >
                         Quick Templates:
@@ -308,11 +308,11 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
                                 padding: '8px 16px',
                                 fontSize: '13px',
                                 fontWeight: 500,
-                                color: useHtmlTemplate ? '#a78bfa' : '#fff',
+                                color: useHtmlTemplate ? 'var(--green-bright)' : 'var(--green)',
                                 background: useHtmlTemplate
-                                    ? 'rgba(139, 92, 246, 0.3)'
-                                    : 'rgba(139, 92, 246, 0.2)',
-                                border: '1px solid rgba(139, 92, 246, 0.4)',
+                                    ? 'rgba(53, 160, 88, 0.20)'
+                                    : 'rgba(53, 160, 88, 0.10)',
+                                border: '1px solid rgba(53, 160, 88, 0.30)',
                                 borderRadius: '6px',
                                 cursor: useHtmlTemplate ? 'default' : 'pointer',
                             }}
@@ -326,9 +326,9 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
                                     padding: '8px 16px',
                                     fontSize: '13px',
                                     fontWeight: 500,
-                                    color: '#f87171',
-                                    background: 'rgba(248, 113, 113, 0.1)',
-                                    border: '1px solid rgba(248, 113, 113, 0.3)',
+                                    color: 'var(--red)',
+                                    background: 'rgba(239, 68, 68, 0.1)',
+                                    border: '1px solid rgba(239, 68, 68, 0.3)',
                                     borderRadius: '6px',
                                     cursor: 'pointer',
                                 }}
@@ -344,11 +344,11 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
                     <div
                         style={{
                             padding: '12px 16px',
-                            background: 'rgba(34, 197, 94, 0.1)',
-                            border: '1px solid rgba(34, 197, 94, 0.3)',
+                            background: 'rgba(53, 160, 88, 0.10)',
+                            border: '1px solid rgba(53, 160, 88, 0.25)',
                             borderRadius: '8px',
                             marginBottom: '16px',
-                            color: '#22c55e',
+                            color: 'var(--green-bright)',
                             fontSize: '14px',
                         }}
                     >
@@ -361,24 +361,24 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
                     <div
                         style={{
                             padding: '16px',
-                            background: 'rgba(59, 130, 246, 0.1)',
-                            border: '1px solid rgba(59, 130, 246, 0.3)',
+                            background: 'rgba(53, 160, 88, 0.08)',
+                            border: '1px solid rgba(53, 160, 88, 0.25)',
                             borderRadius: '8px',
                             marginBottom: '16px',
                         }}
                     >
                         <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#60a5fa', fontWeight: 500, fontSize: '14px' }}>
+                            <span style={{ color: 'var(--green-bright)', fontWeight: 500, fontSize: '14px' }}>
                                 Sending email {progress.current} of {progress.total}
                             </span>
-                            <span style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '13px' }}>
+                            <span style={{ color: 'rgba(53, 160, 88, 0.45)', fontSize: '13px' }}>
                                 {progress.successCount} sent{progress.failCount > 0 ? `, ${progress.failCount} failed` : ''}
                             </span>
                         </div>
                         <div
                             style={{
                                 height: '8px',
-                                background: 'rgba(255, 255, 255, 0.1)',
+                                background: 'rgba(53, 160, 88, 0.10)',
                                 borderRadius: '4px',
                                 overflow: 'hidden',
                                 marginBottom: '8px',
@@ -388,13 +388,13 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
                                 style={{
                                     height: '100%',
                                     width: `${(progress.current / progress.total) * 100}%`,
-                                    background: 'linear-gradient(90deg, #3b82f6, #60a5fa)',
+                                    background: 'linear-gradient(90deg, var(--green), var(--green-bright))',
                                     borderRadius: '4px',
                                     transition: 'width 0.3s ease',
                                 }}
                             />
                         </div>
-                        <div style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '12px' }}>
+                        <div style={{ color: 'rgba(53, 160, 88, 0.35)', fontSize: '12px' }}>
                             Currently sending to: {progress.currentRecipient}
                         </div>
                     </div>
@@ -406,12 +406,12 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
                         padding: '12px 16px',
                         background:
                             selectedIds.length > 0
-                                ? 'rgba(59, 130, 246, 0.1)'
-                                : 'rgba(255, 255, 255, 0.05)',
+                                ? 'rgba(53, 160, 88, 0.10)'
+                                : 'rgba(53, 160, 88, 0.03)',
                         border: `1px solid ${
                             selectedIds.length > 0
-                                ? 'rgba(59, 130, 246, 0.3)'
-                                : 'rgba(255, 255, 255, 0.1)'
+                                ? 'rgba(53, 160, 88, 0.30)'
+                                : 'rgba(53, 160, 88, 0.15)'
                         }`,
                         borderRadius: '8px',
                         marginBottom: '16px',
@@ -419,7 +419,7 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
                 >
                     <span
                         style={{
-                            color: selectedIds.length > 0 ? '#60a5fa' : 'rgba(255, 255, 255, 0.5)',
+                            color: selectedIds.length > 0 ? 'var(--green-bright)' : 'rgba(53, 160, 88, 0.35)',
                             fontWeight: 500,
                         }}
                     >
@@ -445,7 +445,7 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
                                     marginBottom: '8px',
                                     fontSize: '14px',
                                     fontWeight: 500,
-                                    color: 'var(--text-primary)',
+                                    color: 'rgba(53, 160, 88, 0.70)',
                                 }}
                             >
                                 Message
@@ -453,8 +453,8 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
                             <div
                                 style={{
                                     padding: '16px',
-                                    background: 'rgba(16, 185, 129, 0.1)',
-                                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                                    background: 'rgba(53, 160, 88, 0.08)',
+                                    border: '1px solid rgba(53, 160, 88, 0.25)',
                                     borderRadius: '8px',
                                 }}
                             >
@@ -462,7 +462,7 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
                                     style={{
                                         margin: 0,
                                         fontSize: '14px',
-                                        color: '#10b981',
+                                        color: 'var(--green-bright)',
                                         fontWeight: 500,
                                     }}
                                 >
@@ -472,7 +472,7 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
                                     style={{
                                         margin: '8px 0 0',
                                         fontSize: '13px',
-                                        color: 'rgba(255, 255, 255, 0.6)',
+                                        color: 'rgba(53, 160, 88, 0.45)',
                                     }}
                                 >
                                     This will send a professionally designed email prompting users to
@@ -495,7 +495,7 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
                     <button
                         onClick={() => setShowConfirm(true)}
                         disabled={!isValid || sendNotification.isPending}
-                        className="btn btn-primary w-full"
+                        className="ad-btn primary w-full"
                         style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -540,7 +540,7 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
                                 marginTop: '12px',
                                 padding: '12px',
                                 borderRadius: '8px',
-                                background: 'rgba(255, 255, 255, 0.05)',
+                                background: 'rgba(53, 160, 88, 0.05)',
                             }}
                         >
                             <p style={{ marginBottom: '8px' }}>
@@ -554,7 +554,7 @@ export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
                             style={{
                                 marginTop: '12px',
                                 fontSize: '13px',
-                                color: 'rgba(255, 255, 255, 0.6)',
+                                color: 'rgba(53, 160, 88, 0.45)',
                             }}
                         >
                             This will send an email to all selected recipients.

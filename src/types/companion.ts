@@ -109,6 +109,8 @@ export interface CompanionStatus {
   app: string;
   version: string;
   apiVersion: number;
+  apiVersionLegacy?: number;
+  features?: string[];
   running: boolean;
   activeRequests: number;
   directory: string | null;
@@ -130,3 +132,62 @@ export const DEFAULT_GATE_SETTINGS: GateSettings = {
   thicknessMin: null,
   thicknessMax: null,
 };
+
+// ---------------------------------------------------------------------------
+// Companion error types
+// ---------------------------------------------------------------------------
+
+/** The subsystem or protocol layer where the error originated. */
+export type CompanionErrorSource =
+  | 'network'
+  | 'timeout'
+  | 'http'
+  | 'parse'
+  | 'websocket'
+  | 'version';
+
+/** How urgently the user needs to act. */
+export type CompanionErrorSeverity = 'info' | 'warning' | 'error' | 'critical';
+
+/**
+ * Suggested recovery action to present to the user.
+ * null = display-only, no action button needed.
+ */
+export type CompanionRecovery =
+  | 'retry'
+  | 'refresh-index'
+  | 'restart-companion'
+  | 'report'
+  | null;
+
+/** A structured companion error with classification metadata. */
+export class CompanionError extends Error {
+  readonly source: CompanionErrorSource;
+  readonly severity: CompanionErrorSeverity;
+  readonly recovery: CompanionRecovery;
+  /** The high-level operation that was attempted (e.g. "create-composite"). */
+  readonly operation: string;
+  /** Original error that caused this one, if any. */
+  readonly cause: unknown;
+
+  constructor(params: {
+    message: string;
+    source: CompanionErrorSource;
+    severity: CompanionErrorSeverity;
+    recovery: CompanionRecovery;
+    operation: string;
+    cause?: unknown;
+  }) {
+    super(params.message);
+    this.name = 'CompanionError';
+    this.source = params.source;
+    this.severity = params.severity;
+    this.recovery = params.recovery;
+    this.operation = params.operation;
+    this.cause = params.cause;
+
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, CompanionError);
+    }
+  }
+}

@@ -10,6 +10,7 @@ import { useCreateProject, useUpdateProject } from '../../hooks/mutations/useIns
 import { PageSpinner } from '../../components/ui/LoadingSpinner';
 import { useAuth } from '../../contexts/AuthContext';
 import type { EquipmentConfig } from '../../types/inspection-project';
+import './projects.css';
 
 interface FormState {
     name: string;
@@ -26,37 +27,9 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = {
-    name: '',
-    clientName: '',
-    siteName: '',
-    locationDescription: '',
-    startDate: '',
-    endDate: '',
-    equipmentModel: '',
-    probe: '',
-    wedge: '',
-    calibrationBlocks: '',
-    procedureRef: '',
-};
-
-function FormField({ label, children }: { label: string; children: React.ReactNode }) {
-    return (
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>{label}</span>
-            {children}
-        </label>
-    );
-}
-
-const INPUT_STYLE: React.CSSProperties = {
-    padding: '8px 12px',
-    borderRadius: 8,
-    border: '1px solid rgba(255,255,255,0.12)',
-    background: 'rgba(255,255,255,0.04)',
-    color: '#fff',
-    fontSize: '0.85rem',
-    outline: 'none',
-    width: '100%',
+    name: '', clientName: '', siteName: '', locationDescription: '',
+    startDate: '', endDate: '', equipmentModel: '', probe: '',
+    wedge: '', calibrationBlocks: '', procedureRef: '',
 };
 
 export default function ProjectSetupPage() {
@@ -86,7 +59,6 @@ export default function ProjectSetupPage() {
         };
     });
 
-    // Sync form when editing data loads
     const [formLoaded, setFormLoaded] = useState(false);
     if (isEditing && existingProject && !formLoaded) {
         setForm({
@@ -127,27 +99,18 @@ export default function ProjectSetupPage() {
                 await updateMutation.mutateAsync({
                     id,
                     params: {
-                        name: form.name,
-                        clientName: form.clientName || undefined,
-                        siteName: form.siteName || undefined,
-                        locationDescription: form.locationDescription || undefined,
-                        startDate: form.startDate || undefined,
-                        endDate: form.endDate || undefined,
-                        equipment,
+                        name: form.name, clientName: form.clientName || undefined,
+                        siteName: form.siteName || undefined, locationDescription: form.locationDescription || undefined,
+                        startDate: form.startDate || undefined, endDate: form.endDate || undefined, equipment,
                     },
                 });
                 navigate(`/projects/${id}`);
             } else {
                 const newId = await createMutation.mutateAsync({
-                    name: form.name,
-                    organizationId: user.organizationId ?? '',
-                    userId: user.id,
-                    clientName: form.clientName || undefined,
-                    siteName: form.siteName || undefined,
+                    name: form.name, organizationId: user.organizationId ?? '', userId: user.id,
+                    clientName: form.clientName || undefined, siteName: form.siteName || undefined,
                     locationDescription: form.locationDescription || undefined,
-                    startDate: form.startDate || undefined,
-                    endDate: form.endDate || undefined,
-                    equipment,
+                    startDate: form.startDate || undefined, endDate: form.endDate || undefined, equipment,
                 });
                 navigate(`/projects/${newId}`);
             }
@@ -159,141 +122,115 @@ export default function ProjectSetupPage() {
     const isSaving = createMutation.isPending || updateMutation.isPending;
 
     return (
-        <div style={{ padding: '32px 40px', maxWidth: 720 }}>
-            {/* Back button */}
-            <button
-                onClick={() => navigate(isEditing ? `/projects/${id}` : '/projects')}
-                style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    background: 'none',
-                    border: 'none',
-                    color: 'rgba(255,255,255,0.5)',
-                    fontSize: '0.85rem',
-                    cursor: 'pointer',
-                    padding: 0,
-                    marginBottom: 24,
-                }}
-            >
-                <ArrowLeft size={16} />
-                {isEditing ? 'Back to project' : 'Back to projects'}
-            </button>
+        <div className="pj-chassis" style={{ maxWidth: 800 }}>
+            <div className="pj-panel">
+                {/* Back button */}
+                <button
+                    onClick={() => navigate(isEditing ? `/projects/${id}` : '/projects')}
+                    className="pj-back-btn"
+                >
+                    <ArrowLeft size={12} />
+                    {isEditing ? 'Back to project' : 'Back to projects'}
+                </button>
 
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#fff', marginBottom: 32 }}>
-                {isEditing ? 'Edit Project' : 'New Project'}
-            </h1>
+                <h1 className="pj-page-title">
+                    {isEditing ? 'Edit Project' : 'New Project'}
+                </h1>
 
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-                {/* Project Details */}
-                <section>
-                    <h2 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'rgba(255,255,255,0.9)', marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        Project Details
-                    </h2>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                        <div style={{ gridColumn: '1 / -1' }}>
-                            <FormField label="Project Name *">
-                                <input
-                                    value={form.name}
-                                    onChange={update('name')}
-                                    placeholder="e.g., Refinery Alpha Q2 Inspection"
-                                    required
-                                    style={INPUT_STYLE}
-                                />
-                            </FormField>
-                        </div>
-                        <FormField label="Client">
-                            <input value={form.clientName} onChange={update('clientName')} placeholder="e.g., ACME Corp" style={INPUT_STYLE} />
-                        </FormField>
-                        <FormField label="Site Name">
-                            <input value={form.siteName} onChange={update('siteName')} placeholder="e.g., Townsville Refinery" style={INPUT_STYLE} />
-                        </FormField>
-                        <div style={{ gridColumn: '1 / -1' }}>
-                            <FormField label="Location Description">
-                                <textarea
-                                    value={form.locationDescription}
-                                    onChange={update('locationDescription')}
-                                    placeholder="Address or directions..."
-                                    rows={2}
-                                    style={{ ...INPUT_STYLE, resize: 'vertical' }}
-                                />
-                            </FormField>
-                        </div>
-                        <FormField label="Start Date">
-                            <input type="date" value={form.startDate} onChange={update('startDate')} style={INPUT_STYLE} />
-                        </FormField>
-                        <FormField label="End Date">
-                            <input type="date" value={form.endDate} onChange={update('endDate')} style={INPUT_STYLE} />
-                        </FormField>
-                    </div>
-                </section>
+                <div className="pj-groove" />
 
-                {/* Equipment */}
-                <section>
-                    <h2 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'rgba(255,255,255,0.9)', marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        Equipment & Procedure
-                    </h2>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                        <FormField label="Equipment Model">
-                            <input value={form.equipmentModel} onChange={update('equipmentModel')} placeholder="e.g., Zetec TOPAZ 64" style={INPUT_STYLE} />
-                        </FormField>
-                        <FormField label="Probe">
-                            <input value={form.probe} onChange={update('probe')} placeholder="e.g., 5L64-A12" style={INPUT_STYLE} />
-                        </FormField>
-                        <FormField label="Wedge">
-                            <input value={form.wedge} onChange={update('wedge')} placeholder="e.g., SA12-N55S" style={INPUT_STYLE} />
-                        </FormField>
-                        <FormField label="Calibration Blocks">
-                            <input value={form.calibrationBlocks} onChange={update('calibrationBlocks')} placeholder="e.g., V1, V2, Step block" style={INPUT_STYLE} />
-                        </FormField>
-                        <div style={{ gridColumn: '1 / -1' }}>
-                            <FormField label="Procedure Reference">
-                                <input value={form.procedureRef} onChange={update('procedureRef')} placeholder="e.g., PROC-NDT-2024-001" style={INPUT_STYLE} />
-                            </FormField>
+                {/* Form inside display well */}
+                <form onSubmit={handleSubmit}>
+                    {/* Project Details section */}
+                    <h2 className="pj-section-label">Project Details</h2>
+                    <div className="pj-display-well" style={{ marginBottom: 20 }}>
+                        <div className="pj-display">
+                            <div className="pj-form-grid">
+                                <div className="pj-form-field full-width">
+                                    <span className="pj-form-label">Project Name *</span>
+                                    <input value={form.name} onChange={update('name')} placeholder="e.g., Refinery Alpha Q2 Inspection" required className="pj-form-input" />
+                                </div>
+                                <div className="pj-form-field">
+                                    <span className="pj-form-label">Client</span>
+                                    <input value={form.clientName} onChange={update('clientName')} placeholder="e.g., ACME Corp" className="pj-form-input" />
+                                </div>
+                                <div className="pj-form-field">
+                                    <span className="pj-form-label">Site Name</span>
+                                    <input value={form.siteName} onChange={update('siteName')} placeholder="e.g., Townsville Refinery" className="pj-form-input" />
+                                </div>
+                                <div className="pj-form-field full-width">
+                                    <span className="pj-form-label">Location Description</span>
+                                    <textarea value={form.locationDescription} onChange={update('locationDescription')} placeholder="Address or directions..." rows={2} className="pj-form-input" style={{ resize: 'vertical' }} />
+                                </div>
+                                <div className="pj-form-field">
+                                    <span className="pj-form-label">Start Date</span>
+                                    <input type="date" value={form.startDate} onChange={update('startDate')} className="pj-form-input" />
+                                </div>
+                                <div className="pj-form-field">
+                                    <span className="pj-form-label">End Date</span>
+                                    <input type="date" value={form.endDate} onChange={update('endDate')} className="pj-form-input" />
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </section>
 
-                {/* Submit */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, paddingTop: 8 }}>
-                    <button
-                        type="button"
-                        onClick={() => navigate(isEditing ? `/projects/${id}` : '/projects')}
-                        style={{
-                            padding: '8px 20px',
-                            borderRadius: 8,
-                            border: '1px solid rgba(255,255,255,0.15)',
-                            background: 'transparent',
-                            color: 'rgba(255,255,255,0.7)',
-                            fontSize: '0.85rem',
-                            cursor: 'pointer',
-                        }}
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        type="submit"
-                        disabled={!form.name.trim() || isSaving}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            padding: '8px 20px',
-                            borderRadius: 8,
-                            border: 'none',
-                            background: '#3b82f6',
-                            color: '#fff',
-                            fontSize: '0.85rem',
-                            fontWeight: 500,
-                            cursor: isSaving ? 'wait' : 'pointer',
-                            opacity: (!form.name.trim() || isSaving) ? 0.5 : 1,
-                        }}
-                    >
-                        <Save size={16} />
-                        {isSaving ? 'Saving...' : isEditing ? 'Update Project' : 'Create Project'}
-                    </button>
+                    {/* Equipment section */}
+                    <h2 className="pj-section-label">Equipment & Procedure</h2>
+                    <div className="pj-display-well" style={{ marginBottom: 20 }}>
+                        <div className="pj-display">
+                            <div className="pj-form-grid">
+                                <div className="pj-form-field">
+                                    <span className="pj-form-label">Equipment Model</span>
+                                    <input value={form.equipmentModel} onChange={update('equipmentModel')} placeholder="e.g., Zetec TOPAZ 64" className="pj-form-input" />
+                                </div>
+                                <div className="pj-form-field">
+                                    <span className="pj-form-label">Probe</span>
+                                    <input value={form.probe} onChange={update('probe')} placeholder="e.g., 5L64-A12" className="pj-form-input" />
+                                </div>
+                                <div className="pj-form-field">
+                                    <span className="pj-form-label">Wedge</span>
+                                    <input value={form.wedge} onChange={update('wedge')} placeholder="e.g., SA12-N55S" className="pj-form-input" />
+                                </div>
+                                <div className="pj-form-field">
+                                    <span className="pj-form-label">Calibration Blocks</span>
+                                    <input value={form.calibrationBlocks} onChange={update('calibrationBlocks')} placeholder="e.g., V1, V2, Step block" className="pj-form-input" />
+                                </div>
+                                <div className="pj-form-field full-width">
+                                    <span className="pj-form-label">Procedure Reference</span>
+                                    <input value={form.procedureRef} onChange={update('procedureRef')} placeholder="e.g., PROC-NDT-2024-001" className="pj-form-input" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Submit */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, position: 'relative', zIndex: 1 }}>
+                        <button
+                            type="button"
+                            onClick={() => navigate(isEditing ? `/projects/${id}` : '/projects')}
+                            className="pj-btn secondary"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={!form.name.trim() || isSaving}
+                            className="pj-btn primary"
+                            style={{ opacity: (!form.name.trim() || isSaving) ? 0.5 : 1 }}
+                        >
+                            <Save size={14} />
+                            {isSaving ? 'Saving...' : isEditing ? 'Update Project' : 'Create Project'}
+                        </button>
+                    </div>
+                </form>
+
+                {/* Nameplate */}
+                <div className="pj-groove" />
+                <div className="pj-nameplate-bar">
+                    <span className="pj-nameplate">Matrix Portal</span>
+                    <span className="pj-nameplate-model">Project Setup</span>
                 </div>
-            </form>
+            </div>
         </div>
     );
 }

@@ -1,8 +1,6 @@
 /**
- * PersonnelPage - Personnel management page using React Query
- *
- * This is the modernized version of PersonnelManagementPage.jsx
- * Uses React Query for data fetching and extracted components
+ * PersonnelPage - Personnel management page
+ * Industrial instrument theme: chassis > panel > display well hierarchy
  */
 
 import { useState, useCallback, useMemo } from 'react';
@@ -36,12 +34,6 @@ type SortDirection = 'asc' | 'desc';
 /** Quick filter identifiers */
 export type QuickFilter = 'irata-l1' | 'irata-l2' | 'irata-l3' | 'paut-l2' | 'tofd-l2';
 
-/**
- * Check if a person matches a quick filter (has in-date cert matching criteria)
- */
-/**
- * Check if a competency has an in-date expiry
- */
 function hasValidExpiry(c: PersonCompetency, now: Date): boolean {
     return !!c.expiry_date && new Date(c.expiry_date) >= now;
 }
@@ -77,9 +69,6 @@ function matchesQuickFilter(person: Person, filter: QuickFilter): boolean {
     }
 }
 
-/**
- * Filter and sort personnel
- */
 function filterAndSortPersonnel(
     personnel: Person[],
     searchTerm: string,
@@ -90,10 +79,8 @@ function filterAndSortPersonnel(
     sortColumn: SortColumn,
     sortDirection: SortDirection
 ): Person[] {
-    // Cache current date outside the loop to avoid repeated allocations
     const now = new Date();
 
-    // Filter
     const filtered = personnel.filter((person) => {
         const matchesSearch =
             !searchTerm ||
@@ -103,7 +90,6 @@ function filterAndSortPersonnel(
         const matchesOrg = filterOrg === 'all' || person.organization_id === filterOrg;
         const matchesRole = filterRole === 'all' || person.role === filterRole;
 
-        // Filter by competencies - person must have ALL selected competencies
         const matchesCompetencies =
             filterCompetencies.length === 0 ||
             filterCompetencies.every((compId) =>
@@ -114,7 +100,6 @@ function filterAndSortPersonnel(
                 )
             );
 
-        // Quick filters - AND logic (person must match ALL active quick filters)
         const matchesQuickFilters =
             quickFilters.length === 0 ||
             quickFilters.every((qf) => matchesQuickFilter(person, qf));
@@ -122,7 +107,6 @@ function filterAndSortPersonnel(
         return matchesSearch && matchesOrg && matchesRole && matchesCompetencies && matchesQuickFilters;
     });
 
-    // Sort
     return filtered.sort((a, b) => {
         let aValue: string | number;
         let bValue: string | number;
@@ -169,35 +153,26 @@ function filterAndSortPersonnel(
     });
 }
 
-/**
- * PersonnelPage component
- */
 export default function PersonnelPage() {
-    // View state
     const [view, setView] = useState<ViewType>('directory');
 
-    // Filter state
     const [searchTerm, setSearchTerm] = useState('');
     const [filterOrg, setFilterOrg] = useState('all');
     const [filterRole, setFilterRole] = useState('all');
     const [filterCompetencies, setFilterCompetencies] = useState<string[]>([]);
     const [quickFilters, setQuickFilters] = useState<QuickFilter[]>([]);
 
-    // Sort state
     const [sortColumn, setSortColumn] = useState<SortColumn>('name');
     const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
-    // Auth - reactive via useAuth hook
     const { isAdmin } = useAuth();
 
-    // React Query hooks
     const personnelQuery = usePersonnel();
     const organizationsQuery = useOrganizations();
     const definitionsQuery = useCompetencyDefinitions();
     const expiringQuery = useExpiringCompetencies(30);
     const pendingApprovalsQuery = usePendingApprovals();
 
-    // Handle sort
     const handleSort = useCallback((column: string) => {
         setSortColumn((prev) => {
             if (prev === column) {
@@ -209,20 +184,17 @@ export default function PersonnelPage() {
         });
     }, []);
 
-    // Get competency stats (filtered version)
     const getFilteredCompetencyStats = useCallback((competencies: PersonCompetency[]) => {
         const filtered = filterOutPersonalDetails(competencies);
         return getCompetencyStats(filtered);
     }, []);
 
-    // Toggle a quick filter on/off
     const handleQuickFilterToggle = useCallback((filter: QuickFilter) => {
         setQuickFilters((prev) =>
             prev.includes(filter) ? prev.filter((f) => f !== filter) : [...prev, filter]
         );
     }, []);
 
-    // Filtered personnel (memoized)
     const filteredPersonnel = useMemo(
         () =>
             filterAndSortPersonnel(
@@ -238,247 +210,287 @@ export default function PersonnelPage() {
         [personnelQuery.data, searchTerm, filterOrg, filterRole, filterCompetencies, quickFilters, sortColumn, sortDirection]
     );
 
-    // Not configured state
     if (!isSupabaseConfigured()) {
         return (
-            <div className="h-full overflow-y-auto glass-scrollbar" style={{ padding: '32px 40px' }}>
-                <div className="pm-header">
-                    <div className="pm-header-left">
-                        <div className="pm-logo">
-                            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                            </svg>
+            <div className="h-full overflow-y-auto glass-scrollbar">
+                <div className="pm-chassis">
+                    <div className="pm-panel">
+                        <div className="pm-header">
+                            <div className="pm-header-left">
+                                <div className="pm-logo" />
+                                <div className="pm-header-text">
+                                    <h1>Personnel Management</h1>
+                                    <p>Manage employee competencies, certifications, and training records</p>
+                                </div>
+                            </div>
                         </div>
-                        <div className="pm-header-text">
-                            <h1>Personnel Management</h1>
-                            <p>Manage employee competencies, certifications, and training records</p>
+                        <div className="pm-groove" />
+                        <div className="pm-display-well">
+                            <div className="pm-display">
+                                <div className="pm-empty">
+                                    <p className="pm-empty-text">Personnel management requires Supabase backend configuration.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="pm-groove" />
+                        <div className="pm-nameplate-bar">
+                            <span className="pm-nameplate">Matrix Portal</span>
+                            <span className="pm-nameplate-model">Personnel Management System</span>
                         </div>
                     </div>
-                </div>
-                <div className="pm-empty">
-                    <p className="pm-empty-text">Personnel management requires Supabase backend configuration.</p>
                 </div>
             </div>
         );
     }
 
-    // Loading state
     if (personnelQuery.isLoading) {
         return (
-            <div className="h-full overflow-y-auto glass-scrollbar" style={{ padding: '32px 40px' }}>
-                <div className="pm-header">
-                    <div className="pm-header-left">
-                        <div className="pm-logo">
-                            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                            </svg>
+            <div className="h-full overflow-y-auto glass-scrollbar">
+                <div className="pm-chassis">
+                    <div className="pm-panel">
+                        <div className="pm-header">
+                            <div className="pm-header-left">
+                                <div className="pm-logo" />
+                                <div className="pm-header-text">
+                                    <h1>Personnel Management</h1>
+                                    <p>Manage employee competencies, certifications, and training records</p>
+                                </div>
+                            </div>
                         </div>
-                        <div className="pm-header-text">
-                            <h1>Personnel Management</h1>
-                            <p>Manage employee competencies, certifications, and training records</p>
+                        <div className="pm-groove" />
+                        <div className="flex items-center justify-center pm-loading-container">
+                            <PageSpinner message="Loading personnel data..." />
+                        </div>
+                        <div className="pm-groove" />
+                        <div className="pm-nameplate-bar">
+                            <span className="pm-nameplate">Matrix Portal</span>
+                            <span className="pm-nameplate-model">Personnel Management System</span>
                         </div>
                     </div>
-                </div>
-                <div className="flex items-center justify-center" style={{ minHeight: '300px' }}>
-                    <PageSpinner message="Loading personnel data..." />
                 </div>
             </div>
         );
     }
 
-    // Error state
     if (personnelQuery.error) {
         return (
-            <div className="h-full overflow-y-auto glass-scrollbar" style={{ padding: '32px 40px' }}>
-                <div className="pm-header">
-                    <div className="pm-header-left">
-                        <div className="pm-logo">
-                            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                            </svg>
+            <div className="h-full overflow-y-auto glass-scrollbar">
+                <div className="pm-chassis">
+                    <div className="pm-panel">
+                        <div className="pm-header">
+                            <div className="pm-header-left">
+                                <div className="pm-logo" />
+                                <div className="pm-header-text">
+                                    <h1>Personnel Management</h1>
+                                    <p>Manage employee competencies, certifications, and training records</p>
+                                </div>
+                            </div>
                         </div>
-                        <div className="pm-header-text">
-                            <h1>Personnel Management</h1>
-                            <p>Manage employee competencies, certifications, and training records</p>
+                        <div className="pm-groove" />
+                        <div className="flex items-center justify-center pm-loading-container">
+                            <ErrorDisplay
+                                error={personnelQuery.error}
+                                title="Failed to load personnel"
+                                onRetry={() => personnelQuery.refetch()}
+                            />
+                        </div>
+                        <div className="pm-groove" />
+                        <div className="pm-nameplate-bar">
+                            <span className="pm-nameplate">Matrix Portal</span>
+                            <span className="pm-nameplate-model">Personnel Management System</span>
                         </div>
                     </div>
-                </div>
-                <div className="flex items-center justify-center" style={{ minHeight: '300px' }}>
-                    <ErrorDisplay
-                        error={personnelQuery.error}
-                        title="Failed to load personnel"
-                        onRetry={() => personnelQuery.refetch()}
-                    />
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="h-full overflow-y-auto glass-scrollbar" style={{ padding: '32px 40px' }}>
-            {/* Header */}
-            <div className="pm-header">
-                <div className="pm-header-left">
-                    <div className="pm-logo">
-                            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                            </svg>
-                        </div>
-                    <div className="pm-header-text">
-                        <h1>Personnel Management</h1>
-                        <p>Manage employee competencies, certifications, and training records</p>
-                    </div>
-                </div>
-            </div>
-
-            {/* Tabs */}
-            <div style={{ marginBottom: '28px' }}>
-                <div className="pm-tabs">
-                    <button
-                        className={`pm-tab ${view === 'directory' ? 'active' : ''}`}
-                        onClick={() => setView('directory')}
-                    >
-                        Personnel Directory
-                    </button>
-                    <button
-                        className={`pm-tab ${view === 'expiring' ? 'active' : ''}`}
-                        onClick={() => setView('expiring')}
-                    >
-                        Expiring Certifications
-                        {(expiringQuery.data?.length || 0) > 0 && (
-                            <span className="pm-tab-badge red">{expiringQuery.data?.length}</span>
-                        )}
-                    </button>
-                    {isAdmin && (
-                        <button
-                            className={`pm-tab ${view === 'approvals' ? 'active' : ''}`}
-                            onClick={() => setView('approvals')}
-                        >
-                            Pending Approvals
-                            {(pendingApprovalsQuery.data?.length || 0) > 0 && (
-                                <span className="pm-tab-badge yellow">{pendingApprovalsQuery.data?.length}</span>
-                            )}
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            {/* Content Area */}
-            {view === 'directory' ? (
-                <>
-                    {/* Stats Cards */}
-                    <div className="pm-stats-grid">
-                        <div className="pm-stat-card total">
-                            <div className="pm-stat-icon">
-                                <svg viewBox="0 0 24 24"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+        <div className="h-full overflow-y-auto glass-scrollbar">
+            <div className="pm-chassis">
+                <div className="pm-panel">
+                    {/* Header zone */}
+                    <div className="pm-header">
+                        <div className="pm-header-left">
+                            <div className="pm-logo" />
+                            <div className="pm-header-text">
+                                <h1>Personnel Management</h1>
+                                <p>Manage employee competencies, certifications, and training records</p>
                             </div>
-                            <div className="pm-stat-value">{filteredPersonnel.length}</div>
-                            <div className="pm-stat-label">Total Personnel</div>
-                        </div>
-
-                        <div className="pm-stat-card active">
-                            <div className="pm-stat-icon">
-                                <svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            </div>
-                            <div className="pm-stat-value">
-                                {filteredPersonnel.reduce((sum, p) => sum + getFilteredCompetencyStats(p.competencies || []).active, 0)}
-                            </div>
-                            <div className="pm-stat-label">Active Certs</div>
-                        </div>
-
-                        <div className="pm-stat-card expiring">
-                            <div className="pm-stat-icon">
-                                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
-                            </div>
-                            <div className="pm-stat-value">
-                                {filteredPersonnel.reduce((sum, p) => sum + getFilteredCompetencyStats(p.competencies || []).expiring, 0)}
-                            </div>
-                            <div className="pm-stat-label">Expiring Soon</div>
-                        </div>
-
-                        <div className="pm-stat-card expired">
-                            <div className="pm-stat-icon">
-                                <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
-                            </div>
-                            <div className="pm-stat-value">
-                                {filteredPersonnel.reduce((sum, p) => sum + getFilteredCompetencyStats(p.competencies || []).expired, 0)}
-                            </div>
-                            <div className="pm-stat-label">Expired</div>
                         </div>
                     </div>
 
-                    {/* Filters */}
-                    <PersonnelFilters
-                        searchTerm={searchTerm}
-                        onSearchChange={setSearchTerm}
-                        filterOrg={filterOrg}
-                        onOrgChange={setFilterOrg}
-                        filterRole={filterRole}
-                        onRoleChange={setFilterRole}
-                        filterCompetencies={filterCompetencies}
-                        onCompetenciesChange={setFilterCompetencies}
-                        organizations={organizationsQuery.data || []}
-                        competencyDefinitions={(definitionsQuery.data as CompetencyDefinition[]) || []}
-                    />
+                    <div className="pm-groove" />
 
-                    {/* Quick Filters */}
-                    <div className="pm-quick-filters">
-                        <span className="pm-quick-filters-label">Quick Filters</span>
-                        <div className="pm-quick-filters-buttons">
-                            {([
-                                { id: 'irata-l1' as QuickFilter, label: 'IRATA L1' },
-                                { id: 'irata-l2' as QuickFilter, label: 'IRATA L2' },
-                                { id: 'irata-l3' as QuickFilter, label: 'IRATA L3' },
-                                { id: 'paut-l2' as QuickFilter, label: 'PAUT L2' },
-                                { id: 'tofd-l2' as QuickFilter, label: 'TOFD L2' },
-                            ]).map((filter) => (
+                    {/* Tabs */}
+                    <div className="pm-tabs-wrapper">
+                        <div className="pm-tabs">
+                            <button
+                                className={`pm-tab ${view === 'directory' ? 'active' : ''}`}
+                                onClick={() => setView('directory')}
+                            >
+                                Personnel Directory
+                            </button>
+                            <button
+                                className={`pm-tab ${view === 'expiring' ? 'active' : ''}`}
+                                onClick={() => setView('expiring')}
+                            >
+                                Expiring Certifications
+                                {(expiringQuery.data?.length || 0) > 0 && (
+                                    <span className="pm-tab-badge red">{expiringQuery.data?.length}</span>
+                                )}
+                            </button>
+                            {isAdmin && (
                                 <button
-                                    type="button"
-                                    key={filter.id}
-                                    className={`pm-quick-filter-btn ${quickFilters.includes(filter.id) ? 'active' : ''}`}
-                                    onClick={() => handleQuickFilterToggle(filter.id)}
+                                    className={`pm-tab ${view === 'approvals' ? 'active' : ''}`}
+                                    onClick={() => setView('approvals')}
                                 >
-                                    {filter.label}
-                                </button>
-                            ))}
-                            {quickFilters.length > 0 && (
-                                <button
-                                    type="button"
-                                    className="pm-quick-filter-clear"
-                                    onClick={() => setQuickFilters([])}
-                                >
-                                    Clear
+                                    Pending Approvals
+                                    {(pendingApprovalsQuery.data?.length || 0) > 0 && (
+                                        <span className="pm-tab-badge yellow">{pendingApprovalsQuery.data?.length}</span>
+                                    )}
                                 </button>
                             )}
                         </div>
                     </div>
 
-                    {/* Table */}
-                    <div style={{ marginTop: '16px' }}>
-                        <PersonnelTable
-                            personnel={filteredPersonnel}
-                            getCompetencyStats={getFilteredCompetencyStats}
-                            sortColumn={sortColumn}
-                            sortDirection={sortDirection}
-                            onSort={handleSort}
-                            isAdmin={isAdmin}
-                            organizations={organizationsQuery.data || []}
-                            onPersonUpdate={() => personnelQuery.refetch()}
+                    <div className="pm-groove" />
+
+                    {/* Content Area */}
+                    {view === 'directory' ? (
+                        <>
+                            {/* Stats + Filters in dark bay */}
+                            <div className="pm-dark-bay">
+                                <div className="pm-section-label">Overview</div>
+                                <div className="pm-stats-grid">
+                                    <div className="pm-stat-card total">
+                                        <div className="pm-stat-card-inner">
+                                            <div className="pm-stat-icon" />
+                                            <div className="pm-stat-value">{filteredPersonnel.length}</div>
+                                            <div className="pm-stat-label">Total Personnel</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="pm-stat-card active">
+                                        <div className="pm-stat-card-inner">
+                                            <div className="pm-stat-icon" />
+                                            <div className="pm-stat-value">
+                                                {filteredPersonnel.reduce((sum, p) => sum + getFilteredCompetencyStats(p.competencies || []).active, 0)}
+                                            </div>
+                                            <div className="pm-stat-label">Active Certs</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="pm-stat-card expiring">
+                                        <div className="pm-stat-card-inner">
+                                            <div className="pm-stat-icon" />
+                                            <div className="pm-stat-value">
+                                                {filteredPersonnel.reduce((sum, p) => sum + getFilteredCompetencyStats(p.competencies || []).expiring, 0)}
+                                            </div>
+                                            <div className="pm-stat-label">Expiring Soon</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="pm-stat-card expired">
+                                        <div className="pm-stat-card-inner">
+                                            <div className="pm-stat-icon" />
+                                            <div className="pm-stat-value">
+                                                {filteredPersonnel.reduce((sum, p) => sum + getFilteredCompetencyStats(p.competencies || []).expired, 0)}
+                                            </div>
+                                            <div className="pm-stat-label">Expired</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="pm-groove" />
+
+                                <div className="pm-section-label">Search &amp; Filter</div>
+                                <PersonnelFilters
+                                    searchTerm={searchTerm}
+                                    onSearchChange={setSearchTerm}
+                                    filterOrg={filterOrg}
+                                    onOrgChange={setFilterOrg}
+                                    filterRole={filterRole}
+                                    onRoleChange={setFilterRole}
+                                    filterCompetencies={filterCompetencies}
+                                    onCompetenciesChange={setFilterCompetencies}
+                                    organizations={organizationsQuery.data || []}
+                                    competencyDefinitions={(definitionsQuery.data as CompetencyDefinition[]) || []}
+                                />
+
+                                {/* Quick Filters */}
+                                <div className="pm-quick-filters">
+                                    <span className="pm-quick-filters-label">Quick Filters</span>
+                                    <div className="pm-quick-filters-buttons">
+                                        {([
+                                            { id: 'irata-l1' as QuickFilter, label: 'IRATA L1' },
+                                            { id: 'irata-l2' as QuickFilter, label: 'IRATA L2' },
+                                            { id: 'irata-l3' as QuickFilter, label: 'IRATA L3' },
+                                            { id: 'paut-l2' as QuickFilter, label: 'PAUT L2' },
+                                            { id: 'tofd-l2' as QuickFilter, label: 'TOFD L2' },
+                                        ]).map((filter) => (
+                                            <button
+                                                type="button"
+                                                key={filter.id}
+                                                className={`pm-quick-filter-btn ${quickFilters.includes(filter.id) ? 'active' : ''}`}
+                                                onClick={() => handleQuickFilterToggle(filter.id)}
+                                            >
+                                                {filter.label}
+                                            </button>
+                                        ))}
+                                        {quickFilters.length > 0 && (
+                                            <button
+                                                type="button"
+                                                className="pm-quick-filter-clear"
+                                                onClick={() => setQuickFilters([])}
+                                            >
+                                                Clear
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="pm-groove" />
+
+                            {/* Table in Display Well */}
+                            <div className="pm-section-label">Directory</div>
+                            <div className="pm-display-well">
+                                <div className="pm-display" style={{ padding: 0 }}>
+                                    <PersonnelTable
+                                        personnel={filteredPersonnel}
+                                        getCompetencyStats={getFilteredCompetencyStats}
+                                        sortColumn={sortColumn}
+                                        sortDirection={sortDirection}
+                                        onSort={handleSort}
+                                        isAdmin={isAdmin}
+                                        organizations={organizationsQuery.data || []}
+                                        onPersonUpdate={() => personnelQuery.refetch()}
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    ) : view === 'expiring' ? (
+                        <ExpiringView
+                            expiringCompetencies={(expiringQuery.data as ExpiringCompetency[]) || []}
+                            personnel={personnelQuery.data || []}
                         />
-                    </div>
-                </>
-            ) : view === 'expiring' ? (
-                <ExpiringView
-                    expiringCompetencies={(expiringQuery.data as ExpiringCompetency[]) || []}
-                    personnel={personnelQuery.data || []}
-                />
-            ) : view === 'approvals' && isAdmin ? (
-                <PendingApprovalsView
-                    pendingApprovals={pendingApprovalsQuery.data || []}
-                    onRefresh={() => pendingApprovalsQuery.refetch()}
-                />
-            ) : null}
+                    ) : view === 'approvals' && isAdmin ? (
+                        <PendingApprovalsView
+                            pendingApprovals={pendingApprovalsQuery.data || []}
+                            onRefresh={() => pendingApprovalsQuery.refetch()}
+                        />
+                    ) : null}
 
+                    <div className="pm-groove" />
+
+                    {/* Nameplate strip */}
+                    <div className="pm-nameplate-bar">
+                        <span className="pm-nameplate">Matrix Portal</span>
+                        <span className="pm-nameplate-model">Personnel Management System</span>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

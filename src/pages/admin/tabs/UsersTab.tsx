@@ -65,8 +65,8 @@ export default function UsersTab() {
                 sortable: true,
                 render: (user) => (
                     <div>
-                        <p style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{user.username}</p>
-                        <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.5)' }}>{user.email}</p>
+                        <p style={{ fontWeight: 500, color: 'rgba(53, 160, 88, 0.70)' }}>{user.username}</p>
+                        <p style={{ fontSize: '14px', color: 'rgba(53, 160, 88, 0.35)' }}>{user.email}</p>
                     </div>
                 ),
             },
@@ -74,7 +74,7 @@ export default function UsersTab() {
                 key: 'organization',
                 header: 'Organization',
                 render: (user) => (
-                    <span style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.7)' }}>
+                    <span style={{ fontSize: '14px', color: 'rgba(53, 160, 88, 0.45)' }}>
                         {getOrgName(user.organization_id)}
                     </span>
                 ),
@@ -105,33 +105,13 @@ export default function UsersTab() {
                     <div className="flex items-center justify-end gap-2">
                         <button
                             onClick={() => setEditingUser(user as unknown as AdminUser)}
-                            style={{
-                                padding: '6px 12px',
-                                fontSize: '14px',
-                                fontWeight: 500,
-                                color: '#60a5fa',
-                                background: 'rgba(96, 165, 250, 0.1)',
-                                borderRadius: '6px',
-                                border: 'none',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                            }}
+                            className="ad-btn sm"
                         >
                             Edit
                         </button>
                         <button
                             onClick={() => setDeletingUser(user)}
-                            style={{
-                                padding: '6px 12px',
-                                fontSize: '14px',
-                                fontWeight: 500,
-                                color: '#f87171',
-                                background: 'rgba(248, 113, 113, 0.1)',
-                                borderRadius: '6px',
-                                border: 'none',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                            }}
+                            className="ad-btn sm danger"
                         >
                             Delete
                         </button>
@@ -168,15 +148,14 @@ export default function UsersTab() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>Users</h2>
-                    <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)', marginTop: '4px' }}>
+                    <h2 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--green-bright)', fontFamily: 'var(--font-mono)' }}>Users</h2>
+                    <p style={{ fontSize: '14px', color: 'rgba(53, 160, 88, 0.45)', marginTop: '4px', fontFamily: 'var(--font-mono)' }}>
                         {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'}
                     </p>
                 </div>
                 <button
                     onClick={() => setCreateModalOpen(true)}
-                    className="btn btn-primary"
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                    className="ad-btn primary"
                 >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -187,27 +166,47 @@ export default function UsersTab() {
 
             {/* Search */}
             <div className="flex items-center gap-4">
-                <div className="flex-1 max-w-md">
-                    <div className="search-bar-enhanced">
-                        <input
-                            type="text"
-                            placeholder="Search by username, email, or organization..."
-                            value={searchQuery}
-                            onChange={(e) => {
-                                setSearchQuery(e.target.value);
-                                setCurrentPage(1);
-                            }}
-                            className="search-bar-enhanced__input"
-                        />
-                        <svg className="search-bar-enhanced__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                    </div>
+                <div className="flex-1 max-w-md" style={{ position: 'relative' }}>
+                    <input
+                        type="text"
+                        placeholder="Search by username, email, or organization..."
+                        value={searchQuery}
+                        onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            setCurrentPage(1);
+                        }}
+                        style={{
+                            width: '100%',
+                            padding: '8px 12px 8px 36px',
+                            fontSize: '13px',
+                            fontFamily: 'var(--font-mono)',
+                            background: 'rgba(0, 0, 0, 0.25)',
+                            border: '1px solid rgba(53, 160, 88, 0.15)',
+                            borderRadius: '4px',
+                            color: 'rgba(53, 160, 88, 0.70)',
+                            outline: 'none',
+                        }}
+                    />
+                    <svg
+                        style={{
+                            position: 'absolute',
+                            left: '10px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            width: '16px',
+                            height: '16px',
+                            color: 'rgba(53, 160, 88, 0.30)',
+                            pointerEvents: 'none',
+                        }}
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                    >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
                 </div>
             </div>
 
             {/* DataTable */}
-            <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: 0, overflow: 'hidden', borderRadius: '4px' }}>
                 <DataTable
                     data={paginatedUsers}
                     columns={columns}
@@ -225,12 +224,12 @@ export default function UsersTab() {
                 {totalPages > 1 && (
                     <div style={{
                         padding: '16px 24px',
-                        borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderTop: '1px solid rgba(53, 160, 88, 0.12)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between'
                     }}>
-                        <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)' }}>
+                        <div style={{ fontSize: '14px', color: 'rgba(53, 160, 88, 0.45)', fontFamily: 'var(--font-mono)' }}>
                             Showing {(currentPage - 1) * itemsPerPage + 1} to{' '}
                             {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of{' '}
                             {filteredUsers.length} users
@@ -239,19 +238,17 @@ export default function UsersTab() {
                             <button
                                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                                 disabled={currentPage === 1}
-                                className="btn btn-secondary"
-                                style={{ padding: '6px 12px', fontSize: '14px' }}
+                                className="ad-btn sm"
                             >
                                 Previous
                             </button>
-                            <span style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.7)' }}>
+                            <span style={{ fontSize: '14px', color: 'rgba(53, 160, 88, 0.45)', fontFamily: 'var(--font-mono)' }}>
                                 Page {currentPage} of {totalPages}
                             </span>
                             <button
                                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                                 disabled={currentPage === totalPages}
-                                className="btn btn-secondary"
-                                style={{ padding: '6px 12px', fontSize: '14px' }}
+                                className="ad-btn sm"
                             >
                                 Next
                             </button>
@@ -268,13 +265,19 @@ export default function UsersTab() {
                 title="Delete User"
                 message={
                     deletingUser ? (
-                        <div className="text-left">
+                        <div style={{ textAlign: 'left', color: 'rgba(53, 160, 88, 0.45)' }}>
                             <p>Are you sure you want to delete this user?</p>
-                            <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                                <p className="font-medium text-gray-900">{deletingUser.username}</p>
-                                <p className="text-sm text-gray-600">{deletingUser.email}</p>
+                            <div style={{
+                                marginTop: '12px',
+                                padding: '12px',
+                                background: 'rgba(0, 0, 0, 0.25)',
+                                borderRadius: '4px',
+                                border: '1px solid rgba(53, 160, 88, 0.12)',
+                            }}>
+                                <p style={{ fontWeight: 500, color: 'rgba(53, 160, 88, 0.70)' }}>{deletingUser.username}</p>
+                                <p style={{ fontSize: '14px', color: 'rgba(53, 160, 88, 0.35)' }}>{deletingUser.email}</p>
                             </div>
-                            <p className="mt-3 text-sm text-gray-600">
+                            <p style={{ marginTop: '12px', fontSize: '14px', color: 'var(--red)' }}>
                                 This action cannot be undone.
                             </p>
                         </div>

@@ -1,7 +1,8 @@
 import { useState, useMemo, lazy, Suspense } from 'react';
-import { PageHeader, SectionSpinner } from '../../components/ui';
+import { SectionSpinner } from '../../components/ui';
 import { useAccountRequests, usePermissionRequests } from '../../hooks/queries';
 import { useAuth } from '../../contexts/AuthContext';
+import './admin.css';
 
 const OverviewTab = lazy(() => import('./tabs/OverviewTab'));
 const OrganizationsTab = lazy(() => import('./tabs/OrganizationsTab'));
@@ -43,7 +44,6 @@ export default function AdminPage() {
     const { data: permissionRequests = [] } = usePermissionRequests();
     const pendingCount = accountRequests.length + permissionRequests.length;
 
-    // Filter tabs based on role (Tab Visibility tab is super_admin only)
     const tabs = useMemo(() =>
         allTabs.filter(tab => !tab.superAdminOnly || isSuperAdmin),
         [isSuperAdmin]
@@ -66,69 +66,68 @@ export default function AdminPage() {
     };
 
     return (
-        <div className="h-full flex flex-col overflow-hidden">
-            <PageHeader
-                title="Admin Dashboard"
-                subtitle="Manage organizations, users, and system configuration"
-                icon={
-                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5"
-                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                }
-            />
-
-            <div
-                className="glass-panel"
-                style={{
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: 0,
-                    flexShrink: 0,
-                    padding: 0,
-                }}
-            >
-                <div className="flex px-6">
-                    {tabs.map((tab) => {
-                        const isActive = activeTab === tab.id;
-                        const showBadge = tab.id === 'requests' && pendingCount > 0;
-
-                        return (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                className="tab-btn px-4 py-3 text-sm font-medium border-b-2"
-                                style={{
-                                    borderColor: isActive ? 'var(--accent-primary)' : 'transparent',
-                                    color: isActive ? 'var(--accent-primary)' : 'rgba(255, 255, 255, 0.6)',
-                                    background: 'transparent',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s ease',
-                                }}
-                            >
-                                {tab.label}
-                                {showBadge && (
-                                    <span className="ml-2 glass-badge badge-red text-xs">
-                                        {pendingCount}
-                                    </span>
-                                )}
-                            </button>
-                        );
-                    })}
-                </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto glass-scrollbar p-6">
-                <Suspense
-                    key={activeTab}
-                    fallback={
-                        <div className="flex flex-col items-center justify-center h-full gap-4">
-                            <SectionSpinner message="Loading..." />
+        <div className="h-full overflow-y-auto" style={{ scrollbarGutter: 'stable' }}>
+            <div className="ad-chassis">
+                <div className="ad-panel">
+                    {/* Header */}
+                    <div className="ad-header">
+                        <div className="ad-header-left">
+                            <div className="ad-logo" />
+                            <div className="ad-header-text">
+                                <h1>Admin Dashboard</h1>
+                                <p>Manage organizations, users, and system configuration</p>
+                            </div>
                         </div>
-                    }
-                >
-                    {renderTabContent()}
-                </Suspense>
+                    </div>
+
+                    <div className="ad-groove" />
+
+                    {/* Tabs */}
+                    <div className="ad-tabs-well">
+                        {tabs.map((tab) => {
+                            const isActive = activeTab === tab.id;
+                            const showBadge = tab.id === 'requests' && pendingCount > 0;
+
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`ad-tab${isActive ? ' active' : ''}`}
+                                >
+                                    {tab.label}
+                                    {showBadge && (
+                                        <span className="ad-tab-badge">{pendingCount}</span>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div className="ad-groove" />
+
+                    {/* Tab Content Well */}
+                    <div className="ad-display-well" style={{ position: 'relative', zIndex: 1 }}>
+                        <div className="ad-display" style={{ minHeight: '300px' }}>
+                            <Suspense
+                                key={activeTab}
+                                fallback={
+                                    <div className="flex flex-col items-center justify-center h-full gap-4" style={{ minHeight: '200px' }}>
+                                        <SectionSpinner message="Loading..." />
+                                    </div>
+                                }
+                            >
+                                {renderTabContent()}
+                            </Suspense>
+                        </div>
+                    </div>
+
+                    {/* Nameplate */}
+                    <div className="ad-groove" />
+                    <div className="ad-nameplate-bar">
+                        <span className="ad-nameplate">Matrix Portal</span>
+                        <span className="ad-nameplate-model">Admin Dashboard</span>
+                    </div>
+                </div>
             </div>
         </div>
     );

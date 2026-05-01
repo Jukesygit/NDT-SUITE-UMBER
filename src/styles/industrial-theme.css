@@ -1,0 +1,339 @@
+/**
+ * NDT SUITE - INDUSTRIAL INSTRUMENT THEME
+ * Overrides glassmorphic dark variables with warm brushed-metal light theme.
+ * Loaded after glassmorphic.css to take precedence.
+ */
+
+:root {
+  /* Glass → Panel surfaces */
+  --glass-bg-primary: var(--panel-mid);
+  --glass-bg-secondary: var(--ctrl);
+  --glass-bg-tertiary: var(--ctrl-lo);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-border-strong: rgba(0, 0, 0, 0.14);
+  --glass-border-top: rgba(255, 255, 255, 0.35);
+  --glass-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --glass-shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.16);
+  --glass-shadow-hover: 0 8px 28px rgba(0, 0, 0, 0.18);
+  --glass-inset-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.40);
+
+  /* Blue → Green accent */
+  --accent-blue: var(--green);
+  --accent-blue-light: var(--green-bright);
+  --accent-blue-bright: #4db870;
+  --accent-blue-dim: rgba(45, 138, 78, 0.5);
+  --accent-blue-glow: rgba(45, 138, 78, 0.3);
+  --accent-blue-subtle: rgba(45, 138, 78, 0.12);
+  --accent-primary: var(--green);
+
+  /* Semantic colors (warmer versions) */
+  --success: var(--green);
+  --success-light: var(--green-bright);
+  --success-glow: var(--green-glow-soft);
+
+  --warning: var(--amber);
+  --warning-light: #e0a82e;
+  --warning-glow: rgba(212, 152, 30, 0.3);
+
+  --danger: var(--red);
+  --danger-light: #ef5350;
+  --danger-glow: rgba(192, 57, 43, 0.3);
+
+  --info: var(--green);
+  --info-light: var(--green-bright);
+  --info-glow: var(--green-glow-soft);
+
+  --purple: #7a5c8a;
+  --purple-light: #a07db2;
+  --purple-glow: rgba(122, 92, 138, 0.3);
+
+  /* Text (dark on light) */
+  --text-primary: #1c1b18;
+  --text-secondary: #4a4845;
+  --text-tertiary: #7a7672;
+  --text-dim: #9a968f;
+  --text-accent: var(--green);
+
+  /* Background (light surfaces) */
+  --bg-dark-1: var(--panel-bot);
+  --bg-dark-2: var(--panel-mid);
+  --bg-dark-3: var(--panel-top);
+  --bg-dark-overlay: rgba(0, 0, 0, 0.3);
+
+  /* Card colors */
+  --card-bg: var(--ctrl);
+  --card-border: rgba(0, 0, 0, 0.08);
+}
+
+/* ==========================================
+   BODY — Brushed panel background
+   ========================================== */
+
+body {
+  background: #3a3836;
+  color: var(--text-secondary);
+  -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  background: none;
+}
+
+/* Subtle brushed-metal grain texture */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(90deg,
+    transparent 0px, transparent 1px,
+    rgba(255, 255, 255, 0.003) 1px, rgba(255, 255, 255, 0.003) 2px,
+    transparent 2px, transparent 3px
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ==========================================
+   GLASS CARD → PANEL SECTION
+   ========================================== */
+
+.glass-card {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background:
+    radial-gradient(ellipse at 50% 15%, rgba(255, 255, 255, 0.06) 0%, transparent 60%),
+    linear-gradient(180deg, var(--ctrl-hi) 0%, var(--ctrl) 50%, var(--ctrl-lo) 100%);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-top: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  box-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.10),
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.40),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.03);
+}
+
+.glass-card:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.14),
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.10);
+}
+
+.glass-panel {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background:
+    linear-gradient(180deg, var(--ctrl-hi) 0%, var(--ctrl) 50%, var(--ctrl-lo) 100%);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-top: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.10),
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.40),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.03);
+}
+
+/* ==========================================
+   GROOVE DIVIDER
+   ========================================== */
+
+.groove {
+  height: 1px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.08) 0%, rgba(255, 255, 255, 0.25) 100%);
+  border: none;
+}
+
+/* ==========================================
+   INPUT OVERRIDES
+   ========================================== */
+
+.glass-input {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-radius: 5px;
+}
+
+.glass-input:focus {
+  border-color: rgba(45, 138, 78, 0.5);
+  box-shadow: 0 0 0 3px rgba(45, 138, 78, 0.12), 0 2px 12px rgba(45, 138, 78, 0.15);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  box-shadow: 0 0 0 3px rgba(45, 138, 78, 0.12);
+}
+
+/* ==========================================
+   SELECTION
+   ========================================== */
+
+::selection {
+  background: rgba(45, 138, 78, 0.25);
+  color: var(--text-primary);
+}
+
+::-moz-selection {
+  background: rgba(45, 138, 78, 0.25);
+  color: var(--text-primary);
+}
+
+/* ==========================================
+   SCROLLBAR
+   ========================================== */
+
+::-webkit-scrollbar-track {
+  background: var(--ctrl-lo);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-neutral-500);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-neutral-600);
+}
+
+* {
+  scrollbar-color: var(--color-neutral-500) var(--ctrl-lo);
+}
+
+.glass-scrollbar::-webkit-scrollbar-track {
+  background: var(--ctrl-lo);
+}
+
+.glass-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-neutral-500);
+}
+
+.glass-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-neutral-600);
+}
+
+/* ==========================================
+   MAIN CONTENT — Reduce padding for chassis pages
+   ========================================== */
+
+.main {
+  padding: var(--spacing-2) var(--spacing-4);
+}
+
+/* ==========================================
+   HEADER NAV — Engraved panel text
+   ========================================== */
+
+.header__brand {
+  color: var(--color-neutral-500);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.40);
+}
+
+.header__brand-icon {
+  color: var(--green);
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.30));
+}
+
+.header__brand .logo-gradient {
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.50));
+  opacity: 0.60;
+}
+
+.header__actions .btn--ghost {
+  background: transparent;
+  color: var(--color-neutral-400);
+  border-radius: 4px;
+  box-shadow: none;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.header__actions .btn--ghost:hover {
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--color-neutral-600);
+  box-shadow: none;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.40);
+}
+
+/* Notification bell */
+.header__actions button[title] {
+  color: var(--color-neutral-400);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+/* ==========================================
+   DROPDOWN — Recessed panel well
+   ========================================== */
+
+.dropdown__menu {
+  background:
+    linear-gradient(180deg, var(--ctrl-hi) 0%, var(--ctrl) 50%, var(--ctrl-lo) 100%);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.16),
+    0 2px 6px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.40);
+  border-radius: 6px;
+  padding: 6px;
+}
+
+.dropdown__item {
+  color: var(--color-neutral-400);
+  border-radius: 4px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.30);
+  padding: 10px 14px;
+}
+
+.dropdown__item .text-base {
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-neutral-500);
+}
+
+.dropdown__item .text-xs {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  color: var(--color-neutral-400);
+  margin-top: 2px;
+}
+
+.dropdown__item:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--color-neutral-700);
+}
+
+.dropdown__item:hover .text-base {
+  color: var(--color-neutral-700);
+}
+
+.dropdown__item--active {
+  background: rgba(45, 138, 78, 0.08);
+  color: var(--green);
+}
+
+.dropdown__item--active .text-base {
+  color: var(--green);
+}
+
+/* ==========================================
+   CODE BLOCKS
+   ========================================== */
+
+code {
+  color: var(--green);
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.08);
+}

@@ -127,24 +127,24 @@ export function ExpiryRemindersSettings() {
 
     return (
         <>
-            <div className="glass-card" style={{ padding: '24px' }}>
+            <div style={{ padding: '24px', border: '1px solid rgba(53, 160, 88, 0.20)', borderRadius: '8px', background: 'rgba(53, 160, 88, 0.05)' }}>
                 <div className="flex items-start justify-between mb-4">
                     <div>
-                        <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--green-bright)' }}>
                             Certification Expiry Reminders
                         </h2>
                         <p
                             style={{
                                 marginTop: '4px',
                                 fontSize: '14px',
-                                color: 'rgba(255, 255, 255, 0.6)',
+                                color: 'rgba(53, 160, 88, 0.45)',
                             }}
                         >
                             Automatically notify personnel when certifications are expiring
                         </p>
                     </div>
                     {!reminderEditing && (
-                        <button onClick={loadReminderSettingsToForm} className="btn btn-primary">
+                        <button onClick={loadReminderSettingsToForm} className="ad-btn primary">
                             Configure
                         </button>
                     )}
@@ -155,7 +155,7 @@ export function ExpiryRemindersSettings() {
                         style={{
                             padding: '20px',
                             textAlign: 'center',
-                            color: 'rgba(255, 255, 255, 0.6)',
+                            color: 'rgba(53, 160, 88, 0.45)',
                         }}
                     >
                         Loading...
@@ -175,7 +175,7 @@ export function ExpiryRemindersSettings() {
                                     style={{
                                         fontSize: '14px',
                                         fontWeight: 500,
-                                        color: 'rgba(255, 255, 255, 0.9)',
+                                        color: 'rgba(53, 160, 88, 0.70)',
                                     }}
                                 >
                                     Enable automatic email reminders
@@ -190,7 +190,7 @@ export function ExpiryRemindersSettings() {
                                     display: 'block',
                                     fontSize: '14px',
                                     fontWeight: 500,
-                                    color: 'rgba(255, 255, 255, 0.8)',
+                                    color: 'rgba(53, 160, 88, 0.55)',
                                     marginBottom: '8px',
                                 }}
                             >
@@ -199,7 +199,7 @@ export function ExpiryRemindersSettings() {
                             <p
                                 style={{
                                     fontSize: '13px',
-                                    color: 'rgba(255, 255, 255, 0.5)',
+                                    color: 'rgba(53, 160, 88, 0.35)',
                                     marginBottom: '12px',
                                 }}
                             >
@@ -218,14 +218,14 @@ export function ExpiryRemindersSettings() {
                                             fontWeight: 500,
                                             borderRadius: '6px',
                                             border: reminderThresholds.includes(months)
-                                                ? '2px solid #60a5fa'
-                                                : '2px solid rgba(255, 255, 255, 0.1)',
+                                                ? '2px solid rgba(53, 160, 88, 0.60)'
+                                                : '2px solid rgba(53, 160, 88, 0.15)',
                                             background: reminderThresholds.includes(months)
-                                                ? 'rgba(96, 165, 250, 0.2)'
+                                                ? 'rgba(53, 160, 88, 0.15)'
                                                 : 'transparent',
                                             color: reminderThresholds.includes(months)
-                                                ? '#60a5fa'
-                                                : 'rgba(255, 255, 255, 0.7)',
+                                                ? 'var(--green-bright)'
+                                                : 'rgba(53, 160, 88, 0.45)',
                                             cursor: 'pointer',
                                             transition: 'all 0.2s',
                                         }}
@@ -245,7 +245,7 @@ export function ExpiryRemindersSettings() {
                                     display: 'block',
                                     fontSize: '14px',
                                     fontWeight: 500,
-                                    color: 'rgba(255, 255, 255, 0.8)',
+                                    color: 'rgba(53, 160, 88, 0.55)',
                                     marginBottom: '8px',
                                 }}
                             >
@@ -254,7 +254,7 @@ export function ExpiryRemindersSettings() {
                             <p
                                 style={{
                                     fontSize: '13px',
-                                    color: 'rgba(255, 255, 255, 0.5)',
+                                    color: 'rgba(53, 160, 88, 0.35)',
                                     marginBottom: '12px',
                                 }}
                             >
@@ -282,7 +282,7 @@ export function ExpiryRemindersSettings() {
                                     disabled={
                                         !newManagerEmail.trim() || !newManagerEmail.includes('@')
                                     }
-                                    className="btn btn-secondary"
+                                    className="ad-btn"
                                     style={{
                                         opacity:
                                             !newManagerEmail.trim() ||
@@ -306,11 +306,11 @@ export function ExpiryRemindersSettings() {
                                                 alignItems: 'center',
                                                 gap: '8px',
                                                 padding: '6px 12px',
-                                                background: 'rgba(255, 255, 255, 0.05)',
-                                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                                background: 'rgba(53, 160, 88, 0.05)',
+                                                border: '1px solid rgba(53, 160, 88, 0.15)',
                                                 borderRadius: '6px',
                                                 fontSize: '13px',
-                                                color: 'rgba(255, 255, 255, 0.8)',
+                                                color: 'rgba(53, 160, 88, 0.55)',
                                             }}
                                         >
                                             <span>{email}</span>
@@ -320,7 +320,7 @@ export function ExpiryRemindersSettings() {
                                                 style={{
                                                     padding: '2px 6px',
                                                     fontSize: '12px',
-                                                    color: '#f87171',
+                                                    color: 'var(--red)',
                                                     background: 'rgba(248, 113, 113, 0.1)',
                                                     border: 'none',
                                                     borderRadius: '4px',
@@ -336,7 +336,7 @@ export function ExpiryRemindersSettings() {
                                 <p
                                     style={{
                                         fontSize: '13px',
-                                        color: 'rgba(255, 255, 255, 0.4)',
+                                        color: 'rgba(53, 160, 88, 0.30)',
                                         fontStyle: 'italic',
                                     }}
                                 >
@@ -351,7 +351,7 @@ export function ExpiryRemindersSettings() {
                             <button
                                 type="submit"
                                 disabled={updateReminderSettingsMutation.isPending}
-                                className="btn btn-primary"
+                                className="ad-btn primary"
                             >
                                 {updateReminderSettingsMutation.isPending
                                     ? 'Saving...'
@@ -360,14 +360,14 @@ export function ExpiryRemindersSettings() {
                             <button
                                 type="button"
                                 onClick={() => setReminderEditing(false)}
-                                className="btn btn-secondary"
+                                className="ad-btn"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setTriggerConfirmOpen(true)}
-                                className="btn btn-secondary"
+                                className="ad-btn"
                                 style={{ marginLeft: 'auto' }}
                             >
                                 Send Reminders Now
@@ -381,11 +381,11 @@ export function ExpiryRemindersSettings() {
                             padding: '16px',
                             borderRadius: '8px',
                             background: reminderSettings?.is_enabled
-                                ? 'rgba(34, 197, 94, 0.1)'
+                                ? 'rgba(53, 160, 88, 0.10)'
                                 : 'rgba(239, 68, 68, 0.1)',
                             border: `1px solid ${
                                 reminderSettings?.is_enabled
-                                    ? 'rgba(34, 197, 94, 0.3)'
+                                    ? 'rgba(53, 160, 88, 0.25)'
                                     : 'rgba(239, 68, 68, 0.3)'
                             }`,
                         }}
@@ -398,16 +398,16 @@ export function ExpiryRemindersSettings() {
                                     fontWeight: 600,
                                     borderRadius: '4px',
                                     background: reminderSettings?.is_enabled
-                                        ? 'rgba(34, 197, 94, 0.2)'
+                                        ? 'rgba(53, 160, 88, 0.15)'
                                         : 'rgba(239, 68, 68, 0.2)',
-                                    color: reminderSettings?.is_enabled ? '#22c55e' : '#ef4444',
+                                    color: reminderSettings?.is_enabled ? 'var(--green-bright)' : 'var(--red)',
                                     textTransform: 'uppercase',
                                 }}
                             >
                                 {reminderSettings?.is_enabled ? 'Enabled' : 'Disabled'}
                             </span>
                         </div>
-                        <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.85)' }}>
+                        <div style={{ fontSize: '14px', color: 'rgba(53, 160, 88, 0.70)' }}>
                             <p style={{ marginBottom: '8px' }}>
                                 <strong>Thresholds:</strong>{' '}
                                 {reminderSettings?.thresholds_months?.length
@@ -430,17 +430,17 @@ export function ExpiryRemindersSettings() {
             </div>
 
             {/* Send to Individual Section */}
-            <div className="glass-card" style={{ padding: '24px', marginTop: '16px' }}>
+            <div style={{ padding: '24px', marginTop: '16px', border: '1px solid rgba(53, 160, 88, 0.20)', borderRadius: '8px', background: 'rgba(53, 160, 88, 0.05)' }}>
                 <div className="flex items-start justify-between mb-4">
                     <div>
-                        <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--green-bright)' }}>
                             Send to Individual
                         </h2>
                         <p
                             style={{
                                 marginTop: '4px',
                                 fontSize: '14px',
-                                color: 'rgba(255, 255, 255, 0.6)',
+                                color: 'rgba(53, 160, 88, 0.45)',
                             }}
                         >
                             Send expiry reminder to a specific user (useful for testing)
@@ -453,7 +453,7 @@ export function ExpiryRemindersSettings() {
                         style={{
                             padding: '20px',
                             textAlign: 'center',
-                            color: 'rgba(255, 255, 255, 0.6)',
+                            color: 'rgba(53, 160, 88, 0.45)',
                         }}
                     >
                         Loading users...
@@ -463,12 +463,12 @@ export function ExpiryRemindersSettings() {
                         style={{
                             padding: '16px',
                             borderRadius: '8px',
-                            background: 'rgba(34, 197, 94, 0.1)',
-                            border: '1px solid rgba(34, 197, 94, 0.3)',
+                            background: 'rgba(53, 160, 88, 0.10)',
+                            border: '1px solid rgba(53, 160, 88, 0.25)',
                             textAlign: 'center',
                         }}
                     >
-                        <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.8)' }}>
+                        <p style={{ fontSize: '14px', color: 'rgba(53, 160, 88, 0.55)' }}>
                             No users with expiring certifications found
                         </p>
                     </div>
@@ -480,7 +480,7 @@ export function ExpiryRemindersSettings() {
                                     display: 'block',
                                     fontSize: '14px',
                                     fontWeight: 500,
-                                    color: 'rgba(255, 255, 255, 0.8)',
+                                    color: 'rgba(53, 160, 88, 0.55)',
                                     marginBottom: '8px',
                                 }}
                             >
@@ -504,7 +504,7 @@ export function ExpiryRemindersSettings() {
                         <button
                             onClick={() => setSingleUserConfirmOpen(true)}
                             disabled={!selectedUserId || sendToUserMutation.isPending}
-                            className="btn btn-primary"
+                            className="ad-btn primary"
                             style={{
                                 opacity: !selectedUserId ? 0.5 : 1,
                             }}
@@ -519,11 +519,11 @@ export function ExpiryRemindersSettings() {
                                     borderRadius: '8px',
                                     background:
                                         sendToUserMutation.data?.sent > 0
-                                            ? 'rgba(34, 197, 94, 0.1)'
+                                            ? 'rgba(53, 160, 88, 0.10)'
                                             : 'rgba(251, 191, 36, 0.1)',
                                     border:
                                         sendToUserMutation.data?.sent > 0
-                                            ? '1px solid rgba(34, 197, 94, 0.3)'
+                                            ? '1px solid rgba(53, 160, 88, 0.25)'
                                             : '1px solid rgba(251, 191, 36, 0.3)',
                                 }}
                             >
@@ -532,8 +532,8 @@ export function ExpiryRemindersSettings() {
                                         fontSize: '14px',
                                         color:
                                             sendToUserMutation.data?.sent > 0
-                                                ? '#22c55e'
-                                                : '#fbbf24',
+                                                ? 'var(--green-bright)'
+                                                : 'var(--amber)',
                                     }}
                                 >
                                     {sendToUserMutation.data?.message ||
@@ -553,7 +553,7 @@ export function ExpiryRemindersSettings() {
                                     border: '1px solid rgba(239, 68, 68, 0.3)',
                                 }}
                             >
-                                <p style={{ fontSize: '14px', color: '#ef4444' }}>
+                                <p style={{ fontSize: '14px', color: 'var(--red)' }}>
                                     Failed to send: {sendToUserMutation.error?.message}
                                 </p>
                             </div>
@@ -600,7 +600,7 @@ export function ExpiryRemindersSettings() {
                             {selectedUser.count > 1 ? 's' : ''} expiring within 6 months.
                             <br />
                             <br />
-                            <span style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.6)' }}>
+                            <span style={{ fontSize: '13px', color: 'rgba(53, 160, 88, 0.45)' }}>
                                 This uses the same professional email template as automatic reminders.
                             </span>
                         </>

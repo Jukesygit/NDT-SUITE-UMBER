@@ -101,10 +101,10 @@ export function CreateDefinitionModal({ isOpen, onClose, categories }: CreateDef
             size="medium"
             footer={
                 <>
-                    <button type="button" onClick={handleClose} disabled={createDefinition.isPending} className="btn btn-secondary">
+                    <button type="button" onClick={handleClose} disabled={createDefinition.isPending} className="ad-btn">
                         Cancel
                     </button>
-                    <button type="submit" form="create-definition-form" disabled={createDefinition.isPending} className="btn btn-primary flex items-center gap-2">
+                    <button type="submit" form="create-definition-form" disabled={createDefinition.isPending} className="ad-btn primary flex items-center gap-2">
                         {createDefinition.isPending && <RandomMatrixSpinner size={16} />}
                         {createDefinition.isPending ? 'Creating...' : 'Create Cert Type'}
                     </button>

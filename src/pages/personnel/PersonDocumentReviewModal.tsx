@@ -77,7 +77,7 @@ function ChevronRightIcon() {
  */
 function DetailRow({ label, value, highlight = false }: { label: string; value: string | null | undefined; highlight?: boolean }) {
     return (
-        <div className="pm-display-field" style={{ marginBottom: '12px' }}>
+        <div className="pm-display-field pm-detail-row">
             <div className="pm-display-label">{label}</div>
             <div className="pm-display-value" style={{ color: highlight ? '#60a5fa' : undefined, fontWeight: highlight ? '500' : undefined }}>
                 {value || 'Not specified'}
@@ -277,8 +277,7 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
 
     const modalContent = (
         <div
-            className="pm-modal-overlay"
-            style={{ animation: 'fadeIn 0.15s ease-out' }}
+            className="pm-modal-overlay pm-modal-overlay--animated"
         >
             {/* Backdrop click area */}
             <div
@@ -292,28 +291,27 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="review-modal-title"
-                className="pm-modal-panel relative w-full max-w-6xl"
-                style={{ animation: 'scaleIn 0.2s ease-out', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
+                className="pm-modal-panel pm-review-modal-panel relative w-full max-w-6xl"
             >
                 {/* Header */}
-                <div className="pm-modal-header" style={{ flexShrink: 0 }}>
+                <div className="pm-modal-header pm-review-modal-header--shrink">
                     <div>
                         <h2 id="review-modal-title" className="pm-modal-title">
                             Review Documents - {person.username}
                         </h2>
-                        <p className="pm-display-label" style={{ marginTop: '2px', textTransform: 'none', letterSpacing: 'normal', fontSize: '13px' }}>
+                        <p className="pm-display-label pm-review-subtitle">
                             Reviewing {currentIndex + 1} of {pendingCompetencies.length} pending document{pendingCompetencies.length !== 1 ? 's' : ''}
                             {reviewedIds.size > 0 && (
-                                <span style={{ color: '#10b981', marginLeft: '8px' }}>
+                                <span className="pm-reviewed-count">
                                     ({reviewedIds.size} reviewed)
                                 </span>
                             )}
                         </p>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div className="pm-review-header-actions">
                         {/* Navigation buttons */}
                         {pendingCompetencies.length > 1 && (
-                            <div className="pm-review-nav" style={{ border: 'none', background: 'none', padding: '0', gap: '4px', marginRight: '8px' }}>
+                            <div className="pm-review-nav pm-review-nav--bare">
                                 <button
                                     onClick={handlePrevious}
                                     disabled={currentIndex === 0 || submitting}
@@ -348,34 +346,34 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
                 </div>
 
                 {/* Body - Split View */}
-                <div className="flex-1 overflow-hidden flex" style={{ minHeight: 0 }}>
+                <div className="flex-1 overflow-hidden flex pm-doc-split-body">
                     {/* Left: Document Viewer */}
-                    <div className="flex-1 border-r border-white/10 overflow-hidden flex flex-col" style={{ minWidth: 0 }}>
-                        <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', flexShrink: 0 }}>
+                    <div className="flex-1 border-r border-white/10 overflow-hidden flex flex-col pm-doc-viewer-col">
+                        <div className="pm-doc-viewer-header">
                             <div className="pm-display-label">Document Preview</div>
                             {currentCompetency?.document_name && (
-                                <div style={{ fontSize: '13px', color: '#60a5fa', marginTop: '4px' }}>
+                                <div className="pm-doc-filename">
                                     {currentCompetency.document_name}
                                 </div>
                             )}
                         </div>
-                        <div className="flex-1 overflow-auto p-4" style={{ backgroundColor: 'rgba(0, 0, 0, 0.2)' }}>
+                        <div className="flex-1 overflow-auto p-4 pm-doc-viewer-bg">
                             {loadingDocument ? (
                                 <div className="flex items-center justify-center h-full">
-                                    <div style={{ textAlign: 'center' }}>
+                                    <div className="pm-text-center">
                                         <Spinner />
-                                        <p style={{ marginTop: '12px', color: 'rgba(255, 255, 255, 0.5)', fontSize: '14px' }}>
+                                        <p className="pm-loading-text">
                                             Loading document...
                                         </p>
                                     </div>
                                 </div>
                             ) : documentError ? (
                                 <div className="flex items-center justify-center h-full">
-                                    <div style={{ textAlign: 'center', color: '#ef4444' }}>
-                                        <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ margin: '0 auto 12px', opacity: 0.6 }}>
+                                    <div className="pm-text-center" style={{ color: '#ef4444' }}>
+                                        <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24" className="pm-error-icon">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                         </svg>
-                                        <p style={{ fontSize: '14px' }}>{documentError}</p>
+                                        <p className="pm-error-text">{documentError}</p>
                                     </div>
                                 </div>
                             ) : isImage && documentUrl ? (
@@ -383,7 +381,7 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
                                     <img
                                         src={documentUrl}
                                         alt={currentCompetency?.document_name || 'Document'}
-                                        style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '8px' }}
+                                        className="pm-doc-img"
                                     />
                                 </div>
                             ) : isPdf && documentUrl ? (

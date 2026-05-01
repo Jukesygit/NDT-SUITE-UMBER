@@ -6,13 +6,14 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCompanionApp } from '../hooks/queries/useCompanionApp';
 import { useCompanionFolders } from '../hooks/queries/useCompanionFolders';
 import { useBrowseDirectory, useConvertEddify, useRefreshCompanionIndex } from '../hooks/mutations/useCompanionMutations';
 import { useCompanionWebSocket } from '../hooks/useCompanionWebSocket';
 import { useThicknessEngine } from '../hooks/useThicknessEngine';
 import type { GatePosition } from '../hooks/useThicknessEngine';
-import { fetchComposite } from '../services/companion-service';
+import { fetchComposite, setDirectory } from '../services/companion-service';
 import { PageHeader } from '../components/ui/PageHeader';
 import { RandomMatrixSpinner } from '../components/MatrixSpinners';
 import CscanHeatmap from '../components/projects/scan-viewer/CscanHeatmap';
@@ -23,6 +24,10 @@ import GateControlsSidebar from '../components/projects/scan-viewer/GateControls
 import ScanViewerToolbar from '../components/projects/scan-viewer/ScanViewerToolbar';
 import type { CompositeData, GateSettings } from '../types/companion';
 import { DEFAULT_GATE_SETTINGS } from '../types/companion';
+import { CompanionSetupWizard } from '../components/companion/CompanionSetupWizard';
+import { CompanionCompatBanner } from '../components/companion/CompanionCompatBanner';
+import { BackpressureIndicator } from '../components/companion/BackpressureIndicator';
+import { DirectoryBrowser } from '../components/companion/DirectoryBrowser';
 
 
 /** Gate settings that require companion reprocessing (server-side). */
@@ -35,13 +40,14 @@ const SERVER_GATE_KEYS: (keyof GateSettings)[] = [
 ];
 
 export default function ScanViewerLandingPage() {
-  const { connected, port, directory } = useCompanionApp();
+  const { connected, port, directory, compat, features } = useCompanionApp();
+  const queryClient = useQueryClient();
   const { data: foldersData, isLoading: foldersLoading } = useCompanionFolders(port);
   const refreshIndex = useRefreshCompanionIndex();
   const browseMutation = useBrowseDirectory();
   const convertMutation = useConvertEddify();
   const ws = useCompanionWebSocket(port);
-  const { tierTwoThickness, tierTwoProgress } = ws;
+  const { tierTwoThickness, tierTwoProgress, backpressure, avgProcessingMs } = ws;
 
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
   const [selectedEddifyFiles, setSelectedEddifyFiles] = useState<string[]>([]);
@@ -50,6 +56,7 @@ export default function ScanViewerLandingPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<{ pct: number; file: string; stage: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showDirBrowser, setShowDirBrowser] = useState(false);
   const [cursorScanMm, setCursorScanMm] = useState(0);
   const [cursorIndexMm, setCursorIndexMm] = useState(0);
   const [gateSettings, setGateSettings] = useState<GateSettings>({ ...DEFAULT_GATE_SETTINGS });
@@ -355,9 +362,8 @@ export default function ScanViewerLandingPage() {
     return (
       <div style={{ padding: 24, maxWidth: 900 }}>
         <PageHeader title="Scan Viewer" subtitle="Interactive C-scan heatmap with B-scan and A-scan cursors" icon={<ViewerIcon />} />
-        <div style={{ padding: '40px 24px', textAlign: 'center', background: 'var(--surface-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', marginTop: 20 }}>
-          <div style={{ fontSize: '0.9rem', color: 'var(--text-tertiary)', marginBottom: 8 }}>Companion app not connected</div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-quaternary)', lineHeight: 1.5 }}>Start the NDT Companion app and set the directory to a folder containing NDE file subfolders.</div>
+        <div style={{ marginTop: 20 }}>
+          <CompanionSetupWizard connected={false} onDismiss={() => {}} />
         </div>
       </div>
     );
@@ -373,6 +379,7 @@ export default function ScanViewerLandingPage() {
     return (
       <div style={{ padding: 24, maxWidth: 900 }}>
         <PageHeader title="Scan Viewer" subtitle="Interactive C-scan heatmap with B-scan and A-scan cursors" icon={<ViewerIcon />} />
+        <CompanionCompatBanner compat={compat} />
 
         {/* Directory bar */}
         <div style={{ ...cardStyle, marginTop: 20, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
@@ -384,7 +391,30 @@ export default function ScanViewerLandingPage() {
             style={{ fontSize: '0.75rem', padding: '4px 14px', borderRadius: 4, border: '1px solid #3b82f6', background: 'rgba(59,130,246,0.1)', color: '#93c5fd', cursor: browseMutation.isPending ? 'not-allowed' : 'pointer', opacity: browseMutation.isPending ? 0.5 : 1, flexShrink: 0 }}>
             {browseMutation.isPending ? 'Opening...' : 'Browse'}
           </button>
+          {features.includes('list-directory') && (
+            <button onClick={() => setShowDirBrowser(prev => !prev)}
+              style={{ fontSize: '0.75rem', padding: '4px 10px', borderRadius: 4, border: '1px solid var(--border-subtle)', background: showDirBrowser ? 'rgba(59,130,246,0.1)' : 'none', color: 'var(--text-tertiary)', cursor: 'pointer', flexShrink: 0 }}>
+              Web
+            </button>
+          )}
         </div>
+        {showDirBrowser && (
+          <div style={{ marginTop: 8 }}>
+            <DirectoryBrowser
+              port={port}
+              onSelect={async (path) => {
+                if (!port) return;
+                try {
+                  await setDirectory(port, path);
+                  queryClient.invalidateQueries({ queryKey: ['companion-status'] });
+                  queryClient.invalidateQueries({ queryKey: ['companion-folders'] });
+                  setShowDirBrowser(false);
+                } catch { /* will retry on next poll */ }
+              }}
+              onCancel={() => setShowDirBrowser(false)}
+            />
+          </div>
+        )}
 
         {directory ? (
           <div style={{ marginTop: 16 }}>
@@ -540,6 +570,7 @@ export default function ScanViewerLandingPage() {
           {hasRelevantGateOverrides && !tierTwoThickness && !tierTwoProgress && (
             <span style={{ color: '#fbbf24' }}>Tier 1 (approx)</span>
           )}
+          <BackpressureIndicator state={backpressure} avgMs={Math.round(avgProcessingMs)} />
           <span>{composite.width} x {composite.height} — {composite.sourceFiles.length} files — {composite.stats.coveragePct.toFixed(1)}% coverage</span>
         </div>
       </div>

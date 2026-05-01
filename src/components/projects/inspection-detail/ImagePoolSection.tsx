@@ -16,14 +16,8 @@ interface ImagePoolSectionProps {
     images: ProjectImage[];
 }
 
-// ---------------------------------------------------------------------------
-// Image card — fetches its own signed URL
-// ---------------------------------------------------------------------------
-
 function ImageCard({
-    image,
-    vesselId,
-    onPreview,
+    image, vesselId, onPreview,
 }: {
     image: ProjectImage;
     vesselId: string;
@@ -54,45 +48,22 @@ function ImageCard({
     };
 
     return (
-        <div
-            style={{
-                background: 'var(--surface-elevated)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 10,
-                overflow: 'hidden',
-            }}
-        >
-            {/* Thumbnail */}
+        <div className="pj-image-card">
             <div
+                className="pj-image-thumb"
                 onClick={() => signedUrl && onPreview(signedUrl)}
-                style={{
-                    width: '100%',
-                    height: 140,
-                    background: 'var(--surface-elevated)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: signedUrl ? 'pointer' : 'default',
-                    borderBottom: '1px solid var(--border-subtle)',
-                }}
                 title="Click to preview"
             >
                 {signedUrl ? (
-                    <img
-                        src={signedUrl}
-                        alt={image.name}
-                        style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 4 }}
-                    />
+                    <img src={signedUrl} alt={image.name} />
                 ) : (
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-disabled)' }}>
-                        Loading...
+                    <span className="pj-doc-thumb-empty">
+                        <span>Loading...</span>
                     </span>
                 )}
             </div>
 
-            {/* Info bar */}
-            <div style={{ padding: '8px 10px' }}>
-                {/* Editable name */}
+            <div className="pj-image-info">
                 {editingName ? (
                     <input
                         autoFocus
@@ -100,59 +71,24 @@ function ImageCard({
                         onChange={(e) => setName(e.target.value)}
                         onBlur={handleNameBlur}
                         onKeyDown={(e) => { if (e.key === 'Enter') handleNameBlur(); }}
-                        style={{
-                            width: '100%',
-                            padding: '2px 4px',
-                            background: 'var(--border-subtle)',
-                            border: '1px solid var(--border-default)',
-                            borderRadius: 4,
-                            color: 'var(--text-primary)',
-                            fontSize: '0.8rem',
-                        }}
+                        className="pj-form-input"
+                        style={{ padding: '2px 6px', fontSize: '10px' }}
                     />
                 ) : (
-                    <div
-                        onClick={() => setEditingName(true)}
-                        title="Click to rename"
-                        style={{
-                            fontSize: '0.8rem',
-                            color: 'var(--text-primary)',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            cursor: 'text',
-                        }}
-                    >
+                    <div className="pj-image-name" onClick={() => setEditingName(true)} title="Click to rename">
                         {image.name}
                     </div>
                 )}
 
-                {/* File size + delete */}
-                <div
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        marginTop: 4,
-                    }}
-                >
-                    <span style={{ fontSize: '0.65rem', color: 'var(--text-quaternary)' }}>
-                        {image.size_bytes
-                            ? `${(image.size_bytes / 1024).toFixed(0)} KB`
-                            : '\u2014'}
+                <div className="pj-image-meta-row">
+                    <span className="pj-doc-size">
+                        {image.size_bytes ? `${(image.size_bytes / 1024).toFixed(0)} KB` : '—'}
                     </span>
                     <button
                         type="button"
                         onClick={() => deleteImage.mutate({ id: image.id, vesselId })}
-                        style={{
-                            padding: '2px 6px',
-                            background: 'rgba(239,68,68,0.1)',
-                            border: '1px solid rgba(239,68,68,0.2)',
-                            borderRadius: 4,
-                            color: '#ef4444',
-                            fontSize: '0.65rem',
-                            cursor: 'pointer',
-                        }}
+                        className="pj-vessel-action-btn danger-ghost"
+                        style={{ padding: '2px 6px', fontSize: '9px' }}
                     >
                         Delete
                     </button>
@@ -161,10 +97,6 @@ function ImageCard({
         </div>
     );
 }
-
-// ---------------------------------------------------------------------------
-// Preview modal
-// ---------------------------------------------------------------------------
 
 function ImagePreviewModal({ url, onClose }: { url: string; onClose: () => void }) {
     useEffect(() => {
@@ -177,60 +109,37 @@ function ImagePreviewModal({ url, onClose }: { url: string; onClose: () => void 
         <div
             onClick={onClose}
             style={{
-                position: 'fixed',
-                inset: 0,
-                zIndex: 1000,
+                position: 'fixed', inset: 0, zIndex: 1000,
                 background: 'rgba(0,0,0,0.8)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
                 padding: 40,
             }}
         >
             <div
                 onClick={(e) => e.stopPropagation()}
                 style={{
-                    position: 'relative',
-                    maxWidth: '90vw',
-                    maxHeight: '85vh',
-                    background: '#1a1a1a',
-                    borderRadius: 12,
-                    border: '1px solid var(--border-default)',
-                    overflow: 'hidden',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: 24,
+                    position: 'relative', maxWidth: '90vw', maxHeight: '85vh',
+                    background: '#0c0b0a', borderRadius: 8,
+                    border: '1px solid rgba(53, 160, 88, 0.15)',
+                    overflow: 'hidden', display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', padding: 24,
                 }}
             >
                 <button
                     onClick={onClose}
                     style={{
-                        position: 'absolute',
-                        top: 8,
-                        right: 8,
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--text-tertiary)',
-                        cursor: 'pointer',
-                        padding: 4,
+                        position: 'absolute', top: 8, right: 8,
+                        background: 'none', border: 'none',
+                        color: 'rgba(53, 160, 88, 0.50)', cursor: 'pointer', padding: 4,
                     }}
                 >
                     <X size={18} />
                 </button>
-                <img
-                    src={url}
-                    alt="Preview"
-                    style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: 8 }}
-                />
+                <img src={url} alt="Preview" style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: 4 }} />
             </div>
         </div>
     );
 }
-
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
 
 export default function ImagePoolSection({ vesselId, projectId, images }: ImagePoolSectionProps) {
     const { user } = useAuth();
@@ -255,11 +164,7 @@ export default function ImagePoolSection({ vesselId, projectId, images }: ImageP
         setUploadError(null);
         try {
             await uploadImage.mutateAsync({
-                projectId,
-                projectVesselId: vesselId,
-                userId: user.id,
-                name,
-                file,
+                projectId, projectVesselId: vesselId, userId: user.id, name, file,
             });
             setImageName('');
         } catch (err) {
@@ -301,72 +206,34 @@ export default function ImagePoolSection({ vesselId, projectId, images }: ImageP
         }
     }, [user, imageName, projectId, vesselId]);
 
-    const handlePreview = useCallback((url: string) => {
-        setPreviewUrl(url);
-    }, []);
-
-    const closePreview = useCallback(() => {
-        setPreviewUrl(null);
-    }, []);
-
     return (
         <CollapsibleSection title="Inspection Images">
-            {/* Drop zone wrapper */}
             <div
                 ref={dropZoneRef}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 style={{
-                    position: 'relative',
-                    borderRadius: 8,
-                    border: dragOver ? '2px dashed var(--accent-primary, #3b82f6)' : '2px dashed transparent',
-                    background: dragOver ? 'rgba(59,130,246,0.06)' : 'transparent',
+                    position: 'relative', borderRadius: 6,
+                    border: dragOver ? '2px dashed rgba(53, 160, 88, 0.40)' : '2px dashed transparent',
+                    background: dragOver ? 'rgba(53, 160, 88, 0.04)' : 'transparent',
                     padding: dragOver ? 10 : 0,
                     transition: 'all 0.15s ease',
                 }}
             >
-                {/* Drag overlay */}
                 {dragOver && (
-                    <div
-                        style={{
-                            position: 'absolute',
-                            inset: 0,
-                            zIndex: 10,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            background: 'rgba(59,130,246,0.08)',
-                            borderRadius: 8,
-                            pointerEvents: 'none',
-                        }}
-                    >
-                        <span style={{ fontSize: '0.95rem', color: 'var(--accent-primary, #3b82f6)', fontWeight: 500 }}>
-                            Drop images here to upload
-                        </span>
+                    <div style={{
+                        position: 'absolute', inset: 0, zIndex: 10,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: 'rgba(53, 160, 88, 0.06)', borderRadius: 6, pointerEvents: 'none',
+                    }}>
+                        <span className="pj-doc-filename">Drop images here to upload</span>
                     </div>
                 )}
 
-                {/* Upload area */}
-                <div
-                    style={{
-                        display: 'flex',
-                        gap: 8,
-                        marginBottom: 14,
-                        alignItems: 'flex-end',
-                        opacity: dragOver ? 0.3 : 1,
-                        transition: 'opacity 0.15s ease',
-                    }}
-                >
+                <div className="pj-image-upload-row" style={{ opacity: dragOver ? 0.3 : 1, transition: 'opacity 0.15s ease' }}>
                     <div style={{ flex: 1 }}>
-                        <label
-                            style={{
-                                display: 'block',
-                                fontSize: '0.75rem',
-                                color: 'var(--text-tertiary)',
-                                marginBottom: 4,
-                            }}
-                        >
+                        <label className="pj-doc-label" style={{ display: 'block', marginBottom: 4 }}>
                             Image Name (optional)
                         </label>
                         <input
@@ -374,8 +241,7 @@ export default function ImagePoolSection({ vesselId, projectId, images }: ImageP
                             value={imageName}
                             onChange={(e) => setImageName(e.target.value)}
                             placeholder="e.g. Weld A1 Close-up"
-                            className="glass-input"
-                            style={{ width: '100%', fontSize: '0.85rem' }}
+                            className="pj-form-input"
                         />
                     </div>
                     <div>
@@ -395,12 +261,8 @@ export default function ImagePoolSection({ vesselId, projectId, images }: ImageP
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
                             disabled={uploading}
-                            className="btn btn--primary btn--sm"
-                            style={{
-                                cursor: uploading ? 'wait' : 'pointer',
-                                whiteSpace: 'nowrap',
-                                opacity: uploading ? 0.5 : 1,
-                            }}
+                            className="pj-btn primary"
+                            style={{ opacity: uploading ? 0.5 : 1 }}
                         >
                             {uploading ? 'Uploading...' : 'Upload Image'}
                         </button>
@@ -408,74 +270,38 @@ export default function ImagePoolSection({ vesselId, projectId, images }: ImageP
                 </div>
 
                 {uploadError && (
-                    <div
-                        style={{
-                            padding: '8px 12px',
-                            marginBottom: 10,
-                            borderRadius: 6,
-                            background: 'rgba(239,68,68,0.12)',
-                            border: '1px solid rgba(239,68,68,0.25)',
-                            color: '#ef4444',
-                            fontSize: '0.8rem',
-                        }}
-                    >
+                    <div className="pj-alert error" style={{ marginBottom: 10 }}>
                         Upload error: {uploadError}
                     </div>
                 )}
 
-                {/* Image grid */}
                 {images.length > 0 ? (
-                    <div
-                        style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(3, 1fr)',
-                            gap: 10,
-                            opacity: dragOver ? 0.3 : 1,
-                            transition: 'opacity 0.15s ease',
-                        }}
-                    >
+                    <div className="pj-image-grid" style={{ opacity: dragOver ? 0.3 : 1, transition: 'opacity 0.15s ease' }}>
                         {images.map((img) => (
                             <ImageCard
                                 key={img.id}
                                 image={img}
                                 vesselId={vesselId}
-                                onPreview={handlePreview}
+                                onPreview={(url) => setPreviewUrl(url)}
                             />
                         ))}
                     </div>
                 ) : (
-                    <div
-                        style={{
-                            padding: 20,
-                            textAlign: 'center',
-                            color: 'var(--text-quaternary)',
-                            fontSize: '0.85rem',
-                        }}
-                    >
-                        {dragOver ? '' : 'No images uploaded yet. Drag & drop images here or click Upload.'}
+                    <div className="pj-empty" style={{ padding: '16px 0' }}>
+                        <div className="pj-empty-text">
+                            {dragOver ? '' : 'No images uploaded yet. Drag & drop images here or click Upload.'}
+                        </div>
                     </div>
                 )}
             </div>
 
-            {/* Note */}
-            <div
-                style={{
-                    marginTop: 14,
-                    padding: '8px 12px',
-                    borderRadius: 6,
-                    background: 'rgba(59,130,246,0.06)',
-                    border: '1px solid rgba(59,130,246,0.12)',
-                    fontSize: '0.75rem',
-                    color: 'var(--text-tertiary)',
-                }}
-            >
-                These images are available in the 3D Modeler for use as inspection images and
-                restriction attachments. You can drag & drop images directly into this panel.
+            <div className="pj-info-note">
+                These images are available in the 3D Modeler for use as inspection images and restriction attachments.
+                You can drag & drop images directly into this panel.
             </div>
 
-            {/* Preview modal */}
             {previewUrl && (
-                <ImagePreviewModal url={previewUrl} onClose={closePreview} />
+                <ImagePreviewModal url={previewUrl} onClose={() => setPreviewUrl(null)} />
             )}
         </CollapsibleSection>
     );

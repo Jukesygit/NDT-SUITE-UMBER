@@ -1,4 +1,9 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef } from 'react';
+import { useCompanionNotify } from '../../contexts/CompanionNotificationContext';
+import { checkCompanionCompat, type CompatResult } from '../../utils/companionCompat';
+import { setCompanionToken } from '../../utils/companionFetch';
+import type { CompanionStatus as CompanionStatusType } from '../../types/companion';
 
 // ---------------------------------------------------------------------------
 // Debug logger — prefix all companion discovery logs
@@ -34,6 +39,8 @@ interface CompanionStatus {
   port: number | null;
   directory: string | null;
   fileCount: number;
+  features: string[];
+  compat: CompatResult | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -76,6 +83,11 @@ async function probePort(port: number): Promise<CompanionStatusResponse> {
       throw new Error('not companion');
     }
     log(`port ${port}: ✓ found companion in ${elapsed}ms (files=${data.fileCount}, dir="${data.directory}")`);
+    // Extract auth token from /status and store for subsequent requests
+    if (data.token) {
+      setCompanionToken(data.token);
+      log(`port ${port}: auth token acquired from /status`);
+    }
     return { ...data, port };
   } catch (err) {
     const elapsed = (performance.now() - t0).toFixed(1);
@@ -132,6 +144,7 @@ async function discoverCompanion(
 
 export function useCompanionApp(): CompanionStatus {
   const queryClient = useQueryClient();
+  const { push } = useCompanionNotify();
 
   const { data } = useQuery({
     queryKey: ['companion-status'],
@@ -176,10 +189,38 @@ export function useCompanionApp(): CompanionStatus {
     staleTime: 5_000,
   });
 
+  // Track connected state to detect transitions connected → disconnected
+  const wasConnectedRef = useRef(false);
+  const connected = !!data?.running;
+
+  useEffect(() => {
+    const wasConnected = wasConnectedRef.current;
+    wasConnectedRef.current = connected;
+
+    // Only fire the notification when we go from connected to disconnected,
+    // not on initial render (wasConnected is false at mount regardless).
+    if (wasConnected && !connected) {
+      push({
+        title: 'Companion disconnected',
+        message:
+          'Lost contact with the NDT Companion app. Scans and composites are unavailable until it reconnects.',
+        severity: 'critical',
+        recovery: 'restart-companion',
+      });
+    }
+  }, [connected, push]);
+
+  const compat = useMemo(() => {
+    if (!data?.running) return null;
+    return checkCompanionCompat(data as unknown as CompanionStatusType);
+  }, [data]);
+
   return {
-    connected: !!data?.running,
+    connected,
     port: data?.port ?? null,
     directory: data?.directory ?? null,
     fileCount: data?.fileCount ?? 0,
+    features: (data as CompanionStatusResponse & { features?: string[] })?.features ?? [],
+    compat,
   };
 }
