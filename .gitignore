@@ -58,6 +58,16 @@ tsconfig.tsbuildinfo
 # Logs
 logs/
 
+# Python (companion app)
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+*.egg
+*.whl
+companion/dist/
+companion/build/
+
 # OS files
 Thumbs.db
 desktop.ini
