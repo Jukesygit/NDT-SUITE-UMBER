@@ -21,7 +21,7 @@
     position: relative;
     overflow: hidden;
     background:
-        linear-gradient(180deg, var(--panel-top) 0%, var(--panel-mid) 45%, var(--panel-bot) 100%);
+        linear-gradient(180deg, var(--ctrl-hi) 0%, var(--ctrl) 45%, var(--ctrl-lo) 100%);
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.45),
         inset 0 -1px 0 rgba(0, 0, 0, 0.08);
@@ -85,22 +85,18 @@
 
 /* ---- Groove Dividers ---- */
 .pj-groove {
-    height: 2px;
-    margin: 22px -8px;
-    background: linear-gradient(180deg, rgba(0, 0, 0, 0.18) 0%, rgba(0, 0, 0, 0.10) 50%, rgba(255, 255, 255, 0.40) 100%);
-    box-shadow:
-        0 1px 0 rgba(255, 255, 255, 0.18),
-        0 -1px 0 rgba(0, 0, 0, 0.06);
+    height: 1px;
+    margin: 22px 0;
+    background: rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .pj-groove-vertical {
-    width: 2px;
-    background: linear-gradient(90deg, rgba(0, 0, 0, 0.18) 0%, rgba(0, 0, 0, 0.10) 50%, rgba(255, 255, 255, 0.40) 100%);
-    margin: -8px 0;
+    width: 1px;
+    background: rgba(0, 0, 0, 0.08);
+    box-shadow: 1px 0 0 rgba(255, 255, 255, 0.5);
+    margin: 0;
     align-self: stretch;
-    box-shadow:
-        1px 0 0 rgba(255, 255, 255, 0.18),
-        -1px 0 0 rgba(0, 0, 0, 0.06);
 }
 
 /* ---- Nameplate Strip ---- */
@@ -118,7 +114,10 @@
     text-transform: uppercase;
     letter-spacing: 0.18em;
     color: var(--color-neutral-500);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.40);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.12),
+        0 1px 0 rgba(255, 255, 255, 0.70),
+        0 2px 1px rgba(255, 255, 255, 0.25);
 }
 
 .pj-nameplate-model {
@@ -128,14 +127,22 @@
     text-transform: uppercase;
     letter-spacing: 0.12em;
     color: var(--color-neutral-400);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.08),
+        0 1px 0 rgba(255, 255, 255, 0.60);
 }
 
-/* ---- Header ---- */
+/* ---- Header (Title Rail) ---- */
 .pj-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+    margin-bottom: 24px;
+    flex-wrap: wrap;
     position: relative;
     z-index: 1;
 }
@@ -147,13 +154,23 @@
 }
 
 .pj-logo {
-    width: 8px;
-    height: 8px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #5ec87a, var(--green) 55%, var(--green-dark));
-    box-shadow: 0 0 4px var(--green-glow), 0 0 14px var(--green-glow-soft),
-        inset 0 -1px 2px rgba(0, 0, 0, 0.30), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+    background: radial-gradient(circle at 35% 30%, var(--green-bright) 0%, var(--green) 50%, var(--green-dark) 100%);
+    box-shadow:
+        0 0 0 1.5px var(--color-neutral-800),
+        0 0 0 3px var(--color-neutral-300),
+        0 0 8px var(--green-glow),
+        0 0 16px var(--green-glow-soft),
+        inset 0 1px 1px rgba(255, 255, 255, 0.5);
     flex-shrink: 0;
+    animation: pj-led-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes pj-led-pulse {
+    0%, 100% { box-shadow: 0 0 0 1.5px var(--color-neutral-800), 0 0 0 3px var(--color-neutral-300), 0 0 8px var(--green-glow), 0 0 14px var(--green-glow-soft), inset 0 1px 1px rgba(255, 255, 255, 0.5); }
+    50% { box-shadow: 0 0 0 1.5px var(--color-neutral-800), 0 0 0 3px var(--color-neutral-300), 0 0 12px var(--green-glow), 0 0 22px var(--green-glow-soft), inset 0 1px 1px rgba(255, 255, 255, 0.5); }
 }
 
 .pj-header-text h1 {
@@ -164,7 +181,12 @@
     text-transform: uppercase;
     letter-spacing: 0.16em;
     color: var(--color-neutral-700);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.50);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.30),
+        0 1px 0 rgba(255, 255, 255, 0.95),
+        0 2px 1px rgba(255, 255, 255, 0.40),
+        1px 1px 0 rgba(255, 255, 255, 0.25),
+        0 0 6px rgba(255, 255, 255, 0.12);
     margin: 0;
 }
 
@@ -175,22 +197,48 @@
     text-transform: uppercase;
     letter-spacing: 0.12em;
     color: var(--color-neutral-400);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.12),
+        0 1px 0 rgba(255, 255, 255, 0.80),
+        0 2px 1px rgba(255, 255, 255, 0.30);
     margin: 2px 0 0;
 }
 
-/* ---- Section Header (engraved panel text) ---- */
+/* ---- Section Header (engraved with decorative lines) ---- */
 .pj-section-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     font-family: var(--font-label);
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--color-neutral-500);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+    letter-spacing: 0.22em;
+    color: var(--color-neutral-600);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.32),
+        0 1px 0 rgba(255, 255, 255, 0.95),
+        0 2px 1px rgba(255, 255, 255, 0.40);
     margin: 0 0 12px;
     position: relative;
     z-index: 1;
+}
+
+.pj-section-label::before {
+    content: '';
+    width: 14px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--color-neutral-400), transparent);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.pj-section-label::after {
+    content: '';
+    width: 80px;
+    height: 1px;
+    background: linear-gradient(90deg, var(--color-neutral-400), transparent);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+    opacity: 0.5;
 }
 
 /* ---- Back Navigation ---- */
@@ -209,7 +257,9 @@
     text-transform: uppercase;
     letter-spacing: 0.10em;
     color: var(--color-neutral-400);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.08),
+        0 1px 0 rgba(255, 255, 255, 0.60);
     transition: color 0.15s ease;
     position: relative;
     z-index: 1;
@@ -227,7 +277,12 @@
     text-transform: uppercase;
     letter-spacing: 0.16em;
     color: var(--color-neutral-700);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.50);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.30),
+        0 1px 0 rgba(255, 255, 255, 0.95),
+        0 2px 1px rgba(255, 255, 255, 0.40),
+        1px 1px 0 rgba(255, 255, 255, 0.25),
+        0 0 6px rgba(255, 255, 255, 0.12);
     margin: 0 0 4px;
     position: relative;
     z-index: 1;
@@ -243,7 +298,9 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--color-neutral-400);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.08),
+        0 1px 0 rgba(255, 255, 255, 0.60);
     position: relative;
     z-index: 1;
 }
@@ -340,59 +397,96 @@
     color: rgba(53, 160, 88, 0.55);
 }
 
-/* ---- Tabs (recessed well with raised active tab) ---- */
+/* ---- Tabs (Neumorphic Pads) ---- */
 .pj-tabs-well {
-    border-radius: 6px;
-    background:
-        radial-gradient(ellipse at 50% 95%, rgba(255, 255, 255, 0.02) 0%, transparent 50%),
-        linear-gradient(180deg, var(--well-mid) 0%, var(--well-deep) 30%, var(--well-floor) 100%);
-    box-shadow:
-        inset 0 4px 10px rgba(0, 0, 0, 0.35),
-        inset 0 2px 3px rgba(0, 0, 0, 0.20),
-        inset 0 -1px 3px rgba(255, 255, 255, 0.02),
-        0 1px 0 rgba(255, 255, 255, 0.32),
-        0 2px 6px rgba(255, 255, 255, 0.05),
-        0 -1px 0 rgba(0, 0, 0, 0.12);
-    padding: 3px;
-    display: inline-flex;
-    gap: 2px;
+    display: flex;
+    gap: 4px;
+    width: fit-content;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+    border-radius: 0;
     position: relative;
     z-index: 1;
 }
 
 .pj-tab {
-    padding: 6px 16px;
-    border-radius: 4px;
-    border: none;
-    cursor: pointer;
-    font-family: var(--font-mono);
-    font-size: 10px;
+    font-family: var(--font-label);
+    font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    transition: all 0.15s ease;
+    letter-spacing: 0.14em;
+    padding: 10px 20px;
+    border-radius: 999px;
+    border: none;
+    background: transparent;
+    color: var(--color-neutral-600);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.32),
+        0 1px 0 rgba(255, 255, 255, 0.95),
+        0 2px 1px rgba(255, 255, 255, 0.45);
+    box-shadow:
+        -4px -4px 8px rgba(255, 255, 255, 0.75),
+        4px 4px 10px rgba(0, 0, 0, 0.10);
+    transition:
+        color 220ms ease,
+        text-shadow 240ms ease,
+        box-shadow 280ms cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
 }
 
-.pj-tab.active {
-    background: linear-gradient(180deg, var(--ctrl-hi) 0%, var(--ctrl) 50%, var(--ctrl-lo) 100%);
+.pj-tab:hover {
     color: var(--color-neutral-700);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.50);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.40),
+        0 1px 0 rgba(255, 255, 255, 1.0),
+        0 2px 1px rgba(255, 255, 255, 0.55);
     box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.60),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.08),
-        0 2px 4px rgba(0, 0, 0, 0.20);
+        -5px -5px 10px rgba(255, 255, 255, 0.85),
+        5px 5px 12px rgba(0, 0, 0, 0.12);
 }
 
-.pj-tab:not(.active) {
-    background: transparent;
-    color: rgba(53, 160, 88, 0.55);
-    text-shadow: 0 0 6px var(--green-glow-soft);
+.pj-tab:active {
+    box-shadow:
+        inset -3px -3px 6px rgba(255, 255, 255, 0.55),
+        inset 3px 3px 7px rgba(0, 0, 0, 0.12);
+    transition-duration: 80ms;
 }
 
-.pj-tab:not(.active):hover {
-    color: var(--green-bright);
-    background: rgba(53, 160, 88, 0.08);
+.pj-tab.active {
+    color: var(--green);
+    text-shadow:
+        0 -0.5px 0 rgba(0, 0, 0, 0.40),
+        0 1px 0 rgba(255, 255, 255, 0.18),
+        0 0 3px rgba(45, 138, 78, 0.45),
+        0 0 7px rgba(45, 138, 78, 0.25);
+    box-shadow:
+        inset 4px 4px 8px rgba(0, 0, 0, 0.14),
+        inset -4px -4px 8px rgba(255, 255, 255, 0.65),
+        inset 0 0 18px rgba(45, 138, 78, 0.10);
+    animation: pj-tab-glow 3.6s ease-in-out infinite;
+}
+
+@keyframes pj-tab-glow {
+    0%, 100% {
+        text-shadow:
+            0 -0.5px 0 rgba(0, 0, 0, 0.40),
+            0 1px 0 rgba(255, 255, 255, 0.18),
+            0 0 3px rgba(45, 138, 78, 0.40),
+            0 0 7px rgba(45, 138, 78, 0.22);
+    }
+    50% {
+        text-shadow:
+            0 -0.5px 0 rgba(0, 0, 0, 0.40),
+            0 1px 0 rgba(255, 255, 255, 0.18),
+            0 0 4px rgba(45, 138, 78, 0.55),
+            0 0 9px rgba(45, 138, 78, 0.30);
+    }
 }
 
 .pj-tab .pj-tab-count {
@@ -403,63 +497,77 @@
 }
 
 .pj-tab.active .pj-tab-count {
-    background: rgba(0, 0, 0, 0.08);
-    color: var(--color-neutral-500);
+    background: rgba(45, 138, 78, 0.15);
+    color: rgba(45, 138, 78, 0.70);
 }
 
 .pj-tab:not(.active) .pj-tab-count {
-    background: rgba(53, 160, 88, 0.12);
-    color: rgba(53, 160, 88, 0.45);
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--color-neutral-500);
 }
 
-/* ---- Filter Chips (inside display well) ---- */
+/* ---- Filter Chips (Neumorphic Pills) ---- */
 .pj-filter-well {
-    border-radius: 6px;
-    background:
-        radial-gradient(ellipse at 50% 95%, rgba(255, 255, 255, 0.02) 0%, transparent 50%),
-        linear-gradient(180deg, var(--well-mid) 0%, var(--well-deep) 30%, var(--well-floor) 100%);
-    box-shadow:
-        inset 0 4px 10px rgba(0, 0, 0, 0.35),
-        inset 0 2px 3px rgba(0, 0, 0, 0.20),
-        inset 0 -1px 3px rgba(255, 255, 255, 0.02),
-        0 1px 0 rgba(255, 255, 255, 0.32),
-        0 2px 6px rgba(255, 255, 255, 0.05),
-        0 -1px 0 rgba(0, 0, 0, 0.12);
-    padding: 3px;
-    display: inline-flex;
-    gap: 2px;
+    display: flex;
+    gap: 4px;
+    width: fit-content;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+    border-radius: 0;
     position: relative;
     z-index: 1;
 }
 
 .pj-filter-chip {
-    padding: 5px 12px;
-    border-radius: 4px;
+    padding: 7px 16px;
+    border-radius: 999px;
     border: none;
     cursor: pointer;
-    font-family: var(--font-mono);
+    font-family: var(--font-label);
     font-size: 10px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
-    transition: all 0.15s ease;
+    letter-spacing: 0.12em;
+    color: var(--color-neutral-500);
+    background: transparent;
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.20),
+        0 1px 0 rgba(255, 255, 255, 0.80);
+    box-shadow:
+        -3px -3px 6px rgba(255, 255, 255, 0.65),
+        3px 3px 8px rgba(0, 0, 0, 0.08);
+    transition:
+        color 200ms ease,
+        text-shadow 200ms ease,
+        box-shadow 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pj-filter-chip:hover {
+    color: var(--color-neutral-700);
+    box-shadow:
+        -4px -4px 8px rgba(255, 255, 255, 0.75),
+        4px 4px 10px rgba(0, 0, 0, 0.10);
+}
+
+.pj-filter-chip:active {
+    box-shadow:
+        inset -2px -2px 4px rgba(255, 255, 255, 0.50),
+        inset 2px 2px 5px rgba(0, 0, 0, 0.10);
+    transition-duration: 60ms;
 }
 
 .pj-filter-chip.active {
-    background: rgba(53, 160, 88, 0.15);
-    color: var(--green-bright);
-    text-shadow: 0 0 8px var(--green-glow-soft);
-    box-shadow: 0 0 8px rgba(45, 138, 78, 0.10);
-}
-
-.pj-filter-chip:not(.active) {
-    background: transparent;
-    color: rgba(53, 160, 88, 0.40);
-}
-
-.pj-filter-chip:not(.active):hover {
-    color: rgba(53, 160, 88, 0.65);
-    background: rgba(53, 160, 88, 0.06);
+    color: var(--green);
+    text-shadow:
+        0 -0.5px 0 rgba(0, 0, 0, 0.30),
+        0 1px 0 rgba(255, 255, 255, 0.18),
+        0 0 3px rgba(45, 138, 78, 0.40),
+        0 0 6px rgba(45, 138, 78, 0.20);
+    box-shadow:
+        inset 3px 3px 6px rgba(0, 0, 0, 0.12),
+        inset -3px -3px 6px rgba(255, 255, 255, 0.55),
+        inset 0 0 14px rgba(45, 138, 78, 0.08);
 }
 
 /* ---- Raised Buttons (panel surface) ---- */
@@ -511,7 +619,10 @@
 .pj-btn.secondary {
     background: linear-gradient(180deg, var(--ctrl-hi) 0%, var(--ctrl) 50%, var(--ctrl-lo) 100%);
     color: var(--color-neutral-600);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.15),
+        0 1px 0 rgba(255, 255, 255, 0.75),
+        0 2px 1px rgba(255, 255, 255, 0.28);
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.55),
         inset 0 -1px 0 rgba(0, 0, 0, 0.08),
@@ -536,7 +647,10 @@
 .pj-btn.danger {
     background: linear-gradient(180deg, var(--ctrl-hi) 0%, var(--ctrl) 50%, var(--ctrl-lo) 100%);
     color: var(--red);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.40);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.12),
+        0 1px 0 rgba(255, 255, 255, 0.70),
+        0 2px 1px rgba(255, 255, 255, 0.25);
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.55),
         inset 0 -1px 0 rgba(0, 0, 0, 0.08),
@@ -963,7 +1077,10 @@
     text-transform: uppercase;
     letter-spacing: 0.10em;
     color: var(--color-neutral-500);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.40);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.12),
+        0 1px 0 rgba(255, 255, 255, 0.70),
+        0 2px 1px rgba(255, 255, 255, 0.25);
     margin-bottom: 3px;
 }
 
@@ -1556,7 +1673,10 @@
     text-transform: uppercase;
     letter-spacing: 0.12em;
     color: var(--color-neutral-700);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.50);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.22),
+        0 1px 0 rgba(255, 255, 255, 0.90),
+        0 2px 1px rgba(255, 255, 255, 0.35);
     margin: 0;
     display: inline-flex;
     align-items: center;
@@ -1568,7 +1688,9 @@
     font-size: 11px;
     font-weight: 600;
     color: var(--color-neutral-400);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.08),
+        0 1px 0 rgba(255, 255, 255, 0.60);
     margin: 0;
 }
 
@@ -1835,7 +1957,10 @@
     text-transform: uppercase;
     letter-spacing: 0.12em;
     color: var(--color-neutral-600);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.50);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.22),
+        0 1px 0 rgba(255, 255, 255, 0.90),
+        0 2px 1px rgba(255, 255, 255, 0.35);
 }
 
 .pj-collapsible-chevron {

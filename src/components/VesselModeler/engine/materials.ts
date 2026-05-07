@@ -208,7 +208,7 @@ export function createPipelineMaterial(
     emissive: p.emissive,
     roughness: p.roughness,
     metalness: p.metalness,
-    side: THREE.FrontSide,
+    side: THREE.DoubleSide,
     transparent: true,
     opacity: 1.0,
   });

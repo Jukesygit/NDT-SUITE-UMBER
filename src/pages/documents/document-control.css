@@ -21,7 +21,7 @@
     position: relative;
     overflow: hidden;
     background:
-        linear-gradient(180deg, var(--panel-top) 0%, var(--panel-mid) 45%, var(--panel-bot) 100%);
+        linear-gradient(180deg, var(--ctrl-hi) 0%, var(--ctrl) 45%, var(--ctrl-lo) 100%);
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.45),
         inset 0 -1px 0 rgba(0, 0, 0, 0.08);
@@ -85,22 +85,18 @@
 
 /* ---- Groove Dividers ---- */
 .dc-groove {
-    height: 2px;
-    margin: 22px -8px;
-    background: linear-gradient(180deg, rgba(0, 0, 0, 0.18) 0%, rgba(0, 0, 0, 0.10) 50%, rgba(255, 255, 255, 0.40) 100%);
-    box-shadow:
-        0 1px 0 rgba(255, 255, 255, 0.18),
-        0 -1px 0 rgba(0, 0, 0, 0.06);
+    height: 1px;
+    margin: 22px 0;
+    background: rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .dc-groove-vertical {
-    width: 2px;
-    background: linear-gradient(90deg, rgba(0, 0, 0, 0.18) 0%, rgba(0, 0, 0, 0.10) 50%, rgba(255, 255, 255, 0.40) 100%);
-    margin: -8px 0;
+    width: 1px;
+    background: rgba(0, 0, 0, 0.08);
+    box-shadow: 1px 0 0 rgba(255, 255, 255, 0.5);
+    margin: 0;
     align-self: stretch;
-    box-shadow:
-        1px 0 0 rgba(255, 255, 255, 0.18),
-        -1px 0 0 rgba(0, 0, 0, 0.06);
 }
 
 /* ---- Nameplate Strip ---- */
@@ -118,7 +114,10 @@
     text-transform: uppercase;
     letter-spacing: 0.18em;
     color: var(--color-neutral-500);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.40);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.18),
+        0 1px 0 rgba(255, 255, 255, 0.85),
+        0 2px 1px rgba(255, 255, 255, 0.35);
 }
 
 .dc-nameplate-model {
@@ -128,7 +127,9 @@
     text-transform: uppercase;
     letter-spacing: 0.12em;
     color: var(--color-neutral-400);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.08),
+        0 1px 0 rgba(255, 255, 255, 0.65);
 }
 
 /* ---- Stats Cards (LCD Display Wells) ---- */
@@ -236,27 +237,43 @@
 
 .dc-stat-icon svg { display: none; }
 
-/* ---- Header ---- */
+/* ---- Header (Title Rail) ---- */
 .dc-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+    margin-bottom: 24px;
+    flex-wrap: wrap;
 }
 
 .dc-header-left {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 18px;
 }
 
 .dc-logo {
-    width: 8px;
-    height: 8px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #5ec87a, var(--green) 55%, var(--green-dark));
-    box-shadow: 0 0 4px var(--green-glow), 0 0 14px var(--green-glow-soft),
-        inset 0 -1px 2px rgba(0, 0, 0, 0.30), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+    background: radial-gradient(circle at 35% 30%, var(--green-bright) 0%, var(--green) 50%, var(--green-dark) 100%);
+    box-shadow:
+        0 0 0 1.5px var(--color-neutral-800),
+        0 0 0 3px var(--color-neutral-300),
+        0 0 8px var(--green-glow),
+        0 0 16px var(--green-glow-soft),
+        inset 0 1px 1px rgba(255, 255, 255, 0.5);
     flex-shrink: 0;
+    animation: dc-led-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes dc-led-pulse {
+    0%, 100% { box-shadow: 0 0 0 1.5px var(--color-neutral-800), 0 0 0 3px var(--color-neutral-300), 0 0 8px var(--green-glow), 0 0 14px var(--green-glow-soft), inset 0 1px 1px rgba(255, 255, 255, 0.5); }
+    50% { box-shadow: 0 0 0 1.5px var(--color-neutral-800), 0 0 0 3px var(--color-neutral-300), 0 0 12px var(--green-glow), 0 0 22px var(--green-glow-soft), inset 0 1px 1px rgba(255, 255, 255, 0.5); }
 }
 
 .dc-header-text h1 {
@@ -267,7 +284,12 @@
     text-transform: uppercase;
     letter-spacing: 0.16em;
     color: var(--color-neutral-700);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.50);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.30),
+        0 1px 0 rgba(255, 255, 255, 0.95),
+        0 2px 1px rgba(255, 255, 255, 0.40),
+        1px 1px 0 rgba(255, 255, 255, 0.25),
+        0 0 6px rgba(255, 255, 255, 0.12);
 }
 
 .dc-header-text p {
@@ -277,7 +299,10 @@
     text-transform: uppercase;
     letter-spacing: 0.12em;
     color: var(--color-neutral-400);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.12),
+        0 1px 0 rgba(255, 255, 255, 0.80),
+        0 2px 1px rgba(255, 255, 255, 0.30);
 }
 
 .dc-header-actions {
@@ -309,7 +334,10 @@
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.40);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.15),
+        0 1px 0 rgba(255, 255, 255, 0.60),
+        0 2px 1px rgba(255, 255, 255, 0.25);
     cursor: pointer;
     transition: all 0.15s ease;
 }
@@ -372,91 +400,111 @@
     margin-bottom: 0;
 }
 
-/* ---- Tabs (Recessed Well) ---- */
+/* ---- Tabs (Neumorphic Pads) ---- */
 .dc-card-tabs {
     display: flex;
-    gap: 2px;
-    border-radius: 7px;
-    padding: 3px;
-    background:
-        linear-gradient(180deg, var(--well-mid) 0%, var(--well-deep) 40%, var(--well-floor) 100%);
-    box-shadow:
-        inset 0 4px 10px rgba(0, 0, 0, 0.40),
-        inset 0 1px 3px rgba(0, 0, 0, 0.30),
-        0 1px 0 rgba(255, 255, 255, 0.28),
-        0 2px 5px rgba(255, 255, 255, 0.04),
-        0 -1px 0 rgba(0, 0, 0, 0.10);
+    gap: 4px;
+    width: fit-content;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+    border-radius: 0;
 }
 
 .dc-card-tab {
     font-family: var(--font-label);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    padding: 7px 16px;
-    border-radius: 5px;
+    letter-spacing: 0.14em;
+    padding: 10px 20px;
+    border-radius: 999px;
     border: none;
     background: transparent;
-    color: rgba(255, 255, 255, 0.30);
+    color: var(--color-neutral-600);
     cursor: pointer;
-    transition: all 0.15s ease;
-}
-.dc-card-tab:hover { color: rgba(255, 255, 255, 0.55); }
-.dc-card-tab.active {
-    background:
-        radial-gradient(ellipse at 50% 15%, rgba(255, 255, 255, 0.06) 0%, transparent 60%),
-        linear-gradient(180deg, var(--ctrl-hi) 0%, var(--ctrl) 60%, var(--ctrl-lo) 100%);
-    color: var(--color-neutral-700);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.40);
+    white-space: nowrap;
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.32),
+        0 1px 0 rgba(255, 255, 255, 0.95),
+        0 2px 1px rgba(255, 255, 255, 0.45);
     box-shadow:
-        0 2px 6px rgba(0, 0, 0, 0.18),
-        0 1px 2px rgba(0, 0, 0, 0.10),
-        inset 0 1px 0 rgba(255, 255, 255, 0.40);
+        -4px -4px 8px rgba(255, 255, 255, 0.75),
+        4px 4px 10px rgba(0, 0, 0, 0.10);
+    transition:
+        color 220ms ease,
+        text-shadow 240ms ease,
+        box-shadow 280ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.dc-card-tab:hover {
+    color: var(--color-neutral-700);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.40),
+        0 1px 0 rgba(255, 255, 255, 1.0),
+        0 2px 1px rgba(255, 255, 255, 0.55);
+    box-shadow:
+        -5px -5px 10px rgba(255, 255, 255, 0.85),
+        5px 5px 12px rgba(0, 0, 0, 0.12);
+}
+.dc-card-tab:active {
+    box-shadow:
+        inset -3px -3px 6px rgba(255, 255, 255, 0.55),
+        inset 3px 3px 7px rgba(0, 0, 0, 0.12);
+    transition-duration: 80ms;
+}
+.dc-card-tab.active {
+    color: var(--green);
+    text-shadow:
+        0 -0.5px 0 rgba(0, 0, 0, 0.40),
+        0 1px 0 rgba(255, 255, 255, 0.18),
+        0 0 3px rgba(45, 138, 78, 0.45),
+        0 0 7px rgba(45, 138, 78, 0.25);
+    box-shadow:
+        inset 4px 4px 8px rgba(0, 0, 0, 0.14),
+        inset -4px -4px 8px rgba(255, 255, 255, 0.65),
+        inset 0 0 18px rgba(45, 138, 78, 0.10);
 }
 
-/* ---- Search (Recessed Channel) ---- */
+/* ---- Search (Neumorphic Recessed Slot) ---- */
 .dc-search {
     display: flex;
     align-items: center;
     gap: 8px;
-    border-radius: 7px;
-    padding: 3px;
-    background:
-        linear-gradient(180deg, var(--well-mid) 0%, var(--well-deep) 40%, var(--well-floor) 100%);
+    border-radius: 5px;
+    padding: 0;
+    background: linear-gradient(180deg, var(--ctrl-lo) 0%, var(--ctrl) 100%);
     box-shadow:
-        inset 0 3px 8px rgba(0, 0, 0, 0.35),
-        inset 0 1px 3px rgba(0, 0, 0, 0.25),
-        0 1px 0 rgba(255, 255, 255, 0.18);
+        inset 3px 3px 6px rgba(0, 0, 0, 0.14),
+        inset -2px -2px 4px rgba(255, 255, 255, 0.55),
+        0 1px 0 rgba(255, 255, 255, 0.45);
     transition: all 0.2s ease;
 }
 .dc-search:focus-within {
     box-shadow:
-        inset 0 3px 8px rgba(0, 0, 0, 0.40),
-        inset 0 1px 3px rgba(0, 0, 0, 0.30),
-        0 1px 0 rgba(255, 255, 255, 0.18),
-        0 0 0 2px rgba(45, 138, 78, 0.20);
+        inset 3px 3px 6px rgba(0, 0, 0, 0.18),
+        inset -2px -2px 4px rgba(255, 255, 255, 0.55),
+        inset 0 0 12px rgba(45, 138, 78, 0.18);
 }
 .dc-search svg {
-    width: 14px;
-    height: 14px;
-    stroke: rgba(53, 160, 88, 0.40);
+    width: 16px;
+    height: 16px;
+    stroke: var(--color-neutral-500);
     fill: none;
     flex-shrink: 0;
-    margin-left: 10px;
+    margin-left: 14px;
 }
 .dc-search input {
     background: transparent;
     border: none;
     outline: none;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--green-bright);
-    text-shadow: 0 0 4px var(--green-glow-soft);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--text-primary);
     width: 180px;
-    padding: 5px 8px;
+    padding: 10px 14px 10px 8px;
+    height: 42px;
 }
-.dc-search input::placeholder { color: rgba(53, 160, 88, 0.28); }
+.dc-search input::placeholder { color: var(--color-neutral-400); font-style: italic; }
 
 /* ---- Filter Chips (LCD Context Toggles) ---- */
 .dc-filter-row {
@@ -706,7 +754,10 @@
     align-items: center;
     gap: 8px;
     color: var(--color-neutral-700);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.40);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.12),
+        0 1px 0 rgba(255, 255, 255, 0.70),
+        0 2px 1px rgba(255, 255, 255, 0.25);
 }
 
 .dc-sidebar-dot {
@@ -981,7 +1032,9 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--green);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.30);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.08),
+        0 1px 0 rgba(255, 255, 255, 0.55);
     background: none;
     border: none;
     cursor: pointer;
@@ -1004,7 +1057,10 @@
     text-transform: uppercase;
     letter-spacing: 0.10em;
     color: var(--text-primary);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.50);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.22),
+        0 1px 0 rgba(255, 255, 255, 0.90),
+        0 2px 1px rgba(255, 255, 255, 0.35);
     line-height: 1.3;
     margin: 0;
 }
@@ -1098,7 +1154,9 @@
     text-transform: uppercase;
     letter-spacing: 0.10em;
     color: var(--text-quaternary);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.25);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.06),
+        0 1px 0 rgba(255, 255, 255, 0.50);
 }
 
 .dc-detail-actions {
@@ -1117,7 +1175,10 @@
     text-transform: uppercase;
     letter-spacing: 0.12em;
     color: var(--text-secondary);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.40);
+    text-shadow:
+        0 -1px 0 rgba(0, 0, 0, 0.12),
+        0 1px 0 rgba(255, 255, 255, 0.70),
+        0 2px 1px rgba(255, 255, 255, 0.25);
     margin-bottom: 10px;
 }
 

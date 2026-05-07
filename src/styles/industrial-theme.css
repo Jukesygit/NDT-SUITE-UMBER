@@ -229,7 +229,10 @@ select:focus {
 
 .header__brand {
   color: var(--color-neutral-500);
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.40);
+  text-shadow:
+    0 -1px 0 rgba(0, 0, 0, 0.18),
+    0 1px 0 rgba(255, 255, 255, 0.85),
+    0 2px 1px rgba(255, 255, 255, 0.35);
 }
 
 .header__brand-icon {
@@ -247,20 +250,27 @@ select:focus {
   color: var(--color-neutral-400);
   border-radius: 4px;
   box-shadow: none;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+  text-shadow:
+    0 -1px 0 rgba(0, 0, 0, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.60);
 }
 
 .header__actions .btn--ghost:hover {
   background: rgba(0, 0, 0, 0.03);
   color: var(--color-neutral-600);
   box-shadow: none;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.40);
+  text-shadow:
+    0 -1px 0 rgba(0, 0, 0, 0.12),
+    0 1px 0 rgba(255, 255, 255, 0.70),
+    0 2px 1px rgba(255, 255, 255, 0.25);
 }
 
 /* Notification bell */
 .header__actions button[title] {
   color: var(--color-neutral-400);
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+  text-shadow:
+    0 -1px 0 rgba(0, 0, 0, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.60);
 }
 
 /* ==========================================
@@ -288,7 +298,9 @@ select:focus {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.30);
+  text-shadow:
+    0 -1px 0 rgba(0, 0, 0, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.55);
   padding: 10px 14px;
 }
 

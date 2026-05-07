@@ -10,6 +10,7 @@
 // =============================================================================
 
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { type VesselState, type TextureConfig } from '../types';
 import { SCALE } from './materials';
 import { createFlangedNozzle } from './nozzle-geometry';
@@ -358,50 +359,68 @@ export function buildVesselScene(
   const isVertical = state.orientation === 'vertical';
 
   // -- Shell cylinder -------------------------------------------------------
-  const shellGeom = new THREE.CylinderGeometry(
-    RADIUS * SCALE,
-    RADIUS * SCALE,
-    TAN_TAN * SCALE,
-    64,
-    1,
-    true,
-  );
+  const isPipeShape = state.vesselShape === 'pipe';
+  const WALL_RATIO = 0.12;
+
+  let shellGeom: THREE.BufferGeometry;
+  if (isPipeShape) {
+    const outerR = RADIUS * SCALE;
+    const innerR = outerR - outerR * WALL_RATIO;
+    const len = TAN_TAN * SCALE;
+    const h = len / 2;
+    const seg = 64;
+    const outer = new THREE.CylinderGeometry(outerR, outerR, len, seg, 1, true);
+    const inner = new THREE.CylinderGeometry(innerR, innerR, len, seg, 1, true);
+    inner.scale(1, 1, -1);
+    const topRing = new THREE.RingGeometry(innerR, outerR, seg);
+    topRing.rotateX(-Math.PI / 2);
+    topRing.translate(0, h, 0);
+    const bottomRing = new THREE.RingGeometry(innerR, outerR, seg);
+    bottomRing.rotateX(Math.PI / 2);
+    bottomRing.translate(0, -h, 0);
+    shellGeom = mergeGeometries([outer, inner, topRing, bottomRing]) ?? outer;
+  } else {
+    shellGeom = new THREE.CylinderGeometry(
+      RADIUS * SCALE, RADIUS * SCALE, TAN_TAN * SCALE, 64, 1, true,
+    );
+  }
+
   const shell = new THREE.Mesh(shellGeom, shellMaterial);
   if (!isVertical) {
-    shell.rotation.z = Math.PI / 2; // Horizontal orientation
+    shell.rotation.z = Math.PI / 2;
   }
   shell.userData = { type: 'shell', isShell: true };
   vesselGroup.add(shell);
 
-  // -- Ellipsoidal heads ----------------------------------------------------
-  const headGeom = new THREE.SphereGeometry(1, 64, 32, 0, Math.PI * 2, 0, Math.PI / 2);
+  // -- Ellipsoidal heads (skipped for pipe shape) ----------------------------
+  if (!isPipeShape) {
+    const headGeom = new THREE.SphereGeometry(1, 64, 32, 0, Math.PI * 2, 0, Math.PI / 2);
 
-  const bottomHead = new THREE.Mesh(headGeom, shellMaterial);
-  const topHead = new THREE.Mesh(headGeom, shellMaterial);
+    const bottomHead = new THREE.Mesh(headGeom, shellMaterial);
+    const topHead = new THREE.Mesh(headGeom, shellMaterial);
 
-  if (isVertical) {
-    // Vertical: heads at top and bottom (Y axis)
-    bottomHead.rotation.x = Math.PI; // Point down
-    bottomHead.position.y = -(TAN_TAN / 2) * SCALE;
-    bottomHead.scale.set(RADIUS * SCALE, HEAD_DEPTH * SCALE, RADIUS * SCALE);
+    if (isVertical) {
+      bottomHead.rotation.x = Math.PI;
+      bottomHead.position.y = -(TAN_TAN / 2) * SCALE;
+      bottomHead.scale.set(RADIUS * SCALE, HEAD_DEPTH * SCALE, RADIUS * SCALE);
 
-    topHead.rotation.x = 0; // Point up
-    topHead.position.y = (TAN_TAN / 2) * SCALE;
-    topHead.scale.set(RADIUS * SCALE, HEAD_DEPTH * SCALE, RADIUS * SCALE);
-  } else {
-    // Horizontal: heads at left and right (X axis)
-    bottomHead.rotation.z = Math.PI / 2;
-    bottomHead.position.x = -(TAN_TAN / 2) * SCALE;
-    bottomHead.scale.set(RADIUS * SCALE, HEAD_DEPTH * SCALE, RADIUS * SCALE);
+      topHead.rotation.x = 0;
+      topHead.position.y = (TAN_TAN / 2) * SCALE;
+      topHead.scale.set(RADIUS * SCALE, HEAD_DEPTH * SCALE, RADIUS * SCALE);
+    } else {
+      bottomHead.rotation.z = Math.PI / 2;
+      bottomHead.position.x = -(TAN_TAN / 2) * SCALE;
+      bottomHead.scale.set(RADIUS * SCALE, HEAD_DEPTH * SCALE, RADIUS * SCALE);
 
-    topHead.rotation.z = -Math.PI / 2;
-    topHead.position.x = (TAN_TAN / 2) * SCALE;
-    topHead.scale.set(RADIUS * SCALE, HEAD_DEPTH * SCALE, RADIUS * SCALE);
+      topHead.rotation.z = -Math.PI / 2;
+      topHead.position.x = (TAN_TAN / 2) * SCALE;
+      topHead.scale.set(RADIUS * SCALE, HEAD_DEPTH * SCALE, RADIUS * SCALE);
+    }
+    bottomHead.userData = { type: 'shell', isShell: true };
+    topHead.userData = { type: 'shell', isShell: true };
+    vesselGroup.add(bottomHead);
+    vesselGroup.add(topHead);
   }
-  bottomHead.userData = { type: 'shell', isShell: true };
-  topHead.userData = { type: 'shell', isShell: true };
-  vesselGroup.add(bottomHead);
-  vesselGroup.add(topHead);
 
   // -- Nozzles --------------------------------------------------------------
   state.nozzles.forEach((n, idx) => {
@@ -629,8 +648,8 @@ export function buildVesselScene(
     lugMeshes.push(lugGroup);
   });
 
-  // -- Saddles (only for horizontal vessels) --------------------------------
-  if (!isVertical) {
+  // -- Saddles (only for horizontal vessels, not pipe mode) -----------------
+  if (!isVertical && !isPipeShape) {
     state.saddles.forEach((saddle, idx) => {
       const saddleGroup = createSaddleGroup(
         saddle,

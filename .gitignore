@@ -37,7 +37,23 @@ lerna-debug.log*
 *.swo
 *~
 .DS_Store
-.claude
+.claude/*
+!.claude/
+!.claude/CLAUDE.md
+
+# Obsidian local state
+.obsidian/workspace*.json
+.obsidian/cache/
+.obsidian/plugins/
+.obsidian/themes/
+.obsidian/.trash/
+.trash/
+docs/.obsidian/workspace*.json
+docs/.obsidian/cache/
+docs/.obsidian/plugins/
+docs/.obsidian/themes/
+docs/.obsidian/.trash/
+docs/.trash/
 
 # TypeScript
 *.tsbuildinfo

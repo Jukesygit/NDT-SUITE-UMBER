@@ -74,67 +74,63 @@ export function PersonnelFilters({
     return (
         <div className="pm-filter-bar">
             {/* Search */}
-            <div className="pm-filter-section">
-                <div className="pm-search">
-                    <svg viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round">
-                        <circle cx="11" cy="11" r="8" />
-                        <path d="m21 21-4.35-4.35" />
-                    </svg>
-                    <input
-                        type="text"
-                        placeholder="Search by name or email..."
-                        value={searchTerm}
-                        onChange={(e) => onSearchChange(e.target.value)}
-                    />
-                    {searchTerm && (
-                        <button className="pm-search-clear" onClick={() => onSearchChange('')}>
-                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                                <path d="M18 6L6 18M6 6l12 12" />
-                            </svg>
-                        </button>
-                    )}
+            <div className="pm-search">
+                <svg viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.35-4.35" />
+                </svg>
+                <input
+                    type="text"
+                    placeholder="Search by name or email..."
+                    value={searchTerm}
+                    onChange={(e) => onSearchChange(e.target.value)}
+                />
+                {searchTerm && (
+                    <button className="pm-search-clear" onClick={() => onSearchChange('')}>
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                            <path d="M18 6L6 18M6 6l12 12" />
+                        </svg>
+                    </button>
+                )}
+            </div>
+
+            {/* Selectors Grid */}
+            <div className="pm-filter-selectors">
+                {/* Organization */}
+                <div className="pm-filter-field">
+                    <span className="pm-filter-label">Organization</span>
+                    <select
+                        className="pm-filter-select"
+                        value={filterOrg}
+                        onChange={(e) => onOrgChange(e.target.value)}
+                    >
+                        <option value="all">All Organizations</option>
+                        {organizations.map((org) => (
+                            <option key={org.id} value={org.id}>{org.name}</option>
+                        ))}
+                    </select>
                 </div>
-            </div>
 
-            <div className="pm-filter-divider" />
+                {/* Role */}
+                <div className="pm-filter-field">
+                    <span className="pm-filter-label">Role</span>
+                    <select
+                        className="pm-filter-select"
+                        value={filterRole}
+                        onChange={(e) => onRoleChange(e.target.value)}
+                    >
+                        <option value="all">All Roles</option>
+                        <option value="admin">Admin</option>
+                        <option value="org_admin">Org Admin</option>
+                        <option value="editor">Editor</option>
+                        <option value="viewer">Viewer</option>
+                    </select>
+                </div>
 
-            {/* Organization */}
-            <div className="pm-filter-section compact">
-                <label className="pm-filter-label">Organization</label>
-                <select
-                    className="pm-filter-select"
-                    value={filterOrg}
-                    onChange={(e) => onOrgChange(e.target.value)}
-                >
-                    <option value="all">All Organizations</option>
-                    {organizations.map((org) => (
-                        <option key={org.id} value={org.id}>{org.name}</option>
-                    ))}
-                </select>
-            </div>
-
-            <div className="pm-filter-divider" />
-
-            {/* Role */}
-            <div className="pm-filter-section compact">
-                <label className="pm-filter-label">Role</label>
-                <select
-                    className="pm-filter-select"
-                    value={filterRole}
-                    onChange={(e) => onRoleChange(e.target.value)}
-                >
-                    <option value="all">All Roles</option>
-                    <option value="admin">Admin</option>
-                    <option value="org_admin">Org Admin</option>
-                    <option value="editor">Editor</option>
-                    <option value="viewer">Viewer</option>
-                </select>
-            </div>
-
-            {/* Competency Filter */}
-            <div className="pm-filter-section compact" style={{ position: 'relative' }}>
-                <label className="pm-filter-label">Competencies</label>
-                <div ref={dropdownRef} style={{ position: 'relative' }}>
+                {/* Competency Filter */}
+                <div className="pm-filter-field" style={{ position: 'relative' }}>
+                    <span className="pm-filter-label">Competencies</span>
+                    <div ref={dropdownRef} style={{ position: 'relative' }}>
                     <button
                         className="pm-dropdown-trigger"
                         onClick={() => setShowCompetencyDropdown(!showCompetencyDropdown)}
@@ -191,9 +187,9 @@ export function PersonnelFilters({
                             </div>
                         </>
                     )}
+                    </div>
                 </div>
             </div>
-
         </div>
     );
 }

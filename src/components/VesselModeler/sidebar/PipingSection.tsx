@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Trash2, Plus, ChevronDown, ChevronRight } from 'lucide-react';
-import type { VesselState, PipeSegment, PipeSegmentType, NozzleConfig, NozzleOrientationMode } from '../types';
+import type { VesselState, FreeOrigin, PipeSegment, PipeSegmentType, NozzleConfig, NozzleOrientationMode } from '../types';
 import { PIPE_SIZES, findClosestPipeSize } from '../types';
 import { SubSection, SliderRow } from './SliderRow';
 
@@ -18,11 +18,15 @@ export interface PipingSectionProps {
     onRemoveNozzle: (index: number) => void;
     onSelectNozzle: (index: number) => void;
     onAddPipeline: (nozzleIndex: number, segmentType: PipeSegmentType) => void;
+    onAddFreePipeline: (pipeDiameter: number, segmentType: PipeSegmentType) => void;
+    onUpdateFreePipelineOrigin: (pipelineId: string, updates: Partial<FreeOrigin>) => void;
     onAddSegment: (pipelineId: string, segmentType: PipeSegmentType) => void;
     onUpdateSegment: (pipelineId: string, segmentId: string, updates: Partial<PipeSegment>) => void;
     onRemoveSegment: (pipelineId: string, segmentIndex: number) => void;
     onRemovePipeline: (pipelineId: string) => void;
     onSelectPipeSegment: (pipelineId: string, segmentIndex: number) => void;
+    /** When true, hides vessel-attached pipe UI and shows only free pipes */
+    pipeOnly?: boolean;
     isOpen?: boolean;
     onToggle?: () => void;
 }
@@ -66,11 +70,14 @@ export function PipingSection({
     onRemoveNozzle,
     onSelectNozzle,
     onAddPipeline,
+    onAddFreePipeline,
+    onUpdateFreePipelineOrigin,
     onAddSegment,
     onUpdateSegment,
     onRemoveSegment,
     onRemovePipeline,
     onSelectPipeSegment,
+    pipeOnly,
     isOpen,
     onToggle,
 }: PipingSectionProps) {
@@ -78,6 +85,16 @@ export function PipingSection({
 
     // Track which connection point accordions are expanded
     const [expandedPoints, setExpandedPoints] = useState<Set<number>>(() => new Set());
+    // Track which free pipe accordions are expanded
+    const [expandedFreePipes, setExpandedFreePipes] = useState<Set<string>>(() => new Set());
+    const toggleFreePipeExpanded = (id: string) => {
+        setExpandedFreePipes(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
     const toggleExpanded = (index: number) => {
         setExpandedPoints(prev => {
             const next = new Set(prev);
@@ -92,8 +109,11 @@ export function PipingSection({
         .map((n, i) => ({ nozzle: n, index: i }))
         .filter(({ nozzle }) => nozzle.style === 'plain-pipe');
 
+    // Free-standing pipelines (not attached to a nozzle)
+    const freePipelines = pipelines.filter(p => p.nozzleIndex === -1);
+
     // Map nozzle index → pipeline for quick lookup
-    const pipelineByNozzle = new Map(pipelines.map(p => [p.nozzleIndex, p]));
+    const pipelineByNozzle = new Map(pipelines.filter(p => p.nozzleIndex >= 0).map(p => [p.nozzleIndex, p]));
 
     const availableNozzles = connectionPoints.filter(({ index }) => !pipelineByNozzle.has(index));
 
@@ -105,13 +125,15 @@ export function PipingSection({
         ? selectedPipeline.segments[selectedSegmentIdx]
         : null;
 
+    const totalCount = connectionPoints.length + freePipelines.length;
+
     return (
-        <SubSection title="Piping" count={connectionPoints.length} isOpen={isOpen} onToggle={onToggle}>
-            {/* Parts library grid */}
-            <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', margin: '0 0 8px 0' }}>
+        <SubSection title="Piping" count={totalCount} isOpen={isOpen} onToggle={onToggle}>
+            {/* Parts library grid — vessel-attached pipes only */}
+            {!pipeOnly && <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', margin: '0 0 8px 0' }}>
                 Drag a part onto a connection point, or click to add
-            </p>
-            <div className="vm-library-grid" style={{ marginBottom: 10 }}>
+            </p>}
+            {!pipeOnly && <div className="vm-library-grid" style={{ marginBottom: 10 }}>
                 {LIBRARY_TYPES.map(({ type, label }) => (
                     <div
                         key={type}
@@ -134,13 +156,13 @@ export function PipingSection({
                         <div className="size-label">{label}</div>
                     </div>
                 ))}
-            </div>
+            </div>}
 
-            {/* Add connection point (plain-pipe nozzle) */}
-            <p style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', margin: '0 0 4px 0' }}>
+            {/* Add connection point (plain-pipe nozzle) — vessel mode only */}
+            {!pipeOnly && <p style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', margin: '0 0 4px 0' }}>
                 Add a connection point:
-            </p>
-            <div className="vm-library-grid" style={{ marginBottom: 10 }}>
+            </p>}
+            {!pipeOnly && <div className="vm-library-grid" style={{ marginBottom: 10 }}>
                 {PIPE_SIZES.map(p => (
                     <div
                         key={p.nps}
@@ -167,10 +189,10 @@ export function PipingSection({
                         <div className="size-mm">{p.od}mm</div>
                     </div>
                 ))}
-            </div>
+            </div>}
 
             {/* Connection point accordions — each groups nozzle + its pipeline segments */}
-            {connectionPoints.map(({ nozzle, index }) => {
+            {!pipeOnly && connectionPoints.map(({ nozzle, index }) => {
                 const pl = pipelineByNozzle.get(index);
                 const isExpanded = expandedPoints.has(index);
                 const isNozzleSelected = index === selectedNozzleIndex;
@@ -474,6 +496,248 @@ export function PipingSection({
                     </div>
                 );
             })}
+
+            {/* ── Free Pipes (standalone, not attached to vessel) ── */}
+            <div style={pipeOnly ? {} : { borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: 12, paddingTop: 10 }}>
+                <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, margin: '0 0 6px 0' }}>
+                    {pipeOnly ? 'Pipes' : 'Free Pipes'}
+                </p>
+                <p style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', margin: '0 0 6px 0' }}>
+                    Add a standalone pipe (no vessel required):
+                </p>
+                <div className="vm-library-grid" style={{ marginBottom: 10 }}>
+                    {PIPE_SIZES.map(p => (
+                        <div
+                            key={`free-${p.nps}`}
+                            className="vm-library-item"
+                            onClick={() => onAddFreePipeline(p.od, 'straight')}
+                            title={`Add free-standing ${p.nps} pipe`}
+                            style={{ userSelect: 'none', cursor: 'pointer' }}
+                        >
+                            <div className="size-label">{p.nps}</div>
+                            <div className="size-mm">{p.od}mm</div>
+                        </div>
+                    ))}
+                </div>
+
+                {freePipelines.map((fp) => {
+                    const isExpanded = expandedFreePipes.has(fp.id);
+                    const isSelected = fp.id === selectedPipelineId;
+                    const closestSize = PIPE_SIZES.reduce((best, s) =>
+                        Math.abs(s.od - fp.pipeDiameter) < Math.abs(best.od - fp.pipeDiameter) ? s : best,
+                        PIPE_SIZES[0],
+                    );
+                    const origin = fp.freeOrigin ?? { position: [0, 0, 0] as [number, number, number], direction: [0, 1, 0] as [number, number, number] };
+
+                    return (
+                        <div key={fp.id} className="vm-pipe-accordion" style={{ marginBottom: 6 }}>
+                            <div
+                                className={`vm-pipe-accordion-header ${isSelected ? 'selected' : ''}`}
+                                onClick={() => { toggleFreePipeExpanded(fp.id); onSelectPipeSegment(fp.id, fp.segments.length > 0 ? 0 : -1); }}
+                            >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+                                    {isExpanded
+                                        ? <ChevronDown size={14} style={{ flexShrink: 0, opacity: 0.5 }} />
+                                        : <ChevronRight size={14} style={{ flexShrink: 0, opacity: 0.5 }} />
+                                    }
+                                    <div style={{ minWidth: 0 }}>
+                                        <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'white' }}>
+                                            Free Pipe &middot; {closestSize.nps}
+                                        </div>
+                                        <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.45)' }}>
+                                            {fp.segments.length} segment{fp.segments.length !== 1 ? 's' : ''}
+                                            {' '}&middot; {Math.round(fp.pipeDiameter)}mm OD
+                                        </div>
+                                    </div>
+                                </div>
+                                <button
+                                    className="vm-btn-icon"
+                                    title="Remove this pipe"
+                                    onClick={(e) => { e.stopPropagation(); onRemovePipeline(fp.id); }}
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </div>
+
+                            {isExpanded && (
+                                <div className="vm-pipe-accordion-body">
+                                    {/* Origin position controls */}
+                                    <div className="vm-form edit-mode" style={{ margin: '6px 0', position: 'relative', zIndex: 1 }} onClick={e => e.stopPropagation()}>
+                                        <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', marginBottom: 4 }}>Origin (mm)</div>
+                                        <div className="vm-form-row">
+                                            {(['x', 'y', 'z'] as const).map((axis, i) => (
+                                                <div key={axis} className="vm-control-group">
+                                                    <div className="vm-label"><span>{axis.toUpperCase()}</span></div>
+                                                    <input
+                                                        type="number"
+                                                        className="vm-input"
+                                                        value={origin.position[i]}
+                                                        onChange={e => {
+                                                            const pos: [number, number, number] = [...origin.position];
+                                                            pos[i] = Number(e.target.value);
+                                                            onUpdateFreePipelineOrigin(fp.id, { position: pos });
+                                                        }}
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', marginBottom: 4, marginTop: 6 }}>Direction</div>
+                                        <div className="vm-toggle-group">
+                                            {([
+                                                ['+X', [1, 0, 0]],
+                                                ['-X', [-1, 0, 0]],
+                                                ['+Y', [0, 1, 0]],
+                                                ['-Y', [0, -1, 0]],
+                                                ['+Z', [0, 0, 1]],
+                                                ['-Z', [0, 0, -1]],
+                                            ] as [string, [number, number, number]][]).map(([label, dir]) => {
+                                                const isActive = origin.direction[0] === dir[0] && origin.direction[1] === dir[1] && origin.direction[2] === dir[2];
+                                                return (
+                                                    <button
+                                                        key={label}
+                                                        className={`vm-toggle-btn ${isActive ? 'active' : ''}`}
+                                                        onClick={() => onUpdateFreePipelineOrigin(fp.id, { direction: dir })}
+                                                        title={`Pipe direction: ${label}`}
+                                                    >
+                                                        {label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Segments list (reuses same pattern as nozzle-attached) */}
+                                    {fp.segments.map((seg, si) => {
+                                        const isSegSelected = fp.id === selectedPipelineId && si === selectedSegmentIdx;
+                                        return (
+                                            <React.Fragment key={seg.id}>
+                                                <div
+                                                    className={`vm-list-item vm-pipe-segment ${isSegSelected ? 'selected' : ''}`}
+                                                    onClick={() => onSelectPipeSegment(fp.id, si)}
+                                                >
+                                                    <div className="vm-list-item-info">
+                                                        {si + 1}. {segmentLabel(seg)}
+                                                    </div>
+                                                    <button
+                                                        className="vm-btn-icon"
+                                                        onClick={(e) => { e.stopPropagation(); onRemoveSegment(fp.id, si); }}
+                                                        title="Remove this and all downstream segments"
+                                                    >
+                                                        <Trash2 size={12} />
+                                                    </button>
+                                                </div>
+
+                                                {isSegSelected && (
+                                                    <div className="vm-form edit-mode" style={{ marginTop: 4, marginLeft: 8, position: 'relative', zIndex: 1 }} onClick={e => e.stopPropagation()}>
+                                                        <SliderRow
+                                                            label="Rotation"
+                                                            value={seg.rotation}
+                                                            min={0}
+                                                            max={360}
+                                                            step={5}
+                                                            unit="°"
+                                                            onChange={(v) => onUpdateSegment(fp.id, seg.id, { rotation: v })}
+                                                        />
+                                                        {seg.type === 'straight' && (
+                                                            <SliderRow
+                                                                label="Length"
+                                                                value={seg.length ?? fp.pipeDiameter * 3}
+                                                                min={10}
+                                                                max={5000}
+                                                                step={10}
+                                                                unit="mm"
+                                                                onChange={(v) => onUpdateSegment(fp.id, seg.id, { length: v })}
+                                                            />
+                                                        )}
+                                                        {seg.type === 'elbow' && (
+                                                            <>
+                                                                <SliderRow
+                                                                    label="Angle"
+                                                                    value={seg.angle ?? 90}
+                                                                    min={5}
+                                                                    max={180}
+                                                                    step={5}
+                                                                    unit="°"
+                                                                    onChange={(v) => onUpdateSegment(fp.id, seg.id, { angle: v })}
+                                                                />
+                                                                <SliderRow
+                                                                    label="Bend Radius"
+                                                                    value={seg.bendRadius ?? fp.pipeDiameter * 1.5}
+                                                                    min={Math.round(fp.pipeDiameter)}
+                                                                    max={Math.round(fp.pipeDiameter * 5)}
+                                                                    step={10}
+                                                                    unit="mm"
+                                                                    onChange={(v) => onUpdateSegment(fp.id, seg.id, { bendRadius: v })}
+                                                                />
+                                                            </>
+                                                        )}
+                                                        {seg.type === 'reducer' && (
+                                                            <>
+                                                                <SliderRow
+                                                                    label="Length"
+                                                                    value={seg.length ?? fp.pipeDiameter * 2}
+                                                                    min={10}
+                                                                    max={2000}
+                                                                    step={10}
+                                                                    unit="mm"
+                                                                    onChange={(v) => onUpdateSegment(fp.id, seg.id, { length: v })}
+                                                                />
+                                                                <SliderRow
+                                                                    label="End Diameter"
+                                                                    value={seg.endDiameter ?? fp.pipeDiameter * 0.75}
+                                                                    min={20}
+                                                                    max={Math.round(fp.pipeDiameter * 1.5)}
+                                                                    step={5}
+                                                                    unit="mm"
+                                                                    onChange={(v) => onUpdateSegment(fp.id, seg.id, { endDiameter: v })}
+                                                                />
+                                                            </>
+                                                        )}
+                                                        {seg.type === 'flange' && (
+                                                            <SliderRow
+                                                                label="Thickness"
+                                                                value={seg.length ?? 25}
+                                                                min={5}
+                                                                max={100}
+                                                                step={1}
+                                                                unit="mm"
+                                                                onChange={(v) => onUpdateSegment(fp.id, seg.id, { length: v })}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </React.Fragment>
+                                        );
+                                    })}
+
+                                    {/* Add segment buttons */}
+                                    <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                                        {LIBRARY_TYPES.map(({ type, label }) => (
+                                            <button
+                                                key={type}
+                                                className="vm-btn-sm"
+                                                onClick={() => onAddSegment(fp.id, type)}
+                                                title={`Add ${label}`}
+                                                style={{ fontSize: '0.7rem', padding: '2px 6px' }}
+                                            >
+                                                + {label}
+                                            </button>
+                                        ))}
+                                        <button
+                                            className="vm-btn-sm"
+                                            onClick={() => onRemovePipeline(fp.id)}
+                                            title="Remove this pipe"
+                                            style={{ fontSize: '0.7rem', padding: '2px 6px', marginLeft: 'auto', color: 'var(--color-danger, #ef4444)' }}
+                                        >
+                                            Clear
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
 
         </SubSection>
     );

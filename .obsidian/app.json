@@ -1,0 +1,21 @@
+{
+  "attachmentFolderPath": "docs/attachments",
+  "newFileLocation": "folder",
+  "newFileFolderPath": "docs/inbox",
+  "alwaysUpdateLinks": true,
+  "userIgnoreFilters": [
+    "node_modules/",
+    "dist/",
+    "build/",
+    "coverage/",
+    ".git/",
+    ".husky/",
+    ".claude/",
+    ".vercel/",
+    "docs/.obsidian/",
+    "supabase/.temp/",
+    "supabase/.branches/",
+    "src/",
+    "companion/__pycache__/"
+  ]
+}

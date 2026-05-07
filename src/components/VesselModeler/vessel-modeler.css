@@ -1468,6 +1468,12 @@
 .vm-coverage-area {
     width: 72px;
     text-align: right;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.vm-coverage-covered {
+    width: 72px;
+    text-align: right;
     color: rgba(77, 184, 255, 0.9);
 }
 
@@ -1476,6 +1482,19 @@
     text-align: right;
     color: rgba(0, 204, 102, 0.9);
     font-weight: 600;
+}
+
+.vm-coverage-header {
+    font-size: 0.6rem;
+    color: rgba(255, 255, 255, 0.35);
+    padding-bottom: 0;
+}
+
+.vm-coverage-header .vm-coverage-area,
+.vm-coverage-header .vm-coverage-covered,
+.vm-coverage-header .vm-coverage-pct {
+    color: rgba(255, 255, 255, 0.35);
+    font-weight: 400;
 }
 
 .vm-coverage-divider {
@@ -1490,6 +1509,10 @@
 }
 
 .vm-coverage-total .vm-coverage-area {
+    font-weight: 700;
+}
+
+.vm-coverage-total .vm-coverage-covered {
     font-weight: 700;
 }
 

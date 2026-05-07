@@ -108,6 +108,8 @@ Organizations isolate users so they can only see personnel from their own org.
 
 ## Documentation
 
+- [Obsidian Vault Home](VAULT.md)
+- [Agent Memory](docs/Agent%20Memory.md)
 - [Deployment Checklist](docs/DEPLOYMENT_CHECKLIST.md)
 - [Supabase Setup](docs/SUPABASE_SETUP.md)
 - [Codebase Audit (Feb 2026)](dev-docs/codebase-audit-2026-02.md)

@@ -1,0 +1,7 @@
+{
+  "collapse-filter": false,
+  "search": "-path:node_modules -path:dist -path:src -path:.git",
+  "showTags": true,
+  "showAttachments": false,
+  "hideUnresolved": false
+}

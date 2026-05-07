@@ -1,0 +1,11 @@
+{
+  "attachmentFolderPath": "attachments",
+  "newFileLocation": "folder",
+  "newFileFolderPath": "inbox",
+  "alwaysUpdateLinks": true,
+  "userIgnoreFilters": [
+    ".obsidian/workspace.json",
+    ".obsidian/workspace-mobile.json",
+    ".trash/"
+  ]
+}

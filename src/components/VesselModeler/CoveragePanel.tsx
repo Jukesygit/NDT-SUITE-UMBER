@@ -36,17 +36,25 @@ export default function CoveragePanel({ vesselState, sidebarOpen }: CoveragePane
             style={{ left: sidebarOpen ? 350 : 16 }}
         >
             <div className="vm-coverage-title">Coverage</div>
+            <div className="vm-coverage-row vm-coverage-header">
+                <span className="vm-coverage-label" />
+                <span className="vm-coverage-area">Area</span>
+                <span className="vm-coverage-covered">Covered</span>
+                <span className="vm-coverage-pct" />
+            </div>
             {rows.map(({ label, data }) => (
                 <div key={label} className="vm-coverage-row">
                     <span className="vm-coverage-label">{label}</span>
-                    <span className="vm-coverage-area">{formatArea(data.covered)} m&sup2;</span>
+                    <span className="vm-coverage-area">{formatArea(data.total)} m&sup2;</span>
+                    <span className="vm-coverage-covered">{formatArea(data.covered)} m&sup2;</span>
                     <span className="vm-coverage-pct">{formatPct(data.percent)}%</span>
                 </div>
             ))}
             <div className="vm-coverage-divider" />
             <div className="vm-coverage-row vm-coverage-total">
                 <span className="vm-coverage-label">Total</span>
-                <span className="vm-coverage-area">{formatArea(result.total.covered)} m&sup2;</span>
+                <span className="vm-coverage-area">{formatArea(result.total.total)} m&sup2;</span>
+                <span className="vm-coverage-covered">{formatArea(result.total.covered)} m&sup2;</span>
                 <span className="vm-coverage-pct">{formatPct(result.total.percent)}%</span>
             </div>
         </div>

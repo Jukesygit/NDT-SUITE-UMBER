@@ -309,18 +309,16 @@ export default function PersonnelPage() {
         <div className="h-full overflow-y-auto glass-scrollbar">
             <div className="pm-chassis">
                 <div className="pm-panel">
-                    {/* Header zone */}
+                    {/* Title Rail */}
                     <div className="pm-header">
                         <div className="pm-header-left">
                             <div className="pm-logo" />
                             <div className="pm-header-text">
                                 <h1>Personnel Management</h1>
-                                <p>Manage employee competencies, certifications, and training records</p>
+                                <p>Employees · Competencies · Certifications</p>
                             </div>
                         </div>
                     </div>
-
-                    <div className="pm-groove" />
 
                     {/* Tabs */}
                     <div className="pm-tabs-wrapper">
@@ -354,19 +352,18 @@ export default function PersonnelPage() {
                         </div>
                     </div>
 
-                    <div className="pm-groove" />
-
                     {/* Content Area */}
                     {view === 'directory' ? (
                         <>
-                            {/* Stats + Filters in dark bay */}
-                            <div className="pm-dark-bay">
-                                <div className="pm-section-label">Overview</div>
+                            {/* Dashboard Row: KPI 2×2 + Filter Rail side-by-side */}
+                            <div className="pm-dashboard-row">
                                 <div className="pm-stats-grid">
                                     <div className="pm-stat-card total">
                                         <div className="pm-stat-card-inner">
                                             <div className="pm-stat-icon" />
-                                            <div className="pm-stat-value">{filteredPersonnel.length}</div>
+                                            <div className="pm-stat-value">
+                                                {String(filteredPersonnel.length).padStart(2, '0')}
+                                            </div>
                                             <div className="pm-stat-label">Total Personnel</div>
                                         </div>
                                     </div>
@@ -375,7 +372,7 @@ export default function PersonnelPage() {
                                         <div className="pm-stat-card-inner">
                                             <div className="pm-stat-icon" />
                                             <div className="pm-stat-value">
-                                                {filteredPersonnel.reduce((sum, p) => sum + getFilteredCompetencyStats(p.competencies || []).active, 0)}
+                                                {String(filteredPersonnel.reduce((sum, p) => sum + getFilteredCompetencyStats(p.competencies || []).active, 0)).padStart(2, '0')}
                                             </div>
                                             <div className="pm-stat-label">Active Certs</div>
                                         </div>
@@ -385,7 +382,7 @@ export default function PersonnelPage() {
                                         <div className="pm-stat-card-inner">
                                             <div className="pm-stat-icon" />
                                             <div className="pm-stat-value">
-                                                {filteredPersonnel.reduce((sum, p) => sum + getFilteredCompetencyStats(p.competencies || []).expiring, 0)}
+                                                {String(filteredPersonnel.reduce((sum, p) => sum + getFilteredCompetencyStats(p.competencies || []).expiring, 0)).padStart(2, '0')}
                                             </div>
                                             <div className="pm-stat-label">Expiring Soon</div>
                                         </div>
@@ -395,66 +392,68 @@ export default function PersonnelPage() {
                                         <div className="pm-stat-card-inner">
                                             <div className="pm-stat-icon" />
                                             <div className="pm-stat-value">
-                                                {filteredPersonnel.reduce((sum, p) => sum + getFilteredCompetencyStats(p.competencies || []).expired, 0)}
+                                                {String(filteredPersonnel.reduce((sum, p) => sum + getFilteredCompetencyStats(p.competencies || []).expired, 0)).padStart(2, '0')}
                                             </div>
                                             <div className="pm-stat-label">Expired</div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="pm-groove" />
+                                <div className="pm-filter-rail">
+                                    <PersonnelFilters
+                                        searchTerm={searchTerm}
+                                        onSearchChange={setSearchTerm}
+                                        filterOrg={filterOrg}
+                                        onOrgChange={setFilterOrg}
+                                        filterRole={filterRole}
+                                        onRoleChange={setFilterRole}
+                                        filterCompetencies={filterCompetencies}
+                                        onCompetenciesChange={setFilterCompetencies}
+                                        organizations={organizationsQuery.data || []}
+                                        competencyDefinitions={(definitionsQuery.data as CompetencyDefinition[]) || []}
+                                    />
 
-                                <div className="pm-section-label">Search &amp; Filter</div>
-                                <PersonnelFilters
-                                    searchTerm={searchTerm}
-                                    onSearchChange={setSearchTerm}
-                                    filterOrg={filterOrg}
-                                    onOrgChange={setFilterOrg}
-                                    filterRole={filterRole}
-                                    onRoleChange={setFilterRole}
-                                    filterCompetencies={filterCompetencies}
-                                    onCompetenciesChange={setFilterCompetencies}
-                                    organizations={organizationsQuery.data || []}
-                                    competencyDefinitions={(definitionsQuery.data as CompetencyDefinition[]) || []}
-                                />
-
-                                {/* Quick Filters */}
-                                <div className="pm-quick-filters">
-                                    <span className="pm-quick-filters-label">Quick Filters</span>
-                                    <div className="pm-quick-filters-buttons">
-                                        {([
-                                            { id: 'irata-l1' as QuickFilter, label: 'IRATA L1' },
-                                            { id: 'irata-l2' as QuickFilter, label: 'IRATA L2' },
-                                            { id: 'irata-l3' as QuickFilter, label: 'IRATA L3' },
-                                            { id: 'paut-l2' as QuickFilter, label: 'PAUT L2' },
-                                            { id: 'tofd-l2' as QuickFilter, label: 'TOFD L2' },
-                                        ]).map((filter) => (
-                                            <button
-                                                type="button"
-                                                key={filter.id}
-                                                className={`pm-quick-filter-btn ${quickFilters.includes(filter.id) ? 'active' : ''}`}
-                                                onClick={() => handleQuickFilterToggle(filter.id)}
-                                            >
-                                                {filter.label}
-                                            </button>
-                                        ))}
-                                        {quickFilters.length > 0 && (
-                                            <button
-                                                type="button"
-                                                className="pm-quick-filter-clear"
-                                                onClick={() => setQuickFilters([])}
-                                            >
-                                                Clear
-                                            </button>
-                                        )}
+                                    {/* Quick Filters */}
+                                    <div className="pm-quick-filters">
+                                        <span className="pm-quick-filters-label">Quick Filters</span>
+                                        <div className="pm-quick-filters-buttons">
+                                            {([
+                                                { id: 'irata-l1' as QuickFilter, label: 'IRATA L1' },
+                                                { id: 'irata-l2' as QuickFilter, label: 'IRATA L2' },
+                                                { id: 'irata-l3' as QuickFilter, label: 'IRATA L3' },
+                                                { id: 'paut-l2' as QuickFilter, label: 'PAUT L2' },
+                                                { id: 'tofd-l2' as QuickFilter, label: 'TOFD L2' },
+                                            ]).map((filter) => (
+                                                <button
+                                                    type="button"
+                                                    key={filter.id}
+                                                    className={`pm-quick-filter-btn ${quickFilters.includes(filter.id) ? 'active' : ''}`}
+                                                    onClick={() => handleQuickFilterToggle(filter.id)}
+                                                >
+                                                    {filter.label}
+                                                </button>
+                                            ))}
+                                            {quickFilters.length > 0 && (
+                                                <button
+                                                    type="button"
+                                                    className="pm-quick-filter-clear"
+                                                    onClick={() => setQuickFilters([])}
+                                                >
+                                                    Clear
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="pm-groove" />
-
-                            {/* Table in Display Well */}
-                            <div className="pm-section-label">Directory</div>
+                            {/* Directory Table */}
+                            <div className="pm-section-label">
+                                <h2 className="pm-section-label__title">Directory</h2>
+                                <span className="pm-section-label__count">
+                                    {filteredPersonnel.length} of {personnelQuery.data?.length || 0} records
+                                </span>
+                            </div>
                             <div className="pm-display-well">
                                 <div className="pm-display" style={{ padding: 0 }}>
                                     <PersonnelTable

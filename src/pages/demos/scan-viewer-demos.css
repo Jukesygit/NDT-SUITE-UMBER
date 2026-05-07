@@ -105,7 +105,12 @@
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--ink-mid);
-  text-shadow: 0 1px 0 var(--hi);
+  text-shadow:
+    0 -1px 0 rgba(0,0,0,0.30),
+    0 1px 0 rgba(255,255,255,0.95),
+    0 2px 1px rgba(255,255,255,0.40),
+    1px 1px 0 rgba(255,255,255,0.25),
+    0 0 6px rgba(255,255,255,0.12);
   margin: 0;
   line-height: 1;
 }
@@ -115,7 +120,10 @@
   font-size: 12px;
   font-weight: 400;
   color: var(--ink-light);
-  text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+  text-shadow:
+    0 -1px 0 rgba(0,0,0,0.12),
+    0 1px 0 rgba(255,255,255,0.80),
+    0 2px 1px rgba(255,255,255,0.30);
   margin: 3px 0 0;
 }
 
@@ -125,7 +133,7 @@
    ============================================================ */
 
 .ind-plate {
-  background: linear-gradient(180deg, var(--panel-top) 0%, var(--panel-bot) 100%);
+  background: linear-gradient(180deg, var(--ctrl-hi) 0%, var(--ctrl-lo) 100%);
   border-style: solid;
   border-width: 1.5px;
   border-color:
@@ -205,7 +213,10 @@
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  text-shadow:
+    0 -1px 0 rgba(0,0,0,0.12),
+    0 1px 0 rgba(255,255,255,0.70),
+    0 2px 1px rgba(255,255,255,0.25);
   cursor: pointer;
   transition:
     box-shadow var(--speed) var(--ease),
@@ -284,7 +295,10 @@
   background: var(--ctrl);
   border-color: var(--ctrl-edge-lo);
   color: var(--ink-ghost);
-  text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  text-shadow:
+    0 -1px 0 rgba(0,0,0,0.12),
+    0 1px 0 rgba(255,255,255,0.70),
+    0 2px 1px rgba(255,255,255,0.25);
   box-shadow:
     0 1px 2px var(--shadow-soft),
     inset 0 1px 0 var(--hi);
@@ -377,7 +391,10 @@
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--ink-light);
-  text-shadow: 0 1px 0 var(--hi);
+  text-shadow:
+    0 -1px 0 rgba(0,0,0,0.12),
+    0 1px 0 rgba(255,255,255,0.70),
+    0 2px 1px rgba(255,255,255,0.25);
   margin: 0;
 }
 
@@ -391,7 +408,9 @@
   font-family: var(--ff-display);
   font-size: 12px;
   color: var(--ink-light);
-  text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+  text-shadow:
+    0 -1px 0 rgba(0,0,0,0.08),
+    0 1px 0 rgba(255,255,255,0.55);
 }
 
 
@@ -421,7 +440,9 @@
     0 1px 2px var(--shadow-soft),
     inset 0 1px 0 rgba(255,255,255,0.3);
   color: var(--ink-mid);
-  text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+  text-shadow:
+    0 -1px 0 rgba(0,0,0,0.08),
+    0 1px 0 rgba(255,255,255,0.60);
 }
 
 .ind-badge--nde {
@@ -546,7 +567,7 @@
   bottom: 16px;
   right: 16px;
   padding: 5px 14px;
-  background: linear-gradient(180deg, var(--panel-top) 0%, var(--panel-bot) 100%);
+  background: linear-gradient(180deg, var(--ctrl-hi) 0%, var(--ctrl-lo) 100%);
   border-style: solid;
   border-width: 1px;
   border-color:
@@ -564,7 +585,10 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--ink-light);
-  text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  text-shadow:
+    0 -1px 0 rgba(0,0,0,0.12),
+    0 1px 0 rgba(255,255,255,0.70),
+    0 2px 1px rgba(255,255,255,0.25);
   z-index: 900;
 }
 
@@ -626,7 +650,9 @@
 .ind-a__footer-text {
   font-size: 12px;
   color: var(--ink-light);
-  text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+  text-shadow:
+    0 -1px 0 rgba(0,0,0,0.08),
+    0 1px 0 rgba(255,255,255,0.55);
 }
 
 
@@ -758,7 +784,9 @@
   border: none;
   text-align: left;
   width: 100%;
-  text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+  text-shadow:
+    0 -1px 0 rgba(0,0,0,0.08),
+    0 1px 0 rgba(255,255,255,0.55);
 }
 
 .ind-c__sidebar-item:hover {
@@ -797,7 +825,9 @@
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--ink-light);
-  text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+  text-shadow:
+    0 -1px 0 rgba(0,0,0,0.08),
+    0 1px 0 rgba(255,255,255,0.55);
 }
 
 .ind-c__table-list {
@@ -859,7 +889,9 @@
   gap: 10px;
   font-size: 13px;
   color: var(--ink-mid);
-  text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+  text-shadow:
+    0 -1px 0 rgba(0,0,0,0.08),
+    0 1px 0 rgba(255,255,255,0.55);
 }
 
 .ind-c__convert-row {

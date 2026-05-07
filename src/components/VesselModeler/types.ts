@@ -433,6 +433,8 @@ export interface ReferenceDrawing {
   fileName: string;
 }
 
+export type VesselShape = 'vessel' | 'pipe';
+
 export interface VesselState {
   /** Inner diameter in mm */
   id: number;
@@ -441,6 +443,8 @@ export interface VesselState {
   /** Head ratio (e.g., 2.0 for 2:1 Ellipsoidal) */
   headRatio: number;
   orientation: Orientation;
+  /** Shape: 'vessel' (default, with ellipsoidal heads) or 'pipe' (open-ended cylinder) */
+  vesselShape?: VesselShape;
   /** Display name for the vessel (e.g., "V-2401") */
   vesselName: string;
   /** Site/facility location (e.g., "Karstoe Terminal") */
@@ -800,18 +804,28 @@ export interface PipeSegment {
   style?: string;
 }
 
+/** World-space origin for a free-standing pipeline (not attached to a nozzle) */
+export interface FreeOrigin {
+  /** Start position in mm [x, y, z] */
+  position: [number, number, number];
+  /** Pipe axis direction (unit vector) */
+  direction: [number, number, number];
+}
+
 export interface Pipeline {
   id: string;
-  /** Index into vesselState.nozzles — the connection origin */
+  /** Index into vesselState.nozzles — the connection origin. -1 for free-standing pipes. */
   nozzleIndex: number;
   /** Pipe outside diameter in mm */
   pipeDiameter: number;
   /** Optional hex color override */
   color?: string;
-  /** Ordered chain of segments from nozzle outward */
+  /** Ordered chain of segments from origin outward */
   segments: PipeSegment[];
   locked?: boolean;
   visible?: boolean;
+  /** Origin for free-standing pipes (nozzleIndex === -1). Position in mm, direction as unit vector. */
+  freeOrigin?: FreeOrigin;
 }
 
 // ---------------------------------------------------------------------------

@@ -4,7 +4,7 @@ import { Lock, Unlock, Save, Upload, RotateCcw, PanelLeftClose, PanelLeft, FileU
 import ThreeViewport from './ThreeViewport';
 import ErrorBoundary from '../ErrorBoundary';
 import type { ThreeViewportHandle } from './ThreeViewport';
-import SidebarPanel from './SidebarPanel';
+import SidebarPanel, { type ModelMode } from './SidebarPanel';
 import StatusBar from './StatusBar';
 import {
     DEFAULT_VESSEL_STATE,
@@ -23,6 +23,7 @@ import {
     type WeldConfig,
     type ScanCompositeConfig,
     type ThicknessThresholds,
+    type FreeOrigin,
     type Pipeline,
     type PipeSegment,
     type PipeSegmentType,
@@ -445,6 +446,9 @@ export default function VesselModeler() {
     const locksMenuRef = useRef<HTMLDivElement>(null);
     const actionsMenuRef = useRef<HTMLDivElement>(null);
 
+    // Model mode: 'vessel' (default) or 'pipe' (free-standing pipes only)
+    const [modelMode, setModelMode] = useState<ModelMode>('vessel');
+
     // Pipe part popup state (shown when clicking a connection point)
     const [pipePartPopup, setPipePartPopup] = useState<{ pipelineId: string; x: number; y: number } | null>(null);
 
@@ -586,6 +590,7 @@ export default function VesselModeler() {
                     endDiameter: s.endDiameter, branchDiameter: s.branchDiameter, style: s.style,
                 })),
                 locked: p.locked, visible: p.visible,
+                ...(p.freeOrigin ? { freeOrigin: p.freeOrigin } : {}),
             })),
             referenceDrawings: (projectData.referenceDrawings || []).map((d: any) => ({
                 id: d.id || Date.now(), title: d.title || '', imageData: d.imageData || '', fileName: d.fileName || '',
@@ -704,6 +709,16 @@ export default function VesselModeler() {
         dispatch({ type: 'UPDATE_VESSEL_FN', updater });
     }, []);
 
+    // --- Model mode handler ---
+    const handleSetModelMode = useCallback((mode: ModelMode) => {
+        setModelMode(mode);
+        updateVessel(prev => ({
+            ...prev,
+            hasModel: true,
+            vesselShape: mode === 'pipe' ? 'pipe' : 'vessel',
+        }));
+    }, [updateVessel]);
+
     // --- Vessel dimension handlers ---
     const updateDimensions = useCallback((updates: Partial<VesselState>) => {
         updateVessel(prev => ({ ...prev, ...updates, hasModel: true }));
@@ -759,6 +774,28 @@ export default function VesselModeler() {
         };
         updateVessel(prev => ({ ...prev, pipelines: [...prev.pipelines, newPipeline] }));
     }, [vesselState.nozzles, updateVessel, createDefaultSegment]);
+
+    const addFreePipeline = useCallback((pipeDiameter: number, segmentType: PipeSegmentType) => {
+        const newPipeline: Pipeline = {
+            id: crypto.randomUUID(),
+            nozzleIndex: -1,
+            pipeDiameter,
+            segments: [createDefaultSegment(segmentType, pipeDiameter)],
+            freeOrigin: { position: [0, 0, 0], direction: [0, 1, 0] },
+        };
+        updateVessel(prev => ({ ...prev, pipelines: [...prev.pipelines, newPipeline] }));
+    }, [updateVessel, createDefaultSegment]);
+
+    const updateFreePipelineOrigin = useCallback((pipelineId: string, updates: Partial<FreeOrigin>) => {
+        updateVessel(prev => ({
+            ...prev,
+            pipelines: prev.pipelines.map(p => {
+                if (p.id !== pipelineId || p.nozzleIndex !== -1) return p;
+                const current = p.freeOrigin ?? { position: [0, 0, 0] as [number, number, number], direction: [0, 1, 0] as [number, number, number] };
+                return { ...p, freeOrigin: { ...current, ...updates } };
+            }),
+        }));
+    }, [updateVessel]);
 
     const addSegment = useCallback((pipelineId: string, segmentType: PipeSegmentType) => {
         updateVessel(prev => ({
@@ -1986,6 +2023,7 @@ export default function VesselModeler() {
                             endDiameter: s.endDiameter, branchDiameter: s.branchDiameter, style: s.style,
                         })),
                         locked: p.locked, visible: p.visible,
+                        ...(p.freeOrigin ? { freeOrigin: p.freeOrigin } : {}),
                     })),
                     referenceDrawings: (projectData.referenceDrawings || []).map((d: any) => ({
                         id: d.id || Date.now(), title: d.title || '', imageData: d.imageData || '', fileName: d.fileName || '',
@@ -2734,6 +2772,8 @@ export default function VesselModeler() {
                 <div className={`vm-sidebar ${ui.sidebarOpen ? '' : 'collapsed'}`}>
                     <SidebarPanel
                         vesselState={vesselState}
+                        modelMode={modelMode}
+                        onSetModelMode={handleSetModelMode}
                         selectedNozzleIndex={selection.nozzleIndex}
                         selectedSaddleIndex={selection.saddleIndex}
                         selectedTextureId={selection.textureId}
@@ -2809,6 +2849,8 @@ export default function VesselModeler() {
                         selectedPipelineId={selection.pipelineId}
                         selectedSegmentIdx={selection.pipeSegmentIdx}
                         onAddPipeline={addPipeline}
+                        onAddFreePipeline={addFreePipeline}
+                        onUpdateFreePipelineOrigin={updateFreePipelineOrigin}
                         onAddSegment={addSegment}
                         onUpdateSegment={updateSegment}
                         onRemoveSegment={removeSegment}

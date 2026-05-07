@@ -43,7 +43,7 @@ function structuralHash(s: VesselState): string {
         inspectionImages: s.inspectionImages.map(i => ({ ...i, labelOffset: undefined, leaderLength: undefined })),
         scanComposites: s.scanComposites.map(sc => ({ id: sc.id, hasData: sc.data.length > 0, indexStartMm: sc.indexStartMm, datumAngleDeg: sc.datumAngleDeg, scanDirection: sc.scanDirection, indexDirection: sc.indexDirection, orientationConfirmed: sc.orientationConfirmed, colorScale: sc.colorScale, rangeMin: sc.rangeMin, rangeMax: sc.rangeMax, opacity: sc.opacity })),
         pipelines: s.pipelines,
-        hasModel: s.hasModel,
+        hasModel: s.hasModel, vesselShape: s.vesselShape,
         showNozzleLabels: s.visuals.showNozzleLabels,
     });
 }
@@ -784,27 +784,40 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             pipelineParent.userData = { type: 'pipelineRoot' };
 
             for (const pl of state.pipelines) {
-                const nozzle = state.nozzles[pl.nozzleIndex];
-                if (!nozzle) continue;
+                if (pl.nozzleIndex >= 0) {
+                    // Nozzle-attached pipeline
+                    const nozzle = state.nozzles[pl.nozzleIndex];
+                    if (!nozzle) continue;
 
-                // Find the nozzle group by its userData.nozzleIdx
-                let nozzleGroup: THREE.Group | null = null;
-                result.vesselGroup.traverse((child) => {
-                    if (child.userData?.type === 'nozzle' && child.userData?.nozzleIdx === pl.nozzleIndex) {
-                        nozzleGroup = child as THREE.Group;
-                    }
-                });
-                if (!nozzleGroup) continue;
+                    let nozzleGroup: THREE.Group | null = null;
+                    result.vesselGroup.traverse((child) => {
+                        if (child.userData?.type === 'nozzle' && child.userData?.nozzleIdx === pl.nozzleIndex) {
+                            nozzleGroup = child as THREE.Group;
+                        }
+                    });
+                    if (!nozzleGroup) continue;
 
-                const plGroup = buildPipelineGroup(
-                    pl,
-                    nozzleGroup,
-                    nozzle,
-                    state.id / 2, // shellRadius = inner diameter / 2
-                    materials.pipeline,
-                    materials.connectionPoint,
-                );
-                pipelineParent.add(plGroup);
+                    const plGroup = buildPipelineGroup(
+                        pl,
+                        nozzleGroup,
+                        nozzle,
+                        state.id / 2,
+                        materials.pipeline,
+                        materials.connectionPoint,
+                    );
+                    pipelineParent.add(plGroup);
+                } else {
+                    // Free-standing pipeline
+                    const plGroup = buildPipelineGroup(
+                        pl,
+                        null,
+                        null,
+                        0,
+                        materials.pipeline,
+                        materials.connectionPoint,
+                    );
+                    pipelineParent.add(plGroup);
+                }
             }
 
             manager.setPipelineGroup(pipelineParent);
