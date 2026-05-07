@@ -73,3 +73,11 @@ supabase/.temp
 *.local.json
 localData/NUL
 nul
+
+# Obsidian — ignore per-user UI state, keep shared core config
+docs/.obsidian/workspace.json
+docs/.obsidian/workspace-mobile.json
+docs/.obsidian/workspaces.json
+docs/.obsidian/cache
+docs/.obsidian/plugins/*/data.json
+docs/.trash/
