@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Move, ZoomIn, BarChart2, LayoutGrid } from 'lucide-react';
-import { Tool, DisplaySettings } from './types';
+import { Tool, DisplaySettings, DistributionConfig, DistributionMode } from './types';
 
 interface ToolBarProps {
   activeTool: Tool;
@@ -14,6 +14,9 @@ interface ToolBarProps {
   layoutMode?: boolean;
   onToggleLayoutMode?: () => void;
   layoutModeDisabled?: boolean;
+  distributionConfig?: DistributionConfig;
+  onDistributionConfigChange?: (config: DistributionConfig) => void;
+  hasData?: boolean;
 }
 
 const ToolBar: React.FC<ToolBarProps> = ({
@@ -27,7 +30,10 @@ const ToolBar: React.FC<ToolBarProps> = ({
   onToggleStats,
   layoutMode,
   onToggleLayoutMode,
-  layoutModeDisabled
+  layoutModeDisabled,
+  distributionConfig,
+  onDistributionConfigChange,
+  hasData = false
 }) => {
   // Local state for min/max inputs
   const [minInput, setMinInput] = useState<string>(
@@ -305,6 +311,111 @@ const ToolBar: React.FC<ToolBarProps> = ({
             <BarChart2 className="w-4 h-4" />
             <span className="text-xs font-medium">Stats</span>
           </button>
+        )}
+
+        {/* Distribution Controls */}
+        {onDistributionConfigChange && distributionConfig && (
+          <>
+            <div className="w-px h-6 bg-gray-700" />
+            <button
+              onClick={() => onDistributionConfigChange({
+                ...distributionConfig,
+                enabled: !distributionConfig.enabled,
+              })}
+              disabled={!hasData}
+              className={`
+                flex items-center gap-1.5 px-3 py-1.5 rounded transition-colors
+                ${distributionConfig.enabled
+                  ? 'bg-green-600 text-white'
+                  : hasData
+                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  : 'bg-gray-700 text-gray-600 cursor-not-allowed'}
+              `}
+              title="Toggle Distribution Panel"
+            >
+              <span className="text-xs font-medium">Dist</span>
+            </button>
+
+            {distributionConfig.enabled && (
+              <>
+                <select
+                  value={distributionConfig.mode}
+                  onChange={(e) => onDistributionConfigChange({
+                    ...distributionConfig,
+                    mode: e.target.value as DistributionMode,
+                  })}
+                  style={{
+                    padding: '4px 8px',
+                    backgroundColor: '#374151',
+                    color: '#ffffff',
+                    fontSize: '12px',
+                    border: '1px solid #4b5563',
+                    borderRadius: '4px',
+                    outline: 'none',
+                    cursor: 'pointer',
+                  }}
+                  title="Distribution mode"
+                >
+                  <option value="thickness">Thickness (mm)</option>
+                  <option value="wallLoss">Wall Loss (%)</option>
+                </select>
+
+                {distributionConfig.mode === 'wallLoss' && (
+                  <div className="flex items-center gap-1">
+                    <label className="text-xs text-gray-400">Nom:</label>
+                    <input
+                      type="number"
+                      value={distributionConfig.nominalThickness}
+                      min={0.1}
+                      step={0.1}
+                      onChange={(e) => onDistributionConfigChange({
+                        ...distributionConfig,
+                        nominalThickness: Math.max(0.1, Number(e.target.value)),
+                      })}
+                      style={{
+                        width: '56px',
+                        padding: '4px 6px',
+                        backgroundColor: '#374151',
+                        color: '#ffffff',
+                        fontSize: '12px',
+                        border: '1px solid #4b5563',
+                        borderRadius: '4px',
+                        outline: 'none',
+                      }}
+                      title="Nominal thickness (mm)"
+                    />
+                    <span className="text-xs text-gray-500">mm</span>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-1">
+                  <label className="text-xs text-gray-400">Bins:</label>
+                  <input
+                    type="number"
+                    value={distributionConfig.binCount}
+                    min={2}
+                    max={20}
+                    step={1}
+                    onChange={(e) => onDistributionConfigChange({
+                      ...distributionConfig,
+                      binCount: Math.max(2, Math.min(20, Math.round(Number(e.target.value)))),
+                    })}
+                    style={{
+                      width: '44px',
+                      padding: '4px 6px',
+                      backgroundColor: '#374151',
+                      color: '#ffffff',
+                      fontSize: '12px',
+                      border: '1px solid #4b5563',
+                      borderRadius: '4px',
+                      outline: 'none',
+                    }}
+                    title="Number of bins"
+                  />
+                </div>
+              </>
+            )}
+          </>
         )}
       </div>
     </div>
