@@ -1520,6 +1520,115 @@
     font-weight: 700;
 }
 
+/* ===========================================================================
+   Wall Loss Distribution Panel (Floating Overlay)
+   Stacks above CoveragePanel via dynamic bottom offset prop.
+   =========================================================================== */
+
+.vm-wallloss-panel {
+    position: absolute;
+    bottom: 48px;
+    left: 350px;
+    z-index: 15;
+    background: rgba(20, 25, 35, 0.88);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 10px 14px;
+    min-width: 280px;
+    transition: left 0.3s ease, bottom 0.3s ease;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.85);
+    font-family: var(--font-mono, monospace);
+}
+
+.vm-wallloss-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.vm-wallloss-nominal {
+    font-weight: 400;
+    font-size: 0.65rem;
+    color: rgba(255, 255, 255, 0.35);
+    text-transform: none;
+}
+
+.vm-wallloss-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0;
+}
+
+.vm-wallloss-swatch {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.vm-wallloss-range {
+    flex: 1;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.vm-wallloss-area {
+    width: 72px;
+    text-align: right;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.vm-wallloss-pct {
+    width: 44px;
+    text-align: right;
+    color: rgba(0, 204, 102, 0.9);
+    font-weight: 600;
+}
+
+.vm-wallloss-count {
+    width: 40px;
+    text-align: right;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.vm-wallloss-header {
+    font-size: 0.6rem;
+    color: rgba(255, 255, 255, 0.35);
+    padding-bottom: 0;
+}
+
+.vm-wallloss-header .vm-wallloss-area,
+.vm-wallloss-header .vm-wallloss-pct,
+.vm-wallloss-header .vm-wallloss-count {
+    color: rgba(255, 255, 255, 0.35);
+    font-weight: 400;
+}
+
+.vm-wallloss-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.12);
+    margin: 4px 0;
+}
+
+.vm-wallloss-total .vm-wallloss-range {
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.vm-wallloss-total .vm-wallloss-area,
+.vm-wallloss-total .vm-wallloss-pct {
+    font-weight: 700;
+}
+
 /* -- Checkbox row (generic sidebar toggle) -------------------------------- */
 
 .vm-checkbox-row {
