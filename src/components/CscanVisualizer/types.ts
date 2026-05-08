@@ -95,3 +95,45 @@ export interface CsvRepairResult {
   correctedFiles: CscanData[];
   skippedFiles: string[];
 }
+
+// ---------------------------------------------------------------------------
+// Distribution Stats Panel
+// ---------------------------------------------------------------------------
+
+export type DistributionMode = 'thickness' | 'wallLoss';
+
+export interface DistributionConfig {
+  /** Whether the distribution panel is visible */
+  enabled: boolean;
+  /** 'thickness' bins by raw mm ranges; 'wallLoss' bins by % wall loss */
+  mode: DistributionMode;
+  /** Number of equal-width bins */
+  binCount: number;
+  /** Nominal wall thickness in mm — only used in wallLoss mode */
+  nominalThickness: number;
+}
+
+export interface DistributionBin {
+  /** Lower bound (inclusive) */
+  min: number;
+  /** Upper bound (exclusive, except last bin which is inclusive) */
+  max: number;
+  /** Area in this bin (m²) */
+  area: number;
+  /** Percentage of total valid area */
+  areaPercent: number;
+  /** Number of data points in this bin */
+  count: number;
+}
+
+export interface DistributionResult {
+  bins: DistributionBin[];
+  /** Total valid data area (m²) */
+  totalArea: number;
+  /** Total valid data points */
+  totalPoints: number;
+  /** The mode used for this computation */
+  mode: DistributionMode;
+  /** Unit label for display ('mm' or '%') */
+  unit: string;
+}
