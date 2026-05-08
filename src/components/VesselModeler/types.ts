@@ -371,6 +371,44 @@ export interface ThicknessThresholds {
   yellowBelowPct?: number;
 }
 
+// ---------------------------------------------------------------------------
+// Wall Loss Distribution
+// ---------------------------------------------------------------------------
+
+export interface WallLossGroupConfig {
+  /** Whether the wall-loss stats panel is visible */
+  enabled: boolean;
+  /** Nominal wall thickness in mm — required for wall-loss calculation */
+  nominalThickness: number;
+  /** Number of equal-width bins to divide the 0–100 % wall-loss range into.
+   *  v1 supports equal-width only; custom boundaries can be added later
+   *  by extending this interface with an optional `boundaries: number[]` field. */
+  binCount: number;
+}
+
+export interface WallLossGroupBin {
+  /** Lower bound of wall-loss % (inclusive) */
+  minPct: number;
+  /** Upper bound of wall-loss % (exclusive, except last bin which is inclusive) */
+  maxPct: number;
+  /** True surface area falling in this bin (m²) */
+  area: number;
+  /** Percentage of total scanned area in this bin */
+  areaPercent: number;
+  /** Number of data-grid cells in this bin */
+  count: number;
+}
+
+export interface WallLossDistribution {
+  bins: WallLossGroupBin[];
+  /** Total scanned surface area across all composites (m²) */
+  totalScannedArea: number;
+  /** Total valid data points processed */
+  totalDataPoints: number;
+  /** Nominal thickness used for calculation (mm) */
+  nominalThickness: number;
+}
+
 export interface AnnotationThicknessStats {
   min: number;
   max: number;
@@ -466,6 +504,8 @@ export interface VesselState {
   referenceDrawings: ReferenceDrawing[];
   measurementConfig: MeasurementConfig;
   thicknessThresholds?: ThicknessThresholds;
+  /** Wall-loss distribution config — drives the floating stats panel */
+  wallLossGroups?: WallLossGroupConfig;
   /** Global coordinate origin offset — displayed positions subtract these values.
    *  Allows aligning vessel readouts with scan data that doesn't start at 0. */
   coordinateOrigin: { indexMm: number; scanMm: number };
