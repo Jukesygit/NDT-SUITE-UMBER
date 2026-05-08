@@ -23,6 +23,7 @@ import {
     type WeldConfig,
     type ScanCompositeConfig,
     type ThicknessThresholds,
+    type WallLossGroupConfig,
     type FreeOrigin,
     type Pipeline,
     type PipeSegment,
@@ -48,6 +49,7 @@ import './vessel-modeler.css';
 import * as THREE from 'three';
 
 import CoveragePanel from './CoveragePanel';
+import WallLossPanel from './WallLossPanel';
 import InspectionPanel from './sidebar/InspectionPanel';
 import StatLeaderOverlay from './StatLeaderOverlay';
 import { PipePartPopup } from './sidebar/PipePartPopup';
@@ -606,6 +608,7 @@ export default function VesselModeler() {
             labelsTidied: projectData.labelsTidied ?? false,
             annotationTablePosition: projectData.annotationTablePosition,
             annotationTableSize: projectData.annotationTableSize,
+            wallLossGroups: projectData.wallLossGroups,
         };
 
         clearHeatmapCache();
@@ -1072,6 +1075,10 @@ export default function VesselModeler() {
     const updateThicknessThresholds = useCallback((thresholds: ThicknessThresholds) => {
         dispatch({ type: 'UPDATE_THICKNESS_THRESHOLDS', thresholds });
     }, []);
+
+    const handleUpdateWallLossGroups = useCallback((config: WallLossGroupConfig) => {
+        updateVessel(prev => ({ ...prev, wallLossGroups: config }));
+    }, [updateVessel]);
 
     const getNextAnnotationId = useCallback(() => {
         return nextAnnotationIdRef.current++;
@@ -1579,6 +1586,7 @@ export default function VesselModeler() {
             labelsTidied: vesselState.labelsTidied,
             annotationTablePosition: vesselState.annotationTablePosition,
             annotationTableSize: vesselState.annotationTableSize,
+            wallLossGroups: vesselState.wallLossGroups,
             visuals: { ...vesselState.visuals },
         };
 
@@ -1693,6 +1701,7 @@ export default function VesselModeler() {
             labelsTidied: vesselState.labelsTidied,
             annotationTablePosition: vesselState.annotationTablePosition,
             annotationTableSize: vesselState.annotationTableSize,
+            wallLossGroups: vesselState.wallLossGroups,
             visuals: { ...vesselState.visuals },
         };
 
@@ -2039,6 +2048,7 @@ export default function VesselModeler() {
                     originSourceScanId: projectData.originSourceScanId,
                     hasModel: true,
                     visuals: { ...DEFAULT_VESSEL_STATE.visuals, ...(projectData.visuals || {}) },
+                    wallLossGroups: projectData.wallLossGroups,
                 };
 
                 // Clear heatmap cache to avoid stale scan composite textures
@@ -2846,6 +2856,7 @@ export default function VesselModeler() {
                         cloudCompositesLoading={cloudCompositesLoading}
                         cloudCompositesError={cloudCompositesError as Error | null}
                         onUpdateThicknessThresholds={updateThicknessThresholds}
+                        onUpdateWallLossGroups={handleUpdateWallLossGroups}
                         selectedPipelineId={selection.pipelineId}
                         selectedSegmentIdx={selection.pipeSegmentIdx}
                         onAddPipeline={addPipeline}
@@ -3047,6 +3058,11 @@ export default function VesselModeler() {
 
                 {/* Coverage overlay */}
                 <CoveragePanel vesselState={vesselState} sidebarOpen={ui.sidebarOpen} />
+                <WallLossPanel
+                    vesselState={vesselState}
+                    sidebarOpen={ui.sidebarOpen}
+                    coverageVisible={vesselState.coverageRects.length > 0}
+                />
 
                 {/* Inspection mode overlay (right-side panel + camera lock indicator) */}
                 {ui.inspectingAnnotationId !== null && (() => {

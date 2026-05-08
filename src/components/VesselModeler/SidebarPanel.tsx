@@ -13,6 +13,7 @@ import type {
     WeldConfig,
     ScanCompositeConfig,
     ThicknessThresholds,
+    WallLossGroupConfig,
     PipeSegmentType,
 } from './types';
 import type { FreeOrigin, PipeSegment } from './types';
@@ -31,6 +32,7 @@ import {
     ImageOverlaySection,
     ScanCompositeSection,
     AnnotationSection,
+    WallLossConfigSection,
     CoverageSection,
     InspectionImageSection,
     ProjectInfoSection,
@@ -131,6 +133,7 @@ export interface SidebarPanelProps {
     cloudCompositesLoading: boolean;
     cloudCompositesError: Error | null;
     onUpdateThicknessThresholds: (thresholds: ThicknessThresholds) => void;
+    onUpdateWallLossGroups: (config: WallLossGroupConfig) => void;
     // Pipeline props
     selectedPipelineId: string;
     selectedSegmentIdx: number;
@@ -407,6 +410,10 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                                 isOpen={activeInspectionSub === 'annotations'}
                                 onToggle={() => toggleInspSub('annotations')}
                             />
+                            <WallLossConfigSection
+                                config={vesselState.wallLossGroups}
+                                onUpdate={props.onUpdateWallLossGroups}
+                            />
                             <CoverageSection
                                 vesselState={vesselState}
                                 coverageDrawMode={props.coverageDrawMode}
@@ -514,6 +521,10 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                                 projectImages={props.projectImages}
                                 isOpen={activeInspectionSub === 'annotations'}
                                 onToggle={() => toggleInspSub('annotations')}
+                            />
+                            <WallLossConfigSection
+                                config={vesselState.wallLossGroups}
+                                onUpdate={props.onUpdateWallLossGroups}
                             />
                             <CoverageSection
                                 vesselState={vesselState}
