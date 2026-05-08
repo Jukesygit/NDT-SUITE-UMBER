@@ -17,8 +17,9 @@ import FilePanel from './FilePanel';
 import ToolBar from './ToolBar';
 import { useLayoutMode } from './hooks/useLayoutMode';
 import StatsPanel from './StatsPanel';
+import DistributionPanel from './DistributionPanel';
 import CsvRepairModal from './CsvRepairModal';
-import { CscanData, Tool, DisplaySettings } from './types';
+import { CscanData, Tool, DisplaySettings, DistributionConfig } from './types';
 import { exportAndDownloadHeatmap } from './utils/streamedExport';
 import {
   processFilesWithWorker,
@@ -85,6 +86,14 @@ const CscanVisualizer: React.FC = () => {
     showFilenames: false,
     smoothing: 'best',
     range: { min: null, max: null }
+  });
+
+  // Distribution panel state
+  const [distributionConfig, setDistributionConfig] = useState<DistributionConfig>({
+    enabled: false,
+    mode: 'thickness',
+    binCount: 5,
+    nominalThickness: 10,
   });
 
   // Cloud save hooks
@@ -464,6 +473,9 @@ const CscanVisualizer: React.FC = () => {
         layoutMode={layoutMode}
         onToggleLayoutMode={() => setLayoutMode(prev => !prev)}
         layoutModeDisabled={processedScans.length < 2}
+        distributionConfig={distributionConfig}
+        onDistributionConfigChange={setDistributionConfig}
+        hasData={!!scanData}
       />
 
       {/* Main Content Area - relative container for absolute children */}
@@ -588,6 +600,16 @@ const CscanVisualizer: React.FC = () => {
               onToggle={() => setShowStats(false)}
             />
           </div>
+        )}
+
+        {/* Distribution Panel - stacks above stats panel */}
+        {distributionConfig.enabled && (
+          <DistributionPanel
+            data={scanData}
+            config={distributionConfig}
+            statsVisible={showStats}
+            onClose={() => setDistributionConfig(prev => ({ ...prev, enabled: false }))}
+          />
         )}
 
         {/* RIGHT TOOLBAR - floating overlay */}
