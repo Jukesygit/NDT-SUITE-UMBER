@@ -11,6 +11,8 @@ interface FilePanelProps {
   onSelectionChange: (selected: Set<string>) => void;
   onCreateComposite?: () => void;
   onClearFiles?: () => void;
+  onBringToFront?: (fileId: string) => void;
+  layoutMode?: boolean;
 }
 
 const FilePanel: React.FC<FilePanelProps> = ({
@@ -21,7 +23,9 @@ const FilePanel: React.FC<FilePanelProps> = ({
   onFileUpload,
   onSelectionChange,
   onCreateComposite,
-  onClearFiles
+  onClearFiles,
+  onBringToFront,
+  layoutMode
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -203,7 +207,7 @@ const FilePanel: React.FC<FilePanelProps> = ({
                           : 'hover:bg-gray-700/50'}
                         transition-colors
                       `}
-                      onClick={() => onFileSelect(file.id)}
+                      onClick={() => layoutMode && onBringToFront ? onBringToFront(file.id) : onFileSelect(file.id)}
                     >
                       {/* Checkbox - Made larger and more visible */}
                       <input

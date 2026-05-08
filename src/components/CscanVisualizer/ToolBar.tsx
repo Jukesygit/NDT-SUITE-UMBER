@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Move, ZoomIn, BarChart2 } from 'lucide-react';
+import { Move, ZoomIn, BarChart2, LayoutGrid } from 'lucide-react';
 import { Tool, DisplaySettings } from './types';
 
 interface ToolBarProps {
@@ -11,6 +11,9 @@ interface ToolBarProps {
   dataMax?: number;
   showStats?: boolean;
   onToggleStats?: () => void;
+  layoutMode?: boolean;
+  onToggleLayoutMode?: () => void;
+  layoutModeDisabled?: boolean;
 }
 
 const ToolBar: React.FC<ToolBarProps> = ({
@@ -21,7 +24,10 @@ const ToolBar: React.FC<ToolBarProps> = ({
   dataMin = 0,
   dataMax = 100,
   showStats = false,
-  onToggleStats
+  onToggleStats,
+  layoutMode,
+  onToggleLayoutMode,
+  layoutModeDisabled
 }) => {
   // Local state for min/max inputs
   const [minInput, setMinInput] = useState<string>(
@@ -97,6 +103,28 @@ const ToolBar: React.FC<ToolBarProps> = ({
             </button>
           ))}
         </div>
+
+        {onToggleLayoutMode && (
+          <>
+            <div className="w-px h-6 bg-gray-700" />
+            <button
+              onClick={onToggleLayoutMode}
+              disabled={layoutModeDisabled}
+              className={`
+                flex items-center gap-1.5 px-3 py-1.5 rounded transition-colors
+                ${layoutMode
+                  ? 'bg-green-600 text-white'
+                  : layoutModeDisabled
+                  ? 'bg-gray-700 text-gray-600 cursor-not-allowed'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}
+              `}
+              title={layoutModeDisabled ? 'Load 2+ files to use Layout Mode' : 'Toggle Layout Mode'}
+            >
+              <LayoutGrid className="w-4 h-4" />
+              <span className="text-xs font-medium">Layout</span>
+            </button>
+          </>
+        )}
 
         <div className="w-px h-6 bg-gray-700" />
 

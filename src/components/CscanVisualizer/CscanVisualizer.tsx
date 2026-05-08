@@ -12,8 +12,10 @@ import {
   FolderOpen
 } from 'lucide-react';
 import CanvasViewport from './CanvasViewport';
+import LayoutCanvas from './LayoutCanvas';
 import FilePanel from './FilePanel';
 import ToolBar from './ToolBar';
+import { useLayoutMode } from './hooks/useLayoutMode';
 import StatsPanel from './StatsPanel';
 import CsvRepairModal from './CsvRepairModal';
 import { CscanData, Tool, DisplaySettings } from './types';
@@ -46,6 +48,10 @@ const CscanVisualizer: React.FC = () => {
   const [scanData, setScanData] = useState<CscanData | null>(null);
   const [processedScans, setProcessedScans] = useState<CscanData[]>([]);
   const [selectedScans, setSelectedScans] = useState<Set<string>>(new Set());
+
+  // Layout mode state
+  const [layoutMode, setLayoutMode] = useState(false);
+  const [layoutHighlightId, setLayoutHighlightId] = useState<string | null>(null);
 
   // UI state
   const [activeTool, setActiveTool] = useState<Tool>('pan');
@@ -85,6 +91,9 @@ const CscanVisualizer: React.FC = () => {
   const saveComposite = useSaveScanComposite();
   const { data: projectVessels } = useProjectVessels(projectId ?? undefined);
   const { user } = useAuth();
+
+  // Layout mode hook
+  const layoutState = useLayoutMode(processedScans);
 
   // Helper to add scans to state
   const addScansToState = useCallback((scans: CscanData[]) => {
@@ -274,6 +283,64 @@ const CscanVisualizer: React.FC = () => {
     getCscanWorkerManager().clearCache();
   }, []);
 
+  // Layout mode handlers
+  const handleLayoutApply = useCallback(async () => {
+    const adjustedScans: CscanData[] = processedScans.map(scan => {
+      const pos = layoutState.scanPositions.get(scan.id);
+      if (!pos) return scan;
+
+      const origMinX = Math.min(...scan.xAxis);
+      const origMinY = Math.min(...scan.yAxis);
+      const deltaX = pos.x - origMinX;
+      const deltaY = pos.y - origMinY;
+
+      if (Math.abs(deltaX) < 0.001 && Math.abs(deltaY) < 0.001) return scan;
+
+      return {
+        ...scan,
+        xAxis: scan.xAxis.map(v => v + deltaX),
+        yAxis: scan.yAxis.map(v => v + deltaY),
+      };
+    });
+
+    setLayoutMode(false);
+    setLayoutHighlightId(null);
+
+    getCscanWorkerManager().clearCache();
+
+    setProcessingProgress({
+      current: 0,
+      total: adjustedScans.length + 2,
+      message: 'Creating composite from layout...',
+    });
+
+    try {
+      const result = await createCompositeFromDataWithWorker(adjustedScans, {
+        onProgress: (progress) => setProcessingProgress(progress),
+      });
+      setProcessingProgress(null);
+
+      if (result) {
+        setProcessedScans([result.composite]);
+        setScanData(result.composite);
+        setSelectedScans(new Set());
+        setDisplaySettings(prev => ({ ...prev, range: { min: null, max: null } }));
+        getCscanWorkerManager().clearCache();
+        setStatusMessage({ type: 'success', message: `Layout composite created from ${adjustedScans.length} files` });
+        setTimeout(() => setStatusMessage(null), 4000);
+      }
+    } catch (error) {
+      setProcessingProgress(null);
+      const msg = error instanceof Error ? error.message : 'Failed to create composite';
+      setStatusMessage({ type: 'error', message: msg });
+      setTimeout(() => setStatusMessage(null), 5000);
+    }
+  }, [processedScans, layoutState.scanPositions]);
+
+  const handleLayoutReset = useCallback(() => {
+    layoutState.resetPositions();
+  }, [layoutState]);
+
   // Cleanup worker on unmount
   useEffect(() => {
     return () => {
@@ -394,13 +461,33 @@ const CscanVisualizer: React.FC = () => {
         dataMax={dataMax}
         showStats={showStats}
         onToggleStats={() => setShowStats(!showStats)}
+        layoutMode={layoutMode}
+        onToggleLayoutMode={() => setLayoutMode(prev => !prev)}
+        layoutModeDisabled={processedScans.length < 2}
       />
 
       {/* Main Content Area - relative container for absolute children */}
       <div className="flex-1 relative overflow-hidden">
         {/* VIEWPORT LAYER - fills entire space, always rendered */}
-        <div className="absolute inset-0 bg-gray-900">
-          {scanData ? (
+        <div className="absolute inset-0" style={{ backgroundColor: '#1c1b18' }}>
+          {layoutMode && processedScans.length >= 2 ? (
+            <LayoutCanvas
+              scans={processedScans}
+              scanPositions={layoutState.scanPositions}
+              scanExtentsMap={layoutState.scanExtentsMap}
+              zOrder={layoutState.zOrder}
+              highlightedScanId={layoutHighlightId}
+              onPositionChange={layoutState.setScanPosition}
+              onBringToFront={(id) => {
+                layoutState.bringToFront(id);
+                setLayoutHighlightId(id);
+              }}
+              onApply={handleLayoutApply}
+              onReset={handleLayoutReset}
+              camera={layoutState.camera}
+              onCameraChange={layoutState.setCamera}
+            />
+          ) : scanData ? (
             <CanvasViewport
               ref={canvasRef}
               data={scanData}
@@ -455,6 +542,11 @@ const CscanVisualizer: React.FC = () => {
               onSelectionChange={setSelectedScans}
               onCreateComposite={handleCreateComposite}
               onClearFiles={handleClearFiles}
+              layoutMode={layoutMode}
+              onBringToFront={(id) => {
+                layoutState.bringToFront(id);
+                setLayoutHighlightId(id);
+              }}
             />
           </div>
 
