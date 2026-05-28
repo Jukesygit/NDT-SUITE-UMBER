@@ -80,8 +80,8 @@ export class TopologySceneManager {
 
     const material = new THREE.MeshStandardMaterial({
       vertexColors: true,
-      roughness: 0.6,
-      metalness: 0.1,
+      roughness: 0.35,
+      metalness: 0.3,
       side: THREE.DoubleSide,
     });
 
