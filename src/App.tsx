@@ -8,6 +8,7 @@ import { initializeTheme } from './themes';
 import authManager from './auth-manager.js';
 import { AnimatedBackground } from './animated-background';
 import { AuthProvider } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { CompanionNotificationProvider } from './contexts/CompanionNotificationContext';
 import GlobalErrorBoundary from './components/GlobalErrorBoundary';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
@@ -35,6 +36,7 @@ const ReportBuilderPage = lazy(() => import('./pages/projects/ReportBuilderPage'
 const ReportPage = lazy(() => import('./pages/projects/ReportPage'));
 const ScanViewerPage = lazy(() => import('./pages/projects/ScanViewerPage'));
 const ScanViewerLandingPage = lazy(() => import('./pages/ScanViewerLandingPage'));
+const TopologyViewerPage = lazy(() => import('./pages/TopologyViewerPage'));
 const ScanViewerDemoA = lazy(() => import('./pages/demos/ScanViewerDemoA'));
 const ScanViewerDemoB = lazy(() => import('./pages/demos/ScanViewerDemoB'));
 const ScanViewerDemoC = lazy(() => import('./pages/demos/ScanViewerDemoC'));
@@ -136,6 +138,7 @@ function App() {
 
     return (
         <QueryClientProvider client={queryClient}>
+            <ThemeProvider>
             <AuthProvider>
                 <CompanionNotificationProvider>
                 <GlobalErrorBoundary>
@@ -161,6 +164,11 @@ function App() {
                                         <Route path="/scan-viewer" element={
                                             <RequireTabVisible tabId="tools">
                                                 <ErrorBoundary><ScanViewerLandingPage /></ErrorBoundary>
+                                            </RequireTabVisible>
+                                        } />
+                                        <Route path="/topology" element={
+                                            <RequireTabVisible tabId="tools">
+                                                <ErrorBoundary><TopologyViewerPage /></ErrorBoundary>
                                             </RequireTabVisible>
                                         } />
                                         <Route path="/demos/scan-viewer-a" element={<ErrorBoundary><ScanViewerDemoA /></ErrorBoundary>} />
@@ -256,6 +264,7 @@ function App() {
                 </GlobalErrorBoundary>
                 </CompanionNotificationProvider>
             </AuthProvider>
+            </ThemeProvider>
             <ReactQueryDevtools initialIsOpen={false} />
         </QueryClientProvider>
     );
