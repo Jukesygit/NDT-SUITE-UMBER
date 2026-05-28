@@ -141,101 +141,99 @@ export function buildTopologySurface(
 }
 
 /**
- * Build the plate body (edge skirt + bottom face) from a surface geometry.
+ * Build the plate body (bottom face + boundary skirt) from a surface geometry.
  *
- * The skirt connects the perimeter vertices of the top surface down to
- * `bottomY`, creating a wavy edge profile. The bottom face is a flat
- * fan-triangulated polygon at `bottomY`.
+ * The bottom face mirrors the top surface's triangle connectivity at `bottomY`,
+ * so it only covers regions that have data (no triangles over null holes).
+ *
+ * The skirt creates vertical walls along every boundary edge — both the outer
+ * perimeter and internal hole edges — so the plate looks solid from any angle.
  */
 export function buildPlateBody(
   topGeometry: THREE.BufferGeometry,
   bottomY: number,
 ): THREE.BufferGeometry {
   const topPos = topGeometry.getAttribute('position') as THREE.BufferAttribute;
-  const { rows, cols, data } = topGeometry.userData as {
-    rows: number; cols: number; data: (number | null)[][];
-  };
+  const topIdx = topGeometry.getIndex()!;
+  const vertCount = topPos.count;
 
-  // Perimeter indices, clockwise when viewed from +Y
-  const perim: number[] = [];
-  for (let c = 0; c < cols; c++) perim.push(c);
-  for (let r = 1; r < rows; r++) perim.push(r * cols + cols - 1);
-  for (let c = cols - 2; c >= 0; c--) perim.push((rows - 1) * cols + c);
-  for (let r = rows - 2; r >= 1; r--) perim.push(r * cols);
+  // --- Find boundary edges (edges belonging to exactly one triangle) ---
+  const edgeCounts = new Map<string, number>();
+  const ek = (a: number, b: number) => (a < b ? `${a}-${b}` : `${b}-${a}`);
 
-  const n = perim.length;
+  for (let i = 0; i < topIdx.count; i += 3) {
+    const a = topIdx.getX(i);
+    const b = topIdx.getX(i + 1);
+    const c = topIdx.getX(i + 2);
+    edgeCounts.set(ek(a, b), (edgeCounts.get(ek(a, b)) ?? 0) + 1);
+    edgeCounts.set(ek(b, c), (edgeCounts.get(ek(b, c)) ?? 0) + 1);
+    edgeCounts.set(ek(c, a), (edgeCounts.get(ek(c, a)) ?? 0) + 1);
+  }
 
-  // Mark which perimeter vertices are null in the data grid
-  const isNull: boolean[] = perim.map((idx) => {
-    const r = Math.floor(idx / cols);
-    const c = idx % cols;
-    return data[r][c] == null;
-  });
-
-  // Read raw top-ring Y values
-  const topY = perim.map((idx) => topPos.getY(idx));
-
-  // Interpolate null perimeter vertices from nearest non-null neighbors
-  for (let i = 0; i < n; i++) {
-    if (!isNull[i]) continue;
-    let sumY = 0;
-    let count = 0;
-    // Search outward in both directions for non-null neighbors
-    for (let d = 1; d <= Math.min(n / 2, 20); d++) {
-      const prev = (i - d + n) % n;
-      const next = (i + d) % n;
-      if (!isNull[prev]) { sumY += topY[prev]; count++; }
-      if (!isNull[next]) { sumY += topY[next]; count++; }
-      if (count >= 2) break;
+  const boundaryEdges: [number, number][] = [];
+  for (const [key, count] of edgeCounts) {
+    if (count === 1) {
+      const [a, b] = key.split('-').map(Number);
+      boundaryEdges.push([a, b]);
     }
-    topY[i] = count > 0 ? sumY / count : bottomY;
   }
 
-  const positions = new Float32Array(n * 2 * 3);
+  const numBE = boundaryEdges.length;
 
-  for (let i = 0; i < n; i++) {
-    const src = perim[i];
-    const x = topPos.getX(src);
-    const z = topPos.getZ(src);
+  // --- Vertex layout ---
+  // [0 .. vertCount-1]              : bottom face (same XZ, Y = bottomY)
+  // [vertCount .. vertCount+numBE*4] : skirt quads (topA, botA, topB, botB per edge)
+  const totalVerts = vertCount + numBE * 4;
+  const positions = new Float32Array(totalVerts * 3);
 
-    const ti = i * 2;
-    positions[ti * 3]     = x;
-    positions[ti * 3 + 1] = topY[i];
-    positions[ti * 3 + 2] = z;
-
-    const bi = ti + 1;
-    positions[bi * 3]     = x;
-    positions[bi * 3 + 1] = bottomY;
-    positions[bi * 3 + 2] = z;
+  // Bottom face vertices
+  for (let i = 0; i < vertCount; i++) {
+    positions[i * 3]     = topPos.getX(i);
+    positions[i * 3 + 1] = bottomY;
+    positions[i * 3 + 2] = topPos.getZ(i);
   }
 
+  // Skirt vertices (4 per boundary edge)
+  for (let e = 0; e < numBE; e++) {
+    const [a, b] = boundaryEdges[e];
+    const base = (vertCount + e * 4) * 3;
+
+    positions[base]      = topPos.getX(a);
+    positions[base + 1]  = topPos.getY(a);
+    positions[base + 2]  = topPos.getZ(a);
+
+    positions[base + 3]  = topPos.getX(a);
+    positions[base + 4]  = bottomY;
+    positions[base + 5]  = topPos.getZ(a);
+
+    positions[base + 6]  = topPos.getX(b);
+    positions[base + 7]  = topPos.getY(b);
+    positions[base + 8]  = topPos.getZ(b);
+
+    positions[base + 9]  = topPos.getX(b);
+    positions[base + 10] = bottomY;
+    positions[base + 11] = topPos.getZ(b);
+  }
+
+  // --- Index buffer ---
   const indexList: number[] = [];
 
-  // Skirt quads
-  for (let i = 0; i < n; i++) {
-    const next = (i + 1) % n;
-    const topI = i * 2;
-    const botI = topI + 1;
-    const topN = next * 2;
-    const botN = topN + 1;
-    indexList.push(topI, topN, botI);
-    indexList.push(topN, botN, botI);
+  // Bottom face: same triangles as top surface, reversed winding for -Y normals
+  for (let i = 0; i < topIdx.count; i += 3) {
+    indexList.push(topIdx.getX(i), topIdx.getX(i + 2), topIdx.getX(i + 1));
   }
 
-  // Bottom face: fan from first bottom vertex
-  const b0 = 1;
-  for (let i = 1; i < n - 1; i++) {
-    indexList.push(b0, (i + 1) * 2 + 1, i * 2 + 1);
+  // Skirt faces: 2 triangles per boundary edge
+  for (let e = 0; e < numBE; e++) {
+    const base = vertCount + e * 4;
+    const tA = base, bA = base + 1, tB = base + 2, bB = base + 3;
+    indexList.push(tA, tB, bA);
+    indexList.push(tB, bB, bA);
   }
 
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute(
-    'position',
-    new THREE.BufferAttribute(positions, 3),
-  );
-  geometry.setIndex(
-    new THREE.BufferAttribute(new Uint32Array(indexList), 1),
-  );
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(indexList), 1));
   geometry.computeVertexNormals();
 
   return geometry;
