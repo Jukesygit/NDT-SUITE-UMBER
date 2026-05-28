@@ -100,6 +100,9 @@ export class TopologySceneManager {
       roughness: 0.8,
       metalness: 0.2,
       side: THREE.DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1,
     });
 
     this.plateMesh = new THREE.Mesh(geometry, material);
