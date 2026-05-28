@@ -18,7 +18,7 @@ export class TopologySceneManager {
     this.container = container;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x1a1a1a);
+    this.scene.background = new THREE.Color(0x2d2d2d);
 
     const w = container.clientWidth || 1;
     const h = container.clientHeight || 1;
@@ -43,12 +43,12 @@ export class TopologySceneManager {
     this.container.appendChild(this.renderer.domElement);
 
     // Hemisphere light: sky from +Y, ground from -Y
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x666666, 1.0);
     hemi.position.set(0, 1, 0);
     this.scene.add(hemi);
 
     // Key light — raking angle for surface morphology
-    const key = new THREE.DirectionalLight(0xffffff, 0.8);
+    const key = new THREE.DirectionalLight(0xffffff, 1.2);
     key.position.set(200, 150, 200);
     key.castShadow = true;
     key.shadow.mapSize.width = 2048;
@@ -60,7 +60,7 @@ export class TopologySceneManager {
     this.keyLight = key;
 
     // Fill light from opposite side
-    const fill = new THREE.DirectionalLight(0xffffff, 0.3);
+    const fill = new THREE.DirectionalLight(0xffffff, 0.5);
     fill.position.set(-200, 200, -200);
     this.scene.add(fill);
 
