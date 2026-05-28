@@ -10,6 +10,7 @@ export class TopologySceneManager {
   private animationFrameId: number | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private surfaceMesh: THREE.Mesh | null = null;
+  private plateMesh: THREE.Mesh | null = null;
   private keyLight: THREE.DirectionalLight | null = null;
   private disposed = false;
 
@@ -75,6 +76,7 @@ export class TopologySceneManager {
       this.surfaceMesh.geometry.dispose();
       (this.surfaceMesh.material as THREE.Material).dispose();
     }
+    this.clearPlateMesh();
 
     const material = new THREE.MeshStandardMaterial({
       vertexColors: true,
@@ -88,6 +90,31 @@ export class TopologySceneManager {
     this.surfaceMesh.receiveShadow = true;
     this.scene.add(this.surfaceMesh);
     this.fitCameraToSurface();
+  }
+
+  setPlateGeometry(geometry: THREE.BufferGeometry): void {
+    this.clearPlateMesh();
+
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x2a2a2a,
+      roughness: 0.8,
+      metalness: 0.2,
+      side: THREE.DoubleSide,
+    });
+
+    this.plateMesh = new THREE.Mesh(geometry, material);
+    this.plateMesh.castShadow = true;
+    this.plateMesh.receiveShadow = true;
+    this.scene.add(this.plateMesh);
+  }
+
+  private clearPlateMesh(): void {
+    if (this.plateMesh) {
+      this.scene.remove(this.plateMesh);
+      this.plateMesh.geometry.dispose();
+      (this.plateMesh.material as THREE.Material).dispose();
+      this.plateMesh = null;
+    }
   }
 
   getSurfaceMesh(): THREE.Mesh | null { return this.surfaceMesh; }
@@ -155,6 +182,7 @@ export class TopologySceneManager {
       this.surfaceMesh.geometry.dispose();
       (this.surfaceMesh.material as THREE.Material).dispose();
     }
+    this.clearPlateMesh();
     this.renderer.dispose();
     if (this.renderer.domElement.parentNode === this.container) {
       this.container.removeChild(this.renderer.domElement);

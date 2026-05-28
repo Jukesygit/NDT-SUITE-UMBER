@@ -10,7 +10,7 @@ import type {
   MeasurementState,
 } from './types';
 import { TopologySceneManager } from './engine/topology-scene';
-import { buildTopologySurface, clampDisplayDisplacement } from './engine/topology-surface';
+import { buildTopologySurface, buildPlateBody, clampDisplayDisplacement } from './engine/topology-surface';
 import { extractCrossSection } from './engine/topology-cross-section';
 
 // ---------------------------------------------------------------------------
@@ -179,6 +179,8 @@ export default function TopologyViewport({
     try {
       const geometry = buildTopologySurface(cscanData, surfaceOptions);
       mgr.setSurfaceGeometry(geometry);
+      const plate = buildPlateBody(geometry, 0);
+      mgr.setPlateGeometry(plate);
     } catch {
       // Surface build may fail for tiny grids; silently ignore
     }

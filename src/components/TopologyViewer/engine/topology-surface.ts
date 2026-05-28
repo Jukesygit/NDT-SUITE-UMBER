@@ -135,6 +135,80 @@ export function buildTopologySurface(
   geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
   geometry.setIndex(new THREE.BufferAttribute(indices, 1));
   geometry.computeVertexNormals();
+  geometry.userData = { rows, cols, xAxis, yAxis };
+
+  return geometry;
+}
+
+/**
+ * Build the plate body (edge skirt + bottom face) from a surface geometry.
+ *
+ * The skirt connects the perimeter vertices of the top surface down to
+ * `bottomY`, creating a wavy edge profile. The bottom face is a flat
+ * fan-triangulated polygon at `bottomY`.
+ */
+export function buildPlateBody(
+  topGeometry: THREE.BufferGeometry,
+  bottomY: number,
+): THREE.BufferGeometry {
+  const topPos = topGeometry.getAttribute('position') as THREE.BufferAttribute;
+  const { rows, cols } = topGeometry.userData as { rows: number; cols: number };
+
+  // Perimeter indices, clockwise when viewed from +Y
+  const perim: number[] = [];
+  for (let c = 0; c < cols; c++) perim.push(c);
+  for (let r = 1; r < rows; r++) perim.push(r * cols + cols - 1);
+  for (let c = cols - 2; c >= 0; c--) perim.push((rows - 1) * cols + c);
+  for (let r = rows - 2; r >= 1; r--) perim.push(r * cols);
+
+  const n = perim.length;
+  const positions = new Float32Array(n * 2 * 3);
+
+  for (let i = 0; i < n; i++) {
+    const src = perim[i];
+    const x = topPos.getX(src);
+    const y = topPos.getY(src);
+    const z = topPos.getZ(src);
+
+    const ti = i * 2;
+    positions[ti * 3]     = x;
+    positions[ti * 3 + 1] = y;
+    positions[ti * 3 + 2] = z;
+
+    const bi = ti + 1;
+    positions[bi * 3]     = x;
+    positions[bi * 3 + 1] = bottomY;
+    positions[bi * 3 + 2] = z;
+  }
+
+  const indexList: number[] = [];
+
+  // Skirt quads
+  for (let i = 0; i < n; i++) {
+    const next = (i + 1) % n;
+    const topI = i * 2;
+    const botI = topI + 1;
+    const topN = next * 2;
+    const botN = topN + 1;
+    indexList.push(topI, topN, botI);
+    indexList.push(topN, botN, botI);
+  }
+
+  // Bottom face: fan from first bottom vertex
+  const b0 = 1;
+  for (let i = 1; i < n - 1; i++) {
+    indexList.push(b0, (i + 1) * 2 + 1, i * 2 + 1);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute(
+    'position',
+    new THREE.BufferAttribute(positions, 3),
+  );
+  geometry.setIndex(
+    new THREE.BufferAttribute(new Uint32Array(indexList), 1),
+  );
+  geometry.computeVertexNormals();
 
   return geometry;
 }
