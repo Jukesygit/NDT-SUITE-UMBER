@@ -199,6 +199,39 @@ export default function TopologyToolbar({
 
         <Separator />
 
+        {/* ── Denoise toggle ── */}
+        <label
+          style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
+          title="Apply median filter to remove isolated spike noise before rendering"
+        >
+          <input
+            type="checkbox"
+            checked={surfaceOptions.denoiseRadius != null}
+            onChange={(e) =>
+              onOptionsChange({
+                denoiseRadius: e.target.checked ? 1 : null,
+              })
+            }
+            style={{ width: 14, height: 14, accentColor: 'var(--accent-primary)' }}
+          />
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            Denoise
+          </span>
+        </label>
+        {surfaceOptions.denoiseRadius != null && (
+          <select
+            value={surfaceOptions.denoiseRadius}
+            onChange={(e) => onOptionsChange({ denoiseRadius: Number(e.target.value) })}
+            title="Median filter kernel size"
+            style={selectStyle()}
+          >
+            <option value={1}>3×3</option>
+            <option value={2}>5×5</option>
+          </select>
+        )}
+
+        <Separator />
+
         {/* ── Clamp outliers toggle ── */}
         <label
           style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}

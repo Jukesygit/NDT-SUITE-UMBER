@@ -26,6 +26,11 @@ export interface SurfaceOptions {
    * null = no clamping (default).
    */
   displacementClampUpper: number | null;
+  /**
+   * Median filter radius applied before surface building.
+   * 1 = 3×3 kernel, 2 = 5×5 kernel. null = no filtering (default).
+   */
+  denoiseRadius: number | null;
 }
 
 export interface TopologyViewState {
@@ -105,6 +110,7 @@ export const DEFAULT_SURFACE_OPTIONS: SurfaceOptions = {
   maxDisplayResolution: 512,
   nominalThickness: null,
   displacementClampUpper: null,
+  denoiseRadius: null,
 };
 
 /**

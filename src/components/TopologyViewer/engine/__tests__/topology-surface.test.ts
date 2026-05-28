@@ -57,7 +57,7 @@ function makeCscan(rows: number, cols: number, fillValue: number): CscanData {
 const BASE_OPTIONS: SurfaceOptions = {
   exaggeration: 1, colorScale: 'Jet', reverseScale: true,
   rangeMin: null, rangeMax: null, maxDisplayResolution: 512,
-  nominalThickness: null, displacementClampUpper: null,
+  nominalThickness: null, displacementClampUpper: null, denoiseRadius: null,
 };
 
 describe('buildTopologySurface', () => {
@@ -263,5 +263,35 @@ describe('clampDisplayDisplacement', () => {
   it('passes through when clamp is null', () => {
     const y = clampDisplayDisplacement(50, 10, 1, null);
     expect(y).toBeCloseTo(40); // no clamp
+  });
+});
+
+describe('denoise integration', () => {
+  it('removes isolated spike from geometry when denoiseRadius is set', () => {
+    const cscan = makeCscan(3, 3, 10.0);
+    cscan.data[1][1] = 99.0;
+    cscan.stats = { ...cscan.stats!, min: 10, max: 99 };
+
+    const geom = buildTopologySurface(cscan, {
+      ...BASE_OPTIONS, nominalThickness: 10, denoiseRadius: 1,
+    });
+    const pos = geom.getAttribute('position');
+
+    // After 3×3 median, center becomes 10 → displacement = 0
+    expect(pos.getY(4)).toBeCloseTo(0);
+  });
+
+  it('is a no-op when denoiseRadius is null', () => {
+    const cscan = makeCscan(3, 3, 10.0);
+    cscan.data[1][1] = 99.0;
+    cscan.stats = { ...cscan.stats!, min: 10, max: 99 };
+
+    const geom = buildTopologySurface(cscan, {
+      ...BASE_OPTIONS, nominalThickness: 10, denoiseRadius: null,
+    });
+    const pos = geom.getAttribute('position');
+
+    // No filter: displacement = (99 - 10) * 1 = 89
+    expect(pos.getY(4)).toBeCloseTo(89);
   });
 });

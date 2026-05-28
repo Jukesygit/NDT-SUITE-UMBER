@@ -183,6 +183,7 @@ export default function TopologyViewer() {
             isAutoNominal={surfaceOptions.nominalThickness == null}
             isDecimated={isDecimated}
             isGeometryClamped={surfaceOptions.displacementClampUpper != null}
+            isDenoised={surfaceOptions.denoiseRadius != null}
           />
         )}
       </div>
