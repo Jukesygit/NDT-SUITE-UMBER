@@ -10,6 +10,7 @@ export class TopologySceneManager {
   private animationFrameId: number | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private surfaceMesh: THREE.Mesh | null = null;
+  private keyLight: THREE.DirectionalLight | null = null;
   private disposed = false;
 
   constructor(container: HTMLDivElement) {
@@ -29,6 +30,8 @@ export class TopologySceneManager {
     this.renderer.setSize(w, h);
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
@@ -43,10 +46,17 @@ export class TopologySceneManager {
     hemi.position.set(0, 1, 0);
     this.scene.add(hemi);
 
-    // Key light from upper-right
+    // Key light — raking angle for surface morphology
     const key = new THREE.DirectionalLight(0xffffff, 0.8);
-    key.position.set(200, 400, 200);
+    key.position.set(200, 150, 200);
+    key.castShadow = true;
+    key.shadow.mapSize.width = 2048;
+    key.shadow.mapSize.height = 2048;
+    key.shadow.bias = -0.001;
+    key.shadow.normalBias = 0.02;
     this.scene.add(key);
+    this.scene.add(key.target);
+    this.keyLight = key;
 
     // Fill light from opposite side
     const fill = new THREE.DirectionalLight(0xffffff, 0.3);
@@ -74,6 +84,8 @@ export class TopologySceneManager {
     });
 
     this.surfaceMesh = new THREE.Mesh(geometry, material);
+    this.surfaceMesh.castShadow = true;
+    this.surfaceMesh.receiveShadow = true;
     this.scene.add(this.surfaceMesh);
     this.fitCameraToSurface();
   }
@@ -97,6 +109,26 @@ export class TopologySceneManager {
     this.camera.position.set(center.x, center.y + dist * 0.7, center.z + dist * 0.7);
     this.controls.target.copy(center);
     this.controls.update();
+
+    // Position key light at a raking angle relative to the surface
+    if (this.keyLight) {
+      this.keyLight.position.set(
+        center.x + size.x * 0.5,
+        center.y + maxDim * 0.35,
+        center.z - size.z * 0.3,
+      );
+      this.keyLight.target.position.copy(center);
+
+      const cam = this.keyLight.shadow.camera;
+      const half = maxDim * 0.75;
+      cam.left = -half;
+      cam.right = half;
+      cam.top = half;
+      cam.bottom = -half;
+      cam.near = 1;
+      cam.far = maxDim * 3;
+      cam.updateProjectionMatrix();
+    }
   }
 
   private onResize(): void {
