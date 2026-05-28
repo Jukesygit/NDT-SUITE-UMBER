@@ -20,6 +20,12 @@ export interface SurfaceOptions {
    * null = auto-detect via 95th percentile of data.
    */
   nominalThickness: number | null;
+  /**
+   * Upper clamp for raw displacement (mm, pre-exaggeration).
+   * Spikes where (value - nominal) exceeds this are flattened in geometry only.
+   * null = no clamping (default).
+   */
+  displacementClampUpper: number | null;
 }
 
 export interface TopologyViewState {
@@ -98,6 +104,7 @@ export const DEFAULT_SURFACE_OPTIONS: SurfaceOptions = {
   rangeMax: null,
   maxDisplayResolution: 512,
   nominalThickness: null,
+  displacementClampUpper: null,
 };
 
 /**

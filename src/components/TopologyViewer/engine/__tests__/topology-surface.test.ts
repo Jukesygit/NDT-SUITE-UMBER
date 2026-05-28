@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { resolveNominal } from '../../types';
-import { buildTopologySurface } from '../topology-surface';
+import { buildTopologySurface, clampDisplayDisplacement } from '../topology-surface';
 import type { CscanData } from '../../../CscanVisualizer/types';
 import type { SurfaceOptions } from '../../types';
 
@@ -57,7 +57,7 @@ function makeCscan(rows: number, cols: number, fillValue: number): CscanData {
 const BASE_OPTIONS: SurfaceOptions = {
   exaggeration: 1, colorScale: 'Jet', reverseScale: true,
   rangeMin: null, rangeMax: null, maxDisplayResolution: 512,
-  nominalThickness: null,
+  nominalThickness: null, displacementClampUpper: null,
 };
 
 describe('buildTopologySurface', () => {
@@ -157,5 +157,111 @@ describe('buildTopologySurface', () => {
     expect(colors.getX(0)).toBeCloseTo(0.15, 1);
     expect(colors.getY(0)).toBeCloseTo(0.15, 1);
     expect(colors.getZ(0)).toBeCloseTo(0.15, 1);
+  });
+});
+
+describe('displacement clamping', () => {
+  it('clamps positive spikes in geometry Y', () => {
+    // Nominal 10, one point at 50 → raw displacement = +40
+    // Clamp upper at 2 → display displacement = 2 * exaggeration
+    const cscan = makeCscan(3, 3, 10.0);
+    cscan.data[0][0] = 50.0;
+    cscan.stats = { ...cscan.stats!, min: 10, max: 50 };
+
+    const geom = buildTopologySurface(cscan, {
+      ...BASE_OPTIONS, nominalThickness: 10, exaggeration: 5, displacementClampUpper: 2,
+    });
+    const pos = geom.getAttribute('position');
+
+    // Clamped vertex: Y = 2 * 5 = 10 (not 40 * 5 = 200)
+    expect(pos.getY(0)).toBeCloseTo(10);
+    // Normal vertex: displacement = 0, unaffected by upper clamp
+    expect(pos.getY(4)).toBeCloseTo(0);
+  });
+
+  it('does not clamp negative displacement (valleys/pits)', () => {
+    // Nominal 10, one pit at 5 → raw displacement = -5
+    // Upper clamp at 2 only affects positive direction
+    const cscan = makeCscan(3, 3, 10.0);
+    cscan.data[1][1] = 5.0;
+    cscan.stats = { ...cscan.stats!, min: 5, max: 10 };
+
+    const geom = buildTopologySurface(cscan, {
+      ...BASE_OPTIONS, nominalThickness: 10, exaggeration: 1, displacementClampUpper: 2,
+    });
+    const pos = geom.getAttribute('position');
+
+    // Pit vertex: Y = -5 (not clamped — upper-only)
+    expect(pos.getY(4)).toBeCloseTo(-5);
+  });
+
+  it('does not affect color — color uses true unclamped value', () => {
+    const cscan = makeCscan(3, 3, 10.0);
+    cscan.data[0][0] = 50.0;
+    cscan.stats = { ...cscan.stats!, min: 10, max: 50 };
+
+    const geomClamped = buildTopologySurface(cscan, {
+      ...BASE_OPTIONS, nominalThickness: 10, displacementClampUpper: 2,
+    });
+    const geomUnclamped = buildTopologySurface(cscan, {
+      ...BASE_OPTIONS, nominalThickness: 10, displacementClampUpper: null,
+    });
+
+    const colorC = geomClamped.getAttribute('color');
+    const colorU = geomUnclamped.getAttribute('color');
+
+    // The spiked vertex (index 0) should have identical color
+    expect(colorC.getX(0)).toBeCloseTo(colorU.getX(0), 5);
+    expect(colorC.getY(0)).toBeCloseTo(colorU.getY(0), 5);
+    expect(colorC.getZ(0)).toBeCloseTo(colorU.getZ(0), 5);
+  });
+
+  it('does not affect null-hole geometry', () => {
+    const cscan = makeCscan(3, 3, 10.0);
+    cscan.data[1][1] = null;
+
+    const geom = buildTopologySurface(cscan, {
+      ...BASE_OPTIONS, nominalThickness: 10, displacementClampUpper: 2,
+    });
+    const index = geom.getIndex()!;
+
+    // Same as unclamped: center null → all 4 quads omitted → 0 indices
+    expect(index.count).toBe(0);
+  });
+
+  it('is a no-op when displacementClampUpper is null', () => {
+    const cscan = makeCscan(3, 3, 10.0);
+    cscan.data[0][0] = 50.0;
+    cscan.stats = { ...cscan.stats!, min: 10, max: 50 };
+
+    const geom = buildTopologySurface(cscan, {
+      ...BASE_OPTIONS, nominalThickness: 10, exaggeration: 1, displacementClampUpper: null,
+    });
+    const pos = geom.getAttribute('position');
+
+    // No clamp: Y = (50 - 10) * 1 = 40
+    expect(pos.getY(0)).toBeCloseTo(40);
+  });
+});
+
+describe('clampDisplayDisplacement', () => {
+  it('matches surface builder output for consistency', () => {
+    // Same scenario as the geometry test: nominal=10, value=50, clamp=2, exag=5
+    const y = clampDisplayDisplacement(50, 10, 5, 2);
+    expect(y).toBeCloseTo(10); // (clamped to 2) * 5
+  });
+
+  it('returns 0 for null values', () => {
+    expect(clampDisplayDisplacement(null, 10, 5, 2)).toBe(0);
+  });
+
+  it('does not clamp negative displacement', () => {
+    const y = clampDisplayDisplacement(5, 10, 1, 2);
+    expect(y).toBeCloseTo(-5); // -5 is negative, not clamped
+  });
+
+  it('passes through when clamp is null', () => {
+    const y = clampDisplayDisplacement(50, 10, 1, null);
+    expect(y).toBeCloseTo(40); // no clamp
   });
 });

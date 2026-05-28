@@ -199,6 +199,44 @@ export default function TopologyToolbar({
 
         <Separator />
 
+        {/* ── Clamp outliers toggle ── */}
+        <label
+          style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
+          title="Clamp positive displacement outliers in geometry only — values stay raw"
+        >
+          <input
+            type="checkbox"
+            checked={surfaceOptions.displacementClampUpper != null}
+            onChange={(e) =>
+              onOptionsChange({
+                displacementClampUpper: e.target.checked ? 2 : null,
+              })
+            }
+            style={{ width: 14, height: 14, accentColor: 'var(--accent-primary)' }}
+          />
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            Clamp outliers
+          </span>
+        </label>
+        {surfaceOptions.displacementClampUpper != null && (
+          <input
+            type="number"
+            min={0.1}
+            step={0.5}
+            value={surfaceOptions.displacementClampUpper}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              if (!isNaN(v) && v > 0) {
+                onOptionsChange({ displacementClampUpper: v });
+              }
+            }}
+            title="Max displacement above nominal (mm, pre-exaggeration)"
+            style={inputStyle(52)}
+          />
+        )}
+
+        <Separator />
+
         {/* ── Tool buttons (radio-style) ── */}
         <div style={{ display: 'flex', borderRadius: 4, overflow: 'hidden' }}>
           {TOOL_DEFS.map(({ id, icon: Icon, label }) => {

@@ -10,7 +10,7 @@ import type {
   MeasurementState,
 } from './types';
 import { TopologySceneManager } from './engine/topology-scene';
-import { buildTopologySurface } from './engine/topology-surface';
+import { buildTopologySurface, clampDisplayDisplacement } from './engine/topology-surface';
 import { extractCrossSection } from './engine/topology-cross-section';
 
 // ---------------------------------------------------------------------------
@@ -248,11 +248,12 @@ export default function TopologyViewport({
       const colIdx = findNearestIndex(cs.xAxis, pt.scanMm);
       const rowIdx = findNearestIndex(cs.yAxis, pt.indexMm);
       const value = cs.data[rowIdx]?.[colIdx];
-      const nominal = nominalThickness;
-      const y =
-        value != null
-          ? -(nominal - value) * surfaceOptions.exaggeration
-          : 0;
+      const y = clampDisplayDisplacement(
+        value ?? null,
+        nominalThickness,
+        surfaceOptions.exaggeration,
+        surfaceOptions.displacementClampUpper,
+      );
       const sphere = new THREE.Mesh(sphereGeo.clone(), sphereMat.clone());
       sphere.position.set(cs.xAxis[colIdx], y, cs.yAxis[rowIdx]);
       scene.add(sphere);

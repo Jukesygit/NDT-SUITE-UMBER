@@ -7,6 +7,7 @@ interface TopologyInfoPanelProps {
   nominalThickness: number;
   isAutoNominal: boolean;
   isDecimated: boolean;
+  isGeometryClamped: boolean;
 }
 
 const LABEL: React.CSSProperties = {
@@ -40,6 +41,7 @@ export default function TopologyInfoPanel({
   nominalThickness,
   isAutoNominal,
   isDecimated,
+  isGeometryClamped,
 }: TopologyInfoPanelProps) {
   if (!cscanData) return null;
 
@@ -118,6 +120,18 @@ export default function TopologyInfoPanel({
           }}
         >
           display decimated
+        </span>
+      )}
+      {isGeometryClamped && (
+        <span
+          style={{
+            fontSize: 10,
+            color: '#d4981e',
+            fontStyle: 'italic',
+            marginTop: 2,
+          }}
+        >
+          geometry clamped, values raw
         </span>
       )}
     </div>

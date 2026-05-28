@@ -182,6 +182,7 @@ export default function TopologyViewer() {
             nominalThickness={resolvedNominal}
             isAutoNominal={surfaceOptions.nominalThickness == null}
             isDecimated={isDecimated}
+            isGeometryClamped={surfaceOptions.displacementClampUpper != null}
           />
         )}
       </div>

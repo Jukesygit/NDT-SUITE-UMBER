@@ -8,6 +8,23 @@ import { decimateGridMinPreserving } from './topology-decimation';
 const ND_COLOR: [number, number, number] = [0.15, 0.15, 0.15];
 
 /**
+ * Compute display Y for a single value, applying the same clamp + exaggeration
+ * that buildTopologySurface uses. Exported so viewport can place markers on
+ * the clamped surface while keeping their numeric values raw.
+ */
+export function clampDisplayDisplacement(
+  value: number | null,
+  nominal: number,
+  exaggeration: number,
+  clampUpper: number | null,
+): number {
+  if (value == null) return 0;
+  let d = value - nominal;
+  if (clampUpper != null && d > clampUpper) d = clampUpper;
+  return d * exaggeration;
+}
+
+/**
  * Build a Three.js BufferGeometry representing the scan data as a 3D surface.
  *
  * Coordinate convention (Y-up):
@@ -26,6 +43,7 @@ export function buildTopologySurface(
   const {
     exaggeration, colorScale: scaleName, reverseScale,
     rangeMin, rangeMax, maxDisplayResolution, nominalThickness,
+    displacementClampUpper,
   } = options;
   const { data: rawData, xAxis: rawX, yAxis: rawY, stats } = cscan;
 
@@ -60,7 +78,9 @@ export function buildTopologySurface(
       positions[idx * 3 + 2] = yAxis[r];
 
       if (value != null) {
-        positions[idx * 3 + 1] = -(nominal - value) * exaggeration;
+        positions[idx * 3 + 1] = clampDisplayDisplacement(
+          value, nominal, exaggeration, displacementClampUpper,
+        );
 
         const t = (value - cMin) / cRange;
         const [cr, cg, cb] = interpolateColor(t, scale, reverseScale);
