@@ -135,7 +135,7 @@ export function buildTopologySurface(
   geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
   geometry.setIndex(new THREE.BufferAttribute(indices, 1));
   geometry.computeVertexNormals();
-  geometry.userData = { rows, cols, xAxis, yAxis };
+  geometry.userData = { rows, cols, xAxis, yAxis, data };
 
   return geometry;
 }
@@ -152,7 +152,9 @@ export function buildPlateBody(
   bottomY: number,
 ): THREE.BufferGeometry {
   const topPos = topGeometry.getAttribute('position') as THREE.BufferAttribute;
-  const { rows, cols } = topGeometry.userData as { rows: number; cols: number };
+  const { rows, cols, data } = topGeometry.userData as {
+    rows: number; cols: number; data: (number | null)[][];
+  };
 
   // Perimeter indices, clockwise when viewed from +Y
   const perim: number[] = [];
@@ -162,17 +164,43 @@ export function buildPlateBody(
   for (let r = rows - 2; r >= 1; r--) perim.push(r * cols);
 
   const n = perim.length;
+
+  // Mark which perimeter vertices are null in the data grid
+  const isNull: boolean[] = perim.map((idx) => {
+    const r = Math.floor(idx / cols);
+    const c = idx % cols;
+    return data[r][c] == null;
+  });
+
+  // Read raw top-ring Y values
+  const topY = perim.map((idx) => topPos.getY(idx));
+
+  // Interpolate null perimeter vertices from nearest non-null neighbors
+  for (let i = 0; i < n; i++) {
+    if (!isNull[i]) continue;
+    let sumY = 0;
+    let count = 0;
+    // Search outward in both directions for non-null neighbors
+    for (let d = 1; d <= Math.min(n / 2, 20); d++) {
+      const prev = (i - d + n) % n;
+      const next = (i + d) % n;
+      if (!isNull[prev]) { sumY += topY[prev]; count++; }
+      if (!isNull[next]) { sumY += topY[next]; count++; }
+      if (count >= 2) break;
+    }
+    topY[i] = count > 0 ? sumY / count : bottomY;
+  }
+
   const positions = new Float32Array(n * 2 * 3);
 
   for (let i = 0; i < n; i++) {
     const src = perim[i];
     const x = topPos.getX(src);
-    const y = topPos.getY(src);
     const z = topPos.getZ(src);
 
     const ti = i * 2;
     positions[ti * 3]     = x;
-    positions[ti * 3 + 1] = y;
+    positions[ti * 3 + 1] = topY[i];
     positions[ti * 3 + 2] = z;
 
     const bi = ti + 1;
