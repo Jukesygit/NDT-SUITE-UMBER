@@ -96,9 +96,9 @@ export class TopologySceneManager {
     this.clearPlateMesh();
 
     const material = new THREE.MeshStandardMaterial({
-      color: 0x2a2a2a,
-      roughness: 0.8,
-      metalness: 0.2,
+      color: 0x8a8a8a,
+      roughness: 0.3,
+      metalness: 0.85,
       side: THREE.DoubleSide,
       polygonOffset: true,
       polygonOffsetFactor: 1,
