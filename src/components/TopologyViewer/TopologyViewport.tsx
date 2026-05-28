@@ -179,7 +179,14 @@ export default function TopologyViewport({
     try {
       const geometry = buildTopologySurface(cscanData, surfaceOptions);
       mgr.setSurfaceGeometry(geometry);
-      const plate = buildPlateBody(geometry, 0);
+
+      const pos = geometry.getAttribute('position');
+      let minY = 0;
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        if (y < minY) minY = y;
+      }
+      const plate = buildPlateBody(geometry, minY);
       mgr.setPlateGeometry(plate);
     } catch {
       // Surface build may fail for tiny grids; silently ignore
