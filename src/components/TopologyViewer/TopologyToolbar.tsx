@@ -121,11 +121,12 @@ export default function TopologyToolbar({
         <Separator />
 
         {/* ── Z-Scale slider ── */}
-        <ControlGroup label={`Z-Scale: ${surfaceOptions.exaggeration}x`}>
+        <ControlGroup label={`Z-Scale: ${surfaceOptions.exaggeration.toFixed(1)}x`}>
           <input
             type="range"
-            min={1}
-            max={50}
+            min={0.1}
+            max={4}
+            step={0.1}
             value={surfaceOptions.exaggeration}
             onChange={(e) => onOptionsChange({ exaggeration: Number(e.target.value) })}
             style={{ width: 90, accentColor: 'var(--accent-primary)' }}
@@ -229,6 +230,20 @@ export default function TopologyToolbar({
             <option value={2}>5×5</option>
           </select>
         )}
+
+        {/* ── Gap fill slider ── */}
+        <ControlGroup label={`Gap fill: ${surfaceOptions.gapFillRadius}`}>
+          <input
+            type="range"
+            min={0}
+            max={5}
+            step={1}
+            value={surfaceOptions.gapFillRadius}
+            onChange={(e) => onOptionsChange({ gapFillRadius: Number(e.target.value) })}
+            title="Fill small null gaps by interpolating neighbors (0 = off, higher = more aggressive)"
+            style={{ width: 70, accentColor: 'var(--accent-primary)' }}
+          />
+        </ControlGroup>
 
         <Separator />
 

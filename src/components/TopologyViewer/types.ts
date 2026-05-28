@@ -31,6 +31,9 @@ export interface SurfaceOptions {
    * 1 = 3×3 kernel, 2 = 5×5 kernel. null = no filtering (default).
    */
   denoiseRadius: number | null;
+  /** Iterative gap fill radius — fills small null holes by averaging neighbors.
+   *  0 = off, 1–5 = progressively wider fill. */
+  gapFillRadius: number;
 }
 
 export interface TopologyViewState {
@@ -102,7 +105,7 @@ export interface MeasurementResult {
 }
 
 export const DEFAULT_SURFACE_OPTIONS: SurfaceOptions = {
-  exaggeration: 10,
+  exaggeration: 1,
   colorScale: 'Jet',
   reverseScale: true,
   rangeMin: null,
@@ -111,6 +114,7 @@ export const DEFAULT_SURFACE_OPTIONS: SurfaceOptions = {
   nominalThickness: null,
   displacementClampUpper: null,
   denoiseRadius: null,
+  gapFillRadius: 0,
 };
 
 /**

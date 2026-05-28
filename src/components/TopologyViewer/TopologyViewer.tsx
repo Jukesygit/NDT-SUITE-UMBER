@@ -184,6 +184,7 @@ export default function TopologyViewer() {
             isDecimated={isDecimated}
             isGeometryClamped={surfaceOptions.displacementClampUpper != null}
             isDenoised={surfaceOptions.denoiseRadius != null}
+            isGapFilled={surfaceOptions.gapFillRadius > 0}
           />
         )}
       </div>

@@ -9,6 +9,7 @@ interface TopologyInfoPanelProps {
   isDecimated: boolean;
   isGeometryClamped: boolean;
   isDenoised: boolean;
+  isGapFilled: boolean;
 }
 
 const LABEL: React.CSSProperties = {
@@ -44,6 +45,7 @@ export default function TopologyInfoPanel({
   isDecimated,
   isGeometryClamped,
   isDenoised,
+  isGapFilled,
 }: TopologyInfoPanelProps) {
   if (!cscanData) return null;
 
@@ -122,6 +124,18 @@ export default function TopologyInfoPanel({
           }}
         >
           display decimated
+        </span>
+      )}
+      {isGapFilled && (
+        <span
+          style={{
+            fontSize: 10,
+            color: '#8bb86e',
+            fontStyle: 'italic',
+            marginTop: 2,
+          }}
+        >
+          small gaps filled
         </span>
       )}
       {isDenoised && (

@@ -5,6 +5,7 @@ import type { SurfaceOptions } from '../types';
 import { resolveNominal } from '../types';
 import { decimateGridMinPreserving } from './topology-decimation';
 import { medianFilter } from './topology-median-filter';
+import { fillSmallGaps } from './topology-gap-fill';
 
 const ND_COLOR: [number, number, number] = [0.15, 0.15, 0.15];
 
@@ -44,10 +45,12 @@ export function buildTopologySurface(
   const {
     exaggeration, colorScale: scaleName, reverseScale,
     rangeMin, rangeMax, maxDisplayResolution, nominalThickness,
-    displacementClampUpper, denoiseRadius,
+    displacementClampUpper, denoiseRadius, gapFillRadius,
   } = options;
   const { data: srcData, xAxis: rawX, yAxis: rawY, stats } = cscan;
-  const rawData = denoiseRadius != null ? medianFilter(srcData, denoiseRadius) : srcData;
+  let processedData = denoiseRadius != null ? medianFilter(srcData, denoiseRadius) : srcData;
+  processedData = gapFillRadius > 0 ? fillSmallGaps(processedData, gapFillRadius) : processedData;
+  const rawData = processedData;
 
   if (!stats) throw new Error('CscanData must have stats computed');
 

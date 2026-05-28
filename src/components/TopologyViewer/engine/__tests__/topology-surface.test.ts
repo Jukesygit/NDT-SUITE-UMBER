@@ -58,6 +58,7 @@ const BASE_OPTIONS: SurfaceOptions = {
   exaggeration: 1, colorScale: 'Jet', reverseScale: true,
   rangeMin: null, rangeMax: null, maxDisplayResolution: 512,
   nominalThickness: null, displacementClampUpper: null, denoiseRadius: null,
+  gapFillRadius: 0,
 };
 
 describe('buildTopologySurface', () => {
