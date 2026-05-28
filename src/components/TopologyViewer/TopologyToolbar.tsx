@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import {
   Upload,
+  Download,
   Move3d,
   ScissorsLineDashed,
   Ruler,
@@ -15,6 +16,8 @@ interface TopologyToolbarProps {
   activeTool: TopologyTool;
   onToolChange: (tool: TopologyTool) => void;
   onFileUpload: (files: FileList) => void;
+  onExport: () => void;
+  hasData: boolean;
   autoNominal: number | null;
 }
 
@@ -36,6 +39,8 @@ export default function TopologyToolbar({
   activeTool,
   onToolChange,
   onFileUpload,
+  onExport,
+  hasData,
   autoNominal,
 }: TopologyToolbarProps) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -99,6 +104,15 @@ export default function TopologyToolbar({
         >
           <Upload className="w-4 h-4" />
           Open
+        </button>
+        <button
+          className="btn btn--sm btn--secondary"
+          onClick={onExport}
+          disabled={!hasData}
+          title="Export 3D model as GLB"
+        >
+          <Download className="w-4 h-4" />
+          Export GLB
         </button>
 
         {/* ── Separator ── */}

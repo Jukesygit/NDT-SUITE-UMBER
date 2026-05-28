@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import type { CscanData } from '../CscanVisualizer/types';
 import {
   processFilesWithWorker,
@@ -17,6 +17,7 @@ import type {
   MeasurementState,
 } from './types';
 import { DEFAULT_SURFACE_OPTIONS } from './types';
+import type { TopologySceneManager } from './engine/topology-scene';
 import TopologyViewport from './TopologyViewport';
 import TopologyToolbar from './TopologyToolbar';
 import TopologyInfoPanel from './TopologyInfoPanel';
@@ -46,6 +47,7 @@ export default function TopologyViewer() {
     useState<ProcessingProgress | null>(null);
   const [showRepairModal, setShowRepairModal] = useState(false);
   const [pendingScans, setPendingScans] = useState<CscanData[]>([]);
+  const sceneRef = useRef<TopologySceneManager | null>(null);
 
   // ---- Computed values ---------------------------------------------------
 
@@ -147,6 +149,11 @@ export default function TopologyViewer() {
     [],
   );
 
+  const handleExport = useCallback(() => {
+    const name = cscanData?.filename?.replace(/\.[^.]+$/, '') ?? 'topology';
+    sceneRef.current?.exportGLB(`${name}.glb`);
+  }, [cscanData]);
+
   // ---- Render ------------------------------------------------------------
 
   return (
@@ -157,6 +164,8 @@ export default function TopologyViewer() {
         activeTool={activeTool}
         onToolChange={setActiveTool}
         onFileUpload={handleFileUpload}
+        onExport={handleExport}
+        hasData={cscanData != null}
         autoNominal={
           cscanData ? resolveNominal(null, cscanData.data) : null
         }
@@ -173,6 +182,7 @@ export default function TopologyViewer() {
           onMeasurementPoint={handleMeasurementPoint}
           measurementState={measurement}
           nominalThickness={resolvedNominal}
+          onSceneReady={(mgr) => { sceneRef.current = mgr; }}
         />
 
         {cscanData && (

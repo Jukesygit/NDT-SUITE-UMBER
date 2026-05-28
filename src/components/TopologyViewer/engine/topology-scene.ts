@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 
 export class TopologySceneManager {
   private container: HTMLDivElement;
@@ -125,6 +126,23 @@ export class TopologySceneManager {
   getControls(): OrbitControls { return this.controls; }
   getRenderer(): THREE.WebGLRenderer { return this.renderer; }
   getScene(): THREE.Scene { return this.scene; }
+
+  async exportGLB(filename: string): Promise<void> {
+    const group = new THREE.Group();
+    if (this.surfaceMesh) group.add(this.surfaceMesh.clone());
+    if (this.plateMesh) group.add(this.plateMesh.clone());
+    if (group.children.length === 0) return;
+
+    const exporter = new GLTFExporter();
+    const glb = await exporter.parseAsync(group, { binary: true });
+    const blob = new Blob([glb as ArrayBuffer], { type: 'model/gltf-binary' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   fitCameraToSurface(): void {
     if (!this.surfaceMesh) return;

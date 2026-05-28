@@ -53,6 +53,7 @@ interface TopologyViewportProps {
   onMeasurementPoint: (point: MeasurementPoint) => void;
   measurementState: MeasurementState | null;
   nominalThickness: number;
+  onSceneReady: (manager: TopologySceneManager) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -69,6 +70,7 @@ export default function TopologyViewport({
   onMeasurementPoint,
   measurementState,
   nominalThickness,
+  onSceneReady,
 }: TopologyViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneManagerRef = useRef<TopologySceneManager | null>(null);
@@ -160,6 +162,7 @@ export default function TopologyViewport({
     const manager = new TopologySceneManager(containerRef.current);
     manager.init();
     sceneManagerRef.current = manager;
+    onSceneReady(manager);
 
     return () => {
       clearHelperObjects();
