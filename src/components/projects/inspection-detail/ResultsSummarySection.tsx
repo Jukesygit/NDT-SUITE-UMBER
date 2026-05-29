@@ -30,7 +30,6 @@ export default function ResultsSummarySection({ vessel, projectId }: ResultsSumm
                 onChange={(e) => setValue(e.target.value)}
                 onBlur={handleBlur}
                 placeholder="Enter inspection results summary..."
-                className="glass-input"
                 style={{
                     width: '100%',
                     minHeight: 120,
@@ -38,6 +37,12 @@ export default function ResultsSummarySection({ vessel, projectId }: ResultsSumm
                     lineHeight: 1.5,
                     resize: 'vertical',
                     fontFamily: 'inherit',
+                    background: 'var(--clean-surface)',
+                    border: '1px solid var(--clean-border)',
+                    borderRadius: 6,
+                    padding: '10px 12px',
+                    color: 'var(--clean-text-primary)',
+                    outline: 'none',
                 }}
             />
         </CollapsibleSection>

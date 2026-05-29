@@ -299,6 +299,59 @@ export default function TopologyToolbar({
 
         <Separator />
 
+        {/* ── View mode toggle (Flat / Cylinder) ── */}
+        <div style={{ display: 'flex', borderRadius: 4, overflow: 'hidden' }}>
+          {(['flat', 'cylinder'] as const).map((mode) => {
+            const active = surfaceOptions.viewMode === mode;
+            return (
+              <button
+                key={mode}
+                onClick={() => onOptionsChange({ viewMode: mode })}
+                title={mode === 'flat' ? 'Flat plate view' : 'Cylindrical pipe view'}
+                style={{
+                  padding: '5px 10px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  border: 'none',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s, color 0.15s',
+                  background: active ? 'var(--accent-primary)' : 'var(--ctrl-lo, #c4c1bb)',
+                  color: active ? '#fff' : 'var(--text-secondary)',
+                }}
+              >
+                {mode === 'flat' ? 'Flat' : 'Cylinder'}
+              </button>
+            );
+          })}
+        </div>
+
+        {surfaceOptions.viewMode === 'cylinder' && (
+          <ControlGroup label="Pipe OD (mm)">
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={surfaceOptions.pipeDiameter ?? ''}
+              onChange={(e) => {
+                const raw = e.target.value.trim();
+                if (raw === '') {
+                  onOptionsChange({ pipeDiameter: null });
+                } else {
+                  const v = parseFloat(raw);
+                  if (!isNaN(v) && v > 0) {
+                    onOptionsChange({ pipeDiameter: v });
+                  }
+                }
+              }}
+              placeholder="e.g. 323.9"
+              title="Outer diameter of the pipe in mm"
+              style={inputStyle(80)}
+            />
+          </ControlGroup>
+        )}
+
+        <Separator />
+
         {/* ── Tool buttons (radio-style) ── */}
         <div style={{ display: 'flex', borderRadius: 4, overflow: 'hidden' }}>
           {TOOL_DEFS.map(({ id, icon: Icon, label }) => {

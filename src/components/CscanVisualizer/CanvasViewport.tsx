@@ -17,6 +17,26 @@ export interface CanvasViewportHandle {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let Plotly: Record<string, any> | null = null;
 
+function getPlotPalette(whiteBackground: boolean) {
+  return whiteBackground
+    ? {
+        background: 'rgb(248, 250, 252)',
+        text: '#111827',
+        grid: '#cbd5e1',
+        filenameText: '#111827',
+        filenameBg: 'rgba(248, 250, 252, 0.84)',
+        filenameBorder: 'rgba(17, 24, 39, 0.24)',
+      }
+    : {
+        background: 'rgb(31, 41, 55)',
+        text: '#ffffff',
+        grid: '#4b5563',
+        filenameText: '#ffffff',
+        filenameBg: 'rgba(0, 0, 0, 0.6)',
+        filenameBorder: 'rgba(255, 255, 255, 0.3)',
+      };
+}
+
 /**
  * CanvasViewport - Simple heatmap display component
  * Only renders the C-Scan heatmap, no profile charts
@@ -64,6 +84,20 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
       scale: 1
     };
   }, [data]);
+
+  const axisRanges = useMemo(() => {
+    if (!displayData) return null;
+
+    const minX = Math.min(...displayData.xAxis);
+    const maxX = Math.max(...displayData.xAxis);
+    const minY = Math.min(...displayData.yAxis);
+    const maxY = Math.max(...displayData.yAxis);
+
+    return {
+      x: displaySettings.flipH ? [maxX, minX] : [minX, maxX],
+      y: displaySettings.flipV ? [maxY, minY] : [minY, maxY],
+    };
+  }, [displayData, displaySettings.flipH, displaySettings.flipV]);
 
   // Load Plotly dynamically on component mount
   useEffect(() => {
@@ -216,6 +250,7 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
     const { min, max } = displaySettings.range;
     const zMin = min ?? data.stats?.min ?? 0;
     const zMax = max ?? data.stats?.max ?? 1;
+    const palette = getPlotPalette(displaySettings.whiteBackground);
 
     const trace = {
       type: 'heatmap' as const,
@@ -229,7 +264,8 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
       connectgaps: false,
       hovertemplate: 'Scan Axis: %{x:.2f} mm<br>Index Axis: %{y:.2f} mm<br>Thickness: %{z:.2f} mm<extra></extra>',
       colorbar: {
-        title: { text: 'Thickness<br>(mm)', side: 'right' },
+        title: { text: 'Thickness<br>(mm)', side: 'right', font: { color: palette.text } },
+        tickfont: { color: palette.text },
         thickness: 15,
         len: 0.9,
         x: 1.02
@@ -249,9 +285,9 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
           yref: 'y',
           text: displayName,
           showarrow: false,
-          font: { size: 12, color: '#ffffff', family: 'Arial, sans-serif' },
-          bgcolor: 'rgba(0, 0, 0, 0.6)',
-          bordercolor: 'rgba(255, 255, 255, 0.3)',
+          font: { size: 12, color: palette.filenameText, family: 'Arial, sans-serif' },
+          bgcolor: palette.filenameBg,
+          bordercolor: palette.filenameBorder,
           borderwidth: 1,
           borderpad: 4
         });
@@ -268,26 +304,30 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
       margin: { l: 60, r: 80, t: 30, b: 50 },
       title: {
         text: titleText,
-        font: { size: 14, color: '#ffffff' },
+        font: { size: 14, color: palette.text },
         y: 0.98
       },
       xaxis: {
-        title: { text: 'Scan Axis (mm)', font: { size: 12 } },
+        title: { text: 'Scan Axis (mm)', font: { size: 12, color: palette.text } },
         scaleanchor: 'y',
         scaleratio: 1.0,
         showgrid: displaySettings.showGrid,
-        gridcolor: '#4b5563',
-        zeroline: false
+        gridcolor: palette.grid,
+        zeroline: false,
+        autorange: false,
+        range: axisRanges?.x
       },
       yaxis: {
-        title: { text: 'Index Axis (mm)', font: { size: 12 } },
+        title: { text: 'Index Axis (mm)', font: { size: 12, color: palette.text } },
         showgrid: displaySettings.showGrid,
-        gridcolor: '#4b5563',
-        zeroline: false
+        gridcolor: palette.grid,
+        zeroline: false,
+        autorange: false,
+        range: axisRanges?.y
       },
-      paper_bgcolor: 'rgb(31, 41, 55)',
-      plot_bgcolor: 'rgb(31, 41, 55)',
-      font: { color: '#ffffff' },
+      paper_bgcolor: palette.background,
+      plot_bgcolor: palette.background,
+      font: { color: palette.text },
       dragmode: activeTool === 'pan' ? 'pan' : 'zoom',
       hovermode: 'closest',
       annotations: annotations.length > 0 ? annotations : undefined
@@ -311,7 +351,7 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
         Plotly.Plots.resize(plotRef.current);
       }
     }, 100);
-  }, [data, displayData]); // Depends on data and displayData (downsampled version)
+  }, [data, displayData, axisRanges]); // Depends on data and displayData (downsampled version)
 
   // Lightweight update - only restyle/relayout, doesn't reload data
   // This is debounced to prevent rapid-fire updates during slider drag
@@ -328,6 +368,7 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
       const { min, max } = displaySettings.range;
       const zMin = min ?? data.stats?.min ?? 0;
       const zMax = max ?? data.stats?.max ?? 1;
+      const palette = getPlotPalette(displaySettings.whiteBackground);
 
       try {
         // Use restyle for color-related changes (lightweight, no data copy)
@@ -336,20 +377,34 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
           reversescale: [displaySettings.reverseScale],
           zmin: [zMin],
           zmax: [zMax],
-          zsmooth: [displaySettings.smoothing === 'none' ? false : displaySettings.smoothing]
+          zsmooth: [displaySettings.smoothing === 'none' ? false : displaySettings.smoothing],
+          'colorbar.title.font.color': [palette.text],
+          'colorbar.tickfont.color': [palette.text]
         }, [0]);
 
         // Use relayout for layout changes
         await Plotly.relayout(plotRef.current, {
           'xaxis.showgrid': displaySettings.showGrid,
           'yaxis.showgrid': displaySettings.showGrid,
+          'xaxis.gridcolor': palette.grid,
+          'yaxis.gridcolor': palette.grid,
+          'xaxis.autorange': false,
+          'yaxis.autorange': false,
+          'xaxis.range': axisRanges?.x,
+          'yaxis.range': axisRanges?.y,
+          'xaxis.title.font.color': palette.text,
+          'yaxis.title.font.color': palette.text,
+          'title.font.color': palette.text,
+          'font.color': palette.text,
+          paper_bgcolor: palette.background,
+          plot_bgcolor: palette.background,
           dragmode: activeTool === 'pan' ? 'pan' : 'zoom'
         });
       } catch (err) {
         // Plot style update failed
       }
     }, 50);
-  }, [data, displaySettings, activeTool]);
+  }, [data, displaySettings, activeTool, axisRanges]);
 
   // Smart render - full render only when data changes, debounced restyle for settings
   const renderPlot = useCallback(() => {
@@ -412,8 +467,14 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
     };
   }, []);
 
+  const containerBackground = getPlotPalette(displaySettings.whiteBackground).background;
+
   return (
-    <div ref={containerRef} className="w-full h-full bg-gray-800 rounded-lg overflow-hidden">
+    <div
+      ref={containerRef}
+      className="w-full h-full bg-gray-800 rounded-lg overflow-hidden"
+      style={{ backgroundColor: containerBackground }}
+    >
       {!plotlyLoaded ? (
         <div className="w-full h-full flex items-center justify-center">
           <div className="text-white text-opacity-70">Loading visualization...</div>

@@ -23,7 +23,7 @@ const PROCEDURE_FIELDS: { label: string; key: keyof InspectionProcedure; paramKe
 
 const labelStyle: React.CSSProperties = {
     fontSize: '0.75rem',
-    color: 'var(--text-tertiary)',
+    color: 'var(--clean-text-tertiary)',
     marginBottom: 4,
     fontWeight: 500,
     letterSpacing: '0.02em',
@@ -84,7 +84,7 @@ export default function ProcedureSection({ vessel, projectId, procedures }: Proc
                     <select
                         value={vessel.procedure_id ?? ''}
                         onChange={(e) => handleSelectProcedure(e.target.value)}
-                        className="glass-input"
+                        className="pj-sort-select"
                         style={{ maxWidth: 320 }}
                     >
                         <option value="">-- None --</option>
@@ -123,12 +123,12 @@ export default function ProcedureSection({ vessel, projectId, procedures }: Proc
                         padding: '12px 0',
                     }}
                 >
-                    <span style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>
+                    <span style={{ fontSize: '0.875rem', color: 'var(--clean-text-tertiary)' }}>
                         No procedure assigned
                     </span>
                     <button
                         type="button"
-                        className="btn btn--secondary btn--sm"
+                        className="pj-btn secondary sm"
                         onClick={handleCreate}
                         disabled={createProcedure.isPending}
                     >

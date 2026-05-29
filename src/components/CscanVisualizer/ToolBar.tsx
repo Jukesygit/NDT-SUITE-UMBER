@@ -216,6 +216,19 @@ const ToolBar: React.FC<ToolBarProps> = ({
             <span className="text-xs text-gray-400">Grid</span>
           </label>
 
+          <label className="flex items-center gap-1 cursor-pointer" title="Use a light plot background for viewing and graph exports">
+            <input
+              type="checkbox"
+              checked={displaySettings.whiteBackground}
+              onChange={(e) => onDisplaySettingsChange({
+                ...displaySettings,
+                whiteBackground: e.target.checked
+              })}
+              className="w-3 h-3 rounded"
+            />
+            <span className="text-xs text-gray-400">White BG</span>
+          </label>
+
           <label className="flex items-center gap-1 cursor-pointer" title="Show source filenames on composite scans">
             <input
               type="checkbox"
@@ -227,6 +240,32 @@ const ToolBar: React.FC<ToolBarProps> = ({
               className="w-3 h-3 rounded"
             />
             <span className="text-xs text-gray-400">Filenames</span>
+          </label>
+
+          <label className="flex items-center gap-1 cursor-pointer" title="Flip horizontally (mirror scan axis)">
+            <input
+              type="checkbox"
+              checked={displaySettings.flipH}
+              onChange={(e) => onDisplaySettingsChange({
+                ...displaySettings,
+                flipH: e.target.checked
+              })}
+              className="w-3 h-3 rounded"
+            />
+            <span className="text-xs text-gray-400">Flip H</span>
+          </label>
+
+          <label className="flex items-center gap-1 cursor-pointer" title="Flip vertically (mirror index axis)">
+            <input
+              type="checkbox"
+              checked={displaySettings.flipV}
+              onChange={(e) => onDisplaySettingsChange({
+                ...displaySettings,
+                flipV: e.target.checked
+              })}
+              className="w-3 h-3 rounded"
+            />
+            <span className="text-xs text-gray-400">Flip V</span>
           </label>
         </div>
 

@@ -2,19 +2,20 @@ import CscanVisualizer from '../components/CscanVisualizer/CscanVisualizer';
 
 /**
  * CscanVisualizerPage - Full-bleed page wrapper for the C-Scan tool
- * Uses negative margins and fixed height to break out of the layout container
+ * Breaks out of the standard page container so the visualizer can use the
+ * browser width and a fixed remaining viewport height.
  */
 function CscanVisualizerPage() {
     return (
         <div
             className="cscan-page-wrapper"
             style={{
-                // Break out of the main__container padding and max-width
-                margin: 'calc(-1 * var(--spacing-8, 2rem))',
-                width: 'calc(100% + 2 * var(--spacing-8, 2rem))',
-                // Calculate height: viewport - header height (use CSS var)
+                marginTop: 'calc(-1 * var(--spacing-8, 2rem))',
+                marginLeft: 'calc(50% - 50vw)',
+                width: '100vw',
                 height: 'calc(100vh - var(--header-height, 4rem))',
                 maxWidth: 'none',
+                overflow: 'hidden',
             }}
         >
             <CscanVisualizer />

@@ -1,0 +1,193 @@
+/**
+ * Clean Theme - Light/Dark mode custom properties
+ * Warm-tinted neutrals with green accent. No skeuomorphism.
+ */
+
+:root,
+[data-theme="light"] {
+  --clean-bg: #f5f4f0;
+  --clean-surface: #ffffff;
+  --clean-surface-secondary: #fafaf8;
+  --clean-border: #e5e3de;
+  --clean-border-strong: #d5d3ce;
+  --clean-divider: #e5e3de;
+
+  --clean-text-primary: #1c1b18;
+  --clean-text-secondary: #4a4845;
+  --clean-text-tertiary: #7a7672;
+  --clean-text-quaternary: #9a968f;
+
+  --clean-chip-active-bg: #1c1b18;
+  --clean-chip-active-text: #ffffff;
+  --clean-chip-bg: #ffffff;
+  --clean-chip-border: #e5e3de;
+  --clean-chip-hover-bg: #f5f4f0;
+
+  --clean-tab-track-bg: #f0efec;
+  --clean-tab-active-bg: #ffffff;
+  --clean-tab-text: #7a7672;
+  --clean-tab-active-text: #1c1b18;
+
+  --clean-green: #2d8a4e;
+  --clean-green-hover: #257a43;
+  --clean-green-text: #ffffff;
+  --clean-green-subtle: #e6f1ea;
+
+  --clean-badge-green-bg: #e6f1ea;
+  --clean-badge-green-text: #1a6b3a;
+  --clean-badge-amber-bg: #fbf0d8;
+  --clean-badge-amber-text: #8a6b14;
+  --clean-badge-blue-bg: #e6eef9;
+  --clean-badge-blue-text: #2a5a8a;
+  --clean-badge-neutral-bg: #f0efec;
+  --clean-badge-neutral-text: #7a7672;
+  --clean-badge-red-bg: #fde8e6;
+  --clean-badge-red-text: #8e2a1e;
+
+  --clean-progress-track: #e5e3de;
+  --clean-progress-green: #2d8a4e;
+  --clean-progress-amber: #d4981e;
+
+  --clean-input-bg: #ffffff;
+  --clean-input-border: #e5e3de;
+  --clean-input-border-focus: #2d8a4e;
+  --clean-input-text: #1c1b18;
+  --clean-input-placeholder: #9a968f;
+
+  --clean-hover-bg: rgba(0, 0, 0, 0.03);
+  --clean-active-bg: rgba(0, 0, 0, 0.06);
+  --clean-focus-ring: rgba(45, 138, 78, 0.25);
+
+  --clean-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --clean-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --clean-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.10);
+
+  --clean-skeleton-base: #e5e3de;
+  --clean-skeleton-shine: #f0efec;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --clean-bg: #1a1917;
+    --clean-surface: #242320;
+    --clean-surface-secondary: #2a2926;
+    --clean-border: #3a3836;
+    --clean-border-strong: #4a4845;
+    --clean-divider: #333130;
+
+    --clean-text-primary: #e8e6e1;
+    --clean-text-secondary: #a09d96;
+    --clean-text-tertiary: #6a6762;
+    --clean-text-quaternary: #5a5754;
+
+    --clean-chip-active-bg: #e8e6e1;
+    --clean-chip-active-text: #1a1917;
+    --clean-chip-bg: transparent;
+    --clean-chip-border: #3a3836;
+    --clean-chip-hover-bg: #2a2926;
+
+    --clean-tab-track-bg: #2a2926;
+    --clean-tab-active-bg: #333130;
+    --clean-tab-text: #6a6762;
+    --clean-tab-active-text: #e8e6e1;
+
+    --clean-green: #2d8a4e;
+    --clean-green-hover: #35a058;
+    --clean-green-text: #ffffff;
+    --clean-green-subtle: rgba(45, 138, 78, 0.12);
+
+    --clean-badge-green-bg: rgba(45, 138, 78, 0.15);
+    --clean-badge-green-text: #5ec87a;
+    --clean-badge-amber-bg: rgba(212, 152, 30, 0.15);
+    --clean-badge-amber-text: #e0a82e;
+    --clean-badge-blue-bg: rgba(74, 144, 192, 0.15);
+    --clean-badge-blue-text: #7ab0e0;
+    --clean-badge-neutral-bg: #2a2926;
+    --clean-badge-neutral-text: #6a6762;
+    --clean-badge-red-bg: rgba(192, 57, 43, 0.15);
+    --clean-badge-red-text: #ef5350;
+
+    --clean-progress-track: #333130;
+    --clean-progress-green: #35a058;
+    --clean-progress-amber: #e0a82e;
+
+    --clean-input-bg: #2a2926;
+    --clean-input-border: #3a3836;
+    --clean-input-border-focus: #35a058;
+    --clean-input-text: #e8e6e1;
+    --clean-input-placeholder: #5a5754;
+
+    --clean-hover-bg: rgba(255, 255, 255, 0.04);
+    --clean-active-bg: rgba(255, 255, 255, 0.07);
+    --clean-focus-ring: rgba(53, 160, 88, 0.30);
+
+    --clean-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.20);
+    --clean-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.25);
+    --clean-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.30);
+
+    --clean-skeleton-base: #333130;
+    --clean-skeleton-shine: #3a3836;
+  }
+}
+
+[data-theme="dark"] {
+  --clean-bg: #1a1917;
+  --clean-surface: #242320;
+  --clean-surface-secondary: #2a2926;
+  --clean-border: #3a3836;
+  --clean-border-strong: #4a4845;
+  --clean-divider: #333130;
+
+  --clean-text-primary: #e8e6e1;
+  --clean-text-secondary: #a09d96;
+  --clean-text-tertiary: #6a6762;
+  --clean-text-quaternary: #5a5754;
+
+  --clean-chip-active-bg: #e8e6e1;
+  --clean-chip-active-text: #1a1917;
+  --clean-chip-bg: transparent;
+  --clean-chip-border: #3a3836;
+  --clean-chip-hover-bg: #2a2926;
+
+  --clean-tab-track-bg: #2a2926;
+  --clean-tab-active-bg: #333130;
+  --clean-tab-text: #6a6762;
+  --clean-tab-active-text: #e8e6e1;
+
+  --clean-green: #2d8a4e;
+  --clean-green-hover: #35a058;
+  --clean-green-text: #ffffff;
+  --clean-green-subtle: rgba(45, 138, 78, 0.12);
+
+  --clean-badge-green-bg: rgba(45, 138, 78, 0.15);
+  --clean-badge-green-text: #5ec87a;
+  --clean-badge-amber-bg: rgba(212, 152, 30, 0.15);
+  --clean-badge-amber-text: #e0a82e;
+  --clean-badge-blue-bg: rgba(74, 144, 192, 0.15);
+  --clean-badge-blue-text: #7ab0e0;
+  --clean-badge-neutral-bg: #2a2926;
+  --clean-badge-neutral-text: #6a6762;
+  --clean-badge-red-bg: rgba(192, 57, 43, 0.15);
+  --clean-badge-red-text: #ef5350;
+
+  --clean-progress-track: #333130;
+  --clean-progress-green: #35a058;
+  --clean-progress-amber: #e0a82e;
+
+  --clean-input-bg: #2a2926;
+  --clean-input-border: #3a3836;
+  --clean-input-border-focus: #35a058;
+  --clean-input-text: #e8e6e1;
+  --clean-input-placeholder: #5a5754;
+
+  --clean-hover-bg: rgba(255, 255, 255, 0.04);
+  --clean-active-bg: rgba(255, 255, 255, 0.07);
+  --clean-focus-ring: rgba(53, 160, 88, 0.30);
+
+  --clean-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.20);
+  --clean-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --clean-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.30);
+
+  --clean-skeleton-base: #333130;
+  --clean-skeleton-shine: #3a3836;
+}

@@ -52,9 +52,9 @@ function CoverageGauge({
         <div
             style={{
                 padding: 16,
-                background: 'var(--surface-elevated)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-sm)',
+                background: 'var(--clean-surface-secondary)',
+                border: '1px solid var(--clean-border)',
+                borderRadius: '6px',
             }}
         >
             {/* Header row: achieved big number + status */}
@@ -63,20 +63,20 @@ function CoverageGauge({
                     <span style={{
                         fontSize: '1.8rem',
                         fontWeight: 700,
-                        color: meetsScope ? '#22c55e' : 'var(--text-primary)',
+                        color: meetsScope ? '#22c55e' : 'var(--clean-text-primary)',
                         lineHeight: 1,
                         fontVariantNumeric: 'tabular-nums',
                     }}>
                         {fmtPct(achievedPct)}
                     </span>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--clean-text-tertiary)' }}>
                         achieved
                     </span>
                 </div>
                 {scopedPct > 0 && (
                     <span style={{
                         fontSize: '0.8rem',
-                        color: meetsScope ? '#22c55e' : 'var(--text-quaternary)',
+                        color: meetsScope ? '#22c55e' : 'var(--clean-text-quaternary)',
                         fontWeight: meetsScope ? 600 : 400,
                     }}>
                         {meetsScope ? 'Scope met' : `${fmtPct(scopedPct)} scoped`}
@@ -90,7 +90,7 @@ function CoverageGauge({
                 <div style={{
                     height: 10,
                     borderRadius: 5,
-                    background: 'var(--border-subtle)',
+                    background: 'var(--clean-border)',
                     overflow: 'visible',
                     position: 'relative',
                 }}>
@@ -117,7 +117,7 @@ function CoverageGauge({
                             transform: 'translateX(-1px)',
                             width: 2,
                             height: 16,
-                            background: meetsScope ? '#22c55e' : 'var(--text-secondary)',
+                            background: meetsScope ? '#22c55e' : 'var(--clean-text-secondary)',
                             borderRadius: 1,
                             transition: 'left 0.4s ease',
                         }} />
@@ -130,7 +130,7 @@ function CoverageGauge({
                 display: 'flex',
                 gap: 16,
                 fontSize: '0.7rem',
-                color: 'var(--text-quaternary)',
+                color: 'var(--clean-text-quaternary)',
             }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                     <span style={{
@@ -145,7 +145,7 @@ function CoverageGauge({
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                         <span style={{
                             display: 'inline-block', width: 2, height: 10, borderRadius: 1,
-                            background: meetsScope ? '#22c55e' : 'var(--text-secondary)',
+                            background: meetsScope ? '#22c55e' : 'var(--clean-text-secondary)',
                         }} />
                         Scoped target
                     </span>
@@ -159,35 +159,35 @@ function CoverageGauge({
                 gap: 8,
                 marginTop: 14,
                 paddingTop: 12,
-                borderTop: '1px solid var(--border-subtle)',
+                borderTop: '1px solid var(--clean-border)',
             }}>
                 <div>
-                    <div style={{ fontSize: '0.65rem', color: 'var(--text-quaternary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--clean-text-quaternary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
                         Shell
                     </div>
-                    <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
-                        {fmtArea(shellArea)} <span style={{ fontSize: '0.7rem', color: 'var(--text-quaternary)' }}>m²</span>
+                    <div style={{ fontSize: '0.9rem', color: 'var(--clean-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+                        {fmtArea(shellArea)} <span style={{ fontSize: '0.7rem', color: 'var(--clean-text-quaternary)' }}>m²</span>
                     </div>
                 </div>
                 <div>
-                    <div style={{ fontSize: '0.65rem', color: 'var(--text-quaternary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--clean-text-quaternary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
                         Scoped
                     </div>
-                    <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
-                        {fmtArea(scopedArea)} <span style={{ fontSize: '0.7rem', color: 'var(--text-quaternary)' }}>m²</span>
+                    <div style={{ fontSize: '0.9rem', color: 'var(--clean-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+                        {fmtArea(scopedArea)} <span style={{ fontSize: '0.7rem', color: 'var(--clean-text-quaternary)' }}>m²</span>
                     </div>
                 </div>
                 <div>
-                    <div style={{ fontSize: '0.65rem', color: 'var(--text-quaternary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--clean-text-quaternary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
                         Achieved
                     </div>
                     <div style={{
                         fontSize: '0.9rem',
                         fontVariantNumeric: 'tabular-nums',
-                        color: meetsScope ? '#22c55e' : 'var(--text-secondary)',
+                        color: meetsScope ? '#22c55e' : 'var(--clean-text-secondary)',
                         fontWeight: meetsScope ? 600 : 400,
                     }}>
-                        {fmtArea(achievedArea)} <span style={{ fontSize: '0.7rem', color: 'var(--text-quaternary)' }}>m²</span>
+                        {fmtArea(achievedArea)} <span style={{ fontSize: '0.7rem', color: 'var(--clean-text-quaternary)' }}>m²</span>
                     </div>
                 </div>
             </div>
@@ -202,10 +202,10 @@ function CoverageGauge({
 function RegionRow({ label, region }: { label: string; region: { covered: number; total: number; percent: number } }) {
     return (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 0' }}>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', width: 80, flexShrink: 0 }}>
+            <span style={{ fontSize: '0.78rem', color: 'var(--clean-text-secondary)', width: 80, flexShrink: 0 }}>
                 {label}
             </span>
-            <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'var(--border-subtle)', overflow: 'hidden' }}>
+            <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'var(--clean-border)', overflow: 'hidden' }}>
                 {region.percent > 0 && (
                     <div style={{
                         height: '100%',
@@ -218,7 +218,7 @@ function RegionRow({ label, region }: { label: string; region: { covered: number
             </div>
             <span style={{
                 fontSize: '0.75rem',
-                color: region.percent > 0 ? 'var(--text-secondary)' : 'var(--text-quaternary)',
+                color: region.percent > 0 ? 'var(--clean-text-secondary)' : 'var(--clean-text-quaternary)',
                 width: 42,
                 textAlign: 'right',
                 fontVariantNumeric: 'tabular-nums',
@@ -276,13 +276,13 @@ export default function ScopeSection({ vessel, projectId, composites, vesselMode
                         <div style={{
                             marginTop: 12,
                             padding: '10px 14px',
-                            background: 'var(--surface-elevated)',
-                            border: '1px solid var(--border-subtle)',
-                            borderRadius: 'var(--radius-sm)',
+                            background: 'var(--clean-surface-secondary)',
+                            border: '1px solid var(--clean-border)',
+                            borderRadius: '6px',
                         }}>
                             <div style={{
                                 fontSize: '0.7rem',
-                                color: 'var(--text-quaternary)',
+                                color: 'var(--clean-text-quaternary)',
                                 textTransform: 'uppercase',
                                 letterSpacing: '0.05em',
                                 marginBottom: 6,
@@ -302,7 +302,7 @@ export default function ScopeSection({ vessel, projectId, composites, vesselMode
                         justifyContent: 'space-between',
                         marginTop: 12,
                     }}>
-                        <span style={{ fontSize: '0.78rem', color: 'var(--text-quaternary)' }}>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--clean-text-quaternary)' }}>
                             {composites.length} scan composite{composites.length !== 1 ? 's' : ''} linked
                         </span>
                         <button
@@ -335,25 +335,25 @@ export default function ScopeSection({ vessel, projectId, composites, vesselMode
                 /* No model linked — empty state */
                 <div style={{
                     padding: '20px 16px',
-                    background: 'var(--surface-elevated)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius-sm)',
+                    background: 'var(--clean-surface-secondary)',
+                    border: '1px solid var(--clean-border)',
+                    borderRadius: '6px',
                     textAlign: 'center',
                 }}>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: 8 }}>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--clean-text-tertiary)', marginBottom: 8 }}>
                         No coverage model linked
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-quaternary)', lineHeight: 1.5 }}>
-                        Save a model with the <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Coverage</span> type
+                    <div style={{ fontSize: '0.75rem', color: 'var(--clean-text-quaternary)', lineHeight: 1.5 }}>
+                        Save a model with the <span style={{ color: 'var(--clean-text-secondary)', fontWeight: 500 }}>Coverage</span> type
                         from the 3D Modeler to populate this section.
                     </div>
                     {composites.length > 0 && (
                         <div style={{
                             marginTop: 10,
                             paddingTop: 10,
-                            borderTop: '1px solid var(--border-subtle)',
+                            borderTop: '1px solid var(--clean-border)',
                             fontSize: '0.78rem',
-                            color: 'var(--text-quaternary)',
+                            color: 'var(--clean-text-quaternary)',
                         }}>
                             {composites.length} scan composite{composites.length !== 1 ? 's' : ''} linked
                             ({fmtArea(scanAreaSqm)} m² valid data)

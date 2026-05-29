@@ -146,6 +146,15 @@ class CscanWorkerManager {
         break;
       }
 
+      case 'AXES_SHIFTED': {
+        const resolver = this.pendingResolvers.get('shiftAxes');
+        if (resolver) {
+          resolver.resolve(true);
+          this.pendingResolvers.delete('shiftAxes');
+        }
+        break;
+      }
+
       case 'ERROR': {
         // Don't reject - errors for individual files shouldn't stop the batch
         break;
@@ -272,6 +281,24 @@ class CscanWorkerManager {
       this.worker!.postMessage({
         type: 'CREATE_COMPOSITE',
         payload: { scanIds }
+      });
+    });
+  }
+
+  /**
+   * Shift cached scan axes in the worker (no data round-trip)
+   */
+  async shiftScanAxes(
+    shifts: Array<{ id: string; deltaX: number; deltaY: number }>
+  ): Promise<void> {
+    if (!this.worker) return;
+    await this.ensureReady();
+
+    return new Promise((resolve, reject) => {
+      this.pendingResolvers.set('shiftAxes', { resolve: resolve as (v: unknown) => void, reject });
+      this.worker!.postMessage({
+        type: 'SHIFT_SCAN_AXES',
+        payload: { shifts },
       });
     });
   }

@@ -40,17 +40,17 @@ const BEAMSET_COLUMNS: { label: string; key: keyof BeamsetRow }[] = [
 const cellStyle: React.CSSProperties = {
     padding: '6px 8px',
     fontSize: '0.8125rem',
-    color: 'var(--text-primary)',
+    color: 'var(--clean-text-primary)',
     cursor: 'pointer',
     minHeight: 32,
-    borderBottom: '1px solid var(--border-subtle)',
+    borderBottom: '1px solid var(--clean-border)',
 };
 
 const cellInputStyle: React.CSSProperties = {
     fontSize: '0.8125rem',
-    color: 'var(--text-primary)',
-    background: 'var(--surface-elevated)',
-    border: '1px solid var(--border-default)',
+    color: 'var(--clean-text-primary)',
+    background: 'var(--clean-surface)',
+    border: '1px solid var(--clean-border)',
     borderRadius: 4,
     padding: '4px 8px',
     width: '100%',
@@ -200,12 +200,12 @@ export default function EquipmentSection({
                             margin: 0,
                             fontSize: '0.875rem',
                             fontWeight: 600,
-                            color: 'var(--text-secondary)',
+                            color: 'var(--clean-text-secondary)',
                         }}
                     >
                         Equipment Details
                     </h4>
-                    <button type="button" className="btn btn--secondary btn--sm" onClick={handleCopyDefaults}>
+                    <button type="button" className="pj-btn secondary sm" onClick={handleCopyDefaults}>
                         Copy from project defaults
                     </button>
                 </div>
@@ -249,12 +249,12 @@ export default function EquipmentSection({
                             margin: 0,
                             fontSize: '0.875rem',
                             fontWeight: 600,
-                            color: 'var(--text-secondary)',
+                            color: 'var(--clean-text-secondary)',
                         }}
                     >
                         Beamset Configuration
                     </h4>
-                    <button type="button" className="btn btn--secondary btn--sm" onClick={handleAddRow}>
+                    <button type="button" className="pj-btn secondary sm" onClick={handleAddRow}>
                         Add Row
                     </button>
                 </div>
@@ -277,8 +277,8 @@ export default function EquipmentSection({
                                             padding: '8px',
                                             fontSize: '0.75rem',
                                             fontWeight: 600,
-                                            color: 'var(--text-tertiary)',
-                                            borderBottom: '1px solid var(--border-default)',
+                                            color: 'var(--clean-text-tertiary)',
+                                            borderBottom: '1px solid var(--clean-border)',
                                             whiteSpace: 'nowrap',
                                             letterSpacing: '0.02em',
                                             textTransform: 'uppercase',
@@ -296,7 +296,7 @@ export default function EquipmentSection({
                                         colSpan={BEAMSET_COLUMNS.length}
                                         style={{
                                             padding: '20px 8px',
-                                            color: 'var(--text-quaternary)',
+                                            color: 'var(--clean-text-quaternary)',
                                             fontSize: '0.8125rem',
                                             textAlign: 'center',
                                         }}

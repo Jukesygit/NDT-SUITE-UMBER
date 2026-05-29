@@ -60,4 +60,19 @@ describe('useLayoutMode', () => {
     act(() => result.current.resetPositions());
     expect(result.current.scanPositions.get('a')).toEqual({ x: 0, y: 0 });
   });
+
+  it('re-syncs positions and zOrder when scans change from empty', () => {
+    let scans: CscanData[] = [];
+    const { result, rerender } = renderHook(() => useLayoutMode(scans));
+
+    expect(result.current.scanPositions.size).toBe(0);
+    expect(result.current.zOrder).toEqual([]);
+
+    scans = [scanA, scanB];
+    rerender();
+
+    expect(result.current.scanPositions.size).toBe(2);
+    expect(result.current.scanPositions.get('a')).toEqual({ x: 0, y: 0 });
+    expect(result.current.zOrder).toEqual(['a', 'b']);
+  });
 });

@@ -31,6 +31,9 @@
 /* 5b. Industrial instrument theme overrides */
 @import './industrial-theme.css';
 
+/* 5c. Clean theme (light/dark custom properties for project pages) */
+@import './clean-theme.css';
+
 /* ==========================================
    UTILITIES & HELPERS
    ========================================== */

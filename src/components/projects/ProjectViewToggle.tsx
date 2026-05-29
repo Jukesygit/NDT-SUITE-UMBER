@@ -1,7 +1,3 @@
-/**
- * ProjectViewToggle - Segmented control for switching between Trip and Asset views
- */
-
 export type ViewMode = 'trips' | 'assets';
 
 interface ProjectViewToggleProps {

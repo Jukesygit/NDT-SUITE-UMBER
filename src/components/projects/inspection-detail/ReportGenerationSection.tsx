@@ -35,7 +35,7 @@ function StatusDot({ ready }: { ready: boolean }) {
                 width: 8,
                 height: 8,
                 borderRadius: '50%',
-                background: ready ? '#22c55e' : 'var(--border-default)',
+                background: ready ? 'var(--clean-green)' : 'var(--clean-border)',
                 flexShrink: 0,
             }}
         />
@@ -104,7 +104,7 @@ export default function ReportGenerationSection({
             <div
                 style={{
                     fontSize: '0.85rem',
-                    color: 'var(--text-secondary)',
+                    color: 'var(--clean-text-secondary)',
                     marginBottom: 12,
                 }}
             >
@@ -121,8 +121,8 @@ export default function ReportGenerationSection({
                             alignItems: 'center',
                             gap: 10,
                             padding: '8px 12px',
-                            background: 'var(--surface-elevated)',
-                            border: '1px solid var(--border-subtle)',
+                            background: 'var(--clean-surface-secondary)',
+                            border: '1px solid var(--clean-border)',
                             borderRadius: 6,
                         }}
                     >
@@ -131,7 +131,7 @@ export default function ReportGenerationSection({
                             style={{
                                 flex: 1,
                                 fontSize: '0.85rem',
-                                color: item.ready ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                                color: item.ready ? 'var(--clean-text-primary)' : 'var(--clean-text-tertiary)',
                             }}
                         >
                             {item.label}
@@ -140,10 +140,10 @@ export default function ReportGenerationSection({
                             style={{
                                 fontSize: '0.78rem',
                                 color: item.info
-                                    ? 'var(--text-tertiary)'
+                                    ? 'var(--clean-text-tertiary)'
                                     : item.ready
-                                      ? 'rgba(34,197,94,0.8)'
-                                      : 'var(--text-quaternary)',
+                                      ? 'var(--clean-badge-green-text)'
+                                      : 'var(--clean-text-quaternary)',
                             }}
                         >
                             {item.info ??
@@ -158,7 +158,7 @@ export default function ReportGenerationSection({
                                                     navigate(overviewUrl);
                                                 }}
                                                 style={{
-                                                    color: 'var(--accent-primary)',
+                                                    color: 'var(--clean-green)',
                                                     textDecoration: 'none',
                                                     cursor: 'pointer',
                                                 }}
@@ -176,7 +176,7 @@ export default function ReportGenerationSection({
             <button
                 type="button"
                 disabled={!allReady}
-                className={allReady ? 'btn btn--primary' : 'btn btn--secondary'}
+                className={allReady ? 'pj-btn primary' : 'pj-btn secondary'}
                 style={{
                     marginTop: 16,
                     width: '100%',

@@ -36,3 +36,15 @@ Consequences:
 - Claude agents start from root `CLAUDE.md`, then `.claude/CLAUDE.md` when present locally.
 - Both instruction files require agents to read `Project Brief`, `Module Map`, and `Engineering Log` before non-trivial work.
 - Agents should update memory or a dated handoff note when a task changes project shape or leaves important unfinished context.
+
+## 2026-05-08 - Companion CSV Exports Use Explicit Thickness Filters
+
+Decision: companion C-scan CSV export paths should not implicitly apply the NDE file's thickness-process `min`/`max` limits. Those limits remain metadata and may be applied only when a user or API request explicitly supplies export filter values.
+
+Reasoning: a May 2026 Judy SO2 data check showed the NDE `RawCScan` contained sub-5 mm readings, while exported CSVs hid them because the batch/API export paths silently applied the file's 6.25-28.0 mm thickness process range and converted lower readings to `ND`.
+
+Consequences:
+
+- Batch export leaves thickness filter fields blank by default and logs detected NDE process limits as guidance.
+- The `/cscan-export` API uses only request-provided `thicknessMin`/`thicknessMax`.
+- Future OmniPC-match workflows that need process-limit filtering must opt in explicitly.

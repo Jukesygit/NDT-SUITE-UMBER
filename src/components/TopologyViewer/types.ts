@@ -34,6 +34,10 @@ export interface SurfaceOptions {
   /** Iterative gap fill radius — fills small null holes by averaging neighbors.
    *  0 = off, 1–5 = progressively wider fill. */
   gapFillRadius: number;
+  /** Display mode: flat plate or cylindrical pipe wrapping */
+  viewMode: 'flat' | 'cylinder';
+  /** Outer diameter of the pipe in mm (used when viewMode = 'cylinder') */
+  pipeDiameter: number | null;
 }
 
 export interface TopologyViewState {
@@ -115,6 +119,8 @@ export const DEFAULT_SURFACE_OPTIONS: SurfaceOptions = {
   displacementClampUpper: null,
   denoiseRadius: null,
   gapFillRadius: 0,
+  viewMode: 'flat',
+  pipeDiameter: null,
 };
 
 /**

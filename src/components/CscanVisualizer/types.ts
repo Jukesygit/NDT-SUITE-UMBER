@@ -52,8 +52,11 @@ export interface DisplaySettings {
   colorScale: string;
   reverseScale: boolean;
   showGrid: boolean;
+  whiteBackground: boolean;
   showFilenames: boolean;
   smoothing: 'none' | 'fast' | 'best';
+  flipH: boolean;
+  flipV: boolean;
   range: {
     min: number | null;
     max: number | null;
@@ -107,10 +110,12 @@ export interface DistributionConfig {
   enabled: boolean;
   /** 'thickness' bins by raw mm ranges; 'wallLoss' bins by % wall loss */
   mode: DistributionMode;
-  /** Number of equal-width bins */
+  /** Number of equal-width bins (used when customBoundaries is absent) */
   binCount: number;
   /** Nominal wall thickness in mm — only used in wallLoss mode */
   nominalThickness: number;
+  /** Sorted ascending boundary values — N+1 values define N bins. When set, binCount is ignored. */
+  customBoundaries?: number[];
 }
 
 export interface DistributionBin {

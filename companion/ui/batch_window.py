@@ -250,15 +250,22 @@ class BatchExportWindow:
         self.file_indices = index_folder(folder)
         self._populate_file_list()
 
-        # Auto-populate thickness limits from first file's thickness process
-        if self.file_indices and not self.thick_min_var.get().strip() and not self.thick_max_var.get().strip():
-            for fi in self.file_indices:
-                if fi.thickness_process:
-                    if fi.thickness_process.min_mm is not None:
-                        self.thick_min_var.set(str(fi.thickness_process.min_mm))
-                    if fi.thickness_process.max_mm is not None:
-                        self.thick_max_var.set(str(fi.thickness_process.max_mm))
-                    break
+        # Keep export filters opt-in. Some field reports rely on sub-process-limit
+        # readings, so silently applying NDE process limits can hide defects.
+        for fi in self.file_indices:
+            if fi.thickness_process:
+                limits = []
+                if fi.thickness_process.min_mm is not None:
+                    limits.append(f"min {fi.thickness_process.min_mm:g} mm")
+                if fi.thickness_process.max_mm is not None:
+                    limits.append(f"max {fi.thickness_process.max_mm:g} mm")
+                if limits:
+                    self._log(
+                        f"Detected NDE thickness-process limits ({', '.join(limits)}); "
+                        "leave export filter fields blank for raw C-scan values.",
+                        "accent",
+                    )
+                break
 
         # Default output folder
         if not self.output_var.get():

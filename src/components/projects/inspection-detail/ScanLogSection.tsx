@@ -53,10 +53,10 @@ const PARAM_MAP: Record<string, keyof UpdateScanLogEntryParams> = {
 
 const cellStyle: React.CSSProperties = {
     padding: '6px 8px',
-    background: 'var(--surface-elevated)',
-    border: '1px solid var(--border-subtle)',
+    background: 'var(--clean-surface)',
+    border: '1px solid var(--clean-border)',
     borderRadius: 4,
-    color: 'var(--text-primary)',
+    color: 'var(--clean-text-primary)',
     fontSize: '0.82rem',
     width: '100%',
 };
@@ -138,10 +138,10 @@ export default function ScanLogSection({ vesselId, entries, composites }: ScanLo
                     style={{
                         padding: '8px 14px',
                         marginBottom: 10,
-                        background: 'rgba(34,197,94,0.15)',
-                        border: '1px solid rgba(34,197,94,0.3)',
+                        background: 'var(--clean-badge-green-bg)',
+                        border: '1px solid var(--clean-badge-green-text)',
                         borderRadius: 6,
-                        color: '#4ade80',
+                        color: 'var(--clean-badge-green-text)',
                         fontSize: '0.84rem',
                     }}
                 >
@@ -165,10 +165,10 @@ export default function ScanLogSection({ vesselId, entries, composites }: ScanLo
                                     style={{
                                         padding: '8px',
                                         textAlign: 'left',
-                                        color: 'var(--text-tertiary)',
+                                        color: 'var(--clean-text-tertiary)',
                                         fontWeight: 500,
                                         fontSize: '0.78rem',
-                                        borderBottom: '1px solid var(--border-default)',
+                                        borderBottom: '1px solid var(--clean-border)',
                                         whiteSpace: 'nowrap',
                                         minWidth: col.width,
                                     }}
@@ -179,7 +179,7 @@ export default function ScanLogSection({ vesselId, entries, composites }: ScanLo
                             <th
                                 style={{
                                     width: 40,
-                                    borderBottom: '1px solid var(--border-default)',
+                                    borderBottom: '1px solid var(--clean-border)',
                                 }}
                             />
                         </tr>
@@ -208,8 +208,8 @@ export default function ScanLogSection({ vesselId, entries, composites }: ScanLo
                                                     autoFocus
                                                     style={{
                                                         ...cellStyle,
-                                                        background: 'var(--surface-overlay)',
-                                                        border: '1px solid var(--accent-blue-glow)',
+                                                        background: 'var(--clean-surface)',
+                                                        border: '1px solid var(--clean-green)',
                                                     }}
                                                 />
                                             ) : (
@@ -222,8 +222,8 @@ export default function ScanLogSection({ vesselId, entries, composites }: ScanLo
                                                         display: 'flex',
                                                         alignItems: 'center',
                                                         color: display
-                                                            ? 'var(--text-primary)'
-                                                            : 'var(--text-disabled)',
+                                                            ? 'var(--clean-text-primary)'
+                                                            : 'var(--clean-text-quaternary)',
                                                     }}
                                                 >
                                                     {display || '--'}
@@ -242,7 +242,7 @@ export default function ScanLogSection({ vesselId, entries, composites }: ScanLo
                                             padding: '4px 6px',
                                             background: 'transparent',
                                             border: 'none',
-                                            color: 'rgba(239,68,68,0.7)',
+                                            color: 'var(--clean-badge-red-text)',
                                             cursor: 'pointer',
                                             fontSize: '0.85rem',
                                         }}
@@ -272,7 +272,7 @@ export default function ScanLogSection({ vesselId, entries, composites }: ScanLo
                         type="button"
                         onClick={handleAddRow}
                         disabled={createEntry.isPending}
-                        className="btn btn--secondary btn--sm"
+                        className="pj-btn secondary sm"
                     >
                         + Add Row
                     </button>
@@ -280,7 +280,7 @@ export default function ScanLogSection({ vesselId, entries, composites }: ScanLo
                         type="button"
                         onClick={handleAutoPopulate}
                         disabled={createEntry.isPending || composites.length === 0}
-                        className="btn btn--primary btn--sm"
+                        className="pj-btn primary sm"
                         style={{
                             opacity: composites.length === 0 ? 0.5 : 1,
                             cursor: composites.length === 0 ? 'not-allowed' : 'pointer',
@@ -289,7 +289,7 @@ export default function ScanLogSection({ vesselId, entries, composites }: ScanLo
                         Auto-populate from Composites
                     </button>
                 </div>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-quaternary)' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--clean-text-quaternary)' }}>
                     All dimensions in mm. WT results include coating correction.
                 </span>
             </div>

@@ -23,7 +23,7 @@ const TEXT_FIELDS: { label: string; key: keyof ProjectVessel; paramKey: string }
 
 const labelStyle: React.CSSProperties = {
     fontSize: '0.75rem',
-    color: 'var(--text-tertiary)',
+    color: 'var(--clean-text-tertiary)',
     marginBottom: 4,
     fontWeight: 500,
     letterSpacing: '0.02em',
@@ -73,12 +73,12 @@ export default function VesselDetailsSection({ vessel, projectId, files }: Vesse
                                         Drawing Number
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-quaternary)', fontStyle: 'italic' }}>
+                                        <span style={{ fontSize: '0.8rem', color: 'var(--clean-text-quaternary)', fontStyle: 'italic' }}>
                                             {suggestedDrawingNumber}
                                         </span>
                                         <button
                                             onClick={() => saveField('drawingNumber', suggestedDrawingNumber!)}
-                                            className="btn btn--primary btn--sm"
+                                            className="pj-btn primary sm"
                                             style={{ fontSize: '0.7rem', padding: '2px 8px' }}
                                         >
                                             Use from GA
@@ -102,10 +102,10 @@ export default function VesselDetailsSection({ vessel, projectId, files }: Vesse
                     <label
                         style={{
                             display: 'flex', alignItems: 'center', gap: 8,
-                            fontSize: '0.875rem', color: 'var(--text-primary)',
+                            fontSize: '0.875rem', color: 'var(--clean-text-primary)',
                             cursor: 'pointer', padding: '8px 10px',
-                            borderRadius: 'var(--radius-sm)',
-                            borderBottom: '1px solid var(--border-subtle)',
+                            borderRadius: 6,
+                            borderBottom: '1px solid var(--clean-border)',
                         }}
                     >
                         <input
@@ -118,7 +118,7 @@ export default function VesselDetailsSection({ vessel, projectId, files }: Vesse
                                     projectId,
                                 });
                             }}
-                            style={{ accentColor: 'var(--accent-primary)' }}
+                            style={{ accentColor: 'var(--clean-green)' }}
                         />
                         {(vessel.coating_type === 'true' || vessel.coating_type === 'Coated') ? 'Yes' : 'No'}
                     </label>
@@ -130,10 +130,10 @@ export default function VesselDetailsSection({ vessel, projectId, files }: Vesse
                     <label
                         style={{
                             display: 'flex', alignItems: 'center', gap: 8,
-                            fontSize: '0.875rem', color: 'var(--text-primary)',
+                            fontSize: '0.875rem', color: 'var(--clean-text-primary)',
                             cursor: 'pointer', padding: '8px 10px',
-                            borderRadius: 'var(--radius-sm)',
-                            borderBottom: '1px solid var(--border-subtle)',
+                            borderRadius: 6,
+                            borderBottom: '1px solid var(--clean-border)',
                         }}
                     >
                         <input
@@ -146,7 +146,7 @@ export default function VesselDetailsSection({ vessel, projectId, files }: Vesse
                                     projectId,
                                 });
                             }}
-                            style={{ accentColor: 'var(--accent-primary)' }}
+                            style={{ accentColor: 'var(--clean-green)' }}
                         />
                         {vessel.is_insulated ? 'Yes' : 'No'}
                     </label>

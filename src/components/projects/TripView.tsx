@@ -1,17 +1,14 @@
-/**
- * TripView - Shows trips (projects) as expandable cards: Trip (Site + Date) → Vessels
- */
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, MapPin, ChevronRight, ChevronDown, Ship, Plus } from 'lucide-react';
+import {
+    MapPin, ChevronRight, Ship, MoreHorizontal,
+    Download, Copy, Archive, ExternalLink,
+} from 'lucide-react';
 import { useProjectVessels } from '../../hooks/queries/useInspectionProjects';
-import { useCreateProjectVessel } from '../../hooks/mutations/useInspectionProjectMutations';
-import { Modal } from '../ui/Modal';
 import type { InspectionProjectSummary, ProjectStatus, ProjectVessel } from '../../types/inspection-project';
 import { PROJECT_STATUS_LABELS, VESSEL_STATUS_LABELS } from '../../types/inspection-project';
 
-function getProjectStatusClass(status: ProjectStatus): string {
+function getStatusBadgeClass(status: ProjectStatus): string {
     switch (status) {
         case 'completed': return 'active';
         case 'in_progress': return 'info';
@@ -23,13 +20,14 @@ function getProjectStatusClass(status: ProjectStatus): string {
     }
 }
 
-function getVesselStatusClass(status: string): string {
+function getAccentColor(status: ProjectStatus): string {
     switch (status) {
-        case 'completed': return 'active';
-        case 'in_progress': return 'info';
-        case 'pending_review': return 'warning';
-        case 'not_started': return 'neutral';
-        default: return 'neutral';
+        case 'in_progress': return 'var(--clean-green)';
+        case 'mobilizing': return 'var(--clean-green)';
+        case 'review': return 'var(--clean-badge-amber-text)';
+        case 'planned': return 'var(--clean-badge-blue-text)';
+        case 'completed': return 'var(--clean-text-tertiary)';
+        default: return 'transparent';
     }
 }
 
@@ -40,218 +38,187 @@ function formatDateRange(start: string | null, end: string | null): string {
         .join(' – ');
 }
 
-function buildTripTitle(project: InspectionProjectSummary): string {
-    const parts: string[] = [];
-    if (project.site_name) parts.push(project.site_name);
-    const dateRange = formatDateRange(project.start_date, project.end_date);
-    if (dateRange) parts.push(dateRange);
-    if (parts.length === 0) return project.name;
-    return parts.join(' — ');
+function relativeTime(start: string | null, end: string | null, status: ProjectStatus): string {
+    const today = new Date();
+    const ms = 86400000;
+
+    if (status === 'in_progress' && end) {
+        const days = Math.ceil((new Date(end).getTime() - today.getTime()) / ms);
+        return days > 0 ? `${days}d remaining` : 'Ends today';
+    }
+    if (status === 'planned' && start) {
+        const days = Math.ceil((new Date(start).getTime() - today.getTime()) / ms);
+        return days > 0 ? `Starts in ${days}d` : 'Starts soon';
+    }
+    if (status === 'review') return 'Reports under review';
+    if (status === 'completed' && end) {
+        const days = Math.ceil((today.getTime() - new Date(end).getTime()) / ms);
+        return `Closed ${days}d ago`;
+    }
+    if (status === 'mobilizing') return 'Mobilizing';
+    return '';
 }
 
-function VesselRow({ vessel, projectId }: { vessel: ProjectVessel; projectId: string }) {
+function VesselAvatar({ vessel }: { vessel: ProjectVessel }) {
+    const initials = (vessel.vessel_tag || vessel.vessel_name)
+        .replace(/[^A-Za-z0-9]/g, '')
+        .slice(0, 2)
+        .toUpperCase();
+    return <div className="pj-vessel-avatar">{initials}</div>;
+}
+
+function ExpandedDetail({ project }: { project: InspectionProjectSummary }) {
     const navigate = useNavigate();
-    const statusClass = getVesselStatusClass(vessel.status);
+    const { data: vessels = [], isLoading } = useProjectVessels(project.id);
 
     return (
-        <button
-            onClick={() => navigate(`/projects/${projectId}/vessels/${vessel.id}`)}
-            className="pj-vessel-row"
-        >
-            <Ship size={13} className="pj-vessel-row-icon" />
-            <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="pj-vessel-row-name">
-                    {vessel.vessel_tag ? `${vessel.vessel_tag} — ` : ''}{vessel.vessel_name}
-                </div>
-                {vessel.vessel_type && (
-                    <div className="pj-vessel-row-type">{vessel.vessel_type}</div>
+        <div className="pj-row-detail">
+            <div className="pj-detail-card">
+                <h4>Vessels & assets</h4>
+                {isLoading ? (
+                    <div className="pj-detail-loading">Loading vessels...</div>
+                ) : vessels.length === 0 ? (
+                    <div className="pj-detail-empty">No vessels assigned</div>
+                ) : (
+                    <div className="pj-detail-vessels">
+                        {vessels.map(v => (
+                            <button
+                                key={v.id}
+                                className="pj-detail-vessel"
+                                onClick={() => navigate(`/projects/${project.id}/vessels/${v.id}`)}
+                            >
+                                <VesselAvatar vessel={v} />
+                                <div className="pj-detail-vessel-info">
+                                    <strong>{v.vessel_tag ? `${v.vessel_tag} — ` : ''}{v.vessel_name}</strong>
+                                    <span>{v.vessel_type || VESSEL_STATUS_LABELS[v.status]}</span>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
                 )}
             </div>
-            <span className={`pj-badge ${statusClass}`}>
-                <span className={`pj-led ${statusClass}`} />
-                {VESSEL_STATUS_LABELS[vessel.status]}
-            </span>
-            <ChevronRight size={12} className="pj-vessel-row-chevron" />
-        </button>
-    );
-}
-
-function TripVessels({ projectId }: { projectId: string }) {
-    const { data: vessels = [], isLoading } = useProjectVessels(projectId);
-    const createMutation = useCreateProjectVessel();
-    const [showAddModal, setShowAddModal] = useState(false);
-    const [form, setForm] = useState({ vesselName: '', vesselTag: '', vesselType: '', coverageTargetPct: '' });
-
-    const handleAdd = async () => {
-        if (!form.vesselName.trim()) return;
-        const coverage = form.coverageTargetPct ? parseFloat(form.coverageTargetPct) : undefined;
-        await createMutation.mutateAsync({
-            projectId,
-            vesselName: form.vesselName,
-            vesselTag: form.vesselTag || undefined,
-            vesselType: form.vesselType || undefined,
-            coverageTargetPct: coverage,
-        });
-        setShowAddModal(false);
-        setForm({ vesselName: '', vesselTag: '', vesselType: '', coverageTargetPct: '' });
-    };
-
-    if (isLoading) {
-        return <div style={{ padding: '8px 14px' }} className="pj-empty-text">Loading vessels...</div>;
-    }
-
-    return (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {vessels.length === 0 && (
-                <div style={{ padding: '8px 14px' }} className="pj-empty-text">No vessels in this trip</div>
-            )}
-            {vessels.map(v => (
-                <VesselRow key={v.id} vessel={v} projectId={projectId} />
-            ))}
-            <div style={{ padding: '4px 14px 8px' }}>
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        setForm({ vesselName: '', vesselTag: '', vesselType: '', coverageTargetPct: '' });
-                        setShowAddModal(true);
-                    }}
-                    className="pj-add-vessel-btn"
-                >
-                    <Plus size={12} />
-                    Add Vessel
-                </button>
-            </div>
-
-            {showAddModal && (
-                <Modal isOpen={true} title="Add Vessel" onClose={() => setShowAddModal(false)}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 400 }}>
-                        <div className="pj-form-field">
-                            <span className="pj-form-label">Vessel Name *</span>
-                            <input
-                                value={form.vesselName}
-                                onChange={e => setForm(f => ({ ...f, vesselName: e.target.value }))}
-                                placeholder="e.g., Feed Drum"
-                                autoFocus
-                                className="pj-form-input"
-                            />
-                        </div>
-                        <div className="pj-form-grid">
-                            <div className="pj-form-field">
-                                <span className="pj-form-label">Tag Number</span>
-                                <input
-                                    value={form.vesselTag}
-                                    onChange={e => setForm(f => ({ ...f, vesselTag: e.target.value }))}
-                                    placeholder="e.g., V-101"
-                                    className="pj-form-input"
-                                />
-                            </div>
-                            <div className="pj-form-field">
-                                <span className="pj-form-label">Type</span>
-                                <select
-                                    value={form.vesselType}
-                                    onChange={e => setForm(f => ({ ...f, vesselType: e.target.value }))}
-                                    className="pj-form-input"
-                                >
-                                    <option value="">Select type...</option>
-                                    <option value="pressure_vessel">Pressure Vessel</option>
-                                    <option value="heat_exchanger">Heat Exchanger</option>
-                                    <option value="tank">Tank</option>
-                                    <option value="column">Column</option>
-                                    <option value="piping">Piping</option>
-                                    <option value="other">Other</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div className="pj-form-field">
-                            <span className="pj-form-label">Coverage Target (%)</span>
-                            <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                step="1"
-                                value={form.coverageTargetPct}
-                                onChange={e => setForm(f => ({ ...f, coverageTargetPct: e.target.value }))}
-                                placeholder="e.g., 40"
-                                className="pj-form-input"
-                            />
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 8 }}>
-                            <button onClick={() => setShowAddModal(false)} className="pj-btn secondary">Cancel</button>
-                            <button
-                                onClick={handleAdd}
-                                disabled={!form.vesselName.trim() || createMutation.isPending}
-                                className="pj-btn primary"
-                                style={{ opacity: form.vesselName.trim() ? 1 : 0.5 }}
-                            >
-                                {createMutation.isPending ? 'Adding...' : 'Add Vessel'}
-                            </button>
-                        </div>
+            <div className="pj-detail-card">
+                <h4>Details</h4>
+                <div className="pj-detail-kvs">
+                    <div className="pj-detail-kv">
+                        <span className="pj-kv-key">Client</span>
+                        <span className="pj-kv-val">{project.client_name || '—'}</span>
                     </div>
-                </Modal>
-            )}
+                    <div className="pj-detail-kv">
+                        <span className="pj-kv-key">Location</span>
+                        <span className="pj-kv-val">{project.site_name || '—'}</span>
+                    </div>
+                    <div className="pj-detail-kv">
+                        <span className="pj-kv-key">Dates</span>
+                        <span className="pj-kv-val">{formatDateRange(project.start_date, project.end_date) || '—'}</span>
+                    </div>
+                    <div className="pj-detail-kv">
+                        <span className="pj-kv-key">Inspections</span>
+                        <span className="pj-kv-val">{project.completed_vessel_count} of {project.vessel_count}</span>
+                    </div>
+                </div>
+            </div>
+            <div className="pj-detail-card">
+                <h4>Quick actions</h4>
+                <div className="pj-detail-actions">
+                    <button
+                        className="pj-detail-action-btn"
+                        onClick={() => navigate(`/projects/${project.id}`)}
+                    >
+                        <ExternalLink size={14} />Open project
+                    </button>
+                    <button className="pj-detail-action-btn">
+                        <Download size={14} />Export report
+                    </button>
+                    <button className="pj-detail-action-btn">
+                        <Copy size={14} />Duplicate project
+                    </button>
+                    {project.status !== 'archived' && (
+                        <button className="pj-detail-action-btn">
+                            <Archive size={14} />Archive
+                        </button>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }
 
-function TripCard({ project }: { project: InspectionProjectSummary }) {
-    const [expanded, setExpanded] = useState(false);
-    const tripTitle = buildTripTitle(project);
-    const hasSubtitle = tripTitle !== project.name;
-    const statusClass = getProjectStatusClass(project.status);
-
+function ProjectRow({
+    project,
+    isOpen,
+    onToggle,
+}: {
+    project: InspectionProjectSummary;
+    isOpen: boolean;
+    onToggle: () => void;
+}) {
+    const statusClass = getStatusBadgeClass(project.status);
+    const accentColor = getAccentColor(project.status);
     const pct = project.vessel_count > 0
-        ? (project.completed_vessel_count / project.vessel_count) * 100
+        ? Math.round((project.completed_vessel_count / project.vessel_count) * 100)
         : 0;
+    const dateRange = formatDateRange(project.start_date, project.end_date);
+    const relTime = relativeTime(project.start_date, project.end_date, project.status);
+    const isPulse = project.status === 'in_progress';
 
     return (
-        <div className="pj-card-well">
-            <div className="pj-card-display">
-                <button
-                    onClick={() => setExpanded(!expanded)}
-                    className="pj-trip-header"
-                >
-                    <div className="pj-trip-top-row">
-                        <div className="pj-trip-title-area">
-                            {expanded
-                                ? <ChevronDown size={14} style={{ color: 'rgba(53, 160, 88, 0.40)', marginTop: 1, flexShrink: 0 }} />
-                                : <ChevronRight size={14} style={{ color: 'rgba(53, 160, 88, 0.40)', marginTop: 1, flexShrink: 0 }} />
-                            }
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <h3 className="pj-trip-title">{tripTitle}</h3>
-                                <div className="pj-trip-meta">
-                                    {hasSubtitle && <span>{project.name}</span>}
-                                    {project.client_name && <span>{project.client_name}</span>}
-                                    {!hasSubtitle && project.site_name && (
-                                        <span><MapPin size={10} />{project.site_name}</span>
-                                    )}
-                                    {!hasSubtitle && project.start_date && (
-                                        <span><Calendar size={10} />{formatDateRange(project.start_date, project.end_date)}</span>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                        <span className={`pj-badge ${statusClass}`}>
-                            <span className={`pj-led ${statusClass}`} />
-                            {PROJECT_STATUS_LABELS[project.status]}
+        <div className={`pj-project-row-wrap ${isOpen ? 'is-open' : ''}`}>
+            <div
+                className="pj-project-row"
+                style={{ '--row-accent': accentColor } as React.CSSProperties}
+                onClick={(e) => {
+                    if ((e.target as HTMLElement).closest('button')) return;
+                    onToggle();
+                }}
+            >
+                <span className="pj-accent-bar" />
+                <div className="pj-project-row-name">
+                    <div className="pj-row-chev" aria-hidden="true">
+                        <ChevronRight size={13} />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                        <span className="pj-project-row-title">{project.name}</span>
+                        <span className="pj-project-row-meta">
+                            {project.client_name && <span>{project.client_name}</span>}
+                            {project.site_name && (
+                                <>
+                                    <span className="pj-dot-sep" />
+                                    <span><MapPin size={10} />{project.site_name}</span>
+                                </>
+                            )}
                         </span>
                     </div>
-                    <div style={{ paddingLeft: 22 }}>
-                        <div className="pj-progress-wrap">
-                            <div className="pj-progress-track">
-                                <div
-                                    className={`pj-progress-fill ${pct >= 100 ? 'complete' : ''}`}
-                                    style={{ width: `${pct}%` }}
-                                />
-                            </div>
-                            <span className="pj-progress-label">
-                                {project.completed_vessel_count}/{project.vessel_count} vessels
-                            </span>
-                        </div>
+                </div>
+                <div className="pj-project-row-dates">
+                    {dateRange && <span className="pj-date-range">{dateRange}</span>}
+                    {relTime && <span className="pj-date-rel">{relTime}</span>}
+                </div>
+                <div className="pj-project-row-progress">
+                    <div className="pj-progress-meta">
+                        <span><strong>{project.completed_vessel_count}</strong> / {project.vessel_count}</span>
+                        <span>{pct}%</span>
                     </div>
+                    <div className="pj-progress-track">
+                        <div
+                            className={`pj-progress-fill ${pct >= 100 ? 'complete' : ''}`}
+                            style={{ width: `${pct}%` }}
+                        />
+                    </div>
+                </div>
+                <span className={`pj-badge ${statusClass} ${isPulse ? 'pulse' : ''}`}>
+                    <span className={`pj-led ${statusClass}`} />
+                    {PROJECT_STATUS_LABELS[project.status]}
+                </span>
+                <div className="pj-project-row-vessels">
+                    <Ship size={14} />
+                    <span>{project.vessel_count}</span>
+                </div>
+                <button className="pj-more-btn" aria-label="More actions" onClick={e => e.stopPropagation()}>
+                    <MoreHorizontal size={15} />
                 </button>
-
-                {expanded && <TripVessels projectId={project.id} />}
             </div>
+            {isOpen && <ExpandedDetail project={project} />}
         </div>
     );
 }
@@ -261,11 +228,41 @@ interface TripViewProps {
 }
 
 export function TripView({ projects }: TripViewProps) {
+    const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
+
+    const toggleOpen = (id: string) => {
+        setOpenIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
     return (
-        <div className="pj-card-list">
-            {projects.map(project => (
-                <TripCard key={project.id} project={project} />
-            ))}
+        <div className="pj-list">
+            <div className="pj-list-head">
+                <span>Project</span>
+                <span>Dates</span>
+                <span>Progress</span>
+                <span>Status</span>
+                <span>Vessels</span>
+                <span />
+            </div>
+            {projects.length === 0 ? (
+                <div className="pj-empty-text" style={{ padding: '32px 20px' }}>
+                    No projects match the current filters
+                </div>
+            ) : (
+                projects.map(project => (
+                    <ProjectRow
+                        key={project.id}
+                        project={project}
+                        isOpen={openIds.has(project.id)}
+                        onToggle={() => toggleOpen(project.id)}
+                    />
+                ))
+            )}
         </div>
     );
 }

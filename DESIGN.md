@@ -1,50 +1,55 @@
 ---
 name: Matrix Portal
-description: Industrial instrument interface for NDT inspection visualization and reporting
+description: Clean, content-first interface for NDT inspection visualization and reporting
 colors:
   green: "#2d8a4e"
   green-bright: "#35a058"
   green-dark: "#206b3a"
   amber: "#d4981e"
   red: "#c0392b"
-  chassis: "#504e4a"
-  chassis-inner: "#5a5854"
-  panel-top: "#c6c5c2"
-  panel-mid: "#b2b1ae"
-  panel-bot: "#9e9d9a"
-  ctrl: "#d6d3ce"
-  ctrl-hi: "#e4e1dc"
-  ctrl-lo: "#bcb9b4"
-  well-rim: "#4a4844"
-  well-mid: "#262420"
-  well-deep: "#141310"
-  well-floor: "#0a0908"
+  bg: "#f5f4f0"
+  surface: "#ffffff"
+  surface-secondary: "#fafaf8"
+  border: "#e5e3de"
+  border-strong: "#d5d3ce"
   text-primary: "#1c1b18"
   text-secondary: "#4a4845"
   text-tertiary: "#7a7672"
   text-quaternary: "#9a968f"
+  dark-bg: "#1a1917"
+  dark-surface: "#252422"
+  dark-surface-secondary: "#2a2926"
+  dark-border: "#3a3835"
+  dark-text-primary: "#e8e6e1"
+  dark-text-secondary: "#a8a49d"
+  dark-text-tertiary: "#7a7672"
 typography:
   body:
     fontFamily: "Barlow, -apple-system, BlinkMacSystemFont, Segoe UI, system-ui, sans-serif"
-    fontSize: "16px"
+    fontSize: "14px"
     fontWeight: 400
     lineHeight: 1.5
+  heading:
+    fontFamily: "Barlow, -apple-system, BlinkMacSystemFont, Segoe UI, system-ui, sans-serif"
+    fontWeight: 600
+    lineHeight: 1.3
   label:
-    fontFamily: "Barlow Condensed, Barlow, sans-serif"
+    fontFamily: "Barlow, sans-serif"
     fontSize: "11px"
     fontWeight: 600
     lineHeight: 1.4
+    textTransform: "uppercase"
+    letterSpacing: "0.06em"
   mono:
     fontFamily: "JetBrains Mono, Fira Code, Consolas, Monaco, monospace"
-    fontSize: "14px"
+    fontSize: "13px"
     fontWeight: 400
     lineHeight: 1.6
 rounded:
-  sm: "4px"
-  md: "5px"
-  lg: "7px"
-  xl: "8px"
-  2xl: "14px"
+  sm: "6px"
+  md: "10px"
+  lg: "14px"
+  pill: "9999px"
 spacing:
   xs: "4px"
   sm: "8px"
@@ -52,206 +57,186 @@ spacing:
   lg: "24px"
   xl: "32px"
 components:
-  chassis:
-    background: "linear-gradient(180deg, {colors.chassis-inner} 0%, {colors.chassis} 100%)"
-    borderRadius: "{rounded.2xl}"
-    padding: "10px"
-  panel:
-    background: "linear-gradient(180deg, {colors.panel-top} 0%, {colors.panel-mid} 45%, {colors.panel-bot} 100%)"
-    borderRadius: "{rounded.xl}"
-  display-well:
-    background: "linear-gradient(180deg, {colors.well-mid} 0%, {colors.well-deep} 30%, {colors.well-floor} 100%)"
-    borderRadius: "{rounded.lg}"
-    padding: "4px"
-  display:
-    background: "linear-gradient(180deg, #131210 0%, #0c0b0a 100%)"
-    borderRadius: "4px"
-    textColor: "{colors.green-bright}"
-    fontFamily: "{typography.mono.fontFamily}"
-  button-raised:
-    background: "linear-gradient(180deg, {colors.ctrl-hi} 0%, {colors.ctrl} 50%, {colors.ctrl-lo} 100%)"
-    borderRadius: "{rounded.md}"
-    textColor: "{colors.text-secondary}"
-  groove:
+  card:
+    background: "var(--clean-surface)"
+    border: "1px solid var(--clean-border)"
+    borderRadius: "14px"
+    padding: "20px"
+  badge:
+    borderRadius: "9999px"
+    padding: "2px 10px"
+    fontSize: "11px"
+    fontWeight: 500
+  button-primary:
+    background: "var(--clean-green)"
+    color: "#ffffff"
+    borderRadius: "10px"
+    padding: "8px 16px"
+  button-secondary:
+    background: "var(--clean-surface)"
+    border: "1px solid var(--clean-border)"
+    borderRadius: "10px"
+    padding: "8px 16px"
+  tab:
+    background: "var(--clean-tab-track-bg)"
+    borderRadius: "10px"
+    activeBackground: "var(--clean-tab-active-bg)"
+  divider:
     height: "1px"
-    background: "linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(255,255,255,0.25) 100%)"
+    background: "var(--clean-divider)"
 ---
 
 # Design System: Matrix Portal
 
 ## 1. Overview
 
-**Creative North Star: "The Precision Instrument"**
+**Creative North Star: "Content-First Clarity"**
 
-Matrix Portal's interface is a physical instrument, not a screen. Every surface has material properties: brushed-metal panels catch overhead light with specular blooms, data lives inside recessed LCD display wells, zones are separated by machined groove dividers, and buttons have mechanical travel with specular highlights. The metaphor is a high-end test & measurement instrument sitting on an engineer's workbench.
-
-The aesthetic descends from professional measurement equipment (Keysight, Fluke, Olympus NDT) and high-end audio hardware (Universal Audio, SSL). Not from software UI frameworks, admin templates, or SaaS dashboards. If it looks like a website, it's wrong. If it looks like something you could pick up and hold, it's right.
+Matrix Portal's interface is clean, warm, and professional. The aesthetic draws from modern productivity tools (Notion, Linear, Figma) adapted for industrial inspection workflows. Surfaces are simple and honest: white cards on warm off-white backgrounds, separated by subtle borders. The work (scans, models, reports, data) dominates the viewport. UI chrome recedes.
 
 **Key Characteristics:**
-- Warm umber-gray brushed-metal surfaces; never cold blue-gray, never pure white or black
-- Chassis > Panel > Display Well spatial hierarchy mimicking physical instrument construction
-- All data content lives inside recessed dark LCD screens, never on the panel surface
-- Labels and section titles are engraved into the panel surface (text-shadow rim-light effect)
-- Green accent for active/healthy states; amber for warnings; red for critical. Color is functional, never decorative
-- Monospaced type inside display wells (data voice); condensed uppercase labels on panel surface (instrument voice)
+- Warm off-white background (#f5f4f0) with white card surfaces, never cold blue-gray
+- Typography and spacing create hierarchy, not simulated materials
+- Green accent (#2d8a4e / #35a058) used sparingly for interactive elements and healthy status
+- Colored badge pills for status: green (complete), blue (in progress), amber (review/warning), neutral (not started)
+- Full light/dark mode support via CSS custom properties (--clean-* namespace)
+- System preference detection with manual toggle override
 
-## 2. Spatial Hierarchy
+## 2. Surfaces
 
-The interface follows a strict physical construction metaphor with three depth layers:
+### Background
+Warm off-white (#f5f4f0 light, #1a1917 dark). This is the page canvas.
 
-### Chassis (outermost)
-The dark outer frame that holds everything. Think of the metal enclosure of a rack-mounted instrument.
-- Background: `linear-gradient(180deg, var(--chassis-inner) 0%, var(--chassis) 100%)` — warm dark gray (#5a5854 → #504e4a)
-- Padding: 10px (the lip between chassis edge and panel)
-- Border-radius: 14px
-- Shadow: heavy drop shadow suggesting physical weight
+### Cards
+White surfaces (#ffffff light, #252422 dark) with 1px border (--clean-border) and 14px radius. Cards contain related content groups. No shadows by default; optional subtle shadow for elevated elements (dropdowns, modals).
 
-### Panel (main surface)
-The brushed-metal faceplate. All labels, controls, and section titles live ON this surface, engraved into it.
-- Background: 3-stop gradient from `--panel-top` (#c6c5c2) through `--panel-mid` (#b2b1ae) to `--panel-bot` (#9e9d9a)
-- Grain texture: `::before` pseudo-element with repeating-linear-gradient simulating fine horizontal brush marks
-- Specular bloom: `::after` pseudo-element — large radial gradient positioned at top center, simulating overhead light catching the metal surface. This is what makes the panel feel "alive" rather than flat
-- Inset shadow: `inset 0 1px 0 rgba(255,255,255,0.45)` for the top-lit edge, `inset 0 -1px 0 rgba(0,0,0,0.08)` for the shadowed bottom edge
+### Dividers
+1px solid lines using --clean-divider. Used between major content sections. No grooves, no dual-tone tricks.
 
-### Display Well > Display (data screens)
-Recessed dark areas where all data content appears. Two nested elements:
-- **Well** (outer): The beveled recess machined into the panel. `--well-mid` → `--well-deep` → `--well-floor` gradient with heavy inset shadows creating depth
-- **Display** (inner): The near-black LCD screen inside the well. `#131210` → `#0c0b0a` gradient. Text is `--green-bright` in monospace. This is where document lists, stats readouts, category meters, activity feeds, and all other data live
+## 3. Colors
 
-### Named Rules
+### Warm Neutrals
+Every neutral carries warm umber undertones, never cool blue-gray:
 
-**The Surface Rule.** Content type determines which surface it occupies. Labels, titles, and controls → panel surface (engraved). Data, lists, values, readouts → inside display wells (LCD green-on-dark). Mixing these (e.g., dark text on panel for data, or panel-colored text inside a display) breaks the instrument metaphor.
+| Token | Light | Dark | Use |
+|-------|-------|------|-----|
+| --clean-bg | #f5f4f0 | #1a1917 | Page background |
+| --clean-surface | #ffffff | #252422 | Card/panel surfaces |
+| --clean-surface-secondary | #fafaf8 | #2a2926 | Nested surfaces, hover states |
+| --clean-border | #e5e3de | #3a3835 | Card borders, dividers |
+| --clean-text-primary | #1c1b18 | #e8e6e1 | Headings, primary content |
+| --clean-text-secondary | #4a4845 | #a8a49d | Body text, descriptions |
+| --clean-text-tertiary | #7a7672 | #7a7672 | Metadata, timestamps |
+| --clean-text-quaternary | #9a968f | #5a5754 | Placeholders, disabled |
 
-**The Well Rule.** Every distinct data group gets its own display well. The well provides visual containment and the LCD context. Wells never nest inside other wells.
+### Semantic Accents
+Color is functional, never decorative:
 
-## 3. Colors: The Instrument Palette
-
-A warm, deliberately umber-tinted palette. Every neutral carries warm undertones, never cool blue-gray. Color is scarce and functional.
-
-### Panel & Control Surfaces
-- **Panel Top** (#c6c5c2): Lightest point of the brushed-metal gradient
-- **Panel Mid** (#b2b1ae): Middle tone, the dominant surface color
-- **Panel Bot** (#9e9d9a): Shadow edge at the panel's lower extent
-- **Ctrl Hi/Mid/Lo** (#e4e1dc / #d6d3ce / #bcb9b4): Raised control surfaces (buttons, active tabs)
-
-### Chassis & Wells
-- **Chassis** (#504e4a) / **Chassis Inner** (#5a5854): Dark frame surrounding panels
-- **Well Mid/Deep/Floor** (#262420 / #141310 / #0a0908): Progressive depth inside recessed display areas
-- **Body background**: Dark workbench surface (#3a3836 or similar warm dark)
-
-### Instrument Accents
-- **Green** (#2d8a4e): Primary accent. Active states, healthy status, interactive affordances. Bright variant (#35a058) for LED indicators and LCD readouts
-- **Amber** (#d4981e): Caution. Expiring certifications, pending reviews, approaching thresholds
-- **Red** (#c0392b): Critical. Expired credentials, errors, destructive actions
-- **Green Glow** (rgba(45,138,78,0.50)): LED halo effect around active indicators
-
-### Text on Panel (engraved)
-- **Primary** (#1c1b18): Page titles, section headers. With `text-shadow: 0 1px 0 rgba(255,255,255,0.50)` for engraved rim-light
-- **Secondary** (#4a4845): Descriptions, subtitles. Same rim-light, lighter text-shadow
-- **Tertiary** (#7a7672): Metadata labels, less critical information
-- **Quaternary** (#9a968f): Timestamps, helper text, nameplate model text
-
-### Text in Display Wells (LCD)
-- **Green Bright** (#35a058): Primary data values, list item titles, strong readouts. With `text-shadow: 0 0 10px var(--green-glow)` for LCD glow
-- **Green Dim** (rgba(53,160,88,0.42)): Labels, metadata, secondary information inside wells
-- **White** (rgba(255,255,255,0.70-0.80)): Document titles, review item names inside wells
-- **Amber/Red**: Status indicators, same semantic use as on panel but with glow variants
+| Meaning | Color | Badge BG (light) | Badge Text (light) |
+|---------|-------|-------------------|---------------------|
+| Active / Complete | Green #2d8a4e | #e6f4ec | #1a6b3a |
+| In Progress | Blue #3b82f6 | #e6eef9 | #1e5bb8 |
+| Warning / Review | Amber #d4981e | #faf0d8 | #8a6210 |
+| Error / Critical | Red #c0392b | #fde8e8 | #9b2c2c |
+| Neutral | Gray | #f0efec | #5a5754 |
 
 ### Named Rules
 
-**The Warm Neutral Rule.** No neutral is cool-tinted. Every gray carries umber warmth. Compare against pure gray (#808080) — if it could be mistaken for neutral gray, add warmth.
+**The Warm Neutral Rule.** No neutral is cool-tinted. Every gray carries umber warmth.
 
-**The Glow Rule.** Inside display wells, colored text gets a matching `text-shadow` glow simulating LCD phosphor bleed. On the panel surface, text gets a white rim-light shadow simulating engraving. Never mix these: no glow on panel text, no rim-light inside wells.
+**The Accent Budget.** Green accent appears on primary buttons, active status indicators, and progress fills. It occupies less than 10% of any viewport. Other colors appear only inside status badges or error states.
 
 ## 4. Typography
 
-**Body:** Barlow (with system-ui fallback)
-**Labels:** Barlow Condensed — the instrument voice. Uppercase, wide letter-spacing, used for zone labels, section titles, button text, nameplates
-**Data:** JetBrains Mono — the display voice. Used inside all LCD display wells for values, readouts, list items, and any data the user might compare or copy
+**Body:** Barlow (400/500, 14px) for all flowing text
+**Headings:** Barlow (600, 18-24px) for page and section titles
+**Labels:** Barlow (600, 11px, uppercase, 0.06em tracking) for section labels and chip text
+**Data:** JetBrains Mono (400, 13px) for numeric values, code, and data that users compare or copy
 
 ### Hierarchy
 
-- **Page Title** (Barlow Condensed 700, 17px, uppercase, 0.16em tracking): One per chassis. Engraved into panel surface
-- **Section Label** (Barlow Condensed 700, 11px, uppercase, 0.14em tracking): Zone labels on panel. "Attention Required", "Categories", "Recent Activity"
-- **Subtitle** (Barlow Condensed 600, 11px, uppercase, 0.12em tracking): Supporting text below page title
-- **Display Value** (JetBrains Mono 600, 28px, tabular-nums): Large readout numbers inside stat wells
-- **Display Label** (JetBrains Mono, 9px, uppercase, 0.12em tracking): Dim green labels inside stat wells
-- **Display Body** (JetBrains Mono, 11-12px): List items, activity text, review items inside display wells
-- **Nameplate** (Barlow Condensed 700, 15px, uppercase, 0.18em tracking): Product name on nameplate strip
+| Element | Font | Size | Weight | Notes |
+|---------|------|------|--------|-------|
+| Page title | Barlow | 24px | 600 | One per page |
+| Section label | Barlow | 11px | 600 | Uppercase, wide tracking, --clean-text-tertiary |
+| Card heading | Barlow | 15px | 600 | Inside cards |
+| Body text | Barlow | 14px | 400 | Default |
+| Small text | Barlow | 12px | 400 | Metadata, timestamps |
+| Data value | JetBrains Mono | 24px | 600 | Stat readouts |
+| Data label | JetBrains Mono | 11px | 400 | Below stat values |
+| Badge | Barlow | 11px | 500 | Inside status pills |
 
-### Named Rules
+## 5. Components
 
-**The Voice Rule.** Font family signals the surface. Barlow Condensed = on the panel (instrument labels). JetBrains Mono = inside a display well (data readout). Barlow (regular) = flowing body text in modals, descriptions, prose. Breaking this mapping confuses the spatial hierarchy.
+### Cards (.pj-card)
+White surface, 1px border, 14px radius. Interior padding 20px. No nesting cards inside cards. Group related content; separate groups with dividers or new cards.
 
-## 5. Physical Elements
+### Buttons (.pj-btn)
+Flat, 10px radius. Three variants:
+- **Primary**: Green background (#2d8a4e), white text. For the main action on a page.
+- **Secondary**: White/surface background, border. For supporting actions.
+- **Danger**: Red background for destructive actions (delete, remove).
 
-### Groove Dividers
-1px dual-tone lines separating functional zones on the panel surface. Top half is dark (`rgba(0,0,0,0.08)`), bottom half is light (`rgba(255,255,255,0.25)`), creating the illusion of a machined channel. Vertical variant for column separations.
+All buttons: 13px Barlow 500, 8px 16px padding, no gradients, no text-shadows. Disabled state reduces opacity to 0.5.
 
-### Specular Blooms
-Large radial gradients positioned on the panel `::after` pseudo-element, simulating overhead light catching the brushed-metal surface. Centered horizontally, positioned near the top. White → transparent fade. This single element is responsible for making the panel feel "alive" versus flat.
+### Badges (.pj-badge)
+Pill-shaped (border-radius: 9999px). Tinted background with matching text color per semantic meaning. 2px 10px padding. Optional LED dot prefix (6px solid circle) for status.
 
-### LED Indicators
-Small radial-gradient circles (5-8px) with colored glow box-shadows. Used for status dots (sidebar), active nav indicators, and stat card icons. The LED has a specular highlight at top-left (`circle at 35% 30%`) and a matching glow halo (`box-shadow: 0 0 4px [color], 0 0 10px [color-soft]`).
+### Tabs (.pj-tab)
+Segmented control inside a rounded track (--clean-tab-track-bg, 10px radius). Active tab pops to white/surface with subtle shadow. 10px 16px padding. Tab counts in a smaller muted chip.
 
-### Engraved Text
-Text pressed into the panel surface. Achieved with muted text color + `text-shadow: 0 1px 0 rgba(255,255,255,0.40)`. The white shadow below each letter simulates light catching the lower edge of the letter-shaped recess. Used for all text on the panel surface: titles, labels, nameplates, button labels.
+### Filter Chips (.pj-filter-chip)
+Pill border buttons. Active state fills dark (--clean-chip-active-bg) with white text. Inactive has border and surface background. 6px 14px padding.
 
-### Raised Buttons
-Three-layer gradient buttons (specular highlight radial at top + body gradient + base). Inset white top edge, dark bottom edge, drop shadow beneath. `:active` state inverts to inset shadows + 1px translateY to simulate mechanical press. Used for actions on the panel surface.
+### Progress Bars (.pj-progress-track)
+4px tall rounded track. Fill uses green. Complete state uses full green. Animated width transition.
 
-### Category Bars
-Horizontal meters inside display wells showing document distribution. Well-within-well construction: outer bar uses `--well-mid/deep/floor`, inner fill uses green gradient with glow shadow. Animated width transition.
+### Dropdowns (.pj-status-menu, .pj-dropdown-menu)
+White/surface card with border and shadow. 8px radius. Items are full-width buttons with hover highlight. Positioned absolutely below trigger.
 
-### Nameplate Strip
-Bottom zone of each chassis, below the final groove. Product name left-aligned, model descriptor right-aligned. Both in Barlow Condensed uppercase with engraved text-shadow. Color is `--color-neutral-500` — visible but not prominent, like stamped metal identification.
+### Forms (.pj-form-card)
+Card wrapper around form groups. Labels are 11px uppercase Barlow 600. Inputs have 1px border, 8px radius, 9px 12px padding. Focus adds green ring.
 
-## 6. Components
+### Alerts (.pj-alert)
+Full-width banners. Success: green-tinted background. Error: red-tinted background. 12px radius, 12px 16px padding.
 
-### Stat Cards
-Individual display wells, each containing a single metric. LED indicator dot at top (color varies by type), large mono value with glow, dim mono label below. Grid of 6 across. Each is a complete well > display unit.
+## 6. Layout
 
-### Document List
-Lives inside a display well. Each item has: recessed icon well (mini display), white title text, green-dim metadata, status badge (LED-style), review date indicator. Items separated by green-tinted borders (`rgba(53,160,88,0.08)`). Hover state is subtle green background tint.
+### Page Container (.pj-page)
+Max-width 1200px, centered, 32px padding. Background is --clean-bg.
 
-### Status Badges
-Recessed dark pills with LED dot prefix. The badge background is `--well-deep → --well-floor` gradient with inset shadow. LED dot uses the same radial-gradient + glow pattern as standalone LEDs. Text color matches the semantic meaning (green/amber/red).
+### Content Sections
+Separated by dividers (1px --clean-divider). Section labels (11px uppercase) precede content groups.
 
-### Tabs
-Recessed well containing raised button tabs. The well provides the dark channel; the active tab pops up as a raised control surface with specular highlight. Inactive tabs are ghosted text inside the well.
+### Grids
+Cards in responsive grids. 16px gap default. Two-column for readout cards, single-column for lists.
 
-### Search
-Recessed channel (same well treatment as tabs). Monospace green input text with glow. Search icon in dim green. Focus state adds green ring glow around the well.
+## 7. Dark Mode
 
-### Filter Chips
-Inside display wells: flat toggle pills with green-tinted borders on dark background. Active state has green glow. On panel surface: raised button variant matching the standard button treatment.
+Implemented via CSS custom properties with `data-theme` attribute on `<html>`:
+- `data-theme="light"` forces light
+- `data-theme="dark"` forces dark
+- No attribute: follows `prefers-color-scheme`
 
-### Sidebar
-Zones within the panel, separated by grooves. Each zone has a panel-surface label (engraved) and a display well containing the data. The sidebar itself has no separate background — it IS the panel surface, separated from the main content by a vertical groove.
+ThemeProvider (React context) manages state with localStorage persistence. The toggle cycles: system -> light -> dark -> system.
 
-## 7. Global Shell
-
-### Header Bar
-Brushed-metal panel strip matching the page panel surface. Brand name and nav items are engraved text on the warm metal — `color: var(--color-neutral-400/500)` with `text-shadow: 0 1px 0 rgba(255,255,255,0.35)`. No raised buttons for nav; active state indicated by green LED dot below the item. The header is the top edge of the instrument, not a separate dark bar.
-
-### Body Background
-Dark workbench surface (#3a3836). The warm dark tone suggests the surface the instrument sits on. Subtle grain texture via `::after` pseudo-element on body.
+All component styles use `var(--clean-*)` tokens, making them automatically theme-aware. No component needs conditional class names for theme.
 
 ## 8. Do's and Don'ts
 
 ### Do:
-- **Do** use the chassis > panel > display well hierarchy for every page. The chassis is the frame, the panel is the working surface, display wells contain all data.
-- **Do** add specular blooms to panel surfaces. Without them, the panel reads as flat colored rectangles instead of brushed metal.
-- **Do** use grooves between functional zones. They are the structural joints of the instrument.
-- **Do** use monospace type inside display wells and condensed uppercase labels on panel surfaces. The font signals the surface.
-- **Do** give LED indicators a glow halo. A dot without glow looks like a CSS circle; a dot with glow looks like a physical LED.
-- **Do** use the engraved text-shadow on all panel-surface text. Without it, text sits on top of the surface rather than being pressed into it.
+- **Do** use --clean-* CSS custom properties for all colors. Never hardcode hex in components.
+- **Do** let whitespace create hierarchy. Generous padding, clear sections.
+- **Do** use typography scale for hierarchy. Size and weight differences, not color tricks.
+- **Do** keep badges small and pill-shaped. Status is communicated, not shouted.
+- **Do** test both light and dark modes for every new component.
+- **Do** use the card component for content groups, dividers between sections.
 
 ### Don't:
-- **Don't** put data content directly on the panel surface. All data, lists, values, and readouts go inside display wells.
-- **Don't** use dark text on light backgrounds inside display wells. Wells are LCD screens: light text (green/white) on near-black.
-- **Don't** use glassmorphism, backdrop-filter, or transparency effects. The instrument aesthetic is opaque materials: metal, plastic, glass screens. Not frosted glass.
-- **Don't** use blue as an accent color anywhere. The instrument palette is green/amber/red. Blue was the old theme.
-- **Don't** use gradient text, side-stripe borders, bounce animations, or hero-metric templates.
-- **Don't** create flat cards floating on backgrounds. Use the chassis > panel construction. A "card" is a panel zone separated by grooves, not a floating rectangle with a border.
-- **Don't** use raw hex values in component code. Reference design tokens (`var(--green)`, `var(--panel-mid)`, `var(--well-deep)`).
+- **Don't** add shadows to cards unless they're elevated (dropdowns, modals).
+- **Don't** use gradients on surfaces or buttons. Flat, solid colors.
+- **Don't** nest cards inside cards. Use dividers or spacing instead.
+- **Don't** use glow effects, text-shadows, neumorphic shadows, or faux-material textures.
+- **Don't** use blue as a decorative accent. Blue appears only in "in progress" status badges.
+- **Don't** create new CSS classes when a --clean-* token handles it.
+- **Don't** use inline rgba() color values. Map them to tokens.

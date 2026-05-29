@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import type { CscanData } from '../types';
 
 export interface ScanPosition {
@@ -79,6 +79,17 @@ export function useLayoutMode(scans: CscanData[]): UseLayoutModeResult {
   const [scanPositions, setScanPositions] = useState(() => computeInitialPositions(scans));
   const [zOrder, setZOrder] = useState(() => scans.map((s) => s.id));
   const [camera, setCamera] = useState(() => computeInitialCamera(scans));
+
+  // Re-sync state when the scan list changes (useState initializers only run once)
+  const prevScansRef = useRef(scans);
+  useEffect(() => {
+    if (prevScansRef.current !== scans) {
+      prevScansRef.current = scans;
+      setScanPositions(computeInitialPositions(scans));
+      setZOrder(scans.map((s) => s.id));
+      setCamera(computeInitialCamera(scans));
+    }
+  }, [scans]);
 
   const scanExtentsMap = useMemo(() => {
     const map = new Map<string, ScanExtents>();

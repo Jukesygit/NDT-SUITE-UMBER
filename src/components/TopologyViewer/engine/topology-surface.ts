@@ -46,6 +46,7 @@ export function buildTopologySurface(
     exaggeration, colorScale: scaleName, reverseScale,
     rangeMin, rangeMax, maxDisplayResolution, nominalThickness,
     displacementClampUpper, denoiseRadius, gapFillRadius,
+    viewMode, pipeDiameter,
   } = options;
   const { data: srcData, xAxis: rawX, yAxis: rawY, stats } = cscan;
   let processedData = denoiseRadius != null ? medianFilter(srcData, denoiseRadius) : srcData;
@@ -101,6 +102,35 @@ export function buildTopologySurface(
 
       uvs[idx * 2]     = c / (cols - 1);
       uvs[idx * 2 + 1] = r / (rows - 1);
+    }
+  }
+
+  // Cylindrical wrapping: bend flat surface into pipe shape (inner face)
+  if (viewMode === 'cylinder' && pipeDiameter != null && pipeDiameter > 0) {
+    const R = pipeDiameter / 2;
+    const innerR = R - nominal;
+    const xMin = xAxis[0];
+    const xMax = xAxis[cols - 1];
+    const scanSpan = xMax - xMin;
+
+    if (scanSpan > 0) {
+      const circumference = Math.PI * pipeDiameter;
+      const arcFraction = scanSpan / circumference;
+      const totalAngle = arcFraction * 2 * Math.PI;
+
+      for (let i = 0; i < vertexCount; i++) {
+        const flatX = positions[i * 3];
+        const flatY = positions[i * 3 + 1];
+        const flatZ = positions[i * 3 + 2];
+
+        // Positive theta → triangle normals face inward (visible from inside pipe)
+        const theta = ((flatX - xMin) / scanSpan) * totalAngle;
+        const r = innerR - flatY;
+
+        positions[i * 3]     = r * Math.cos(theta);
+        positions[i * 3 + 1] = r * Math.sin(theta);
+        positions[i * 3 + 2] = flatZ;
+      }
     }
   }
 
@@ -229,6 +259,115 @@ export function buildPlateBody(
     const tA = base, bA = base + 1, tB = base + 2, bB = base + 3;
     indexList.push(tA, tB, bA);
     indexList.push(tB, bB, bA);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(indexList), 1));
+  geometry.computeVertexNormals();
+
+  return geometry;
+}
+
+/**
+ * Build a cylindrical pipe shell from the inner surface geometry.
+ *
+ * The outer face projects every inner vertex to constant `outerRadius` at the
+ * same angle and axial position, with reversed winding so normals face outward.
+ * Radial walls (skirt) connect inner and outer surfaces along every boundary
+ * edge — perimeter and internal hole edges alike.
+ */
+export function buildCylindricalShell(
+  innerGeometry: THREE.BufferGeometry,
+  outerRadius: number,
+): THREE.BufferGeometry {
+  const innerPos = innerGeometry.getAttribute('position') as THREE.BufferAttribute;
+  const innerIdx = innerGeometry.getIndex()!;
+  const vertCount = innerPos.count;
+
+  // --- Recover theta and z for each inner vertex ---
+  const thetas = new Float32Array(vertCount);
+  const zVals = new Float32Array(vertCount);
+  for (let i = 0; i < vertCount; i++) {
+    const x = innerPos.getX(i);
+    const y = innerPos.getY(i);
+    thetas[i] = Math.atan2(y, x);
+    zVals[i] = innerPos.getZ(i);
+  }
+
+  // --- Find boundary edges (edges in exactly one triangle) ---
+  const edgeCounts = new Map<string, number>();
+  const ek = (a: number, b: number) => (a < b ? `${a}-${b}` : `${b}-${a}`);
+
+  for (let i = 0; i < innerIdx.count; i += 3) {
+    const a = innerIdx.getX(i);
+    const b = innerIdx.getX(i + 1);
+    const c = innerIdx.getX(i + 2);
+    edgeCounts.set(ek(a, b), (edgeCounts.get(ek(a, b)) ?? 0) + 1);
+    edgeCounts.set(ek(b, c), (edgeCounts.get(ek(b, c)) ?? 0) + 1);
+    edgeCounts.set(ek(c, a), (edgeCounts.get(ek(c, a)) ?? 0) + 1);
+  }
+
+  const boundaryEdges: [number, number][] = [];
+  for (const [key, count] of edgeCounts) {
+    if (count === 1) {
+      const [a, b] = key.split('-').map(Number);
+      boundaryEdges.push([a, b]);
+    }
+  }
+
+  const numBE = boundaryEdges.length;
+
+  // --- Vertex layout ---
+  // [0 .. vertCount-1]               : outer face (constant outerRadius)
+  // [vertCount .. vertCount+numBE*4]  : skirt quads (innerA, outerA, innerB, outerB)
+  const totalVerts = vertCount + numBE * 4;
+  const positions = new Float32Array(totalVerts * 3);
+
+  // Outer face vertices — same theta/z, constant radius
+  for (let i = 0; i < vertCount; i++) {
+    positions[i * 3]     = outerRadius * Math.cos(thetas[i]);
+    positions[i * 3 + 1] = outerRadius * Math.sin(thetas[i]);
+    positions[i * 3 + 2] = zVals[i];
+  }
+
+  // Skirt vertices (4 per boundary edge: inner + outer for each endpoint)
+  for (let e = 0; e < numBE; e++) {
+    const [a, b] = boundaryEdges[e];
+    const base = (vertCount + e * 4) * 3;
+
+    // Inner A
+    positions[base]      = innerPos.getX(a);
+    positions[base + 1]  = innerPos.getY(a);
+    positions[base + 2]  = innerPos.getZ(a);
+    // Outer A
+    positions[base + 3]  = outerRadius * Math.cos(thetas[a]);
+    positions[base + 4]  = outerRadius * Math.sin(thetas[a]);
+    positions[base + 5]  = zVals[a];
+    // Inner B
+    positions[base + 6]  = innerPos.getX(b);
+    positions[base + 7]  = innerPos.getY(b);
+    positions[base + 8]  = innerPos.getZ(b);
+    // Outer B
+    positions[base + 9]  = outerRadius * Math.cos(thetas[b]);
+    positions[base + 10] = outerRadius * Math.sin(thetas[b]);
+    positions[base + 11] = zVals[b];
+  }
+
+  // --- Index buffer ---
+  const indexList: number[] = [];
+
+  // Outer face: same triangles as inner surface, reversed winding for outward normals
+  for (let i = 0; i < innerIdx.count; i += 3) {
+    indexList.push(innerIdx.getX(i), innerIdx.getX(i + 2), innerIdx.getX(i + 1));
+  }
+
+  // Skirt faces: 2 triangles per boundary edge
+  for (let e = 0; e < numBE; e++) {
+    const base = vertCount + e * 4;
+    const iA = base, oA = base + 1, iB = base + 2, oB = base + 3;
+    indexList.push(iA, iB, oA);
+    indexList.push(iB, oB, oA);
   }
 
   const geometry = new THREE.BufferGeometry();

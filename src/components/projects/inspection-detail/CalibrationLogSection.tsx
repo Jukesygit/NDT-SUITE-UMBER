@@ -46,10 +46,10 @@ const PARAM_MAP: Record<string, keyof UpdateCalibrationLogEntryParams> = {
 
 const cellStyle: React.CSSProperties = {
     padding: '6px 8px',
-    background: 'var(--surface-elevated)',
-    border: '1px solid var(--border-subtle)',
+    background: 'var(--clean-surface)',
+    border: '1px solid var(--clean-border)',
     borderRadius: 4,
-    color: 'var(--text-primary)',
+    color: 'var(--clean-text-primary)',
     fontSize: '0.82rem',
     width: '100%',
 };
@@ -187,9 +187,9 @@ export default function CalibrationLogSection({ vesselId, entries }: Calibration
                         alignItems: 'center',
                         marginBottom: 12,
                         padding: '8px 12px',
-                        background: 'var(--surface-elevated)',
+                        background: 'var(--clean-surface-secondary)',
                         borderRadius: 6,
-                        border: '1px solid var(--border-subtle)',
+                        border: '1px solid var(--clean-border)',
                     }}
                 >
                     <span
@@ -197,11 +197,11 @@ export default function CalibrationLogSection({ vesselId, entries }: Calibration
                             width: 8,
                             height: 8,
                             borderRadius: '50%',
-                            background: '#10b981',
+                            background: 'var(--clean-green)',
                             flexShrink: 0,
                         }}
                     />
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', flex: 1 }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--clean-text-secondary)', flex: 1 }}>
                         {calFiles.length} cal file{calFiles.length !== 1 ? 's' : ''} found
                         {newCalFiles.length > 0 && (
                             <> &middot; {newCalFiles.length} new</>
@@ -211,7 +211,7 @@ export default function CalibrationLogSection({ vesselId, entries }: Calibration
                         type="button"
                         onClick={handleAutoPopulate}
                         disabled={importing || newCalFiles.length === 0}
-                        className="btn btn--primary btn--sm"
+                        className="pj-btn primary sm"
                         title="Create entries for all calibration files not already in the log"
                     >
                         Auto-populate
@@ -220,7 +220,7 @@ export default function CalibrationLogSection({ vesselId, entries }: Calibration
                         type="button"
                         onClick={openImportModal}
                         disabled={importing || calFiles.length === 0}
-                        className="btn btn--secondary btn--sm"
+                        className="pj-btn secondary sm"
                     >
                         Import from Companion
                     </button>
@@ -243,10 +243,10 @@ export default function CalibrationLogSection({ vesselId, entries }: Calibration
                                     style={{
                                         padding: '8px',
                                         textAlign: 'left',
-                                        color: 'var(--text-tertiary)',
+                                        color: 'var(--clean-text-tertiary)',
                                         fontWeight: 500,
                                         fontSize: '0.78rem',
-                                        borderBottom: '1px solid var(--border-default)',
+                                        borderBottom: '1px solid var(--clean-border)',
                                         whiteSpace: 'nowrap',
                                         minWidth: col.width,
                                     }}
@@ -257,7 +257,7 @@ export default function CalibrationLogSection({ vesselId, entries }: Calibration
                             <th
                                 style={{
                                     width: 40,
-                                    borderBottom: '1px solid var(--border-default)',
+                                    borderBottom: '1px solid var(--clean-border)',
                                 }}
                             />
                         </tr>
@@ -286,8 +286,8 @@ export default function CalibrationLogSection({ vesselId, entries }: Calibration
                                                     autoFocus
                                                     style={{
                                                         ...cellStyle,
-                                                        background: 'var(--surface-overlay)',
-                                                        border: '1px solid var(--accent-blue-glow)',
+                                                        background: 'var(--clean-surface)',
+                                                        border: '1px solid var(--clean-green)',
                                                     }}
                                                 />
                                             ) : (
@@ -300,8 +300,8 @@ export default function CalibrationLogSection({ vesselId, entries }: Calibration
                                                         display: 'flex',
                                                         alignItems: 'center',
                                                         color: display
-                                                            ? '#fff'
-                                                            : 'var(--text-disabled)',
+                                                            ? 'var(--clean-text-primary)'
+                                                            : 'var(--clean-text-quaternary)',
                                                     }}
                                                 >
                                                     {display || '--'}
@@ -320,7 +320,7 @@ export default function CalibrationLogSection({ vesselId, entries }: Calibration
                                             padding: '4px 6px',
                                             background: 'transparent',
                                             border: 'none',
-                                            color: 'rgba(239,68,68,0.7)',
+                                            color: 'var(--clean-badge-red-text)',
                                             cursor: 'pointer',
                                             fontSize: '0.85rem',
                                         }}
@@ -347,11 +347,11 @@ export default function CalibrationLogSection({ vesselId, entries }: Calibration
                     type="button"
                     onClick={handleAddRow}
                     disabled={createEntry.isPending}
-                    className="btn btn--secondary btn--sm"
+                    className="pj-btn secondary sm"
                 >
                     + Add Row
                 </button>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-quaternary)' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--clean-text-quaternary)' }}>
                     All dimensions & measurements in mm.
                 </span>
             </div>
@@ -372,9 +372,9 @@ export default function CalibrationLogSection({ vesselId, entries }: Calibration
                 >
                     <div
                         style={{
-                            background: 'var(--surface-primary)',
+                            background: 'var(--clean-surface)',
                             borderRadius: 8,
-                            border: '1px solid var(--border-default)',
+                            border: '1px solid var(--clean-border)',
                             padding: 24,
                             maxWidth: 700,
                             width: '90vw',
@@ -383,7 +383,7 @@ export default function CalibrationLogSection({ vesselId, entries }: Calibration
                         }}
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <h3 style={{ margin: '0 0 16px', color: 'var(--text-primary)' }}>
+                        <h3 style={{ margin: '0 0 16px', color: 'var(--clean-text-primary)' }}>
                             Import Calibration Files
                         </h3>
 
@@ -397,9 +397,9 @@ export default function CalibrationLogSection({ vesselId, entries }: Calibration
                                         key={cal.filename}
                                         style={{
                                             padding: 12,
-                                            background: 'var(--surface-elevated)',
+                                            background: 'var(--clean-surface-secondary)',
                                             borderRadius: 6,
-                                            border: `1px solid ${checked ? 'var(--accent-blue-glow)' : 'var(--border-subtle)'}`,
+                                            border: `1px solid ${checked ? 'var(--clean-green)' : 'var(--clean-border)'}`,
                                             opacity: alreadyImported ? 0.5 : 1,
                                         }}
                                     >
@@ -419,15 +419,15 @@ export default function CalibrationLogSection({ vesselId, entries }: Calibration
                                                 style={{ marginTop: 2 }}
                                             />
                                             <div style={{ flex: 1, fontSize: '0.82rem' }}>
-                                                <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                                                <div style={{ fontWeight: 600, color: 'var(--clean-text-primary)' }}>
                                                     {cal.filename}
                                                     {alreadyImported && (
-                                                        <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 8 }}>
+                                                        <span style={{ fontWeight: 400, color: 'var(--clean-text-quaternary)', marginLeft: 8 }}>
                                                             (already imported)
                                                         </span>
                                                     )}
                                                 </div>
-                                                <div style={{ color: 'var(--text-secondary)', marginTop: 4 }}>
+                                                <div style={{ color: 'var(--clean-text-secondary)', marginTop: 4 }}>
                                                     {cal.calDate && <span>Date: {formatCalDate(cal.calDate)} &middot; </span>}
                                                     Velocity: {cal.velocity} m/s
                                                     {cal.probe && <span> &middot; Probe: {cal.probe.model}</span>}
@@ -450,7 +450,7 @@ export default function CalibrationLogSection({ vesselId, entries }: Calibration
                                                                         <td style={{
                                                                             ...stepCell,
                                                                             fontWeight: s.isReference ? 700 : 400,
-                                                                            color: s.isReference ? 'var(--accent-teal)' : 'var(--text-primary)',
+                                                                            color: s.isReference ? 'var(--clean-green)' : 'var(--clean-text-primary)',
                                                                         }}>
                                                                             {s.measuredMm.toFixed(3)} mm
                                                                             {s.isReference && ' *'}
@@ -474,7 +474,7 @@ export default function CalibrationLogSection({ vesselId, entries }: Calibration
                             <button
                                 type="button"
                                 onClick={() => setShowImportModal(false)}
-                                className="btn btn--secondary btn--sm"
+                                className="pj-btn secondary sm"
                             >
                                 Cancel
                             </button>
@@ -482,7 +482,7 @@ export default function CalibrationLogSection({ vesselId, entries }: Calibration
                                 type="button"
                                 onClick={handleImportSelected}
                                 disabled={selectedFiles.size === 0 || importing}
-                                className="btn btn--primary btn--sm"
+                                className="pj-btn primary sm"
                             >
                                 Import {selectedFiles.size} File{selectedFiles.size !== 1 ? 's' : ''}
                             </button>
@@ -497,12 +497,12 @@ export default function CalibrationLogSection({ vesselId, entries }: Calibration
 const stepHeader: React.CSSProperties = {
     padding: '3px 8px',
     textAlign: 'left',
-    color: 'var(--text-tertiary)',
+    color: 'var(--clean-text-tertiary)',
     fontWeight: 500,
-    borderBottom: '1px solid var(--border-subtle)',
+    borderBottom: '1px solid var(--clean-border)',
 };
 
 const stepCell: React.CSSProperties = {
     padding: '3px 8px',
-    color: 'var(--text-primary)',
+    color: 'var(--clean-text-primary)',
 };

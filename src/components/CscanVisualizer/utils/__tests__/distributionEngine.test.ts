@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { CscanData, DistributionConfig } from '../../types';
-import { computeDistribution } from '../distributionEngine';
+import { computeDistribution, autoBoundaries } from '../distributionEngine';
 
 function makeScan(overrides?: Partial<CscanData>): CscanData {
   const data: (number | null)[][] = [
@@ -159,5 +159,78 @@ describe('computeDistribution', () => {
     const r10 = computeDistribution(scan, { ...THICKNESS_CONFIG, binCount: 10 });
     expect(r10).not.toBeNull();
     expect(r10!.bins).toHaveLength(10);
+  });
+
+  it('uses custom boundaries when provided', () => {
+    const data: (number | null)[][] = [[2, 4, 6, 8, 10]];
+    const scan = makeScan({ data, xAxis: [0, 100, 200, 300, 400], yAxis: [0] });
+    const result = computeDistribution(scan, {
+      ...THICKNESS_CONFIG,
+      customBoundaries: [0, 5, 10],
+    });
+    expect(result).not.toBeNull();
+    expect(result!.bins).toHaveLength(2);
+    expect(result!.bins[0].min).toBe(0);
+    expect(result!.bins[0].max).toBe(5);
+    expect(result!.bins[0].count).toBe(2); // 2 and 4
+    expect(result!.bins[1].min).toBe(5);
+    expect(result!.bins[1].max).toBe(10);
+    expect(result!.bins[1].count).toBe(3); // 6, 8, 10
+  });
+
+  it('custom boundaries clamp out-of-range values to edge bins', () => {
+    const data: (number | null)[][] = [[1, 5, 15]];
+    const scan = makeScan({ data, xAxis: [0, 100, 200], yAxis: [0] });
+    const result = computeDistribution(scan, {
+      ...THICKNESS_CONFIG,
+      customBoundaries: [3, 7, 12],
+    });
+    expect(result).not.toBeNull();
+    expect(result!.bins).toHaveLength(2);
+    expect(result!.bins[0].count).toBe(2); // 1 (clamped) and 5
+    expect(result!.bins[1].count).toBe(1); // 15 (clamped)
+  });
+
+  it('custom boundaries work in wallLoss mode', () => {
+    const data: (number | null)[][] = [[10, 8, 5, 2]];
+    const scan = makeScan({ data, xAxis: [0, 100, 200, 300], yAxis: [0] });
+    // nom=10 → wl: 0%, 20%, 50%, 80%
+    const result = computeDistribution(scan, {
+      ...WALL_LOSS_CONFIG,
+      customBoundaries: [0, 25, 60, 100],
+    });
+    expect(result).not.toBeNull();
+    expect(result!.bins).toHaveLength(3);
+    expect(result!.bins[0].count).toBe(2); // 0% and 20%
+    expect(result!.bins[1].count).toBe(1); // 50%
+    expect(result!.bins[2].count).toBe(1); // 80%
+  });
+
+  it('custom boundaries sort unsorted input', () => {
+    const data: (number | null)[][] = [[2, 6, 10]];
+    const scan = makeScan({ data, xAxis: [0, 100, 200], yAxis: [0] });
+    const result = computeDistribution(scan, {
+      ...THICKNESS_CONFIG,
+      customBoundaries: [10, 0, 5], // unsorted
+    });
+    expect(result).not.toBeNull();
+    expect(result!.bins[0].min).toBe(0);
+    expect(result!.bins[0].max).toBe(5);
+    expect(result!.bins[1].min).toBe(5);
+    expect(result!.bins[1].max).toBe(10);
+  });
+});
+
+describe('autoBoundaries', () => {
+  it('generates correct number of boundaries', () => {
+    const b = autoBoundaries(0, 100, 5);
+    expect(b).toHaveLength(6);
+    expect(b[0]).toBe(0);
+    expect(b[5]).toBe(100);
+  });
+
+  it('produces equal-width bins', () => {
+    const b = autoBoundaries(2, 10, 4);
+    expect(b).toEqual([2, 4, 6, 8, 10]);
   });
 });

@@ -1,7 +1,3 @@
-/**
- * ProjectSetupPage - Create or edit an inspection project
- */
-
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save } from 'lucide-react';
@@ -122,115 +118,94 @@ export default function ProjectSetupPage() {
     const isSaving = createMutation.isPending || updateMutation.isPending;
 
     return (
-        <div className="pj-chassis" style={{ maxWidth: 800 }}>
-            <div className="pj-panel">
-                {/* Back button */}
-                <button
-                    onClick={() => navigate(isEditing ? `/projects/${id}` : '/projects')}
-                    className="pj-back-btn"
-                >
-                    <ArrowLeft size={12} />
-                    {isEditing ? 'Back to project' : 'Back to projects'}
-                </button>
+        <div className="pj-page" style={{ maxWidth: 800 }}>
+            <button
+                onClick={() => navigate(isEditing ? `/projects/${id}` : '/projects')}
+                className="pj-back-btn"
+            >
+                <ArrowLeft size={14} />
+                {isEditing ? 'Back to project' : 'Back to projects'}
+            </button>
 
-                <h1 className="pj-page-title">
-                    {isEditing ? 'Edit Project' : 'New Project'}
-                </h1>
+            <h1 className="pj-page-title" style={{ marginBottom: 24 }}>
+                {isEditing ? 'Edit Project' : 'New Project'}
+            </h1>
 
-                <div className="pj-groove" />
-
-                {/* Form inside display well */}
-                <form onSubmit={handleSubmit}>
-                    {/* Project Details section */}
-                    <h2 className="pj-section-label">Project Details</h2>
-                    <div className="pj-display-well" style={{ marginBottom: 20 }}>
-                        <div className="pj-display">
-                            <div className="pj-form-grid">
-                                <div className="pj-form-field full-width">
-                                    <span className="pj-form-label">Project Name *</span>
-                                    <input value={form.name} onChange={update('name')} placeholder="e.g., Refinery Alpha Q2 Inspection" required className="pj-form-input" />
-                                </div>
-                                <div className="pj-form-field">
-                                    <span className="pj-form-label">Client</span>
-                                    <input value={form.clientName} onChange={update('clientName')} placeholder="e.g., ACME Corp" className="pj-form-input" />
-                                </div>
-                                <div className="pj-form-field">
-                                    <span className="pj-form-label">Site Name</span>
-                                    <input value={form.siteName} onChange={update('siteName')} placeholder="e.g., Townsville Refinery" className="pj-form-input" />
-                                </div>
-                                <div className="pj-form-field full-width">
-                                    <span className="pj-form-label">Location Description</span>
-                                    <textarea value={form.locationDescription} onChange={update('locationDescription')} placeholder="Address or directions..." rows={2} className="pj-form-input" style={{ resize: 'vertical' }} />
-                                </div>
-                                <div className="pj-form-field">
-                                    <span className="pj-form-label">Start Date</span>
-                                    <input type="date" value={form.startDate} onChange={update('startDate')} className="pj-form-input" />
-                                </div>
-                                <div className="pj-form-field">
-                                    <span className="pj-form-label">End Date</span>
-                                    <input type="date" value={form.endDate} onChange={update('endDate')} className="pj-form-input" />
-                                </div>
-                            </div>
+            <form onSubmit={handleSubmit}>
+                <div className="pj-section-label">Project Details</div>
+                <div className="pj-form-card">
+                    <div className="pj-form-grid">
+                        <div className="pj-form-field full-width">
+                            <span className="pj-form-label">Project Name *</span>
+                            <input value={form.name} onChange={update('name')} placeholder="e.g., Refinery Alpha Q2 Inspection" required className="pj-form-input" />
+                        </div>
+                        <div className="pj-form-field">
+                            <span className="pj-form-label">Client</span>
+                            <input value={form.clientName} onChange={update('clientName')} placeholder="e.g., ACME Corp" className="pj-form-input" />
+                        </div>
+                        <div className="pj-form-field">
+                            <span className="pj-form-label">Site Name</span>
+                            <input value={form.siteName} onChange={update('siteName')} placeholder="e.g., Townsville Refinery" className="pj-form-input" />
+                        </div>
+                        <div className="pj-form-field full-width">
+                            <span className="pj-form-label">Location Description</span>
+                            <textarea value={form.locationDescription} onChange={update('locationDescription')} placeholder="Address or directions..." rows={2} className="pj-form-input" style={{ resize: 'vertical' }} />
+                        </div>
+                        <div className="pj-form-field">
+                            <span className="pj-form-label">Start Date</span>
+                            <input type="date" value={form.startDate} onChange={update('startDate')} className="pj-form-input" />
+                        </div>
+                        <div className="pj-form-field">
+                            <span className="pj-form-label">End Date</span>
+                            <input type="date" value={form.endDate} onChange={update('endDate')} className="pj-form-input" />
                         </div>
                     </div>
-
-                    {/* Equipment section */}
-                    <h2 className="pj-section-label">Equipment & Procedure</h2>
-                    <div className="pj-display-well" style={{ marginBottom: 20 }}>
-                        <div className="pj-display">
-                            <div className="pj-form-grid">
-                                <div className="pj-form-field">
-                                    <span className="pj-form-label">Equipment Model</span>
-                                    <input value={form.equipmentModel} onChange={update('equipmentModel')} placeholder="e.g., Zetec TOPAZ 64" className="pj-form-input" />
-                                </div>
-                                <div className="pj-form-field">
-                                    <span className="pj-form-label">Probe</span>
-                                    <input value={form.probe} onChange={update('probe')} placeholder="e.g., 5L64-A12" className="pj-form-input" />
-                                </div>
-                                <div className="pj-form-field">
-                                    <span className="pj-form-label">Wedge</span>
-                                    <input value={form.wedge} onChange={update('wedge')} placeholder="e.g., SA12-N55S" className="pj-form-input" />
-                                </div>
-                                <div className="pj-form-field">
-                                    <span className="pj-form-label">Calibration Blocks</span>
-                                    <input value={form.calibrationBlocks} onChange={update('calibrationBlocks')} placeholder="e.g., V1, V2, Step block" className="pj-form-input" />
-                                </div>
-                                <div className="pj-form-field full-width">
-                                    <span className="pj-form-label">Procedure Reference</span>
-                                    <input value={form.procedureRef} onChange={update('procedureRef')} placeholder="e.g., PROC-NDT-2024-001" className="pj-form-input" />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Submit */}
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, position: 'relative', zIndex: 1 }}>
-                        <button
-                            type="button"
-                            onClick={() => navigate(isEditing ? `/projects/${id}` : '/projects')}
-                            className="pj-btn secondary"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={!form.name.trim() || isSaving}
-                            className="pj-btn primary"
-                            style={{ opacity: (!form.name.trim() || isSaving) ? 0.5 : 1 }}
-                        >
-                            <Save size={14} />
-                            {isSaving ? 'Saving...' : isEditing ? 'Update Project' : 'Create Project'}
-                        </button>
-                    </div>
-                </form>
-
-                {/* Nameplate */}
-                <div className="pj-groove" />
-                <div className="pj-nameplate-bar">
-                    <span className="pj-nameplate">Matrix Portal</span>
-                    <span className="pj-nameplate-model">Project Setup</span>
                 </div>
-            </div>
+
+                <div className="pj-section-label">Equipment & Procedure</div>
+                <div className="pj-form-card">
+                    <div className="pj-form-grid">
+                        <div className="pj-form-field">
+                            <span className="pj-form-label">Equipment Model</span>
+                            <input value={form.equipmentModel} onChange={update('equipmentModel')} placeholder="e.g., Zetec TOPAZ 64" className="pj-form-input" />
+                        </div>
+                        <div className="pj-form-field">
+                            <span className="pj-form-label">Probe</span>
+                            <input value={form.probe} onChange={update('probe')} placeholder="e.g., 5L64-A12" className="pj-form-input" />
+                        </div>
+                        <div className="pj-form-field">
+                            <span className="pj-form-label">Wedge</span>
+                            <input value={form.wedge} onChange={update('wedge')} placeholder="e.g., SA12-N55S" className="pj-form-input" />
+                        </div>
+                        <div className="pj-form-field">
+                            <span className="pj-form-label">Calibration Blocks</span>
+                            <input value={form.calibrationBlocks} onChange={update('calibrationBlocks')} placeholder="e.g., V1, V2, Step block" className="pj-form-input" />
+                        </div>
+                        <div className="pj-form-field full-width">
+                            <span className="pj-form-label">Procedure Reference</span>
+                            <input value={form.procedureRef} onChange={update('procedureRef')} placeholder="e.g., PROC-NDT-2024-001" className="pj-form-input" />
+                        </div>
+                    </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <button
+                        type="button"
+                        onClick={() => navigate(isEditing ? `/projects/${id}` : '/projects')}
+                        className="pj-btn secondary"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={!form.name.trim() || isSaving}
+                        className="pj-btn primary"
+                    >
+                        <Save size={14} />
+                        {isSaving ? 'Saving...' : isEditing ? 'Update Project' : 'Create Project'}
+                    </button>
+                </div>
+            </form>
         </div>
     );
 }

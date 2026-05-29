@@ -53,6 +53,8 @@ Use this before searching. Pick the relevant area, read the nearby files, then s
 - `src/components/projects/scan-viewer/` - heatmap, waveform, B-scan, gates, toolbar.
 - `src/pages/CscanVisualizerPage.tsx` - standalone C-scan visualizer page.
 - `src/components/CscanVisualizer/` - visualizer UI and processing utilities.
+- `src/components/CscanVisualizer/utils/annotatedExport.ts` - annotated graph export with stats, thickness distribution, notes, and report background styling.
+- `src/components/CscanVisualizer/utils/sessionStore.ts` - browser-local IndexedDB save/load for C-scan sessions.
 - `src/workers/heatmap-renderer.worker.ts`, `src/workers/thickness-engine.worker.ts` - worker logic.
 - `src/hooks/useHeatmapRenderer.ts`, `src/hooks/useThicknessEngine.ts` - worker-facing hooks.
 

@@ -1,7 +1,3 @@
-/**
- * AssetView - 3-level hierarchy: Site/Asset → Vessel → Trip dates
- */
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, ChevronDown, Calendar, Ship, Building2 } from 'lucide-react';
@@ -99,11 +95,11 @@ function TripRow({ trip }: { trip: TripEntry }) {
             onClick={() => navigate(`/projects/${v.project_id}/vessels/${v.id}`)}
             className="pj-trip-row"
         >
-            <Calendar size={11} style={{ color: 'rgba(53, 160, 88, 0.35)', flexShrink: 0 }} />
+            <Calendar size={11} style={{ color: 'var(--clean-text-quaternary)', flexShrink: 0 }} />
             <span className="pj-trip-row-date">{trip.dateRange || 'No date'}</span>
             <span className="pj-trip-row-project">{proj.name}</span>
             <span className={`pj-badge ${statusClass}`}>
-                <span className={`pj-led ${statusClass}`} style={{ width: 5, height: 5 }} />
+                <span className={`pj-led ${statusClass}`} style={{ width: 6, height: 6 }} />
                 {VESSEL_STATUS_LABELS[v.status]}
             </span>
             <ChevronRight size={11} className="pj-vessel-row-chevron" />
@@ -118,10 +114,10 @@ function VesselGroupRow({ group }: { group: VesselGroup }) {
         <div>
             <button onClick={() => setExpanded(!expanded)} className="pj-vessel-group-btn">
                 {expanded
-                    ? <ChevronDown size={12} style={{ color: 'rgba(53, 160, 88, 0.35)' }} />
-                    : <ChevronRight size={12} style={{ color: 'rgba(53, 160, 88, 0.35)' }} />
+                    ? <ChevronDown size={12} style={{ color: 'var(--clean-text-quaternary)' }} />
+                    : <ChevronRight size={12} style={{ color: 'var(--clean-text-quaternary)' }} />
                 }
-                <Ship size={12} style={{ color: 'var(--green-bright)', flexShrink: 0, opacity: 0.7 }} />
+                <Ship size={12} style={{ color: 'var(--clean-text-quaternary)', flexShrink: 0 }} />
                 <span className="pj-vessel-group-label">{group.vesselLabel}</span>
                 <span className="pj-vessel-group-count">
                     {group.trips.length} inspection{group.trips.length !== 1 ? 's' : ''}
@@ -143,30 +139,28 @@ function AssetGroupCard({ group }: { group: AssetGroup }) {
     const [expanded, setExpanded] = useState(false);
 
     return (
-        <div className="pj-card-well">
-            <div className="pj-card-display">
-                <button onClick={() => setExpanded(!expanded)} className="pj-asset-header">
-                    {expanded
-                        ? <ChevronDown size={14} style={{ color: 'rgba(53, 160, 88, 0.40)' }} />
-                        : <ChevronRight size={14} style={{ color: 'rgba(53, 160, 88, 0.40)' }} />
-                    }
-                    <Building2 size={14} className="pj-asset-icon" />
-                    <span className="pj-asset-title">{group.siteName}</span>
-                    <span className="pj-asset-count">
-                        {group.vessels.length} vessel{group.vessels.length !== 1 ? 's' : ''}
-                        {' · '}
-                        {group.totalTrips} inspection{group.totalTrips !== 1 ? 's' : ''}
-                    </span>
-                </button>
+        <div className="pj-card">
+            <button onClick={() => setExpanded(!expanded)} className="pj-asset-header">
+                {expanded
+                    ? <ChevronDown size={14} style={{ color: 'var(--clean-text-quaternary)' }} />
+                    : <ChevronRight size={14} style={{ color: 'var(--clean-text-quaternary)' }} />
+                }
+                <Building2 size={14} className="pj-asset-icon" />
+                <span className="pj-asset-title">{group.siteName}</span>
+                <span className="pj-asset-count">
+                    {group.vessels.length} vessel{group.vessels.length !== 1 ? 's' : ''}
+                    {' · '}
+                    {group.totalTrips} inspection{group.totalTrips !== 1 ? 's' : ''}
+                </span>
+            </button>
 
-                {expanded && (
-                    <div style={{ padding: '0 8px 8px 16px' }}>
-                        {group.vessels.map(vg => (
-                            <VesselGroupRow key={`${vg.vesselLabel}-${vg.trips[0]?.vessel.id ?? ''}`} group={vg} />
-                        ))}
-                    </div>
-                )}
-            </div>
+            {expanded && (
+                <div style={{ padding: '0 8px 8px 16px' }}>
+                    {group.vessels.map(vg => (
+                        <VesselGroupRow key={`${vg.vesselLabel}-${vg.trips[0]?.vessel.id ?? ''}`} group={vg} />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

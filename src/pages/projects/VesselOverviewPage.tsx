@@ -144,14 +144,8 @@ export default function VesselOverviewPage() {
 
     if (!project || !vessel) {
         return (
-            <div className="pj-chassis">
-                <div className="pj-panel">
-                    <div className="pj-display-well">
-                        <div className="pj-display">
-                            <div className="pj-alert error">Project or vessel not found.</div>
-                        </div>
-                    </div>
-                </div>
+            <div className="pj-page">
+                <div className="pj-alert error">Project or vessel not found.</div>
             </div>
         );
     }
@@ -167,22 +161,19 @@ export default function VesselOverviewPage() {
     const statusClass = getVesselStatusClass(vessel.status);
 
     return (
-        <div className="pj-chassis">
-            <div className="pj-panel">
-                {/* Back nav */}
-                <button onClick={() => navigate(`/projects/${projectId}`)} className="pj-back-btn">
-                    <ArrowLeft size={12} />
-                    {project.name}
-                </button>
+        <div className="pj-page">
+            <button onClick={() => navigate(`/projects/${projectId}`)} className="pj-back-btn">
+                <ArrowLeft size={14} />
+                {project.name}
+            </button>
 
-                {/* Trip context */}
-                <div className="pj-page-meta" style={{ marginBottom: 8 }}>
-                    {project.client_name && <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{project.client_name}</span>}
-                    {project.site_name && <span><MapPin size={10} />{project.site_name}</span>}
-                    {tripDateRange && <span><Calendar size={10} />{tripDateRange}</span>}
-                    {project.contract_number && <span>Contract: {project.contract_number}</span>}
-                    {project.work_order_number && <span>WO: {project.work_order_number}</span>}
-                </div>
+            <div className="pj-page-meta" style={{ marginBottom: 8 }}>
+                {project.client_name && <span style={{ fontWeight: 600, color: 'var(--clean-text-secondary)' }}>{project.client_name}</span>}
+                {project.site_name && <span><MapPin size={10} />{project.site_name}</span>}
+                {tripDateRange && <span><Calendar size={10} />{tripDateRange}</span>}
+                {project.contract_number && <span>Contract: {project.contract_number}</span>}
+                {project.work_order_number && <span>WO: {project.work_order_number}</span>}
+            </div>
 
                 {/* Header */}
                 <div className="pj-header" style={{ marginBottom: 0 }}>
@@ -197,7 +188,7 @@ export default function VesselOverviewPage() {
                                     onKeyDown={(e) => { if (e.key === 'Enter') commitTag(); if (e.key === 'Escape') setEditingTag(false); }}
                                     placeholder="Tag"
                                     className="pj-edit-input"
-                                    style={{ fontSize: '17px', fontWeight: 700, width: 120 }}
+                                    style={{ fontSize: '24px', fontWeight: 600, width: 120 }}
                                 />
                             ) : (
                                 vessel.vessel_tag && (
@@ -215,12 +206,12 @@ export default function VesselOverviewPage() {
                                     onBlur={commitName}
                                     onKeyDown={(e) => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') setEditingName(false); }}
                                     className="pj-edit-input"
-                                    style={{ fontSize: '17px', fontWeight: 700, flex: 1, minWidth: 200 }}
+                                    style={{ fontSize: '24px', fontWeight: 600, flex: 1, minWidth: 200 }}
                                 />
                             ) : (
                                 <h1 onClick={startEditName} title="Click to edit vessel name" className="pj-vessel-title pj-editable">
                                     {vessel.vessel_name}
-                                    <Pencil size={12} style={{ opacity: 0, color: 'var(--text-tertiary)', transition: 'opacity 0.15s' }} />
+                                    <Pencil size={12} style={{ opacity: 0, color: 'var(--clean-text-tertiary)', transition: 'opacity 0.15s' }} />
                                 </h1>
                             )}
 
@@ -255,7 +246,7 @@ export default function VesselOverviewPage() {
                                                 className={`pj-status-option ${s === vessel.status ? 'current' : ''}`}
                                             >
                                                 <span className={`pj-led ${sc}`} />
-                                                <span style={{ color: s === vessel.status ? 'var(--green-bright)' : 'rgba(53, 160, 88, 0.65)' }}>
+                                                <span>
                                                     {VESSEL_STATUS_LABELS[s]}
                                                 </span>
                                             </button>
@@ -306,7 +297,7 @@ export default function VesselOverviewPage() {
                                                     <div style={{ minWidth: 0, flex: 1 }}>
                                                         <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</div>
                                                         {m.model_type && (
-                                                            <span style={{ fontSize: '8px', color: 'rgba(53, 160, 88, 0.35)' }}>{m.model_type}</span>
+                                                            <span style={{ fontSize: '10px', color: 'var(--clean-text-quaternary)' }}>{m.model_type}</span>
                                                         )}
                                                     </div>
                                                 </button>
@@ -319,7 +310,7 @@ export default function VesselOverviewPage() {
                     </div>
                 </div>
 
-                <div className="pj-groove" />
+                <div className="pj-divider" />
 
                 {/* Body content */}
                 <div className="pj-content">
@@ -358,7 +349,7 @@ export default function VesselOverviewPage() {
                         </button>
                     </div>
 
-                    <div className="pj-groove" style={{ margin: '16px -8px 20px' }} />
+                    <div className="pj-divider" />
 
                     {/* LCD readout zone */}
                     <div className="pj-section-label">Readouts</div>
@@ -377,7 +368,7 @@ export default function VesselOverviewPage() {
                         />
                     </div>
 
-                    <div className="pj-groove" style={{ margin: '20px -8px 20px' }} />
+                    <div className="pj-divider" />
 
                     {/* Attachments zone */}
                     <DocumentsSection vessel={vessel} projectId={projectId!} files={files} />
@@ -385,13 +376,6 @@ export default function VesselOverviewPage() {
                     <ModelsSection vessel={vessel} projectId={projectId!} composites={composites} vesselModels={vesselModels} />
                 </div>
 
-                {/* Nameplate */}
-                <div className="pj-groove" />
-                <div className="pj-nameplate-bar">
-                    <span className="pj-nameplate">Matrix Portal</span>
-                    <span className="pj-nameplate-model">Vessel Overview</span>
-                </div>
-            </div>
         </div>
     );
 }

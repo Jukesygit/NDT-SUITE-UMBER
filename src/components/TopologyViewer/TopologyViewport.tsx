@@ -10,7 +10,7 @@ import type {
   MeasurementState,
 } from './types';
 import { TopologySceneManager } from './engine/topology-scene';
-import { buildTopologySurface, buildPlateBody, clampDisplayDisplacement } from './engine/topology-surface';
+import { buildTopologySurface, buildPlateBody, buildCylindricalShell, clampDisplayDisplacement } from './engine/topology-surface';
 import { extractCrossSection } from './engine/topology-cross-section';
 
 // ---------------------------------------------------------------------------
@@ -130,6 +130,8 @@ export default function TopologyViewport({
       (measureLineRef.current.material as THREE.Material).dispose();
       measureLineRef.current = null;
     }
+
+    sceneManagerRef.current?.requestRender();
   }, []);
 
   // ------------------------------------------------------------------
@@ -183,14 +185,25 @@ export default function TopologyViewport({
       const geometry = buildTopologySurface(cscanData, surfaceOptions);
       mgr.setSurfaceGeometry(geometry);
 
-      const pos = geometry.getAttribute('position');
-      let minY = 0;
-      for (let i = 0; i < pos.count; i++) {
-        const y = pos.getY(i);
-        if (y < minY) minY = y;
+      if (surfaceOptions.viewMode === 'cylinder' && surfaceOptions.pipeDiameter) {
+        const shell = buildCylindricalShell(geometry, surfaceOptions.pipeDiameter / 2);
+        mgr.setPlateGeometry(shell);
+
+        // Inner surface: FrontSide only (inward normals → visible from inside pipe,
+        // culled from outside → no z-fighting with the outer shell).
+        // Shell stays DoubleSide so skirt/radial walls render from both sides.
+        const surfaceMesh = mgr.getSurfaceMesh();
+        if (surfaceMesh) (surfaceMesh.material as THREE.MeshStandardMaterial).side = THREE.FrontSide;
+      } else {
+        const pos = geometry.getAttribute('position');
+        let minY = 0;
+        for (let i = 0; i < pos.count; i++) {
+          const y = pos.getY(i);
+          if (y < minY) minY = y;
+        }
+        const plate = buildPlateBody(geometry, minY);
+        mgr.setPlateGeometry(plate);
       }
-      const plate = buildPlateBody(geometry, minY);
-      mgr.setPlateGeometry(plate);
     } catch {
       // Surface build may fail for tiny grids; silently ignore
     }
@@ -290,6 +303,8 @@ export default function TopologyViewport({
       scene.add(line);
       measureLineRef.current = line;
     }
+
+    mgr.requestRender();
   }, [measurementState, nominalThickness, surfaceOptions.exaggeration]);
 
   // ------------------------------------------------------------------
@@ -403,6 +418,7 @@ export default function TopologyViewport({
       const line = new THREE.Line(lineGeo, lineMat);
       scene.add(line);
       crossSectionLineRef.current = line;
+      mgr.requestRender();
     };
 
     // ----- Measurement (click) -----

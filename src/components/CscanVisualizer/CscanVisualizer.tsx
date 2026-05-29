@@ -9,7 +9,13 @@ import {
   Grid3x3,
   Loader2,
   CloudUpload,
-  FolderOpen
+  FolderOpen,
+  Check,
+  RotateCcw,
+  FileText,
+  Save,
+  Database,
+  Trash2,
 } from 'lucide-react';
 import CanvasViewport from './CanvasViewport';
 import LayoutCanvas from './LayoutCanvas';
@@ -21,6 +27,14 @@ import DistributionPanel from './DistributionPanel';
 import CsvRepairModal from './CsvRepairModal';
 import { CscanData, Tool, DisplaySettings, DistributionConfig } from './types';
 import { exportAndDownloadHeatmap } from './utils/streamedExport';
+import { exportAnnotatedScanImage } from './utils/annotatedExport';
+import {
+  deleteCscanSession,
+  listCscanSessions,
+  loadCscanSession,
+  saveCscanSession,
+  type CscanSessionSummary,
+} from './utils/sessionStore';
 import {
   processFilesWithWorker,
   createCompositeWithWorker,
@@ -35,6 +49,31 @@ import { useProjectVessels } from '../../hooks/queries/useInspectionProjects';
 import { isSupabaseConfigured } from '../../supabase-client';
 
 const SECTION_OPTIONS = ['Shell', 'Dome End', 'Nozzle', 'Other'] as const;
+const LEFT_PANEL_WIDTH = 256;
+const SIDE_RAIL_WIDTH = 48;
+
+const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
+  colorScale: 'Jet',
+  reverseScale: true,
+  showGrid: true,
+  whiteBackground: false,
+  showFilenames: false,
+  smoothing: 'best',
+  flipH: false,
+  flipV: false,
+  range: { min: null, max: null },
+};
+
+function normalizeDisplaySettings(settings?: Partial<DisplaySettings>): DisplaySettings {
+  return {
+    ...DEFAULT_DISPLAY_SETTINGS,
+    ...settings,
+    range: {
+      min: settings?.range?.min ?? null,
+      max: settings?.range?.max ?? null,
+    },
+  };
+}
 
 const CscanVisualizer: React.FC = () => {
   // Project context from URL params
@@ -59,11 +98,16 @@ const CscanVisualizer: React.FC = () => {
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [showStats, setShowStats] = useState(true);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showSessionDialog, setShowSessionDialog] = useState(false);
 
   // Modal state
   const [showRepairModal, setShowRepairModal] = useState(false);
   const [pendingScans, setPendingScans] = useState<CscanData[]>([]);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [savedSessions, setSavedSessions] = useState<CscanSessionSummary[]>([]);
+  const [sessionName, setSessionName] = useState('');
+  const [sessionBusy, setSessionBusy] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
 
   // Save to cloud state
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -74,19 +118,13 @@ const CscanVisualizer: React.FC = () => {
 
   // Export progress state
   const [exportProgress, setExportProgress] = useState<{ progress: number; message: string } | null>(null);
+  const [scanNotesById, setScanNotesById] = useState<Record<string, string>>({});
 
   // Processing progress state (for file loading and composite creation)
   const [processingProgress, setProcessingProgress] = useState<ProcessingProgress | null>(null);
 
   // Display settings
-  const [displaySettings, setDisplaySettings] = useState<DisplaySettings>({
-    colorScale: 'Jet',
-    reverseScale: true,
-    showGrid: true,
-    showFilenames: false,
-    smoothing: 'best',
-    range: { min: null, max: null }
-  });
+  const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(() => normalizeDisplaySettings());
 
   // Distribution panel state
   const [distributionConfig, setDistributionConfig] = useState<DistributionConfig>({
@@ -103,6 +141,33 @@ const CscanVisualizer: React.FC = () => {
 
   // Layout mode hook
   const layoutState = useLayoutMode(processedScans);
+
+  const makeDefaultSessionName = useCallback(() => {
+    const base = scanData?.filename?.replace(/\.[^/.]+$/, '') || 'C-scan session';
+    return `${base} ${new Date().toLocaleString()}`;
+  }, [scanData]);
+
+  const refreshSavedSessions = useCallback(async () => {
+    try {
+      const sessions = await listCscanSessions();
+      setSavedSessions(sessions);
+      setSessionError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to read saved sessions';
+      setSessionError(message);
+    }
+  }, []);
+
+  const handleOpenSessionDialog = useCallback(() => {
+    setSessionName(makeDefaultSessionName());
+    setSessionError(null);
+    setShowSessionDialog(true);
+    void refreshSavedSessions();
+  }, [makeDefaultSessionName, refreshSavedSessions]);
+
+  useEffect(() => {
+    if (showSessionDialog) void refreshSavedSessions();
+  }, [showSessionDialog, refreshSavedSessions]);
 
   // Helper to add scans to state
   const addScansToState = useCallback((scans: CscanData[]) => {
@@ -284,6 +349,7 @@ const CscanVisualizer: React.FC = () => {
     setProcessedScans([]);
     setScanData(null);
     setSelectedScans(new Set());
+    setScanNotesById({});
     setDisplaySettings(prev => ({
       ...prev,
       range: { min: null, max: null }
@@ -292,50 +358,166 @@ const CscanVisualizer: React.FC = () => {
     getCscanWorkerManager().clearCache();
   }, []);
 
+  const handleSaveSession = useCallback(async () => {
+    if (processedScans.length === 0) {
+      setSessionError('Load or create a scan before saving a session.');
+      return;
+    }
+
+    setSessionBusy(true);
+    setSessionError(null);
+    try {
+      const record = await saveCscanSession({
+        name: sessionName.trim() || makeDefaultSessionName(),
+        scans: processedScans,
+        currentScanId: scanData?.id ?? null,
+        selectedScanIds: Array.from(selectedScans),
+        displaySettings,
+        distributionConfig,
+        scanNotesById,
+        showStats,
+      });
+      setSessionName(record.name);
+      await refreshSavedSessions();
+      setStatusMessage({ type: 'success', message: `Session saved: ${record.name}` });
+      setTimeout(() => setStatusMessage(null), 3000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save session';
+      setSessionError(message);
+    } finally {
+      setSessionBusy(false);
+    }
+  }, [
+    processedScans,
+    sessionName,
+    makeDefaultSessionName,
+    scanData,
+    selectedScans,
+    displaySettings,
+    distributionConfig,
+    scanNotesById,
+    showStats,
+    refreshSavedSessions,
+  ]);
+
+  const handleLoadSession = useCallback(async (sessionId: string) => {
+    setSessionBusy(true);
+    setSessionError(null);
+    try {
+      const session = await loadCscanSession(sessionId);
+      if (!session) {
+        setSessionError('Saved session could not be found.');
+        return;
+      }
+
+      const currentScan = session.scans.find(scan => scan.id === session.currentScanId)
+        ?? session.scans[0]
+        ?? null;
+      const validIds = new Set(session.scans.map(scan => scan.id));
+
+      setProcessedScans(session.scans);
+      setScanData(currentScan);
+      setSelectedScans(new Set(session.selectedScanIds.filter(id => validIds.has(id))));
+      setDisplaySettings(normalizeDisplaySettings(session.displaySettings));
+      setDistributionConfig(session.distributionConfig);
+      setScanNotesById(session.scanNotesById ?? {});
+      setShowStats(session.showStats);
+      setLayoutMode(false);
+      setLayoutHighlightId(null);
+      setSessionName(session.name);
+      setShowSessionDialog(false);
+      setLeftPanelOpen(true);
+      getCscanWorkerManager().clearCache();
+      setStatusMessage({ type: 'success', message: `Session loaded: ${session.name}` });
+      setTimeout(() => setStatusMessage(null), 3000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load session';
+      setSessionError(message);
+    } finally {
+      setSessionBusy(false);
+    }
+  }, []);
+
+  const handleDeleteSession = useCallback(async (sessionId: string) => {
+    setSessionBusy(true);
+    setSessionError(null);
+    try {
+      await deleteCscanSession(sessionId);
+      await refreshSavedSessions();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to delete session';
+      setSessionError(message);
+    } finally {
+      setSessionBusy(false);
+    }
+  }, [refreshSavedSessions]);
+
   // Layout mode handlers
   const handleLayoutApply = useCallback(async () => {
-    const adjustedScans: CscanData[] = processedScans.map(scan => {
+    const shifts: Array<{ id: string; deltaX: number; deltaY: number }> = [];
+    for (const scan of processedScans) {
       const pos = layoutState.scanPositions.get(scan.id);
-      if (!pos) return scan;
-
+      if (!pos) continue;
       const origMinX = Math.min(...scan.xAxis);
       const origMinY = Math.min(...scan.yAxis);
       const deltaX = pos.x - origMinX;
       const deltaY = pos.y - origMinY;
-
-      if (Math.abs(deltaX) < 0.001 && Math.abs(deltaY) < 0.001) return scan;
-
-      return {
-        ...scan,
-        xAxis: scan.xAxis.map(v => v + deltaX),
-        yAxis: scan.yAxis.map(v => v + deltaY),
-      };
-    });
+      if (Math.abs(deltaX) > 0.001 || Math.abs(deltaY) > 0.001) {
+        shifts.push({ id: scan.id, deltaX, deltaY });
+      }
+    }
 
     setLayoutMode(false);
     setLayoutHighlightId(null);
 
-    getCscanWorkerManager().clearCache();
+    if (shifts.length === 0) {
+      await handleCreateComposite();
+      return;
+    }
 
     setProcessingProgress({
       current: 0,
-      total: adjustedScans.length + 2,
+      total: processedScans.length + 2,
       message: 'Creating composite from layout...',
     });
 
     try {
-      const result = await createCompositeFromDataWithWorker(adjustedScans, {
+      const manager = getCscanWorkerManager();
+      await manager.shiftScanAxes(shifts);
+
+      const scanIds = processedScans.map(s => s.id);
+      let result = await createCompositeWithWorker(scanIds, {
         onProgress: (progress) => setProcessingProgress(progress),
       });
+
+      if (!result) {
+        const adjustedScans: CscanData[] = processedScans.map(scan => {
+          const shift = shifts.find(s => s.id === scan.id);
+          if (!shift) return scan;
+          return {
+            ...scan,
+            xAxis: scan.xAxis.map(v => v + shift.deltaX),
+            yAxis: scan.yAxis.map(v => v + shift.deltaY),
+          };
+        });
+        result = await createCompositeFromDataWithWorker(adjustedScans, {
+          onProgress: (progress) => setProcessingProgress(progress),
+        });
+      }
+
       setProcessingProgress(null);
 
       if (result) {
-        setProcessedScans([result.composite]);
+        const compositeSourceIds = new Set(processedScans.map(s => s.id));
+        setProcessedScans(prev => {
+          const nonSourceScans = prev.filter(s => !compositeSourceIds.has(s.id));
+          return [...nonSourceScans, result.composite];
+        });
         setScanData(result.composite);
         setSelectedScans(new Set());
         setDisplaySettings(prev => ({ ...prev, range: { min: null, max: null } }));
-        getCscanWorkerManager().clearCache();
-        setStatusMessage({ type: 'success', message: `Layout composite created from ${adjustedScans.length} files` });
+        manager.clearCache();
+        setStatusMessage({ type: 'success', message: `Layout composite created from ${processedScans.length} files` });
         setTimeout(() => setStatusMessage(null), 4000);
       }
     } catch (error) {
@@ -344,7 +526,7 @@ const CscanVisualizer: React.FC = () => {
       setStatusMessage({ type: 'error', message: msg });
       setTimeout(() => setStatusMessage(null), 5000);
     }
-  }, [processedScans, layoutState.scanPositions]);
+  }, [processedScans, layoutState.scanPositions, handleCreateComposite]);
 
   const handleLayoutReset = useCallback(() => {
     layoutState.resetPositions();
@@ -446,8 +628,40 @@ const CscanVisualizer: React.FC = () => {
     }
   }, [scanData, displaySettings]);
 
+  const scanNotes = scanData ? scanNotesById[scanData.id] ?? '' : '';
+
+  const handleScanNotesChange = useCallback((notes: string) => {
+    if (!scanData) return;
+    setScanNotesById(prev => ({ ...prev, [scanData.id]: notes }));
+  }, [scanData]);
+
+  const handleExportAnnotatedImage = useCallback(async () => {
+    if (!scanData || !canvasRef.current) return;
+
+    setShowExportMenu(false);
+
+    try {
+      const plotDataUrl = await canvasRef.current.exportImage();
+      if (!plotDataUrl) {
+        throw new Error('Graph export failed');
+      }
+
+      await exportAnnotatedScanImage({
+        data: scanData,
+        displaySettings,
+        distributionConfig,
+        plotDataUrl,
+        notes: scanNotes,
+      });
+    } catch (error) {
+      setStatusMessage({ type: 'error', message: 'Annotated export failed' });
+      setTimeout(() => setStatusMessage(null), 5000);
+    }
+  }, [scanData, displaySettings, distributionConfig, scanNotes]);
+
   const dataMin = scanData?.stats?.min ?? 0;
   const dataMax = scanData?.stats?.max ?? 100;
+  const viewportInsetLeft = leftPanelOpen ? LEFT_PANEL_WIDTH + SIDE_RAIL_WIDTH : SIDE_RAIL_WIDTH;
 
   return (
     <div className="h-full w-full flex flex-col bg-gray-900 overflow-hidden">
@@ -481,7 +695,15 @@ const CscanVisualizer: React.FC = () => {
       {/* Main Content Area - relative container for absolute children */}
       <div className="flex-1 relative overflow-hidden">
         {/* VIEWPORT LAYER - fills entire space, always rendered */}
-        <div className="absolute inset-0" style={{ backgroundColor: '#1c1b18' }}>
+        <div
+          className="absolute top-0 bottom-0"
+          style={{
+            left: `${viewportInsetLeft}px`,
+            right: `${SIDE_RAIL_WIDTH}px`,
+            backgroundColor: '#1c1b18',
+            transition: 'left 300ms ease-in-out, right 300ms ease-in-out',
+          }}
+        >
           {layoutMode && processedScans.length >= 2 ? (
             <LayoutCanvas
               scans={processedScans}
@@ -494,8 +716,7 @@ const CscanVisualizer: React.FC = () => {
                 layoutState.bringToFront(id);
                 setLayoutHighlightId(id);
               }}
-              onApply={handleLayoutApply}
-              onReset={handleLayoutReset}
+              displaySettings={displaySettings}
               camera={layoutState.camera}
               onCameraChange={layoutState.setCamera}
             />
@@ -527,14 +748,22 @@ const CscanVisualizer: React.FC = () => {
 
         {/* LEFT PANEL - floating overlay */}
         <div
-          className={`
-            absolute left-0 top-0 bottom-0 z-20
-            flex transition-transform duration-300 ease-in-out
-            ${leftPanelOpen ? 'translate-x-0' : '-translate-x-[calc(100%-48px)]'}
-          `}
+          className="absolute left-0 top-0 bottom-0 z-20 flex"
+          style={{
+            width: `${LEFT_PANEL_WIDTH + SIDE_RAIL_WIDTH}px`,
+            transform: leftPanelOpen ? 'translateX(0)' : `translateX(-${LEFT_PANEL_WIDTH}px)`,
+            transition: 'transform 300ms ease-in-out',
+          }}
         >
           {/* Panel Content */}
-          <div className="w-64 border-r border-gray-700 flex flex-col shadow-xl" style={{ backgroundColor: '#1f2937' }}>
+          <div
+            className="border-r border-gray-700 flex flex-col shadow-xl"
+            style={{
+              width: `${LEFT_PANEL_WIDTH}px`,
+              flex: '0 0 auto',
+              backgroundColor: '#1f2937',
+            }}
+          >
             <div className="flex items-center justify-between p-3 border-b border-gray-700">
               <h3 className="text-sm font-medium text-white">Files</h3>
               <button
@@ -563,7 +792,14 @@ const CscanVisualizer: React.FC = () => {
           </div>
 
           {/* Collapse Tab - always visible */}
-          <div className="w-12 border-r border-gray-700 flex flex-col items-center py-4 space-y-4" style={{ backgroundColor: '#1f2937' }}>
+          <div
+            className="border-r border-gray-700 flex flex-col items-center py-4 space-y-4"
+            style={{
+              width: `${SIDE_RAIL_WIDTH}px`,
+              flex: '0 0 auto',
+              backgroundColor: '#1f2937',
+            }}
+          >
             <button
               onClick={() => setLeftPanelOpen(!leftPanelOpen)}
               className="p-2 hover:bg-gray-700 rounded transition-colors"
@@ -591,8 +827,13 @@ const CscanVisualizer: React.FC = () => {
         {/* Stats Panel - Independent floating popout */}
         {showStats && (
           <div
-            className="absolute left-4 bottom-12 z-30 rounded-lg shadow-xl border border-gray-700"
-            style={{ backgroundColor: '#1f2937', minWidth: '520px' }}
+            className="absolute bottom-12 z-30 rounded-lg shadow-xl border border-gray-700"
+            style={{
+              left: `${viewportInsetLeft + 16}px`,
+              backgroundColor: '#1f2937',
+              minWidth: '520px',
+              transition: 'left 300ms ease-in-out',
+            }}
           >
             <StatsPanel
               data={scanData}
@@ -607,13 +848,82 @@ const CscanVisualizer: React.FC = () => {
           <DistributionPanel
             data={scanData}
             config={distributionConfig}
+            onConfigChange={setDistributionConfig}
+            displaySettings={displaySettings}
             statsVisible={showStats}
+            leftOffset={viewportInsetLeft + 16}
             onClose={() => setDistributionConfig(prev => ({ ...prev, enabled: false }))}
           />
         )}
 
+        {/* SCAN NOTES - included in annotated graph export */}
+        {scanData && !layoutMode && (
+          <div
+            className="absolute z-30 rounded-lg shadow-xl border border-gray-700"
+            style={{
+              right: `${SIDE_RAIL_WIDTH + 16}px`,
+              bottom: 16,
+              width: 'min(420px, calc(100% - 32px))',
+              backgroundColor: 'rgba(20, 25, 35, 0.95)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+            }}
+          >
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-700">
+              <FileText className="w-4 h-4 text-gray-400" />
+              <span className="text-sm font-medium text-white">Scan Notes</span>
+            </div>
+            <div className="p-3">
+              <textarea
+                value={scanNotes}
+                onChange={(event) => handleScanNotesChange(event.target.value)}
+                placeholder="Add inspection notes for the annotated export..."
+                rows={3}
+                className="w-full rounded bg-gray-900 border border-gray-700 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-green-600"
+                style={{
+                  resize: 'vertical',
+                  minHeight: 74,
+                  maxHeight: 180,
+                  padding: '8px 10px',
+                  fontFamily: 'var(--font-sans, system-ui, sans-serif)',
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* LAYOUT MODE ACTION BUTTONS - floating above viewport */}
+        {layoutMode && processedScans.length >= 2 && (
+          <div className="absolute bottom-4 right-16 flex gap-2 z-30">
+            <button
+              onClick={handleLayoutReset}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm rounded transition-colors"
+              style={{ backgroundColor: '#4a4845', color: '#f5f4f2' }}
+            >
+              <RotateCcw className="w-4 h-4" />
+              Reset
+            </button>
+            <button
+              onClick={handleLayoutApply}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm rounded font-medium transition-colors"
+              style={{ backgroundColor: '#2d8a4e', color: '#f5f4f2' }}
+            >
+              <Check className="w-4 h-4" />
+              Apply &amp; Composite
+            </button>
+          </div>
+        )}
+
         {/* RIGHT TOOLBAR - floating overlay */}
         <div className="absolute right-0 top-0 bottom-0 w-12 z-20 border-l border-gray-700 flex flex-col items-center py-4 space-y-4" style={{ backgroundColor: '#1f2937' }}>
+          <button
+            onClick={handleOpenSessionDialog}
+            className={`p-2 hover:bg-gray-700 rounded transition-colors ${showSessionDialog ? 'bg-blue-600' : ''}`}
+            title="Save / Load Sessions"
+          >
+            <Database className="w-4 h-4 text-gray-400" />
+          </button>
+
           <div className="relative">
             <button
               onClick={() => setShowExportMenu(!showExportMenu)}
@@ -626,15 +936,22 @@ const CscanVisualizer: React.FC = () => {
 
             {showExportMenu && scanData && (
               <div
-                className="absolute right-full mr-2 top-0 border border-gray-600 rounded-lg shadow-xl py-1 min-w-[160px] z-50"
-                style={{ backgroundColor: '#1f2937' }}
+                className="absolute right-full mr-2 top-0 border border-gray-600 rounded-lg shadow-xl py-1 z-50"
+                style={{ backgroundColor: '#1f2937', minWidth: 210 }}
               >
                 <button
                   onClick={handleExportImage}
                   className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-gray-700 flex items-center gap-2"
                 >
                   <Download className="w-4 h-4" />
-                  Export Image
+                  Export Graph Image
+                </button>
+                <button
+                  onClick={handleExportAnnotatedImage}
+                  className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-gray-700 flex items-center gap-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  Export Graph + Stats
                 </button>
                 <button
                   onClick={handleExportCleanHeatmap}
@@ -785,6 +1102,131 @@ const CscanVisualizer: React.FC = () => {
         scans={pendingScans}
         onRepairComplete={handleRepairComplete}
       />
+
+      {/* Local Session Dialog */}
+      {showSessionDialog && (
+        <div
+          className="fixed inset-0 flex items-center justify-center z-50"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)' }}
+          onClick={() => setShowSessionDialog(false)}
+        >
+          <div
+            className="rounded-lg shadow-xl"
+            style={{
+              width: 'min(760px, calc(100vw - 32px))',
+              maxHeight: '82vh',
+              backgroundColor: '#1f2937',
+              border: '1px solid #374151',
+              overflow: 'hidden',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700">
+              <div className="flex items-center gap-3">
+                <Database className="w-5 h-5 text-gray-400" />
+                <div>
+                  <h3 className="text-white font-medium">C-Scan Sessions</h3>
+                  <p className="text-xs text-gray-400">Saved locally in this browser</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSessionDialog(false)}
+                className="px-3 py-1.5 text-sm rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-5 space-y-5" style={{ maxHeight: 'calc(82vh - 72px)', overflowY: 'auto' }}>
+              <div className="rounded-lg border border-gray-700 p-4" style={{ backgroundColor: '#111827' }}>
+                <div className="flex items-end gap-3">
+                  <label className="flex-1">
+                    <span className="block text-xs text-gray-400 mb-1">Session name</span>
+                    <input
+                      type="text"
+                      value={sessionName}
+                      onChange={(event) => setSessionName(event.target.value)}
+                      className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-600 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-green-600"
+                      placeholder="C-scan session name"
+                    />
+                  </label>
+                  <button
+                    onClick={handleSaveSession}
+                    disabled={sessionBusy || processedScans.length === 0}
+                    className="px-4 py-2 text-sm rounded bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    title={processedScans.length === 0 ? 'Load a scan before saving a session' : 'Save current session'}
+                  >
+                    <Save className="w-4 h-4" />
+                    Save Current
+                  </button>
+                </div>
+                <div className="mt-2 text-xs text-gray-500">
+                  {processedScans.length > 0
+                    ? `${processedScans.length} scan${processedScans.length !== 1 ? 's' : ''} will be saved with notes and display settings.`
+                    : 'No scan data is currently loaded.'}
+                </div>
+              </div>
+
+              {sessionError && (
+                <div className="px-3 py-2 rounded text-sm bg-red-600/20 text-red-300 border border-red-600/40">
+                  {sessionError}
+                </div>
+              )}
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-medium text-white">Saved Sessions</h4>
+                  <button
+                    onClick={refreshSavedSessions}
+                    disabled={sessionBusy}
+                    className="text-xs text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                  >
+                    Refresh
+                  </button>
+                </div>
+
+                {savedSessions.length === 0 ? (
+                  <div className="rounded-lg border border-gray-700 px-4 py-8 text-center text-sm text-gray-500" style={{ backgroundColor: '#111827' }}>
+                    No saved sessions yet.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {savedSessions.map((session) => (
+                      <div
+                        key={session.id}
+                        className="rounded-lg border border-gray-700 px-4 py-3 flex items-center gap-3"
+                        style={{ backgroundColor: '#111827' }}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-white truncate">{session.name}</div>
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            {session.scanCount} scan{session.scanCount !== 1 ? 's' : ''} - Saved {new Date(session.updatedAt).toLocaleString()}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleLoadSession(session.id)}
+                          disabled={sessionBusy}
+                          className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                        >
+                          Load
+                        </button>
+                        <button
+                          onClick={() => handleDeleteSession(session.id)}
+                          disabled={sessionBusy}
+                          className="p-2 rounded hover:bg-red-600/30 transition-colors disabled:opacity-50"
+                          title="Delete session"
+                        >
+                          <Trash2 className="w-4 h-4 text-red-300" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Save to Cloud Dialog */}
       {showSaveDialog && (

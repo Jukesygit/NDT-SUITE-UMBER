@@ -313,22 +313,16 @@ def create_router(cache: FileCache) -> APIRouter:
         if fi is None:
             raise HTTPException(status_code=404, detail=f"File not found: {req.filename}")
 
-        # Fall back to file's thickness process limits if not specified in request
-        t_min = req.thicknessMin
-        t_max = req.thicknessMax
-        if t_min is None and fi.thickness_process:
-            t_min = fi.thickness_process.min_mm
-        if t_max is None and fi.thickness_process:
-            t_max = fi.thickness_process.max_mm
-
         params = GateControlParams(
             gate_mode=req.gateMode,
             ref_recovery=req.refRecovery,
             meas_recovery=req.measRecovery,
             min_amplitude_ref=GateControlParams.pct_to_raw(req.minAmplitudeRef),
             min_amplitude_meas=GateControlParams.pct_to_raw(req.minAmplitudeMeas),
-            thickness_min=t_min,
-            thickness_max=t_max,
+            # NDE thickness-process limits are metadata, not implicit export filters.
+            # Apply thickness filters only when explicitly supplied by the request.
+            thickness_min=req.thicknessMin,
+            thickness_max=req.thicknessMax,
         )
 
         try:

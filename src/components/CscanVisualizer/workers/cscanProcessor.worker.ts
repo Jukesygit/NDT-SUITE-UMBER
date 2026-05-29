@@ -604,10 +604,11 @@ async function createCompositeStreaming(scanIds: string[]): Promise<EfficientCsc
 
   postProgress('COMPOSITE_PROGRESS', 0, scans.length + 2, 'Calculating grid bounds...');
 
-  // Step 1: Find global extent and minimum spacing
+  // Step 1: Find global extent and per-axis minimum spacing
   let gMinX = Infinity, gMaxX = -Infinity;
   let gMinY = Infinity, gMaxY = -Infinity;
-  let minSpacing = Infinity;
+  let minXSpacing = Infinity;
+  let minYSpacing = Infinity;
   const sourceRegions: SourceRegion[] = [];
 
   for (const scan of scans) {
@@ -633,21 +634,22 @@ async function createCompositeStreaming(scanIds: string[]): Promise<EfficientCsc
 
     if (scan.xAxis.length > 1) {
       const spacing = Math.abs(scan.xAxis[1] - scan.xAxis[0]);
-      if (spacing > 0 && spacing < minSpacing) minSpacing = spacing;
+      if (spacing > 0 && spacing < minXSpacing) minXSpacing = spacing;
     }
     if (scan.yAxis.length > 1) {
       const spacing = Math.abs(scan.yAxis[1] - scan.yAxis[0]);
-      if (spacing > 0 && spacing < minSpacing) minSpacing = spacing;
+      if (spacing > 0 && spacing < minYSpacing) minYSpacing = spacing;
     }
   }
 
-  const resolution = minSpacing !== Infinity ? minSpacing : 1.0;
-  const gridWidth = Math.ceil((gMaxX - gMinX) / resolution) + 1;
-  const gridHeight = Math.ceil((gMaxY - gMinY) / resolution) + 1;
+  const xRes = minXSpacing !== Infinity ? minXSpacing : 1.0;
+  const yRes = minYSpacing !== Infinity ? minYSpacing : 1.0;
+  const gridWidth = Math.ceil((gMaxX - gMinX) / xRes) + 1;
+  const gridHeight = Math.ceil((gMaxY - gMinY) / yRes) + 1;
   const totalCells = gridWidth * gridHeight;
 
   postProgress('COMPOSITE_PROGRESS', 1, scans.length + 2,
-    `Allocating ${gridWidth}x${gridHeight} grid (${(totalCells * 8 / 1024 / 1024).toFixed(1)} MB)...`);
+    `Allocating ${gridWidth}x${gridHeight} grid (${(totalCells * 8 / 1024 / 1024).toFixed(1)} MB, res ${xRes}x${yRes}mm)...`);
 
   // Step 2: Allocate accumulator grids (streaming approach)
   const compositeGrid = new Float32Array(totalCells);
@@ -679,8 +681,8 @@ async function createCompositeStreaming(scanIds: string[]): Promise<EfficientCsc
           const x = xArr[col];
           const y = yArr[row];
 
-          const gridX = Math.round((x - gMinX) / resolution);
-          const gridY = Math.round((y - gMinY) / resolution);
+          const gridX = Math.round((x - gMinX) / xRes);
+          const gridY = Math.round((y - gMinY) / yRes);
 
           if (gridX >= 0 && gridX < gridWidth && gridY >= 0 && gridY < gridHeight) {
             const dstIdx = gridY * gridWidth + gridX;
@@ -761,10 +763,10 @@ async function createCompositeStreaming(scanIds: string[]): Promise<EfficientCsc
   const xAxis = new Float32Array(gridWidth);
   const yAxis = new Float32Array(gridHeight);
   for (let i = 0; i < gridWidth; i++) {
-    xAxis[i] = gMinX + i * resolution;
+    xAxis[i] = gMinX + i * xRes;
   }
   for (let i = 0; i < gridHeight; i++) {
-    yAxis[i] = gMinY + i * resolution;
+    yAxis[i] = gMinY + i * yRes;
   }
 
   const stats = calculateStats(resultValues, resultNullMask, gridWidth, gridHeight, xAxis, yAxis);
@@ -784,7 +786,8 @@ async function createCompositeStreaming(scanIds: string[]): Promise<EfficientCsc
       'Source Files': scans.length,
       sourceFileNames: scans.map(s => s.filename),
       compositeType: 'weighted_average',
-      gridResolution: resolution
+      gridResolutionX: xRes,
+      gridResolutionY: yRes
     },
     isComposite: true,
     sourceRegions,
@@ -920,6 +923,28 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
           };
           self.postMessage(response);
         }
+        break;
+      }
+
+      case 'SHIFT_SCAN_AXES': {
+        const { shifts } = payload as {
+          shifts: Array<{ id: string; deltaX: number; deltaY: number }>;
+        };
+        for (const { id, deltaX, deltaY } of shifts) {
+          const scan = parsedScans.get(id);
+          if (!scan) continue;
+          if (Math.abs(deltaX) > 0.001) {
+            const newX = new Float32Array(scan.xAxis.length);
+            for (let i = 0; i < scan.xAxis.length; i++) newX[i] = scan.xAxis[i] + deltaX;
+            scan.xAxis = newX;
+          }
+          if (Math.abs(deltaY) > 0.001) {
+            const newY = new Float32Array(scan.yAxis.length);
+            for (let i = 0; i < scan.yAxis.length; i++) newY[i] = scan.yAxis[i] + deltaY;
+            scan.yAxis = newY;
+          }
+        }
+        self.postMessage({ type: 'AXES_SHIFTED' });
         break;
       }
 

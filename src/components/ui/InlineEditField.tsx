@@ -13,7 +13,7 @@ interface InlineEditFieldProps {
 
 const labelStyle: React.CSSProperties = {
     fontSize: '0.75rem',
-    color: 'var(--text-tertiary)',
+    color: 'var(--clean-text-tertiary)',
     marginBottom: 4,
     fontWeight: 500,
     letterSpacing: '0.02em',
@@ -22,10 +22,10 @@ const labelStyle: React.CSSProperties = {
 
 const inputStyle: React.CSSProperties = {
     fontSize: '0.875rem',
-    color: 'var(--text-primary)',
-    background: 'linear-gradient(180deg, #131210 0%, #0c0b0a 100%)',
-    border: '1px solid var(--border-default)',
-    borderRadius: 'var(--radius-sm)',
+    color: 'var(--clean-text-primary)',
+    background: 'var(--clean-surface)',
+    border: '1px solid var(--clean-border)',
+    borderRadius: 6,
     padding: '8px 10px',
     width: '100%',
     outline: 'none',
@@ -71,26 +71,26 @@ export function InlineEditField({ label, value, onSave, fullWidth }: InlineEditF
                 <div
                     style={{
                         fontSize: '0.875rem',
-                        color: displayValue ? 'var(--text-primary)' : 'var(--text-quaternary)',
+                        color: displayValue ? 'var(--clean-text-primary)' : 'var(--clean-text-quaternary)',
                         padding: '8px 10px',
-                        borderRadius: 'var(--radius-sm)',
+                        borderRadius: 6,
                         minHeight: 36,
                         cursor: 'pointer',
                         border: '1px solid transparent',
-                        borderBottom: '1px solid var(--border-subtle)',
-                        background: displayValue ? 'transparent' : 'rgba(255,255,255,0.03)',
+                        borderBottom: '1px solid var(--clean-border)',
+                        background: displayValue ? 'transparent' : 'var(--clean-hover-bg)',
                         transition: 'border-color 0.15s ease, background 0.15s ease',
                     }}
                     onClick={startEdit}
                     title="Click to edit"
                     onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--border-default)';
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                        e.currentTarget.style.borderColor = 'var(--clean-border)';
+                        e.currentTarget.style.background = 'var(--clean-hover-bg)';
                     }}
                     onMouseLeave={(e) => {
                         e.currentTarget.style.borderColor = 'transparent';
-                        e.currentTarget.style.borderBottomColor = 'var(--border-subtle)';
-                        e.currentTarget.style.background = displayValue ? 'transparent' : 'rgba(255,255,255,0.03)';
+                        e.currentTarget.style.borderBottomColor = 'var(--clean-border)';
+                        e.currentTarget.style.background = displayValue ? 'transparent' : 'var(--clean-hover-bg)';
                     }}
                 >
                     {displayValue || '\u2014'}

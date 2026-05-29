@@ -43,10 +43,10 @@ const ROLES: { key: SignoffRole; label: string; fields: { key: keyof SignoffPers
 const inputStyle: React.CSSProperties = {
     width: '100%',
     padding: '8px 10px',
-    background: 'var(--surface-elevated)',
-    border: '1px solid var(--border-default)',
-    borderRadius: 'var(--radius-sm)' as any,
-    color: 'var(--text-primary)',
+    background: 'var(--clean-surface)',
+    border: '1px solid var(--clean-border)',
+    borderRadius: 6,
+    color: 'var(--clean-text-primary)',
     fontSize: '0.85rem',
 };
 
@@ -83,10 +83,10 @@ export default function SignoffSection({ vessel, projectId }: SignoffSectionProp
                             style={{
                                 fontSize: '0.85rem',
                                 fontWeight: 600,
-                                color: 'var(--text-secondary)',
+                                color: 'var(--clean-text-secondary)',
                                 marginBottom: 10,
                                 paddingBottom: 6,
-                                borderBottom: '1px solid var(--border-default)',
+                                borderBottom: '1px solid var(--clean-border)',
                             }}
                         >
                             {role.label}
@@ -98,7 +98,7 @@ export default function SignoffSection({ vessel, projectId }: SignoffSectionProp
                                         style={{
                                             display: 'block',
                                             fontSize: '0.75rem',
-                                            color: 'var(--text-tertiary)',
+                                            color: 'var(--clean-text-tertiary)',
                                             marginBottom: 3,
                                             fontWeight: 500,
                                             letterSpacing: '0.02em',

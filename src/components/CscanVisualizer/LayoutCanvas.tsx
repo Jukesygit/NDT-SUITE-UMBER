@@ -1,6 +1,5 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { Check, RotateCcw } from 'lucide-react';
-import type { CscanData } from './types';
+import type { CscanData, DisplaySettings } from './types';
 import type { ScanPosition, ScanExtents } from './hooks/useLayoutMode';
 import { findSnap, type SnapResult } from './hooks/layoutSnap';
 
@@ -19,8 +18,7 @@ interface LayoutCanvasProps {
   highlightedScanId: string | null;
   onPositionChange: (id: string, pos: ScanPosition) => void;
   onBringToFront: (id: string) => void;
-  onApply: () => void;
-  onReset: () => void;
+  displaySettings: DisplaySettings;
   camera: { panX: number; panY: number; zoom: number };
   onCameraChange: (camera: { panX: number; panY: number; zoom: number }) => void;
 }
@@ -33,8 +31,7 @@ export default function LayoutCanvas({
   highlightedScanId,
   onPositionChange,
   onBringToFront,
-  onApply,
-  onReset,
+  displaySettings,
   camera,
   onCameraChange,
 }: LayoutCanvasProps) {
@@ -43,6 +40,9 @@ export default function LayoutCanvas({
   const thumbnailCache = useRef<Map<string, ImageBitmap>>(new Map());
   const workerRef = useRef<Worker | null>(null);
   const rafRef = useRef<number>(0);
+  const fittedScanKeyRef = useRef('');
+  const [thumbnailsReady, setThumbnailsReady] = useState(0);
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
 
   // Drag state
   const dragRef = useRef<{
@@ -80,28 +80,87 @@ export default function LayoutCanvas({
     [camera],
   );
 
+  const scanKey = scans.map((scan) => scan.id).join('|');
+
+  useEffect(() => {
+    if (!scanKey || fittedScanKeyRef.current === scanKey) return;
+    if (viewportSize.width <= 0 || viewportSize.height <= 0) return;
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+
+    for (const scan of scans) {
+      const pos = scanPositions.get(scan.id);
+      const extents = scanExtentsMap.get(scan.id);
+      if (!pos || !extents) continue;
+
+      minX = Math.min(minX, pos.x);
+      maxX = Math.max(maxX, pos.x + extents.width);
+      minY = Math.min(minY, pos.y);
+      maxY = Math.max(maxY, pos.y + extents.height);
+    }
+
+    if (!Number.isFinite(minX) || !Number.isFinite(maxX) || !Number.isFinite(minY) || !Number.isFinite(maxY)) {
+      return;
+    }
+
+    const boundsWidth = Math.max(maxX - minX, 1);
+    const boundsHeight = Math.max(maxY - minY, 1);
+    const fitPadding = 96;
+    const availableWidth = Math.max(viewportSize.width - fitPadding, 1);
+    const availableHeight = Math.max(viewportSize.height - fitPadding, 1);
+    const fitZoom = Math.min(availableWidth / boundsWidth, availableHeight / boundsHeight);
+
+    onCameraChange({
+      panX: (minX + maxX) / 2,
+      panY: (minY + maxY) / 2,
+      zoom: Math.max(0.05, Math.min(50, fitZoom)),
+    });
+    fittedScanKeyRef.current = scanKey;
+  }, [scanKey, scans, scanPositions, scanExtentsMap, viewportSize, onCameraChange]);
+
   // Generate thumbnails via heatmap worker
   useEffect(() => {
+    thumbnailCache.current.clear();
+    setThumbnailsReady(0);
+
+    if (scans.length === 0) return;
+
     const worker = new Worker(
       new URL('../../workers/heatmap-renderer.worker.ts', import.meta.url),
       { type: 'module' },
     );
     workerRef.current = worker;
+    let cancelled = false;
 
     const pendingQueue = [...scans];
 
     worker.onmessage = async (e: MessageEvent<{ id: number; imageData: ImageData }>) => {
+      if (cancelled) return;
       const { imageData } = e.data;
-      const scan = scans.find((_, idx) => idx === e.data.id);
+      const scan = scans[e.data.id];
       if (scan) {
-        const bitmap = await createImageBitmap(imageData);
-        thumbnailCache.current.set(scan.id, bitmap);
+        try {
+          const bitmap = await createImageBitmap(imageData);
+          if (!cancelled) {
+            thumbnailCache.current.set(scan.id, bitmap);
+            setThumbnailsReady(prev => prev + 1);
+          }
+        } catch {
+          // bitmap creation failed — skip this thumbnail
+        }
       }
       processNext();
     };
 
+    worker.onerror = () => {
+      processNext();
+    };
+
     function processNext() {
-      if (pendingQueue.length === 0) return;
+      if (cancelled || pendingQueue.length === 0) return;
       const scan = pendingQueue.shift()!;
       const idx = scans.indexOf(scan);
 
@@ -126,8 +185,8 @@ export default function LayoutCanvas({
           height: scan.height,
           viewportWidth,
           viewportHeight,
-          colormap: 'Jet',
-          reverseColormap: true,
+          colormap: displaySettings.colorScale,
+          reverseColormap: displaySettings.reverseScale,
         },
         [matrix.buffer],
       );
@@ -136,10 +195,11 @@ export default function LayoutCanvas({
     processNext();
 
     return () => {
+      cancelled = true;
       worker.terminate();
       workerRef.current = null;
     };
-  }, [scans]);
+  }, [scans, displaySettings.colorScale, displaySettings.reverseScale]);
 
   // Render loop
   useEffect(() => {
@@ -149,8 +209,9 @@ export default function LayoutCanvas({
     if (!ctx) return;
 
     function draw() {
-      const cw = canvas!.width;
-      const ch = canvas!.height;
+      const dpr = devicePixelRatio || 1;
+      const cw = canvas!.width / dpr;
+      const ch = canvas!.height / dpr;
 
       ctx!.clearRect(0, 0, cw, ch);
       ctx!.fillStyle = CANVAS_BG;
@@ -177,7 +238,14 @@ export default function LayoutCanvas({
         const drawW = bottomRight.x - topLeft.x;
         const drawH = bottomRight.y - topLeft.y;
 
-        ctx!.drawImage(bitmap, topLeft.x, topLeft.y, drawW, drawH);
+        ctx!.save();
+        ctx!.translate(
+          displaySettings.flipH ? topLeft.x + drawW : topLeft.x,
+          displaySettings.flipV ? topLeft.y + drawH : topLeft.y,
+        );
+        ctx!.scale(displaySettings.flipH ? -1 : 1, displaySettings.flipV ? -1 : 1);
+        ctx!.drawImage(bitmap, 0, 0, drawW, drawH);
+        ctx!.restore();
 
         if (scanId === highlightedScanId) {
           ctx!.strokeStyle = HIGHLIGHT_COLOR;
@@ -219,14 +287,17 @@ export default function LayoutCanvas({
             cw,
             ch,
           );
+          const ghostW = ghostBR.x - ghostTL.x;
+          const ghostH = ghostBR.y - ghostTL.y;
           ctx!.globalAlpha = 0.5;
-          ctx!.drawImage(
-            bitmap,
-            ghostTL.x,
-            ghostTL.y,
-            ghostBR.x - ghostTL.x,
-            ghostBR.y - ghostTL.y,
+          ctx!.save();
+          ctx!.translate(
+            displaySettings.flipH ? ghostTL.x + ghostW : ghostTL.x,
+            displaySettings.flipV ? ghostTL.y + ghostH : ghostTL.y,
           );
+          ctx!.scale(displaySettings.flipH ? -1 : 1, displaySettings.flipV ? -1 : 1);
+          ctx!.drawImage(bitmap, 0, 0, ghostW, ghostH);
+          ctx!.restore();
           ctx!.globalAlpha = 1.0;
 
           for (const guide of snapResult.guides) {
@@ -266,6 +337,9 @@ export default function LayoutCanvas({
     dragCurrent,
     snapResult,
     mmToPixel,
+    thumbnailsReady,
+    displaySettings.flipH,
+    displaySettings.flipV,
   ]);
 
   // Resize canvas to container
@@ -280,6 +354,7 @@ export default function LayoutCanvas({
       canvas.height = rect.height * devicePixelRatio;
       canvas.style.width = `${rect.width}px`;
       canvas.style.height = `${rect.height}px`;
+      setViewportSize({ width: rect.width, height: rect.height });
       const ctx2 = canvas.getContext('2d');
       if (ctx2) ctx2.scale(devicePixelRatio, devicePixelRatio);
     });
@@ -468,24 +543,12 @@ export default function LayoutCanvas({
         style={{ cursor: dragRef.current ? 'grabbing' : 'default', touchAction: 'none' }}
         tabIndex={0}
       />
-      <div className="absolute bottom-4 right-4 flex gap-2 z-10">
-        <button
-          onClick={onReset}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm rounded transition-colors"
-          style={{ backgroundColor: '#4a4845', color: '#f5f4f2' }}
-        >
-          <RotateCcw className="w-4 h-4" />
-          Reset
-        </button>
-        <button
-          onClick={onApply}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm rounded font-medium transition-colors"
-          style={{ backgroundColor: '#2d8a4e', color: '#f5f4f2' }}
-        >
-          <Check className="w-4 h-4" />
-          Apply &amp; Composite
-        </button>
-      </div>
+      {thumbnailsReady < scans.length && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded text-xs z-10"
+          style={{ backgroundColor: 'rgba(28, 27, 24, 0.85)', color: '#a8a29e' }}>
+          Rendering thumbnails... {thumbnailsReady}/{scans.length}
+        </div>
+      )}
     </div>
   );
 }

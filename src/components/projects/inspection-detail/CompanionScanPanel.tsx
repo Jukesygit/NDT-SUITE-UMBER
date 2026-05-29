@@ -151,12 +151,12 @@ export default function CompanionScanPanel({ vessel, projectId }: CompanionScanP
     return (
       <div style={{
         padding: '14px 16px',
-        background: 'var(--surface-elevated)',
-        border: '1px solid var(--border-subtle)',
-        borderRadius: 'var(--radius-sm)',
+        background: 'var(--clean-surface-secondary)',
+        border: '1px solid var(--clean-border)',
+        borderRadius: '6px',
         opacity: 0.6,
       }}>
-        <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>
+        <div style={{ fontSize: '0.8rem', color: 'var(--clean-text-tertiary)' }}>
           Connect companion app to enable scan controls
         </div>
       </div>
@@ -173,7 +173,7 @@ export default function CompanionScanPanel({ vessel, projectId }: CompanionScanP
     }}>
       {/* Header + refresh button */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '0.7rem', color: 'var(--text-quaternary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <span style={{ fontSize: '0.7rem', color: 'var(--clean-text-quaternary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Companion scan folders
         </span>
         <button
@@ -204,17 +204,17 @@ export default function CompanionScanPanel({ vessel, projectId }: CompanionScanP
             key={section}
             style={{
               padding: '10px 14px',
-              background: 'var(--surface-elevated)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 'var(--radius-sm)',
+              background: 'var(--clean-surface-secondary)',
+              border: '1px solid var(--clean-border)',
+              borderRadius: '6px',
             }}
           >
             {/* Section header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
+              <span style={{ fontSize: '0.82rem', color: 'var(--clean-text-secondary)', fontWeight: 500 }}>
                 {section}
               </span>
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-quaternary)' }}>
+              <span style={{ fontSize: '0.7rem', color: 'var(--clean-text-quaternary)' }}>
                 {mapped.length} folder{mapped.length !== 1 ? 's' : ''}
               </span>
             </div>
@@ -238,7 +238,7 @@ export default function CompanionScanPanel({ vessel, projectId }: CompanionScanP
             {canEdit && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: mapped.length > 0 ? 8 : 0 }}>
                 {foldersLoading ? (
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-quaternary)' }}>Loading folders...</span>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--clean-text-quaternary)' }}>Loading folders...</span>
                 ) : (
                   folders.map(f => {
                     const selected = mapped.includes(f.name);
@@ -250,9 +250,9 @@ export default function CompanionScanPanel({ vessel, projectId }: CompanionScanP
                           fontSize: '0.72rem',
                           padding: '3px 8px',
                           borderRadius: 4,
-                          border: `1px solid ${selected ? '#3b82f6' : 'var(--border-subtle)'}`,
+                          border: `1px solid ${selected ? '#3b82f6' : 'var(--clean-border)'}`,
                           background: selected ? 'rgba(59,130,246,0.15)' : 'transparent',
-                          color: selected ? '#93c5fd' : 'var(--text-tertiary)',
+                          color: selected ? '#93c5fd' : 'var(--clean-text-tertiary)',
                           cursor: 'pointer',
                         }}
                       >
@@ -290,7 +290,7 @@ export default function CompanionScanPanel({ vessel, projectId }: CompanionScanP
                       fontSize: '0.75rem',
                       padding: '4px 12px',
                       borderRadius: 4,
-                      border: '1px solid var(--border-subtle)',
+                      border: '1px solid var(--clean-border)',
                       background: 'rgba(59,130,246,0.1)',
                       color: '#93c5fd',
                       cursor: 'pointer',
@@ -357,7 +357,7 @@ function CompositePreview({
       border: '1px solid rgba(59,130,246,0.15)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-        <span style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>
+        <span style={{ fontSize: '0.72rem', color: 'var(--clean-text-tertiary)' }}>
           {data.width} x {data.height} — {data.sourceFiles.length} file{data.sourceFiles.length !== 1 ? 's' : ''}
         </span>
         <a
@@ -367,7 +367,7 @@ function CompositePreview({
           Open in Viewer
         </a>
       </div>
-      <div style={{ display: 'flex', gap: 16, fontSize: '0.72rem', color: 'var(--text-quaternary)' }}>
+      <div style={{ display: 'flex', gap: 16, fontSize: '0.72rem', color: 'var(--clean-text-quaternary)' }}>
         <span>Min: {data.stats.min.toFixed(2)} mm</span>
         <span>Max: {data.stats.max.toFixed(2)} mm</span>
         <span>Mean: {data.stats.mean.toFixed(2)} mm</span>
