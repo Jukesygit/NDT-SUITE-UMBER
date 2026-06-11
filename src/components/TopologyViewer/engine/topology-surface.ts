@@ -118,13 +118,14 @@ export function buildTopologySurface(
       const arcFraction = scanSpan / circumference;
       const totalAngle = arcFraction * 2 * Math.PI;
 
+      const thetaOffset = -Math.PI / 2 - totalAngle / 2;
+
       for (let i = 0; i < vertexCount; i++) {
         const flatX = positions[i * 3];
         const flatY = positions[i * 3 + 1];
         const flatZ = positions[i * 3 + 2];
 
-        // Positive theta → triangle normals face inward (visible from inside pipe)
-        const theta = ((flatX - xMin) / scanSpan) * totalAngle;
+        const theta = thetaOffset + ((flatX - xMin) / scanSpan) * totalAngle;
         const r = innerR - flatY;
 
         positions[i * 3]     = r * Math.cos(theta);

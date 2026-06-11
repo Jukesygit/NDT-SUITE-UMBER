@@ -1,6 +1,7 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import * as THREE from 'three';
 import type { CscanData } from '../CscanVisualizer/types';
+import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import type {
   SurfaceOptions,
   TopologyTool,
@@ -8,10 +9,13 @@ import type {
   CrossSectionData,
   MeasurementPoint,
   MeasurementState,
+  TopologyAnnotation,
 } from './types';
 import { TopologySceneManager } from './engine/topology-scene';
 import { buildTopologySurface, buildPlateBody, buildCylindricalShell, clampDisplayDisplacement } from './engine/topology-surface';
 import { extractCrossSection } from './engine/topology-cross-section';
+import { interpolateColor, getColorscale } from '../../utils/colorscales';
+import { RandomMatrixSpinner } from '../MatrixSpinners';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -39,6 +43,40 @@ function toNDC(clientX: number, clientY: number, rect: DOMRect): THREE.Vector2 {
   );
 }
 
+/**
+ * Resolve grid row/col from a raycast hit. Uses the face's vertex indices
+ * when geometry userData is available (works in both flat and cylinder mode),
+ * falling back to the flat-mode nearest-axis lookup.
+ */
+function resolveGridFromHit(
+  hit: THREE.Intersection,
+  cs: CscanData,
+  flatCol: number,
+  flatRow: number,
+): { gridRow: number; gridCol: number } {
+  const geo = (hit.object as THREE.Mesh).geometry;
+  const ud = geo?.userData as {
+    cols?: number;
+    xAxis?: number[];
+    yAxis?: number[];
+  } | undefined;
+  const idx = geo?.getIndex();
+  if (hit.faceIndex != null && idx && ud?.cols && ud.xAxis && ud.yAxis) {
+    const cols = ud.cols;
+    const triBase = hit.faceIndex * 3;
+    const v0 = idx.getX(triBase);
+    const decimatedRow = Math.floor(v0 / cols);
+    const decimatedCol = v0 % cols;
+    const scanMm = ud.xAxis[decimatedCol];
+    const indexMm = ud.yAxis[decimatedRow];
+    return {
+      gridRow: findNearestIndex(cs.yAxis, indexMm),
+      gridCol: findNearestIndex(cs.xAxis, scanMm),
+    };
+  }
+  return { gridRow: flatRow, gridCol: flatCol };
+}
+
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -53,7 +91,12 @@ interface TopologyViewportProps {
   onMeasurementPoint: (point: MeasurementPoint) => void;
   measurementState: MeasurementState | null;
   nominalThickness: number;
+  lightAzimuth: number;
+  lightElevation: number;
   onSceneReady: (manager: TopologySceneManager) => void;
+  annotations: TopologyAnnotation[];
+  onAddAnnotation: (annotation: TopologyAnnotation) => void;
+  onUpdateAnnotation: (id: string, updates: Partial<TopologyAnnotation>) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -70,10 +113,16 @@ export default function TopologyViewport({
   onMeasurementPoint,
   measurementState,
   nominalThickness,
+  lightAzimuth,
+  lightElevation,
   onSceneReady,
+  annotations,
+  onAddAnnotation,
+  onUpdateAnnotation,
 }: TopologyViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneManagerRef = useRef<TopologySceneManager | null>(null);
+  const [isRebuilding, setIsRebuilding] = useState(false);
 
   // Persistent raycaster + mouse vector (avoid per-frame allocation)
   const raycasterRef = useRef(new THREE.Raycaster());
@@ -102,6 +151,12 @@ export default function TopologyViewport({
   onCrossSectionRef.current = onCrossSection;
   const onMeasurementPointRef = useRef(onMeasurementPoint);
   onMeasurementPointRef.current = onMeasurementPoint;
+  const onAddAnnotationRef = useRef(onAddAnnotation);
+  onAddAnnotationRef.current = onAddAnnotation;
+  const onUpdateAnnotationRef = useRef(onUpdateAnnotation);
+  onUpdateAnnotationRef.current = onUpdateAnnotation;
+
+  const annotationGroupsRef = useRef<THREE.Group[]>([]);
 
   // ------------------------------------------------------------------
   // Cleanup helper: remove all helper visuals from the scene
@@ -138,11 +193,15 @@ export default function TopologyViewport({
   // Raycast the surface mesh under the cursor, returning XZ world coords
   // ------------------------------------------------------------------
   const raycastSurface = useCallback(
-    (clientX: number, clientY: number): THREE.Vector3 | null => {
+    (clientX: number, clientY: number): THREE.Intersection | null => {
       const mgr = sceneManagerRef.current;
       if (!mgr) return null;
       const mesh = mgr.getSurfaceMesh();
       if (!mesh) return null;
+
+      const mat = mesh.material as THREE.Material;
+      const prevSide = mat.side;
+      mat.side = THREE.DoubleSide;
 
       const canvas = mgr.getRenderer().domElement;
       const rect = canvas.getBoundingClientRect();
@@ -150,7 +209,8 @@ export default function TopologyViewport({
       raycasterRef.current.setFromCamera(mouseRef.current, mgr.getCamera());
 
       const hits = raycasterRef.current.intersectObject(mesh);
-      return hits.length > 0 ? hits[0].point : null;
+      mat.side = prevSide;
+      return hits.length > 0 ? hits[0] : null;
     },
     [],
   );
@@ -181,35 +241,47 @@ export default function TopologyViewport({
     const mgr = sceneManagerRef.current;
     if (!mgr || !cscanData || !cscanData.stats) return;
 
-    try {
-      const geometry = buildTopologySurface(cscanData, surfaceOptions);
-      mgr.setSurfaceGeometry(geometry);
+    setIsRebuilding(true);
 
-      if (surfaceOptions.viewMode === 'cylinder' && surfaceOptions.pipeDiameter) {
-        const shell = buildCylindricalShell(geometry, surfaceOptions.pipeDiameter / 2);
-        mgr.setPlateGeometry(shell);
+    const timer = setTimeout(() => {
+      try {
+        const geometry = buildTopologySurface(cscanData, surfaceOptions);
+        mgr.setSurfaceGeometry(geometry);
 
-        // Inner surface: FrontSide only (inward normals → visible from inside pipe,
-        // culled from outside → no z-fighting with the outer shell).
-        // Shell stays DoubleSide so skirt/radial walls render from both sides.
-        const surfaceMesh = mgr.getSurfaceMesh();
-        if (surfaceMesh) (surfaceMesh.material as THREE.MeshStandardMaterial).side = THREE.FrontSide;
-      } else {
-        const pos = geometry.getAttribute('position');
-        let minY = 0;
-        for (let i = 0; i < pos.count; i++) {
-          const y = pos.getY(i);
-          if (y < minY) minY = y;
+        if (surfaceOptions.viewMode === 'cylinder' && surfaceOptions.pipeDiameter) {
+          const pos = geometry.getAttribute('position');
+          let maxR = 0;
+          for (let i = 0; i < pos.count; i++) {
+            const x = pos.getX(i);
+            const y = pos.getY(i);
+            const r = Math.sqrt(x * x + y * y);
+            if (r > maxR) maxR = r;
+          }
+          const outerR = Math.max(surfaceOptions.pipeDiameter / 2, maxR + nominalThickness);
+          const shell = buildCylindricalShell(geometry, outerR);
+          mgr.setPlateGeometry(shell);
+
+          const surfaceMesh = mgr.getSurfaceMesh();
+          if (surfaceMesh) (surfaceMesh.material as THREE.MeshStandardMaterial).side = THREE.FrontSide;
+        } else {
+          const pos = geometry.getAttribute('position');
+          let minY = 0;
+          for (let i = 0; i < pos.count; i++) {
+            const y = pos.getY(i);
+            if (y < minY) minY = y;
+          }
+          const plate = buildPlateBody(geometry, minY);
+          mgr.setPlateGeometry(plate);
         }
-        const plate = buildPlateBody(geometry, minY);
-        mgr.setPlateGeometry(plate);
+      } catch {
+        // Surface build may fail for tiny grids; silently ignore
       }
-    } catch {
-      // Surface build may fail for tiny grids; silently ignore
-    }
 
-    // Clear helper visuals when data changes — they reference old geometry
-    clearHelperObjects();
+      clearHelperObjects();
+      setIsRebuilding(false);
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, [cscanData, surfaceOptions, clearHelperObjects]);
 
   // ------------------------------------------------------------------
@@ -231,6 +303,9 @@ export default function TopologyViewport({
     } else if (activeTool === 'measure') {
       controls.enabled = true;
       canvas.style.cursor = 'crosshair';
+    } else if (activeTool === 'annotate') {
+      controls.enabled = true;
+      canvas.style.cursor = 'crosshair';
     }
 
     // Reset drag state when tool changes away from crossSection
@@ -238,6 +313,13 @@ export default function TopologyViewport({
       crossDragRef.current = null;
     }
   }, [activeTool]);
+
+  // ------------------------------------------------------------------
+  // Reposition the key light when azimuth/elevation change
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    sceneManagerRef.current?.setLightAngles(lightAzimuth, lightElevation);
+  }, [lightAzimuth, lightElevation]);
 
   // ------------------------------------------------------------------
   // Draw measurement markers when measurementState changes
@@ -308,6 +390,196 @@ export default function TopologyViewport({
   }, [measurementState, nominalThickness, surfaceOptions.exaggeration]);
 
   // ------------------------------------------------------------------
+  // Render annotation visuals (rebuilds on annotations or options change)
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    const mgr = sceneManagerRef.current;
+    const cs = cscanDataRef.current;
+    if (!mgr || !cs) return;
+    const scene = mgr.getScene();
+
+    // Clear previous annotation groups
+    for (const grp of annotationGroupsRef.current) {
+      scene.remove(grp);
+      grp.traverse((obj) => {
+        if (obj instanceof CSS2DObject) {
+          obj.element.remove();
+        } else if (obj instanceof THREE.Mesh) {
+          obj.geometry.dispose();
+          (obj.material as THREE.Material).dispose();
+        } else if (obj instanceof THREE.Line) {
+          obj.geometry.dispose();
+          (obj.material as THREE.Material).dispose();
+        }
+      });
+    }
+    annotationGroupsRef.current = [];
+
+    const scale = getColorscale(surfaceOptions.colorScale);
+    const cMin = surfaceOptions.rangeMin ?? cs.stats?.min ?? 0;
+    const cMax = surfaceOptions.rangeMax ?? cs.stats?.max ?? 1;
+    const cRange = cMax === cMin ? 1 : cMax - cMin;
+
+    for (const ann of annotations) {
+      let surfacePos: THREE.Vector3;
+      if (ann.surfacePoint) {
+        surfacePos = new THREE.Vector3(...ann.surfacePoint);
+      } else {
+        const value = cs.data[ann.row]?.[ann.col];
+        const y = clampDisplayDisplacement(
+          value ?? null,
+          nominalThickness,
+          surfaceOptions.exaggeration,
+          surfaceOptions.displacementClampUpper,
+        );
+        surfacePos = new THREE.Vector3(ann.scanMm, y, ann.indexMm);
+      }
+
+      const group = new THREE.Group();
+
+      // Dot at surface
+      const dot = new THREE.Mesh(
+        new THREE.SphereGeometry(1.5, 12, 12),
+        new THREE.MeshBasicMaterial({ color: 0x00ccff }),
+      );
+      dot.position.copy(surfacePos);
+      group.add(dot);
+
+      // Label position: default offset above, or stored drag offset
+      const labelPos = surfacePos.clone();
+      if (ann.labelOffset) {
+        labelPos.x += ann.labelOffset[0];
+        labelPos.y += ann.labelOffset[1];
+        labelPos.z += ann.labelOffset[2];
+      } else {
+        labelPos.y += 15;
+      }
+
+      // Leader line
+      const leaderLine = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([surfacePos, labelPos]),
+        new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 }),
+      );
+      group.add(leaderLine);
+
+      // Thickness color from colorscale
+      let thickHtml: string;
+      if (ann.thickness != null) {
+        const t = (ann.thickness - cMin) / cRange;
+        let [cr, cg, cb] = interpolateColor(t, scale, surfaceOptions.reverseScale);
+        const lum = (cr * 0.299 + cg * 0.587 + cb * 0.114) / 255;
+        if (lum < 0.35) {
+          const boost = 0.35 / Math.max(lum, 0.01);
+          cr = Math.min(255, Math.round(cr * boost));
+          cg = Math.min(255, Math.round(cg * boost));
+          cb = Math.min(255, Math.round(cb * boost));
+        }
+        thickHtml = `<span style="color:rgb(${cr},${cg},${cb});font-weight:700">${ann.thickness.toFixed(2)} mm</span>`;
+      } else {
+        thickHtml = '<span style="color:#ff6666;font-weight:700">ND</span>';
+      }
+
+      // CSS2D label
+      const el = document.createElement('div');
+      el.style.cssText = `
+        background: rgba(20, 25, 35, 0.88);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-family: var(--font-mono, monospace);
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.85);
+        white-space: nowrap;
+        cursor: grab;
+        pointer-events: auto;
+        user-select: none;
+      `;
+      el.innerHTML = `${thickHtml}<br><span style="opacity:0.6;font-size:10px">S ${ann.scanMm.toFixed(1)} &middot; I ${ann.indexMm.toFixed(1)}</span>`;
+
+      const cssObj = new CSS2DObject(el);
+      cssObj.position.copy(labelPos);
+      group.add(cssObj);
+
+      // Drag handler — moves label in a camera-facing plane
+      const annId = ann.id;
+      let dragging = false;
+      const dragPlane = new THREE.Plane();
+      const dragStart3D = new THREE.Vector3();
+      const labelStart = new THREE.Vector3();
+      const intersection = new THREE.Vector3();
+
+      const onPointerDown = (e: PointerEvent) => {
+        e.stopPropagation();
+        dragging = true;
+        el.style.cursor = 'grabbing';
+        el.setPointerCapture(e.pointerId);
+        mgr.getControls().enabled = false;
+
+        const cam = mgr.getCamera();
+        dragPlane.setFromNormalAndCoplanarPoint(
+          cam.getWorldDirection(new THREE.Vector3()).negate(),
+          labelPos,
+        );
+        labelStart.copy(labelPos);
+
+        const canvas = mgr.getRenderer().domElement;
+        const rect = canvas.getBoundingClientRect();
+        const ndc = toNDC(e.clientX, e.clientY, rect);
+        raycasterRef.current.setFromCamera(ndc, cam);
+        raycasterRef.current.ray.intersectPlane(dragPlane, dragStart3D);
+      };
+
+      const onPointerMove = (e: PointerEvent) => {
+        if (!dragging) return;
+        const cam = mgr.getCamera();
+        const canvas = mgr.getRenderer().domElement;
+        const rect = canvas.getBoundingClientRect();
+        const ndc = toNDC(e.clientX, e.clientY, rect);
+        raycasterRef.current.setFromCamera(ndc, cam);
+        if (!raycasterRef.current.ray.intersectPlane(dragPlane, intersection)) return;
+
+        const delta = intersection.clone().sub(dragStart3D);
+        const newPos = labelStart.clone().add(delta);
+        cssObj.position.copy(newPos);
+        labelPos.copy(newPos);
+
+        // Update leader line endpoint
+        const posAttr = leaderLine.geometry.getAttribute('position') as THREE.BufferAttribute;
+        posAttr.setXYZ(1, newPos.x, newPos.y, newPos.z);
+        posAttr.needsUpdate = true;
+
+        mgr.requestRender();
+      };
+
+      const onPointerUp = (e: PointerEvent) => {
+        if (!dragging) return;
+        dragging = false;
+        el.style.cursor = 'grab';
+        el.releasePointerCapture(e.pointerId);
+        mgr.getControls().enabled = true;
+
+        const offset: [number, number, number] = [
+          labelPos.x - surfacePos.x,
+          labelPos.y - surfacePos.y,
+          labelPos.z - surfacePos.z,
+        ];
+        onUpdateAnnotationRef.current(annId, { labelOffset: offset });
+      };
+
+      el.addEventListener('pointerdown', onPointerDown);
+      el.addEventListener('pointermove', onPointerMove);
+      el.addEventListener('pointerup', onPointerUp);
+
+      scene.add(group);
+      annotationGroupsRef.current.push(group);
+    }
+
+    mgr.requestRender();
+  }, [annotations, surfaceOptions, nominalThickness]);
+
+  // ------------------------------------------------------------------
   // Mouse event handlers — attached once, read refs for current values
   // ------------------------------------------------------------------
   useEffect(() => {
@@ -321,25 +593,25 @@ export default function TopologyViewport({
       if (!cs) return;
       if (activeToolRef.current !== 'orbit') return;
 
-      const point = raycastSurface(e.clientX, e.clientY);
-      if (!point) {
+      const hit = raycastSurface(e.clientX, e.clientY);
+      if (!hit) {
         onHoverRef.current(null);
         return;
       }
 
-      // Map raycast XZ back to full-res grid indices
-      const col = findNearestIndex(cs.xAxis, point.x);
-      const row = findNearestIndex(cs.yAxis, point.z);
-      const thickness = cs.data[row]?.[col] ?? null;
+      const col = findNearestIndex(cs.xAxis, hit.point.x);
+      const row = findNearestIndex(cs.yAxis, hit.point.z);
+      const { gridRow, gridCol } = resolveGridFromHit(hit, cs, col, row);
+      const thickness = cs.data[gridRow]?.[gridCol] ?? null;
 
       onHoverRef.current({
         thickness,
-        scanMm: cs.xAxis[col],
-        indexMm: cs.yAxis[row],
+        scanMm: cs.xAxis[gridCol],
+        indexMm: cs.yAxis[gridRow],
         screenX: e.clientX,
         screenY: e.clientY,
-        row,
-        col,
+        row: gridRow,
+        col: gridCol,
       });
     };
 
@@ -353,12 +625,12 @@ export default function TopologyViewport({
       const cs = cscanDataRef.current;
       if (!cs) return;
 
-      const point = raycastSurface(e.clientX, e.clientY);
-      if (!point) return;
+      const hit = raycastSurface(e.clientX, e.clientY);
+      if (!hit) return;
 
       crossDragRef.current = {
-        startScanMm: point.x,
-        startIndexMm: point.z,
+        startScanMm: hit.point.x,
+        startIndexMm: hit.point.z,
         dragging: true,
       };
 
@@ -381,14 +653,14 @@ export default function TopologyViewport({
         return;
       }
 
-      const point = raycastSurface(e.clientX, e.clientY);
+      const hit = raycastSurface(e.clientX, e.clientY);
       crossDragRef.current = null;
       mgr.getControls().enabled = true;
 
-      if (!point) return;
+      if (!hit) return;
 
-      const endScanMm = point.x;
-      const endIndexMm = point.z;
+      const endScanMm = hit.point.x;
+      const endIndexMm = hit.point.z;
 
       // Extract cross-section from FULL-RES data
       const csData = extractCrossSection(
@@ -421,25 +693,39 @@ export default function TopologyViewport({
       mgr.requestRender();
     };
 
-    // ----- Measurement (click) -----
+    // ----- Measurement / Annotation (click) -----
     const handleClick = (e: MouseEvent) => {
-      if (activeToolRef.current !== 'measure') return;
+      const tool = activeToolRef.current;
+      if (tool !== 'measure' && tool !== 'annotate') return;
       const cs = cscanDataRef.current;
       if (!cs) return;
 
-      const point = raycastSurface(e.clientX, e.clientY);
-      if (!point) return;
+      const hit = raycastSurface(e.clientX, e.clientY);
+      if (!hit) return;
 
-      // Map to full-res grid
-      const col = findNearestIndex(cs.xAxis, point.x);
-      const row = findNearestIndex(cs.yAxis, point.z);
-      const thickness = cs.data[row]?.[col] ?? null;
+      const flatCol = findNearestIndex(cs.xAxis, hit.point.x);
+      const flatRow = findNearestIndex(cs.yAxis, hit.point.z);
+      const { gridRow, gridCol } = resolveGridFromHit(hit, cs, flatCol, flatRow);
+      const thickness = cs.data[gridRow]?.[gridCol] ?? null;
 
-      onMeasurementPointRef.current({
-        scanMm: cs.xAxis[col],
-        indexMm: cs.yAxis[row],
-        thickness,
-      });
+      if (tool === 'measure') {
+        onMeasurementPointRef.current({
+          scanMm: cs.xAxis[gridCol],
+          indexMm: cs.yAxis[gridRow],
+          thickness,
+        });
+      } else {
+        onAddAnnotationRef.current({
+          id: crypto.randomUUID(),
+          row: gridRow,
+          col: gridCol,
+          scanMm: cs.xAxis[gridCol],
+          indexMm: cs.yAxis[gridRow],
+          thickness,
+          label: thickness != null ? `${thickness.toFixed(2)} mm` : 'ND',
+          surfacePoint: [hit.point.x, hit.point.y, hit.point.z],
+        });
+      }
     };
 
     canvas.addEventListener('mousemove', handleMouseMove);
@@ -461,9 +747,24 @@ export default function TopologyViewport({
   // Render
   // ------------------------------------------------------------------
   return (
-    <div
-      ref={containerRef}
-      style={{ width: '100%', height: '100%' }}
-    />
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <div
+        ref={containerRef}
+        style={{ position: 'relative', width: '100%', height: '100%' }}
+      />
+      {isRebuilding && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'rgba(0,0,0,0.3)',
+          pointerEvents: 'none',
+        }}>
+          <RandomMatrixSpinner size={120} />
+        </div>
+      )}
+    </div>
   );
 }

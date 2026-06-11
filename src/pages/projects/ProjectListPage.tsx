@@ -119,27 +119,23 @@ export default function ProjectListPage() {
                 </div>
             </div>
 
-            {/* Tabs + View Toggle */}
-            <div className="pj-toolbar">
-                <div className="pj-toolbar-left">
-                    <ProjectViewToggle viewMode={viewMode} onChange={handleViewModeChange} />
-                </div>
-            </div>
-
-            {/* Filter chips + Search + Sort */}
+            {/* Unified toolbar: view toggle + filters + search + sort */}
             <div className="pj-toolbar-row">
-                <div className="pj-filter-well">
-                    {FILTER_OPTIONS.map(f => (
-                        <button
-                            key={f.key}
-                            onClick={() => setFilter(f.key)}
-                            className={`pj-filter-chip ${filter === f.key ? 'active' : ''}`}
-                        >
-                            {f.dotClass && <span className={`pj-chip-dot ${f.dotClass}`} />}
-                            {f.label}
-                            <span className="pj-chip-count">{counts[f.key]}</span>
-                        </button>
-                    ))}
+                <div className="pj-toolbar-left-group">
+                    <ProjectViewToggle viewMode={viewMode} onChange={handleViewModeChange} />
+                    <div className="pj-filter-well">
+                        {FILTER_OPTIONS.map(f => (
+                            <button
+                                key={f.key}
+                                onClick={() => setFilter(f.key)}
+                                className={`pj-filter-chip ${filter === f.key ? 'active' : ''}`}
+                            >
+                                {f.dotClass && <span className={`pj-chip-dot ${f.dotClass}`} />}
+                                {f.label}
+                                <span className="pj-chip-count">{counts[f.key]}</span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
                 <div className="pj-toolbar-right-group">
                     <div className="pj-search">

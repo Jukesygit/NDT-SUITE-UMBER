@@ -15,6 +15,7 @@ import type {
   CrossSectionData,
   MeasurementPoint,
   MeasurementState,
+  TopologyAnnotation,
 } from './types';
 import { DEFAULT_SURFACE_OPTIONS } from './types';
 import type { TopologySceneManager } from './engine/topology-scene';
@@ -22,7 +23,21 @@ import TopologyViewport from './TopologyViewport';
 import TopologyToolbar from './TopologyToolbar';
 import TopologyInfoPanel from './TopologyInfoPanel';
 import CrossSectionPanel from './CrossSectionPanel';
+import TopologyAnnotationPanel from './TopologyAnnotationPanel';
+import {
+  Move3d,
+  ScissorsLineDashed,
+  Ruler,
+  MapPin,
+} from 'lucide-react';
 import './topology-viewer.css';
+
+const TOOL_DEFS: { id: TopologyTool; icon: typeof Move3d; label: string }[] = [
+  { id: 'orbit', icon: Move3d, label: 'Orbit' },
+  { id: 'crossSection', icon: ScissorsLineDashed, label: 'Cross-Section' },
+  { id: 'measure', icon: Ruler, label: 'Measure' },
+  { id: 'annotate', icon: MapPin, label: 'Annotate' },
+];
 
 // ---------------------------------------------------------------------------
 // Component
@@ -47,6 +62,9 @@ export default function TopologyViewer() {
     useState<ProcessingProgress | null>(null);
   const [showRepairModal, setShowRepairModal] = useState(false);
   const [pendingScans, setPendingScans] = useState<CscanData[]>([]);
+  const [lightAzimuth, setLightAzimuth] = useState(45);
+  const [lightElevation, setLightElevation] = useState(35);
+  const [annotations, setAnnotations] = useState<TopologyAnnotation[]>([]);
   const sceneRef = useRef<TopologySceneManager | null>(null);
 
   // ---- Computed values ---------------------------------------------------
@@ -154,24 +172,59 @@ export default function TopologyViewer() {
     sceneRef.current?.exportGLB(`${name}.glb`);
   }, [cscanData]);
 
+  const handleLightChange = useCallback(
+    (updates: { azimuth?: number; elevation?: number }) => {
+      if (updates.azimuth != null) setLightAzimuth(updates.azimuth);
+      if (updates.elevation != null) setLightElevation(updates.elevation);
+    },
+    [],
+  );
+
+  const handleAddAnnotation = useCallback((annotation: TopologyAnnotation) => {
+    setAnnotations(prev => [...prev, annotation]);
+  }, []);
+
+  const handleUpdateAnnotation = useCallback((id: string, updates: Partial<TopologyAnnotation>) => {
+    setAnnotations(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+  }, []);
+
+  const handleDeleteAnnotation = useCallback((id: string) => {
+    setAnnotations(prev => prev.filter(a => a.id !== id));
+  }, []);
+
   // ---- Render ------------------------------------------------------------
 
   return (
-    <div className="topology-viewer">
+    <div className="topology-viewer" style={{ flexDirection: 'row' }}>
       <TopologyToolbar
         surfaceOptions={surfaceOptions}
         onOptionsChange={handleOptionsChange}
-        activeTool={activeTool}
-        onToolChange={setActiveTool}
         onFileUpload={handleFileUpload}
         onExport={handleExport}
         hasData={cscanData != null}
         autoNominal={
           cscanData ? resolveNominal(null, cscanData.data) : null
         }
+        lightAzimuth={lightAzimuth}
+        lightElevation={lightElevation}
+        onLightChange={handleLightChange}
       />
 
       <div className="topology-viewer__main">
+        {/* Floating tool buttons */}
+        <div className="topo-quick-tools">
+          {TOOL_DEFS.map(({ id, icon: Icon, label }) => (
+            <button
+              key={id}
+              className={`topo-quick-tool ${activeTool === id ? 'active' : ''}`}
+              onClick={() => setActiveTool(id)}
+              title={label}
+            >
+              <Icon size={18} />
+            </button>
+          ))}
+        </div>
+
         <TopologyViewport
           cscanData={cscanData}
           surfaceOptions={surfaceOptions}
@@ -182,7 +235,17 @@ export default function TopologyViewer() {
           onMeasurementPoint={handleMeasurementPoint}
           measurementState={measurement}
           nominalThickness={resolvedNominal}
+          lightAzimuth={lightAzimuth}
+          lightElevation={lightElevation}
           onSceneReady={(mgr) => { sceneRef.current = mgr; }}
+          annotations={annotations}
+          onAddAnnotation={handleAddAnnotation}
+          onUpdateAnnotation={handleUpdateAnnotation}
+        />
+
+        <TopologyAnnotationPanel
+          annotations={annotations}
+          onDelete={handleDeleteAnnotation}
         />
 
         {cscanData && (

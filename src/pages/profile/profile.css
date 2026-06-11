@@ -1,131 +1,63 @@
-/* Profile Page — Industrial Instrument Theme
-   Chassis > Panel spatial metaphor: dark outer frame wrapping
-   a brushed-metal surface with groove-separated zones. */
+/* Profile Page — Clean Theme
+   Flat, minimal styling using --clean-* design tokens.
+   Notion/Linear aesthetic: white cards on warm off-white. */
 
-/* ---- Chassis & Panel ---- */
-.pf-chassis {
-    padding: 10px;
-    border-radius: 14px;
-    margin: 24px 28px;
-    background: linear-gradient(180deg, var(--chassis-inner) 0%, var(--chassis) 100%);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.06),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.20),
-        0 12px 40px rgba(0, 0, 0, 0.45),
-        0 2px 8px rgba(0, 0, 0, 0.25);
-}
-
-.pf-panel {
-    border-radius: 8px;
-    padding: 28px 32px 24px;
+/* ---- App Shell Override ---- */
+.main:has(.pf-chassis) {
+    background: var(--clean-bg);
+    padding: 0;
     position: relative;
-    overflow: hidden;
-    background:
-        linear-gradient(180deg, var(--ctrl-hi) 0%, var(--ctrl) 45%, var(--ctrl-lo) 100%);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.45),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+    z-index: 1;
+}
+.main:has(.pf-chassis) .main__container {
+    max-width: none;
 }
 
-.pf-panel::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 8px;
-    background: repeating-linear-gradient(90deg,
-        transparent 0px, transparent 1px,
-        rgba(255, 255, 255, 0.004) 1px, rgba(255, 255, 255, 0.004) 2px,
-        transparent 2px, transparent 3px
-    );
-    pointer-events: none;
+/* ---- Page Container ---- */
+.pf-chassis {
+    background: var(--clean-bg);
+    padding: 32px 48px;
+    max-width: 1400px;
+    margin: 0 auto;
+    min-height: 100%;
 }
 
-.pf-panel::after {
-    content: '';
-    position: absolute;
-    top: -80px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 70%;
-    height: 200px;
-    border-radius: 50%;
-    background: radial-gradient(ellipse at 50% 50%,
-        rgba(255, 255, 255, 0.55) 0%,
-        rgba(255, 255, 255, 0.35) 20%,
-        rgba(255, 255, 255, 0.14) 40%,
-        rgba(255, 255, 255, 0.04) 60%,
-        transparent 80%);
-    pointer-events: none;
-    z-index: 0;
+/* ---- Panel (transparent passthrough) ---- */
+.pf-panel {
+    position: relative;
 }
 
-/* ---- Display Wells (LCD Screens) ---- */
+/* ---- Display Wells ---- */
 .pf-display-well {
-    border-radius: 7px;
-    background:
-        radial-gradient(ellipse at 50% 95%, rgba(255, 255, 255, 0.02) 0%, transparent 50%),
-        linear-gradient(180deg, var(--well-mid) 0%, var(--well-deep) 30%, var(--well-floor) 100%);
-    box-shadow:
-        inset 0 5px 14px rgba(0, 0, 0, 0.38),
-        inset 0 2px 4px rgba(0, 0, 0, 0.28),
-        inset 0 -2px 5px rgba(255, 255, 255, 0.03),
-        0 1px 0 rgba(255, 255, 255, 0.32),
-        0 2px 6px rgba(255, 255, 255, 0.05),
-        0 -1px 0 rgba(0, 0, 0, 0.12);
+    background: var(--clean-surface);
+    border: 1px solid var(--clean-border);
+    border-radius: 14px;
     padding: 4px;
 }
 
 .pf-display {
-    border-radius: 4px;
     padding: 14px 16px;
-    background: linear-gradient(180deg, #131210 0%, #0c0b0a 100%);
-    color: var(--green-bright);
-    font-family: var(--font-mono);
 }
 
 /* ---- Groove Dividers ---- */
 .pf-groove {
     height: 1px;
-    margin: 22px 0;
-    background: rgba(0, 0, 0, 0.08);
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+    margin: 20px 0;
+    background: var(--clean-divider);
 }
 
-/* ---- Section Label (engraved with decorative lines) ---- */
+/* ---- Section Label ---- */
 .pf-section-label {
     display: flex;
     align-items: center;
     gap: 10px;
-    font-family: var(--font-label);
+    font-family: var(--font-sans);
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.22em;
-    color: var(--color-neutral-600);
-    text-shadow:
-        0 -1px 0 rgba(0, 0, 0, 0.32),
-        0 1px 0 rgba(255, 255, 255, 0.95),
-        0 2px 1px rgba(255, 255, 255, 0.40);
+    letter-spacing: 0.06em;
+    color: var(--clean-text-tertiary);
     margin: 0 0 12px;
-    position: relative;
-    z-index: 1;
-}
-
-.pf-section-label::before {
-    content: '';
-    width: 14px;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, var(--color-neutral-400), transparent);
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
-}
-
-.pf-section-label::after {
-    content: '';
-    width: 80px;
-    height: 1px;
-    background: linear-gradient(90deg, var(--color-neutral-400), transparent);
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
-    opacity: 0.5;
 }
 
 /* ---- Nameplate Strip ---- */
@@ -135,104 +67,57 @@
     justify-content: space-between;
     padding: 0 8px;
     margin-top: 18px;
-    position: relative;
-    z-index: 1;
 }
 
 .pf-nameplate {
-    font-family: var(--font-label);
-    font-weight: 700;
-    font-size: 15px;
-    text-transform: uppercase;
-    letter-spacing: 0.18em;
-    color: var(--color-neutral-500);
-    text-shadow:
-        0 -1px 0 rgba(0, 0, 0, 0.12),
-        0 1px 0 rgba(255, 255, 255, 0.70),
-        0 2px 1px rgba(255, 255, 255, 0.25);
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--clean-text-tertiary);
 }
 
 .pf-nameplate-model {
-    font-family: var(--font-label);
-    font-weight: 600;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--color-neutral-400);
-    text-shadow:
-        0 -1px 0 rgba(0, 0, 0, 0.08),
-        0 1px 0 rgba(255, 255, 255, 0.60);
+    font-family: var(--font-sans);
+    font-weight: 500;
+    font-size: 12px;
+    color: var(--clean-text-quaternary);
 }
 
-/* ---- Header (Title Rail) ---- */
+/* ---- Header ---- */
 .pf-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    gap: 24px;
-    padding-bottom: 18px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
-    margin-bottom: 24px;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 28px;
     flex-wrap: wrap;
-    position: relative;
-    z-index: 1;
 }
 
 .pf-header-left {
     display: flex;
     align-items: center;
-    gap: 18px;
+    gap: 14px;
 }
 
 .pf-logo {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, var(--green-bright) 0%, var(--green) 50%, var(--green-dark) 100%);
-    box-shadow:
-        0 0 0 1.5px var(--color-neutral-800),
-        0 0 0 3px var(--color-neutral-300),
-        0 0 8px var(--green-glow),
-        0 0 16px var(--green-glow-soft),
-        inset 0 1px 1px rgba(255, 255, 255, 0.5);
+    background: var(--clean-green);
     flex-shrink: 0;
-    animation: pf-led-pulse 2.4s ease-in-out infinite;
-}
-
-@keyframes pf-led-pulse {
-    0%, 100% { box-shadow: 0 0 0 1.5px var(--color-neutral-800), 0 0 0 3px var(--color-neutral-300), 0 0 8px var(--green-glow), 0 0 14px var(--green-glow-soft), inset 0 1px 1px rgba(255, 255, 255, 0.5); }
-    50% { box-shadow: 0 0 0 1.5px var(--color-neutral-800), 0 0 0 3px var(--color-neutral-300), 0 0 12px var(--green-glow), 0 0 22px var(--green-glow-soft), inset 0 1px 1px rgba(255, 255, 255, 0.5); }
 }
 
 .pf-header-text h1 {
-    font-family: var(--font-label);
-    font-size: 17px;
-    font-weight: 700;
-    line-height: 1.2;
-    text-transform: uppercase;
-    letter-spacing: 0.16em;
-    color: var(--color-neutral-700);
-    text-shadow:
-        0 -1px 0 rgba(0, 0, 0, 0.30),
-        0 1px 0 rgba(255, 255, 255, 0.95),
-        0 2px 1px rgba(255, 255, 255, 0.40),
-        1px 1px 0 rgba(255, 255, 255, 0.25),
-        0 0 6px rgba(255, 255, 255, 0.12);
+    font-family: var(--font-sans);
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--clean-text-primary);
     margin: 0;
 }
 
 .pf-header-text p {
-    font-family: var(--font-label);
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--color-neutral-400);
-    text-shadow:
-        0 -1px 0 rgba(0, 0, 0, 0.12),
-        0 1px 0 rgba(255, 255, 255, 0.80),
-        0 2px 1px rgba(255, 255, 255, 0.30);
+    font-size: 14px;
+    color: var(--clean-text-tertiary);
     margin: 0;
 }
 
@@ -242,41 +127,23 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    font-family: var(--font-label);
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.10em;
-    padding: 7px 16px;
-    border-radius: 5px;
-    border: none;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--clean-border);
     cursor: pointer;
-    position: relative;
-    z-index: 1;
-    transition: filter 0.15s, transform 0.1s;
-    background:
-        radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.15) 0%, transparent 60%),
-        linear-gradient(180deg, var(--ctrl-hi) 0%, var(--ctrl) 50%, var(--ctrl-lo) 100%);
-    color: var(--color-neutral-600);
-    text-shadow:
-        0 -1px 0 rgba(0, 0, 0, 0.15),
-        0 1px 0 rgba(255, 255, 255, 0.75),
-        0 2px 1px rgba(255, 255, 255, 0.28);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.55),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.10),
-        0 2px 4px rgba(0, 0, 0, 0.18),
-        0 1px 2px rgba(0, 0, 0, 0.12);
+    background: var(--clean-surface);
+    color: var(--clean-text-secondary);
+    transition: all 150ms ease;
 }
 .pf-btn:hover {
-    filter: brightness(1.04);
+    background: var(--clean-surface-secondary);
+    border-color: var(--clean-border-strong);
 }
 .pf-btn:active {
     transform: translateY(1px);
-    box-shadow:
-        inset 0 2px 4px rgba(0, 0, 0, 0.15),
-        inset 0 1px 0 rgba(255, 255, 255, 0.30),
-        0 1px 2px rgba(0, 0, 0, 0.10);
 }
 .pf-btn:disabled {
     opacity: 0.5;
@@ -285,44 +152,36 @@
 }
 
 .pf-btn.primary {
-    background:
-        radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.15) 0%, transparent 60%),
-        linear-gradient(180deg, var(--green-bright) 0%, var(--green) 50%, var(--green-dark) 100%);
-    color: #fff;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.30);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.25),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.20),
-        0 2px 6px rgba(45, 138, 78, 0.30),
-        0 1px 2px rgba(0, 0, 0, 0.12);
+    background: var(--clean-green);
+    color: var(--clean-green-text);
+    border: none;
 }
 .pf-btn.primary:hover {
-    filter: brightness(1.08);
+    background: var(--clean-green-hover);
 }
 
 .pf-btn.sm {
-    font-size: 10px;
     padding: 5px 12px;
+    font-size: 12px;
 }
 
 .pf-btn.danger {
-    color: var(--red);
-    text-shadow: none;
+    background: var(--clean-surface);
+    color: var(--clean-badge-red-text);
+    border: 1px solid var(--clean-border);
 }
 .pf-btn.danger:hover {
-    filter: brightness(1.06);
-    color: #e74c3c;
+    background: var(--clean-badge-red-bg);
 }
 
 .pf-btn.ghost {
     background: transparent;
-    box-shadow: none;
-    color: rgba(53, 160, 88, 0.55);
-    text-shadow: 0 0 6px var(--green-glow-soft);
+    border: none;
+    color: var(--clean-text-tertiary);
 }
 .pf-btn.ghost:hover {
-    color: rgba(53, 160, 88, 0.80);
-    background: rgba(53, 160, 88, 0.06);
+    color: var(--clean-text-secondary);
+    background: var(--clean-hover-bg);
 }
 
 /* ---- Avatar Section ---- */
@@ -330,8 +189,6 @@
     display: flex;
     align-items: center;
     gap: 24px;
-    position: relative;
-    z-index: 1;
 }
 
 .pf-avatar-wrapper {
@@ -344,14 +201,11 @@
     height: 96px;
     border-radius: 50%;
     overflow: hidden;
-    border: 3px solid var(--color-neutral-400);
-    background: linear-gradient(135deg, var(--well-mid), var(--well-floor));
+    border: 1px solid var(--clean-border);
+    background: var(--clean-surface-secondary);
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow:
-        inset 0 2px 6px rgba(0, 0, 0, 0.30),
-        0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
 .pf-avatar-circle img {
@@ -367,33 +221,24 @@
     width: 96px;
     height: 96px;
     border-radius: 50%;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.5);
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 .pf-avatar-name {
-    font-family: var(--font-label);
-    font-size: 15px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.10em;
-    color: var(--color-neutral-700);
-    text-shadow:
-        0 -1px 0 rgba(0, 0, 0, 0.22),
-        0 1px 0 rgba(255, 255, 255, 0.90),
-        0 2px 1px rgba(255, 255, 255, 0.35);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--clean-text-primary);
     margin: 0 0 4px 0;
 }
 
 .pf-avatar-email {
     font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--color-neutral-500);
-    text-shadow:
-        0 -1px 0 rgba(0, 0, 0, 0.08),
-        0 1px 0 rgba(255, 255, 255, 0.60);
+    font-size: 13px;
+    color: var(--clean-text-tertiary);
     margin: 0 0 12px 0;
 }
 
@@ -403,41 +248,30 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 16px;
-    position: relative;
-    z-index: 1;
 }
 
 .pf-section-title {
-    font-family: var(--font-label);
+    font-family: var(--font-sans);
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--color-neutral-500);
-    text-shadow:
-        0 -1px 0 rgba(0, 0, 0, 0.15),
-        0 1px 0 rgba(255, 255, 255, 0.75),
-        0 2px 1px rgba(255, 255, 255, 0.28);
+    letter-spacing: 0.06em;
+    color: var(--clean-text-tertiary);
     margin: 0;
 }
 
 .pf-section-subtitle {
     font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--color-neutral-400);
-    text-shadow:
-        0 -1px 0 rgba(0, 0, 0, 0.08),
-        0 1px 0 rgba(255, 255, 255, 0.60);
+    font-size: 12px;
+    color: var(--clean-text-quaternary);
     margin: 2px 0 0 0;
 }
 
-/* ---- Display Fields (panel-surface metadata) ---- */
+/* ---- Display Fields ---- */
 .pf-field-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 14px;
-    position: relative;
-    z-index: 1;
 }
 
 .pf-display-field {
@@ -447,24 +281,18 @@
 }
 
 .pf-display-label {
-    font-family: var(--font-label);
-    font-size: 9px;
-    font-weight: 700;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--color-neutral-400);
-    text-shadow:
-        0 -1px 0 rgba(0, 0, 0, 0.08),
-        0 1px 0 rgba(255, 255, 255, 0.60);
+    letter-spacing: 0.06em;
+    color: var(--clean-text-tertiary);
 }
 
 .pf-display-value {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--color-neutral-700);
-    text-shadow:
-        0 -1px 0 rgba(0, 0, 0, 0.08),
-        0 1px 0 rgba(255, 255, 255, 0.60);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--clean-text-primary);
 }
 
 /* ---- Action Bar ---- */
@@ -473,39 +301,31 @@
     gap: 10px;
     margin-top: 18px;
     justify-content: flex-end;
-    position: relative;
-    z-index: 1;
 }
 
-/* ---- Search (Neumorphic Recessed Slot) ---- */
+/* ---- Search ---- */
 .pf-search {
     display: flex;
     align-items: center;
     gap: 8px;
-    border-radius: 5px;
+    border-radius: 10px;
+    border: 1px solid var(--clean-border-strong);
+    background: var(--clean-input-bg);
     padding: 0;
-    background: linear-gradient(180deg, var(--ctrl-lo) 0%, var(--ctrl) 100%);
-    box-shadow:
-        inset 3px 3px 6px rgba(0, 0, 0, 0.14),
-        inset -2px -2px 4px rgba(255, 255, 255, 0.55),
-        0 1px 0 rgba(255, 255, 255, 0.45);
-    transition: all 0.2s ease;
-    position: relative;
-    z-index: 1;
+    height: 36px;
+    transition: all 150ms ease;
 }
 .pf-search:focus-within {
-    box-shadow:
-        inset 3px 3px 6px rgba(0, 0, 0, 0.18),
-        inset -2px -2px 4px rgba(255, 255, 255, 0.55),
-        inset 0 0 12px rgba(45, 138, 78, 0.18);
+    border-color: var(--clean-input-border-focus);
+    box-shadow: 0 0 0 3px var(--clean-focus-ring);
 }
 .pf-search svg {
     width: 16px;
     height: 16px;
-    stroke: var(--color-neutral-500);
+    stroke: var(--clean-text-quaternary);
     fill: none;
     flex-shrink: 0;
-    margin-left: 14px;
+    margin-left: 12px;
 }
 .pf-search input {
     background: transparent;
@@ -513,95 +333,66 @@
     outline: none;
     font-family: var(--font-sans);
     font-size: 14px;
-    color: var(--text-primary);
+    color: var(--clean-input-text);
     width: 100%;
-    padding: 10px 14px 10px 8px;
-    height: 42px;
+    padding: 0 12px 0 8px;
+    height: 100%;
 }
 .pf-search input::placeholder {
-    color: var(--color-neutral-400);
-    font-style: italic;
+    color: var(--clean-text-quaternary);
 }
 
-/* ---- Filter Chips (Neumorphic Pills) ---- */
+/* ---- Filter Chips ---- */
 .pf-filter-row {
     display: flex;
     gap: 4px;
     margin-bottom: 14px;
     flex-wrap: wrap;
     align-items: center;
-    position: relative;
-    z-index: 1;
 }
 
 .pf-filter-chip {
-    font-family: var(--font-label);
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    padding: 7px 16px;
-    border-radius: 999px;
-    border: none;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 14px;
+    border-radius: 9999px;
+    border: 1px solid var(--clean-border);
     cursor: pointer;
-    background: transparent;
-    color: var(--color-neutral-500);
-    text-shadow:
-        0 -1px 0 rgba(0, 0, 0, 0.20),
-        0 1px 0 rgba(255, 255, 255, 0.80);
-    box-shadow:
-        -3px -3px 6px rgba(255, 255, 255, 0.65),
-        3px 3px 8px rgba(0, 0, 0, 0.08);
-    transition:
-        color 200ms ease,
-        text-shadow 200ms ease,
-        box-shadow 250ms cubic-bezier(0.4, 0, 0.2, 1);
+    background: var(--clean-surface);
+    color: var(--clean-text-secondary);
+    transition: all 150ms ease;
 }
 .pf-filter-chip:hover {
-    color: var(--color-neutral-700);
-    box-shadow:
-        -4px -4px 8px rgba(255, 255, 255, 0.75),
-        4px 4px 10px rgba(0, 0, 0, 0.10);
-}
-.pf-filter-chip:active {
-    box-shadow:
-        inset -2px -2px 4px rgba(255, 255, 255, 0.50),
-        inset 2px 2px 5px rgba(0, 0, 0, 0.10);
-    transition-duration: 60ms;
+    background: var(--clean-surface-secondary);
+    border-color: var(--clean-border-strong);
 }
 .pf-filter-chip.active {
-    color: var(--green);
-    text-shadow:
-        0 -0.5px 0 rgba(0, 0, 0, 0.30),
-        0 1px 0 rgba(255, 255, 255, 0.18),
-        0 0 3px rgba(45, 138, 78, 0.40),
-        0 0 6px rgba(45, 138, 78, 0.20);
-    box-shadow:
-        inset 3px 3px 6px rgba(0, 0, 0, 0.12),
-        inset -3px -3px 6px rgba(255, 255, 255, 0.55),
-        inset 0 0 14px rgba(45, 138, 78, 0.08);
+    background: var(--clean-badge-green-bg);
+    color: var(--clean-badge-green-text);
+    border-color: transparent;
 }
 
 /* ---- Competency Grid ---- */
 .pf-competency-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 6px;
+    gap: 8px;
 }
 
-/* ---- Competency Card (inside well — light containment) ---- */
+/* ---- Competency Card ---- */
 .pf-competency-card {
-    background: rgba(0, 0, 0, 0.20);
-    border: 1px solid rgba(53, 160, 88, 0.10);
-    border-radius: 4px;
+    background: var(--clean-surface);
+    border: 1px solid var(--clean-border);
+    border-radius: 12px;
     padding: 14px 16px;
     display: flex;
     flex-direction: column;
     gap: 10px;
-    transition: border-color 0.15s;
+    transition: border-color 150ms ease;
 }
 .pf-competency-card:hover {
-    border-color: rgba(53, 160, 88, 0.25);
+    border-color: var(--clean-border-strong);
 }
 
 .pf-competency-card.compact {
@@ -627,13 +418,13 @@
 .pf-card-icon {
     width: 32px;
     height: 32px;
-    border-radius: 4px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    background: rgba(53, 160, 88, 0.10);
-    color: rgba(53, 160, 88, 0.60);
+    background: var(--clean-badge-green-bg);
+    color: var(--clean-badge-green-text);
 }
 .pf-card-icon svg {
     width: 16px;
@@ -646,11 +437,10 @@
 }
 
 .pf-card-title {
-    font-family: var(--font-mono);
-    font-size: 12px;
+    font-family: var(--font-sans);
+    font-size: 13px;
     font-weight: 600;
-    color: rgba(53, 160, 88, 0.70);
-    text-shadow: 0 0 6px var(--green-glow-soft);
+    color: var(--clean-text-primary);
     margin: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -658,9 +448,9 @@
 }
 
 .pf-card-category {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: rgba(53, 160, 88, 0.40);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    color: var(--clean-text-tertiary);
 }
 
 .pf-card-edit-btn {
@@ -671,17 +461,17 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid rgba(53, 160, 88, 0.10);
-    border-radius: 4px;
+    border: 1px solid var(--clean-border);
+    border-radius: 8px;
     background: transparent;
-    color: rgba(53, 160, 88, 0.40);
+    color: var(--clean-text-tertiary);
     cursor: pointer;
-    transition: all 0.15s;
+    transition: all 150ms ease;
 }
 .pf-card-edit-btn:hover {
-    border-color: rgba(53, 160, 88, 0.30);
-    color: rgba(53, 160, 88, 0.70);
-    background: rgba(53, 160, 88, 0.06);
+    border-color: var(--clean-border-strong);
+    color: var(--clean-text-secondary);
+    background: var(--clean-surface-secondary);
 }
 
 /* ---- Card Details Grid ---- */
@@ -693,9 +483,10 @@
 }
 
 .pf-detail-label {
-    font-family: var(--font-mono);
-    font-size: 9px;
-    color: rgba(53, 160, 88, 0.35);
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--clean-text-quaternary);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     display: block;
@@ -703,9 +494,9 @@
 }
 
 .pf-detail-value {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: rgba(53, 160, 88, 0.55);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--clean-text-secondary);
 }
 
 /* ---- Document Link ---- */
@@ -713,18 +504,17 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: rgba(53, 160, 88, 0.55);
-    text-shadow: 0 0 6px var(--green-glow-soft);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    color: var(--clean-green);
     background: none;
     border: none;
     cursor: pointer;
     padding: 0;
-    transition: color 0.15s;
+    transition: color 150ms ease;
 }
 .pf-doc-link:hover {
-    color: rgba(53, 160, 88, 0.80);
+    color: var(--clean-green-hover);
 }
 .pf-doc-link svg {
     width: 12px;
@@ -733,113 +523,105 @@
     fill: none;
 }
 
-/* ---- Status Badges (LED-style) ---- */
+/* ---- Status Badges ---- */
 .pf-badge {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    padding: 2px 8px;
-    font-family: var(--font-mono);
-    font-size: 9px;
-    font-weight: 600;
-    border-radius: 3px;
+    padding: 3px 10px;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 9999px;
     align-self: flex-start;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
 }
 .pf-badge::before {
     content: '';
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     flex-shrink: 0;
 }
 
 .pf-badge.valid {
-    background: rgba(53, 160, 88, 0.12);
-    color: rgba(53, 160, 88, 0.70);
-    text-shadow: 0 0 4px var(--green-glow-soft);
+    background: var(--clean-badge-green-bg);
+    color: var(--clean-badge-green-text);
 }
 .pf-badge.valid::before {
-    background: radial-gradient(circle at 35% 30%, #5ec87a, var(--green) 55%, var(--green-dark));
-    box-shadow: 0 0 4px var(--green-glow), 0 0 8px var(--green-glow-soft);
+    background: var(--clean-badge-green-text);
 }
 
 .pf-badge.expired {
-    background: rgba(192, 57, 43, 0.12);
-    color: var(--red);
+    background: var(--clean-badge-red-bg);
+    color: var(--clean-badge-red-text);
 }
 .pf-badge.expired::before {
-    background: radial-gradient(circle at 35% 30%, #f07070, var(--red) 55%, #8e2a1e);
-    box-shadow: 0 0 4px rgba(192, 57, 43, 0.50), 0 0 8px rgba(192, 57, 43, 0.25);
+    background: var(--clean-badge-red-text);
 }
 
 .pf-badge.expiring-soon,
 .pf-badge.expiring {
-    background: rgba(212, 152, 30, 0.12);
-    color: var(--amber);
+    background: var(--clean-badge-amber-bg);
+    color: var(--clean-badge-amber-text);
 }
 .pf-badge.expiring-soon::before,
 .pf-badge.expiring::before {
-    background: radial-gradient(circle at 35% 30%, #f0c050, var(--amber) 55%, #b8860b);
-    box-shadow: 0 0 4px rgba(212, 152, 30, 0.50), 0 0 8px rgba(212, 152, 30, 0.25);
+    background: var(--clean-badge-amber-text);
 }
 
 .pf-badge.pending {
-    background: rgba(212, 152, 30, 0.12);
-    color: var(--amber);
+    background: var(--clean-badge-amber-bg);
+    color: var(--clean-badge-amber-text);
 }
 .pf-badge.pending::before {
-    background: radial-gradient(circle at 35% 30%, #f0c050, var(--amber) 55%, #b8860b);
-    box-shadow: 0 0 4px rgba(212, 152, 30, 0.50), 0 0 8px rgba(212, 152, 30, 0.25);
+    background: var(--clean-badge-amber-text);
 }
 
 .pf-badge.rejected,
 .pf-badge.changes-requested {
-    background: rgba(192, 57, 43, 0.12);
-    color: var(--red);
+    background: var(--clean-badge-red-bg);
+    color: var(--clean-badge-red-text);
 }
 .pf-badge.rejected::before,
 .pf-badge.changes-requested::before {
-    background: radial-gradient(circle at 35% 30%, #f07070, var(--red) 55%, #8e2a1e);
-    box-shadow: 0 0 4px rgba(192, 57, 43, 0.50), 0 0 8px rgba(192, 57, 43, 0.25);
+    background: var(--clean-badge-red-text);
 }
 
-/* ---- Picker Item (competency type picker, inside well) ---- */
+/* ---- Picker Item ---- */
 .pf-picker-item {
     padding: 12px 14px;
-    background: rgba(0, 0, 0, 0.20);
-    border-radius: 4px;
-    border: 1px solid rgba(53, 160, 88, 0.08);
+    background: var(--clean-surface);
+    border-radius: 10px;
+    border: 1px solid var(--clean-border);
     cursor: pointer;
-    transition: all 0.15s;
+    transition: all 150ms ease;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 .pf-picker-item:hover {
-    background: rgba(53, 160, 88, 0.06);
-    border-color: rgba(53, 160, 88, 0.25);
+    background: var(--clean-hover-bg);
+    border-color: var(--clean-border-strong);
 }
 
 .pf-picker-name {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: rgba(53, 160, 88, 0.65);
-    text-shadow: 0 0 6px var(--green-glow-soft);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--clean-text-primary);
     margin-bottom: 2px;
 }
 
 .pf-picker-desc {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: rgba(53, 160, 88, 0.35);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    color: var(--clean-text-tertiary);
 }
 
 .pf-picker-icon {
     width: 16px;
     height: 16px;
-    color: rgba(53, 160, 88, 0.50);
+    color: var(--clean-text-quaternary);
     flex-shrink: 0;
 }
 
@@ -850,20 +632,20 @@
     align-items: center;
     justify-content: center;
     padding: 20px;
-    border: 2px dashed rgba(53, 160, 88, 0.20);
-    border-radius: 5px;
+    border: 2px dashed var(--clean-border-strong);
+    border-radius: 10px;
     cursor: pointer;
-    transition: all 0.15s;
-    background: rgba(0, 0, 0, 0.10);
+    transition: all 150ms ease;
+    background: var(--clean-surface);
 }
 .pf-upload-zone:hover {
-    border-color: rgba(53, 160, 88, 0.40);
-    background: rgba(53, 160, 88, 0.04);
+    border-color: var(--clean-green);
+    background: var(--clean-hover-bg);
 }
 .pf-upload-zone.dragging {
-    border-color: var(--green);
+    border-color: var(--clean-green);
     border-style: solid;
-    background: rgba(53, 160, 88, 0.08);
+    background: var(--clean-badge-green-bg);
 }
 .pf-upload-zone.uploading {
     cursor: wait;
@@ -872,21 +654,21 @@
 .pf-upload-icon {
     width: 28px;
     height: 28px;
-    color: rgba(53, 160, 88, 0.30);
+    color: var(--clean-text-quaternary);
     margin-bottom: 8px;
 }
 
 .pf-upload-text {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: rgba(53, 160, 88, 0.50);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--clean-text-secondary);
     text-align: center;
 }
 
 .pf-upload-hint {
-    font-family: var(--font-mono);
-    font-size: 9px;
-    color: rgba(53, 160, 88, 0.30);
+    font-family: var(--font-sans);
+    font-size: 11px;
+    color: var(--clean-text-quaternary);
     margin-top: 4px;
 }
 
@@ -896,16 +678,16 @@
     align-items: center;
     gap: 10px;
     padding: 10px 14px;
-    background: rgba(53, 160, 88, 0.06);
-    border: 1px solid rgba(53, 160, 88, 0.15);
-    border-radius: 4px;
+    background: var(--clean-surface-secondary);
+    border: 1px solid var(--clean-border);
+    border-radius: 10px;
 }
 
 .pf-document-name {
     flex: 1;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: rgba(53, 160, 88, 0.60);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--clean-text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -913,15 +695,15 @@
 
 .pf-document-remove {
     padding: 4px;
-    color: var(--red);
+    color: var(--clean-badge-red-text);
     background: none;
     border: none;
     cursor: pointer;
-    border-radius: 4px;
-    transition: background 0.15s;
+    border-radius: 6px;
+    transition: background 150ms ease;
 }
 .pf-document-remove:hover {
-    background: rgba(192, 57, 43, 0.12);
+    background: var(--clean-badge-red-bg);
 }
 
 /* ---- Empty State ---- */
@@ -934,7 +716,7 @@
     width: 40px;
     height: 40px;
     margin: 0 auto 12px;
-    color: rgba(53, 160, 88, 0.20);
+    color: var(--clean-text-quaternary);
 }
 .pf-empty-icon svg {
     width: 100%;
@@ -945,23 +727,24 @@
 }
 
 .pf-empty-title {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: rgba(53, 160, 88, 0.45);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--clean-text-secondary);
     margin-bottom: 4px;
 }
 
 .pf-empty-text {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: rgba(53, 160, 88, 0.30);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--clean-text-tertiary);
 }
 
 /* ---- Loading Skeleton ---- */
 .pf-skeleton-card {
-    background: rgba(0, 0, 0, 0.20);
-    border-radius: 4px;
-    border: 1px solid rgba(53, 160, 88, 0.06);
+    background: var(--clean-surface);
+    border-radius: 12px;
+    border: 1px solid var(--clean-border);
     padding: 14px 16px;
     display: flex;
     flex-direction: column;
@@ -977,8 +760,8 @@
 .pf-skeleton-icon {
     width: 32px;
     height: 32px;
-    border-radius: 4px;
-    background: rgba(53, 160, 88, 0.06);
+    border-radius: 8px;
+    background: var(--clean-surface-secondary);
     animation: pf-pulse 1.5s infinite;
     flex-shrink: 0;
 }
@@ -992,8 +775,8 @@
 
 .pf-skeleton-line {
     height: 10px;
-    border-radius: 3px;
-    background: rgba(53, 160, 88, 0.06);
+    border-radius: 4px;
+    background: var(--clean-surface-secondary);
     animation: pf-pulse 1.5s infinite;
 }
 .pf-skeleton-line:nth-child(1) { width: 60%; }
@@ -1007,115 +790,94 @@
 
 .pf-skeleton-detail {
     height: 28px;
-    border-radius: 3px;
-    background: rgba(53, 160, 88, 0.06);
+    border-radius: 4px;
+    background: var(--clean-surface-secondary);
     animation: pf-pulse 1.5s infinite;
 }
 
-/* ---- Panel-Surface Info Block (Security, Privacy sections) ---- */
+/* ---- Info Block (Security, Privacy sections) ---- */
 .pf-info-block {
-    position: relative;
-    z-index: 1;
+    /* transparent passthrough */
 }
 
 .pf-info-text {
     font-family: var(--font-sans);
-    font-size: 12px;
-    color: var(--color-neutral-500);
-    text-shadow:
-        0 -1px 0 rgba(0, 0, 0, 0.08),
-        0 1px 0 rgba(255, 255, 255, 0.60);
+    font-size: 13px;
+    color: var(--clean-text-secondary);
     line-height: 1.6;
     margin: 0 0 14px;
 }
 
 .pf-info-label {
-    font-family: var(--font-label);
+    font-family: var(--font-sans);
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--color-neutral-600);
-    text-shadow:
-        0 -1px 0 rgba(0, 0, 0, 0.15),
-        0 1px 0 rgba(255, 255, 255, 0.75),
-        0 2px 1px rgba(255, 255, 255, 0.28);
+    letter-spacing: 0.06em;
+    color: var(--clean-text-tertiary);
 }
 
 .pf-status-active {
-    color: var(--green);
-    text-shadow: 0 0 6px var(--green-glow-soft);
+    color: var(--clean-badge-green-text);
 }
 
 .pf-status-danger {
-    color: var(--red);
+    color: var(--clean-badge-red-text);
 }
 
 /* ---- LED Indicators ---- */
 .pf-led {
     display: inline-block;
-    width: 7px;
-    height: 7px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     flex-shrink: 0;
 }
 
 .pf-led.active {
-    background: radial-gradient(circle at 35% 30%, #5ec87a, var(--green) 55%, var(--green-dark));
-    box-shadow: 0 0 4px var(--green-glow), 0 0 10px var(--green-glow-soft),
-        inset 0 -1px 2px rgba(0, 0, 0, 0.30), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+    background: var(--clean-badge-green-text);
 }
 
 .pf-led.warning {
-    background: radial-gradient(circle at 35% 30%, #f0c050, var(--amber) 55%, #b8860b);
-    box-shadow: 0 0 4px rgba(212, 152, 30, 0.50), 0 0 10px rgba(212, 152, 30, 0.25),
-        inset 0 -1px 2px rgba(0, 0, 0, 0.30), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+    background: var(--clean-badge-amber-text);
 }
 
 .pf-led.danger {
-    background: radial-gradient(circle at 35% 30%, #f07070, var(--red) 55%, #8e2a1e);
-    box-shadow: 0 0 4px rgba(192, 57, 43, 0.50), 0 0 10px rgba(192, 57, 43, 0.25),
-        inset 0 -1px 2px rgba(0, 0, 0, 0.30), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+    background: var(--clean-badge-red-text);
 }
 
 .pf-led.neutral {
-    background: radial-gradient(circle at 35% 30%, #8a8884, #6a6864 55%, #4a4844);
-    box-shadow: 0 0 4px rgba(100, 100, 96, 0.30),
-        inset 0 -1px 2px rgba(0, 0, 0, 0.30), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+    background: var(--clean-text-quaternary);
 }
 
-/* ---- Inline Input (panel-surface edit fields) ---- */
+/* ---- Inline Input ---- */
 .pf-inline-input {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--color-neutral-700);
-    background: rgba(0, 0, 0, 0.04);
-    border: 1px solid var(--color-neutral-400);
-    border-radius: 4px;
-    padding: 6px 10px;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--clean-input-text);
+    background: var(--clean-input-bg);
+    border: 1px solid var(--clean-input-border);
+    border-radius: 8px;
+    padding: 8px 12px;
     width: 100%;
     outline: none;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 .pf-inline-input:focus {
-    border-color: var(--green);
-    box-shadow: 0 0 0 2px rgba(53, 160, 88, 0.15);
+    border-color: var(--clean-input-border-focus);
+    box-shadow: 0 0 0 3px var(--clean-focus-ring);
 }
 
 /* ---- Animations ---- */
 @keyframes pf-pulse {
-    0%, 100% { opacity: 0.3; }
-    50% { opacity: 0.6; }
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 0.7; }
 }
 
 /* ---- Responsive ---- */
 @media (max-width: 768px) {
     .pf-chassis {
-        margin: 12px 8px;
-    }
-
-    .pf-panel {
-        padding: 20px 16px 16px;
+        padding: 20px 16px;
     }
 
     .pf-header {

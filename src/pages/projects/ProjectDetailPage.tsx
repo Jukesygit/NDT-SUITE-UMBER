@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Settings, Calendar, MapPin, Trash2 } from 'lucide-react';
+import { ArrowLeft, Settings, Calendar, MapPin, Trash2, ChevronDown } from 'lucide-react';
 import {
     useProject,
     useProjectVessels,
@@ -11,14 +11,13 @@ import {
 import { useDeleteProject, useUpdateProject } from '../../hooks/mutations/useInspectionProjectMutations';
 import { PageSpinner } from '../../components/ui/LoadingSpinner';
 import { Modal } from '../../components/ui/Modal';
-import { ProjectVesselsTab } from '../../components/projects/ProjectVesselsTab';
 import { ProjectFilesTab } from '../../components/projects/ProjectFilesTab';
-import { VesselCard } from '../../components/projects/VesselCard';
-import type { ProjectStatus } from '../../types/inspection-project';
+import { ProjectSummaryStrip } from '../../components/projects/ProjectSummaryStrip';
+import { ProjectAttentionQueue } from '../../components/projects/ProjectAttentionQueue';
+import { ProjectVesselList } from '../../components/projects/ProjectVesselList';
+import type { ProjectStatus, ProjectVessel, ProjectFile } from '../../types/inspection-project';
 import { PROJECT_STATUS_LABELS } from '../../types/inspection-project';
 import './projects.css';
-
-type Tab = 'overview' | 'vessels' | 'files';
 
 function getProjectStatusClass(status: ProjectStatus): string {
     switch (status) {
@@ -32,10 +31,49 @@ function getProjectStatusClass(status: ProjectStatus): string {
     }
 }
 
+function FilesSection({
+    projectId,
+    files,
+    vessels,
+    composites,
+    models,
+    defaultOpen,
+}: {
+    projectId: string;
+    files: ProjectFile[];
+    vessels: ProjectVessel[];
+    composites: { id: string; name: string; created_at: string; project_vessel_id: string | null }[];
+    models: { id: string; name: string; updated_at: string; project_vessel_id: string | null; model_type: string | null }[];
+    defaultOpen: boolean;
+}) {
+    const [open, setOpen] = useState(defaultOpen);
+    const totalCount = files.length + composites.length + models.length;
+
+    return (
+        <div className="pj-files-section">
+            <button onClick={() => setOpen(!open)} className="pj-files-toggle">
+                <div className="pj-files-toggle-left">
+                    <span className="pj-files-toggle-label">Files</span>
+                    <span className="pj-files-toggle-count">{totalCount}</span>
+                </div>
+                <ChevronDown size={14} className={`pj-files-toggle-chevron ${open ? 'open' : ''}`} />
+            </button>
+            {open && (
+                <ProjectFilesTab
+                    projectId={projectId}
+                    files={files}
+                    vessels={vessels}
+                    scanComposites={composites}
+                    vesselModels={models}
+                />
+            )}
+        </div>
+    );
+}
+
 export default function ProjectDetailPage() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState<Tab>('overview');
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [showStatusMenu, setShowStatusMenu] = useState(false);
 
@@ -159,69 +197,33 @@ export default function ProjectDetailPage() {
 
             <div className="pj-divider" />
 
-            <div className="pj-toolbar">
-                <div className="pj-tabs-well">
-                    <button className={`pj-tab ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>
-                        Overview
-                        <span className="pj-tab-count">{vessels.length}</span>
-                    </button>
-                    <button className={`pj-tab ${activeTab === 'vessels' ? 'active' : ''}`} onClick={() => setActiveTab('vessels')}>
-                        Vessels
-                        <span className="pj-tab-count">{vessels.length}</span>
-                    </button>
-                    <button className={`pj-tab ${activeTab === 'files' ? 'active' : ''}`} onClick={() => setActiveTab('files')}>
-                        Files
-                        <span className="pj-tab-count">{files.length + composites.length + models.length}</span>
-                    </button>
-                </div>
-            </div>
+            {/* Summary */}
+            <ProjectSummaryStrip vessels={vessels} />
 
-            <div className="pj-content">
-                {activeTab === 'overview' && (
-                    vessels.length === 0 ? (
-                        <div className="pj-card">
-                            <div className="pj-empty">
-                                <div className="pj-empty-title">No vessels yet</div>
-                                <div className="pj-empty-text">Add vessels to start setting up this inspection project.</div>
-                                <button onClick={() => setActiveTab('vessels')} className="pj-btn primary" style={{ marginTop: 16 }}>
-                                    Add Vessel
-                                </button>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="pj-card-grid">
-                            {vessels.map(v => (
-                                <VesselCard
-                                    key={v.id}
-                                    vessel={v}
-                                    projectId={project.id}
-                                    compositeCount={compositeCountByVessel.get(v.id) ?? 0}
-                                    onEdit={() => setActiveTab('vessels')}
-                                    onDelete={() => setActiveTab('vessels')}
-                                />
-                            ))}
-                        </div>
-                    )
-                )}
+            {/* Attention queue */}
+            <ProjectAttentionQueue
+                projectId={project.id}
+                vessels={vessels}
+                compositeCountByVessel={compositeCountByVessel}
+                projectStatus={project.status}
+            />
 
-                {activeTab === 'vessels' && (
-                    <ProjectVesselsTab
-                        projectId={project.id}
-                        vessels={vessels}
-                        compositeCountByVessel={compositeCountByVessel}
-                    />
-                )}
+            {/* Vessel list */}
+            <ProjectVesselList
+                projectId={project.id}
+                vessels={vessels}
+                compositeCountByVessel={compositeCountByVessel}
+            />
 
-                {activeTab === 'files' && (
-                    <ProjectFilesTab
-                        projectId={project.id}
-                        files={files}
-                        vessels={vessels}
-                        scanComposites={composites}
-                        vesselModels={models}
-                    />
-                )}
-            </div>
+            {/* Files (collapsible) */}
+            <FilesSection
+                projectId={project.id}
+                files={files}
+                vessels={vessels}
+                composites={composites}
+                models={models}
+                defaultOpen={false}
+            />
 
             {showDeleteModal && (
                 <Modal isOpen={true} title="Delete Project" onClose={() => setShowDeleteModal(false)}>

@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Download,
   Image,
+  Table,
   ChevronLeft,
   ChevronRight,
   Layers,
@@ -28,6 +29,7 @@ import CsvRepairModal from './CsvRepairModal';
 import { CscanData, Tool, DisplaySettings, DistributionConfig } from './types';
 import { exportAndDownloadHeatmap } from './utils/streamedExport';
 import { exportAnnotatedScanImage } from './utils/annotatedExport';
+import { exportCscanAsCsv } from './utils/csvExport';
 import {
   deleteCscanSession,
   listCscanSessions,
@@ -628,6 +630,12 @@ const CscanVisualizer: React.FC = () => {
     }
   }, [scanData, displaySettings]);
 
+  const handleExportCsv = useCallback(() => {
+    if (!scanData) return;
+    exportCscanAsCsv(scanData);
+    setShowExportMenu(false);
+  }, [scanData]);
+
   const scanNotes = scanData ? scanNotesById[scanData.id] ?? '' : '';
 
   const handleScanNotesChange = useCallback((notes: string) => {
@@ -959,6 +967,13 @@ const CscanVisualizer: React.FC = () => {
                 >
                   <Image className="w-4 h-4" />
                   Export Heatmap
+                </button>
+                <button
+                  onClick={handleExportCsv}
+                  className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-gray-700 flex items-center gap-2"
+                >
+                  <Table className="w-4 h-4" />
+                  Export CSV Data
                 </button>
               </div>
             )}

@@ -1,6 +1,6 @@
 import type { CscanData } from '../CscanVisualizer/types';
 
-export type TopologyTool = 'orbit' | 'crossSection' | 'measure';
+export type TopologyTool = 'orbit' | 'crossSection' | 'measure' | 'annotate';
 
 export interface SurfaceOptions {
   /** Vertical displacement exaggeration factor (1 = true scale) */
@@ -106,6 +106,18 @@ export interface MeasurementResult {
   wallLossA: number | null;
   /** Wall loss at point B relative to nominal, null if ND or no nominal */
   wallLossB: number | null;
+}
+
+export interface TopologyAnnotation {
+  id: string;
+  row: number;
+  col: number;
+  scanMm: number;
+  indexMm: number;
+  thickness: number | null;
+  label: string;
+  labelOffset?: [number, number, number];
+  surfacePoint?: [number, number, number];
 }
 
 export const DEFAULT_SURFACE_OPTIONS: SurfaceOptions = {

@@ -5,7 +5,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-    ArrowLeft, Box, MapPin, Calendar, Pencil, ChevronDown,
+    ArrowLeft, Box, Pencil, ChevronDown,
     ClipboardList, Eye, Cuboid,
 } from 'lucide-react';
 import { useUpdateProjectVessel } from '../../hooks/mutations/useInspectionProjectMutations';
@@ -150,14 +150,6 @@ export default function VesselOverviewPage() {
         );
     }
 
-    const formatDate = (d: string | null) => {
-        if (!d) return null;
-        return new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-    };
-    const tripDateRange = project.start_date || project.end_date
-        ? [formatDate(project.start_date), formatDate(project.end_date)].filter(Boolean).join(' – ')
-        : null;
-
     const statusClass = getVesselStatusClass(vessel.status);
 
     return (
@@ -165,15 +157,19 @@ export default function VesselOverviewPage() {
             <button onClick={() => navigate(`/projects/${projectId}`)} className="pj-back-btn">
                 <ArrowLeft size={14} />
                 {project.name}
+                {project.client_name && (
+                    <>
+                        <span className="pj-dot-sep" />
+                        <span>{project.client_name}</span>
+                    </>
+                )}
+                {project.site_name && (
+                    <>
+                        <span className="pj-dot-sep" />
+                        <span>{project.site_name}</span>
+                    </>
+                )}
             </button>
-
-            <div className="pj-page-meta" style={{ marginBottom: 8 }}>
-                {project.client_name && <span style={{ fontWeight: 600, color: 'var(--clean-text-secondary)' }}>{project.client_name}</span>}
-                {project.site_name && <span><MapPin size={10} />{project.site_name}</span>}
-                {tripDateRange && <span><Calendar size={10} />{tripDateRange}</span>}
-                {project.contract_number && <span>Contract: {project.contract_number}</span>}
-                {project.work_order_number && <span>WO: {project.work_order_number}</span>}
-            </div>
 
                 {/* Header */}
                 <div className="pj-header" style={{ marginBottom: 0 }}>
