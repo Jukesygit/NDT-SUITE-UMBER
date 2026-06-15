@@ -1,7 +1,7 @@
 import { supabase } from '../../../supabase-client';
 
 const GEMINI_API_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent';
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent';
 
 export interface GeminiImagePart {
   mimeType: string;

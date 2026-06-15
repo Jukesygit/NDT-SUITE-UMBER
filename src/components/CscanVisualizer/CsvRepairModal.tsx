@@ -17,7 +17,7 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
   onRepairComplete
 }) => {
   const [correctIndex, setCorrectIndex] = useState(true);
-  const [correctScan, setCorrectScan] = useState(false);
+  const [correctScan, setCorrectScan] = useState(true);
   const [showDetails, setShowDetails] = useState(false);
 
   // Detect offsets for all scans
@@ -148,6 +148,7 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
                       <th className="text-left p-2 text-gray-400 font-medium">File</th>
                       <th className="text-right p-2 text-gray-400 font-medium">Index Offset</th>
                       <th className="text-right p-2 text-gray-400 font-medium">Scan Offset</th>
+                      <th className="text-right p-2 text-gray-400 font-medium">Source</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -169,6 +170,9 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
                           ) : (
                             <span className="text-gray-500">OK</span>
                           )}
+                        </td>
+                        <td className="p-2 text-right text-gray-400">
+                          {(d.indexNeedsCorrection ? d.indexSource : d.scanSource) ?? '—'}
                         </td>
                       </tr>
                     ))}

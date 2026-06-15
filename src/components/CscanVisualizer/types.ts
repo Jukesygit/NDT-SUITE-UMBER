@@ -87,11 +87,13 @@ export interface OffsetDetection {
   actualIndexStart: number;           // First value in data
   indexOffset: number;                // Correction needed
   indexNeedsCorrection: boolean;
+  indexSource?: 'metadata' | 'filename' | null; // Which source supplied the expected value
   // Scan axis (X)
   expectedScanStart: number | null;   // From metadata or filename
   actualScanStart: number;            // First value in data
   scanOffset: number;                 // Correction needed
   scanNeedsCorrection: boolean;
+  scanSource?: 'metadata' | 'filename' | null;
 }
 
 export interface CsvRepairResult {

@@ -19,6 +19,7 @@ import type {
   CompositeCompleteMessage,
   ErrorMessage
 } from '../utils/efficientTypes';
+import { resolveExpectedStarts, OFFSET_TOLERANCE } from '../utils/offsetExpectations';
 
 /** Chrome-only Performance.memory API */
 interface PerformanceWithMemory extends Performance {
@@ -30,9 +31,6 @@ const parsedScans = new Map<string, EfficientCscanData>();
 
 // Generate unique ID
 const generateId = () => `cscan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-// Tolerance for detecting offset mismatch (in mm)
-const OFFSET_TOLERANCE = 10;
 
 /**
  * Post a progress message to main thread
@@ -497,36 +495,28 @@ function parseGenericFormat(_buffer: ArrayBuffer, filename: string, lines: strin
 }
 
 /**
- * Parse filename to extract expected Index and Scan ranges
- */
-function parseFilenameOffsets(filename: string): {
-  indexStart: number | null;
-  scanStart: number | null;
-} {
-  const indexMatch = filename.match(/I-(\d+)-(\d+)/i);
-  const scanMatch = filename.match(/S-(\d+)-(\d+)/i);
-
-  return {
-    indexStart: indexMatch ? parseInt(indexMatch[1], 10) : null,
-    scanStart: scanMatch ? parseInt(scanMatch[1], 10) : null
-  };
-}
-
-/**
  * Detect if a scan has offset issues
+ * Must stay consistent with detectOffsets in utils/fileParser.ts — both
+ * delegate expected-position arbitration to resolveExpectedStarts.
  */
 function hasOffsetIssues(scan: EfficientCscanData): boolean {
-  const filenameOffsets = parseFilenameOffsets(scan.filename);
-  const metadata = scan.metadata || {};
+  const yArr = Array.from(scan.yAxis);
+  const xArr = Array.from(scan.xAxis);
 
-  const expectedIndexStart = (metadata['IndexStart (mm)'] as number) ?? filenameOffsets.indexStart;
-  const expectedScanStart = (metadata['ScanStart (mm)'] as number) ?? filenameOffsets.scanStart;
+  const actualIndexStart = yArr.length > 0 ? Math.min(...yArr) : 0;
+  const actualIndexEnd = yArr.length > 0 ? Math.max(...yArr) : 0;
+  const actualScanStart = xArr.length > 0 ? Math.min(...xArr) : 0;
+  const actualScanEnd = xArr.length > 0 ? Math.max(...xArr) : 0;
 
-  const actualIndexStart = scan.yAxis.length > 0 ? Math.min(...Array.from(scan.yAxis)) : 0;
-  const actualScanStart = scan.xAxis.length > 0 ? Math.min(...Array.from(scan.xAxis)) : 0;
+  const expected = resolveExpectedStarts(
+    scan.filename,
+    scan.metadata,
+    actualScanEnd - actualScanStart,
+    actualIndexEnd - actualIndexStart
+  );
 
-  const indexOffset = expectedIndexStart !== null ? expectedIndexStart - actualIndexStart : 0;
-  const scanOffset = expectedScanStart !== null ? expectedScanStart - actualScanStart : 0;
+  const indexOffset = expected.indexStart !== null ? expected.indexStart - actualIndexStart : 0;
+  const scanOffset = expected.scanStart !== null ? expected.scanStart - actualScanStart : 0;
 
   return Math.abs(indexOffset) > OFFSET_TOLERANCE || Math.abs(scanOffset) > OFFSET_TOLERANCE;
 }

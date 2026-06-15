@@ -1,4 +1,5 @@
 import { CscanData, CscanStats, SourceRegion, OffsetDetection } from '../types';
+import { resolveExpectedStarts, OFFSET_TOLERANCE } from './offsetExpectations';
 
 // Generate unique ID for files
 const generateId = () => `cscan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -522,47 +523,27 @@ export const createComposite = (scans: CscanData[]): CscanData | null => {
 // CSV OFFSET DETECTION AND CORRECTION
 // =============================================================================
 
-// Tolerance for detecting offset mismatch (in mm)
-const OFFSET_TOLERANCE = 10;
-
-/**
- * Parse filename to extract expected Index and Scan ranges
- * Filename pattern: ... S-{start}-{end} I-{start}-{end} ...
- */
-const parseFilenameOffsets = (filename: string): {
-  indexStart: number | null;
-  indexEnd: number | null;
-  scanStart: number | null;
-  scanEnd: number | null;
-} => {
-  // Match I-{start}-{end} pattern (Index axis)
-  const indexMatch = filename.match(/I-(\d+)-(\d+)/i);
-  // Match S-{start}-{end} pattern (Scan axis)
-  const scanMatch = filename.match(/S-(\d+)-(\d+)/i);
-
-  return {
-    indexStart: indexMatch ? parseInt(indexMatch[1], 10) : null,
-    indexEnd: indexMatch ? parseInt(indexMatch[2], 10) : null,
-    scanStart: scanMatch ? parseInt(scanMatch[1], 10) : null,
-    scanEnd: scanMatch ? parseInt(scanMatch[2], 10) : null
-  };
-};
-
 /**
  * Detect if a scan file has incorrect axis offsets
- * Compares metadata/filename expected values against actual data values
+ * Compares expected positions (filename ranges and metadata, arbitrated by
+ * resolveExpectedStarts) against actual data values
  */
 export const detectOffsets = (scan: CscanData): OffsetDetection => {
-  const filenameOffsets = parseFilenameOffsets(scan.filename);
-
-  // Get expected values from metadata (more reliable) or filename
-  const expectedIndexStart = scan.metadata?.['IndexStart (mm)'] ?? filenameOffsets.indexStart;
-  const expectedScanStart = scan.metadata?.['ScanStart (mm)'] ?? filenameOffsets.scanStart;
-
   // Get actual values from parsed data
   // yAxis is Index (rows), xAxis is Scan (columns)
   const actualIndexStart = scan.yAxis.length > 0 ? Math.min(...scan.yAxis) : 0;
+  const actualIndexEnd = scan.yAxis.length > 0 ? Math.max(...scan.yAxis) : 0;
   const actualScanStart = scan.xAxis.length > 0 ? Math.min(...scan.xAxis) : 0;
+  const actualScanEnd = scan.xAxis.length > 0 ? Math.max(...scan.xAxis) : 0;
+
+  const expected = resolveExpectedStarts(
+    scan.filename,
+    scan.metadata,
+    actualScanEnd - actualScanStart,
+    actualIndexEnd - actualIndexStart
+  );
+  const expectedIndexStart = expected.indexStart;
+  const expectedScanStart = expected.scanStart;
 
   // Calculate offsets needed
   const indexOffset = expectedIndexStart !== null
@@ -583,10 +564,12 @@ export const detectOffsets = (scan: CscanData): OffsetDetection => {
     actualIndexStart,
     indexOffset,
     indexNeedsCorrection,
+    indexSource: expected.indexSource,
     expectedScanStart,
     actualScanStart,
     scanOffset,
-    scanNeedsCorrection
+    scanNeedsCorrection,
+    scanSource: expected.scanSource
   };
 };
 

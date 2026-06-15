@@ -19,6 +19,7 @@ Use this page as the running handoff point between Obsidian notes and code work.
 
 ## Recent Handovers
 
+- [[plans/2026-06-11-cscan-offset-filename-arbitration]]
 - [[plans/2026-05-01-industrial-theme-handover]]
 - [[plans/2026-04-30-industrial-instrument-handover]]
 - [[plans/2026-04-23-vessel-overview-page-implementation]]
