@@ -145,6 +145,8 @@ export interface WeldConfig {
   endPos?: number;
   /** For longitudinal welds: angle in degrees around circumference (90 = top) */
   angle?: number;
+  /** Weld cap width in mm (full bead diameter). Defaults to 8 */
+  capWidth?: number;
   /** Hex color string */
   color: string;
 }

@@ -17,8 +17,8 @@ import { SCALE } from './materials';
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Weld bead cross-section: tube radius of the torus / half-width of long weld */
-const BEAD_RADIUS_MM = 4;
+/** Default weld cap full width in mm */
+const DEFAULT_CAP_WIDTH_MM = 8;
 
 // ---------------------------------------------------------------------------
 // Circumferential Weld (Torus Ring)
@@ -38,6 +38,7 @@ function createCircumferentialWeld(
   material: THREE.MeshStandardMaterial,
 ): THREE.Group {
   const group = new THREE.Group();
+  const beadRadius = (weld.capWidth ?? DEFAULT_CAP_WIDTH_MM) / 2;
 
   // Determine the local radius at this axial position (may be on an ellipsoidal head)
   const HEAD_DEPTH = vesselRadius / headRatio;
@@ -53,7 +54,7 @@ function createCircumferentialWeld(
 
   const torusGeom = new THREE.TorusGeometry(
     r_local * SCALE,       // ring radius (distance from center of torus to center of tube)
-    BEAD_RADIUS_MM * SCALE, // tube radius (cross-section of the bead)
+    beadRadius * SCALE,     // tube radius (cross-section of the bead)
     12,                     // radial segments (tube cross-section)
     64,                     // tubular segments (around the ring)
   );
@@ -104,7 +105,7 @@ function createLongitudinalWeld(
   const segments = Math.max(2, Math.ceil(weldLength / 50)); // segment every ~50mm
 
   // Build a curved strip on the vessel surface
-  const beadR = BEAD_RADIUS_MM * SCALE;
+  const beadR = ((weld.capWidth ?? DEFAULT_CAP_WIDTH_MM) / 2) * SCALE;
   const R = vesselRadius * SCALE;
 
   // Create the weld bead as a series of small cylinder segments following the surface

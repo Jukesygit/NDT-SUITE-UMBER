@@ -152,6 +152,15 @@ export function WeldSection({
                                     onChange={v => onUpdateWeld(selectedWeldIndex, { angle: v })}
                                 />
                             )}
+                            <SliderRow
+                                label="Cap Width"
+                                value={sel.capWidth ?? 8}
+                                min={2}
+                                max={30}
+                                step={1}
+                                unit="mm"
+                                onChange={v => onUpdateWeld(selectedWeldIndex, { capWidth: v })}
+                            />
                             <div className="vm-control-group">
                                 <div className="vm-label"><span>Color</span></div>
                                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>

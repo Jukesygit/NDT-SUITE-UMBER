@@ -525,7 +525,7 @@ export default function VesselModeler() {
             welds: (projectData.welds || []).map((w: any) => ({
                 name: w.name || 'W', type: w.type || 'circumferential',
                 pos: w.pos ?? 0, endPos: w.endPos, angle: w.angle,
-                color: w.color || '#888888',
+                capWidth: w.capWidth, color: w.color || '#888888',
             })),
             textures: loadedTextures,
             annotations: (projectData.annotations || []).map((a: any) => ({
@@ -1521,7 +1521,8 @@ export default function VesselModeler() {
             })),
             welds: vesselState.welds.map(w => ({
                 name: w.name, type: w.type, pos: w.pos,
-                endPos: w.endPos, angle: w.angle, color: w.color,
+                endPos: w.endPos, angle: w.angle,
+                capWidth: w.capWidth, color: w.color,
             })),
             textures: vesselState.textures.map(t => ({
                 id: t.id, name: t.name, imageData: t.imageData,
@@ -1649,7 +1650,8 @@ export default function VesselModeler() {
             })),
             welds: vesselState.welds.map(w => ({
                 name: w.name, type: w.type, pos: w.pos,
-                endPos: w.endPos, angle: w.angle, color: w.color,
+                endPos: w.endPos, angle: w.angle,
+                capWidth: w.capWidth, color: w.color,
             })),
             textures: vesselState.textures.map(t => ({
                 id: t.id, name: t.name, imageData: t.imageData,
