@@ -10,7 +10,12 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.js'],
     pool: 'forks',
     maxWorkers: process.env.CI ? 1 : undefined,
+    // useLayoutMode.test.ts OOMs the fork worker even without coverage (Vitest/jsdom issue)
+    exclude: process.env.CI
+      ? ['**/node_modules/**', '**/dist/**', '**/useLayoutMode.test.ts']
+      : ['**/node_modules/**', '**/dist/**'],
     coverage: {
+      provider: 'istanbul',
       reporter: ['text', 'json', 'html', 'cobertura'],
       exclude: [
         'node_modules/',
