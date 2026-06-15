@@ -23,6 +23,7 @@ import {
     createWeldGlowMaterial,
     createPipelineMaterial,
     createConnectionPointMaterial,
+    SCALE,
 } from './engine/materials';
 import { buildPipelineGroup, computeNozzleTipY } from './engine/pipeline-geometry';
 import * as THREE from 'three';
@@ -45,6 +46,7 @@ function structuralHash(s: VesselState): string {
         pipelines: s.pipelines,
         hasModel: s.hasModel, vesselShape: s.vesselShape,
         showNozzleLabels: s.visuals.showNozzleLabels,
+        showWeldLabels: s.visuals.showWeldLabels,
     });
 }
 
@@ -117,6 +119,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
     const buildResultRef = useRef<BuildSceneResult | null>(null);
     const weldMeshesRef = useRef<THREE.Object3D[]>([]);
     const weldGlowRef = useRef<THREE.Object3D | null>(null);
+    const weldLabelsRef = useRef<{ label: CSS2DObject; weld: import('./types').WeldConfig }[]>([]);
 
     // --- Tier 1: track textureObjects identity for forced rebuild ---
     const textureObjectsRef = useRef<Record<number, THREE.Texture>>(textureObjects);
@@ -148,9 +151,10 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         manager.init();
         sceneManagerRef.current = manager;
 
-        // Hook camera animation into the render loop
+        // Hook camera animation + weld label tracking into the render loop
         manager.onBeforeRender = (cam, ctrl) => {
             updateCameraAnimation(cam, ctrl);
+            updateWeldLabelPositions(cam);
         };
 
         // Add persistent preview group to scene (Tier 3)
@@ -259,6 +263,56 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
     }, []); // Mount once
 
     // =========================================================================
+    // Per-frame: slide weld labels around the shell to face the camera
+    // =========================================================================
+    const updateWeldLabelPositions = useCallback((cam: THREE.PerspectiveCamera) => {
+        const labels = weldLabelsRef.current;
+        if (labels.length === 0) return;
+
+        const state = vesselStateRef.current;
+        const radius = state.id / 2;
+        const tanTan = state.length;
+        const isVert = state.orientation === 'vertical';
+        const vesselGroup = buildResultRef.current?.vesselGroup;
+        if (!vesselGroup) return;
+
+        // Camera position in vessel-group local space
+        const invMatrix = new THREE.Matrix4().copy(vesselGroup.matrixWorld).invert();
+        const camLocal = cam.position.clone().applyMatrix4(invMatrix);
+
+        for (const { label, weld } of labels) {
+            if (weld.type === 'circumferential') {
+                const axial = (weld.pos - tanTan / 2) * SCALE;
+                // Project camera onto the radial plane at this axial position
+                // and find the angle the camera is looking from
+                let angle: number;
+                if (isVert) {
+                    angle = Math.atan2(camLocal.z, camLocal.x);
+                } else {
+                    angle = Math.atan2(camLocal.y, camLocal.z);
+                }
+                const r = (radius + 30) * SCALE;
+                if (isVert) {
+                    label.position.set(r * Math.cos(angle), axial, r * Math.sin(angle));
+                } else {
+                    label.position.set(axial, r * Math.sin(angle), r * Math.cos(angle));
+                }
+            } else {
+                // Longitudinal welds are fixed — they don't wrap circumferentially
+                const midPos = (weld.pos + (weld.endPos ?? tanTan)) / 2;
+                const axial = (midPos - tanTan / 2) * SCALE;
+                const angleRad = ((weld.angle ?? 90) * Math.PI) / 180;
+                const r = (radius + 30) * SCALE;
+                if (isVert) {
+                    label.position.set(r * Math.cos(angleRad), axial, r * Math.sin(angleRad));
+                } else {
+                    label.position.set(axial, r * Math.sin(angleRad), r * Math.cos(angleRad));
+                }
+            }
+        }
+    }, []);
+
+    // =========================================================================
     // rebuildScene — full geometry disposal + recreation (expensive)
     // =========================================================================
     const rebuildScene = useCallback(() => {
@@ -346,6 +400,24 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             result.vesselGroup.add(weldGroup);
             weldMeshes.push(weldGroup);
         });
+
+        // -- Weld name labels (CSS2D) --
+        const newWeldLabels: { label: CSS2DObject; weld: import('./types').WeldConfig }[] = [];
+        if (state.visuals.showWeldLabels) {
+            state.welds.forEach((weld, idx) => {
+                if (!weld.name) return;
+
+                const el = document.createElement('div');
+                el.className = 'vm-weld-label';
+                el.textContent = weld.name;
+
+                const label = new CSS2DObject(el);
+                label.userData = { type: 'weld-label', weldIdx: idx };
+                result.vesselGroup.add(label);
+                newWeldLabels.push({ label, weld });
+            });
+        }
+        weldLabelsRef.current = newWeldLabels;
 
         // -- Nozzle name labels (CSS2D) --
         if (state.visuals.showNozzleLabels) {

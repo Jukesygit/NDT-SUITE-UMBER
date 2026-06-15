@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import type { VesselState } from '../types';
-import { createAnnotationLabelSprite, createNozzleLabelSprite, createRulerLabelSprite, createNameplateSprites, createCardinalDirectionSprites } from './text-sprite';
+import { createAnnotationLabelSprite, createNozzleLabelSprite, createWeldLabelSprite, createRulerLabelSprite, createNameplateSprites, createCardinalDirectionSprites } from './text-sprite';
 
 // ---------------------------------------------------------------------------
 // userData types to exclude from export
@@ -166,6 +166,14 @@ export async function exportVesselGLB(
       const nozzle = vesselState.nozzles[idx];
       if (!nozzle?.name) continue;
       clone.add(createNozzleLabelSprite(nozzle, nozzleGroup, vesselState));
+    }
+  }
+
+  // 5b. Add weld name labels
+  if (vesselState.visuals.showWeldLabels) {
+    for (const weld of vesselState.welds) {
+      if (!weld.name) continue;
+      clone.add(createWeldLabelSprite(weld, vesselState));
     }
   }
 

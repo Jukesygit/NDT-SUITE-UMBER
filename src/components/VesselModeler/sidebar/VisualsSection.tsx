@@ -180,6 +180,14 @@ export function VisualsSection({ vesselState, onUpdateDimensions, isOpen, onTogg
                 <label className="vm-checkbox-row">
                     <input
                         type="checkbox"
+                        checked={v.showWeldLabels ?? false}
+                        onChange={e => updateVisuals({ showWeldLabels: e.target.checked })}
+                    />
+                    <span>Weld Labels</span>
+                </label>
+                <label className="vm-checkbox-row">
+                    <input
+                        type="checkbox"
                         checked={v.showCardinalDirections ?? false}
                         onChange={e => updateVisuals({ showCardinalDirections: e.target.checked })}
                     />

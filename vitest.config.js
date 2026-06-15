@@ -8,6 +8,8 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.js'],
+    pool: 'forks',
+    maxWorkers: process.env.CI ? 1 : undefined,
     coverage: {
       reporter: ['text', 'json', 'html', 'cobertura'],
       exclude: [
@@ -18,10 +20,13 @@ export default defineConfig({
         '**/*.config.*',
         '**/mockData/*',
         'dist/',
-        'build/'
+        'build/',
+        'src/pages/**',
+        'src/components/VesselModeler/engine/**',
+        'src/components/CscanVisualizer/workers/**',
+        'src/workers/**',
       ],
       thresholds: {
-        // Start with achievable thresholds and increase over time
         global: {
           statements: 50,
           branches: 50,

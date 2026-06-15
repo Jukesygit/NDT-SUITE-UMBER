@@ -7,7 +7,7 @@
 // =============================================================================
 
 import * as THREE from 'three';
-import type { AnnotationShapeConfig, NozzleConfig, RulerConfig, VesselState } from '../types';
+import type { AnnotationShapeConfig, NozzleConfig, RulerConfig, WeldConfig, VesselState } from '../types';
 import { getAnnotationLeaderEndPosition } from './annotation-labels';
 import { computeRulerDistance, shellPoint } from './annotation-geometry';
 import { SCALE } from './materials';
@@ -407,6 +407,65 @@ export function createNozzleLabelSprite(
   }
 
   mesh.userData = { type: 'export-label', sourceType: 'nozzle', name: config.name };
+
+  return mesh;
+}
+
+// ---------------------------------------------------------------------------
+// Weld Label Sprite (for GLB export)
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a label sprite for a weld, positioned above the weld bead.
+ */
+export function createWeldLabelSprite(
+  config: WeldConfig,
+  vesselState: VesselState,
+): THREE.Mesh {
+  const lines: TextLine[] = [
+    {
+      text: ` ${config.name} `,
+      font: `bold ${FONT_SIZE_NAME}px monospace`,
+      color: '#ffd966',
+    },
+  ];
+
+  const worldScale = vesselState.id * SCALE * 0.003;
+
+  const mesh = createTextSprite(
+    lines,
+    'rgb(10, 14, 20)',
+    'rgba(255, 200, 60, 0.4)',
+    worldScale,
+    undefined,
+    true,
+  );
+
+  const radius = vesselState.id / 2;
+  const tanTan = vesselState.length;
+  const isVertical = vesselState.orientation === 'vertical';
+  const offset = (radius + 30) * SCALE;
+
+  if (config.type === 'circumferential') {
+    const axial = (config.pos - tanTan / 2) * SCALE;
+    if (isVertical) {
+      mesh.position.set(0, axial, offset);
+    } else {
+      mesh.position.set(axial, offset, 0);
+    }
+  } else {
+    const midPos = (config.pos + (config.endPos ?? tanTan)) / 2;
+    const axial = (midPos - tanTan / 2) * SCALE;
+    const angleRad = ((config.angle ?? 90) * Math.PI) / 180;
+    const r = offset;
+    if (isVertical) {
+      mesh.position.set(r * Math.cos(angleRad), axial, r * Math.sin(angleRad));
+    } else {
+      mesh.position.set(axial, r * Math.sin(angleRad), r * Math.cos(angleRad));
+    }
+  }
+
+  mesh.userData = { type: 'export-label', sourceType: 'weld', name: config.name };
 
   return mesh;
 }

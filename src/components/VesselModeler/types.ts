@@ -461,6 +461,8 @@ export interface VisualSettings {
   shadowIntensity: number;
   /** Whether to show nozzle name labels in the 3D scene */
   showNozzleLabels: boolean;
+  /** Whether to show weld name labels in the 3D scene */
+  showWeldLabels: boolean;
 }
 
 export interface ReferenceDrawing {
@@ -919,6 +921,7 @@ export const DEFAULT_VESSEL_STATE: VesselState = {
     enableShadows: true,
     shadowIntensity: 0.35,
     showNozzleLabels: false,
+    showWeldLabels: false,
   },
 };
 

@@ -181,6 +181,12 @@ function drawCSS2DElement(
       border: 'rgba(255, 255, 255, 0.2)',
       color: '#ffffff',
     });
+  } else if (className.includes('vm-weld-label')) {
+    drawPillLabel(ctx, el, x, y, scale, {
+      bg: 'rgba(0, 0, 0, 0.9)',
+      border: 'rgba(255, 200, 60, 0.4)',
+      color: '#ffd966',
+    });
   } else if (className.includes('vm-annotation-pill')) {
     const annType = el.dataset.annType;
     const colors = annType === 'restriction'
