@@ -243,7 +243,7 @@ function LayoutNew() {
 
   const handleLogoChange = (id: string) => {
     setLogoId(id);
-    try { localStorage.setItem('dev-logo-variant', id); } catch {}
+    try { localStorage.setItem('dev-logo-variant', id); } catch { /* storage unavailable */ }
   };
 
   // Fetch tab visibility settings from DB
