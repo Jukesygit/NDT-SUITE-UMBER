@@ -508,12 +508,12 @@ export class InteractionManager {
           const userData = hit.object.userData;
 
           if (uv && userData.type === 'scanComposite' && userData.data) {
-            // CCW flips uv.x via `v` instead of `1-v`, so invert back for column lookup
-            const uvX = userData.scanDirection === 'ccw' ? 1 - uv.x : uv.x;
-            const col = Math.min(Math.floor(uvX * userData.width), userData.width - 1);
-            const row = userData.indexDirection === 'reverse'
-              ? Math.min(Math.floor(uv.y * userData.height), userData.height - 1)
-              : Math.min(Math.floor((1 - uv.y) * userData.height), userData.height - 1);
+            // UV mapping in texture-manager already handles scanDirection (vMapped)
+            // and indexDirection (uMapped), so uv.x/uv.y map directly to texture
+            // columns/rows. CanvasTexture flipY=true means uv.y=1→data[0], so
+            // invert with (1-uv.y) to get the data row index.
+            const col = Math.min(Math.floor(uv.x * userData.width), userData.width - 1);
+            const row = Math.min(Math.floor((1 - uv.y) * userData.height), userData.height - 1);
             const thickness = userData.data[row]?.[col] ?? null;
 
             this.callbacks.onScanCompositeHover(
