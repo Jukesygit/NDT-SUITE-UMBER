@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Download,
@@ -41,6 +41,7 @@ import {
   processFilesWithWorker,
   createCompositeWithWorker,
   createCompositeFromDataWithWorker,
+  applyThresholdWithWorker,
   getCscanWorkerManager,
   type ProcessingProgress
 } from './utils/workerManager';
@@ -64,6 +65,7 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   flipH: false,
   flipV: false,
   range: { min: null, max: null },
+  minimumThreshold: null,
 };
 
 function normalizeDisplaySettings(settings?: Partial<DisplaySettings>): DisplaySettings {
@@ -74,6 +76,7 @@ function normalizeDisplaySettings(settings?: Partial<DisplaySettings>): DisplayS
       min: settings?.range?.min ?? null,
       max: settings?.range?.max ?? null,
     },
+    minimumThreshold: settings?.minimumThreshold ?? null,
   };
 }
 
@@ -360,6 +363,61 @@ const CscanVisualizer: React.FC = () => {
     getCscanWorkerManager().clearCache();
   }, []);
 
+  // Threshold apply handler — permanently nullifies values below threshold
+  const handleApplyThreshold = useCallback(async (threshold: number) => {
+    if (!scanData) return;
+
+    // Count how many points will be removed for the confirmation message
+    const flatData = scanData.data.flat().filter((v): v is number => v !== null && !isNaN(v));
+    const belowCount = flatData.filter(v => v < threshold).length;
+    const belowPercent = flatData.length > 0 ? ((belowCount / flatData.length) * 100).toFixed(1) : '0';
+
+    if (belowCount === 0) {
+      setStatusMessage({ type: 'success', message: 'No values below threshold — nothing to remove.' });
+      setTimeout(() => setStatusMessage(null), 3000);
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Permanently remove ${belowCount.toLocaleString()} points (${belowPercent}%) below ${threshold} mm?\n\nThis cannot be undone — to recover the data you would need to re-composite from source scans.`
+    );
+    if (!confirmed) return;
+
+    try {
+      // The scan needs to be in the worker cache — re-cache if needed
+      const manager = getCscanWorkerManager();
+      if (!manager.getCachedScan(scanData.id)) {
+        const { toEfficientFormat } = await import('./utils/efficientTypes');
+        manager.cacheScan(toEfficientFormat({
+          ...scanData,
+          stats: scanData.stats as unknown as Record<string, number>,
+        }));
+      }
+
+      const result = await applyThresholdWithWorker(scanData.id, threshold);
+      if (result) {
+        setProcessedScans(prev =>
+          prev.map(s => s.id === scanData.id ? result.composite : s)
+        );
+        setScanData(result.composite);
+        setDisplaySettings(prev => ({
+          ...prev,
+          minimumThreshold: null,
+        }));
+
+        setStatusMessage({
+          type: 'success',
+          message: `Threshold applied: ${result.removedPoints.toLocaleString()} points (${result.removedPercent.toFixed(1)}%) below ${threshold} mm removed permanently.`
+        });
+        setTimeout(() => setStatusMessage(null), 5000);
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Failed to apply threshold';
+      setStatusMessage({ type: 'error', message: msg });
+      setTimeout(() => setStatusMessage(null), 5000);
+    }
+  }, [scanData]);
+
   const handleSaveSession = useCallback(async () => {
     if (processedScans.length === 0) {
       setSessionError('Load or create a scan before saving a session.');
@@ -541,23 +599,36 @@ const CscanVisualizer: React.FC = () => {
     };
   }, []);
 
+  // Effective scan data with threshold applied — used for all exports/saves
+  const effectiveScanData = useMemo((): CscanData | null => {
+    if (!scanData) return null;
+    const threshold = displaySettings.minimumThreshold;
+    if (threshold === null) return scanData;
+    return {
+      ...scanData,
+      data: scanData.data.map(row =>
+        row.map(val => (val !== null && val < threshold) ? null : val)
+      ),
+    };
+  }, [scanData, displaySettings.minimumThreshold]);
+
   // Save to cloud handler
   const handleSaveToCloud = useCallback(async () => {
-    if (!scanData || !user) return;
+    if (!effectiveScanData || !user) return;
     const effectiveVesselId = saveVesselId || undefined;
     const sectionType = saveSectionType === 'Other' ? saveCustomSection : saveSectionType;
     try {
       await saveComposite.mutateAsync({
-        name: saveName || scanData.filename || 'Untitled Composite',
+        name: saveName || effectiveScanData.filename || 'Untitled Composite',
         organizationId: user.organizationId || '',
         userId: user.id,
-        thicknessData: scanData.data,
-        xAxis: scanData.xAxis,
-        yAxis: scanData.yAxis,
-        stats: scanData.stats || null,
-        width: scanData.width,
-        height: scanData.height,
-        sourceFiles: scanData.sourceRegions || null,
+        thicknessData: effectiveScanData.data,
+        xAxis: effectiveScanData.xAxis,
+        yAxis: effectiveScanData.yAxis,
+        stats: effectiveScanData.stats || null,
+        width: effectiveScanData.width,
+        height: effectiveScanData.height,
+        sourceFiles: effectiveScanData.sourceRegions || null,
         projectVesselId: effectiveVesselId,
         sectionType: sectionType || undefined,
       });
@@ -576,7 +647,7 @@ const CscanVisualizer: React.FC = () => {
       setStatusMessage({ type: 'error', message: `Failed to save composite${sizeMsg}` });
       setTimeout(() => setStatusMessage(null), 5000);
     }
-  }, [scanData, user, saveName, saveVesselId, saveSectionType, saveCustomSection, saveComposite]);
+  }, [effectiveScanData, user, saveName, saveVesselId, saveSectionType, saveCustomSection, saveComposite]);
 
   // Export handlers
   const handleExportImage = useCallback(async () => {
@@ -602,14 +673,14 @@ const CscanVisualizer: React.FC = () => {
   }, [scanData]);
 
   const handleExportCleanHeatmap = useCallback(async () => {
-    if (!scanData) return;
+    if (!effectiveScanData) return;
 
     setShowExportMenu(false);
 
     try {
       // Use streamed export for memory efficiency (handles large composites)
       const success = await exportAndDownloadHeatmap(
-        scanData,
+        effectiveScanData,
         displaySettings,
         (progress, message) => {
           setExportProgress({ progress, message });
@@ -628,13 +699,13 @@ const CscanVisualizer: React.FC = () => {
       setStatusMessage({ type: 'error', message: 'Export failed - image may be too large' });
       setTimeout(() => setStatusMessage(null), 5000);
     }
-  }, [scanData, displaySettings]);
+  }, [effectiveScanData, displaySettings]);
 
   const handleExportCsv = useCallback(() => {
-    if (!scanData) return;
-    exportCscanAsCsv(scanData);
+    if (!effectiveScanData) return;
+    exportCscanAsCsv(effectiveScanData);
     setShowExportMenu(false);
-  }, [scanData]);
+  }, [effectiveScanData]);
 
   const scanNotes = scanData ? scanNotesById[scanData.id] ?? '' : '';
 
@@ -667,6 +738,7 @@ const CscanVisualizer: React.FC = () => {
     }
   }, [scanData, displaySettings, distributionConfig, scanNotes]);
 
+  // Effective scan data with threshold applied — used for all exports/saves
   const dataMin = scanData?.stats?.min ?? 0;
   const dataMax = scanData?.stats?.max ?? 100;
   const viewportInsetLeft = leftPanelOpen ? LEFT_PANEL_WIDTH + SIDE_RAIL_WIDTH : SIDE_RAIL_WIDTH;
@@ -698,6 +770,7 @@ const CscanVisualizer: React.FC = () => {
         distributionConfig={distributionConfig}
         onDistributionConfigChange={setDistributionConfig}
         hasData={!!scanData}
+        onApplyThreshold={handleApplyThreshold}
       />
 
       {/* Main Content Area - relative container for absolute children */}
@@ -847,6 +920,7 @@ const CscanVisualizer: React.FC = () => {
               data={scanData}
               isExpanded={true}
               onToggle={() => setShowStats(false)}
+              minimumThreshold={displaySettings.minimumThreshold}
             />
           </div>
         )}

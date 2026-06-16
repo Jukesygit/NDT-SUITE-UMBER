@@ -17,6 +17,7 @@ import type {
   ProgressMessage,
   ParseCompleteMessage,
   CompositeCompleteMessage,
+  ThresholdAppliedMessage,
   ErrorMessage
 } from '../utils/efficientTypes';
 import { resolveExpectedStarts, OFFSET_TOLERANCE } from '../utils/offsetExpectations';
@@ -913,6 +914,50 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
           };
           self.postMessage(response);
         }
+        break;
+      }
+
+      case 'APPLY_THRESHOLD': {
+        const { scanId, threshold } = payload as { scanId: string; threshold: number };
+        const scan = parsedScans.get(scanId);
+        if (!scan) {
+          postError(`Scan ${scanId} not found in cache`);
+          break;
+        }
+
+        const totalCells = scan.width * scan.height;
+        let removedPoints = 0;
+
+        for (let i = 0; i < totalCells; i++) {
+          const byteIdx = Math.floor(i / 8);
+          const bitIdx = i % 8;
+          const isNullVal = (scan.nullMask[byteIdx] & (1 << bitIdx)) !== 0;
+
+          if (!isNullVal && scan.values[i] < threshold) {
+            scan.nullMask[byteIdx] |= (1 << bitIdx);
+            scan.values[i] = 0;
+            removedPoints++;
+          }
+        }
+
+        const removedPercent = scan.stats.validPoints > 0
+          ? (removedPoints / scan.stats.validPoints) * 100
+          : 0;
+
+        scan.stats = calculateStats(scan.values, scan.nullMask, scan.width, scan.height, scan.xAxis, scan.yAxis);
+
+        scan.metadata = {
+          ...scan.metadata,
+          appliedThreshold: threshold,
+          thresholdRemovedPoints: removedPoints,
+          thresholdRemovedPercent: Math.round(removedPercent * 100) / 100,
+        };
+
+        const response: ThresholdAppliedMessage = {
+          type: 'THRESHOLD_APPLIED',
+          payload: { composite: scan, removedPoints, removedPercent }
+        };
+        self.postMessage(response);
         break;
       }
 

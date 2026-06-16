@@ -15,3 +15,4 @@ export { ThresholdSection } from './ThresholdSection';
 export { PipingSection } from './PipingSection';
 export { ReportExportSection } from './ReportExportSection';
 export { WallLossConfigSection } from './WallLossConfigSection';
+export { VesselDetailsSection } from './VesselDetailsSection';

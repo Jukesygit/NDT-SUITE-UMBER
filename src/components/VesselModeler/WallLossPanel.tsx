@@ -1,6 +1,5 @@
-import { useMemo, useDeferredValue } from 'react';
 import type { VesselState } from './types';
-import { computeWallLossDistribution } from './engine/wall-loss-distribution';
+import { useWallLossWorker } from '../../hooks/useWallLossWorker';
 
 interface WallLossPanelProps {
   vesselState: VesselState;
@@ -31,38 +30,24 @@ function binColor(index: number, total: number): string {
   return BIN_COLORS[mapped];
 }
 
+function binRangeLabel(bin: { minPct: number; maxPct: number; minMm?: number; maxMm?: number; label?: string }, mode: string): string {
+  if (bin.label) return bin.label;
+  if (mode === 'custom' && bin.minMm != null && bin.maxMm != null) {
+    return `${bin.minMm.toFixed(1)}–${bin.maxMm.toFixed(1)}`;
+  }
+  return `${bin.minPct.toFixed(0)}–${bin.maxPct.toFixed(0)}%`;
+}
+
 export default function WallLossPanel({ vesselState, sidebarOpen, coverageVisible }: WallLossPanelProps) {
   const config = vesselState.wallLossGroups;
-  const hasScans = vesselState.scanComposites.some(c => c.orientationConfirmed);
-
-  const deferredConfig = useDeferredValue(config);
-
-  const compositeKey = useMemo(() =>
-    JSON.stringify(vesselState.scanComposites.map(c => ({
-      id: c.id,
-      orientationConfirmed: c.orientationConfirmed,
-      indexStartMm: c.indexStartMm,
-      datumAngleDeg: c.datumAngleDeg,
-      scanDirection: c.scanDirection,
-      indexDirection: c.indexDirection,
-      rows: c.data.length,
-      cols: c.data[0]?.length ?? 0,
-    }))),
-    [vesselState.scanComposites],
-  );
-
-  const result = useMemo(() => {
-    if (!deferredConfig?.enabled || !hasScans) return null;
-    return computeWallLossDistribution(vesselState, deferredConfig);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    deferredConfig?.enabled, deferredConfig?.nominalThickness, deferredConfig?.binCount,
-    compositeKey, vesselState.id, vesselState.length, vesselState.headRatio, hasScans,
-  ]);
+  const result = useWallLossWorker(vesselState, config);
+  const binNames = config?.binNames;
+  const mode = config?.binMode ?? 'equal';
 
   if (!result || result.totalDataPoints === 0) return null;
 
   const bottom = coverageVisible ? 200 : 48;
+  const hasSpurious = (result.spuriousCount ?? 0) > 0;
 
   return (
     <div
@@ -76,6 +61,7 @@ export default function WallLossPanel({ vesselState, sidebarOpen, coverageVisibl
         </span>
       </div>
       <div className="vm-wallloss-row vm-wallloss-header">
+        <span className="vm-wallloss-name">Name</span>
         <span className="vm-wallloss-range">Range</span>
         <span className="vm-wallloss-area">Area</span>
         <span className="vm-wallloss-pct">%</span>
@@ -87,16 +73,38 @@ export default function WallLossPanel({ vesselState, sidebarOpen, coverageVisibl
             className="vm-wallloss-swatch"
             style={{ backgroundColor: binColor(i, result.bins.length) }}
           />
+          <span className="vm-wallloss-name" title={binNames?.[i] || bin.label || ''}>
+            {binNames?.[i] || bin.label || `Bin ${i + 1}`}
+          </span>
           <span className="vm-wallloss-range">
-            {bin.minPct.toFixed(0)}–{bin.maxPct.toFixed(0)}%
+            {binRangeLabel(bin, mode)}
           </span>
           <span className="vm-wallloss-area">{formatArea(bin.area)} m&sup2;</span>
           <span className="vm-wallloss-pct">{formatPct(bin.areaPercent)}%</span>
           <span className="vm-wallloss-count">{bin.count}</span>
         </div>
       ))}
+      {hasSpurious && (
+        <>
+          <div className="vm-wallloss-divider" />
+          <div className="vm-wallloss-row" style={{ opacity: 0.7 }}>
+            <span
+              className="vm-wallloss-swatch"
+              style={{ backgroundColor: 'rgba(128, 128, 128, 0.6)' }}
+            />
+            <span className="vm-wallloss-name" title="Data points outside all bin ranges">
+              Spurious
+            </span>
+            <span className="vm-wallloss-range">Outside</span>
+            <span className="vm-wallloss-area">{formatArea(result.spuriousArea ?? 0)} m&sup2;</span>
+            <span className="vm-wallloss-pct">{formatPct(result.spuriousAreaPercent ?? 0)}%</span>
+            <span className="vm-wallloss-count">{result.spuriousCount ?? 0}</span>
+          </div>
+        </>
+      )}
       <div className="vm-wallloss-divider" />
       <div className="vm-wallloss-row vm-wallloss-total">
+        <span className="vm-wallloss-name" />
         <span className="vm-wallloss-range">Total</span>
         <span className="vm-wallloss-area">{formatArea(result.totalScannedArea)} m&sup2;</span>
         <span className="vm-wallloss-pct">100%</span>

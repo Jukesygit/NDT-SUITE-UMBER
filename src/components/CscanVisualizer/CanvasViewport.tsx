@@ -50,22 +50,34 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
   const plotRef = useRef<HTMLDivElement>(null);
   const [plotlyLoaded, setPlotlyLoaded] = useState(false);
 
-  // Track last rendered data ID to avoid unnecessary full re-renders
+  // Track last rendered data ID and threshold to avoid unnecessary full re-renders
   const lastDataIdRef = useRef<string | null>(null);
+  const lastThresholdRef = useRef<number | null>(null);
   // Debounce timer for style updates
   const styleUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Apply minimum threshold preview — replaces values below threshold with null
+  const thresholdFilteredData = useMemo(() => {
+    if (!data) return null;
+    const threshold = displaySettings.minimumThreshold;
+    if (threshold === null) return data.data;
+
+    return data.data.map(row =>
+      row.map(val => (val !== null && val < threshold) ? null : val)
+    );
+  }, [data, displaySettings.minimumThreshold]);
 
   // Downsample large datasets for display (prevents OOM)
   // Full resolution is still used for exports
   const displayData = useMemo(() => {
-    if (!data) return null;
+    if (!data || !thresholdFilteredData) return null;
 
-    const width = data.data[0]?.length ?? 0;
-    const height = data.data.length;
+    const width = thresholdFilteredData[0]?.length ?? 0;
+    const height = thresholdFilteredData.length;
 
     // Check if downsampling is needed
     if (needsDownsampling(width, height)) {
-      const downsampled = downsampleForDisplay(data.data, data.xAxis, data.yAxis);
+      const downsampled = downsampleForDisplay(thresholdFilteredData, data.xAxis, data.yAxis);
       return {
         zData: downsampled.data,
         xAxis: downsampled.xAxis,
@@ -77,13 +89,13 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
 
     // No downsampling needed
     return {
-      zData: data.data,
+      zData: thresholdFilteredData,
       xAxis: data.xAxis,
       yAxis: data.yAxis,
       isDownsampled: false,
       scale: 1
     };
-  }, [data]);
+  }, [data, thresholdFilteredData]);
 
   const axisRanges = useMemo(() => {
     if (!displayData) return null;
@@ -149,7 +161,7 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
         tempDiv.style.top = '-9999px';
         document.body.appendChild(tempDiv);
 
-        const zData = data.data;
+        const zData = thresholdFilteredData ?? data.data;
         const { min, max } = displaySettings.range;
         const zMin = min ?? data.stats?.min ?? 0;
         const zMax = max ?? data.stats?.max ?? 1;
@@ -229,7 +241,7 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
         return null;
       }
     }
-  }), [data, displaySettings]);
+  }), [data, displaySettings, thresholdFilteredData]);
 
   // Full render - only called when data changes (not on settings changes)
   const renderFullPlot = useCallback(async () => {
@@ -410,15 +422,18 @@ const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(({
   const renderPlot = useCallback(() => {
     if (!plotRef.current || !data || !Plotly) return;
 
-    // Check if this is new data or just a settings change
-    if (lastDataIdRef.current !== data.id) {
-      // New data - need full render (async but we don't await)
+    const currentThreshold = displaySettings.minimumThreshold;
+    const thresholdChanged = currentThreshold !== lastThresholdRef.current;
+
+    // Check if this is new data or threshold changed (needs full re-render with new z values)
+    if (lastDataIdRef.current !== data.id || thresholdChanged) {
+      lastThresholdRef.current = currentThreshold;
       renderFullPlot();
     } else {
-      // Same data - debounced style update (much faster, no OOM risk)
+      // Same data, same threshold - debounced style update (much faster, no OOM risk)
       updatePlotStyleDebounced();
     }
-  }, [data, renderFullPlot, updatePlotStyleDebounced]);
+  }, [data, displaySettings.minimumThreshold, renderFullPlot, updatePlotStyleDebounced]);
 
   // Initialize and update plot when renderPlot changes
   useEffect(() => {

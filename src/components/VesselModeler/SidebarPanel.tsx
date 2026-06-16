@@ -38,10 +38,11 @@ import {
     ProjectInfoSection,
     PipingSection,
     ReportExportSection,
+    VesselDetailsSection,
 } from './sidebar';
 
 export type ModelMode = 'vessel' | 'pipe';
-type SidebarSectionId = 'projectInfo' | 'dimensions' | 'visuals' | 'attachments' | 'scanOverlay' | 'inspection' | 'piping';
+type SidebarSectionId = 'projectInfo' | 'dimensions' | 'vesselDetails' | 'visuals' | 'attachments' | 'scanOverlay' | 'inspection' | 'piping';
 type AttachmentSubId = 'nozzles' | 'liftingLugs' | 'welds' | 'supports' | 'piping';
 type ScanOverlaySubId = 'imageOverlays' | 'scanComposites';
 type InspectionSubId = 'annotations' | 'coverage' | 'inspectionImages' | 'reportExport';
@@ -275,6 +276,12 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                             isOpen={activeSection === 'dimensions'}
                             onToggle={() => toggle('dimensions')}
                         />
+                        <VesselDetailsSection
+                            vesselState={vesselState}
+                            onUpdateDimensions={props.onUpdateDimensions}
+                            isOpen={activeSection === 'vesselDetails'}
+                            onToggle={() => toggle('vesselDetails')}
+                        />
                         <VisualsSection
                             vesselState={vesselState}
                             onUpdateDimensions={props.onUpdateDimensions}
@@ -413,6 +420,9 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                             <WallLossConfigSection
                                 config={vesselState.wallLossGroups}
                                 onUpdate={props.onUpdateWallLossGroups}
+                                corrosionAllowance={vesselState.corrosionAllowance}
+                                shellNominalThickness={vesselState.shellNominalThickness}
+                                domeNominalThickness={vesselState.domeNominalThickness}
                             />
                             <CoverageSection
                                 vesselState={vesselState}
@@ -525,6 +535,9 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                             <WallLossConfigSection
                                 config={vesselState.wallLossGroups}
                                 onUpdate={props.onUpdateWallLossGroups}
+                                corrosionAllowance={vesselState.corrosionAllowance}
+                                shellNominalThickness={vesselState.shellNominalThickness}
+                                domeNominalThickness={vesselState.domeNominalThickness}
                             />
                             <CoverageSection
                                 vesselState={vesselState}

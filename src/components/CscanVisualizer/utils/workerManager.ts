@@ -14,6 +14,7 @@ import type {
   ProgressMessage,
   ParseCompleteMessage,
   CompositeCompleteMessage,
+  ThresholdAppliedMessage,
 } from './efficientTypes';
 import { toLegacyFormat } from './efficientTypes';
 import type { CscanData } from '../types';
@@ -142,6 +143,25 @@ class CscanWorkerManager {
         if (resolver) {
           resolver.resolve({ composite: legacyComposite, efficientComposite: composite });
           this.pendingResolvers.delete('composite');
+        }
+        break;
+      }
+
+      case 'THRESHOLD_APPLIED': {
+        const thresholdPayload = payload as ThresholdAppliedMessage['payload'];
+        this.scanCache.set(thresholdPayload.composite.id, thresholdPayload.composite);
+
+        const legacyComposite = this.efficientToLegacy(thresholdPayload.composite);
+
+        const thresholdResolver = this.pendingResolvers.get('threshold');
+        if (thresholdResolver) {
+          thresholdResolver.resolve({
+            composite: legacyComposite,
+            efficientComposite: thresholdPayload.composite,
+            removedPoints: thresholdPayload.removedPoints,
+            removedPercent: thresholdPayload.removedPercent,
+          });
+          this.pendingResolvers.delete('threshold');
         }
         break;
       }
@@ -345,6 +365,31 @@ class CscanWorkerManager {
   }
 
   /**
+   * Apply minimum threshold to a scan — permanently nullifies values below the threshold
+   */
+  async applyThreshold(
+    scanId: string,
+    threshold: number
+  ): Promise<{
+    composite: CscanData;
+    efficientComposite: EfficientCscanData;
+    removedPoints: number;
+    removedPercent: number;
+  } | null> {
+    if (!this.worker) return null;
+    await this.ensureReady();
+
+    return new Promise((resolve, reject) => {
+      this.pendingResolvers.set('threshold', { resolve: resolve as (v: unknown) => void, reject });
+
+      this.worker!.postMessage({
+        type: 'APPLY_THRESHOLD',
+        payload: { scanId, threshold }
+      });
+    });
+  }
+
+  /**
    * Get cached efficient scan by ID
    */
   getCachedScan(id: string): EfficientCscanData | undefined {
@@ -419,4 +464,19 @@ export async function createCompositeFromDataWithWorker(
   options?: CreateCompositeOptions
 ): Promise<{ composite: CscanData; efficientComposite: EfficientCscanData } | null> {
   return getCscanWorkerManager().createCompositeFromData(scans, options);
+}
+
+/**
+ * Convenience function to apply minimum threshold to a scan
+ */
+export async function applyThresholdWithWorker(
+  scanId: string,
+  threshold: number
+): Promise<{
+  composite: CscanData;
+  efficientComposite: EfficientCscanData;
+  removedPoints: number;
+  removedPercent: number;
+} | null> {
+  return getCscanWorkerManager().applyThreshold(scanId, threshold);
 }

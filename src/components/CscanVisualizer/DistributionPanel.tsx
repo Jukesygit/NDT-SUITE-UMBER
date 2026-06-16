@@ -36,7 +36,7 @@ type PanelDistributionResult = DistributionResult & {
 function computeHonestThicknessDistribution(
   data: CscanData,
   config: DistributionConfig,
-  displayRange: { min: number; max: number },
+  displayRange: { min: number; max: number; threshold?: number },
 ): PanelDistributionResult | null {
   const boundaries = (config.customBoundaries ?? autoBoundaries(displayRange.min, displayRange.max, config.binCount))
     .slice()
@@ -61,9 +61,11 @@ function computeHonestThicknessDistribution(
   let excludedInvalidArea = 0;
   let excludedInvalidPoints = 0;
 
+  const threshold = displayRange.threshold;
   for (const row of data.data) {
     for (const value of row) {
       if (value === null || !Number.isFinite(value)) continue;
+      if (threshold !== undefined && value < threshold) continue;
 
       measuredArea += cellAreaM2;
       measuredPoints += 1;
@@ -201,8 +203,9 @@ export default function DistributionPanel({
   const displayRange = useMemo(() => {
     const min = Math.max(0, displaySettings.range.min ?? data?.stats?.min ?? 0);
     const max = displaySettings.range.max ?? data?.stats?.max ?? 100;
-    return { min, max };
-  }, [displaySettings.range, data?.stats?.min, data?.stats?.max]);
+    const threshold = displaySettings.minimumThreshold ?? undefined;
+    return { min, max, threshold };
+  }, [displaySettings.range, data?.stats?.min, data?.stats?.max, displaySettings.minimumThreshold]);
 
   const result = useMemo<PanelDistributionResult | null>(() => {
     if (!data || !config.enabled) return null;

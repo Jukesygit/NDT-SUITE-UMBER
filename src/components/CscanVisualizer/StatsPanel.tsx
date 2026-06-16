@@ -6,19 +6,24 @@ interface StatsPanelProps {
   data: CscanData | null;
   isExpanded: boolean;
   onToggle: () => void;
+  minimumThreshold?: number | null;
 }
 
-const StatsPanel: React.FC<StatsPanelProps> = ({ data, onToggle }) => {
-  // Calculate statistics
+const StatsPanel: React.FC<StatsPanelProps> = ({ data, onToggle, minimumThreshold }) => {
+  // Calculate statistics — when a preview threshold is active, recompute from filtered data
   const stats = React.useMemo((): CscanStats | null => {
     if (!data) return null;
 
-    if (data.stats) {
+    const hasPreviewThreshold = minimumThreshold !== null && minimumThreshold !== undefined;
+
+    if (data.stats && !hasPreviewThreshold) {
       return data.stats;
     }
 
-    // Calculate stats from data if not provided (fallback)
-    const flatData = data.data.flat().filter((v): v is number => v !== null && !isNaN(v));
+    // Calculate stats from data, applying threshold filter if active
+    const flatData = data.data.flat().filter((v): v is number =>
+      v !== null && !isNaN(v) && (!hasPreviewThreshold || v >= minimumThreshold)
+    );
     const validPoints = flatData.length;
     const totalPoints = data.width * data.height;
     const ndCount = totalPoints - validPoints;
