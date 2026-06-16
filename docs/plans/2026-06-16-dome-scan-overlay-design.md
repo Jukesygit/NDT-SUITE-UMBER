@@ -1,7 +1,7 @@
 # Dome End Scan Overlay System
 
 **Date:** 2026-06-16
-**Status:** Draft (rev 2 — incorporates Codex audit)
+**Status:** Draft (rev 3 — incorporates Codex audit + Jonas review)
 **Author:** Claude (design session with Jonas)
 
 ## Problem
@@ -21,9 +21,16 @@ Add a separate **dome scan** feature rather than modifying the existing `ScanCom
 
 ## Coordinate System
 
-### Axis Convention
+### Axis Convention & Units
 
-All dome geometry uses the **existing vessel-geometry.ts convention**: the vessel's longitudinal axis is **x** (left→right), with **y** vertical and **z** horizontal-transverse. The shared helpers in this doc follow that convention explicitly.
+All dome geometry follows the **existing vessel-geometry.ts / texture-manager.ts convention**:
+
+- **Horizontal vessels:** x = longitudinal (left→right), y = vertical, z = horizontal-transverse
+- **Vertical vessels:** y = longitudinal (bottom→top), x and z = radial plane
+
+All 3D positions are in **scaled world units** (`mm × SCALE` where `SCALE = 0.001` from `materials.ts`). The shared helpers accept mm inputs and return scaled coordinates, matching `createScanCompositePlane()` which applies `* SCALE` to every vertex component.
+
+**Phase 1 scope: horizontal vessels only.** The helpers accept an `orientation` parameter but Phase 1 only implements and tests the horizontal path. Vertical vessel dome scans are Phase 2+ (the existing shell scan composite code already handles both orientations via `isVertical` branching, and the dome helpers follow the same pattern).
 
 ### Current Shell Mapping (unchanged)
 
@@ -54,86 +61,119 @@ Parameterize the ellipsoidal head surface using polar coordinates centered on th
 
 Two pure functions define the mapping between `(φ, θ)` and 3D Cartesian. Both live in `dome-scan-geometry.ts` and are the **single source of truth** for dome surface parameterization. All geometry code (vertex loops, drag inverse, gizmo placement) must use these rather than inline formulas.
 
+The forward helper (`domeLocalFromPhiTheta`) returns **mm-space local coordinates** — it does NOT apply SCALE or vessel centering. The vertex loop in `createDomeScanPlane()` handles `* SCALE`, centering (`- TAN_TAN/2`), `headSign`, `surfaceOffset`, and the `isVertical` axis swap — exactly mirroring how `createScanCompositePlane()` builds its vertices (see `texture-manager.ts:518-558`).
+
+The inverse helper (`domePhiThetaFromPoint`) accepts **world-space scaled coordinates** (from raycaster hits) and reverses the SCALE + axis swap.
+
 ```typescript
-import { degToRad } from 'three/src/math/MathUtils.js';
+import { degToRad, radToDeg } from 'three/src/math/MathUtils.js';
 
 const PHI_EPSILON = 0.01; // degrees — clamp to avoid exact-zero sin(φ)
 
+interface DomeLocalResult {
+  /** Axial distance from tangent line toward apex, in mm */
+  axialMm: number;
+  /** Radial distance from dome axis, in mm */
+  rLocalMm: number;
+  /** Azimuthal angle in radians (for sin/cos decomposition into y/z or x/z) */
+  thetaRad: number;
+  /** Ellipsoid surface normal (unit vector in local dome frame) */
+  normal: THREE.Vector3;
+}
+
 /**
- * Map dome polar coords → 3D point in vessel-local space.
- * Returns { position: Vector3, normal: Vector3 }.
+ * Map dome polar coords → local dome coordinates in mm.
+ * Does NOT apply SCALE or vessel centering — the caller (createDomeScanPlane)
+ * handles that, matching how createScanCompositePlane builds vertices.
  *
- * Axis convention: x = vessel longitudinal, y = vertical, z = horizontal-transverse.
- * headSign: +1 for right head (apex at +x), -1 for left head (apex at -x).
- * tangentLineX: x-coordinate of the tangent line for this head.
+ * Returns axialMm (from tangent line toward apex), rLocalMm (radial),
+ * thetaRad (azimuthal), and the ellipsoid surface normal.
  */
-function domePointFromPhiTheta(
+function domeLocalFromPhiTheta(
   phiDeg: number,
   thetaDeg: number,
   radius: number,
   headDepth: number,
-  tangentLineX: number,
-  headSign: 1 | -1,
-): { position: THREE.Vector3; normal: THREE.Vector3 } {
+): DomeLocalResult {
   const phi = degToRad(Math.max(PHI_EPSILON, Math.min(90, phiDeg)));
   const theta = degToRad(thetaDeg);
 
   const sinPhi = Math.sin(phi);
   const cosPhi = Math.cos(phi);
 
-  // Local dome coordinates (origin at tangent line center)
-  const axial = headDepth * cosPhi;       // distance from tangent line toward apex
-  const rLocal = radius * sinPhi;          // radial distance from dome axis
+  const axialMm = headDepth * cosPhi;
+  const rLocalMm = radius * sinPhi;
 
-  // Convert to vessel-global coordinates
-  const x = tangentLineX + headSign * axial;
-  const y = rLocal * Math.sin(theta);      // vertical
-  const z = rLocal * Math.cos(theta);      // horizontal-transverse
+  // Ellipsoid surface gradient: ∇F for F(x,y,z) = (x/D)² + (y/R)² + (z/R)² - 1
+  // In dome-local coords (axial, radial·sinθ, radial·cosθ):
+  //   ∂F/∂axial = 2·cosPhi / D²  → simplified direction: cosPhi / D
+  //   ∂F/∂y     = 2·sinPhi·sinθ / R²  → sinPhi·sinθ / R
+  //   ∂F/∂z     = 2·sinPhi·cosθ / R²  → sinPhi·cosθ / R
+  // At apex (phi→0): cosPhi/D ≈ 1/D dominates → normal points along head axis ✓
+  // At equator (phi→90): sinPhi/R dominates → normal points radially outward ✓
+  const nAxial = cosPhi / headDepth;
+  const nRadSin = sinPhi * Math.sin(theta) / radius;
+  const nRadCos = sinPhi * Math.cos(theta) / radius;
 
-  // Ellipsoidal surface normal (unnormalized, then normalize)
-  const nx = headSign * sinPhi * sinPhi * headDepth;
-  const ny = cosPhi * radius * Math.sin(theta);
-  const nz = cosPhi * radius * Math.cos(theta);
+  // Normal in vessel-local frame (caller swaps axes for vertical orientation)
+  // Convention: (axial, sin-component, cos-component)
+  const normal = new THREE.Vector3(nAxial, nRadSin, nRadCos).normalize();
 
-  return {
-    position: new THREE.Vector3(x, y, z),
-    normal: new THREE.Vector3(nx, ny, nz).normalize(),
-  };
+  return { axialMm, rLocalMm, thetaRad: theta, normal };
 }
 
 /**
- * Inverse: 3D point in vessel-local space → dome polar coords (φ°, θ°).
- * Returns null if the point is not on/near the specified dome head.
+ * Inverse: 3D world-space point → dome polar coords (φ°, θ°).
+ * Point must be in SCALED world coordinates (same frame as vertices).
+ * Returns null if the point is not on the specified dome head.
+ *
+ * headSign: +1 for right/top head, -1 for left/bottom head.
+ * tangentLineWorld: scaled world-coord of the tangent line along the vessel axis.
+ * isVertical: axis swap flag.
  */
 function domePhiThetaFromPoint(
   point: THREE.Vector3,
   radius: number,
   headDepth: number,
-  tangentLineX: number,
+  tangentLineWorld: number,
   headSign: 1 | -1,
+  isVertical: boolean,
 ): { phiDeg: number; thetaDeg: number } | null {
-  // Local dome coordinates
-  const axial = headSign * (point.x - tangentLineX);
-  if (axial < 0) return null; // point is on shell side of tangent line
+  // Extract axial and radial components based on orientation
+  let axialWorld: number, radY: number, radZ: number;
+  if (isVertical) {
+    axialWorld = point.y;
+    radY = point.x;  // Note: for vertical, x/z are the radial plane
+    radZ = point.z;
+  } else {
+    axialWorld = point.x;
+    radY = point.y;
+    radZ = point.z;
+  }
 
-  const rLocal = Math.sqrt(point.y * point.y + point.z * point.z);
+  // Convert from world coords back to mm from tangent line
+  const axialFromTL = headSign * (axialWorld - tangentLineWorld) / SCALE;
+  if (axialFromTL < 0) return null; // point is on shell side
 
-  // Inverse of the ellipsoidal parameterization
-  const phiRad = Math.atan2(rLocal / radius, axial / headDepth);
-  const phiDeg = THREE.MathUtils.radToDeg(phiRad);
+  const rLocalWorld = Math.sqrt(radY * radY + radZ * radZ);
+  const rLocalMm = rLocalWorld / SCALE;
+
+  // Inverse ellipsoidal parameterization
+  const phiRad = Math.atan2(rLocalMm / radius, axialFromTL / headDepth);
+  const phiDeg = radToDeg(phiRad);
   if (phiDeg < 0 || phiDeg > 90) return null;
 
-  const thetaRad = Math.atan2(point.y, point.z);
-  const thetaDeg = THREE.MathUtils.radToDeg(thetaRad);
+  const thetaRad = Math.atan2(radY, radZ);
+  const thetaDeg = radToDeg(thetaRad);
 
   return { phiDeg, thetaDeg: ((thetaDeg % 360) + 360) % 360 };
 }
 ```
 
 **Key design decisions:**
-- `phiDeg` is clamped to `[PHI_EPSILON, 90]` in the forward direction to avoid `sin(0) = 0` producing a degenerate ring at the apex. The inverse can return `phiDeg ≈ 0` for points near the crown.
-- `headSign` (+1 right, -1 left) and `tangentLineX` are passed in rather than baked into the helpers, so they stay pure and testable.
-- Both functions use the same axis convention (x = axial) matching `vessel-geometry.ts`.
+- **`isVertical` parameter** is present on the inverse helper; the forward helper returns orientation-agnostic local coords so the caller does the axis swap (keeping the helper pure and testable).
+- `phiDeg` is clamped to `[PHI_EPSILON, 90]` in the forward direction to avoid `sin(0) = 0`. The inverse can return `phiDeg ≈ 0` for points near the crown.
+- **Normal formula uses the ellipsoid gradient** `(cosPhi/D, sinPhi·sinθ/R, sinPhi·cosθ/R)`. At the apex (φ→0) this correctly points along the head axis; at the equator (φ→90) it points radially outward.
 
 ### Scan Data Mapping
 
@@ -233,7 +273,8 @@ const centerThetaRad = degToRad(config.centerTheta);
 const sinCenterPhi = Math.sin(centerPhiRad);
 const localCircumference = 2 * Math.PI * RADIUS * sinCenterPhi;
 // Guard: if scan is near apex, cap angular span to avoid >360° wrapping
-const scanRangeMm = config.xAxis[config.xAxis.length - 1] - config.xAxis[0];
+// Use Math.abs to handle descending axis arrays (e.g. right-to-left scan)
+const scanRangeMm = Math.abs(config.xAxis[config.xAxis.length - 1] - config.xAxis[0]);
 const rawAngularSpan = (scanRangeMm / Math.max(localCircumference, 1)) * 2 * Math.PI;
 const angularSpan = Math.min(rawAngularSpan, 2 * Math.PI);
 
@@ -245,7 +286,7 @@ const angularSpan = Math.min(rawAngularSpan, 2 * Math.PI);
 // Phase 1 uses this approximation. Phase 2 can switch to numeric quadrature
 // if distortion on eccentric heads is unacceptable (see Acceptance Tests).
 const effectiveRadius = Math.sqrt(RADIUS * HEAD_DEPTH);
-const indexRangeMm = config.yAxis[config.yAxis.length - 1] - config.yAxis[0];
+const indexRangeMm = Math.abs(config.yAxis[config.yAxis.length - 1] - config.yAxis[0]);
 const phiSpan = indexRangeMm / effectiveRadius;
 ```
 
@@ -254,13 +295,14 @@ const phiSpan = indexRangeMm / effectiveRadius;
 ### Vertex Loop
 
 ```typescript
+const surfaceOffset = 2; // mm above the shell surface, matching shell scans
+const TAN_TAN_HALF = TAN_TAN / 2;
+
 for (let iy = 0; iy <= segmentsY; iy++) {
   const v = iy / segmentsY;
   // φ offset from center (polar / radial from apex)
   const phiOffset = (v - 0.5) * phiSpan;
   const currentPhiRad = centerPhiRad + phiOffset;
-
-  // Clamp to valid range
   const clampedPhiDeg = Math.max(PHI_EPSILON, Math.min(90,
     THREE.MathUtils.radToDeg(currentPhiRad)));
 
@@ -270,15 +312,36 @@ for (let iy = 0; iy <= segmentsY; iy++) {
     const thetaOffset = (u - 0.5) * angularSpan;
     const currentThetaDeg = THREE.MathUtils.radToDeg(centerThetaRad + thetaOffset);
 
-    // Use shared helper — single source of truth
-    const { position, normal } = domePointFromPhiTheta(
-      clampedPhiDeg, currentThetaDeg,
-      RADIUS, HEAD_DEPTH, tangentLineX, headSign,
+    // Shared helper returns mm-space local coords
+    const local = domeLocalFromPhiTheta(
+      clampedPhiDeg, currentThetaDeg, RADIUS, HEAD_DEPTH,
     );
 
-    vertices.push(position.x, position.y, position.z);
-    normals.push(normal.x, normal.y, normal.z);
-    uvs.push(u, v);
+    // Convert to scaled world coordinates (matching texture-manager.ts pattern)
+    const rScaled = (local.rLocalMm + surfaceOffset) * SCALE;
+    const tangentLinePos = tangentLineMm; // mm from LTL for this head
+    const axialPosMm = tangentLinePos + headSign * local.axialMm;
+    const axialGlobal = (axialPosMm - TAN_TAN_HALF) * SCALE; // centered on vessel midpoint
+
+    let x: number, y: number, z: number;
+    if (isVertical) {
+      x = rScaled * Math.cos(local.thetaRad);
+      y = axialGlobal;
+      z = rScaled * Math.sin(local.thetaRad);
+    } else {
+      x = axialGlobal;
+      y = rScaled * Math.sin(local.thetaRad);
+      z = rScaled * Math.cos(local.thetaRad);
+    }
+    vertices.push(x, y, z);
+
+    // UV mapping: dome loop axes differ from shell loop axes.
+    // Here ix/u = theta (circumferential/scan) and iy/v = phi (radial/index).
+    // texture.x (scanMapped) tracks the scan/circumferential axis → derived from u.
+    // texture.y (indexMapped) tracks the index/radial axis → derived from v.
+    const scanMapped = config.scanDirection === 'ccw' ? u : 1 - u;
+    const indexMapped = config.indexDirection === 'inward' ? v : 1 - v;
+    uvs.push(scanMapped, indexMapped);
   }
 }
 ```
@@ -295,7 +358,7 @@ Same pattern as shell scans — build a slightly larger border mesh behind the h
 
 Similar to the existing `buildScanOrientationGizmo()` but adapted for the dome surface:
 
-- **Origin dot** at `domePointFromPhiTheta(centerPhi, centerTheta, ...)` on the dome surface
+- **Origin dot** at `domeLocalFromPhiTheta(centerPhi, centerTheta, R, D)` → scaled world coords on the dome surface
 - **Green arrow** follows a ring of constant φ around the dome (circumferential/scan direction)
 - **Orange arrow** follows a meridian from the origin toward the equator or apex (index direction)
 - **Click-to-toggle** arrows flip `scanDirection` / `indexDirection`
@@ -335,9 +398,28 @@ Phase 1 does not include the interactive gizmo. Placement is entirely via sideba
 - Opacity slider
 - Remove button
 
-### Hover Tooltip
+### Hover Tooltip (Phase 1)
 
-When hovering over a dome scan, show the same thickness readout as shell scans but with dome-specific coordinates:
+Hover requires `interaction-manager.ts` to raycast dome scan meshes. This is a **small, bounded change** in Phase 1: add `domeScanMeshes` to the existing hover raycast alongside `scanCompositeMeshes` (see `interaction-manager.ts:498-504`). The dome meshes carry `userData.type = 'domeScan'` so the existing hit handler branches:
+
+- For `scanComposite` hits: existing shell tooltip (position/angle)
+- For `domeScan` hits: dome tooltip with φ/θ coordinates
+
+The tooltip reads UV coordinates from the hit (same as shell scans) and maps back to data rows/cols. A **separate `onDomeScanHover` callback** avoids reusing the shell tooltip's hardcoded "Scan" / "Index" labels:
+
+```typescript
+interface DomeScanHoverInfo {
+  scanId: string;
+  thickness: number | null;
+  phiDeg: number;   // polar angle from apex
+  thetaDeg: number; // azimuthal position around dome
+  row: number;
+  col: number;
+}
+onDomeScanHover?: (info: DomeScanHoverInfo | null) => void;
+```
+
+Tooltip renders dome-native labels:
 
 ```
 Thickness: 12.4 mm
@@ -345,13 +427,18 @@ Thickness: 12.4 mm
 θ: 127.5° (position around dome)
 ```
 
+**This is the only `interaction-manager.ts` change in Phase 1.** Dragging, gizmo interaction, and click-to-select remain Phase 2.
+
 ## Interaction: Dragging (Phase 2)
 
 Dome scans should be draggable on the dome surface. The raycaster hit point needs to be converted from Cartesian to `(φ, θ)` using the shared `domePhiThetaFromPoint()` helper:
 
 ```typescript
 // In interaction-manager.ts drag handler for dome scans:
-const result = domePhiThetaFromPoint(hitPoint, RADIUS, HEAD_DEPTH, tangentLineX, headSign);
+const tangentLineWorld = tangentLineMm * SCALE; // scaled tangent line position
+const result = domePhiThetaFromPoint(
+  hitPoint, RADIUS, HEAD_DEPTH, tangentLineWorld, headSign, isVertical,
+);
 if (result) {
   domeScan.centerPhi = result.phiDeg;
   domeScan.centerTheta = result.thetaDeg;
@@ -412,31 +499,33 @@ If a vessel needs multiple dome scans on the same head (e.g. two passes), the co
 
 ## Implementation Phases
 
-### Phase 1: Core Rendering (MVP)
+### Phase 1: Core Rendering (MVP) — horizontal vessels only
 
 - [ ] Add `DomeScanConfig` interface to `types.ts`
 - [ ] Add `domeScanComposites: DomeScanConfig[]` to `VesselState` and defaults
-- [ ] Create `dome-scan-geometry.ts` with shared helpers + `createDomeScanPlane()`
+- [ ] Create `dome-scan-geometry.ts` with shared helpers (`domeLocalFromPhiTheta`, `domePhiThetaFromPoint`) + `createDomeScanPlane()`
 - [ ] Wire into `buildVesselScene()` render loop (add `domeScanMeshes` to `BuildSceneResult`)
 - [ ] Add "Dome Scans" sub-section in sidebar with placement controls (sliders, not gizmo)
 - [ ] Support adding a dome scan from companion NDE file data
 - [ ] Heatmap rendering using existing `createHeatmapTexture()`
 - [ ] Selection highlight border
-- [ ] Hover tooltip with dome coordinates
+- [ ] Hover tooltip with dome coordinates (add `domeScanMeshes` to interaction-manager raycast, `onDomeScanHover` callback)
 - [ ] Save/load hydration with `domeScanComposites` defaulting to `[]`
 - [ ] Wall loss panel note when dome scans exist but aren't in distribution
 - [ ] Report scan-log defensive row for dome scan count
 
-**Phase 1 does NOT include:** interactive gizmo, drag-to-reposition, cloud sync, wall loss integration, annotation sampling.
+**Phase 1 does NOT include:** interactive gizmo, drag-to-reposition, cloud sync, wall loss integration, annotation sampling, vertical vessel orientation.
 
-### Phase 2: Orientation & Interaction
+### Phase 2: Orientation, Interaction & Vertical Support
 
 - [ ] Dome-specific orientation gizmo (`buildDomeScanGizmo()`) using shared helpers
 - [ ] Drag-to-reposition on dome surface via `domePhiThetaFromPoint()`
-- [ ] Wire into `interaction-manager.ts` (raycaster callbacks, mesh group registration)
+- [ ] Wire into `interaction-manager.ts` (drag callbacks, click-to-select, mesh group registration)
 - [ ] Confirm/reset orientation flow
 - [ ] Per-row angular span correction for large-φ-range scans
 - [ ] Cloud sync with `dome_left` / `dome_right` section types
+- [ ] Vertical vessel orientation support (`isVertical` axis swap in vertex loop + inverse helper)
+- [ ] Vertical vessel round-trip acceptance tests
 
 ### Phase 3: Analysis Integration
 
@@ -450,17 +539,18 @@ If a vessel needs multiple dome scans on the same head (e.g. two passes), the co
 
 | File | Change | Phase |
 |------|--------|-------|
-| `types.ts` | Add `DomeScanConfig`, extend `VesselState`, extend `BuildSceneResult` | 1 |
+| `types.ts` | Add `DomeScanConfig`, extend `VesselState` | 1 |
 | `engine/dome-scan-geometry.ts` | **New** — shared helpers + `createDomeScanPlane()` | 1 |
-| `engine/vessel-geometry.ts` | Wire dome scan meshes into `buildVesselScene()`, add to result | 1 |
+| `engine/vessel-geometry.ts` | Extend `BuildSceneResult` with `domeScanMeshes`, wire into `buildVesselScene()` | 1 |
 | `engine/heatmap-texture.ts` | No changes (reused as-is) | — |
+| `engine/interaction-manager.ts` | Add `domeScanMeshes` to hover raycast + dome tooltip branch (hover only) | 1 |
 | `sidebar/DomeScanSection.tsx` | **New** — dome scan sub-section UI | 1 |
 | `SidebarPanel.tsx` | Wire new section, add `ScanOverlaySubId` variant | 1 |
-| `VesselModeler.tsx` | Add dome scan state management, callbacks | 1 |
+| `VesselModeler.tsx` | Add dome scan state management, callbacks, pass meshes to interaction-manager | 1 |
 | `WallLossPanel.tsx` | Informational note when dome scans exist | 1 |
 | `engine/report-generator.ts` | Defensive row in scan log table | 1 |
 | `engine/scan-gizmo-geometry.ts` | `buildDomeScanGizmo()` using shared helpers | 2 |
-| `engine/interaction-manager.ts` | Dome-surface raycasting, drag callbacks, mesh group registration | 2 |
+| `engine/interaction-manager.ts` | Dome-surface drag callbacks, click-to-select, mesh group registration | 2 |
 | `services/scan-composite-service.ts` | `dome_left` / `dome_right` section type support | 2 |
 | `engine/scan-sampling.ts` | Dome scan sampling via `(φ, θ)` | 3 |
 | `hooks/useWallLossWorker.ts` | Include dome composites with dome area calcs | 3 |
@@ -472,23 +562,24 @@ These tests validate correctness at key risk points identified during review.
 
 ### Apex Safety (P0)
 
-- `domePointFromPhiTheta(0, 0, ...)` returns a valid position at the dome crown with no NaN in position or normal vectors.
-- `domePointFromPhiTheta(PHI_EPSILON, θ, ...)` for θ ∈ {0, 90, 180, 270} returns four distinct points forming a tiny ring (not collapsed to one point).
+- `domeLocalFromPhiTheta(0, 0, R, D)` returns a valid result at the dome crown with no NaN in `axialMm`, `rLocalMm`, or `normal`.
+- `domeLocalFromPhiTheta(PHI_EPSILON, θ, R, D)` for θ ∈ {0, 90, 180, 270} returns four distinct `(rLocalMm, thetaRad)` positions forming a tiny ring (not collapsed to one point).
 - `createDomeScanPlane()` with `centerPhi = 5` (near apex) produces geometry with no NaN vertices and no degenerate (zero-area) triangles.
 
 ### Round-Trip Consistency (P1)
 
 - For each `(phiDeg, thetaDeg)` in `{ (0.1, 0), (45, 90), (45, 270), (89, 180) }` × `{ left, right }`:
-  - `domePhiThetaFromPoint(domePointFromPhiTheta(φ, θ, ...).position, ...) ≈ (φ, θ)` within 0.01°.
-- For both horizontal and vertical vessel orientations, the round trip holds.
+  - Build a vertex via the forward path in `createDomeScanPlane()` (mm → scaled world coords), then pass it through `domePhiThetaFromPoint()` — result must match `(φ, θ)` within 0.01°.
+- Phase 1: horizontal orientation only. Phase 2 adds vertical round-trip tests.
 
 ### UV Correctness
 
 - A 10×10 test scan placed at `(centerPhi=45, centerTheta=0)`:
-  - Corner UVs are `(0,0), (1,0), (0,1), (1,1)`.
+  - Corner UVs are `(0,0), (1,0), (0,1), (1,1)` with default directions (`scanDirection='cw'`, `indexDirection='outward'`).
   - The center vertex UV is `(0.5, 0.5)`.
-  - Swapping `scanDirection` mirrors U coordinates.
-  - Swapping `indexDirection` mirrors V coordinates.
+  - Swapping `scanDirection` to `'ccw'` flips the U/texture-x component (circumferential axis): `scanMapped = u` instead of `1-u`.
+  - Swapping `indexDirection` to `'inward'` flips the V/texture-y component (radial axis): `indexMapped = v` instead of `1-v`.
+  - Note: the dome loop's UV axis assignment differs from the shell loop. In the shell, `v` is circumferential; in the dome, `u` (ix/theta) is circumferential. The test must verify the dome-specific mapping, not copy the shell assertion.
 
 ### Arc-Length Approximation
 
