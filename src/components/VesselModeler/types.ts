@@ -377,38 +377,40 @@ export interface ThicknessThresholds {
 // Wall Loss Distribution
 // ---------------------------------------------------------------------------
 
+export type WallLossBinMode = 'equal' | 'ca-based' | 'custom';
+
 export interface WallLossGroupConfig {
-  /** Whether the wall-loss stats panel is visible */
   enabled: boolean;
-  /** Nominal wall thickness in mm — required for wall-loss calculation */
   nominalThickness: number;
-  /** Number of equal-width bins to divide the 0–100 % wall-loss range into.
-   *  v1 supports equal-width only; custom boundaries can be added later
-   *  by extending this interface with an optional `boundaries: number[]` field. */
   binCount: number;
+  binNames?: string[];
+  binMode?: WallLossBinMode;
+  /** Custom bin boundaries in mm (ascending thresholds). Length = binCount + 1.
+   *  Only used when binMode === 'custom'. */
+  customBoundaries?: number[];
 }
 
 export interface WallLossGroupBin {
-  /** Lower bound of wall-loss % (inclusive) */
   minPct: number;
-  /** Upper bound of wall-loss % (exclusive, except last bin which is inclusive) */
   maxPct: number;
-  /** True surface area falling in this bin (m²) */
+  /** For custom/CA modes: lower boundary in mm */
+  minMm?: number;
+  /** For custom/CA modes: upper boundary in mm */
+  maxMm?: number;
   area: number;
-  /** Percentage of total scanned area in this bin */
   areaPercent: number;
-  /** Number of data-grid cells in this bin */
   count: number;
+  label?: string;
 }
 
 export interface WallLossDistribution {
   bins: WallLossGroupBin[];
-  /** Total scanned surface area across all composites (m²) */
   totalScannedArea: number;
-  /** Total valid data points processed */
   totalDataPoints: number;
-  /** Nominal thickness used for calculation (mm) */
   nominalThickness: number;
+  spuriousArea?: number;
+  spuriousCount?: number;
+  spuriousAreaPercent?: number;
 }
 
 export interface AnnotationThicknessStats {
@@ -508,6 +510,12 @@ export interface VesselState {
   referenceDrawings: ReferenceDrawing[];
   measurementConfig: MeasurementConfig;
   thicknessThresholds?: ThicknessThresholds;
+  /** Corrosion allowance in mm */
+  corrosionAllowance?: number;
+  /** Shell nominal wall thickness in mm */
+  shellNominalThickness?: number;
+  /** Dome/head nominal wall thickness in mm */
+  domeNominalThickness?: number;
   /** Wall-loss distribution config — drives the floating stats panel */
   wallLossGroups?: WallLossGroupConfig;
   /** Global coordinate origin offset — displayed positions subtract these values.

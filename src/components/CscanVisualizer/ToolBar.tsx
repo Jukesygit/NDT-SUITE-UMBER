@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Move, ZoomIn, BarChart2, LayoutGrid } from 'lucide-react';
+import { Move, ZoomIn, BarChart2, LayoutGrid, Filter } from 'lucide-react';
 import { Tool, DisplaySettings, DistributionConfig, DistributionMode } from './types';
 
 interface ToolBarProps {
@@ -17,6 +17,7 @@ interface ToolBarProps {
   distributionConfig?: DistributionConfig;
   onDistributionConfigChange?: (config: DistributionConfig) => void;
   hasData?: boolean;
+  onApplyThreshold?: (threshold: number) => void;
 }
 
 const ToolBar: React.FC<ToolBarProps> = ({
@@ -33,7 +34,8 @@ const ToolBar: React.FC<ToolBarProps> = ({
   layoutModeDisabled,
   distributionConfig,
   onDistributionConfigChange,
-  hasData = false
+  hasData = false,
+  onApplyThreshold,
 }) => {
   // Local state for min/max inputs
   const [minInput, setMinInput] = useState<string>(
@@ -42,6 +44,10 @@ const ToolBar: React.FC<ToolBarProps> = ({
   const [maxInput, setMaxInput] = useState<string>(
     displaySettings.range.max?.toFixed(2) ?? dataMax.toFixed(2)
   );
+
+  // Threshold preview state
+  const [thresholdInput, setThresholdInput] = useState<string>('');
+  const thresholdPreviewActive = displaySettings.minimumThreshold !== null;
 
   // Update local state when displaySettings or data range changes
   useEffect(() => {
@@ -331,6 +337,96 @@ const ToolBar: React.FC<ToolBarProps> = ({
           >
             Auto
           </button>
+        </div>
+
+        <div className="w-px h-6 bg-gray-700" />
+
+        {/* Min Cutoff Threshold */}
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-400 flex items-center gap-1">
+            <Filter className="w-3 h-3" />
+            Cutoff:
+          </label>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={thresholdInput}
+            onChange={(e) => setThresholdInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const val = parseFloat(thresholdInput);
+                if (!isNaN(val) && val > 0) {
+                  onDisplaySettingsChange({
+                    ...displaySettings,
+                    minimumThreshold: val
+                  });
+                }
+              }
+            }}
+            placeholder="mm"
+            style={{
+              width: '56px',
+              padding: '4px 8px',
+              backgroundColor: '#374151',
+              color: '#ffffff',
+              fontSize: '12px',
+              border: `1px solid ${thresholdPreviewActive ? '#d97706' : '#4b5563'}`,
+              borderRadius: '4px',
+              outline: 'none',
+              cursor: 'text',
+              pointerEvents: 'auto'
+            }}
+            title="Minimum thickness cutoff — values below this are filtered out"
+          />
+          <button
+            onClick={() => {
+              const val = parseFloat(thresholdInput);
+              if (!isNaN(val) && val > 0) {
+                onDisplaySettingsChange({
+                  ...displaySettings,
+                  minimumThreshold: val
+                });
+              }
+            }}
+            disabled={!thresholdInput || isNaN(parseFloat(thresholdInput))}
+            className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+              thresholdPreviewActive
+                ? 'bg-amber-600 text-white'
+                : 'bg-gray-600 text-white hover:bg-gray-500'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+            title="Preview threshold filter"
+          >
+            Preview
+          </button>
+          {thresholdPreviewActive && onApplyThreshold && (
+            <button
+              onClick={() => {
+                const val = displaySettings.minimumThreshold;
+                if (val !== null) {
+                  onApplyThreshold(val);
+                }
+              }}
+              className="px-2 py-1 bg-red-600 text-white text-xs font-medium rounded hover:bg-red-700 transition-colors"
+              title="Permanently remove values below threshold"
+            >
+              Apply
+            </button>
+          )}
+          {thresholdPreviewActive && (
+            <button
+              onClick={() => {
+                setThresholdInput('');
+                onDisplaySettingsChange({
+                  ...displaySettings,
+                  minimumThreshold: null
+                });
+              }}
+              className="px-2 py-1 bg-gray-600 text-white text-xs font-medium rounded hover:bg-gray-700 transition-colors"
+              title="Clear threshold filter"
+            >
+              Clear
+            </button>
+          )}
         </div>
 
         <div className="w-px h-6 bg-gray-700" />

@@ -72,12 +72,14 @@ export type WorkerMessageType =
   | 'PARSE_FILES'
   | 'CREATE_COMPOSITE'
   | 'CREATE_COMPOSITE_FROM_DATA'
+  | 'APPLY_THRESHOLD'
   | 'SHIFT_SCAN_AXES'
   | 'CLEAR_CACHE'
   | 'PARSE_PROGRESS'
   | 'PARSE_COMPLETE'
   | 'COMPOSITE_PROGRESS'
   | 'COMPOSITE_COMPLETE'
+  | 'THRESHOLD_APPLIED'
   | 'AXES_SHIFTED'
   | 'CACHE_CLEARED'
   | 'READY'
@@ -126,6 +128,15 @@ export interface CompositeCompleteMessage {
   type: 'COMPOSITE_COMPLETE';
   payload: {
     composite: EfficientCscanData;
+  };
+}
+
+export interface ThresholdAppliedMessage {
+  type: 'THRESHOLD_APPLIED';
+  payload: {
+    composite: EfficientCscanData;
+    removedPoints: number;
+    removedPercent: number;
   };
 }
 

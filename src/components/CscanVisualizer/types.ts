@@ -61,6 +61,7 @@ export interface DisplaySettings {
     min: number | null;
     max: number | null;
   };
+  minimumThreshold: number | null;
 }
 
 export interface FileItem {
