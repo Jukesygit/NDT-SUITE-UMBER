@@ -373,3 +373,34 @@ describe('createDomeScanPlane', () => {
     }
   });
 });
+
+describe('per-row angular span correction', () => {
+  beforeEach(() => {
+    clearDomeHeatmapCache();
+  });
+
+  it('large phi range: no NaN in any vertex', () => {
+    const rows = 20;
+    const cols = 20;
+    const config = makeDomeScanConfig({
+      centerPhi: 45,
+      data: Array.from({ length: rows }, () =>
+        Array.from({ length: cols }, () => 10),
+      ),
+      xAxis: Array.from({ length: cols }, (_, i) => i * 50),
+      yAxis: Array.from({ length: rows }, (_, i) => i * 50),
+    });
+    const vessel = makeVesselState();
+
+    const mesh = createDomeScanPlane(config, vessel, '');
+    expect(mesh).not.toBeNull();
+    if (!mesh) return;
+
+    const positions = mesh.geometry.getAttribute('position');
+    for (let i = 0; i < positions.count; i++) {
+      expect(Number.isNaN(positions.getX(i))).toBe(false);
+      expect(Number.isNaN(positions.getY(i))).toBe(false);
+      expect(Number.isNaN(positions.getZ(i))).toBe(false);
+    }
+  });
+});

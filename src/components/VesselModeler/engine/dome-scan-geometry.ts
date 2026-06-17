@@ -226,12 +226,14 @@ export function createDomeScanPlane(
   // --- Angular span calculation ---
   const centerPhiRad = degToRad(Math.max(PHI_EPSILON, config.centerPhi));
   const centerThetaRad = degToRad(config.centerTheta);
-  const sinCenterPhi = Math.sin(centerPhiRad);
-  const localCircumference = 2 * Math.PI * RADIUS * sinCenterPhi;
 
   const scanRangeMm = Math.abs(config.xAxis[config.xAxis.length - 1] - config.xAxis[0]);
-  const angularSpan = Math.min(
-    (scanRangeMm / Math.max(localCircumference, 1)) * 2 * Math.PI,
+
+  // Center-row angular span (used only for segment count estimation)
+  const sinCenterPhi = Math.sin(centerPhiRad);
+  const centerCircumference = 2 * Math.PI * RADIUS * sinCenterPhi;
+  const centerAngularSpan = Math.min(
+    (scanRangeMm / Math.max(centerCircumference, 1)) * 2 * Math.PI,
     2 * Math.PI,
   );
 
@@ -240,7 +242,7 @@ export function createDomeScanPlane(
   const phiSpan = indexRangeMm / effectiveRadius;
 
   // --- Segment counts ---
-  const segmentsX = Math.max(16, Math.round(64 * angularSpan / Math.PI));
+  const segmentsX = Math.max(16, Math.round(64 * centerAngularSpan / Math.PI));
   const segmentsY = Math.max(16, Math.round(64 * phiSpan / Math.PI));
 
   // --- Build geometry ---
@@ -260,9 +262,18 @@ export function createDomeScanPlane(
       Math.min(90, radToDeg(centerPhiRad + phiOffset)),
     );
 
+    // Per-row angular span: each row's local circumference differs
+    const rowPhiRad = degToRad(clampedPhiDeg);
+    const rowSinPhi = Math.sin(rowPhiRad);
+    const rowCircumference = 2 * Math.PI * RADIUS * rowSinPhi;
+    const rowAngularSpan = Math.min(
+      (scanRangeMm / Math.max(rowCircumference, 1)) * 2 * Math.PI,
+      2 * Math.PI,
+    );
+
     for (let ix = 0; ix <= segmentsX; ix++) {
       const u = ix / segmentsX;
-      const thetaOffset = (u - 0.5) * angularSpan;
+      const thetaOffset = (u - 0.5) * rowAngularSpan;
       const currentThetaDeg = radToDeg(centerThetaRad + thetaOffset);
 
       const local = domeLocalFromPhiTheta(clampedPhiDeg, currentThetaDeg, RADIUS, HEAD_DEPTH);
@@ -344,7 +355,6 @@ export function createDomeScanPlane(
     });
 
     const borderScale = 1.08;
-    const borderAngularSpan = angularSpan * borderScale;
     const borderPhiSpan = phiSpan * borderScale;
     const borderOffset = 1; // mm, slightly below the main surface offset
 
@@ -359,6 +369,14 @@ export function createDomeScanPlane(
         PHI_EPSILON,
         Math.min(90, radToDeg(centerPhiRad + phiOffset)),
       );
+
+      // Per-row angular span for border
+      const bRowPhiRad = degToRad(clampedPhiDeg);
+      const bRowCirc = 2 * Math.PI * RADIUS * Math.sin(bRowPhiRad);
+      const borderAngularSpan = Math.min(
+        (scanRangeMm / Math.max(bRowCirc, 1)) * 2 * Math.PI,
+        2 * Math.PI,
+      ) * borderScale;
 
       for (let ix = 0; ix <= segmentsX; ix++) {
         const u = ix / segmentsX;

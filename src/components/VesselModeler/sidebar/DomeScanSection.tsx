@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2 } from 'lucide-react';
+import { Check, RotateCcw, Trash2 } from 'lucide-react';
 import type { DomeScanConfig, VesselState } from '../types';
 import { SliderRow, SubSection } from './SliderRow';
 
@@ -42,8 +42,17 @@ export function DomeScanSection({
                         >
                             <div className="vm-list-item-info">
                                 <strong>{ds.name}</strong>
-                                <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
+                                <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
                                     {ds.head === 'left' ? 'Left' : 'Right'} head
+                                    {!ds.orientationConfirmed && (
+                                        <span style={{
+                                            fontSize: '0.65rem',
+                                            padding: '1px 5px',
+                                            borderRadius: 3,
+                                            background: 'rgba(255,180,0,0.18)',
+                                            color: '#ffb400',
+                                        }}>unconfirmed</span>
+                                    )}
                                 </div>
                             </div>
                             <button className="vm-btn-icon" onClick={e => { e.stopPropagation(); onRemoveDomeScan(ds.id); }}>
@@ -79,6 +88,35 @@ function DomeScanEditPanel({
 }) {
     return (
         <div className="vm-form edit-mode" style={{ marginTop: 8, position: 'relative', zIndex: 1 }} onClick={e => e.stopPropagation()}>
+            {/* Confirm / Reset orientation */}
+            {!ds.orientationConfirmed && (
+                <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                    <button
+                        className="vm-btn vm-btn-primary"
+                        style={{ flex: 1, fontSize: '0.75rem', padding: '5px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                        onClick={() => onUpdate({ orientationConfirmed: true })}
+                    >
+                        <Check size={12} /> Confirm
+                    </button>
+                    <button
+                        className="vm-btn"
+                        style={{ flex: 1, fontSize: '0.75rem', padding: '5px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                        onClick={() => onUpdate({ centerPhi: 45, centerTheta: 0, scanDirection: 'cw', indexDirection: 'outward' })}
+                    >
+                        <RotateCcw size={12} /> Reset
+                    </button>
+                </div>
+            )}
+            {ds.orientationConfirmed && (
+                <button
+                    className="vm-btn"
+                    style={{ width: '100%', fontSize: '0.75rem', padding: '5px 0', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                    onClick={() => onUpdate({ orientationConfirmed: false })}
+                >
+                    <RotateCcw size={12} /> Re-orient
+                </button>
+            )}
+
             {/* Head selection */}
             <div className="vm-control-group">
                 <div className="vm-label"><span>Head</span></div>
@@ -146,57 +184,59 @@ function DomeScanEditPanel({
                 </div>
             </div>
 
-            {/* Visualization controls */}
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 10, paddingTop: 10 }}>
-                <div className="vm-control-group">
-                    <div className="vm-label"><span>Colorscale</span></div>
-                    <select
-                        className="vm-select"
-                        value={ds.colorScale}
-                        onChange={e => onUpdate({ colorScale: e.target.value })}
-                    >
-                        <option value="Jet">Jet</option>
-                        <option value="Viridis">Viridis</option>
-                        <option value="Hot">Hot</option>
-                        <option value="Blues">Blues</option>
-                    </select>
-                </div>
-                <SliderRow
-                    label="Opacity"
-                    value={ds.opacity}
-                    min={0}
-                    max={1}
-                    step={0.1}
-                    unit=""
-                    onChange={v => onUpdate({ opacity: v })}
-                />
-                <div className="vm-form-row">
+            {/* Visualization controls — only after orientation is confirmed */}
+            {ds.orientationConfirmed && (
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 10, paddingTop: 10 }}>
                     <div className="vm-control-group">
-                        <div className="vm-label"><span>Min</span></div>
-                        <input
-                            type="number"
-                            className="vm-input"
-                            placeholder="Auto"
-                            value={ds.rangeMin ?? ''}
-                            onChange={e => onUpdate({
-                                rangeMin: e.target.value === '' ? null : parseFloat(e.target.value),
-                            })}
-                        />
+                        <div className="vm-label"><span>Colorscale</span></div>
+                        <select
+                            className="vm-select"
+                            value={ds.colorScale}
+                            onChange={e => onUpdate({ colorScale: e.target.value })}
+                        >
+                            <option value="Jet">Jet</option>
+                            <option value="Viridis">Viridis</option>
+                            <option value="Hot">Hot</option>
+                            <option value="Blues">Blues</option>
+                        </select>
                     </div>
-                    <div className="vm-control-group">
-                        <div className="vm-label"><span>Max</span></div>
-                        <input
-                            type="number"
-                            className="vm-input"
-                            placeholder="Auto"
-                            value={ds.rangeMax ?? ''}
-                            onChange={e => onUpdate({
-                                rangeMax: e.target.value === '' ? null : parseFloat(e.target.value),
-                            })}
-                        />
+                    <SliderRow
+                        label="Opacity"
+                        value={ds.opacity}
+                        min={0}
+                        max={1}
+                        step={0.1}
+                        unit=""
+                        onChange={v => onUpdate({ opacity: v })}
+                    />
+                    <div className="vm-form-row">
+                        <div className="vm-control-group">
+                            <div className="vm-label"><span>Min</span></div>
+                            <input
+                                type="number"
+                                className="vm-input"
+                                placeholder="Auto"
+                                value={ds.rangeMin ?? ''}
+                                onChange={e => onUpdate({
+                                    rangeMin: e.target.value === '' ? null : parseFloat(e.target.value),
+                                })}
+                            />
+                        </div>
+                        <div className="vm-control-group">
+                            <div className="vm-label"><span>Max</span></div>
+                            <input
+                                type="number"
+                                className="vm-input"
+                                placeholder="Auto"
+                                value={ds.rangeMax ?? ''}
+                                onChange={e => onUpdate({
+                                    rangeMax: e.target.value === '' ? null : parseFloat(e.target.value),
+                                })}
+                            />
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
 
             {/* Remove button */}
             <button
