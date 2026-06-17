@@ -1495,6 +1495,21 @@ export default function VesselModeler() {
                 handleUpdateScanComposite(compositeId, { indexDirection: sc.indexDirection === 'forward' ? 'reverse' : 'forward' });
             }
         },
+        onDomeGizmoDatumMoved: (compositeId, phiDeg, thetaDeg) => {
+            handleUpdateDomeScan(compositeId, { centerPhi: phiDeg, centerTheta: thetaDeg });
+        },
+        onDomeGizmoDirectionToggle: (compositeId, field) => {
+            const ds = vesselState.domeScanComposites?.find(d => d.id === compositeId);
+            if (!ds) return;
+            if (field === 'scanDirection') {
+                handleUpdateDomeScan(compositeId, { scanDirection: ds.scanDirection === 'cw' ? 'ccw' : 'cw' });
+            } else {
+                handleUpdateDomeScan(compositeId, { indexDirection: ds.indexDirection === 'outward' ? 'inward' : 'outward' });
+            }
+        },
+        onDomeGizmoClicked: (compositeId) => {
+            dispatch({ type: 'SELECT_DOME_SCAN', id: compositeId });
+        },
         onPipeSegmentSelected: (pipelineId, segmentIndex) => {
             dispatch({ type: 'SELECT_PIPE_SEGMENT', pipelineId, segmentIndex });
         },
