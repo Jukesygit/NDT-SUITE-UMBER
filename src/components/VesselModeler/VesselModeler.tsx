@@ -22,6 +22,8 @@ import {
     type VesselCallbacks,
     type WeldConfig,
     type ScanCompositeConfig,
+    type DomeScanConfig,
+    type DomeScanHoverInfo,
     type ThicknessThresholds,
     type WallLossGroupConfig,
     type FreeOrigin,
@@ -33,6 +35,7 @@ import {
 } from './types';
 import type { ExtractionResult } from './engine/drawing-parser';
 import { loadTextureFromData, clearHeatmapCache } from './engine/texture-manager';
+import { clearDomeHeatmapCache } from './engine/dome-scan-geometry';
 import { exportVesselGLB } from './engine/gltf-export';
 import { recomputeAllAnnotationStats } from './engine/annotation-stats';
 import { computeInspectionCameraTarget, animateCamera, cancelCameraAnimation } from './engine/camera-animation';
@@ -118,6 +121,7 @@ interface SelectionState {
     coverageRectId: number;
     inspectionImageId: number;
     scanCompositeId: string;
+    domeScanId: string;
     pipelineId: string;
     pipeSegmentIdx: number;
 }
@@ -180,6 +184,7 @@ const DESELECTED: SelectionState = {
     coverageRectId: -1,
     inspectionImageId: -1,
     scanCompositeId: '',
+    domeScanId: '',
     pipelineId: '',
     pipeSegmentIdx: -1,
 };
@@ -216,6 +221,7 @@ type VesselAction =
     | { type: 'SELECT_COVERAGE_RECT'; id: number }
     | { type: 'SELECT_INSPECTION_IMAGE'; id: number }
     | { type: 'SELECT_SCAN_COMPOSITE'; id: string }
+    | { type: 'SELECT_DOME_SCAN'; id: string }
     | { type: 'SELECT_PIPE_SEGMENT'; pipelineId: string; segmentIndex: number }
     | { type: 'DESELECT_ALL' }
     | { type: 'TOGGLE_LOCK'; key: keyof LocksState }
@@ -265,6 +271,8 @@ function vesselReducer(state: VesselModelerState, action: VesselAction): VesselM
             return { ...state, selection: { ...DESELECTED, inspectionImageId: action.id } };
         case 'SELECT_SCAN_COMPOSITE':
             return { ...state, selection: { ...state.selection, scanCompositeId: action.id } };
+        case 'SELECT_DOME_SCAN':
+            return { ...state, selection: { ...state.selection, domeScanId: action.id } };
         case 'SELECT_PIPE_SEGMENT':
             return { ...state, selection: { ...DESELECTED, pipelineId: action.pipelineId, pipeSegmentIdx: action.segmentIndex } };
         case 'DESELECT_ALL':
@@ -1291,6 +1299,32 @@ export default function VesselModeler() {
         });
     }, [updateVessel]);
 
+    // --- Dome scan handlers ---
+    const handleSelectDomeScan = useCallback((id: string) => {
+        dispatch({ type: 'SELECT_DOME_SCAN', id });
+    }, []);
+
+    const handleUpdateDomeScan = useCallback((id: string, updates: Partial<DomeScanConfig>) => {
+        updateVessel(prev => ({
+            ...prev,
+            domeScanComposites: prev.domeScanComposites.map(ds =>
+                ds.id === id ? { ...ds, ...updates } : ds,
+            ),
+        }));
+    }, [updateVessel]);
+
+    const handleRemoveDomeScan = useCallback((id: string) => {
+        clearDomeHeatmapCache(id);
+        updateVessel(prev => ({
+            ...prev,
+            domeScanComposites: prev.domeScanComposites.filter(ds => ds.id !== id),
+        }));
+        if (selection.domeScanId === id) dispatch({ type: 'SELECT_DOME_SCAN', id: '' });
+    }, [updateVessel, selection.domeScanId]);
+
+    // Dome scan hover tooltip state
+    const [domeScanHoverInfo, setDomeScanHoverInfo] = useState<DomeScanHoverInfo | null>(null);
+
     // --- Interaction callbacks (from Three.js viewport) ---
     const vesselCallbacks: VesselCallbacks = {
         onNozzleSelected: (idx) => dispatch({ type: 'SELECT_NOZZLE', index: idx }),
@@ -1445,6 +1479,9 @@ export default function VesselModeler() {
                     cursorTooltipRef.current.style.top = `${screenY - 12}px`;
                 }
             }
+        },
+        onDomeScanHover: (info) => {
+            setDomeScanHoverInfo(info);
         },
         onScanGizmoDatumMoved: (compositeId, angleDeg, posMm) => {
             handleUpdateScanComposite(compositeId, { datumAngleDeg: angleDeg, indexStartMm: Math.round(posMm) });
@@ -2735,6 +2772,7 @@ export default function VesselModeler() {
                         rulerDrawMode={drawModeState.ruler}
                         previewRuler={previews.ruler}
                         selectedScanCompositeId={selection.scanCompositeId}
+                        selectedDomeScanId={selection.domeScanId}
                         selectedPipelineId={selection.pipelineId}
                         selectedPipeSegmentIdx={selection.pipeSegmentIdx}
                         inspectingAnnotationId={ui.inspectingAnnotationId}
@@ -2777,6 +2815,45 @@ export default function VesselModeler() {
                             <div className="vm-scan-tooltip-value">
                                 <span className="vm-scan-tooltip-label">Index</span>
                                 <span className="vm-scan-tooltip-number">{ui.hoverData.indexMm.toFixed(1)}<span className="vm-scan-tooltip-unit">mm</span></span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Dome scan hover tooltip */}
+                {domeScanHoverInfo && (
+                    <div
+                        className="pointer-events-none"
+                        style={{
+                            position: 'fixed',
+                            left: domeScanHoverInfo.screenX + 12,
+                            top: domeScanHoverInfo.screenY - 40,
+                            zIndex: 9999,
+                        }}
+                    >
+                        <div className="vm-scan-tooltip">
+                            <div className="vm-scan-tooltip-value">
+                                <span className="vm-scan-tooltip-label">Thickness</span>
+                                <span className="vm-scan-tooltip-number primary">
+                                    {domeScanHoverInfo.thickness?.toFixed(1) ?? '—'}
+                                    <span className="vm-scan-tooltip-unit">mm</span>
+                                </span>
+                            </div>
+                            <div className="vm-scan-tooltip-divider" />
+                            <div className="vm-scan-tooltip-value">
+                                <span className="vm-scan-tooltip-label">{'φ'}</span>
+                                <span className="vm-scan-tooltip-number">
+                                    {domeScanHoverInfo.phiDeg.toFixed(1)}
+                                    <span className="vm-scan-tooltip-unit">{'°'}</span>
+                                </span>
+                            </div>
+                            <div className="vm-scan-tooltip-divider" />
+                            <div className="vm-scan-tooltip-value">
+                                <span className="vm-scan-tooltip-label">{'θ'}</span>
+                                <span className="vm-scan-tooltip-number">
+                                    {domeScanHoverInfo.thetaDeg.toFixed(1)}
+                                    <span className="vm-scan-tooltip-unit">{'°'}</span>
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -2859,6 +2936,10 @@ export default function VesselModeler() {
                         cloudComposites={cloudComposites}
                         cloudCompositesLoading={cloudCompositesLoading}
                         cloudCompositesError={cloudCompositesError as Error | null}
+                        selectedDomeScanId={selection.domeScanId}
+                        onSelectDomeScan={handleSelectDomeScan}
+                        onUpdateDomeScan={handleUpdateDomeScan}
+                        onRemoveDomeScan={handleRemoveDomeScan}
                         onUpdateThicknessThresholds={updateThicknessThresholds}
                         onUpdateWallLossGroups={handleUpdateWallLossGroups}
                         selectedPipelineId={selection.pipelineId}
