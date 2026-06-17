@@ -3,10 +3,8 @@
    Import Order is Critical
    ============================================ */
 
-/* Tailwind Utilities */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Tailwind CSS 4 */
+@import "tailwindcss";
 
 /* ============================================
    LEGACY COMPATIBILITY
