@@ -13,7 +13,7 @@ export type Orientation = 'horizontal' | 'vertical';
 
 export type MaterialKey = 'blue' | 'cs' | 'ss' | 'red';
 
-export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | 'annotation' | 'inspectionImage' | 'weld' | 'scanGizmo';
+export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | 'annotation' | 'inspectionImage' | 'weld' | 'scanGizmo' | 'domeGizmo';
 
 export type AnnotationTool =
   | 'arrow'
@@ -1016,6 +1016,9 @@ export interface VesselCallbacks {
   onDomeScanHover?: (info: DomeScanHoverInfo | null) => void;
   onScanGizmoDatumMoved?: (compositeId: string, angleDeg: number, posMm: number) => void;
   onScanGizmoDirectionToggle?: (compositeId: string, field: 'scanDirection' | 'indexDirection') => void;
+  onDomeGizmoDatumMoved?: (compositeId: string, phiDeg: number, thetaDeg: number) => void;
+  onDomeGizmoDirectionToggle?: (compositeId: string, field: 'scanDirection' | 'indexDirection') => void;
+  onDomeGizmoClicked?: (compositeId: string) => void;
   onPipeSegmentSelected?: (pipelineId: string, segmentIndex: number) => void;
   onPipeConnectionPointClicked?: (pipelineId: string) => void;
   onDeselect?: () => void;

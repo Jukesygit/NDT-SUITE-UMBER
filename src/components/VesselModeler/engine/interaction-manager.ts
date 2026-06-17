@@ -20,12 +20,13 @@ import * as THREE from 'three';
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { VesselState, AnnotationShapeType } from '../types';
 import { SCALE } from './materials';
+import { domePhiThetaFromPoint } from './dome-scan-geometry';
 
 // ---------------------------------------------------------------------------
 // Public Types
 // ---------------------------------------------------------------------------
 
-export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | 'annotation' | 'coverageRect' | 'inspectionImage' | 'weld' | 'scanGizmo' | 'pipeSegment' | null;
+export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | 'annotation' | 'coverageRect' | 'inspectionImage' | 'weld' | 'scanGizmo' | 'domeGizmo' | 'pipeSegment' | null;
 
 export interface InteractionCallbacks {
   onNozzleSelected: (index: number) => void;
@@ -55,6 +56,9 @@ export interface InteractionCallbacks {
   onDomeScanHover: (info: { scanId: string; thickness: number | null; phiDeg: number; thetaDeg: number; row: number; col: number; screenX: number; screenY: number } | null) => void;
   onScanGizmoDatumMoved: (compositeId: string, angleDeg: number, posMm: number) => void;
   onScanGizmoDirectionToggle: (compositeId: string, field: 'scanDirection' | 'indexDirection') => void;
+  onDomeGizmoDatumMoved: (compositeId: string, phiDeg: number, thetaDeg: number) => void;
+  onDomeGizmoDirectionToggle: (compositeId: string, field: 'scanDirection' | 'indexDirection') => void;
+  onDomeGizmoClicked: (compositeId: string) => void;
   onPipeSegmentSelected: (pipelineId: string, segmentIndex: number) => void;
   onPipeConnectionPointClicked: (pipelineId: string) => void;
   onDragEnd: () => void;
@@ -263,6 +267,27 @@ export class InteractionManager {
         if (ud.type === 'scanGizmoArrowLong') {
           // Click on longitudinal arrow: toggle index direction
           this.callbacks.onScanGizmoDirectionToggle(ud.compositeId as string, 'indexDirection');
+          return;
+        }
+
+        // --- Dome gizmo ---
+        if (ud.type === 'domeGizmo') {
+          this.selectedGizmoCompositeId = ud.compositeId as string;
+          this.isDown = true;
+          this.isDragging = true;
+          this.dragType = 'domeGizmo';
+          this.controls.enabled = false;
+          this.callbacks.onDomeGizmoClicked(ud.compositeId as string);
+          return;
+        }
+
+        if (ud.type === 'domeGizmoArrowCirc') {
+          this.callbacks.onDomeGizmoDirectionToggle(ud.compositeId as string, 'scanDirection');
+          return;
+        }
+
+        if (ud.type === 'domeGizmoArrowLong') {
+          this.callbacks.onDomeGizmoDirectionToggle(ud.compositeId as string, 'indexDirection');
           return;
         }
       }
@@ -664,6 +689,34 @@ export class InteractionManager {
       return;
     }
 
+    if (this.dragType === 'domeGizmo') {
+      const shellMeshes = this.getShellMeshes();
+      if (shellMeshes.length === 0) return;
+      const hits = this.raycaster.intersectObjects(shellMeshes, true);
+      if (hits.length === 0) return;
+
+      const point = hits[0].point;
+      const isVertical = state.orientation === 'vertical';
+      const RADIUS = state.id / 2;
+      const HEAD_DEPTH = RADIUS / (state.headRatio || 2);
+
+      const ds = state.domeScanComposites?.find(d => d.id === this.selectedGizmoCompositeId);
+      if (!ds) return;
+      const headSign = ds.head === 'right' ? 1 : -1;
+      const tangentLineWorld = (ds.head === 'right' ? state.length / 2 : -state.length / 2) * SCALE;
+
+      const result = domePhiThetaFromPoint(
+        point, RADIUS, HEAD_DEPTH, tangentLineWorld, headSign, isVertical,
+      );
+      if (!result) return;
+
+      const phiDeg = Math.max(1, Math.min(89, Math.round(result.phiDeg)));
+      const thetaDeg = ((Math.round(result.thetaDeg) % 360) + 360) % 360;
+
+      this.callbacks.onDomeGizmoDatumMoved(this.selectedGizmoCompositeId, phiDeg, thetaDeg);
+      return;
+    }
+
     if (this.dragType === 'nozzle' || this.dragType === 'texture' || this.dragType === 'liftingLug' || this.dragType === 'annotation') {
       // Raycast against the vessel shell to find the surface point
       const shellMeshes = this.getShellMeshes();
@@ -831,7 +884,10 @@ export class InteractionManager {
       if (
         ud.type === 'scanGizmo' ||
         ud.type === 'scanGizmoArrowCirc' ||
-        ud.type === 'scanGizmoArrowLong'
+        ud.type === 'scanGizmoArrowLong' ||
+        ud.type === 'domeGizmo' ||
+        ud.type === 'domeGizmoArrowCirc' ||
+        ud.type === 'domeGizmoArrowLong'
       ) {
         return ud as Record<string, unknown>;
       }

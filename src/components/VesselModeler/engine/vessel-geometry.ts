@@ -19,6 +19,7 @@ import { createSaddleGroup } from './saddle-geometry';
 import { createScanCompositePlane } from './texture-manager';
 import { createDomeScanPlane } from './dome-scan-geometry';
 import { buildScanOrientationGizmo } from './scan-gizmo-geometry';
+import { buildDomeScanGizmo } from './dome-scan-gizmo';
 
 // ---------------------------------------------------------------------------
 // Result interface
@@ -721,6 +722,24 @@ export function buildVesselScene(
       // Also add arrow groups for click-to-toggle raycasting
       gizmoGroup.children.forEach(child => {
         if (child !== originMesh) gizmoMeshes.push(child);
+      });
+    }
+  }
+
+  // -- Dome Scan Orientation Gizmo (for selected dome scan, pre-confirmation) --
+  if (selectedDomeScanId) {
+    const selectedDs = (state.domeScanComposites ?? []).find(
+      ds => ds.id === selectedDomeScanId,
+    );
+    if (selectedDs && !selectedDs.orientationConfirmed) {
+      const { group: domeGizmoGroup, originMesh: domeOrigin } = buildDomeScanGizmo(
+        selectedDs,
+        state,
+      );
+      vesselGroup.add(domeGizmoGroup);
+      gizmoMeshes.push(domeOrigin);
+      domeGizmoGroup.children.forEach(child => {
+        if (child !== domeOrigin) gizmoMeshes.push(child);
       });
     }
   }
