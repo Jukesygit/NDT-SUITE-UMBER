@@ -52,6 +52,7 @@ export interface InteractionCallbacks {
   onWeldSelected: (index: number) => void;
   onWeldMoved: (index: number, pos: number, angle: number) => void;
   onScanCompositeHover: (id: string, thickness: number | null, scanMm: number, indexMm: number, screenX: number, screenY: number) => void;
+  onDomeScanHover: (info: { scanId: string; thickness: number | null; phiDeg: number; thetaDeg: number; row: number; col: number; screenX: number; screenY: number } | null) => void;
   onScanGizmoDatumMoved: (compositeId: string, angleDeg: number, posMm: number) => void;
   onScanGizmoDirectionToggle: (compositeId: string, field: 'scanDirection' | 'indexDirection') => void;
   onPipeSegmentSelected: (pipelineId: string, segmentIndex: number) => void;
@@ -112,6 +113,7 @@ export class InteractionManager {
   weldMeshes: THREE.Object3D[] = [];
   textureMeshes: THREE.Mesh[] = [];
   scanCompositeMeshes: THREE.Mesh[] = [];
+  domeScanMeshes: THREE.Mesh[] = [];
   gizmoMeshes: THREE.Object3D[] = [];
   annotationMeshes: THREE.Object3D[] = [];
   coverageMeshes: THREE.Object3D[] = [];
@@ -494,40 +496,67 @@ export class InteractionManager {
     }
 
     if (!this.isDown || !this.isDragging || this.dragType === null) {
-      // --- Scan composite hover (only when not dragging) ---
-      if (this.scanCompositeMeshes.length > 0) {
+      // --- Scan composite + dome scan hover (only when not dragging) ---
+      if (this.scanCompositeMeshes.length > 0 || this.domeScanMeshes.length > 0) {
         const rect = this.canvas.getBoundingClientRect();
         this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
         this.raycaster.setFromCamera(this.mouse, this.camera);
 
-        const hits = this.raycaster.intersectObjects(this.scanCompositeMeshes, false);
-        if (hits.length > 0) {
-          const hit = hits[0];
-          const uv = hit.uv;
-          const userData = hit.object.userData;
-
-          if (uv && userData.type === 'scanComposite' && userData.data) {
-            // UV mapping in texture-manager already handles scanDirection (vMapped)
-            // and indexDirection (uMapped), so uv.x/uv.y map directly to texture
-            // columns/rows. CanvasTexture flipY=true means uv.y=1→data[0], so
-            // invert with (1-uv.y) to get the data row index.
-            const col = Math.min(Math.floor(uv.x * userData.width), userData.width - 1);
-            const row = Math.min(Math.floor((1 - uv.y) * userData.height), userData.height - 1);
-            const thickness = userData.data[row]?.[col] ?? null;
-
-            this.callbacks.onScanCompositeHover(
-              userData.id,
-              thickness,
-              userData.xAxis[col] ?? 0,
-              userData.yAxis[row] ?? 0,
-              event.clientX,
-              event.clientY,
-            );
+        // Check dome scans first (they sit on top of shell scans)
+        if (this.domeScanMeshes.length > 0) {
+          const domeHits = this.raycaster.intersectObjects(this.domeScanMeshes, false);
+          if (domeHits.length > 0) {
+            const hit = domeHits[0];
+            const uv = hit.uv;
+            const ud = hit.object.userData;
+            if (uv && ud.type === 'domeScan' && ud.data) {
+              const col = Math.min(Math.floor(uv.x * ud.width), ud.width - 1);
+              const row = Math.min(Math.floor((1 - uv.y) * ud.height), ud.height - 1);
+              const thickness = ud.data[row]?.[col] ?? null;
+              this.callbacks.onDomeScanHover({
+                scanId: ud.id,
+                thickness,
+                phiDeg: ud.centerPhi,
+                thetaDeg: ud.centerTheta,
+                row, col,
+                screenX: event.clientX,
+                screenY: event.clientY,
+              });
+              this.callbacks.onScanCompositeHover('', null, 0, 0, 0, 0);
+              return;
+            }
+          } else {
+            this.callbacks.onDomeScanHover(null);
           }
-        } else {
-          // Clear hover when not over any composite
-          this.callbacks.onScanCompositeHover('', null, 0, 0, 0, 0);
+        }
+
+        // Check shell scan composites
+        if (this.scanCompositeMeshes.length > 0) {
+          const hits = this.raycaster.intersectObjects(this.scanCompositeMeshes, false);
+          if (hits.length > 0) {
+            const hit = hits[0];
+            const uv = hit.uv;
+            const userData = hit.object.userData;
+
+            if (uv && userData.type === 'scanComposite' && userData.data) {
+              const col = Math.min(Math.floor(uv.x * userData.width), userData.width - 1);
+              const row = Math.min(Math.floor((1 - uv.y) * userData.height), userData.height - 1);
+              const thickness = userData.data[row]?.[col] ?? null;
+
+              this.callbacks.onScanCompositeHover(
+                userData.id,
+                thickness,
+                userData.xAxis[col] ?? 0,
+                userData.yAxis[row] ?? 0,
+                event.clientX,
+                event.clientY,
+              );
+            }
+          } else {
+            // Clear hover when not over any composite
+            this.callbacks.onScanCompositeHover('', null, 0, 0, 0, 0);
+          }
         }
       }
       return;

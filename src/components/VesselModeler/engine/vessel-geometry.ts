@@ -17,6 +17,7 @@ import { createFlangedNozzle } from './nozzle-geometry';
 import { createLiftingLug } from './lifting-lug-geometry';
 import { createSaddleGroup } from './saddle-geometry';
 import { createScanCompositePlane } from './texture-manager';
+import { createDomeScanPlane } from './dome-scan-geometry';
 import { buildScanOrientationGizmo } from './scan-gizmo-geometry';
 
 // ---------------------------------------------------------------------------
@@ -30,6 +31,7 @@ export interface BuildSceneResult {
   saddleMeshes: THREE.Object3D[];
   textureMeshes: THREE.Mesh[];
   scanCompositeMeshes: THREE.Mesh[];
+  domeScanMeshes: THREE.Mesh[];
   gizmoMeshes: THREE.Object3D[];
 }
 
@@ -338,6 +340,7 @@ export function buildVesselScene(
   selectedSaddleIndex: number,
   selectedTextureId: number,
   selectedScanCompositeId: string = '',
+  selectedDomeScanId: string = '',
 ): BuildSceneResult {
   const vesselGroup = new THREE.Group();
   const nozzleMeshes: THREE.Object3D[] = [];
@@ -345,11 +348,12 @@ export function buildVesselScene(
   const saddleMeshes: THREE.Object3D[] = [];
   const textureMeshes: THREE.Mesh[] = [];
   const scanCompositeMeshes: THREE.Mesh[] = [];
+  const domeScanMeshes: THREE.Mesh[] = [];
   const gizmoMeshes: THREE.Object3D[] = [];
 
   // -- Return empty group if no model data yet ------------------------------
   if (!state.hasModel) {
-    return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes, scanCompositeMeshes, gizmoMeshes };
+    return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes, scanCompositeMeshes, domeScanMeshes, gizmoMeshes };
   }
 
   // -- Vessel dimensions ----------------------------------------------------
@@ -690,6 +694,18 @@ export function buildVesselScene(
     }
   }
 
+  // -- Dome Scan Composites (only for vessel shapes with heads) --------------
+  if (state.vesselShape !== 'pipe') {
+    for (const ds of (state.domeScanComposites ?? [])) {
+      if (!ds.orientationConfirmed) continue;
+      const mesh = createDomeScanPlane(ds, state, selectedDomeScanId);
+      if (mesh) {
+        vesselGroup.add(mesh);
+        domeScanMeshes.push(mesh);
+      }
+    }
+  }
+
   // -- Scan Orientation Gizmo (for selected composite only) -----------------
   if (selectedScanCompositeId) {
     const selectedComposite = state.scanComposites.find(
@@ -709,5 +725,5 @@ export function buildVesselScene(
     }
   }
 
-  return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes, scanCompositeMeshes, gizmoMeshes };
+  return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes, scanCompositeMeshes, domeScanMeshes, gizmoMeshes };
 }
