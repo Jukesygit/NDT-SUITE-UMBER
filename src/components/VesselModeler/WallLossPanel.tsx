@@ -110,6 +110,11 @@ export default function WallLossPanel({ vesselState, sidebarOpen, coverageVisibl
         <span className="vm-wallloss-pct">100%</span>
         <span className="vm-wallloss-count">{result.totalDataPoints}</span>
       </div>
+      {(vesselState.domeScanComposites ?? []).length > 0 && (
+        <div style={{ fontSize: '0.7rem', opacity: 0.7, padding: '4px 8px', fontStyle: 'italic' }}>
+          Note: Dome scan data is not included in wall loss distribution (shell scans only).
+        </div>
+      )}
     </div>
   );
 }
