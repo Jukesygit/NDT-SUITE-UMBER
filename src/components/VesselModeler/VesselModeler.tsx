@@ -587,7 +587,11 @@ export default function VesselModeler() {
                 sourceNdeFile: sc.sourceNdeFile,
                 sourceFiles: sc.sourceFiles,
             })),
-            domeScanComposites: projectData.domeScanComposites || [],
+            domeScanComposites: (projectData.domeScanComposites || []).map((ds: any) => ({
+                ...ds,
+                head: ds.head || (ds.sectionType === 'dome_left' ? 'left' : 'right'),
+                orientationConfirmed: ds.orientationConfirmed ?? false,
+            })),
             pipelines: (projectData.pipelines || []).map((p: any) => ({
                 id: p.id || crypto.randomUUID(),
                 nozzleIndex: p.nozzleIndex ?? 0,
@@ -1758,6 +1762,7 @@ export default function VesselModeler() {
                 xAxis: ds.xAxis, yAxis: ds.yAxis, stats: ds.stats,
                 colorScale: ds.colorScale, rangeMin: ds.rangeMin, rangeMax: ds.rangeMax,
                 opacity: ds.opacity, sourceFiles: ds.sourceFiles,
+                sectionType: `dome_${ds.head}`,
             })),
             pipelines: vesselState.pipelines,
             referenceDrawings: vesselState.referenceDrawings ?? [],
@@ -2083,7 +2088,11 @@ export default function VesselModeler() {
                         sourceNdeFile: sc.sourceNdeFile,
                         sourceFiles: sc.sourceFiles,
                     })),
-                    domeScanComposites: projectData.domeScanComposites || [],
+                    domeScanComposites: (projectData.domeScanComposites || []).map((ds: any) => ({
+                ...ds,
+                head: ds.head || (ds.sectionType === 'dome_left' ? 'left' : 'right'),
+                orientationConfirmed: ds.orientationConfirmed ?? false,
+            })),
                     pipelines: (projectData.pipelines || []).map((p: any) => ({
                         id: p.id || crypto.randomUUID(),
                         nozzleIndex: p.nozzleIndex ?? 0,
