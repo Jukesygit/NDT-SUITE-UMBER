@@ -404,3 +404,123 @@ describe('per-row angular span correction', () => {
     }
   });
 });
+
+describe('vertical vessel round-trip', () => {
+  const RADIUS = 1500;
+  const HEAD_DEPTH = 750;
+  const TAN_TAN = 8000;
+
+  const cases: Array<{ phi: number; theta: number; head: 'left' | 'right' }> = [
+    { phi: 0.1, theta: 0, head: 'right' },
+    { phi: 45, theta: 90, head: 'right' },
+    { phi: 45, theta: 270, head: 'left' },
+    { phi: 89, theta: 180, head: 'left' },
+    { phi: 30, theta: 45, head: 'right' },
+    { phi: 60, theta: 315, head: 'left' },
+  ];
+
+  for (const { phi, theta, head } of cases) {
+    it(`vertical round-trips phi=${phi} theta=${theta} head=${head}`, () => {
+      const headSign = head === 'right' ? 1 : -1;
+      const tangentLineMm = head === 'right' ? TAN_TAN : 0;
+      const isVertical = true;
+
+      const local = domeLocalFromPhiTheta(phi, theta, RADIUS, HEAD_DEPTH);
+
+      const axialPosMm = tangentLineMm + headSign * local.axialMm;
+      const axialGlobal = (axialPosMm - TAN_TAN / 2) * SCALE;
+      const rScaled = local.rLocalMm * SCALE;
+
+      const worldPoint = new THREE.Vector3(
+        rScaled * Math.cos(local.thetaRad),
+        axialGlobal,
+        rScaled * Math.sin(local.thetaRad),
+      );
+
+      const tangentLineWorld = (tangentLineMm - TAN_TAN / 2) * SCALE;
+      const result = domePhiThetaFromPoint(
+        worldPoint,
+        RADIUS,
+        HEAD_DEPTH,
+        tangentLineWorld,
+        headSign,
+        isVertical,
+      );
+
+      expect(result).not.toBeNull();
+      if (result) {
+        expect(result.phiDeg).toBeCloseTo(phi, 1);
+        const expectedTheta = ((theta % 360) + 360) % 360;
+        const actualTheta = ((result.thetaDeg % 360) + 360) % 360;
+        expect(actualTheta).toBeCloseTo(expectedTheta, 0);
+      }
+    });
+  }
+});
+
+describe('vertical vessel mesh creation', () => {
+  beforeEach(() => {
+    clearDomeHeatmapCache();
+  });
+
+  it('creates valid mesh for vertical vessel, right head', () => {
+    const config = makeDomeScanConfig({ head: 'right', centerPhi: 45 });
+    const vessel = makeVesselState({ orientation: 'vertical' });
+    const mesh = createDomeScanPlane(config, vessel, '');
+
+    expect(mesh).not.toBeNull();
+    if (mesh) {
+      const positions = mesh.geometry.getAttribute('position');
+      for (let i = 0; i < positions.count; i++) {
+        expect(Number.isNaN(positions.getX(i))).toBe(false);
+        expect(Number.isNaN(positions.getY(i))).toBe(false);
+        expect(Number.isNaN(positions.getZ(i))).toBe(false);
+      }
+    }
+  });
+
+  it('creates valid mesh for vertical vessel, left head', () => {
+    const config = makeDomeScanConfig({ head: 'left', centerPhi: 30 });
+    const vessel = makeVesselState({ orientation: 'vertical' });
+    const mesh = createDomeScanPlane(config, vessel, '');
+
+    expect(mesh).not.toBeNull();
+    if (mesh) {
+      const positions = mesh.geometry.getAttribute('position');
+      for (let i = 0; i < positions.count; i++) {
+        expect(Number.isNaN(positions.getX(i))).toBe(false);
+        expect(Number.isNaN(positions.getY(i))).toBe(false);
+        expect(Number.isNaN(positions.getZ(i))).toBe(false);
+      }
+    }
+  });
+
+  it('vertical vessel: axial axis is Y (mesh extents differ from horizontal)', () => {
+    const config = makeDomeScanConfig({ head: 'right', centerPhi: 45 });
+    const vesselH = makeVesselState({ orientation: 'horizontal' });
+    const vesselV = makeVesselState({ orientation: 'vertical' });
+
+    const meshH = createDomeScanPlane(config, vesselH, '');
+    const meshV = createDomeScanPlane(config, vesselV, '');
+
+    expect(meshH).not.toBeNull();
+    expect(meshV).not.toBeNull();
+    if (meshH && meshV) {
+      meshH.geometry.computeBoundingBox();
+      meshV.geometry.computeBoundingBox();
+
+      const bbH = meshH.geometry.boundingBox!;
+      const bbV = meshV.geometry.boundingBox!;
+
+      const hXRange = bbH.max.x - bbH.min.x;
+      const vYRange = bbV.max.y - bbV.min.y;
+
+      expect(hXRange).toBeGreaterThan(0.01);
+      expect(vYRange).toBeGreaterThan(0.01);
+
+      const ratio = hXRange / vYRange;
+      expect(ratio).toBeGreaterThan(0.5);
+      expect(ratio).toBeLessThan(2.0);
+    }
+  });
+});
