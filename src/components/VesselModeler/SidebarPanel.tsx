@@ -44,7 +44,7 @@ import {
 export type ModelMode = 'vessel' | 'pipe';
 type SidebarSectionId = 'projectInfo' | 'dimensions' | 'vesselDetails' | 'visuals' | 'attachments' | 'scanOverlay' | 'inspection' | 'piping';
 type AttachmentSubId = 'nozzles' | 'liftingLugs' | 'welds' | 'supports' | 'piping';
-type ScanOverlaySubId = 'imageOverlays' | 'scanComposites';
+type ScanOverlaySubId = 'imageOverlays' | 'scanComposites' | 'domeScanComposites';
 type InspectionSubId = 'annotations' | 'coverage' | 'inspectionImages' | 'reportExport';
 
 // ---------------------------------------------------------------------------

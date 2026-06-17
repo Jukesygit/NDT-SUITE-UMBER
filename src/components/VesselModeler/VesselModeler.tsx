@@ -579,6 +579,7 @@ export default function VesselModeler() {
                 sourceNdeFile: sc.sourceNdeFile,
                 sourceFiles: sc.sourceFiles,
             })),
+            domeScanComposites: projectData.domeScanComposites || [],
             pipelines: (projectData.pipelines || []).map((p: any) => ({
                 id: p.id || crypto.randomUUID(),
                 nozzleIndex: p.nozzleIndex ?? 0,
@@ -2021,6 +2022,7 @@ export default function VesselModeler() {
                         sourceNdeFile: sc.sourceNdeFile,
                         sourceFiles: sc.sourceFiles,
                     })),
+                    domeScanComposites: projectData.domeScanComposites || [],
                     pipelines: (projectData.pipelines || []).map((p: any) => ({
                         id: p.id || crypto.randomUUID(),
                         nozzleIndex: p.nozzleIndex ?? 0,

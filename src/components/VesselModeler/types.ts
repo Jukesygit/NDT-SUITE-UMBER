@@ -223,6 +223,53 @@ export interface ScanCompositeSourceFile {
 }
 
 // ---------------------------------------------------------------------------
+// Dome Scan Overlay
+// ---------------------------------------------------------------------------
+
+export interface DomeScanHoverInfo {
+  scanId: string;
+  thickness: number | null;
+  phiDeg: number;
+  thetaDeg: number;
+  row: number;
+  col: number;
+  screenX: number;
+  screenY: number;
+}
+
+export interface DomeScanConfig {
+  id: string;
+  name: string;
+  cloudId?: string;
+
+  head: 'left' | 'right';
+  /** Polar angle from dome apex in degrees (0 = apex, 90 = equator) */
+  centerPhi: number;
+  /** Azimuthal angle around dome axis in degrees (0° = 3-o'clock, 90° = TDC) */
+  centerTheta: number;
+
+  scanDirection: 'cw' | 'ccw';
+  indexDirection: 'outward' | 'inward';
+  orientationConfirmed: boolean;
+
+  data: (number | null)[][];
+  xAxis: number[];
+  yAxis: number[];
+  stats: { min: number; max: number; mean: number; median: number; stdDev: number };
+
+  colorScale: string;
+  rangeMin: number | null;
+  rangeMax: number | null;
+  opacity: number;
+
+  sourceFiles?: Array<{
+    filename: string;
+    minX: number; maxX: number;
+    minY: number; maxY: number;
+  }>;
+}
+
+// ---------------------------------------------------------------------------
 // Annotation Shapes
 // ---------------------------------------------------------------------------
 
@@ -505,6 +552,7 @@ export interface VesselState {
   coverageRects: CoverageRectConfig[];
   inspectionImages: InspectionImageConfig[];
   scanComposites: ScanCompositeConfig[];
+  domeScanComposites: DomeScanConfig[];
   pipelines: Pipeline[];
   /** Reference drawings for report appendix (base64 image data) */
   referenceDrawings: ReferenceDrawing[];
@@ -905,6 +953,7 @@ export const DEFAULT_VESSEL_STATE: VesselState = {
   coverageRects: [],
   inspectionImages: [],
   scanComposites: [],
+  domeScanComposites: [],
   pipelines: [],
   referenceDrawings: [],
   measurementConfig: {
@@ -964,6 +1013,7 @@ export interface VesselCallbacks {
   onWeldMoved?: (index: number, newPos: number, newAngle: number) => void;
   onScanCompositeSelected?: (id: string) => void;
   onScanCompositeHover?: (id: string, thickness: number | null, scanMm: number, indexMm: number, screenX: number, screenY: number) => void;
+  onDomeScanHover?: (info: DomeScanHoverInfo | null) => void;
   onScanGizmoDatumMoved?: (compositeId: string, angleDeg: number, posMm: number) => void;
   onScanGizmoDirectionToggle?: (compositeId: string, field: 'scanDirection' | 'indexDirection') => void;
   onPipeSegmentSelected?: (pipelineId: string, segmentIndex: number) => void;
