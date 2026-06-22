@@ -12,6 +12,7 @@ import type {
     MeasurementConfig,
     WeldConfig,
     ScanCompositeConfig,
+    DomeScanConfig,
     ThicknessThresholds,
     WallLossGroupConfig,
     PipeSegmentType,
@@ -31,6 +32,7 @@ import {
     SaddleSection,
     ImageOverlaySection,
     ScanCompositeSection,
+    DomeScanSection,
     AnnotationSection,
     WallLossConfigSection,
     CoverageSection,
@@ -44,7 +46,7 @@ import {
 export type ModelMode = 'vessel' | 'pipe';
 type SidebarSectionId = 'projectInfo' | 'dimensions' | 'vesselDetails' | 'visuals' | 'attachments' | 'scanOverlay' | 'inspection' | 'piping';
 type AttachmentSubId = 'nozzles' | 'liftingLugs' | 'welds' | 'supports' | 'piping';
-type ScanOverlaySubId = 'imageOverlays' | 'scanComposites';
+type ScanOverlaySubId = 'imageOverlays' | 'scanComposites' | 'domeScanComposites';
 type InspectionSubId = 'annotations' | 'coverage' | 'inspectionImages' | 'reportExport';
 
 // ---------------------------------------------------------------------------
@@ -72,6 +74,7 @@ export interface SidebarPanelProps {
     onAddSaddle: (saddle: SaddleConfig) => void;
     onUpdateSaddle: (index: number, updates: Partial<SaddleConfig>) => void;
     onUpdateAllSaddleHeights: (height: number) => void;
+    onUpdateAllSaddleDepths: (depth: number) => void;
     onRemoveSaddle: (index: number) => void;
     onSelectSaddle: (index: number) => void;
     // Weld props
@@ -133,6 +136,15 @@ export interface SidebarPanelProps {
     cloudComposites: Array<{ id: string; name: string; width: number; height: number; created_at: string }> | undefined;
     cloudCompositesLoading: boolean;
     cloudCompositesError: Error | null;
+    // Dome scan props
+    selectedDomeScanId: string;
+    onSelectDomeScan: (id: string) => void;
+    onImportDomeComposite: (compositeId: string, head: 'left' | 'right') => void;
+    onUpdateDomeScan: (id: string, updates: Partial<DomeScanConfig>) => void;
+    onRemoveDomeScan: (id: string) => void;
+    cloudDomeComposites: Array<{ id: string; name: string; width: number; height: number; section_type: string | null; created_at: string }> | undefined;
+    cloudDomeCompositesLoading: boolean;
+    cloudDomeCompositesError: Error | null;
     onUpdateThicknessThresholds: (thresholds: ThicknessThresholds) => void;
     onUpdateWallLossGroups: (config: WallLossGroupConfig) => void;
     // Pipeline props
@@ -331,6 +343,7 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                                 onAddSaddle={props.onAddSaddle}
                                 onUpdateSaddle={props.onUpdateSaddle}
                                 onUpdateAllSaddleHeights={props.onUpdateAllSaddleHeights}
+                                onUpdateAllSaddleDepths={props.onUpdateAllSaddleDepths}
                                 onRemoveSaddle={props.onRemoveSaddle}
                                 onSelectSaddle={props.onSelectSaddle}
                                 isOpen={activeAttachmentSub === 'supports'}
@@ -359,7 +372,8 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                         </Section>
                         <Section title="Scan Overlay" defaultOpen={false} icon={<Layers size={14} style={{ marginRight: 6 }} />} isOpen={activeSection === 'scanOverlay'} onToggle={() => toggle('scanOverlay')} count={
                             vesselState.textures.length +
-                            vesselState.scanComposites.length
+                            vesselState.scanComposites.length +
+                            vesselState.domeScanComposites.length
                         }>
                             <ImageOverlaySection
                                 vesselState={vesselState}
@@ -386,6 +400,21 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                                 isOpen={activeScanOverlaySub === 'scanComposites'}
                                 onToggle={() => toggleScanSub('scanComposites')}
                             />
+                            {vesselState.vesselShape !== 'pipe' && (
+                                <DomeScanSection
+                                    vesselState={vesselState}
+                                    selectedDomeScanId={props.selectedDomeScanId}
+                                    onSelectDomeScan={props.onSelectDomeScan}
+                                    onImportDomeComposite={props.onImportDomeComposite}
+                                    onUpdateDomeScan={props.onUpdateDomeScan}
+                                    onRemoveDomeScan={props.onRemoveDomeScan}
+                                    cloudDomeComposites={props.cloudDomeComposites}
+                                    cloudDomeCompositesLoading={props.cloudDomeCompositesLoading}
+                                    cloudDomeCompositesError={props.cloudDomeCompositesError}
+                                    isOpen={activeScanOverlaySub === 'domeScanComposites'}
+                                    onToggle={() => toggleScanSub('domeScanComposites')}
+                                />
+                            )}
                         </Section>
                         <Section title="Inspection" defaultOpen={false} icon={<ClipboardCheck size={14} style={{ marginRight: 6 }} />} isOpen={activeSection === 'inspection'} onToggle={() => toggle('inspection')} count={
                             vesselState.annotations.length +

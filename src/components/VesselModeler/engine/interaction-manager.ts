@@ -20,12 +20,13 @@ import * as THREE from 'three';
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { VesselState, AnnotationShapeType } from '../types';
 import { SCALE } from './materials';
+import { domePhiThetaFromPoint } from './dome-scan-geometry';
 
 // ---------------------------------------------------------------------------
 // Public Types
 // ---------------------------------------------------------------------------
 
-export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | 'annotation' | 'coverageRect' | 'inspectionImage' | 'weld' | 'scanGizmo' | 'pipeSegment' | null;
+export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | 'annotation' | 'coverageRect' | 'inspectionImage' | 'weld' | 'scanGizmo' | 'domeGizmo' | 'pipeSegment' | null;
 
 export interface InteractionCallbacks {
   onNozzleSelected: (index: number) => void;
@@ -52,12 +53,34 @@ export interface InteractionCallbacks {
   onWeldSelected: (index: number) => void;
   onWeldMoved: (index: number, pos: number, angle: number) => void;
   onScanCompositeHover: (id: string, thickness: number | null, scanMm: number, indexMm: number, screenX: number, screenY: number) => void;
+  onDomeScanHover: (info: { scanId: string; thickness: number | null; phiDeg: number; thetaDeg: number; row: number; col: number; screenX: number; screenY: number } | null) => void;
   onScanGizmoDatumMoved: (compositeId: string, angleDeg: number, posMm: number) => void;
   onScanGizmoDirectionToggle: (compositeId: string, field: 'scanDirection' | 'indexDirection') => void;
+  onDomeGizmoDatumMoved: (compositeId: string, phiDeg: number, thetaDeg: number) => void;
+  onDomeGizmoDirectionToggle: (compositeId: string, field: 'scanDirection' | 'indexDirection') => void;
+  onDomeGizmoClicked: (compositeId: string) => void;
   onPipeSegmentSelected: (pipelineId: string, segmentIndex: number) => void;
   onPipeConnectionPointClicked: (pipelineId: string) => void;
   onDragEnd: () => void;
   onNeedRebuild: () => void;
+}
+
+// ---------------------------------------------------------------------------
+// Angle Snapping
+// ---------------------------------------------------------------------------
+
+/**
+ * Snap a circumferential angle (degrees) to the nearest multiple of `increment`.
+ *
+ * Returns the angle unchanged when `increment` is not positive. The result is
+ * normalised to the [0, 360) range, so a snap that rounds up to 360° wraps back
+ * to 0°. Callers should only pass increments that divide 360 evenly (e.g. 5, 10,
+ * 15, 30, 45, 90) to avoid an uneven step across the 0°/360° seam.
+ */
+export function snapAngleToIncrement(deg: number, increment: number): number {
+  if (!(increment > 0)) return deg;
+  const snapped = Math.round(deg / increment) * increment;
+  return ((snapped % 360) + 360) % 360;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,6 +128,12 @@ export class InteractionManager {
   lugsLocked = false;
   weldsLocked = false;
 
+  // Angle-snap config - public so the React layer can toggle them. When enabled,
+  // dragged nozzles and lifting lugs snap their circumferential angle to the
+  // nearest `angleSnapDeg` increment. Other attachments are never snapped.
+  angleSnapEnabled = false;
+  angleSnapDeg = 5;
+
   // External mesh references (updated by the rebuild cycle)
   nozzleMeshes: THREE.Object3D[] = [];
   lugMeshes: THREE.Object3D[] = [];
@@ -112,6 +141,7 @@ export class InteractionManager {
   weldMeshes: THREE.Object3D[] = [];
   textureMeshes: THREE.Mesh[] = [];
   scanCompositeMeshes: THREE.Mesh[] = [];
+  domeScanMeshes: THREE.Mesh[] = [];
   gizmoMeshes: THREE.Object3D[] = [];
   annotationMeshes: THREE.Object3D[] = [];
   coverageMeshes: THREE.Object3D[] = [];
@@ -261,6 +291,27 @@ export class InteractionManager {
         if (ud.type === 'scanGizmoArrowLong') {
           // Click on longitudinal arrow: toggle index direction
           this.callbacks.onScanGizmoDirectionToggle(ud.compositeId as string, 'indexDirection');
+          return;
+        }
+
+        // --- Dome gizmo ---
+        if (ud.type === 'domeGizmo') {
+          this.selectedGizmoCompositeId = ud.compositeId as string;
+          this.isDown = true;
+          this.isDragging = true;
+          this.dragType = 'domeGizmo';
+          this.controls.enabled = false;
+          this.callbacks.onDomeGizmoClicked(ud.compositeId as string);
+          return;
+        }
+
+        if (ud.type === 'domeGizmoArrowCirc') {
+          this.callbacks.onDomeGizmoDirectionToggle(ud.compositeId as string, 'scanDirection');
+          return;
+        }
+
+        if (ud.type === 'domeGizmoArrowLong') {
+          this.callbacks.onDomeGizmoDirectionToggle(ud.compositeId as string, 'indexDirection');
           return;
         }
       }
@@ -494,40 +545,67 @@ export class InteractionManager {
     }
 
     if (!this.isDown || !this.isDragging || this.dragType === null) {
-      // --- Scan composite hover (only when not dragging) ---
-      if (this.scanCompositeMeshes.length > 0) {
+      // --- Scan composite + dome scan hover (only when not dragging) ---
+      if (this.scanCompositeMeshes.length > 0 || this.domeScanMeshes.length > 0) {
         const rect = this.canvas.getBoundingClientRect();
         this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
         this.raycaster.setFromCamera(this.mouse, this.camera);
 
-        const hits = this.raycaster.intersectObjects(this.scanCompositeMeshes, false);
-        if (hits.length > 0) {
-          const hit = hits[0];
-          const uv = hit.uv;
-          const userData = hit.object.userData;
-
-          if (uv && userData.type === 'scanComposite' && userData.data) {
-            // UV mapping in texture-manager already handles scanDirection (vMapped)
-            // and indexDirection (uMapped), so uv.x/uv.y map directly to texture
-            // columns/rows. CanvasTexture flipY=true means uv.y=1→data[0], so
-            // invert with (1-uv.y) to get the data row index.
-            const col = Math.min(Math.floor(uv.x * userData.width), userData.width - 1);
-            const row = Math.min(Math.floor((1 - uv.y) * userData.height), userData.height - 1);
-            const thickness = userData.data[row]?.[col] ?? null;
-
-            this.callbacks.onScanCompositeHover(
-              userData.id,
-              thickness,
-              userData.xAxis[col] ?? 0,
-              userData.yAxis[row] ?? 0,
-              event.clientX,
-              event.clientY,
-            );
+        // Check dome scans first (they sit on top of shell scans)
+        if (this.domeScanMeshes.length > 0) {
+          const domeHits = this.raycaster.intersectObjects(this.domeScanMeshes, false);
+          if (domeHits.length > 0) {
+            const hit = domeHits[0];
+            const uv = hit.uv;
+            const ud = hit.object.userData;
+            if (uv && ud.type === 'domeScan' && ud.data) {
+              const col = Math.min(Math.floor(uv.x * ud.width), ud.width - 1);
+              const row = Math.min(Math.floor((1 - uv.y) * ud.height), ud.height - 1);
+              const thickness = ud.data[row]?.[col] ?? null;
+              this.callbacks.onDomeScanHover({
+                scanId: ud.id,
+                thickness,
+                phiDeg: ud.centerPhi,
+                thetaDeg: ud.centerTheta,
+                row, col,
+                screenX: event.clientX,
+                screenY: event.clientY,
+              });
+              this.callbacks.onScanCompositeHover('', null, 0, 0, 0, 0);
+              return;
+            }
+          } else {
+            this.callbacks.onDomeScanHover(null);
           }
-        } else {
-          // Clear hover when not over any composite
-          this.callbacks.onScanCompositeHover('', null, 0, 0, 0, 0);
+        }
+
+        // Check shell scan composites
+        if (this.scanCompositeMeshes.length > 0) {
+          const hits = this.raycaster.intersectObjects(this.scanCompositeMeshes, false);
+          if (hits.length > 0) {
+            const hit = hits[0];
+            const uv = hit.uv;
+            const userData = hit.object.userData;
+
+            if (uv && userData.type === 'scanComposite' && userData.data) {
+              const col = Math.min(Math.floor(uv.x * userData.width), userData.width - 1);
+              const row = Math.min(Math.floor((1 - uv.y) * userData.height), userData.height - 1);
+              const thickness = userData.data[row]?.[col] ?? null;
+
+              this.callbacks.onScanCompositeHover(
+                userData.id,
+                thickness,
+                userData.xAxis[col] ?? 0,
+                userData.yAxis[row] ?? 0,
+                event.clientX,
+                event.clientY,
+              );
+            }
+          } else {
+            // Clear hover when not over any composite
+            this.callbacks.onScanCompositeHover('', null, 0, 0, 0, 0);
+          }
         }
       }
       return;
@@ -635,6 +713,34 @@ export class InteractionManager {
       return;
     }
 
+    if (this.dragType === 'domeGizmo') {
+      const shellMeshes = this.getShellMeshes();
+      if (shellMeshes.length === 0) return;
+      const hits = this.raycaster.intersectObjects(shellMeshes, true);
+      if (hits.length === 0) return;
+
+      const point = hits[0].point;
+      const isVertical = state.orientation === 'vertical';
+      const RADIUS = state.id / 2;
+      const HEAD_DEPTH = RADIUS / (state.headRatio || 2);
+
+      const ds = state.domeScanComposites?.find(d => d.id === this.selectedGizmoCompositeId);
+      if (!ds) return;
+      const headSign = ds.head === 'right' ? 1 : -1;
+      const tangentLineWorld = (ds.head === 'right' ? state.length / 2 : -state.length / 2) * SCALE;
+
+      const result = domePhiThetaFromPoint(
+        point, RADIUS, HEAD_DEPTH, tangentLineWorld, headSign, isVertical,
+      );
+      if (!result) return;
+
+      const phiDeg = Math.max(1, Math.min(89, Math.round(result.phiDeg)));
+      const thetaDeg = ((Math.round(result.thetaDeg) % 360) + 360) % 360;
+
+      this.callbacks.onDomeGizmoDatumMoved(this.selectedGizmoCompositeId, phiDeg, thetaDeg);
+      return;
+    }
+
     if (this.dragType === 'nozzle' || this.dragType === 'texture' || this.dragType === 'liftingLug' || this.dragType === 'annotation') {
       // Raycast against the vessel shell to find the surface point
       const shellMeshes = this.getShellMeshes();
@@ -663,9 +769,11 @@ export class InteractionManager {
       if (deg < 0) deg += 360;
 
       if (this.dragType === 'nozzle') {
-        this.callbacks.onNozzleMoved(this.selectedNozzleIdx, newPos, deg);
+        // Nozzles snap to the chosen angular increment when snapping is enabled.
+        this.callbacks.onNozzleMoved(this.selectedNozzleIdx, newPos, this.snapAngle(deg));
       } else if (this.dragType === 'liftingLug') {
-        this.callbacks.onLugMoved(this.selectedLugIdx, newPos, deg);
+        // Lifting lugs snap to the chosen angular increment when snapping is enabled.
+        this.callbacks.onLugMoved(this.selectedLugIdx, newPos, this.snapAngle(deg));
       } else if (this.dragType === 'annotation') {
         this.callbacks.onAnnotationMoved(this.selectedAnnotationIdx, newPos, deg);
       } else {
@@ -793,6 +901,14 @@ export class InteractionManager {
   }
 
   /**
+   * Apply angle snapping when enabled. Used for nozzle and lifting-lug drags so
+   * a part can be dropped on a clean angular stop (e.g. 90° instead of 91°).
+   */
+  private snapAngle(deg: number): number {
+    return this.angleSnapEnabled ? snapAngleToIncrement(deg, this.angleSnapDeg) : deg;
+  }
+
+  /**
    * Walk up from a hit object to find gizmo userData (scanGizmo, scanGizmoArrowCirc, scanGizmoArrowLong).
    */
   private findGizmoData(obj: THREE.Object3D): Record<string, unknown> | null {
@@ -802,7 +918,10 @@ export class InteractionManager {
       if (
         ud.type === 'scanGizmo' ||
         ud.type === 'scanGizmoArrowCirc' ||
-        ud.type === 'scanGizmoArrowLong'
+        ud.type === 'scanGizmoArrowLong' ||
+        ud.type === 'domeGizmo' ||
+        ud.type === 'domeGizmoArrowCirc' ||
+        ud.type === 'domeGizmoArrowLong'
       ) {
         return ud as Record<string, unknown>;
       }

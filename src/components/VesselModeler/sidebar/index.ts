@@ -8,6 +8,7 @@ export { WeldSection } from './WeldSection';
 export { SaddleSection } from './SaddleSection';
 export { ImageOverlaySection } from './ImageOverlaySection';
 export { ScanCompositeSection } from './ScanCompositeSection';
+export { DomeScanSection } from './DomeScanSection';
 export { AnnotationSection } from './AnnotationSection';
 export { CoverageSection } from './CoverageSection';
 export { InspectionImageSection } from './InspectionImageSection';

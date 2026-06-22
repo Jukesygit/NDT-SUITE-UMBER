@@ -1,10 +1,8 @@
-import type { VesselState } from './types';
-import { useWallLossWorker } from '../../hooks/useWallLossWorker';
+import type { VesselState } from '../types';
+import { useWallLossWorker } from '../../../hooks/useWallLossWorker';
 
-interface WallLossPanelProps {
+interface WallLossStatsSectionProps {
   vesselState: VesselState;
-  sidebarOpen: boolean;
-  coverageVisible: boolean;
 }
 
 function formatArea(m2: number): string {
@@ -38,7 +36,7 @@ function binRangeLabel(bin: { minPct: number; maxPct: number; minMm?: number; ma
   return `${bin.minPct.toFixed(0)}–${bin.maxPct.toFixed(0)}%`;
 }
 
-export default function WallLossPanel({ vesselState, sidebarOpen, coverageVisible }: WallLossPanelProps) {
+export default function WallLossStatsSection({ vesselState }: WallLossStatsSectionProps) {
   const config = vesselState.wallLossGroups;
   const result = useWallLossWorker(vesselState, config);
   const binNames = config?.binNames;
@@ -46,14 +44,10 @@ export default function WallLossPanel({ vesselState, sidebarOpen, coverageVisibl
 
   if (!result || result.totalDataPoints === 0) return null;
 
-  const bottom = coverageVisible ? 200 : 48;
   const hasSpurious = (result.spuriousCount ?? 0) > 0;
 
   return (
-    <div
-      className="vm-wallloss-panel"
-      style={{ left: sidebarOpen ? 350 : 16, bottom }}
-    >
+    <div className="vm-stats-section">
       <div className="vm-wallloss-title">
         Wall Loss Distribution
         <span className="vm-wallloss-nominal">

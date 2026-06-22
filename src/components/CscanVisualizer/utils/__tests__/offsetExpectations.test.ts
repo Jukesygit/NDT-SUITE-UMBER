@@ -97,6 +97,43 @@ describe('resolveExpectedStarts', () => {
   });
 });
 
+describe('resolveExpectedStarts with preferFilename (operator placement override)', () => {
+  it('uses an unvalidated filename range over metadata when preferFilename is on', () => {
+    // Index token says a 1000mm strip but actual data spans only 500mm, so the
+    // range is NOT span-validated. Default arbitration keeps metadata; the
+    // operator override trusts the filename anyway.
+    const metadata = { 'IndexStart (mm)': 2004.5 };
+    const result = resolveExpectedStarts(STRIP2_FILENAME, metadata, 800, 500, true);
+    expect(result.indexStart).toBe(1000);
+    expect(result.indexSource).toBe('filename');
+  });
+
+  it('resolves to filename even when metadata agrees within tolerance', () => {
+    const metadata = { 'IndexStart (mm)': 1004.5, 'ScanStart (mm)': 0 };
+    const result = resolveExpectedStarts(STRIP2_FILENAME, metadata, 800, 1001, true);
+    expect(result.indexStart).toBe(1000);
+    expect(result.indexSource).toBe('filename');
+  });
+
+  it('falls back to metadata for axes the filename has no range for', () => {
+    // "plain scan file.csv" has no range tokens — metadata still fills both axes.
+    const metadata = { 'IndexStart (mm)': 250, 'ScanStart (mm)': 10 };
+    const result = resolveExpectedStarts('plain scan file.csv', metadata, 800, 1001, true);
+    expect(result.indexStart).toBe(250);
+    expect(result.indexSource).toBe('metadata');
+    expect(result.scanStart).toBe(10);
+    expect(result.scanSource).toBe('metadata');
+  });
+
+  it('leaves default arbitration unchanged when preferFilename is off', () => {
+    // Same loosely-span case as above but flag off → metadata wins.
+    const metadata = { 'IndexStart (mm)': 2004.5 };
+    const result = resolveExpectedStarts(STRIP2_FILENAME, metadata, 800, 500, false);
+    expect(result.indexStart).toBe(2004.5);
+    expect(result.indexSource).toBe('metadata');
+  });
+});
+
 describe('detectOffsets with corrupted instrument metadata (Grid 1 regression)', () => {
   const makeStrip2 = (): CscanData => {
     const width = 801;

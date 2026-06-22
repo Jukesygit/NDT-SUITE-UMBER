@@ -613,6 +613,14 @@ function buildScanLogTable(vessel: VesselState, config: ReportConfig): (Paragrap
     }));
   }
 
+  const domeScanCount = (vessel.domeScanComposites ?? []).filter(ds => ds.orientationConfirmed).length;
+  if (domeScanCount > 0) {
+    children.push(new Paragraph({
+      children: [textRun(`Dome scans: ${domeScanCount} (see viewport images)`, { size: FONT_SIZE_SMALL })],
+      spacing: { before: 80 },
+    }));
+  }
+
   children.push(new Paragraph({
     children: [textRun('All dimensions in mm. WT results include coating correction.', { size: FONT_SIZE_SMALL })],
     spacing: { before: 80 },

@@ -14,6 +14,8 @@ import { SCALE } from './materials';
 const CRADLE_ARC = (120 * Math.PI) / 180;
 /** Saddle plate thickness in mm */
 const PLATE_THICKNESS = 20;
+/** Default saddle depth (axial width along the vessel length) in mm */
+export const DEFAULT_SADDLE_DEPTH = 400;
 /** Number of segments for the cradle arc */
 const ARC_SEGMENTS = 32;
 
@@ -119,7 +121,7 @@ export function createSaddleGroup(
 
   const mat: THREE.Material = isSelected ? highlightMaterial : baseMaterial;
 
-  const saddleWidth = 400; // mm along vessel axis
+  const saddleWidth = saddle.depth ?? DEFAULT_SADDLE_DEPTH; // mm along vessel axis
   const thickness = PLATE_THICKNESS;
   const halfArc = CRADLE_ARC / 2;
 

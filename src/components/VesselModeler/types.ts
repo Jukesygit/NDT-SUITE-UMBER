@@ -13,7 +13,7 @@ export type Orientation = 'horizontal' | 'vertical';
 
 export type MaterialKey = 'blue' | 'cs' | 'ss' | 'red';
 
-export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | 'annotation' | 'inspectionImage' | 'weld' | 'scanGizmo';
+export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | 'annotation' | 'inspectionImage' | 'weld' | 'scanGizmo' | 'domeGizmo';
 
 export type AnnotationTool =
   | 'arrow'
@@ -73,6 +73,10 @@ export interface NozzleConfig {
   size: number;
   /** Pipe orientation mode: radial (default), horizontal, vertical-up, vertical-down */
   orientationMode?: NozzleOrientationMode;
+  /** Extra rotation about the world vertical axis, in degrees (0/90/180/270).
+   *  Applied on top of orientationMode. Lets a dome-end nozzle point straight
+   *  out the end instead of sideways. */
+  azimuthRotation?: number;
   /** Optional flange outside diameter override in mm */
   flangeOD?: number;
   /** Optional flange thickness override in mm */
@@ -131,6 +135,8 @@ export interface SaddleConfig {
   color?: string;
   /** Overall saddle height in mm (from base plate to vessel centerline). Defaults to vessel radius × 1.2 */
   height?: number;
+  /** Saddle depth (axial width along the vessel length) in mm. Defaults to 400 */
+  depth?: number;
 }
 
 export type WeldType = 'circumferential' | 'longitudinal';
@@ -185,7 +191,7 @@ export interface ScanCompositeConfig {
   /** Index axis coordinates in mm (longitudinal) */
   yAxis: number[];
   /** Pre-computed statistics */
-  stats: { min: number; max: number; mean: number; median: number; stdDev: number };
+  stats: { min: number; max: number; mean: number; median: number; stdDev: number; validArea?: number; totalArea?: number };
   /** Longitudinal start position on vessel (mm from tangent line) */
   indexStartMm: number;
   /** Circumferential datum angle in degrees (0-360). 0 = TDC (12 o'clock) */
@@ -220,6 +226,53 @@ export interface ScanCompositeSourceFile {
   maxX: number;
   minY: number;
   maxY: number;
+}
+
+// ---------------------------------------------------------------------------
+// Dome Scan Overlay
+// ---------------------------------------------------------------------------
+
+export interface DomeScanHoverInfo {
+  scanId: string;
+  thickness: number | null;
+  phiDeg: number;
+  thetaDeg: number;
+  row: number;
+  col: number;
+  screenX: number;
+  screenY: number;
+}
+
+export interface DomeScanConfig {
+  id: string;
+  name: string;
+  cloudId?: string;
+
+  head: 'left' | 'right';
+  /** Polar angle from dome apex in degrees (0 = apex, 90 = equator) */
+  centerPhi: number;
+  /** Azimuthal angle around dome axis in degrees (0° = 3-o'clock, 90° = TDC) */
+  centerTheta: number;
+
+  scanDirection: 'cw' | 'ccw';
+  indexDirection: 'outward' | 'inward';
+  orientationConfirmed: boolean;
+
+  data: (number | null)[][];
+  xAxis: number[];
+  yAxis: number[];
+  stats: { min: number; max: number; mean: number; median: number; stdDev: number; validArea?: number; totalArea?: number };
+
+  colorScale: string;
+  rangeMin: number | null;
+  rangeMax: number | null;
+  opacity: number;
+
+  sourceFiles?: Array<{
+    filename: string;
+    minX: number; maxX: number;
+    minY: number; maxY: number;
+  }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -479,6 +532,17 @@ export interface ReferenceDrawing {
 
 export type VesselShape = 'vessel' | 'pipe';
 
+export interface CoverageTargetEntry {
+  rbaPct: number;
+  scopedPct: number;
+}
+
+export interface CoverageTargets {
+  leftHead: CoverageTargetEntry;
+  cylinder: CoverageTargetEntry;
+  rightHead: CoverageTargetEntry;
+}
+
 export interface VesselState {
   /** Inner diameter in mm */
   id: number;
@@ -505,6 +569,7 @@ export interface VesselState {
   coverageRects: CoverageRectConfig[];
   inspectionImages: InspectionImageConfig[];
   scanComposites: ScanCompositeConfig[];
+  domeScanComposites: DomeScanConfig[];
   pipelines: Pipeline[];
   /** Reference drawings for report appendix (base64 image data) */
   referenceDrawings: ReferenceDrawing[];
@@ -518,6 +583,8 @@ export interface VesselState {
   domeNominalThickness?: number;
   /** Wall-loss distribution config — drives the floating stats panel */
   wallLossGroups?: WallLossGroupConfig;
+  /** Scan coverage targets (RBA prescribed % and scoped %) per section */
+  coverageTargets?: CoverageTargets;
   /** Global coordinate origin offset — displayed positions subtract these values.
    *  Allows aligning vessel readouts with scan data that doesn't start at 0. */
   coordinateOrigin: { indexMm: number; scanMm: number };
@@ -905,6 +972,7 @@ export const DEFAULT_VESSEL_STATE: VesselState = {
   coverageRects: [],
   inspectionImages: [],
   scanComposites: [],
+  domeScanComposites: [],
   pipelines: [],
   referenceDrawings: [],
   measurementConfig: {
@@ -964,8 +1032,12 @@ export interface VesselCallbacks {
   onWeldMoved?: (index: number, newPos: number, newAngle: number) => void;
   onScanCompositeSelected?: (id: string) => void;
   onScanCompositeHover?: (id: string, thickness: number | null, scanMm: number, indexMm: number, screenX: number, screenY: number) => void;
+  onDomeScanHover?: (info: DomeScanHoverInfo | null) => void;
   onScanGizmoDatumMoved?: (compositeId: string, angleDeg: number, posMm: number) => void;
   onScanGizmoDirectionToggle?: (compositeId: string, field: 'scanDirection' | 'indexDirection') => void;
+  onDomeGizmoDatumMoved?: (compositeId: string, phiDeg: number, thetaDeg: number) => void;
+  onDomeGizmoDirectionToggle?: (compositeId: string, field: 'scanDirection' | 'indexDirection') => void;
+  onDomeGizmoClicked?: (compositeId: string) => void;
   onPipeSegmentSelected?: (pipelineId: string, segmentIndex: number) => void;
   onPipeConnectionPointClicked?: (pipelineId: string) => void;
   onDeselect?: () => void;

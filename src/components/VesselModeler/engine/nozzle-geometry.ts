@@ -187,6 +187,32 @@ export function createFlangedNozzle(
 }
 
 // ---------------------------------------------------------------------------
+// rotateNormalAboutVertical
+// ---------------------------------------------------------------------------
+
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
+
+/**
+ * Yaw a surface normal about the world vertical (+Y) axis by `deg` degrees,
+ * mutating and returning it. The angle is normalised to `[0, 360)`, so a value
+ * of 0 (or any multiple of 360) is a no-op.
+ *
+ * Used to let a dome-end nozzle be stepped 90° at a time so it protrudes
+ * straight out of the end instead of sideways. A vertical (Y-parallel) normal
+ * is unaffected because it is parallel to the rotation axis.
+ */
+export function rotateNormalAboutVertical(
+  normal: THREE.Vector3,
+  deg: number,
+): THREE.Vector3 {
+  const norm = ((deg % 360) + 360) % 360;
+  if (norm !== 0) {
+    normal.applyAxisAngle(WORLD_UP, (norm * Math.PI) / 180);
+  }
+  return normal;
+}
+
+// ---------------------------------------------------------------------------
 // disposeObject
 // ---------------------------------------------------------------------------
 

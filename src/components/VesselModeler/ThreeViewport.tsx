@@ -42,7 +42,14 @@ function structuralHash(s: VesselState): string {
         rulers: s.rulers,
         coverageRects: s.coverageRects,
         inspectionImages: s.inspectionImages.map(i => ({ ...i, labelOffset: undefined, leaderLength: undefined })),
-        scanComposites: s.scanComposites.map(sc => ({ id: sc.id, hasData: sc.data.length > 0, indexStartMm: sc.indexStartMm, datumAngleDeg: sc.datumAngleDeg, scanDirection: sc.scanDirection, indexDirection: sc.indexDirection, orientationConfirmed: sc.orientationConfirmed, colorScale: sc.colorScale, rangeMin: sc.rangeMin, rangeMax: sc.rangeMax, opacity: sc.opacity })),
+        scanComposites: s.scanComposites.map(sc => ({ id: sc.id, hasData: (sc.data?.length ?? 0) > 0, indexStartMm: sc.indexStartMm, datumAngleDeg: sc.datumAngleDeg, scanDirection: sc.scanDirection, indexDirection: sc.indexDirection, orientationConfirmed: sc.orientationConfirmed, colorScale: sc.colorScale, rangeMin: sc.rangeMin, rangeMax: sc.rangeMax, opacity: sc.opacity })),
+        domeScanComposites: (s.domeScanComposites ?? []).map(ds => ({
+            id: ds.id, hasData: (ds.data?.length ?? 0) > 0, head: ds.head,
+            centerPhi: ds.centerPhi, centerTheta: ds.centerTheta,
+            scanDirection: ds.scanDirection, indexDirection: ds.indexDirection,
+            orientationConfirmed: ds.orientationConfirmed,
+            colorScale: ds.colorScale, rangeMin: ds.rangeMin, rangeMax: ds.rangeMax, opacity: ds.opacity,
+        })),
         pipelines: s.pipelines,
         hasModel: s.hasModel, vesselShape: s.vesselShape,
         showNozzleLabels: s.visuals.showNozzleLabels,
@@ -74,6 +81,10 @@ interface ThreeViewportProps {
     lugsLocked: boolean;
     weldsLocked: boolean;
     pipelinesLocked: boolean;
+    /** When true, dragged nozzles and lifting lugs snap their angle to angleSnapDeg */
+    angleSnapEnabled: boolean;
+    /** Angular snap increment in degrees (e.g. 5, 10, 45) */
+    angleSnapDeg: number;
     selectedWeldIndex: number;
     selectedInspectionImageId: number;
     onInspectionImageThumbnailClick: (id: number) => void;
@@ -84,13 +95,14 @@ interface ThreeViewportProps {
     rulerDrawMode: boolean;
     previewRuler: RulerConfig | null;
     selectedScanCompositeId?: string;
+    selectedDomeScanId?: string;
     selectedPipelineId?: string;
     selectedPipeSegmentIdx?: number;
     inspectingAnnotationId?: number | null;
 }
 
 const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(function ThreeViewport(
-    { vesselState, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedAnnotationId, textureObjects, callbacks, nozzlesLocked, saddlesLocked, texturesLocked, lugsLocked, weldsLocked, pipelinesLocked, selectedWeldIndex, selectedInspectionImageId, onInspectionImageThumbnailClick, drawMode, coverageDrawMode, previewAnnotation, previewCoverageRect, rulerDrawMode, previewRuler, selectedScanCompositeId = '', selectedPipelineId = '', selectedPipeSegmentIdx = -1, inspectingAnnotationId },
+    { vesselState, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedAnnotationId, textureObjects, callbacks, nozzlesLocked, saddlesLocked, texturesLocked, lugsLocked, weldsLocked, pipelinesLocked, angleSnapEnabled, angleSnapDeg, selectedWeldIndex, selectedInspectionImageId, onInspectionImageThumbnailClick, drawMode, coverageDrawMode, previewAnnotation, previewCoverageRect, rulerDrawMode, previewRuler, selectedScanCompositeId = '', selectedDomeScanId = '', selectedPipelineId = '', selectedPipeSegmentIdx = -1, inspectingAnnotationId },
     ref
 ) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -206,8 +218,12 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
                 onWeldSelected: (idx) => callbacksRef.current.onWeldSelected?.(idx),
                 onWeldMoved: (idx, pos, angle) => callbacksRef.current.onWeldMoved?.(idx, pos, angle),
                 onScanCompositeHover: (id, thickness, scanMm, indexMm, screenX, screenY) => callbacksRef.current.onScanCompositeHover?.(id, thickness, scanMm, indexMm, screenX, screenY),
+                onDomeScanHover: (info) => callbacksRef.current.onDomeScanHover?.(info),
                 onScanGizmoDatumMoved: (compositeId, angleDeg, posMm) => callbacksRef.current.onScanGizmoDatumMoved?.(compositeId, angleDeg, posMm),
                 onScanGizmoDirectionToggle: (compositeId, field) => callbacksRef.current.onScanGizmoDirectionToggle?.(compositeId, field),
+                onDomeGizmoDatumMoved: (compositeId, phiDeg, thetaDeg) => callbacksRef.current.onDomeGizmoDatumMoved?.(compositeId, phiDeg, thetaDeg),
+                onDomeGizmoDirectionToggle: (compositeId, field) => callbacksRef.current.onDomeGizmoDirectionToggle?.(compositeId, field),
+                onDomeGizmoClicked: (compositeId) => callbacksRef.current.onDomeGizmoClicked?.(compositeId),
                 onPipeSegmentSelected: (pipelineId, segmentIndex) => callbacksRef.current.onPipeSegmentSelected?.(pipelineId, segmentIndex),
                 onPipeConnectionPointClicked: (pipelineId) => callbacksRef.current.onPipeConnectionPointClicked?.(pipelineId),
                 onDragEnd: () => callbacksRef.current.onDragEnd?.(),
@@ -345,6 +361,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             selectedSaddleIndex,
             selectedTextureId,
             selectedScanCompositeId,
+            selectedDomeScanId,
         );
 
         // -- Annotation shapes (outlines + hit meshes) --
@@ -909,13 +926,14 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             interactionRef.current.weldMeshes = weldMeshes;
             interactionRef.current.textureMeshes = result.textureMeshes;
             interactionRef.current.scanCompositeMeshes = result.scanCompositeMeshes;
+            interactionRef.current.domeScanMeshes = result.domeScanMeshes;
             interactionRef.current.gizmoMeshes = result.gizmoMeshes;
             interactionRef.current.annotationMeshes = annotationMeshes;
             interactionRef.current.coverageMeshes = coverageMeshes;
             interactionRef.current.inspectionImageDotMeshes = inspectionImageDotMeshes;
             interactionRef.current.vesselGroup = result.vesselGroup;
         }
-    }, [textureObjects, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedScanCompositeId, selectedAnnotationId, selectedInspectionImageId, selectedWeldIndex, onInspectionImageThumbnailClick, inspectingAnnotationId]);
+    }, [textureObjects, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedScanCompositeId, selectedDomeScanId, selectedAnnotationId, selectedInspectionImageId, selectedWeldIndex, onInspectionImageThumbnailClick, inspectingAnnotationId]);
 
     // =========================================================================
     // Tier 2 — Selection highlight update (O(n) material swaps, no geometry)
@@ -1047,7 +1065,20 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
                 }
             });
         });
-    }, [selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedScanCompositeId, selectedWeldIndex, selectedPipelineId, selectedPipeSegmentIdx]);
+
+        // Dome scan composites: toggle border child mesh visibility
+        if (result.domeScanMeshes) {
+            result.domeScanMeshes.forEach((dsMesh) => {
+                const dsId = dsMesh.userData?.id as string | undefined;
+                const isSelected = dsId === selectedDomeScanId;
+                dsMesh.children.forEach((child) => {
+                    if (child instanceof THREE.Mesh && child.userData?.role === 'domeScan-border') {
+                        child.visible = isSelected;
+                    }
+                });
+            });
+        }
+    }, [selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedScanCompositeId, selectedDomeScanId, selectedWeldIndex, selectedPipelineId, selectedPipeSegmentIdx]);
 
     // =========================================================================
     // Tier 3 — Preview overlay update (only touches preview group, never main vessel)
@@ -1152,11 +1183,13 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             interactionRef.current.lugsLocked = lugsLocked;
             interactionRef.current.weldsLocked = weldsLocked;
             interactionRef.current.pipelinesLocked = pipelinesLocked;
+            interactionRef.current.angleSnapEnabled = angleSnapEnabled;
+            interactionRef.current.angleSnapDeg = angleSnapDeg;
             interactionRef.current.drawMode = drawMode;
             interactionRef.current.coverageDrawMode = coverageDrawMode;
             interactionRef.current.rulerDrawMode = rulerDrawMode;
         }
-    }, [nozzlesLocked, saddlesLocked, texturesLocked, lugsLocked, weldsLocked, pipelinesLocked, drawMode, coverageDrawMode, rulerDrawMode]);
+    }, [nozzlesLocked, saddlesLocked, texturesLocked, lugsLocked, weldsLocked, pipelinesLocked, angleSnapEnabled, angleSnapDeg, drawMode, coverageDrawMode, rulerDrawMode]);
 
     // Update material visuals when visual settings change
     useEffect(() => {

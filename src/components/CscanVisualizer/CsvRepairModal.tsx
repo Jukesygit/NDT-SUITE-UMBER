@@ -18,19 +18,22 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
 }) => {
   const [correctIndex, setCorrectIndex] = useState(true);
   const [correctScan, setCorrectScan] = useState(true);
+  const [preferFilename, setPreferFilename] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
-  // Detect offsets for all scans
+  // Detect offsets for all scans. When the operator prioritizes filenames,
+  // detection re-runs with that arbitration so the file list, offsets, and
+  // Source column reflect filename-driven placement.
   const detections = useMemo(() => {
-    return detectOffsetsForScans(scans);
-  }, [scans]);
+    return detectOffsetsForScans(scans, preferFilename);
+  }, [scans, preferFilename]);
 
   // Separate by type
   const indexIssues = detections.filter(d => d.indexNeedsCorrection);
   const scanIssues = detections.filter(d => d.scanNeedsCorrection);
 
   const handleRepair = () => {
-    const repairedScans = applyOffsetCorrections(scans, correctIndex, correctScan);
+    const repairedScans = applyOffsetCorrections(scans, correctIndex, correctScan, preferFilename);
     onRepairComplete(repairedScans);
     onClose();
   };
@@ -83,6 +86,36 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
               based on the filename or metadata. This commonly occurs when the scanner outputs
               relative positions instead of absolute positions.
             </p>
+          </div>
+
+          {/* Placement source override */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-3 p-3 border border-teal-500/50 rounded-lg" style={{ backgroundColor: '#0f3b3a' }}>
+              <input
+                type="checkbox"
+                id="prefer-filename"
+                checked={preferFilename}
+                onChange={(e) => setPreferFilename(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-500 bg-gray-700 text-teal-600 focus:ring-teal-500"
+              />
+              <label htmlFor="prefer-filename" className="flex-1 cursor-pointer">
+                <span className="font-medium text-white">Prioritize filenames for placement</span>
+                <p className="text-sm text-gray-400">
+                  Use the range in each filename as the true position, even when it
+                  disagrees with — or isn&apos;t confirmed by — the file metadata.
+                </p>
+              </label>
+            </div>
+            {preferFilename && (
+              <div className="flex items-start gap-2 p-3 rounded-lg text-sm" style={{ backgroundColor: '#3a2f0f' }}>
+                <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+                <p className="text-amber-200/90">
+                  Filenames are trusted for placement, including ranges whose span
+                  doesn&apos;t match the scan data. Verify the resulting positions —
+                  the Source column below shows what drove each file.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Issue Summary */}

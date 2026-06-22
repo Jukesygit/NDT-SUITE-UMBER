@@ -88,7 +88,7 @@ export async function verifyAuth(req: Request): Promise<AuthResult> {
  * Check if user has admin role
  */
 export function isAdmin(role: string): boolean {
-  return role === 'admin'
+  return ['super_admin', 'admin'].includes(role)
 }
 
 /**

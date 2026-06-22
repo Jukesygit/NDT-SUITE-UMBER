@@ -1,6 +1,7 @@
 import React from 'react';
 import { Trash2, Plus } from 'lucide-react';
 import type { VesselState, SaddleConfig } from '../types';
+import { DEFAULT_SADDLE_DEPTH } from '../engine/saddle-geometry';
 import { SliderRow, SubSection } from './SliderRow';
 
 export interface SaddleSectionProps {
@@ -9,6 +10,7 @@ export interface SaddleSectionProps {
     onAddSaddle: (saddle: SaddleConfig) => void;
     onUpdateSaddle: (index: number, updates: Partial<SaddleConfig>) => void;
     onUpdateAllSaddleHeights: (height: number) => void;
+    onUpdateAllSaddleDepths: (depth: number) => void;
     onRemoveSaddle: (index: number) => void;
     onSelectSaddle: (index: number) => void;
     isOpen?: boolean;
@@ -17,7 +19,7 @@ export interface SaddleSectionProps {
 
 export function SaddleSection({
     vesselState, selectedSaddleIndex,
-    onAddSaddle, onUpdateSaddle, onUpdateAllSaddleHeights, onRemoveSaddle, onSelectSaddle,
+    onAddSaddle, onUpdateSaddle, onUpdateAllSaddleHeights, onUpdateAllSaddleDepths, onRemoveSaddle, onSelectSaddle,
     isOpen, onToggle,
 }: SaddleSectionProps) {
     const sel = selectedSaddleIndex >= 0 ? vesselState.saddles[selectedSaddleIndex] : null;
@@ -25,6 +27,9 @@ export function SaddleSection({
     const currentAllHeight = vesselState.saddles.length > 0
         ? (vesselState.saddles[0].height ?? defaultHeight)
         : defaultHeight;
+    const currentAllDepth = vesselState.saddles.length > 0
+        ? (vesselState.saddles[0].depth ?? DEFAULT_SADDLE_DEPTH)
+        : DEFAULT_SADDLE_DEPTH;
 
     return (
         <SubSection title="Supports" count={vesselState.saddles.length} isOpen={isOpen} onToggle={onToggle}>
@@ -45,6 +50,18 @@ export function SaddleSection({
                     step={10}
                     unit="mm"
                     onChange={onUpdateAllSaddleHeights}
+                />
+            )}
+
+            {vesselState.saddles.length > 0 && (
+                <SliderRow
+                    label="All Support Depths"
+                    value={currentAllDepth}
+                    min={100}
+                    max={1000}
+                    step={10}
+                    unit="mm"
+                    onChange={onUpdateAllSaddleDepths}
                 />
             )}
 
@@ -82,6 +99,17 @@ export function SaddleSection({
                                         className="vm-input"
                                         value={sel.height ?? Math.round(vesselState.id / 2 * 1.2)}
                                         onChange={e => onUpdateSaddle(selectedSaddleIndex, { height: Number(e.target.value) })}
+                                    />
+                                </div>
+                            </div>
+                            <div className="vm-form-row">
+                                <div className="vm-control-group">
+                                    <div className="vm-label"><span>Depth (mm)</span></div>
+                                    <input
+                                        type="number"
+                                        className="vm-input"
+                                        value={sel.depth ?? DEFAULT_SADDLE_DEPTH}
+                                        onChange={e => onUpdateSaddle(selectedSaddleIndex, { depth: Number(e.target.value) })}
                                     />
                                 </div>
                             </div>

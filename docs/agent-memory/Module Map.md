@@ -44,6 +44,9 @@ Use this before searching. Pick the relevant area, read the nearby files, then s
 - `src/components/VesselModeler/sidebar/` - sidebar sections for vessel parts, coverage, scans, report export, annotations.
 - `src/components/VesselModeler/engine/` - geometry, materials, reporting, screenshots, texture, and interaction logic.
 - `src/components/VesselModeler/vessel-modeler.css` - modeler styles.
+- Stats overlay: `UnifiedStatsPanel.tsx` hosts `stats/CoverageStatsSection`, `stats/WallLossStatsSection`, `stats/ScanCoverageStatsSection`.
+- Wall-loss math: production path is the worker `src/workers/wall-loss.worker.ts` (thin) → `src/workers/wall-loss-compute.ts` (pure `compute`, unit-tested). `engine/wall-loss-distribution.ts` is a tested reference, NOT used by the UI. Dome scans are folded in via flat grid-cell area (point-based, like the C-scan distribution engine).
+- Scan-coverage achieved area: `engine/coverage-calculator.ts` (`computeRegionTotalAreas`, `validAreaFromGrid`). Dome/shell achieved coverage prefers persisted `stats.validArea`, falling back to `validAreaFromGrid` so dome ends still register. Composite stats are normalized via `engine/composite-stats.ts` (`toConfigStats`) on import.
 - `src/services/vessel-model-service.ts` - persistence.
 - `src/hooks/queries/useVesselModels.ts` and `src/hooks/mutations/useVesselModelMutations.ts` - data hooks.
 

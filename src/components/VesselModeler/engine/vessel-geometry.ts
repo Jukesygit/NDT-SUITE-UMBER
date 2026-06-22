@@ -13,11 +13,13 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { type VesselState, type TextureConfig } from '../types';
 import { SCALE } from './materials';
-import { createFlangedNozzle } from './nozzle-geometry';
+import { createFlangedNozzle, rotateNormalAboutVertical } from './nozzle-geometry';
 import { createLiftingLug } from './lifting-lug-geometry';
 import { createSaddleGroup } from './saddle-geometry';
 import { createScanCompositePlane } from './texture-manager';
+import { createDomeScanPlane } from './dome-scan-geometry';
 import { buildScanOrientationGizmo } from './scan-gizmo-geometry';
+import { buildDomeScanGizmo } from './dome-scan-gizmo';
 
 // ---------------------------------------------------------------------------
 // Result interface
@@ -30,6 +32,7 @@ export interface BuildSceneResult {
   saddleMeshes: THREE.Object3D[];
   textureMeshes: THREE.Mesh[];
   scanCompositeMeshes: THREE.Mesh[];
+  domeScanMeshes: THREE.Mesh[];
   gizmoMeshes: THREE.Object3D[];
 }
 
@@ -338,6 +341,7 @@ export function buildVesselScene(
   selectedSaddleIndex: number,
   selectedTextureId: number,
   selectedScanCompositeId: string = '',
+  selectedDomeScanId: string = '',
 ): BuildSceneResult {
   const vesselGroup = new THREE.Group();
   const nozzleMeshes: THREE.Object3D[] = [];
@@ -345,11 +349,12 @@ export function buildVesselScene(
   const saddleMeshes: THREE.Object3D[] = [];
   const textureMeshes: THREE.Mesh[] = [];
   const scanCompositeMeshes: THREE.Mesh[] = [];
+  const domeScanMeshes: THREE.Mesh[] = [];
   const gizmoMeshes: THREE.Object3D[] = [];
 
   // -- Return empty group if no model data yet ------------------------------
   if (!state.hasModel) {
-    return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes, scanCompositeMeshes, gizmoMeshes };
+    return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes, scanCompositeMeshes, domeScanMeshes, gizmoMeshes };
   }
 
   // -- Vessel dimensions ----------------------------------------------------
@@ -551,6 +556,10 @@ export function buildVesselScene(
       }
     }
 
+    // Extra yaw about the world vertical axis (lets a dome-end nozzle point
+    // straight out the end instead of sideways). No-op when unset.
+    rotateNormalAboutVertical(normal, n.azimuthRotation ?? 0);
+
     // Orient nozzle to be normal to surface
     // Nozzle is built along +Y axis, rotate to align with surface normal
     const defaultDir = new THREE.Vector3(0, 1, 0);
@@ -690,6 +699,18 @@ export function buildVesselScene(
     }
   }
 
+  // -- Dome Scan Composites (only for vessel shapes with heads) --------------
+  if (state.vesselShape !== 'pipe') {
+    for (const ds of (state.domeScanComposites ?? [])) {
+      if (!ds.orientationConfirmed) continue;
+      const mesh = createDomeScanPlane(ds, state, selectedDomeScanId);
+      if (mesh) {
+        vesselGroup.add(mesh);
+        domeScanMeshes.push(mesh);
+      }
+    }
+  }
+
   // -- Scan Orientation Gizmo (for selected composite only) -----------------
   if (selectedScanCompositeId) {
     const selectedComposite = state.scanComposites.find(
@@ -709,5 +730,23 @@ export function buildVesselScene(
     }
   }
 
-  return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes, scanCompositeMeshes, gizmoMeshes };
+  // -- Dome Scan Orientation Gizmo (for selected dome scan, pre-confirmation) --
+  if (selectedDomeScanId) {
+    const selectedDs = (state.domeScanComposites ?? []).find(
+      ds => ds.id === selectedDomeScanId,
+    );
+    if (selectedDs && !selectedDs.orientationConfirmed) {
+      const { group: domeGizmoGroup, originMesh: domeOrigin } = buildDomeScanGizmo(
+        selectedDs,
+        state,
+      );
+      vesselGroup.add(domeGizmoGroup);
+      gizmoMeshes.push(domeOrigin);
+      domeGizmoGroup.children.forEach(child => {
+        if (child !== domeOrigin) gizmoMeshes.push(child);
+      });
+    }
+  }
+
+  return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes, scanCompositeMeshes, domeScanMeshes, gizmoMeshes };
 }
