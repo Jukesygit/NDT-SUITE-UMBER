@@ -85,8 +85,20 @@ export interface NozzleConfig {
   pipeOD?: number;
   /** Nozzle style: 'flanged' (default) or 'plain-pipe' (simple stub for piping) */
   style?: 'flanged' | 'plain-pipe';
-  /** Hide the weld neck at the shell junction (plain cylinder instead) */
+  /** @deprecated Legacy combined flag — hid BOTH the reinforcing pad and the weld
+   *  neck. Superseded by independent `showRepad` / `showWeldNeck`. Still read for
+   *  back-compat: when the new flags are absent they derive from `!hideRepad`. */
   hideRepad?: boolean;
+  /** Show the reinforcing pad (curved plate conforming to the shell). Independent
+   *  of the weld neck. Undefined → derived from legacy `hideRepad` (`!hideRepad`). */
+  showRepad?: boolean;
+  /** Show the weld neck (tapered transition at the shell junction). Independent of
+   *  the pad. Undefined → derived from legacy `hideRepad` (`!hideRepad`). */
+  showWeldNeck?: boolean;
+  /** Reinforcing pad outside diameter in mm. Defaults to 1.8 × pipe OD. */
+  repadOD?: number;
+  /** Reinforcing pad thickness in mm. Defaults to 10. */
+  repadThickness?: number;
 }
 
 export type LiftingLugStyle = 'padEye' | 'trunnion';
@@ -137,6 +149,16 @@ export interface SaddleConfig {
   height?: number;
   /** Saddle depth (axial width along the vessel length) in mm. Defaults to 400 */
   depth?: number;
+  /** Show a wear / reinforcement plate between the shell and the cradle. Legacy
+   *  saddles (undefined) render without one; the "Add Saddle Support" button sets
+   *  this true so new saddles are realistic. */
+  wearPlate?: boolean;
+  /** Wear plate thickness in mm. Defaults to 12. */
+  wearPlateThickness?: number;
+  /** Wear plate circumferential overhang beyond each saddle horn, in degrees. Defaults to 6. */
+  wearPlateArcOverhang?: number;
+  /** Wear plate axial overhang beyond the saddle depth, per side, in mm. Defaults to 50. */
+  wearPlateAxialOverhang?: number;
 }
 
 export type WeldType = 'circumferential' | 'longitudinal';

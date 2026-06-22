@@ -75,6 +75,7 @@ export interface SidebarPanelProps {
     onUpdateSaddle: (index: number, updates: Partial<SaddleConfig>) => void;
     onUpdateAllSaddleHeights: (height: number) => void;
     onUpdateAllSaddleDepths: (depth: number) => void;
+    onUpdateAllSaddleWearPlate: (updates: Partial<SaddleConfig>) => void;
     onRemoveSaddle: (index: number) => void;
     onSelectSaddle: (index: number) => void;
     // Weld props
@@ -344,6 +345,7 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                                 onUpdateSaddle={props.onUpdateSaddle}
                                 onUpdateAllSaddleHeights={props.onUpdateAllSaddleHeights}
                                 onUpdateAllSaddleDepths={props.onUpdateAllSaddleDepths}
+                                onUpdateAllSaddleWearPlate={props.onUpdateAllSaddleWearPlate}
                                 onRemoveSaddle={props.onRemoveSaddle}
                                 onSelectSaddle={props.onSelectSaddle}
                                 isOpen={activeAttachmentSub === 'supports'}

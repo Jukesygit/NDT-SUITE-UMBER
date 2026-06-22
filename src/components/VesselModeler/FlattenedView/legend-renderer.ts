@@ -140,12 +140,18 @@ export function drawMetadataHeader(
  * Draw an axial (horizontal) scale along the bottom of the vessel.
  *
  * Tick marks are 6px long, labels rendered below in 10px font.
+ *
+ * `toCanvasX` handles tick placement (including any axis mirroring), so ticks
+ * are still iterated over vessel position 0..vesselLength. `labelFor` maps a
+ * vessel position to the value printed under the tick — pass it to show
+ * scan-index distance instead of raw vessel position. Defaults to identity.
  */
 export function drawAxialScale(
   ctx: CanvasRenderingContext2D,
   vesselLength: number,
   toCanvasX: (mm: number) => number,
   y: number,
+  labelFor: (mm: number) => number = (mm) => mm,
 ): void {
   const interval = niceInterval(vesselLength);
 
@@ -166,7 +172,7 @@ export function drawAxialScale(
     ctx.stroke();
 
     // Label
-    ctx.fillText(`${Math.round(mm)}`, cx, y + 8);
+    ctx.fillText(`${Math.round(labelFor(mm))}`, cx, y + 8);
   }
 }
 

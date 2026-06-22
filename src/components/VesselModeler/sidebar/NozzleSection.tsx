@@ -138,18 +138,59 @@ export function NozzleSection({
                                 </div>
                             </div>
                             <div className="vm-control-group">
+                                <div className="vm-label"><span>Reinforcing Pad</span></div>
+                                <div className="vm-toggle-group">
+                                    <button
+                                        className={`vm-toggle-btn ${(sel.showRepad ?? false) ? 'active' : ''}`}
+                                        onClick={() => onUpdateNozzle(selectedNozzleIndex, { showRepad: true })}
+                                        title="Show the reinforcing pad (curved plate conforming to the shell)"
+                                    >
+                                        On
+                                    </button>
+                                    <button
+                                        className={`vm-toggle-btn ${!(sel.showRepad ?? false) ? 'active' : ''}`}
+                                        onClick={() => onUpdateNozzle(selectedNozzleIndex, { showRepad: false })}
+                                        title="Hide the reinforcing pad"
+                                    >
+                                        Off
+                                    </button>
+                                </div>
+                            </div>
+                            {(sel.showRepad ?? false) && (
+                                <div className="vm-form-row">
+                                    <div className="vm-control-group">
+                                        <div className="vm-label"><span>Pad OD (mm)</span></div>
+                                        <input
+                                            type="number"
+                                            className="vm-input"
+                                            value={sel.repadOD ?? Math.round((sel.pipeOD || findClosestPipeSize(sel.size).od) * 1.8)}
+                                            onChange={e => onUpdateNozzle(selectedNozzleIndex, { repadOD: Number(e.target.value) })}
+                                        />
+                                    </div>
+                                    <div className="vm-control-group">
+                                        <div className="vm-label"><span>Pad Thk (mm)</span></div>
+                                        <input
+                                            type="number"
+                                            className="vm-input"
+                                            value={sel.repadThickness ?? 10}
+                                            onChange={e => onUpdateNozzle(selectedNozzleIndex, { repadThickness: Number(e.target.value) })}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                            <div className="vm-control-group">
                                 <div className="vm-label"><span>Weld Neck</span></div>
                                 <div className="vm-toggle-group">
                                     <button
-                                        className={`vm-toggle-btn ${!sel.hideRepad ? 'active' : ''}`}
-                                        onClick={() => onUpdateNozzle(selectedNozzleIndex, { hideRepad: false })}
+                                        className={`vm-toggle-btn ${(sel.showWeldNeck ?? (sel.hideRepad !== true)) ? 'active' : ''}`}
+                                        onClick={() => onUpdateNozzle(selectedNozzleIndex, { showWeldNeck: true })}
                                         title="Show weld neck at shell junction"
                                     >
                                         On
                                     </button>
                                     <button
-                                        className={`vm-toggle-btn ${sel.hideRepad ? 'active' : ''}`}
-                                        onClick={() => onUpdateNozzle(selectedNozzleIndex, { hideRepad: true })}
+                                        className={`vm-toggle-btn ${!(sel.showWeldNeck ?? (sel.hideRepad !== true)) ? 'active' : ''}`}
+                                        onClick={() => onUpdateNozzle(selectedNozzleIndex, { showWeldNeck: false })}
                                         title="Hide weld neck (plain cylinder at junction)"
                                     >
                                         Off

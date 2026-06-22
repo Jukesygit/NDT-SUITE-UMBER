@@ -9,7 +9,7 @@ tags:
 # Vessel Modeler: Reinforcement Pads for Saddles & Nozzles
 
 **Date:** 2026-06-22
-**Status:** Designed
+**Status:** Implemented (see "Revisions during implementation")
 
 ## Problem
 
@@ -166,3 +166,19 @@ fields must be added to all of them or they silently fail to reach the cloud
 - `src/components/VesselModeler/VesselModeler.tsx` (serialization mappers)
 - `src/components/VesselModeler/engine/__tests__/saddle-geometry.test.ts`
 - `src/components/VesselModeler/engine/__tests__/nozzle-geometry.test.ts` (new)
+
+## Revisions during implementation (user feedback, 2026-06-22)
+
+- **Nozzle pad now defaults OFF** (opt-in). `showRepad` defaults `false` in both
+  `deserializeNozzle` and `createFlangedNozzle`; the weld neck keeps its historical
+  default. The sidebar pad toggle resolves `sel.showRepad ?? false`.
+- **Saddle wear-plate controls are now GLOBAL**, not per-saddle. A single
+  "Wear Plate (all supports)" toggle + Thickness / Arc Overhang / Axial Overhang
+  sliders drive every support via `onUpdateAllSaddleWearPlate` (merges a partial
+  into all saddles). The per-saddle wear-plate UI was removed. Each saddle still
+  stores its own fields, so the geometry and persistence are unchanged.
+- **Nozzle pad conformance is still OPEN.** The first cut (sphere-cap → Lathe →
+  spherically-displaced disc) does not seat flush on the cylinder. Handed off:
+  [2026-06-22-nozzle-repad-conformance-handover.md](2026-06-22-nozzle-repad-conformance-handover.md).
+  Root cause: spherical bend vs. the cylinder's single-axis curvature; fix is a
+  cylindrical roll about the vessel axis.

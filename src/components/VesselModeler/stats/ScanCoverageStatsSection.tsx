@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback, type KeyboardEvent } from 'react';
 import type { VesselState, CoverageTargets, CoverageTargetEntry } from '../types';
 import { computeRegionTotalAreas, validAreaFromGrid } from '../engine/coverage-calculator';
+import { cardinalForHead } from '../engine/cardinal-directions';
 
 /**
  * Valid scanned area for a composite in mm². Prefers the persisted
@@ -135,10 +136,20 @@ export default function ScanCoverageStatsSection({
     [targets, onUpdateTargets],
   );
 
+  // Horizontal heads face world ±X; name them by the scene's North Heading.
+  const cardinalRotation = vesselState.visuals?.cardinalRotation ?? 0;
   const sections: { key: SectionKey; label: string; show: boolean }[] = [
-    { key: 'leftHead', label: isVertical ? 'Top Dome' : 'Left Dome', show: !isPipe },
+    {
+      key: 'leftHead',
+      label: isVertical ? 'Top Dome' : `${cardinalForHead('left', cardinalRotation)} Dome`,
+      show: !isPipe,
+    },
     { key: 'cylinder', label: 'Shell', show: true },
-    { key: 'rightHead', label: isVertical ? 'Bottom Dome' : 'Right Dome', show: !isPipe },
+    {
+      key: 'rightHead',
+      label: isVertical ? 'Bottom Dome' : `${cardinalForHead('right', cardinalRotation)} Dome`,
+      show: !isPipe,
+    },
   ];
 
   const visibleSections = sections.filter(s => s.show);

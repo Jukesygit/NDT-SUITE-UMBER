@@ -19,11 +19,17 @@ import type { VesselState, ScanCompositeConfig } from '../types';
 import {
   getCircumference,
   angleToCircumMm,
+  datumToCircumMm,
   projectNozzle,
   projectCircWeld,
   projectLongWeld,
   projectSaddle,
   projectLiftingLug,
+  wrapCircumCenters,
+  getAxialOrientation,
+  axialToIndexMm,
+  axialFrac,
+  fitScale,
 } from './geometry-projection';
 import {
   drawColorBar,
@@ -109,48 +115,61 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
       return { drawWidth, drawHeight, cssWidth, cssHeight };
     }, []);
 
+    // Single to-scale (1:1) layout: equal mm/pixel on both axes so round bores
+    // render round and scan footprints are not axis-stretched. The looser axis
+    // is letterboxed (centred) via marginX/marginY.
+    const getPlotMetrics = useCallback(() => {
+      const { drawWidth, drawHeight } = getDrawDimensions();
+      const vesselLength = vesselState.length;
+      const circumference = getCircumference(vesselState);
+      const { pxPerMm, marginX, marginY } = fitScale(
+        drawWidth, drawHeight, vesselLength, circumference,
+      );
+      const reversed = getAxialOrientation(vesselState.scanComposites)?.reversed ?? false;
+      return { pxPerMm, marginX, marginY, vesselLength, circumference, reversed };
+    }, [vesselState, getDrawDimensions]);
+
     const toCanvasX = useCallback(
       (mm: number) => {
-        const { drawWidth } = getDrawDimensions();
-        const vesselLength = vesselState.length;
+        const { pxPerMm, marginX, vesselLength, reversed } = getPlotMetrics();
         const { zoom, offsetX } = viewRef.current;
-        if (vesselLength <= 0) return PADDING.left;
-        return PADDING.left + (mm / vesselLength) * drawWidth * zoom + offsetX;
+        if (pxPerMm <= 0) return PADDING.left;
+        const pos = axialFrac(mm, vesselLength, reversed) * vesselLength; // reversed ? len-mm : mm
+        return PADDING.left + marginX + pos * pxPerMm * zoom + offsetX;
       },
-      [vesselState.length, getDrawDimensions],
+      [getPlotMetrics],
     );
 
     const toCanvasY = useCallback(
       (mm: number) => {
-        const { drawHeight } = getDrawDimensions();
-        const circumference = getCircumference(vesselState);
+        const { pxPerMm, marginY } = getPlotMetrics();
         const { zoom, offsetY } = viewRef.current;
-        if (circumference <= 0) return PADDING.top;
-        return PADDING.top + (mm / circumference) * drawHeight * zoom + offsetY;
+        if (pxPerMm <= 0) return PADDING.top;
+        return PADDING.top + marginY + mm * pxPerMm * zoom + offsetY;
       },
-      [vesselState, getDrawDimensions],
+      [getPlotMetrics],
     );
 
     /** Inverse: canvas pixel → vessel mm (for hover lookups) */
     const fromCanvasX = useCallback(
       (px: number) => {
-        const { drawWidth } = getDrawDimensions();
+        const { pxPerMm, marginX, vesselLength, reversed } = getPlotMetrics();
         const { zoom, offsetX } = viewRef.current;
-        if (drawWidth <= 0 || zoom <= 0) return 0;
-        return ((px - PADDING.left - offsetX) / (drawWidth * zoom)) * vesselState.length;
+        if (pxPerMm <= 0 || zoom <= 0) return 0;
+        const pos = (px - PADDING.left - marginX - offsetX) / (pxPerMm * zoom);
+        return reversed ? vesselLength - pos : pos;
       },
-      [vesselState.length, getDrawDimensions],
+      [getPlotMetrics],
     );
 
     const fromCanvasY = useCallback(
       (py: number) => {
-        const { drawHeight } = getDrawDimensions();
-        const circumference = getCircumference(vesselState);
+        const { pxPerMm, marginY } = getPlotMetrics();
         const { zoom, offsetY } = viewRef.current;
-        if (drawHeight <= 0 || zoom <= 0) return 0;
-        return ((py - PADDING.top - offsetY) / (drawHeight * zoom)) * circumference;
+        if (pxPerMm <= 0 || zoom <= 0) return 0;
+        return (py - PADDING.top - marginY - offsetY) / (pxPerMm * zoom);
       },
-      [vesselState, getDrawDimensions],
+      [getPlotMetrics],
     );
 
     // -----------------------------------------------------------------------
@@ -234,20 +253,24 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
         ctx.restore();
       }
 
-      // Nozzle glow
+      // Nozzle glow — match the marker: per-axis radius + seam wrap.
       if (selectedNozzleIndex >= 0 && selectedNozzleIndex < vesselState.nozzles.length) {
         const circle = projectNozzle(vesselState.nozzles[selectedNozzleIndex], od);
         const cx = toCanvasX(circle.cx);
-        const cy = toCanvasY(circle.cy);
-        const rPx = Math.abs(toCanvasX(circle.cx + circle.radius) - cx) || 4;
+        const rxPx = Math.abs(toCanvasX(circle.cx + circle.radius) - cx) || 4;
+        const ryPx =
+          Math.abs(toCanvasY(circle.cy + circle.radius) - toCanvasY(circle.cy)) || rxPx;
         ctx.save();
-        for (const layer of GLOW_LAYERS) {
-          ctx.globalAlpha = layer.alpha;
-          ctx.strokeStyle = '#ef4444';
-          ctx.lineWidth = layer.width;
-          ctx.beginPath();
-          ctx.arc(cx, cy, rPx, 0, Math.PI * 2);
-          ctx.stroke();
+        for (const cyMm of wrapCircumCenters(circle.cy, circle.radius, circumference)) {
+          const cy = toCanvasY(cyMm);
+          for (const layer of GLOW_LAYERS) {
+            ctx.globalAlpha = layer.alpha;
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = layer.width;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, rxPx, ryPx, 0, 0, Math.PI * 2);
+            ctx.stroke();
+          }
         }
         ctx.globalAlpha = 1;
         ctx.restore();
@@ -319,9 +342,15 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
       ctx.setLineDash([]);
       ctx.restore();
 
-      // 4. Dimension scales
-      drawAxialScale(ctx, vesselLength, toCanvasX, y1 + 4);
-      drawCircumScale(ctx, circumference, toCanvasY, x0 - 4);
+      // 4. Dimension scales — axial axis labelled as scan-index distance from
+      //    the scan start (0 on the left), matching the mirrored orientation.
+      const axialOri = getAxialOrientation(vesselState.scanComposites);
+      drawAxialScale(ctx, vesselLength, toCanvasX, y1 + 4, (mm) =>
+        axialToIndexMm(mm, axialOri),
+      );
+      // Anchor the circumferential scale to the actual left edge — when the
+      // axial axis is mirrored, toCanvasX(0) becomes the right edge.
+      drawCircumScale(ctx, circumference, toCanvasY, Math.min(x0, x1) - 4);
 
       // 5. Metadata header
       drawMetadataHeader(ctx, vesselState, PADDING.left, 10);
@@ -372,6 +401,16 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
 
         const vesselLength = state.length;
         const { zoom, offsetX, offsetY } = viewRef.current;
+        // Axial axis follows the reference scan's index direction (scan start on
+        // the left). Mirror the row→pixel mapping the same way toCanvasX does.
+        const reversed = getAxialOrientation(state.scanComposites)?.reversed ?? false;
+        // Same 1:1 scale + letterbox margins as toCanvasX/Y. Buffer is blitted at
+        // (PADDING.left, PADDING.top), so pixels are relative to that origin.
+        const { pxPerMm, marginX, marginY } = fitScale(
+          drawWidth, drawHeight, vesselLength, circumference,
+        );
+        if (pxPerMm <= 0) return;
+        const circSpanZoomed = circumference * pxPerMm * zoom;
         let hasData = false;
 
         for (const composite of state.scanComposites) {
@@ -386,10 +425,10 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
           const range = rMax === rMin ? 1 : rMax - rMin;
           const alpha = Math.round(Math.max(0, Math.min(1, composite.opacity)) * 255);
 
-          // datumAngleDeg is user-facing (0° = TDC). The +90 offset is only
-          // needed for the 3D internal coordinate system — the flattened view
-          // Y-axis uses the user convention directly.
-          const datumCircMm = angleToCircumMm(
+          // datumAngleDeg is user-facing (0° = TDC). datumToCircumMm applies the
+          // +90° (same as the 3D path) so a datum-0 scan starts at the TDC line
+          // (Y = 0), aligned with the geometry overlays.
+          const datumCircMm = datumToCircumMm(
             composite.datumAngleDeg,
             state.id,
           );
@@ -406,9 +445,12 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
                 ? indexStartMm + yAxis[row + 1]
                 : indexStartMm - yAxis[row + 1])
               : axialMm + (row > 0 ? Math.abs(yAxis[row] - yAxis[row - 1]) : 1);
-            // Convert to buffer pixel (relative to PADDING.left)
-            rowPx[row] = (axialMm / vesselLength) * drawWidth * zoom + offsetX;
-            rowPxNext[row] = (nextMm / vesselLength) * drawWidth * zoom + offsetX;
+            // Convert to buffer pixel (relative to PADDING.left), to-scale and
+            // mirrored to match the scan-index axis orientation.
+            const pos = axialFrac(axialMm, vesselLength, reversed) * vesselLength;
+            const posNext = axialFrac(nextMm, vesselLength, reversed) * vesselLength;
+            rowPx[row] = marginX + pos * pxPerMm * zoom + offsetX;
+            rowPxNext[row] = marginX + posNext * pxPerMm * zoom + offsetX;
           }
 
           // Pre-compute circumferential pixel for each col
@@ -427,8 +469,8 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
             let circumMmNext = datumCircMm + nextOffset;
             circumMmNext = ((circumMmNext % circumference) + circumference) % circumference;
 
-            colPy[col] = (circumMm / circumference) * drawHeight * zoom + offsetY;
-            colPyNext[col] = (circumMmNext / circumference) * drawHeight * zoom + offsetY;
+            colPy[col] = marginY + circumMm * pxPerMm * zoom + offsetY;
+            colPyNext[col] = marginY + circumMmNext * pxPerMm * zoom + offsetY;
           }
 
           for (let row = 0; row < data.length; row++) {
@@ -445,9 +487,9 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
 
               const py = colPy[col];
               const pyNext = colPyNext[col];
-              // Skip smearing: if the gap between adjacent pixels is > half the
-              // draw height, the wrapping crossed the boundary — skip that cell
-              if (Math.abs(pyNext - py) > drawHeight * 0.5) continue;
+              // Skip smearing: if the gap between adjacent pixels is more than
+              // half a circumference in pixels, the wrap crossed the seam — skip.
+              if (Math.abs(pyNext - py) > circSpanZoomed * 0.5) continue;
 
               const cellH = Math.abs(pyNext - py) || 1;
               const cellY = Math.min(py, pyNext);
@@ -491,8 +533,8 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
       (ctx: CanvasRenderingContext2D, state: VesselState) => {
         const od = state.id; // geometry-projection functions accept vesselOD
 
-        // 12 o'clock reference line (vessel TDC = 90° in vessel coords, -90° shift = 0°)
-        const tdcMm = angleToCircumMm(0, od);
+        // 12 o'clock reference line (vessel TDC = 90° → Y = 0, top of the view)
+        const tdcMm = angleToCircumMm(90, od);
         const tdcY = toCanvasY(tdcMm);
         const x0 = toCanvasX(0);
         const x1 = toCanvasX(state.length);
@@ -509,7 +551,8 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
         ctx.font = '10px sans-serif';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'bottom';
-        ctx.fillText('12 o\'clock (TDC)', x0 + 4, tdcY - 3);
+        // Left edge — toCanvasX(0) is the right edge when the axis is mirrored.
+        ctx.fillText('12 o\'clock (TDC)', Math.min(x0, x1) + 4, tdcY - 3);
         ctx.restore();
 
         // Welds are rendered outside the clip region (see main draw fn)
@@ -539,33 +582,45 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
           );
         }
 
-        // Nozzles
+        // Nozzles — drawn as ellipses because the developed view scales the axial
+        // and circumferential axes independently, so a bore that is round on the
+        // shell must use a separate pixel radius per axis (a single radius makes
+        // it bulge/shrink circumferentially). Each nozzle is also drawn at every
+        // seam-wrapped centre so a feature straddling the TDC cut is not clipped
+        // in half at the top/bottom boundary.
+        const circumference = getCircumference(state);
         for (const nozzle of state.nozzles) {
           const circle = projectNozzle(nozzle, od);
           const cx = toCanvasX(circle.cx);
-          const cy = toCanvasY(circle.cy);
-          const rPx =
+          const rxPx =
             Math.abs(toCanvasX(circle.cx + circle.radius) - cx) || 4;
+          const ryPx =
+            Math.abs(toCanvasY(circle.cy + circle.radius) - toCanvasY(circle.cy)) ||
+            rxPx;
 
-          ctx.strokeStyle = '#e74c3c';
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.arc(cx, cy, rPx, 0, Math.PI * 2);
-          ctx.stroke();
+          for (const cyMm of wrapCircumCenters(circle.cy, circle.radius, circumference)) {
+            const cy = toCanvasY(cyMm);
 
-          // Cross-hair
-          ctx.beginPath();
-          ctx.moveTo(cx - rPx, cy);
-          ctx.lineTo(cx + rPx, cy);
-          ctx.moveTo(cx, cy - rPx);
-          ctx.lineTo(cx, cy + rPx);
-          ctx.stroke();
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, rxPx, ryPx, 0, 0, Math.PI * 2);
+            ctx.stroke();
 
-          ctx.fillStyle = '#333';
-          ctx.font = '10px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'bottom';
-          ctx.fillText(circle.label, cx, cy - rPx - 3);
+            // Cross-hair
+            ctx.beginPath();
+            ctx.moveTo(cx - rxPx, cy);
+            ctx.lineTo(cx + rxPx, cy);
+            ctx.moveTo(cx, cy - ryPx);
+            ctx.lineTo(cx, cy + ryPx);
+            ctx.stroke();
+
+            ctx.fillStyle = '#333';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(circle.label, cx, cy - ryPx - 3);
+          }
         }
 
         // Lifting lugs
@@ -806,7 +861,7 @@ function findThicknessAt(
     const { yAxis, xAxis, data, indexStartMm, indexDirection, scanDirection } =
       composite;
 
-    const datumCircMm = angleToCircumMm(composite.datumAngleDeg, vesselOD);
+    const datumCircMm = datumToCircumMm(composite.datumAngleDeg, vesselOD);
 
     // Find the closest row (axial)
     let bestRow = -1;
