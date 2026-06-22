@@ -305,7 +305,7 @@ export function createDomeScanPlane(
   const phiTanLen = Math.sqrt(ePhiX ** 2 + ePhiY ** 2 + ePhiZ ** 2);
 
   // ∂P/∂θ — circumferential tangent (scan direction)
-  let eThetaX = 0;
+  const eThetaX = 0;
   let eThetaY = RADIUS * cSinPhi * cCosTheta;
   let eThetaZ = -RADIUS * cSinPhi * cSinTheta;
   let thetaTanLen = Math.sqrt(eThetaY ** 2 + eThetaZ ** 2);

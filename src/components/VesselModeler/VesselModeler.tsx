@@ -37,6 +37,8 @@ import {
 import type { ExtractionResult } from './engine/drawing-parser';
 import { loadTextureFromData, clearHeatmapCache } from './engine/texture-manager';
 import { clearDomeHeatmapCache, normalizeDomeScanComposite } from './engine/dome-scan-geometry';
+import { deserializeNozzle } from './engine/nozzle-geometry';
+import { deserializeSaddle } from './engine/saddle-geometry';
 import { exportVesselGLB } from './engine/gltf-export';
 import { recomputeAllAnnotationStats } from './engine/annotation-stats';
 import { computeInspectionCameraTarget, animateCamera, cancelCameraAnimation } from './engine/camera-animation';
@@ -544,22 +546,14 @@ export default function VesselModeler() {
             vesselName: projectData.vessel.vesselName || '',
             location: projectData.vessel.location || '',
             inspectionDate: projectData.vessel.inspectionDate || '',
-            nozzles: (projectData.nozzles || []).map((n: any) => ({
-                name: n.name || 'N', pos: n.pos ?? 0, proj: n.proj ?? 200,
-                angle: n.angle ?? 90, size: n.size ?? 100,
-                orientationMode: n.orientationMode, azimuthRotation: n.azimuthRotation,
-                flangeOD: n.flangeOD, flangeThk: n.flangeThk, pipeOD: n.pipeOD, style: n.style,
-                hideRepad: n.hideRepad,
-            })),
+            nozzles: (projectData.nozzles || []).map(deserializeNozzle),
             liftingLugs: (projectData.liftingLugs || []).map((l: any) => ({
                 name: l.name || 'L', pos: l.pos ?? 0, angle: l.angle ?? 90,
                 style: l.style || 'padEye', swl: l.swl || '5t',
                 width: l.width, height: l.height,
                 thickness: l.thickness, holeDiameter: l.holeDiameter,
             })),
-            saddles: (projectData.saddles || []).map((s: any) =>
-                typeof s === 'number' ? { pos: s, color: '#2244ff' } : { pos: s.pos, color: s.color || '#2244ff', height: s.height, depth: s.depth }
-            ),
+            saddles: (projectData.saddles || []).map(deserializeSaddle),
             welds: (projectData.welds || []).map((w: any) => ({
                 name: w.name || 'W', type: w.type || 'circumferential',
                 pos: w.pos ?? 0, endPos: w.endPos, angle: w.angle,
@@ -935,6 +929,11 @@ export default function VesselModeler() {
 
     const updateAllSaddleDepths = useCallback((depth: number) => {
         updateVessel(prev => ({ ...prev, saddles: prev.saddles.map(s => ({ ...s, depth })) }));
+    }, [updateVessel]);
+
+    // Wear plate is configured universally across all supports, not per-saddle.
+    const updateAllSaddleWearPlate = useCallback((updates: Partial<SaddleConfig>) => {
+        updateVessel(prev => ({ ...prev, saddles: prev.saddles.map(s => ({ ...s, ...updates })) }));
     }, [updateVessel]);
 
     const removeSaddle = useCallback((index: number) => {
@@ -1700,6 +1699,8 @@ export default function VesselModeler() {
                 orientationMode: n.orientationMode, azimuthRotation: n.azimuthRotation,
                 flangeOD: n.flangeOD, flangeThk: n.flangeThk, pipeOD: n.pipeOD, style: n.style,
                 hideRepad: n.hideRepad,
+                showRepad: n.showRepad, showWeldNeck: n.showWeldNeck,
+                repadOD: n.repadOD, repadThickness: n.repadThickness,
             })),
             liftingLugs: vesselState.liftingLugs.map(l => ({
                 name: l.name, pos: l.pos, angle: l.angle,
@@ -1710,6 +1711,8 @@ export default function VesselModeler() {
             saddles: vesselState.saddles.map(s => ({
                 pos: s.pos, color: s.color || '#2244ff',
                 height: s.height, depth: s.depth,
+                wearPlate: s.wearPlate, wearPlateThickness: s.wearPlateThickness,
+                wearPlateArcOverhang: s.wearPlateArcOverhang, wearPlateAxialOverhang: s.wearPlateAxialOverhang,
             })),
             welds: vesselState.welds.map(w => ({
                 name: w.name, type: w.type, pos: w.pos,
@@ -1829,6 +1832,8 @@ export default function VesselModeler() {
                 orientationMode: n.orientationMode, azimuthRotation: n.azimuthRotation,
                 flangeOD: n.flangeOD, flangeThk: n.flangeThk, pipeOD: n.pipeOD, style: n.style,
                 hideRepad: n.hideRepad,
+                showRepad: n.showRepad, showWeldNeck: n.showWeldNeck,
+                repadOD: n.repadOD, repadThickness: n.repadThickness,
             })),
             liftingLugs: vesselState.liftingLugs.map(l => ({
                 name: l.name, pos: l.pos, angle: l.angle,
@@ -1839,6 +1844,8 @@ export default function VesselModeler() {
             saddles: vesselState.saddles.map(s => ({
                 pos: s.pos, color: s.color || '#2244ff',
                 height: s.height, depth: s.depth,
+                wearPlate: s.wearPlate, wearPlateThickness: s.wearPlateThickness,
+                wearPlateArcOverhang: s.wearPlateArcOverhang, wearPlateAxialOverhang: s.wearPlateAxialOverhang,
             })),
             welds: vesselState.welds.map(w => ({
                 name: w.name, type: w.type, pos: w.pos,
@@ -2150,21 +2157,14 @@ export default function VesselModeler() {
                     vesselName: projectData.vessel.vesselName || '',
                     location: projectData.vessel.location || '',
                     inspectionDate: projectData.vessel.inspectionDate || '',
-                    nozzles: (projectData.nozzles || []).map((n: any) => ({
-                        name: n.name || 'N', pos: n.pos ?? 0, proj: n.proj ?? 200,
-                        angle: n.angle ?? 90, size: n.size ?? 100,
-                        orientationMode: n.orientationMode, azimuthRotation: n.azimuthRotation,
-                        flangeOD: n.flangeOD, flangeThk: n.flangeThk, pipeOD: n.pipeOD, style: n.style,
-                    })),
+                    nozzles: (projectData.nozzles || []).map(deserializeNozzle),
                     liftingLugs: (projectData.liftingLugs || []).map((l: any) => ({
                         name: l.name || 'L', pos: l.pos ?? 0, angle: l.angle ?? 90,
                         style: l.style || 'padEye', swl: l.swl || '5t',
                         width: l.width, height: l.height,
                         thickness: l.thickness, holeDiameter: l.holeDiameter,
                     })),
-                    saddles: (projectData.saddles || []).map((s: any) =>
-                        typeof s === 'number' ? { pos: s, color: '#2244ff' } : { pos: s.pos, color: s.color || '#2244ff', height: s.height, depth: s.depth }
-                    ),
+                    saddles: (projectData.saddles || []).map(deserializeSaddle),
                     welds: (projectData.welds || []).map((w: any) => ({
                         name: w.name || 'W', type: w.type || 'circumferential',
                         pos: w.pos ?? 0, endPos: w.endPos, angle: w.angle,
@@ -3077,6 +3077,7 @@ export default function VesselModeler() {
                         onUpdateSaddle={updateSaddle}
                         onUpdateAllSaddleHeights={updateAllSaddleHeights}
                         onUpdateAllSaddleDepths={updateAllSaddleDepths}
+                        onUpdateAllSaddleWearPlate={updateAllSaddleWearPlate}
                         onRemoveSaddle={removeSaddle}
                         onSelectSaddle={(index) => dispatch({ type: 'SELECT_SADDLE', index })}
                         selectedWeldIndex={selection.weldIndex}

@@ -19,6 +19,97 @@ import { type NozzleConfig, findClosestPipeSize } from '../types';
 import { SCALE } from './materials';
 
 // ---------------------------------------------------------------------------
+// deserializeNozzle
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalise a raw (loaded or imported) nozzle record into a {@link NozzleConfig}.
+ *
+ * Shared by every project-load path so the deserialisers cannot drift apart.
+ * Critically, an intentionally-blank name (`''`) is preserved rather than
+ * coerced to the `'N'` default: a blank-named nozzle is treated as an unlabelled
+ * "building block" and renders without a 3D label (see the `!nozzle?.name`
+ * guards in ThreeViewport / gltf-export). Only a genuinely missing or
+ * non-string name falls back to `'N'`.
+ */
+export function deserializeNozzle(raw: any): NozzleConfig {
+    // Migration: the pad and weld neck used to share the single `hideRepad`
+    // flag. New records carry independent `showRepad` / `showWeldNeck`.
+    // The reinforcing pad is an opt-in detail, so it defaults OFF unless the
+    // record explicitly enables it. The weld neck keeps its historical default
+    // (shown unless the legacy `hideRepad` hid it).
+    const legacyWeldNeckVisible = raw?.hideRepad !== true;
+    return {
+        name: typeof raw?.name === 'string' ? raw.name : 'N',
+        pos: raw?.pos ?? 0,
+        proj: raw?.proj ?? 200,
+        angle: raw?.angle ?? 90,
+        size: raw?.size ?? 100,
+        orientationMode: raw?.orientationMode,
+        azimuthRotation: raw?.azimuthRotation,
+        flangeOD: raw?.flangeOD,
+        flangeThk: raw?.flangeThk,
+        pipeOD: raw?.pipeOD,
+        style: raw?.style,
+        hideRepad: raw?.hideRepad,
+        showRepad: raw?.showRepad ?? false,
+        showWeldNeck: raw?.showWeldNeck ?? legacyWeldNeckVisible,
+        repadOD: raw?.repadOD,
+        repadThickness: raw?.repadThickness,
+    };
+}
+
+// ---------------------------------------------------------------------------
+// buildConformingRepad
+// ---------------------------------------------------------------------------
+
+/** Default reinforcing pad outside-diameter multiplier (× pipe OD). */
+const DEFAULT_REPAD_OD_RATIO = 1.8;
+/** Default reinforcing pad thickness in mm. */
+const DEFAULT_REPAD_THICKNESS = 10;
+
+/**
+ * Build a reinforcing pad as a flat circular plate **bent to the shell radius**
+ * — a true repad rather than a domed sphere-cap.
+ *
+ * Starts from a thin disc (`CylinderGeometry`, which has clean outward winding)
+ * and displaces every vertex down by the shell-curvature sagitta
+ * `R − √(R² − ρ²)` (ρ = distance from the nozzle axis), so the plate seats on
+ * the shell: bottom-centre touches at the origin (y = 0) and the rim dips to
+ * follow the curve, keeping ~uniform thickness. Normals are recomputed from the
+ * primitive's preserved winding, so the plate shades correctly. On dome ends
+ * `R` is the cylinder radius — an accepted approximation.
+ *
+ * All inputs are in **world units** (already scaled).
+ */
+function buildConformingRepad(
+  repadRadius: number,
+  repadThickness: number,
+  bendRadius: number,
+  material: THREE.Material,
+): THREE.Mesh {
+  const R = bendRadius;
+  const geom = new THREE.CylinderGeometry(repadRadius, repadRadius, repadThickness, 48, 1);
+  // Move the disc so its (flat) bottom face starts at y = 0, then bend it down.
+  geom.translate(0, repadThickness / 2, 0);
+
+  const pos = geom.attributes.position as THREE.BufferAttribute;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    const rho = Math.hypot(x, z);
+    const sag = R - Math.sqrt(Math.max(0, R * R - rho * rho));
+    pos.setY(i, pos.getY(i) - sag);
+  }
+  pos.needsUpdate = true;
+  geom.computeVertexNormals();
+
+  const mesh = new THREE.Mesh(geom, material);
+  mesh.userData = { part: 'repad' };
+  return mesh;
+}
+
+// ---------------------------------------------------------------------------
 // createFlangedNozzle
 // ---------------------------------------------------------------------------
 
@@ -42,6 +133,11 @@ export function createFlangedNozzle(
   const group = new THREE.Group();
   const isPlainPipe = nozzle.style === 'plain-pipe';
 
+  // -- Pad / weld-neck visibility (independent; migrate from legacy hideRepad)
+  // The pad is opt-in (defaults off); the weld neck keeps its historical default.
+  const showRepad = nozzle.showRepad ?? false;
+  const showWeldNeck = nozzle.showWeldNeck ?? (nozzle.hideRepad !== true);
+
   // -- Pipe dimensions from lookup table (with optional overrides) ----------
   const pipeID = nozzle.size;
   const closestPipe = findClosestPipeSize(pipeID);
@@ -58,35 +154,26 @@ export function createFlangedNozzle(
   // Penetration depth - extend nozzle into the shell for proper visual connection
   const penetrationDepth = shellRadius * SCALE * 0.12;
 
-  // -- Reinforcing pad (curved disc that follows shell curvature) -----------
-  if (!isPlainPipe && !nozzle.hideRepad) {
-  const repadOD = pipeOD * 1.8; // Typically 1.5-2x pipe OD
-  const repadRadius = (repadOD / 2) * SCALE;
-  const repadThickness = 10 * SCALE; // ~10mm thick pad
-
-  const padSegments = 32;
-  const padGeom = new THREE.SphereGeometry(
-    repadRadius,
-    padSegments,
-    padSegments,
-    0,
-    Math.PI * 2,
-    0,
-    Math.PI * 0.25, // Only the top cap portion
-  );
-  const repad = new THREE.Mesh(padGeom, material);
-  // Scale Y to flatten into a pad, and flip so curved side faces down (toward shell)
-  repad.scale.set(1, 0.3, 1);
-  repad.rotation.x = Math.PI; // Flip so curve matches shell
-  repad.position.y = repadThickness * 0.5;
-  group.add(repad);
+  // -- Reinforcing pad (flat plate bent to the shell radius) ----------------
+  if (!isPlainPipe && showRepad) {
+    const repadOD = nozzle.repadOD || pipeOD * DEFAULT_REPAD_OD_RATIO;
+    const repadRadius = (repadOD / 2) * SCALE;
+    const repadThickness = (nozzle.repadThickness ?? DEFAULT_REPAD_THICKNESS) * SCALE;
+    const repad = buildConformingRepad(
+      repadRadius,
+      repadThickness,
+      shellRadius * SCALE,
+      material,
+    );
+    group.add(repad);
   }
 
   // -- Inner stub (penetrates into the shell) --------------------------------
+  // Flares to blend into the reinforced junction only when the weld neck shows.
   const stubLength = penetrationDepth;
   const stubGeom = new THREE.CylinderGeometry(
-    nozzle.hideRepad ? pipeRadius : pipeRadius * 1.1,
-    nozzle.hideRepad ? pipeRadius : pipeRadius * 1.3,
+    showWeldNeck ? pipeRadius * 1.1 : pipeRadius,
+    showWeldNeck ? pipeRadius * 1.3 : pipeRadius,
     stubLength,
     32,
   );
@@ -96,8 +183,8 @@ export function createFlangedNozzle(
 
   // -- Weld neck (tapered section emerging from the pad) ---------------------
   // Fixed size based on pipe diameter, not projection length
-  const weldNeckLength = nozzle.hideRepad ? 0 : Math.min(pipeRadius * 0.8, 40 * SCALE);
-  if (!nozzle.hideRepad) {
+  const weldNeckLength = showWeldNeck ? Math.min(pipeRadius * 0.8, 40 * SCALE) : 0;
+  if (showWeldNeck) {
     const weldNeckGeom = new THREE.CylinderGeometry(
       pipeRadius,
       pipeRadius * 1.15,
@@ -106,6 +193,7 @@ export function createFlangedNozzle(
     );
     const weldNeck = new THREE.Mesh(weldNeckGeom, material);
     weldNeck.position.y = weldNeckLength / 2;
+    weldNeck.userData = { part: 'weldNeck' };
     group.add(weldNeck);
   }
 

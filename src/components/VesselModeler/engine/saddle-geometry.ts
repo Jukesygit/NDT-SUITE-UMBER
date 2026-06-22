@@ -19,29 +19,37 @@ export const DEFAULT_SADDLE_DEPTH = 400;
 /** Number of segments for the cradle arc */
 const ARC_SEGMENTS = 32;
 
+/** Default wear / reinforcement plate thickness in mm */
+export const DEFAULT_WEAR_PLATE_THICKNESS = 12;
+/** Default wear plate circumferential overhang beyond each saddle horn, in degrees */
+export const DEFAULT_WEAR_PLATE_ARC_OVERHANG = 6;
+/** Default wear plate axial overhang beyond the saddle depth, per side, in mm */
+export const DEFAULT_WEAR_PLATE_AXIAL_OVERHANG = 50;
+
 /**
- * Build an extruded cradle arc that wraps the bottom of the vessel.
+ * Build an extruded arc plate that wraps the bottom of the vessel.
  *
  * The 2D cross-section is drawn in a local XY plane:
  *   X = transverse  (maps to world -Z after rotateY(π/2))
  *   Y = vertical    (maps to world  Y)
  *
- * The arc is centered at angle -π/2 (bottom of circle) so the cradle
- * sits beneath the vessel shell.
+ * The arc is centered at angle -π/2 (bottom of circle) so the plate
+ * sits beneath the vessel shell. Used for both the saddle cradle and the
+ * wear plate; only the inner radius, thickness, half-arc, and depth differ.
+ *
+ * All dimensions are in **world units** (already multiplied by SCALE).
  */
-function buildCradleGeometry(
-  vesselRadius: number,
-  saddleWidth: number,
+function buildArcPlateGeometry(
+  innerRadius: number,
+  thickness: number,
+  halfArc: number,
+  depth: number,
 ): THREE.ExtrudeGeometry {
-  const r = vesselRadius * SCALE;
-  const thickness = PLATE_THICKNESS * SCALE;
-  const halfArc = CRADLE_ARC / 2;
-
-  const outerR = r + thickness;
+  const outerR = innerRadius + thickness;
 
   // Arc centered at -π/2 (bottom of vessel cross-section)
-  const startAngle = -Math.PI / 2 - halfArc; // -150°
-  const endAngle = -Math.PI / 2 + halfArc;   // -30°
+  const startAngle = -Math.PI / 2 - halfArc;
+  const endAngle = -Math.PI / 2 + halfArc;
 
   const shape = new THREE.Shape();
 
@@ -64,22 +72,47 @@ function buildCradleGeometry(
     const t = i / ARC_SEGMENTS;
     const angle = startAngle + (endAngle - startAngle) * t;
     shape.lineTo(
-      Math.cos(angle) * r,
-      Math.sin(angle) * r,
+      Math.cos(angle) * innerRadius,
+      Math.sin(angle) * innerRadius,
     );
   }
 
   shape.closePath();
 
   const geom = new THREE.ExtrudeGeometry(shape, {
-    depth: saddleWidth * SCALE,
+    depth,
     bevelEnabled: false,
   });
 
   // Center the extrusion along its depth (local Z) axis
-  geom.translate(0, 0, -(saddleWidth * SCALE) / 2);
+  geom.translate(0, 0, -depth / 2);
 
   return geom;
+}
+
+/**
+ * Normalise a raw (loaded or imported) saddle record into a {@link SaddleConfig}.
+ *
+ * Shared by every project-load path so the deserialisers cannot drift apart
+ * (the same contract as `deserializeNozzle`). Legacy saddles were stored as a
+ * bare number (the axial position); those expand to a positioned config. The
+ * optional wear-plate fields pass through untouched — absent means the plate
+ * renders off, preserving the look of older models.
+ */
+export function deserializeSaddle(raw: any): SaddleConfig {
+  if (typeof raw === 'number') {
+    return { pos: raw, color: '#2244ff' };
+  }
+  return {
+    pos: raw?.pos ?? 0,
+    color: raw?.color || '#2244ff',
+    height: raw?.height,
+    depth: raw?.depth,
+    wearPlate: raw?.wearPlate,
+    wearPlateThickness: raw?.wearPlateThickness,
+    wearPlateArcOverhang: raw?.wearPlateArcOverhang,
+    wearPlateAxialOverhang: raw?.wearPlateAxialOverhang,
+  };
 }
 
 /** Default saddle height as a multiplier of vessel radius */
@@ -125,12 +158,20 @@ export function createSaddleGroup(
   const thickness = PLATE_THICKNESS;
   const halfArc = CRADLE_ARC / 2;
 
+  // -- Wear plate parameters --------------------------------------------------
+  // When present, the wear plate hugs the shell (inner radius = RADIUS) and the
+  // cradle rides on its outer surface, so the cradle contact radius shifts out
+  // by the plate thickness.
+  const hasWearPlate = saddle.wearPlate === true;
+  const wearPlateThickness = saddle.wearPlateThickness ?? DEFAULT_WEAR_PLATE_THICKNESS;
+  const contactRadius = RADIUS + (hasWearPlate ? wearPlateThickness : 0);
+
   // Total saddle height from base to vessel center (configurable)
   const totalHeight = saddle.height ?? RADIUS * DEFAULT_HEIGHT_RATIO;
 
   // Y coordinate where the cradle arc edges end
-  // cos(60°) = 0.5, so edge Y = -0.5 * R
-  const cradleEdgeY = -Math.cos(halfArc) * RADIUS * SCALE;
+  // cos(60°) = 0.5, so edge Y = -0.5 * contactRadius
+  const cradleEdgeY = -Math.cos(halfArc) * contactRadius * SCALE;
 
   // Base plate sits at the bottom of the total height
   const baseY = -totalHeight * SCALE;
@@ -140,23 +181,48 @@ export function createSaddleGroup(
   const webCenterY = (cradleEdgeY + baseY) / 2;
 
   // Z positions of the side webs (at the transverse edges of the cradle arc)
-  const webZ = Math.sin(halfArc) * RADIUS * SCALE;
+  const webZ = Math.sin(halfArc) * contactRadius * SCALE;
 
   // Base plate spans the full transverse width
   const baseWidth = webZ * 2 + thickness * SCALE;
 
   const group = new THREE.Group();
 
+  // -- 0. Wear / reinforcement plate (curved plate welded to the shell) -------
+  // Built first so it sits between the shell and the cradle. Wraps a larger arc
+  // and a wider axial span than the cradle so its horns and edges are visible.
+  if (hasWearPlate) {
+    const arcOverhangRad =
+      ((saddle.wearPlateArcOverhang ?? DEFAULT_WEAR_PLATE_ARC_OVERHANG) * Math.PI) / 180;
+    const axialOverhang = saddle.wearPlateAxialOverhang ?? DEFAULT_WEAR_PLATE_AXIAL_OVERHANG;
+    const wearPlateGeom = buildArcPlateGeometry(
+      RADIUS * SCALE,
+      wearPlateThickness * SCALE,
+      halfArc + arcOverhangRad,
+      (saddleWidth + 2 * axialOverhang) * SCALE,
+    );
+    wearPlateGeom.rotateY(Math.PI / 2);
+    const wearPlateMesh = new THREE.Mesh(wearPlateGeom, mat);
+    wearPlateMesh.userData = { part: 'wearPlate' };
+    group.add(wearPlateMesh);
+  }
+
   // -- 1. Curved cradle -------------------------------------------------------
-  const cradleGeom = buildCradleGeometry(RADIUS, saddleWidth);
+  const cradleGeom = buildArcPlateGeometry(
+    contactRadius * SCALE,
+    PLATE_THICKNESS * SCALE,
+    halfArc,
+    saddleWidth * SCALE,
+  );
   // Rotate so extrusion depth goes along X (vessel axis) instead of Z
   cradleGeom.rotateY(Math.PI / 2);
   const cradleMesh = new THREE.Mesh(cradleGeom, mat);
+  cradleMesh.userData = { part: 'cradle' };
   group.add(cradleMesh);
 
   // -- 2. Center web plate (fills the gap under the cradle) -------------------
   // Spans from the very bottom of the cradle arc down to the base
-  const cradleBottomY = -RADIUS * SCALE; // lowest point of the inner arc
+  const cradleBottomY = -contactRadius * SCALE; // lowest point of the inner arc
   const centerWebHeight = Math.abs(cradleBottomY - baseY);
   const centerWebGeom = new THREE.BoxGeometry(
     saddleWidth * SCALE,
@@ -187,7 +253,7 @@ export function createSaddleGroup(
   // Their top edge follows the cradle inner arc at that Z position.
   const midZ = webZ / 2;
   // The cradle inner radius at this Z: Y = -sqrt(R² - Z²)
-  const midCradleY = -Math.sqrt(RADIUS * RADIUS - (midZ / SCALE) * (midZ / SCALE)) * SCALE;
+  const midCradleY = -Math.sqrt(contactRadius * contactRadius - (midZ / SCALE) * (midZ / SCALE)) * SCALE;
   const midWebHeight = Math.abs(midCradleY - baseY);
   const midWebCenterY = (midCradleY + baseY) / 2;
 
