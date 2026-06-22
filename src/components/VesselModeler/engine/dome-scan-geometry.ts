@@ -1,9 +1,11 @@
 // =============================================================================
 // Dome Scan Geometry — Helpers & Mesh Factory
 // =============================================================================
-// Maps C-scan data onto ellipsoidal vessel heads using polar coordinates
-// (phi from apex, theta around axis).  Parallels the cylindrical shell scan
-// system in texture-manager.ts but uses a distinct coordinate model.
+// Maps C-scan data onto ellipsoidal vessel heads using tangent-plane
+// projection: a flat rectangular grid is laid out on the tangent plane at
+// the scan center, then each point is projected radially onto the
+// ellipsoid surface.  This avoids the polar singularity of spherical
+// coordinates and keeps the scan rectangular regardless of position.
 // =============================================================================
 
 import * as THREE from 'three';
@@ -22,6 +24,33 @@ export const PHI_EPSILON = 0.01;
 
 /** Surface offset in mm (raises scan mesh slightly above the dome surface). */
 const SURFACE_OFFSET = 2;
+
+// ---------------------------------------------------------------------------
+// Part 0 — Deserialization / Normalization
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalize a raw dome-scan composite (as restored from a saved project) into a
+ * fully-formed {@link DomeScanConfig}.
+ *
+ * Projects are persisted WITHOUT the heavy `data`/`xAxis`/`yAxis` matrices, so
+ * those fields are `undefined` on load. Every required field is backfilled with
+ * a safe default here — the single source of truth for both load paths — so no
+ * downstream consumer (structuralHash, geometry, stats) can read a property of
+ * `undefined`. Mirrors the field-by-field defaulting the scan-composite loader
+ * already performs.
+ */
+export function normalizeDomeScanComposite(raw: any): DomeScanConfig {
+    return {
+        ...raw,
+        head: raw.head || (raw.sectionType === 'dome_left' ? 'left' : 'right'),
+        orientationConfirmed: raw.orientationConfirmed ?? false,
+        data: raw.data ?? [],
+        xAxis: raw.xAxis ?? [],
+        yAxis: raw.yAxis ?? [],
+        stats: raw.stats ?? { min: 0, max: 0, mean: 0, median: 0, stdDev: 0 },
+    };
+}
 
 // ---------------------------------------------------------------------------
 // Part A — Shared Helpers
@@ -223,26 +252,34 @@ export function createDomeScanPlane(
     evictDomeHeatmapCache();
   }
 
-  // --- Angular span calculation ---
+  // --- Projection metrics at center point ---
   const centerPhiRad = degToRad(Math.max(PHI_EPSILON, config.centerPhi));
   const centerThetaRad = degToRad(config.centerTheta);
+  const cCosPhi = Math.cos(centerPhiRad);
+  const cSinPhi = Math.sin(centerPhiRad);
+  const cCosTheta = Math.cos(centerThetaRad);
+  const cSinTheta = Math.sin(centerThetaRad);
 
   const scanRangeMm = Math.abs(config.xAxis[config.xAxis.length - 1] - config.xAxis[0]);
+  const indexRangeMm = Math.abs(config.yAxis[config.yAxis.length - 1] - config.yAxis[0]);
 
-  // Center-row angular span (used only for segment count estimation)
-  const sinCenterPhi = Math.sin(centerPhiRad);
-  const centerCircumference = 2 * Math.PI * RADIUS * sinCenterPhi;
-  const centerAngularSpan = Math.min(
-    (scanRangeMm / Math.max(centerCircumference, 1)) * 2 * Math.PI,
+  // Segment count sizing (angular spans at center for mesh density)
+  const hPhi = Math.sqrt(
+    HEAD_DEPTH * HEAD_DEPTH * cSinPhi * cSinPhi +
+    RADIUS * RADIUS * cCosPhi * cCosPhi,
+  );
+  const hThetaCenter = RADIUS * cSinPhi;
+  const thetaSpanCenter = Math.min(
+    hThetaCenter > 0.001 ? scanRangeMm / hThetaCenter : 2 * Math.PI,
     2 * Math.PI,
   );
+  const phiSpan = Math.min(
+    hPhi > 0.001 ? indexRangeMm / hPhi : Math.PI / 2,
+    Math.PI,
+  );
 
-  const effectiveRadius = Math.sqrt(RADIUS * HEAD_DEPTH);
-  const indexRangeMm = Math.abs(config.yAxis[config.yAxis.length - 1] - config.yAxis[0]);
-  const phiSpan = indexRangeMm / effectiveRadius;
-
-  // --- Segment counts ---
-  const segmentsX = Math.max(16, Math.round(64 * centerAngularSpan / Math.PI));
+  // --- Segment counts (based on center-phi span for mesh density) ---
+  const segmentsX = Math.max(16, Math.round(64 * thetaSpanCenter / Math.PI));
   const segmentsY = Math.max(16, Math.round(64 * phiSpan / Math.PI));
 
   // --- Build geometry ---
@@ -254,48 +291,81 @@ export function createDomeScanPlane(
   const headSign = config.head === 'right' ? 1 : -1;
   const tangentLineMm = config.head === 'right' ? TAN_TAN : 0;
 
+  // --- Tangent-plane basis at scan center ---
+  // Dome-local 3D frame: origin at ellipsoid center (tangent-line ∩ dome axis),
+  //   x = axial (toward apex), yz = radial plane.
+  const cx = HEAD_DEPTH * cCosPhi;
+  const cy = RADIUS * cSinPhi * cSinTheta;
+  const cz = RADIUS * cSinPhi * cCosTheta;
+
+  // ∂P/∂φ — meridional tangent (index direction, toward equator)
+  const ePhiX = -HEAD_DEPTH * cSinPhi;
+  const ePhiY = RADIUS * cCosPhi * cSinTheta;
+  const ePhiZ = RADIUS * cCosPhi * cCosTheta;
+  const phiTanLen = Math.sqrt(ePhiX ** 2 + ePhiY ** 2 + ePhiZ ** 2);
+
+  // ∂P/∂θ — circumferential tangent (scan direction)
+  let eThetaX = 0;
+  let eThetaY = RADIUS * cSinPhi * cCosTheta;
+  let eThetaZ = -RADIUS * cSinPhi * cSinTheta;
+  let thetaTanLen = Math.sqrt(eThetaY ** 2 + eThetaZ ** 2);
+
+  if (thetaTanLen < 0.001) {
+    // Near-apex fallback: circumferential tangent degenerates
+    eThetaY = -RADIUS * cCosTheta;
+    eThetaZ = RADIUS * cSinTheta;
+    thetaTanLen = RADIUS;
+  }
+
+  // Unit tangent vectors (per mm on dome surface)
+  const uPhiX = ePhiX / phiTanLen;
+  const uPhiY = ePhiY / phiTanLen;
+  const uPhiZ = ePhiZ / phiTanLen;
+  const uThetaX = eThetaX / thetaTanLen;
+  const uThetaY = eThetaY / thetaTanLen;
+  const uThetaZ = eThetaZ / thetaTanLen;
+
+  const invD2 = 1 / (HEAD_DEPTH * HEAD_DEPTH);
+  const invR2 = 1 / (RADIUS * RADIUS);
+
   for (let iy = 0; iy <= segmentsY; iy++) {
     const v = iy / segmentsY;
-    const phiOffset = (v - 0.5) * phiSpan;
-    const clampedPhiDeg = Math.max(
-      PHI_EPSILON,
-      Math.min(90, radToDeg(centerPhiRad + phiOffset)),
-    );
-
-    // Per-row angular span: each row's local circumference differs
-    const rowPhiRad = degToRad(clampedPhiDeg);
-    const rowSinPhi = Math.sin(rowPhiRad);
-    const rowCircumference = 2 * Math.PI * RADIUS * rowSinPhi;
-    const rowAngularSpan = Math.min(
-      (scanRangeMm / Math.max(rowCircumference, 1)) * 2 * Math.PI,
-      2 * Math.PI,
-    );
+    const indexMm = (v - 0.5) * indexRangeMm;
 
     for (let ix = 0; ix <= segmentsX; ix++) {
       const u = ix / segmentsX;
-      const thetaOffset = (u - 0.5) * rowAngularSpan;
-      const currentThetaDeg = radToDeg(centerThetaRad + thetaOffset);
+      const scanMm = (u - 0.5) * scanRangeMm;
 
-      const local = domeLocalFromPhiTheta(clampedPhiDeg, currentThetaDeg, RADIUS, HEAD_DEPTH);
+      // Point on tangent plane at scan center
+      const px = cx + scanMm * uThetaX + indexMm * uPhiX;
+      const py = cy + scanMm * uThetaY + indexMm * uPhiY;
+      const pz = cz + scanMm * uThetaZ + indexMm * uPhiZ;
 
-      const rScaled = (local.rLocalMm + SURFACE_OFFSET) * SCALE;
-      const axialPosMm = tangentLineMm + headSign * local.axialMm;
+      // Central projection onto ellipsoid: scale so (x/D)²+(y²+z²)/R²=1
+      const denom = Math.sqrt(px * px * invD2 + (py * py + pz * pz) * invR2);
+      const sx = px / denom;
+      const sy = py / denom;
+      const sz = pz / denom;
+
+      const rLocalMm = Math.sqrt(sy * sy + sz * sz);
+      const localTheta = Math.atan2(sy, sz);
+      const rScaled = (rLocalMm + SURFACE_OFFSET) * SCALE;
+      const axialPosMm = tangentLineMm + headSign * sx;
       const axialGlobal = (axialPosMm - TAN_TAN / 2) * SCALE;
 
       let x: number, y: number, z: number;
       if (isVertical) {
-        x = rScaled * Math.cos(local.thetaRad);
+        x = rScaled * Math.cos(localTheta);
         y = axialGlobal;
-        z = rScaled * Math.sin(local.thetaRad);
+        z = rScaled * Math.sin(localTheta);
       } else {
         x = axialGlobal;
-        y = rScaled * Math.sin(local.thetaRad);
-        z = rScaled * Math.cos(local.thetaRad);
+        y = rScaled * Math.sin(localTheta);
+        z = rScaled * Math.cos(localTheta);
       }
 
       vertices.push(x, y, z);
 
-      // UV mapping: respect scan and index direction flips
       const scanMapped = config.scanDirection === 'ccw' ? u : 1 - u;
       const indexMapped = config.indexDirection === 'inward' ? v : 1 - v;
       uvs.push(scanMapped, indexMapped);
@@ -355,8 +425,7 @@ export function createDomeScanPlane(
     });
 
     const borderScale = 1.08;
-    const borderPhiSpan = phiSpan * borderScale;
-    const borderOffset = 1; // mm, slightly below the main surface offset
+    const borderOffset = 1;
 
     const borderGeometry = new THREE.BufferGeometry();
     const borderVertices: number[] = [];
@@ -364,40 +433,36 @@ export function createDomeScanPlane(
 
     for (let iy = 0; iy <= segmentsY; iy++) {
       const v = iy / segmentsY;
-      const phiOffset = (v - 0.5) * borderPhiSpan;
-      const clampedPhiDeg = Math.max(
-        PHI_EPSILON,
-        Math.min(90, radToDeg(centerPhiRad + phiOffset)),
-      );
-
-      // Per-row angular span for border
-      const bRowPhiRad = degToRad(clampedPhiDeg);
-      const bRowCirc = 2 * Math.PI * RADIUS * Math.sin(bRowPhiRad);
-      const borderAngularSpan = Math.min(
-        (scanRangeMm / Math.max(bRowCirc, 1)) * 2 * Math.PI,
-        2 * Math.PI,
-      ) * borderScale;
+      const bIndexMm = (v - 0.5) * indexRangeMm * borderScale;
 
       for (let ix = 0; ix <= segmentsX; ix++) {
         const u = ix / segmentsX;
-        const thetaOffset = (u - 0.5) * borderAngularSpan;
-        const currentThetaDeg = radToDeg(centerThetaRad + thetaOffset);
+        const bScanMm = (u - 0.5) * scanRangeMm * borderScale;
 
-        const local = domeLocalFromPhiTheta(clampedPhiDeg, currentThetaDeg, RADIUS, HEAD_DEPTH);
+        const px = cx + bScanMm * uThetaX + bIndexMm * uPhiX;
+        const py = cy + bScanMm * uThetaY + bIndexMm * uPhiY;
+        const pz = cz + bScanMm * uThetaZ + bIndexMm * uPhiZ;
 
-        const rScaled = (local.rLocalMm + borderOffset) * SCALE;
-        const axialPosMm = tangentLineMm + headSign * local.axialMm;
+        const denom = Math.sqrt(px * px * invD2 + (py * py + pz * pz) * invR2);
+        const sx = px / denom;
+        const sy = py / denom;
+        const sz = pz / denom;
+
+        const rLocalMm = Math.sqrt(sy * sy + sz * sz);
+        const localTheta = Math.atan2(sy, sz);
+        const rScaled = (rLocalMm + borderOffset) * SCALE;
+        const axialPosMm = tangentLineMm + headSign * sx;
         const axialGlobal = (axialPosMm - TAN_TAN / 2) * SCALE;
 
         let bx: number, by: number, bz: number;
         if (isVertical) {
-          bx = rScaled * Math.cos(local.thetaRad);
+          bx = rScaled * Math.cos(localTheta);
           by = axialGlobal;
-          bz = rScaled * Math.sin(local.thetaRad);
+          bz = rScaled * Math.sin(localTheta);
         } else {
           bx = axialGlobal;
-          by = rScaled * Math.sin(local.thetaRad);
-          bz = rScaled * Math.cos(local.thetaRad);
+          by = rScaled * Math.sin(localTheta);
+          bz = rScaled * Math.cos(localTheta);
         }
 
         borderVertices.push(bx, by, bz);

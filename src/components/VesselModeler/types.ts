@@ -73,6 +73,10 @@ export interface NozzleConfig {
   size: number;
   /** Pipe orientation mode: radial (default), horizontal, vertical-up, vertical-down */
   orientationMode?: NozzleOrientationMode;
+  /** Extra rotation about the world vertical axis, in degrees (0/90/180/270).
+   *  Applied on top of orientationMode. Lets a dome-end nozzle point straight
+   *  out the end instead of sideways. */
+  azimuthRotation?: number;
   /** Optional flange outside diameter override in mm */
   flangeOD?: number;
   /** Optional flange thickness override in mm */
@@ -131,6 +135,8 @@ export interface SaddleConfig {
   color?: string;
   /** Overall saddle height in mm (from base plate to vessel centerline). Defaults to vessel radius × 1.2 */
   height?: number;
+  /** Saddle depth (axial width along the vessel length) in mm. Defaults to 400 */
+  depth?: number;
 }
 
 export type WeldType = 'circumferential' | 'longitudinal';
@@ -185,7 +191,7 @@ export interface ScanCompositeConfig {
   /** Index axis coordinates in mm (longitudinal) */
   yAxis: number[];
   /** Pre-computed statistics */
-  stats: { min: number; max: number; mean: number; median: number; stdDev: number };
+  stats: { min: number; max: number; mean: number; median: number; stdDev: number; validArea?: number; totalArea?: number };
   /** Longitudinal start position on vessel (mm from tangent line) */
   indexStartMm: number;
   /** Circumferential datum angle in degrees (0-360). 0 = TDC (12 o'clock) */
@@ -255,7 +261,7 @@ export interface DomeScanConfig {
   data: (number | null)[][];
   xAxis: number[];
   yAxis: number[];
-  stats: { min: number; max: number; mean: number; median: number; stdDev: number };
+  stats: { min: number; max: number; mean: number; median: number; stdDev: number; validArea?: number; totalArea?: number };
 
   colorScale: string;
   rangeMin: number | null;
@@ -526,6 +532,17 @@ export interface ReferenceDrawing {
 
 export type VesselShape = 'vessel' | 'pipe';
 
+export interface CoverageTargetEntry {
+  rbaPct: number;
+  scopedPct: number;
+}
+
+export interface CoverageTargets {
+  leftHead: CoverageTargetEntry;
+  cylinder: CoverageTargetEntry;
+  rightHead: CoverageTargetEntry;
+}
+
 export interface VesselState {
   /** Inner diameter in mm */
   id: number;
@@ -566,6 +583,8 @@ export interface VesselState {
   domeNominalThickness?: number;
   /** Wall-loss distribution config — drives the floating stats panel */
   wallLossGroups?: WallLossGroupConfig;
+  /** Scan coverage targets (RBA prescribed % and scoped %) per section */
+  coverageTargets?: CoverageTargets;
   /** Global coordinate origin offset — displayed positions subtract these values.
    *  Allows aligning vessel readouts with scan data that doesn't start at 0. */
   coordinateOrigin: { indexMm: number; scanMm: number };

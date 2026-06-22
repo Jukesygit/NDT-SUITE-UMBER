@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, RotateCw } from 'lucide-react';
 import type { VesselState, NozzleConfig, NozzleOrientationMode } from '../types';
 import { PIPE_SIZES, findClosestPipeSize } from '../types';
 import { SubSection } from './SliderRow';
@@ -177,6 +177,18 @@ export function NozzleSection({
                                         </button>
                                     ))}
                                 </div>
+                            </div>
+                            <div className="vm-control-group">
+                                <div className="vm-label"><span>Rotate (vert. axis)</span></div>
+                                <button
+                                    className={`vm-toggle-btn ${(sel.azimuthRotation ?? 0) !== 0 ? 'active' : ''}`}
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%' }}
+                                    onClick={() => onUpdateNozzle(selectedNozzleIndex, { azimuthRotation: ((sel.azimuthRotation ?? 0) + 90) % 360 })}
+                                    title="Rotate the nozzle 90&deg; about the vertical axis. Click repeatedly to step it around so a dome-end nozzle points straight out the end."
+                                >
+                                    <RotateCw size={13} />
+                                    {sel.azimuthRotation ?? 0}&deg;
+                                </button>
                             </div>
                             <button
                                 className="vm-btn-sm"

@@ -66,6 +66,24 @@ export interface InteractionCallbacks {
 }
 
 // ---------------------------------------------------------------------------
+// Angle Snapping
+// ---------------------------------------------------------------------------
+
+/**
+ * Snap a circumferential angle (degrees) to the nearest multiple of `increment`.
+ *
+ * Returns the angle unchanged when `increment` is not positive. The result is
+ * normalised to the [0, 360) range, so a snap that rounds up to 360° wraps back
+ * to 0°. Callers should only pass increments that divide 360 evenly (e.g. 5, 10,
+ * 15, 30, 45, 90) to avoid an uneven step across the 0°/360° seam.
+ */
+export function snapAngleToIncrement(deg: number, increment: number): number {
+  if (!(increment > 0)) return deg;
+  const snapped = Math.round(deg / increment) * increment;
+  return ((snapped % 360) + 360) % 360;
+}
+
+// ---------------------------------------------------------------------------
 // InteractionManager
 // ---------------------------------------------------------------------------
 
@@ -109,6 +127,12 @@ export class InteractionManager {
   texturesLocked = false;
   lugsLocked = false;
   weldsLocked = false;
+
+  // Angle-snap config - public so the React layer can toggle them. When enabled,
+  // dragged nozzles and lifting lugs snap their circumferential angle to the
+  // nearest `angleSnapDeg` increment. Other attachments are never snapped.
+  angleSnapEnabled = false;
+  angleSnapDeg = 5;
 
   // External mesh references (updated by the rebuild cycle)
   nozzleMeshes: THREE.Object3D[] = [];
@@ -745,9 +769,11 @@ export class InteractionManager {
       if (deg < 0) deg += 360;
 
       if (this.dragType === 'nozzle') {
-        this.callbacks.onNozzleMoved(this.selectedNozzleIdx, newPos, deg);
+        // Nozzles snap to the chosen angular increment when snapping is enabled.
+        this.callbacks.onNozzleMoved(this.selectedNozzleIdx, newPos, this.snapAngle(deg));
       } else if (this.dragType === 'liftingLug') {
-        this.callbacks.onLugMoved(this.selectedLugIdx, newPos, deg);
+        // Lifting lugs snap to the chosen angular increment when snapping is enabled.
+        this.callbacks.onLugMoved(this.selectedLugIdx, newPos, this.snapAngle(deg));
       } else if (this.dragType === 'annotation') {
         this.callbacks.onAnnotationMoved(this.selectedAnnotationIdx, newPos, deg);
       } else {
@@ -872,6 +898,14 @@ export class InteractionManager {
 
     // Disable orbit controls during drag so panning doesn't interfere
     this.controls.enabled = false;
+  }
+
+  /**
+   * Apply angle snapping when enabled. Used for nozzle and lifting-lug drags so
+   * a part can be dropped on a clean angular stop (e.g. 90° instead of 91°).
+   */
+  private snapAngle(deg: number): number {
+    return this.angleSnapEnabled ? snapAngleToIncrement(deg, this.angleSnapDeg) : deg;
   }
 
   /**

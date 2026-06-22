@@ -88,6 +88,24 @@ export function useUpdatePerson() {
                 }
             }
 
+            // If email is changing, update auth.users via edge function (admin/super_admin only)
+            if (cleanedData.email && typeof cleanedData.email === 'string') {
+                const { data: fnData, error: fnError } = await supabase.functions.invoke('admin-update-email', {
+                    body: { userId: personId, newEmail: cleanedData.email },
+                });
+
+                if (fnError) {
+                    throw new Error(fnError.message || 'Failed to update login email');
+                }
+
+                if (fnData?.error) {
+                    throw new Error(fnData.error);
+                }
+
+                // Edge function already updated profiles.email, so remove from local update
+                delete cleanedData.email;
+            }
+
             // Ensure date_of_birth is properly formatted or null
             if (cleanedData.date_of_birth && typeof cleanedData.date_of_birth === 'string') {
                 // Validate date format (should be YYYY-MM-DD)
@@ -103,6 +121,17 @@ export function useUpdatePerson() {
                 }
             }
 
+            // Skip profile update if email was the only field changed
+            if (Object.keys(cleanedData).length === 0) {
+                const { data: current, error: fetchError } = await supabase
+                    .from('profiles')
+                    .select('*, organizations(*)')
+                    .eq('id', personId)
+                    .single();
+                if (fetchError) throw fetchError;
+                return current;
+            }
+
             const { data: updated, error } = await supabase
                 .from('profiles')
                 .update(cleanedData)
@@ -112,7 +141,6 @@ export function useUpdatePerson() {
 
             if (error) {
                 if (error.code === '42703') {
-                    // Column does not exist
                     throw new Error(`Database schema error: A required column is missing. Please contact support.`);
                 }
                 throw error;

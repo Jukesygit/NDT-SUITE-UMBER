@@ -13,7 +13,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { type VesselState, type TextureConfig } from '../types';
 import { SCALE } from './materials';
-import { createFlangedNozzle } from './nozzle-geometry';
+import { createFlangedNozzle, rotateNormalAboutVertical } from './nozzle-geometry';
 import { createLiftingLug } from './lifting-lug-geometry';
 import { createSaddleGroup } from './saddle-geometry';
 import { createScanCompositePlane } from './texture-manager';
@@ -555,6 +555,10 @@ export function buildVesselScene(
         }
       }
     }
+
+    // Extra yaw about the world vertical axis (lets a dome-end nozzle point
+    // straight out the end instead of sideways). No-op when unset.
+    rotateNormalAboutVertical(normal, n.azimuthRotation ?? 0);
 
     // Orient nozzle to be normal to surface
     // Nozzle is built along +Y axis, rotate to align with surface normal

@@ -54,11 +54,18 @@ const spanMatches = (token: RangeToken, dataSpan: number): boolean =>
  *   "3000MM-4000MM"), assigned to axes by matching each token's span
  *   against the actual data spans; ambiguous tokens fall back to the
  *   conventional order of scan range first, index range second.
+ *
+ * When `preferFilename` is set (operator placement override), a final pass
+ * assigns any still-unassigned positional tokens to empty axis slots in
+ * conventional order even when their span does not match the data — so the
+ * filename can drive placement for loosely-named ranges. Such candidates are
+ * marked `validated: false`, which `resolveAxis` honors only under the override.
  */
 const parseFilenameCandidates = (
   filename: string,
   xSpan: number,
-  ySpan: number
+  ySpan: number,
+  preferFilename = false
 ): { scan: AxisCandidate | null; index: AxisCandidate | null } => {
   // Labelled convention takes priority when present
   const indexLabelled = filename.match(/I-(\d+)-(\d+)/i);
@@ -113,12 +120,35 @@ const parseFilenameCandidates = (
   const ambiguous = unassigned.filter(
     token => spanMatches(token, xSpan) && spanMatches(token, ySpan)
   );
+  const consume = (token: RangeToken) => {
+    const at = unassigned.indexOf(token);
+    if (at >= 0) unassigned.splice(at, 1);
+  };
   if (ambiguous.length >= 2 && !scan && !index) {
     scan = { start: ambiguous[0].start, validated: true };
     index = { start: ambiguous[1].start, validated: true };
+    consume(ambiguous[0]);
+    consume(ambiguous[1]);
   } else if (ambiguous.length >= 1) {
-    if (!scan && index) scan = { start: ambiguous[0].start, validated: true };
-    else if (!index && scan) index = { start: ambiguous[0].start, validated: true };
+    if (!scan && index) {
+      scan = { start: ambiguous[0].start, validated: true };
+      consume(ambiguous[0]);
+    } else if (!index && scan) {
+      index = { start: ambiguous[0].start, validated: true };
+      consume(ambiguous[0]);
+    }
+  }
+
+  // Pass 3 (operator override): the filename is authoritative, so fill any
+  // still-empty axis from the remaining tokens in conventional order even when
+  // the span does not match. Candidates are flagged validated/unvalidated so
+  // callers can surface which placements rest on an unmatched span.
+  if (preferFilename) {
+    for (const token of [...unassigned]) {
+      if (!scan) scan = { start: token.start, validated: spanMatches(token, xSpan) };
+      else if (!index) index = { start: token.start, validated: spanMatches(token, ySpan) };
+      else break;
+    }
   }
 
   return { scan, index };
@@ -126,8 +156,15 @@ const parseFilenameCandidates = (
 
 const resolveAxis = (
   metadataStart: number | null,
-  candidate: AxisCandidate | null
+  candidate: AxisCandidate | null,
+  preferFilename: boolean
 ): { value: number | null; source: ExpectedStartSource | null } => {
+  // Operator override: a parseable filename range drives placement regardless
+  // of span-validation or metadata agreement. Metadata still fills axes the
+  // filename has no range for (the fallbacks below).
+  if (preferFilename && candidate !== null) {
+    return { value: candidate.start, source: 'filename' };
+  }
   // A span-validated filename range overrides metadata that disagrees with
   // it — instruments are known to write corrupted absolute starts, while a
   // range whose span matches the data demonstrably describes this strip.
@@ -151,15 +188,16 @@ export const resolveExpectedStarts = (
   filename: string,
   metadata: Record<string, unknown> | undefined,
   xSpan: number,
-  ySpan: number
+  ySpan: number,
+  preferFilename = false
 ): ExpectedStarts => {
   const metaIndex = numericOrNull(metadata?.['IndexStart (mm)']);
   const metaScan = numericOrNull(metadata?.['ScanStart (mm)']);
 
-  const candidates = parseFilenameCandidates(filename, xSpan, ySpan);
+  const candidates = parseFilenameCandidates(filename, xSpan, ySpan, preferFilename);
 
-  const index = resolveAxis(metaIndex, candidates.index);
-  const scan = resolveAxis(metaScan, candidates.scan);
+  const index = resolveAxis(metaIndex, candidates.index, preferFilename);
+  const scan = resolveAxis(metaScan, candidates.scan, preferFilename);
 
   return {
     indexStart: index.value,

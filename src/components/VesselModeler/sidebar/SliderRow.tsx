@@ -70,7 +70,9 @@ export function Section({ title, icon, count, defaultOpen = true, isOpen: contro
                 </h3>
                 <ChevronDown size={14} className="vm-chevron" />
             </div>
-            <div className="vm-section-content">{children}</div>
+            <div className="vm-section-content">
+                <div className="vm-section-content-inner">{children}</div>
+            </div>
         </div>
     );
 }
@@ -96,7 +98,9 @@ export function SubSection({ title, count, defaultOpen = false, isOpen: controll
                 </span>
                 <ChevronDown size={12} className="vm-chevron" />
             </div>
-            <div className="vm-subsection-content">{children}</div>
+            <div className="vm-subsection-content">
+                <div className="vm-subsection-content-inner">{children}</div>
+            </div>
         </div>
     );
 }

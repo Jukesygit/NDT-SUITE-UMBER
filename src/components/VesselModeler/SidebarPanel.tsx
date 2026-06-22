@@ -74,6 +74,7 @@ export interface SidebarPanelProps {
     onAddSaddle: (saddle: SaddleConfig) => void;
     onUpdateSaddle: (index: number, updates: Partial<SaddleConfig>) => void;
     onUpdateAllSaddleHeights: (height: number) => void;
+    onUpdateAllSaddleDepths: (depth: number) => void;
     onRemoveSaddle: (index: number) => void;
     onSelectSaddle: (index: number) => void;
     // Weld props
@@ -138,8 +139,12 @@ export interface SidebarPanelProps {
     // Dome scan props
     selectedDomeScanId: string;
     onSelectDomeScan: (id: string) => void;
+    onImportDomeComposite: (compositeId: string, head: 'left' | 'right') => void;
     onUpdateDomeScan: (id: string, updates: Partial<DomeScanConfig>) => void;
     onRemoveDomeScan: (id: string) => void;
+    cloudDomeComposites: Array<{ id: string; name: string; width: number; height: number; section_type: string | null; created_at: string }> | undefined;
+    cloudDomeCompositesLoading: boolean;
+    cloudDomeCompositesError: Error | null;
     onUpdateThicknessThresholds: (thresholds: ThicknessThresholds) => void;
     onUpdateWallLossGroups: (config: WallLossGroupConfig) => void;
     // Pipeline props
@@ -338,6 +343,7 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                                 onAddSaddle={props.onAddSaddle}
                                 onUpdateSaddle={props.onUpdateSaddle}
                                 onUpdateAllSaddleHeights={props.onUpdateAllSaddleHeights}
+                                onUpdateAllSaddleDepths={props.onUpdateAllSaddleDepths}
                                 onRemoveSaddle={props.onRemoveSaddle}
                                 onSelectSaddle={props.onSelectSaddle}
                                 isOpen={activeAttachmentSub === 'supports'}
@@ -399,8 +405,12 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                                     vesselState={vesselState}
                                     selectedDomeScanId={props.selectedDomeScanId}
                                     onSelectDomeScan={props.onSelectDomeScan}
+                                    onImportDomeComposite={props.onImportDomeComposite}
                                     onUpdateDomeScan={props.onUpdateDomeScan}
                                     onRemoveDomeScan={props.onRemoveDomeScan}
+                                    cloudDomeComposites={props.cloudDomeComposites}
+                                    cloudDomeCompositesLoading={props.cloudDomeCompositesLoading}
+                                    cloudDomeCompositesError={props.cloudDomeCompositesError}
                                     isOpen={activeScanOverlaySub === 'domeScanComposites'}
                                     onToggle={() => toggleScanSub('domeScanComposites')}
                                 />

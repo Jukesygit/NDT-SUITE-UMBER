@@ -3,58 +3,13 @@ import type {
   VesselState,
   WallLossGroupConfig,
   WallLossDistribution,
-  WallLossBinMode,
 } from '../components/VesselModeler/types';
-
-interface CompositeSlim {
-  id: string;
-  orientationConfirmed: boolean;
-  data: (number | null)[][];
-  xAxis: number[];
-  yAxis: number[];
-  indexStartMm: number;
-  datumAngleDeg: number;
-  scanDirection: 'cw' | 'ccw';
-  indexDirection: 'forward' | 'reverse';
-}
-
-interface WallLossRequest {
-  id: number;
-  composites: CompositeSlim[];
-  vesselId: number;
-  vesselLength: number;
-  headRatio: number;
-  nominalThickness: number;
-  binCount: number;
-  binMode: WallLossBinMode;
-  customBoundaries?: number[];
-  corrosionAllowance?: number;
-  shellNominalThickness?: number;
-  domeNominalThickness?: number;
-}
-
-interface BinResult {
-  minPct: number;
-  maxPct: number;
-  minMm?: number;
-  maxMm?: number;
-  area: number;
-  areaPercent: number;
-  count: number;
-  label?: string;
-}
-
-interface WallLossResponse {
-  id: number;
-  bins: BinResult[];
-  totalScannedArea: number;
-  totalDataPoints: number;
-  nominalThickness: number;
-  computeMs: number;
-  spuriousArea: number;
-  spuriousCount: number;
-  spuriousAreaPercent: number;
-}
+import type {
+  CompositeSlim,
+  DomeCompositeSlim,
+  WallLossRequest,
+  WallLossResponse,
+} from '../workers/wall-loss-compute';
 
 const DEBOUNCE_MS = 300;
 
@@ -99,7 +54,9 @@ export function useWallLossWorker(
     };
   }, []);
 
-  const hasScans = vesselState.scanComposites.some(c => c.orientationConfirmed);
+  const hasShellScans = vesselState.scanComposites.some(c => c.orientationConfirmed);
+  const hasDomeScans = (vesselState.domeScanComposites ?? []).some(d => d.orientationConfirmed);
+  const hasScans = hasShellScans || hasDomeScans;
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -125,9 +82,18 @@ export function useWallLossWorker(
         indexDirection: c.indexDirection,
       }));
 
+      const domeComposites: DomeCompositeSlim[] = (vesselState.domeScanComposites ?? []).map(d => ({
+        id: d.id,
+        orientationConfirmed: d.orientationConfirmed,
+        data: d.data,
+        xAxis: d.xAxis,
+        yAxis: d.yAxis,
+      }));
+
       const req: WallLossRequest = {
         id,
         composites,
+        domeComposites,
         vesselId: vesselState.id,
         vesselLength: vesselState.length,
         headRatio: vesselState.headRatio,
@@ -149,6 +115,7 @@ export function useWallLossWorker(
     config?.binMode,
     config?.customBoundaries,
     vesselState.scanComposites,
+    vesselState.domeScanComposites,
     vesselState.id,
     vesselState.length,
     vesselState.headRatio,

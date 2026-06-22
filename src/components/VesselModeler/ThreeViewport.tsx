@@ -42,9 +42,9 @@ function structuralHash(s: VesselState): string {
         rulers: s.rulers,
         coverageRects: s.coverageRects,
         inspectionImages: s.inspectionImages.map(i => ({ ...i, labelOffset: undefined, leaderLength: undefined })),
-        scanComposites: s.scanComposites.map(sc => ({ id: sc.id, hasData: sc.data.length > 0, indexStartMm: sc.indexStartMm, datumAngleDeg: sc.datumAngleDeg, scanDirection: sc.scanDirection, indexDirection: sc.indexDirection, orientationConfirmed: sc.orientationConfirmed, colorScale: sc.colorScale, rangeMin: sc.rangeMin, rangeMax: sc.rangeMax, opacity: sc.opacity })),
+        scanComposites: s.scanComposites.map(sc => ({ id: sc.id, hasData: (sc.data?.length ?? 0) > 0, indexStartMm: sc.indexStartMm, datumAngleDeg: sc.datumAngleDeg, scanDirection: sc.scanDirection, indexDirection: sc.indexDirection, orientationConfirmed: sc.orientationConfirmed, colorScale: sc.colorScale, rangeMin: sc.rangeMin, rangeMax: sc.rangeMax, opacity: sc.opacity })),
         domeScanComposites: (s.domeScanComposites ?? []).map(ds => ({
-            id: ds.id, hasData: ds.data.length > 0, head: ds.head,
+            id: ds.id, hasData: (ds.data?.length ?? 0) > 0, head: ds.head,
             centerPhi: ds.centerPhi, centerTheta: ds.centerTheta,
             scanDirection: ds.scanDirection, indexDirection: ds.indexDirection,
             orientationConfirmed: ds.orientationConfirmed,
@@ -81,6 +81,10 @@ interface ThreeViewportProps {
     lugsLocked: boolean;
     weldsLocked: boolean;
     pipelinesLocked: boolean;
+    /** When true, dragged nozzles and lifting lugs snap their angle to angleSnapDeg */
+    angleSnapEnabled: boolean;
+    /** Angular snap increment in degrees (e.g. 5, 10, 45) */
+    angleSnapDeg: number;
     selectedWeldIndex: number;
     selectedInspectionImageId: number;
     onInspectionImageThumbnailClick: (id: number) => void;
@@ -98,7 +102,7 @@ interface ThreeViewportProps {
 }
 
 const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(function ThreeViewport(
-    { vesselState, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedAnnotationId, textureObjects, callbacks, nozzlesLocked, saddlesLocked, texturesLocked, lugsLocked, weldsLocked, pipelinesLocked, selectedWeldIndex, selectedInspectionImageId, onInspectionImageThumbnailClick, drawMode, coverageDrawMode, previewAnnotation, previewCoverageRect, rulerDrawMode, previewRuler, selectedScanCompositeId = '', selectedDomeScanId = '', selectedPipelineId = '', selectedPipeSegmentIdx = -1, inspectingAnnotationId },
+    { vesselState, selectedNozzleIndex, selectedLugIndex, selectedSaddleIndex, selectedTextureId, selectedAnnotationId, textureObjects, callbacks, nozzlesLocked, saddlesLocked, texturesLocked, lugsLocked, weldsLocked, pipelinesLocked, angleSnapEnabled, angleSnapDeg, selectedWeldIndex, selectedInspectionImageId, onInspectionImageThumbnailClick, drawMode, coverageDrawMode, previewAnnotation, previewCoverageRect, rulerDrawMode, previewRuler, selectedScanCompositeId = '', selectedDomeScanId = '', selectedPipelineId = '', selectedPipeSegmentIdx = -1, inspectingAnnotationId },
     ref
 ) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -1179,11 +1183,13 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             interactionRef.current.lugsLocked = lugsLocked;
             interactionRef.current.weldsLocked = weldsLocked;
             interactionRef.current.pipelinesLocked = pipelinesLocked;
+            interactionRef.current.angleSnapEnabled = angleSnapEnabled;
+            interactionRef.current.angleSnapDeg = angleSnapDeg;
             interactionRef.current.drawMode = drawMode;
             interactionRef.current.coverageDrawMode = coverageDrawMode;
             interactionRef.current.rulerDrawMode = rulerDrawMode;
         }
-    }, [nozzlesLocked, saddlesLocked, texturesLocked, lugsLocked, weldsLocked, pipelinesLocked, drawMode, coverageDrawMode, rulerDrawMode]);
+    }, [nozzlesLocked, saddlesLocked, texturesLocked, lugsLocked, weldsLocked, pipelinesLocked, angleSnapEnabled, angleSnapDeg, drawMode, coverageDrawMode, rulerDrawMode]);
 
     // Update material visuals when visual settings change
     useEffect(() => {

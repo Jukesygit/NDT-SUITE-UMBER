@@ -9,6 +9,7 @@ import {
   domePhiThetaFromPoint,
   createDomeScanPlane,
   clearDomeHeatmapCache,
+  normalizeDomeScanComposite,
 } from '../dome-scan-geometry';
 import { SCALE } from '../materials';
 
@@ -72,6 +73,68 @@ function makeVesselState(overrides?: Partial<VesselState>): VesselState {
     ...overrides,
   } as VesselState;
 }
+
+// ---------------------------------------------------------------------------
+// normalizeDomeScanComposite — deserialization guard
+// ---------------------------------------------------------------------------
+// Projects persist dome scans WITHOUT the heavy `data`/`xAxis`/`yAxis` matrices
+// (see VesselModeler save path). On load, those fields are therefore absent and
+// MUST be backfilled with safe defaults so downstream consumers (structuralHash,
+// dome-scan geometry, stats) never read `.length`/`.validArea` of undefined.
+
+describe('normalizeDomeScanComposite', () => {
+  it('backfills missing data/xAxis/yAxis with empty arrays', () => {
+    // Simulates a composite restored from a saved project (data stripped on save).
+    const raw = {
+      id: 'ds_1',
+      name: 'Saved Dome',
+      head: 'left',
+      centerPhi: 30,
+      centerTheta: 90,
+      scanDirection: 'cw',
+      indexDirection: 'outward',
+      colorScale: 'Jet',
+      rangeMin: null,
+      rangeMax: null,
+      opacity: 1,
+      // data, xAxis, yAxis, stats intentionally absent
+    };
+
+    const result = normalizeDomeScanComposite(raw);
+
+    expect(Array.isArray(result.data)).toBe(true);
+    expect(result.data).toEqual([]);
+    expect(result.data.length).toBe(0); // the exact access that used to crash
+    expect(Array.isArray(result.xAxis)).toBe(true);
+    expect(Array.isArray(result.yAxis)).toBe(true);
+    expect(result.stats).toBeDefined();
+    expect(typeof result.stats.min).toBe('number');
+  });
+
+  it('preserves real data and all persisted fields when present', () => {
+    const raw = makeDomeScanConfig({ id: 'ds_keep', head: 'right' });
+    const result = normalizeDomeScanComposite(raw);
+
+    expect(result.id).toBe('ds_keep');
+    expect(result.head).toBe('right');
+    expect(result.data).toBe(raw.data); // not replaced
+    expect(result.data.length).toBe(10);
+    expect(result.xAxis).toBe(raw.xAxis);
+    expect(result.stats).toBe(raw.stats);
+  });
+
+  it('derives head from legacy sectionType when head is absent', () => {
+    expect(normalizeDomeScanComposite({ sectionType: 'dome_left' }).head).toBe('left');
+    expect(normalizeDomeScanComposite({ sectionType: 'dome_right' }).head).toBe('right');
+  });
+
+  it('defaults orientationConfirmed to false when absent', () => {
+    expect(normalizeDomeScanComposite({ head: 'left' }).orientationConfirmed).toBe(false);
+    expect(
+      normalizeDomeScanComposite({ head: 'left', orientationConfirmed: true }).orientationConfirmed,
+    ).toBe(true);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // domeLocalFromPhiTheta

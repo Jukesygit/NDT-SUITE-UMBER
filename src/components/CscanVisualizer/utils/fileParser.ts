@@ -528,7 +528,7 @@ export const createComposite = (scans: CscanData[]): CscanData | null => {
  * Compares expected positions (filename ranges and metadata, arbitrated by
  * resolveExpectedStarts) against actual data values
  */
-export const detectOffsets = (scan: CscanData): OffsetDetection => {
+export const detectOffsets = (scan: CscanData, preferFilename = false): OffsetDetection => {
   // Get actual values from parsed data
   // yAxis is Index (rows), xAxis is Scan (columns)
   const actualIndexStart = scan.yAxis.length > 0 ? Math.min(...scan.yAxis) : 0;
@@ -540,7 +540,8 @@ export const detectOffsets = (scan: CscanData): OffsetDetection => {
     scan.filename,
     scan.metadata,
     actualScanEnd - actualScanStart,
-    actualIndexEnd - actualIndexStart
+    actualIndexEnd - actualIndexStart,
+    preferFilename
   );
   const expectedIndexStart = expected.indexStart;
   const expectedScanStart = expected.scanStart;
@@ -577,10 +578,13 @@ export const detectOffsets = (scan: CscanData): OffsetDetection => {
  * Detect offsets for multiple scans
  * Returns only scans that need correction
  */
-export const detectOffsetsForScans = (scans: CscanData[]): OffsetDetection[] => {
+export const detectOffsetsForScans = (
+  scans: CscanData[],
+  preferFilename = false
+): OffsetDetection[] => {
   return scans
     .filter(scan => !scan.isComposite) // Skip composite scans
-    .map(scan => detectOffsets(scan))
+    .map(scan => detectOffsets(scan, preferFilename))
     .filter(detection => detection.indexNeedsCorrection || detection.scanNeedsCorrection);
 };
 
@@ -591,9 +595,10 @@ export const detectOffsetsForScans = (scans: CscanData[]): OffsetDetection[] => 
 export const applyOffsetCorrection = (
   scan: CscanData,
   correctIndex: boolean,
-  correctScan: boolean
+  correctScan: boolean,
+  preferFilename = false
 ): CscanData => {
-  const detection = detectOffsets(scan);
+  const detection = detectOffsets(scan, preferFilename);
 
   // Create new axis arrays with corrections applied
   const correctedYAxis = correctIndex && detection.indexNeedsCorrection
@@ -627,19 +632,20 @@ export const applyOffsetCorrection = (
 export const applyOffsetCorrections = (
   scans: CscanData[],
   correctIndex: boolean,
-  correctScan: boolean
+  correctScan: boolean,
+  preferFilename = false
 ): CscanData[] => {
   return scans.map(scan => {
     if (scan.isComposite) return scan; // Don't correct composites
 
-    const detection = detectOffsets(scan);
+    const detection = detectOffsets(scan, preferFilename);
     const needsCorrection =
       (correctIndex && detection.indexNeedsCorrection) ||
       (correctScan && detection.scanNeedsCorrection);
 
     if (!needsCorrection) return scan;
 
-    return applyOffsetCorrection(scan, correctIndex, correctScan);
+    return applyOffsetCorrection(scan, correctIndex, correctScan, preferFilename);
   });
 };
 

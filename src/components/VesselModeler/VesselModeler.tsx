@@ -26,6 +26,7 @@ import {
     type DomeScanHoverInfo,
     type ThicknessThresholds,
     type WallLossGroupConfig,
+    type CoverageTargets,
     type FreeOrigin,
     type Pipeline,
     type PipeSegment,
@@ -35,12 +36,13 @@ import {
 } from './types';
 import type { ExtractionResult } from './engine/drawing-parser';
 import { loadTextureFromData, clearHeatmapCache } from './engine/texture-manager';
-import { clearDomeHeatmapCache } from './engine/dome-scan-geometry';
+import { clearDomeHeatmapCache, normalizeDomeScanComposite } from './engine/dome-scan-geometry';
 import { exportVesselGLB } from './engine/gltf-export';
 import { recomputeAllAnnotationStats } from './engine/annotation-stats';
 import { computeInspectionCameraTarget, animateCamera, cancelCameraAnimation } from './engine/camera-animation';
 import { useScanCompositeList } from '../../hooks/queries/useScanComposites';
 import { getScanComposite, getScanCompositeData } from '../../services/scan-composite-service';
+import { toConfigStats } from './engine/composite-stats';
 import { useLinkScanCompositeToProject } from '../../hooks/mutations/useScanCompositeMutations';
 import { uploadAnnotationImage, deleteAnnotationImage, getAnnotationImageUrl } from '../../services/annotation-attachment-service';
 import { useAuth } from '../../contexts/AuthContext';
@@ -51,8 +53,9 @@ import { getVesselModelByProjectVessel } from '../../services/vessel-model-servi
 import './vessel-modeler.css';
 import * as THREE from 'three';
 
-import CoveragePanel from './CoveragePanel';
-import WallLossPanel from './WallLossPanel';
+import StatsDropdown from './StatsDropdown';
+import UnifiedStatsPanel from './UnifiedStatsPanel';
+import SnapControl from './SnapControl';
 import InspectionPanel from './sidebar/InspectionPanel';
 import StatLeaderOverlay from './StatLeaderOverlay';
 import { PipePartPopup } from './sidebar/PipePartPopup';
@@ -153,8 +156,15 @@ interface UIState {
     viewingInspectionImageId: number;
     viewMode: '3d' | 'flattened';
     labelsTidied: boolean;
+    showStatsCoverage: boolean;
+    showStatsWallLoss: boolean;
+    showStatsScanCoverage: boolean;
     hoverData: { thickness: number | null; scanMm: number; indexMm: number } | null;
     scanTooltipFollow: boolean;
+    /** Whether drag angle-snapping is enabled (nozzles + lifting lugs) */
+    snapEnabled: boolean;
+    /** Angle-snap increment in degrees */
+    snapDeg: number;
     /** ID of annotation being inspected (null = not in inspection mode) */
     inspectingAnnotationId: number | null;
     /** Camera state saved before entering inspection mode */
@@ -201,10 +211,15 @@ const INITIAL_STATE: VesselModelerState = {
         viewingInspectionImageId: -1,
         hoverData: null,
         scanTooltipFollow: false,
+        snapEnabled: false,
+        snapDeg: 5,
         inspectingAnnotationId: null,
         savedCameraState: null,
         viewMode: '3d',
         labelsTidied: false,
+        showStatsCoverage: false,
+        showStatsWallLoss: false,
+        showStatsScanCoverage: false,
     },
 };
 
@@ -237,13 +252,18 @@ type VesselAction =
     | { type: 'SET_VIEWING_INSPECTION_IMAGE'; id: number }
     | { type: 'SET_HOVER_DATA'; data: UIState['hoverData'] }
     | { type: 'TOGGLE_SCAN_TOOLTIP_FOLLOW' }
+    | { type: 'TOGGLE_SNAP' }
+    | { type: 'SET_SNAP_DEG'; deg: number }
     | { type: 'CANCEL_ALL_DRAW_MODES' }
     | { type: 'UPDATE_THICKNESS_THRESHOLDS'; thresholds: VesselState['thicknessThresholds'] }
     | { type: 'ENTER_INSPECTION_MODE'; annotationId: number; cameraState: { position: [number, number, number]; target: [number, number, number] } }
     | { type: 'CYCLE_INSPECTION'; annotationId: number }
     | { type: 'EXIT_INSPECTION_MODE' }
     | { type: 'SET_VIEW_MODE'; mode: '3d' | 'flattened' }
-    | { type: 'TOGGLE_LABELS_TIDIED' };
+    | { type: 'TOGGLE_LABELS_TIDIED' }
+    | { type: 'TOGGLE_STATS_COVERAGE' }
+    | { type: 'TOGGLE_STATS_WALL_LOSS' }
+    | { type: 'TOGGLE_STATS_SCAN_COVERAGE' };
 
 function vesselReducer(state: VesselModelerState, action: VesselAction): VesselModelerState {
     switch (action.type) {
@@ -324,6 +344,10 @@ function vesselReducer(state: VesselModelerState, action: VesselAction): VesselM
             return { ...state, ui: { ...state.ui, hoverData: action.data } };
         case 'TOGGLE_SCAN_TOOLTIP_FOLLOW':
             return { ...state, ui: { ...state.ui, scanTooltipFollow: !state.ui.scanTooltipFollow } };
+        case 'TOGGLE_SNAP':
+            return { ...state, ui: { ...state.ui, snapEnabled: !state.ui.snapEnabled } };
+        case 'SET_SNAP_DEG':
+            return { ...state, ui: { ...state.ui, snapDeg: action.deg } };
         case 'CANCEL_ALL_DRAW_MODES':
             return {
                 ...state,
@@ -375,6 +399,12 @@ function vesselReducer(state: VesselModelerState, action: VesselAction): VesselM
                 ui: { ...state.ui, labelsTidied: newTidied },
             };
         }
+        case 'TOGGLE_STATS_COVERAGE':
+            return { ...state, ui: { ...state.ui, showStatsCoverage: !state.ui.showStatsCoverage } };
+        case 'TOGGLE_STATS_WALL_LOSS':
+            return { ...state, ui: { ...state.ui, showStatsWallLoss: !state.ui.showStatsWallLoss } };
+        case 'TOGGLE_STATS_SCAN_COVERAGE':
+            return { ...state, ui: { ...state.ui, showStatsScanCoverage: !state.ui.showStatsScanCoverage } };
         default:
             return state;
     }
@@ -517,7 +547,7 @@ export default function VesselModeler() {
             nozzles: (projectData.nozzles || []).map((n: any) => ({
                 name: n.name || 'N', pos: n.pos ?? 0, proj: n.proj ?? 200,
                 angle: n.angle ?? 90, size: n.size ?? 100,
-                orientationMode: n.orientationMode,
+                orientationMode: n.orientationMode, azimuthRotation: n.azimuthRotation,
                 flangeOD: n.flangeOD, flangeThk: n.flangeThk, pipeOD: n.pipeOD, style: n.style,
                 hideRepad: n.hideRepad,
             })),
@@ -528,7 +558,7 @@ export default function VesselModeler() {
                 thickness: l.thickness, holeDiameter: l.holeDiameter,
             })),
             saddles: (projectData.saddles || []).map((s: any) =>
-                typeof s === 'number' ? { pos: s, color: '#2244ff' } : { pos: s.pos, color: s.color || '#2244ff', height: s.height }
+                typeof s === 'number' ? { pos: s, color: '#2244ff' } : { pos: s.pos, color: s.color || '#2244ff', height: s.height, depth: s.depth }
             ),
             welds: (projectData.welds || []).map((w: any) => ({
                 name: w.name || 'W', type: w.type || 'circumferential',
@@ -588,9 +618,7 @@ export default function VesselModeler() {
                 sourceFiles: sc.sourceFiles,
             })),
             domeScanComposites: (projectData.domeScanComposites || []).map((ds: any) => ({
-                ...ds,
-                head: ds.head || (ds.sectionType === 'dome_left' ? 'left' : 'right'),
-                orientationConfirmed: ds.orientationConfirmed ?? false,
+                ...normalizeDomeScanComposite(ds),
             })),
             pipelines: (projectData.pipelines || []).map((p: any) => ({
                 id: p.id || crypto.randomUUID(),
@@ -665,6 +693,34 @@ export default function VesselModeler() {
                 })});
             }).catch((err) => {
                 console.error(`Failed to fetch scan composite ${sc.cloudId}:`, err);
+            });
+        }
+
+        // Re-fetch dome scan thickness data from cloud. Dome scans are stored in the
+        // same scan_composites table (by cloudId) and have their data stripped on save,
+        // exactly like flat composites — so they need the same re-hydration on load.
+        const domeCompositesNeedingData = validatedState.domeScanComposites.filter(
+            ds => ds.cloudId && (!ds.data || ds.data.length === 0),
+        );
+        for (const ds of domeCompositesNeedingData) {
+            getScanComposite(ds.cloudId!).then((cloud) => {
+                clearDomeHeatmapCache(ds.id);
+                dispatch({ type: 'UPDATE_VESSEL_FN', updater: prev => ({
+                    ...prev,
+                    domeScanComposites: prev.domeScanComposites.map(existing =>
+                        existing.id === ds.id
+                            ? {
+                                ...existing,
+                                data: cloud.thickness_data,
+                                xAxis: cloud.x_axis,
+                                yAxis: cloud.y_axis,
+                                stats: cloud.stats || existing.stats,
+                            }
+                            : existing,
+                    ),
+                })});
+            }).catch((err) => {
+                console.error(`Failed to fetch dome scan composite ${ds.cloudId}:`, err);
             });
         }
 
@@ -875,6 +931,10 @@ export default function VesselModeler() {
 
     const updateAllSaddleHeights = useCallback((height: number) => {
         updateVessel(prev => ({ ...prev, saddles: prev.saddles.map(s => ({ ...s, height })) }));
+    }, [updateVessel]);
+
+    const updateAllSaddleDepths = useCallback((depth: number) => {
+        updateVessel(prev => ({ ...prev, saddles: prev.saddles.map(s => ({ ...s, depth })) }));
     }, [updateVessel]);
 
     const removeSaddle = useCallback((index: number) => {
@@ -1093,6 +1153,10 @@ export default function VesselModeler() {
         updateVessel(prev => ({ ...prev, wallLossGroups: config }));
     }, [updateVessel]);
 
+    const handleUpdateCoverageTargets = useCallback((targets: CoverageTargets) => {
+        updateVessel(prev => ({ ...prev, coverageTargets: targets }));
+    }, [updateVessel]);
+
     const getNextAnnotationId = useCallback(() => {
         return nextAnnotationIdRef.current++;
     }, []);
@@ -1221,10 +1285,9 @@ export default function VesselModeler() {
                     }
                     data.push(rowData);
                 }
-                stats = {
-                    min: cd.stats.min, max: cd.stats.max, mean: cd.stats.mean,
-                    median: cd.stats.mean, stdDev: cd.stats.std,
-                };
+                // Preserve validArea/totalArea (mm²) — the Scan Coverage
+                // "Achieved" column is computed from stats.validArea.
+                stats = toConfigStats(cd.stats);
                 sourceFiles = cd.sourceFiles;
             } catch {
                 // Fallback to legacy format
@@ -1325,6 +1388,78 @@ export default function VesselModeler() {
         }));
         if (selection.domeScanId === id) dispatch({ type: 'SELECT_DOME_SCAN', id: '' });
     }, [updateVessel, selection.domeScanId]);
+
+    const handleImportDomeComposite = useCallback(async (
+        compositeId: string,
+        head: 'left' | 'right',
+    ) => {
+        try {
+            let name: string;
+            let cloudId: string;
+            let data: (number | null)[][];
+            let xAxis: number[];
+            let yAxis: number[];
+            let stats: DomeScanConfig['stats'];
+            let sourceFiles: DomeScanConfig['sourceFiles'];
+
+            try {
+                const cd = await getScanCompositeData(compositeId);
+                cloudId = compositeId;
+                name = `Dome ${head} ${compositeId.slice(0, 8)}`;
+                xAxis = Array.from(cd.xAxis);
+                yAxis = Array.from(cd.yAxis);
+                data = [];
+                for (let row = 0; row < cd.height; row++) {
+                    const rowData: (number | null)[] = [];
+                    for (let col = 0; col < cd.width; col++) {
+                        const val = cd.matrix[row * cd.width + col];
+                        rowData.push(isNaN(val) ? null : val);
+                    }
+                    data.push(rowData);
+                }
+                // Preserve validArea/totalArea (mm²) so dome achieved coverage works.
+                stats = toConfigStats(cd.stats);
+                sourceFiles = cd.sourceFiles;
+            } catch {
+                const composite = await getScanComposite(compositeId);
+                cloudId = composite.id;
+                name = composite.name;
+                data = composite.thickness_data;
+                xAxis = composite.x_axis;
+                yAxis = composite.y_axis;
+                stats = composite.stats || { min: 0, max: 0, mean: 0, median: 0, stdDev: 0 };
+                sourceFiles = composite.source_files ?? undefined;
+            }
+
+            const newConfig: DomeScanConfig = {
+                id: `ds_${Date.now()}`,
+                name,
+                cloudId,
+                head,
+                centerPhi: 45,
+                centerTheta: 0,
+                scanDirection: 'cw',
+                indexDirection: 'outward',
+                orientationConfirmed: false,
+                data,
+                xAxis,
+                yAxis,
+                stats,
+                colorScale: 'Jet',
+                rangeMin: null,
+                rangeMax: null,
+                opacity: 1,
+                sourceFiles,
+            };
+            updateVessel(prev => ({
+                ...prev,
+                domeScanComposites: [...prev.domeScanComposites, newConfig],
+            }));
+            dispatch({ type: 'SELECT_DOME_SCAN', id: newConfig.id });
+        } catch (err) {
+            console.error('Failed to import dome composite:', err);
+        }
+    }, [updateVessel]);
 
     // Dome scan hover tooltip state
     const [domeScanHoverInfo, setDomeScanHoverInfo] = useState<DomeScanHoverInfo | null>(null);
@@ -1562,7 +1697,7 @@ export default function VesselModeler() {
             nozzles: vesselState.nozzles.map(n => ({
                 name: n.name, pos: n.pos, proj: n.proj,
                 angle: n.angle, size: n.size,
-                orientationMode: n.orientationMode,
+                orientationMode: n.orientationMode, azimuthRotation: n.azimuthRotation,
                 flangeOD: n.flangeOD, flangeThk: n.flangeThk, pipeOD: n.pipeOD, style: n.style,
                 hideRepad: n.hideRepad,
             })),
@@ -1574,7 +1709,7 @@ export default function VesselModeler() {
             })),
             saddles: vesselState.saddles.map(s => ({
                 pos: s.pos, color: s.color || '#2244ff',
-                height: s.height,
+                height: s.height, depth: s.depth,
             })),
             welds: vesselState.welds.map(w => ({
                 name: w.name, type: w.type, pos: w.pos,
@@ -1691,7 +1826,7 @@ export default function VesselModeler() {
             nozzles: vesselState.nozzles.map(n => ({
                 name: n.name, pos: n.pos, proj: n.proj,
                 angle: n.angle, size: n.size,
-                orientationMode: n.orientationMode,
+                orientationMode: n.orientationMode, azimuthRotation: n.azimuthRotation,
                 flangeOD: n.flangeOD, flangeThk: n.flangeThk, pipeOD: n.pipeOD, style: n.style,
                 hideRepad: n.hideRepad,
             })),
@@ -1703,7 +1838,7 @@ export default function VesselModeler() {
             })),
             saddles: vesselState.saddles.map(s => ({
                 pos: s.pos, color: s.color || '#2244ff',
-                height: s.height,
+                height: s.height, depth: s.depth,
             })),
             welds: vesselState.welds.map(w => ({
                 name: w.name, type: w.type, pos: w.pos,
@@ -2018,7 +2153,7 @@ export default function VesselModeler() {
                     nozzles: (projectData.nozzles || []).map((n: any) => ({
                         name: n.name || 'N', pos: n.pos ?? 0, proj: n.proj ?? 200,
                         angle: n.angle ?? 90, size: n.size ?? 100,
-                        orientationMode: n.orientationMode,
+                        orientationMode: n.orientationMode, azimuthRotation: n.azimuthRotation,
                         flangeOD: n.flangeOD, flangeThk: n.flangeThk, pipeOD: n.pipeOD, style: n.style,
                     })),
                     liftingLugs: (projectData.liftingLugs || []).map((l: any) => ({
@@ -2028,7 +2163,7 @@ export default function VesselModeler() {
                         thickness: l.thickness, holeDiameter: l.holeDiameter,
                     })),
                     saddles: (projectData.saddles || []).map((s: any) =>
-                        typeof s === 'number' ? { pos: s, color: '#2244ff' } : { pos: s.pos, color: s.color || '#2244ff', height: s.height }
+                        typeof s === 'number' ? { pos: s, color: '#2244ff' } : { pos: s.pos, color: s.color || '#2244ff', height: s.height, depth: s.depth }
                     ),
                     welds: (projectData.welds || []).map((w: any) => ({
                         name: w.name || 'W', type: w.type || 'circumferential',
@@ -2089,9 +2224,7 @@ export default function VesselModeler() {
                         sourceFiles: sc.sourceFiles,
                     })),
                     domeScanComposites: (projectData.domeScanComposites || []).map((ds: any) => ({
-                ...ds,
-                head: ds.head || (ds.sectionType === 'dome_left' ? 'left' : 'right'),
-                orientationConfirmed: ds.orientationConfirmed ?? false,
+                ...normalizeDomeScanComposite(ds),
             })),
                     pipelines: (projectData.pipelines || []).map((p: any) => ({
                         id: p.id || crypto.randomUUID(),
@@ -2176,6 +2309,33 @@ export default function VesselModeler() {
                         })});
                     }).catch((err) => {
                         console.error(`Failed to fetch scan composite ${sc.cloudId}:`, err);
+                    });
+                }
+
+                // Re-fetch dome scan thickness data from cloud (same scan_composites
+                // table by cloudId; data stripped on save like flat composites).
+                const domeCompositesNeedingData = validatedState.domeScanComposites.filter(
+                    ds => ds.cloudId && (!ds.data || ds.data.length === 0),
+                );
+                for (const ds of domeCompositesNeedingData) {
+                    getScanComposite(ds.cloudId!).then((cloud) => {
+                        clearDomeHeatmapCache(ds.id);
+                        dispatch({ type: 'UPDATE_VESSEL_FN', updater: prev => ({
+                            ...prev,
+                            domeScanComposites: prev.domeScanComposites.map(existing =>
+                                existing.id === ds.id
+                                    ? {
+                                        ...existing,
+                                        data: cloud.thickness_data,
+                                        xAxis: cloud.x_axis,
+                                        yAxis: cloud.y_axis,
+                                        stats: cloud.stats || existing.stats,
+                                    }
+                                    : existing,
+                            ),
+                        })});
+                    }).catch((err) => {
+                        console.error(`Failed to fetch dome scan composite ${ds.cloudId}:`, err);
                     });
                 }
             } catch (error: any) {
@@ -2795,6 +2955,8 @@ export default function VesselModeler() {
                         lugsLocked={locks.lugs}
                         weldsLocked={locks.welds}
                         pipelinesLocked={locks.pipelines}
+                        angleSnapEnabled={ui.snapEnabled}
+                        angleSnapDeg={ui.snapDeg}
                         selectedWeldIndex={selection.weldIndex}
                         selectedInspectionImageId={selection.inspectionImageId}
                         onInspectionImageThumbnailClick={(id) => dispatch({ type: 'SET_VIEWING_INSPECTION_IMAGE', id })}
@@ -2853,8 +3015,8 @@ export default function VesselModeler() {
                     </div>
                 )}
 
-                {/* Dome scan hover tooltip */}
-                {domeScanHoverInfo && (
+                {/* Dome scan hover tooltip — cursor-following mode */}
+                {ui.scanTooltipFollow && domeScanHoverInfo && (
                     <div
                         className="pointer-events-none"
                         style={{
@@ -2914,6 +3076,7 @@ export default function VesselModeler() {
                         onAddSaddle={addSaddle}
                         onUpdateSaddle={updateSaddle}
                         onUpdateAllSaddleHeights={updateAllSaddleHeights}
+                        onUpdateAllSaddleDepths={updateAllSaddleDepths}
                         onRemoveSaddle={removeSaddle}
                         onSelectSaddle={(index) => dispatch({ type: 'SELECT_SADDLE', index })}
                         selectedWeldIndex={selection.weldIndex}
@@ -2971,8 +3134,12 @@ export default function VesselModeler() {
                         cloudCompositesError={cloudCompositesError as Error | null}
                         selectedDomeScanId={selection.domeScanId}
                         onSelectDomeScan={handleSelectDomeScan}
+                        onImportDomeComposite={handleImportDomeComposite}
                         onUpdateDomeScan={handleUpdateDomeScan}
                         onRemoveDomeScan={handleRemoveDomeScan}
+                        cloudDomeComposites={cloudComposites}
+                        cloudDomeCompositesLoading={cloudCompositesLoading}
+                        cloudDomeCompositesError={cloudCompositesError as Error | null}
                         onUpdateThicknessThresholds={updateThicknessThresholds}
                         onUpdateWallLossGroups={handleUpdateWallLossGroups}
                         selectedPipelineId={selection.pipelineId}
@@ -3058,22 +3225,12 @@ export default function VesselModeler() {
                 {/* Actions popout menu */}
                 <div className="vm-popout-menu vm-popout-menu-right" ref={actionsMenuRef} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {/* 3D/2D toggle */}
-                    <div style={{ display: 'flex', gap: 2, background: 'rgba(20,25,35,0.85)', backdropFilter: 'blur(8px)', borderRadius: 8, padding: 2, border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <div className="vm-toolbar-segmented">
                         {(['3d', 'flattened'] as const).map(mode => (
                             <button
                                 key={mode}
+                                className={`vm-toolbar-segmented__btn ${ui.viewMode === mode ? 'active' : ''}`}
                                 onClick={() => dispatch({ type: 'SET_VIEW_MODE', mode })}
-                                style={{
-                                    padding: '6px 14px',
-                                    borderRadius: 6,
-                                    border: 'none',
-                                    fontSize: '0.8rem',
-                                    fontWeight: 500,
-                                    cursor: 'pointer',
-                                    background: ui.viewMode === mode ? 'rgba(59,130,246,0.2)' : 'transparent',
-                                    color: ui.viewMode === mode ? '#60a5fa' : 'rgba(255,255,255,0.5)',
-                                    transition: 'all 0.15s',
-                                }}
                             >
                                 {mode === '3d' ? '3D' : '2D'}
                             </button>
@@ -3081,20 +3238,36 @@ export default function VesselModeler() {
                     </div>
                     {/* Tidy labels toggle */}
                     <button
+                        className={`vm-popout-trigger ${ui.labelsTidied ? 'vm-popout-trigger--active' : ''}`}
                         onClick={() => dispatch({ type: 'TOGGLE_LABELS_TIDIED' })}
                         title={ui.labelsTidied ? 'Switch all labels to flyout mode' : 'Switch all labels to table mode'}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: 4,
-                            padding: '6px 10px', borderRadius: 6, border: 'none',
-                            fontSize: '0.8rem', fontWeight: 500, cursor: 'pointer',
-                            background: ui.labelsTidied ? 'rgba(59,130,246,0.2)' : 'rgba(20,25,35,0.85)',
-                            color: ui.labelsTidied ? '#60a5fa' : 'rgba(255,255,255,0.5)',
-                            backdropFilter: 'blur(8px)',
-                            transition: 'all 0.15s',
-                        }}
                     >
                         <AlignVerticalDistributeCenter size={14} />
                         Tidy
+                    </button>
+                    <StatsDropdown
+                        showCoverage={ui.showStatsCoverage}
+                        showWallLoss={ui.showStatsWallLoss}
+                        showScanCoverage={ui.showStatsScanCoverage}
+                        hasCoverageData={vesselState.coverageRects.length > 0}
+                        hasWallLossData={!!vesselState.wallLossGroups?.enabled}
+                        onToggleCoverage={() => dispatch({ type: 'TOGGLE_STATS_COVERAGE' })}
+                        onToggleWallLoss={() => dispatch({ type: 'TOGGLE_STATS_WALL_LOSS' })}
+                        onToggleScanCoverage={() => dispatch({ type: 'TOGGLE_STATS_SCAN_COVERAGE' })}
+                    />
+                    <SnapControl
+                        enabled={ui.snapEnabled}
+                        snapDeg={ui.snapDeg}
+                        onToggle={() => dispatch({ type: 'TOGGLE_SNAP' })}
+                        onChangeDeg={(deg) => dispatch({ type: 'SET_SNAP_DEG', deg })}
+                    />
+                    <button
+                        className={`vm-popout-trigger ${ui.scanTooltipFollow ? 'vm-popout-trigger--active' : ''}`}
+                        onClick={() => dispatch({ type: 'TOGGLE_SCAN_TOOLTIP_FOLLOW' })}
+                        title={ui.scanTooltipFollow ? 'Switch to fixed readout' : 'Switch to cursor-following tooltip'}
+                    >
+                        {ui.scanTooltipFollow ? <MousePointer size={14} /> : <PanelBottomClose size={14} />}
+                        {ui.scanTooltipFollow ? 'Cursor' : 'Fixed'}
                     </button>
                     <button
                         className={`vm-popout-trigger ${actionsMenuOpen ? 'open' : ''}`}
@@ -3174,12 +3347,14 @@ export default function VesselModeler() {
                 </div>
 
 
-                {/* Coverage overlay */}
-                <CoveragePanel vesselState={vesselState} sidebarOpen={ui.sidebarOpen} />
-                <WallLossPanel
+                {/* Unified stats overlay */}
+                <UnifiedStatsPanel
                     vesselState={vesselState}
                     sidebarOpen={ui.sidebarOpen}
-                    coverageVisible={vesselState.coverageRects.length > 0}
+                    showCoverage={ui.showStatsCoverage}
+                    showWallLoss={ui.showStatsWallLoss}
+                    showScanCoverage={ui.showStatsScanCoverage}
+                    onUpdateCoverageTargets={handleUpdateCoverageTargets}
                 />
 
                 {/* Inspection mode overlay (right-side panel + camera lock indicator) */}
@@ -3234,8 +3409,8 @@ export default function VesselModeler() {
                     );
                 })()}
 
-                {/* Interaction hint / scan hover readout */}
-                {ui.hoverData && ui.hoverData.thickness !== null && !ui.scanTooltipFollow ? (
+                {/* Interaction hint / scan hover readout — fixed mode */}
+                {!ui.scanTooltipFollow && ui.hoverData && ui.hoverData.thickness !== null ? (
                     <div className="vm-hint vm-hint--scan">
                         <div className="vm-scan-tooltip">
                             <div className="vm-scan-tooltip-value">
@@ -3252,28 +3427,38 @@ export default function VesselModeler() {
                                 <span className="vm-scan-tooltip-label">Index</span>
                                 <span className="vm-scan-tooltip-number">{ui.hoverData.indexMm.toFixed(1)}<span className="vm-scan-tooltip-unit">mm</span></span>
                             </div>
-                            <div className="vm-scan-tooltip-divider" />
-                            <button
-                                className="vm-scan-tooltip-toggle"
-                                onClick={() => dispatch({ type: 'TOGGLE_SCAN_TOOLTIP_FOLLOW' })}
-                                title="Switch to cursor-following tooltip"
-                            >
-                                <MousePointer size={13} />
-                            </button>
                         </div>
                     </div>
-                ) : (getHintText() || (ui.scanTooltipFollow && ui.hoverData && ui.hoverData.thickness !== null)) ? (
+                ) : !ui.scanTooltipFollow && domeScanHoverInfo ? (
+                    <div className="vm-hint vm-hint--scan">
+                        <div className="vm-scan-tooltip">
+                            <div className="vm-scan-tooltip-value">
+                                <span className="vm-scan-tooltip-label">Thickness</span>
+                                <span className="vm-scan-tooltip-number primary">
+                                    {domeScanHoverInfo.thickness?.toFixed(1) ?? '—'}
+                                    <span className="vm-scan-tooltip-unit">mm</span>
+                                </span>
+                            </div>
+                            <div className="vm-scan-tooltip-divider" />
+                            <div className="vm-scan-tooltip-value">
+                                <span className="vm-scan-tooltip-label">{'φ'}</span>
+                                <span className="vm-scan-tooltip-number">
+                                    {domeScanHoverInfo.phiDeg.toFixed(1)}
+                                    <span className="vm-scan-tooltip-unit">{'°'}</span>
+                                </span>
+                            </div>
+                            <div className="vm-scan-tooltip-divider" />
+                            <div className="vm-scan-tooltip-value">
+                                <span className="vm-scan-tooltip-label">{'θ'}</span>
+                                <span className="vm-scan-tooltip-number">
+                                    {domeScanHoverInfo.thetaDeg.toFixed(1)}
+                                    <span className="vm-scan-tooltip-unit">{'°'}</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                ) : getHintText() ? (
                     <div className="vm-hint">
-                        {ui.scanTooltipFollow && ui.hoverData && ui.hoverData.thickness !== null && (
-                            <button
-                                className="vm-scan-tooltip-toggle"
-                                onClick={() => dispatch({ type: 'TOGGLE_SCAN_TOOLTIP_FOLLOW' })}
-                                title="Switch to fixed readout"
-                                style={{ marginRight: 8 }}
-                            >
-                                <PanelBottomClose size={13} />
-                            </button>
-                        )}
                         {getHintText()}
                     </div>
                 ) : null}

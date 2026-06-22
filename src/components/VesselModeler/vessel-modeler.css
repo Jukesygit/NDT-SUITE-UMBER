@@ -86,19 +86,26 @@
     color: rgba(255, 255, 255, 0.9);
 }
 
+/* Collapse animation uses grid-template-rows (0fr <-> 1fr) instead of a fixed
+   max-height cap, so tall sections (e.g. many nozzles + an open edit panel)
+   are never clipped. The parent sidebar scrolls to accommodate the height. */
 .vm-section-content {
-    overflow: hidden;
-    transition: max-height 0.3s ease, opacity 0.2s ease;
-    max-height: 2000px;
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 0.3s ease, opacity 0.2s ease;
     opacity: 1;
-    padding: 10px 15px 15px;
     background: rgba(0, 0, 0, 0.12);
 }
 
+.vm-section-content-inner {
+    overflow: hidden;
+    min-height: 0;
+    padding: 10px 15px 15px;
+}
+
 .vm-section.collapsed .vm-section-content {
-    max-height: 0;
+    grid-template-rows: 0fr;
     opacity: 0;
-    padding: 0 15px;
 }
 
 .vm-section.collapsed .vm-chevron {
@@ -184,17 +191,21 @@
 }
 
 .vm-subsection-content {
-    overflow: hidden;
-    transition: max-height 0.25s ease, opacity 0.2s ease;
-    max-height: 2000px;
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 0.25s ease, opacity 0.2s ease;
     opacity: 1;
+}
+
+.vm-subsection-content-inner {
+    overflow: hidden;
+    min-height: 0;
     padding: 0 10px 10px;
 }
 
 .vm-subsection.collapsed .vm-subsection-content {
-    max-height: 0;
+    grid-template-rows: 0fr;
     opacity: 0;
-    padding-bottom: 0;
 }
 
 .vm-subsection.collapsed .vm-chevron {
@@ -627,6 +638,36 @@
     right: 10px;
 }
 
+.vm-toolbar-segmented {
+    display: flex;
+    background: rgba(20, 25, 35, 0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 2px;
+    gap: 2px;
+}
+
+.vm-toolbar-segmented__btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+}
+
+.vm-toolbar-segmented__btn:hover {
+    color: white;
+}
+
+.vm-toolbar-segmented__btn.active {
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+}
+
 .vm-popout-trigger {
     background: rgba(20, 25, 35, 0.85);
     backdrop-filter: blur(8px);
@@ -701,6 +742,45 @@
     height: 1px;
     background: rgba(255, 255, 255, 0.08);
     margin: 4px 8px;
+}
+
+/* Snap control popout — increment slider */
+.vm-snap-slider {
+    padding: 6px 10px 8px;
+    min-width: 180px;
+}
+
+.vm-snap-slider-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.55);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 2px;
+}
+
+.vm-snap-value {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #60a5fa;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.vm-snap-ticks {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 2px;
+    font-size: 0.6rem;
+    color: rgba(255, 255, 255, 0.35);
+    font-family: var(--font-mono, monospace);
+}
+
+.vm-snap-ticks .active {
+    color: #60a5fa;
+    font-weight: 700;
 }
 
 /* Toggle sidebar button */
@@ -1467,19 +1547,21 @@
 }
 
 .vm-coverage-title {
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 700;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.55);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 6px;
+    letter-spacing: 0.8px;
+    margin-bottom: 8px;
+    padding-left: 8px;
+    border-left: 2px solid rgba(96, 165, 250, 0.4);
 }
 
 .vm-coverage-row {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 2px 0;
+    padding: 3px 0;
 }
 
 .vm-coverage-label {
@@ -1522,7 +1604,7 @@
 .vm-coverage-divider {
     height: 1px;
     background: rgba(255, 255, 255, 0.12);
-    margin: 4px 0;
+    margin: 5px 0;
 }
 
 .vm-coverage-total .vm-coverage-label {
@@ -1566,12 +1648,14 @@
 }
 
 .vm-wallloss-title {
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 700;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.55);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 6px;
+    letter-spacing: 0.8px;
+    margin-bottom: 8px;
+    padding-left: 8px;
+    border-left: 2px solid rgba(96, 165, 250, 0.4);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -1588,7 +1672,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 2px 0;
+    padding: 3px 0;
 }
 
 .vm-wallloss-swatch {
@@ -1649,7 +1733,7 @@
 .vm-wallloss-divider {
     height: 1px;
     background: rgba(255, 255, 255, 0.12);
-    margin: 4px 0;
+    margin: 5px 0;
 }
 
 .vm-wallloss-total .vm-wallloss-range {
@@ -2218,4 +2302,318 @@
 
 .vm-annotation-table-label.light .vm-annotation-table-thumb {
     border-color: rgba(0, 0, 0, 0.12);
+}
+
+/* ------------------------------------------------------------------ */
+/* Unified Stats Panel                                                */
+/* ------------------------------------------------------------------ */
+
+.vm-unified-stats-panel {
+    position: absolute;
+    bottom: 48px;
+    left: 350px;
+    z-index: 15;
+    background: rgba(20, 25, 35, 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 0 14px 8px;
+    min-width: 340px;
+    max-height: 70vh;
+    overflow-y: auto;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.85);
+    font-family: var(--font-mono, monospace);
+    transition: left 0.3s ease;
+}
+
+.vm-stats-section-divider {
+    height: 1px;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.15) 15%,
+        rgba(255, 255, 255, 0.15) 85%,
+        transparent
+    );
+    margin: 12px 0;
+}
+
+.vm-stats-section {
+    padding: 6px 0 4px;
+}
+
+.vm-stats-section-title {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.55);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 8px;
+    padding-left: 8px;
+    border-left: 2px solid rgba(96, 165, 250, 0.4);
+}
+
+/* Stats dropdown toggle items */
+.vm-stats-toggle-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.75);
+    transition: all 0.15s;
+    background: transparent;
+    border: none;
+    width: 100%;
+    text-align: left;
+}
+
+.vm-stats-toggle-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.vm-stats-toggle-check {
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s;
+    color: #60a5fa;
+}
+
+.vm-stats-toggle-check.checked {
+    background: rgba(59, 130, 246, 0.3);
+    border-color: #60a5fa;
+}
+
+.vm-stats-toggle-item--no-data {
+    opacity: 0.5;
+}
+
+.vm-popout-trigger--active {
+    background: rgba(59, 130, 246, 0.2) !important;
+    color: #60a5fa !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* Scan Coverage Stats Panel                                          */
+/* ------------------------------------------------------------------ */
+
+.vm-scancov-panel {
+    position: absolute;
+    bottom: 48px;
+    left: 350px;
+    z-index: 15;
+    background: rgba(20, 25, 35, 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 0 14px 8px;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.85);
+    font-family: var(--font-mono, monospace);
+    overflow: auto;
+}
+
+/* Drag title bar */
+.vm-scancov-titlebar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 0 7px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.vm-scancov-titlebar:active {
+    cursor: grabbing;
+}
+
+.vm-scancov-drag-dots {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.25);
+    letter-spacing: -2px;
+    line-height: 1;
+}
+
+.vm-scancov-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.45);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+
+/* Resize handle (bottom-right corner) */
+.vm-scancov-resize-handle {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 14px;
+    height: 14px;
+    cursor: nwse-resize;
+    background: linear-gradient(
+        135deg,
+        transparent 50%,
+        rgba(255, 255, 255, 0.15) 50%,
+        rgba(255, 255, 255, 0.15) 65%,
+        transparent 65%,
+        transparent 75%,
+        rgba(255, 255, 255, 0.15) 75%,
+        rgba(255, 255, 255, 0.15) 90%,
+        transparent 90%
+    );
+    border-radius: 0 0 8px 0;
+}
+
+/* Column group headers (RBA / Scoped / Achieved) */
+.vm-scancov-group-headers {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 4px;
+}
+
+.vm-scancov-section-col {
+    width: 82px;
+    flex-shrink: 0;
+    font-weight: 600;
+    font-size: 0.72rem;
+}
+
+.vm-scancov-group-label {
+    flex: 1;
+    text-align: center;
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.35);
+    padding: 3px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.vm-scancov-group-label--achieved {
+    color: rgba(96, 165, 250, 0.6);
+    border-bottom-color: rgba(96, 165, 250, 0.15);
+}
+
+/* Data rows */
+.vm-scancov-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.vm-scancov-row:last-child {
+    border-bottom: none;
+}
+
+/* Totals row */
+.vm-scancov-row--total {
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    border-bottom: none;
+    margin-top: 2px;
+    padding-top: 6px;
+}
+
+.vm-scancov-row--total .vm-scancov-section-col {
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.95);
+}
+
+.vm-scancov-row--total .vm-scancov-cell-pct {
+    font-weight: 700;
+}
+
+/* Grouped stat cell — stacks % on top, m² below */
+.vm-scancov-cell {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2px 6px;
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.vm-scancov-cell:first-of-type {
+    border-left: none;
+}
+
+.vm-scancov-cell-pct {
+    font-size: 0.78rem;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+.vm-scancov-cell-area {
+    font-size: 0.62rem;
+    color: rgba(255, 255, 255, 0.35);
+    line-height: 1.2;
+    margin-top: 1px;
+}
+
+/* Achieved column highlight */
+.vm-scancov-cell--achieved {
+    background: rgba(96, 165, 250, 0.06);
+    border-radius: 4px;
+    border-left-color: rgba(96, 165, 250, 0.12);
+}
+
+.vm-scancov-cell--achieved .vm-scancov-cell-pct {
+    color: #60a5fa;
+    font-weight: 600;
+}
+
+.vm-scancov-cell--achieved .vm-scancov-cell-area {
+    color: rgba(96, 165, 250, 0.5);
+}
+
+/* Inline editable percentage */
+.vm-scancov-editable {
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 500;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.25);
+    padding: 0 2px;
+    transition: color 0.15s, border-color 0.15s;
+    line-height: 1.2;
+}
+
+.vm-scancov-editable:hover {
+    color: #60a5fa;
+    border-bottom-color: #60a5fa;
+}
+
+.vm-scancov-input {
+    width: 48px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(96, 165, 250, 0.5);
+    border-radius: 3px;
+    color: #fff;
+    font-size: 0.75rem;
+    font-family: var(--font-mono, monospace);
+    text-align: center;
+    padding: 1px 4px;
+    outline: none;
+}
+
+.vm-scancov-input:focus {
+    border-color: #60a5fa;
+    box-shadow: 0 0 4px rgba(96, 165, 250, 0.3);
 }

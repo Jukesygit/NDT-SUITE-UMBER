@@ -134,7 +134,38 @@ function cylinderCellArea(
 // Region Total Areas
 // ---------------------------------------------------------------------------
 
-function computeRegionTotalAreas(vesselState: VesselState): { leftHead: number; cylinder: number; rightHead: number } {
+/**
+ * Compute the valid (non-null) scanned area of a thickness grid in mm².
+ *
+ * Counts valid data points and multiplies by the flat grid-cell area
+ * (xSpacing × ySpacing) — the same convention as the C-scan distribution
+ * engine and the companion's `validArea`. Used as a robust fallback for the
+ * Scan Coverage "Achieved" column when a composite's persisted
+ * `stats.validArea` is missing (common for dome scans whose stats were never
+ * round-tripped with area metrics).
+ */
+export function validAreaFromGrid(
+  data: (number | null)[][],
+  xAxis: number[],
+  yAxis: number[],
+): number {
+  if (!data || data.length === 0 || !data[0] || data[0].length === 0) return 0;
+
+  const xSpacing = xAxis.length > 1 ? Math.abs(xAxis[1] - xAxis[0]) : 1;
+  const ySpacing = yAxis.length > 1 ? Math.abs(yAxis[1] - yAxis[0]) : 1;
+  const cellArea = xSpacing * ySpacing;
+  if (cellArea <= 0) return 0;
+
+  let validPoints = 0;
+  for (const row of data) {
+    for (const v of row) {
+      if (v != null && !Number.isNaN(v)) validPoints += 1;
+    }
+  }
+  return validPoints * cellArea;
+}
+
+export function computeRegionTotalAreas(vesselState: VesselState): { leftHead: number; cylinder: number; rightHead: number } {
   const R = vesselState.id / 2;
   const D = vesselState.id / (2 * vesselState.headRatio);
 

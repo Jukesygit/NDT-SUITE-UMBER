@@ -1,14 +1,27 @@
-import React from 'react';
-import { Check, RotateCcw, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Check, Cloud, RotateCcw, Trash2 } from 'lucide-react';
 import type { DomeScanConfig, VesselState } from '../types';
 import { SliderRow, SubSection } from './SliderRow';
+
+export interface DomeScanCloudItem {
+    id: string;
+    name: string;
+    width: number;
+    height: number;
+    section_type: string | null;
+    created_at: string;
+}
 
 export interface DomeScanSectionProps {
     vesselState: VesselState;
     selectedDomeScanId: string;
     onSelectDomeScan: (id: string) => void;
+    onImportDomeComposite: (compositeId: string, head: 'left' | 'right') => void;
     onUpdateDomeScan: (id: string, updates: Partial<DomeScanConfig>) => void;
     onRemoveDomeScan: (id: string) => void;
+    cloudDomeComposites: DomeScanCloudItem[] | undefined;
+    cloudDomeCompositesLoading: boolean;
+    cloudDomeCompositesError: Error | null;
     isOpen?: boolean;
     onToggle?: () => void;
 }
@@ -17,15 +30,37 @@ export function DomeScanSection({
     vesselState,
     selectedDomeScanId,
     onSelectDomeScan,
+    onImportDomeComposite,
     onUpdateDomeScan,
     onRemoveDomeScan,
+    cloudDomeComposites,
+    cloudDomeCompositesLoading,
+    cloudDomeCompositesError,
     isOpen,
     onToggle,
 }: DomeScanSectionProps) {
     const domeScanComposites = vesselState.domeScanComposites;
+    const [showImport, setShowImport] = useState(false);
+    const [importingId, setImportingId] = useState<string | null>(null);
+    const [importHead, setImportHead] = useState<'left' | 'right'>('left');
+
+    const handleImport = () => {
+        if (!importingId) return;
+        onImportDomeComposite(importingId, importHead);
+        setShowImport(false);
+        setImportingId(null);
+    };
 
     return (
         <SubSection title="Dome Scans" count={domeScanComposites.length} isOpen={isOpen} onToggle={onToggle}>
+            <button
+                className="vm-btn vm-btn-primary"
+                onClick={() => setShowImport(true)}
+                style={{ marginBottom: 8 }}
+            >
+                <Cloud size={14} /> Import from Cloud
+            </button>
+
             {domeScanComposites.length === 0 && (
                 <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.35)', textAlign: 'center', padding: '8px 0' }}>
                     No dome scans placed
@@ -69,6 +104,80 @@ export function DomeScanSection({
                     </React.Fragment>
                 );
             })}
+
+            {showImport && (
+                <div className="vm-modal-overlay">
+                    <div className="vm-modal">
+                        <div className="vm-modal-header">
+                            <h3 style={{ margin: 0, fontSize: '0.9rem', color: 'white' }}>Import Dome Scan Composite</h3>
+                            <button className="vm-btn-icon" onClick={() => { setShowImport(false); setImportingId(null); }}>
+                                &times;
+                            </button>
+                        </div>
+                        <div className="vm-modal-body">
+                            <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', margin: '0 0 10px' }}>
+                                Select a dome composite to import. You can adjust orientation after import using the 3D gizmo or sidebar controls.
+                            </p>
+                            {cloudDomeCompositesLoading ? (
+                                <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: '20px 0' }}>
+                                    Loading...
+                                </p>
+                            ) : cloudDomeCompositesError ? (
+                                <p style={{ fontSize: '0.85rem', color: '#ef4444', textAlign: 'center', padding: '20px 0' }}>
+                                    Error: {cloudDomeCompositesError.message}
+                                </p>
+                            ) : (!cloudDomeComposites || cloudDomeComposites.length === 0) ? (
+                                <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: '20px 0' }}>
+                                    No dome composites saved yet
+                                </p>
+                            ) : (
+                                cloudDomeComposites.map(c => (
+                                    <div
+                                        key={c.id}
+                                        className={`vm-list-item texture ${importingId === c.id ? 'selected' : ''}`}
+                                        onClick={() => {
+                                            setImportingId(c.id);
+                                            if (c.section_type === 'dome_left') setImportHead('left');
+                                            else if (c.section_type === 'dome_right') setImportHead('right');
+                                        }}
+                                        style={{ cursor: 'pointer' }}
+                                    >
+                                        <div className="vm-list-item-info">
+                                            <strong>{c.name}</strong>
+                                            <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
+                                                {c.width} &times; {c.height}
+                                                {c.section_type && <> &middot; {c.section_type === 'dome_left' ? 'Left head' : 'Right head'}</>}
+                                                {' '}&middot; {new Date(c.created_at).toLocaleDateString()}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                            {importingId && (
+                                <div className="vm-control-group" style={{ marginTop: 10 }}>
+                                    <div className="vm-label"><span>Head</span></div>
+                                    <div className="vm-toggle-group">
+                                        <button
+                                            className={`vm-toggle-btn ${importHead === 'left' ? 'active' : ''}`}
+                                            onClick={() => setImportHead('left')}
+                                        >Left</button>
+                                        <button
+                                            className={`vm-toggle-btn ${importHead === 'right' ? 'active' : ''}`}
+                                            onClick={() => setImportHead('right')}
+                                        >Right</button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="vm-modal-footer">
+                            <button className="vm-btn" onClick={() => { setShowImport(false); setImportingId(null); }}>Cancel</button>
+                            {importingId && (
+                                <button className="vm-btn vm-btn-primary" onClick={handleImport}>Import</button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </SubSection>
     );
 }
