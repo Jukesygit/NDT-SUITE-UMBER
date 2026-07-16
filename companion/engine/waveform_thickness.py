@@ -9,6 +9,8 @@ releases a gate drag in the browser.
 
 import numpy as np
 import h5py
+
+from . import nde_format
 from .models import FileIndex
 
 CHUNK_SIZE = 50  # scan lines per chunk to limit RAM
@@ -63,7 +65,7 @@ def compute_thickness_full_res(
     amplitude_grid = np.full((n_scans, n_index), np.nan, dtype=np.float32)
 
     with h5py.File(file_index.path, "r") as f:
-        amp_ds = f["Public/Groups/0/Datasets/0-AScanAmplitude"]
+        amp_ds = f[nde_format.resolve_amplitude_path(f)]
 
         for chunk_start in range(0, n_scans, CHUNK_SIZE):
             chunk_end = min(chunk_start + CHUNK_SIZE, n_scans)

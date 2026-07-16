@@ -10,6 +10,7 @@ import logging
 import h5py
 import numpy as np
 
+from . import nde_format
 from .models import FileIndex, RegionData
 
 logger = logging.getLogger(__name__)
@@ -68,8 +69,11 @@ def extract_region(
         idx_i1 = idx_i0 + 1
 
     with h5py.File(file_index.path, "r") as f:
-        waveforms = f["Public/Groups/0/Datasets/0-AScanAmplitude"][scan_i0:scan_i1, idx_i0:idx_i1, :]
-        status = f["Public/Groups/0/Datasets/1-AScanStatus"][scan_i0:scan_i1, idx_i0:idx_i1]
+        waveforms = f[nde_format.resolve_amplitude_path(f)][scan_i0:scan_i1, idx_i0:idx_i1, :]
+        status_path = nde_format.resolve_status_path(f)
+        if status_path is None:
+            raise KeyError("No AScanStatus dataset found")
+        status = f[status_path][scan_i0:scan_i1, idx_i0:idx_i1]
 
     # Build axis arrays from actual indices
     n_scans = scan_i1 - scan_i0

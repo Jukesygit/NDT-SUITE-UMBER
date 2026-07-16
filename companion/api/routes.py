@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from .auth import create_session_token, get_startup_token, validate_token
 from .cache import CacheSnapshot, FileCache
 
+from engine import nde_format
 from engine.calibration import extract_calibration
 from engine.composite import create_composite
 from engine.cscan_export import cscan_to_csv, extract_cscan
@@ -688,7 +689,7 @@ def create_router(cache: FileCache) -> APIRouter:
         idx_i = max(0, min(ia.quantity - 1, round((index_mm / 1000.0 - ia.offset) / ia.resolution))) if ia.resolution else 0
 
         with h5py.File(fi.path, "r") as f:
-            amp_ds = f["Public/Groups/0/Datasets/0-AScanAmplitude"]
+            amp_ds = f[nde_format.resolve_amplitude_path(f)]
             waveform = amp_ds[scan_i, idx_i, :]
 
             sync_gate = None

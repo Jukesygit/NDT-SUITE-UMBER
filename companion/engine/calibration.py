@@ -174,16 +174,13 @@ def extract_calibration(file_index: FileIndex) -> Optional[CalibrationResult]:
 
 def _get_scenario(file_index: FileIndex) -> str:
     """Read scenario name from the NDE file's Setup JSON."""
-    import json
     import h5py
+
+    from . import nde_format
 
     try:
         with h5py.File(file_index.path, "r") as f:
-            raw = f["Public/Setup"][()]
-            if isinstance(raw, bytes):
-                setup = json.loads(raw.decode("utf-8"))
-            else:
-                setup = json.loads(raw.tobytes().decode("utf-8"))
+            setup = nde_format.load_setup(f)
             return setup.get("scenario", "")
     except Exception:
         return ""

@@ -7,6 +7,8 @@ to preserve peak amplitudes for threshold crossing detection.
 
 import numpy as np
 import h5py
+
+from . import nde_format
 from .models import FileIndex
 
 # Number of time samples in the downsampled envelope
@@ -56,7 +58,7 @@ def extract_envelope_chunk(
     n_index = file_index.index_axis.quantity
 
     with h5py.File(file_index.path, "r") as f:
-        amp_ds = f["Public/Groups/0/Datasets/0-AScanAmplitude"]
+        amp_ds = f[nde_format.resolve_amplitude_path(f)]
         waveforms = amp_ds[scan_start:scan_end, :n_index, :]  # (chunk, n_index, n_time) int16
 
     # Rectify (absolute value) and convert to float32
