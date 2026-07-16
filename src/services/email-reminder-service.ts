@@ -262,7 +262,7 @@ export async function sendTestReminder(userId: string, email: string): Promise<S
 
     await sendEmail({
         to: email,
-        subject: '[TEST] Certification Expiration Reminder',
+        subject: 'Certification renewal reminder (test)',
         html,
     });
 

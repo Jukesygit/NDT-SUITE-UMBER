@@ -128,7 +128,7 @@ function generateConsolidatedEmail(
                         <td style="padding: 0 40px;">
                             <div style="padding: 16px 20px; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.2); border-radius: 8px; text-align: center;">
                                 <span style="font-size: 15px; font-weight: 600; color: #fbbf24;">
-                                    ${competencies.length} certification${competencies.length > 1 ? 's' : ''} require${competencies.length === 1 ? 's' : ''} attention
+                                    ${competencies.length} certification${competencies.length > 1 ? 's' : ''} due for renewal
                                 </span>
                             </div>
                         </td>
@@ -446,7 +446,7 @@ serve(async (req) => {
       const urgentCount = competencies.filter(c => c.days_until_expiry <= 30).length
       const subject = urgentCount > 0
         ? `${competencies.length} certification(s) expiring soon`
-        : `Reminder: ${competencies.length} certification(s) require attention`
+        : `${competencies.length} certification(s) due for renewal`
 
       // Generate email HTML + plain-text alternative
       const html = generateConsolidatedEmail(
