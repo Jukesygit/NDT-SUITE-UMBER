@@ -5,7 +5,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import { isAdmin } from '../_shared/auth.ts'
-import { REMINDER_EMAIL_HEADERS, SUPPORT_EMAIL } from '../_shared/email.ts'
+// DELIVERABILITY: no REMINDER_EMAIL_HEADERS here — List-Unsubscribe marks the
+// mail as bulk, which routes it to junk/quarantine at strict M365 tenants.
+import { SUPPORT_EMAIL } from '../_shared/email.ts'
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
@@ -56,49 +58,33 @@ function generateConsolidatedEmail(
     })
   }
 
-  const renderCompetencyRow = (comp: Competency, urgencyColor: string) => {
+  // DELIVERABILITY: keep this template transactional in shape — plain light
+  // layout, no colored banners/badges, no CTA button, minimal links. Marketing
+  // shape is what pushes reminder mail into Exchange Online's bulk bucket.
+  const renderCompetencyRow = (comp: Competency) => {
     const statusText = comp.days_until_expiry <= 0
-      ? 'EXPIRED'
-      : `${comp.days_until_expiry} days`
+      ? 'Expired'
+      : `${comp.days_until_expiry} days remaining`
 
     return `
       <tr>
-        <td style="padding: 12px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08);">
-          <span style="font-size: 14px; color: #f8fafc;">${escapeHtml(comp.name)}</span>
-        </td>
-        <td style="padding: 12px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); text-align: center;">
-          <span style="font-size: 14px; color: #a3a3a3;">${formatDate(comp.expiry_date)}</span>
-        </td>
-        <td style="padding: 12px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); text-align: right;">
-          <span style="display: inline-block; padding: 4px 12px; font-size: 13px; font-weight: 600; color: ${urgencyColor}; background: ${urgencyColor}20; border-radius: 20px;">
-            ${statusText}
-          </span>
-        </td>
+        <td style="padding: 10px 0; border-bottom: 1px solid #e5e3de; font-size: 14px; color: #1c1b18;">${escapeHtml(comp.name)}</td>
+        <td style="padding: 10px 0 10px 16px; border-bottom: 1px solid #e5e3de; font-size: 14px; color: #4a4845; white-space: nowrap;">${formatDate(comp.expiry_date)}</td>
+        <td style="padding: 10px 0 10px 16px; border-bottom: 1px solid #e5e3de; font-size: 14px; color: ${comp.days_until_expiry <= 0 ? '#8e2a1e' : '#4a4845'}; text-align: right; white-space: nowrap;">${statusText}</td>
       </tr>
     `
   }
 
-  const renderSection = (title: string, comps: Competency[], urgencyColor: string) => {
+  const renderSection = (title: string, comps: Competency[]) => {
     if (comps.length === 0) return ''
 
     return `
-      <div style="margin-bottom: 24px;">
-        <h3 style="margin: 0 0 12px; font-size: 14px; font-weight: 600; color: ${urgencyColor}; text-transform: uppercase; letter-spacing: 0.5px;">
-          ${title} (${comps.length})
-        </h3>
-        <table style="width: 100%; border-collapse: collapse; background: rgba(23, 23, 23, 0.5); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; overflow: hidden;">
-          <thead>
-            <tr style="background: rgba(255, 255, 255, 0.03);">
-              <th style="padding: 10px 16px; text-align: left; font-size: 12px; font-weight: 600; color: #525252; text-transform: uppercase; letter-spacing: 0.5px;">Certification</th>
-              <th style="padding: 10px 16px; text-align: center; font-size: 12px; font-weight: 600; color: #525252; text-transform: uppercase; letter-spacing: 0.5px;">Expiry Date</th>
-              <th style="padding: 10px 16px; text-align: right; font-size: 12px; font-weight: 600; color: #525252; text-transform: uppercase; letter-spacing: 0.5px;">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${comps.map(c => renderCompetencyRow(c, urgencyColor)).join('')}
-          </tbody>
-        </table>
-      </div>
+      <p style="margin: 24px 0 4px; font-size: 14px; font-weight: 600; color: #1c1b18;">${title}</p>
+      <table role="presentation" style="width: 100%; border-collapse: collapse;">
+        <tbody>
+          ${comps.map(c => renderCompetencyRow(c)).join('')}
+        </tbody>
+      </table>
     `
   }
 
@@ -107,81 +93,36 @@ function generateConsolidatedEmail(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Certification Expiration Reminder - Matrix Portal</title>
+    <title>Certification renewal reminder - Matrix Portal</title>
 </head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #0a0a0a; color: #e2e8f0;">
-    <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #0a0a0a;">
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f4f0; color: #1c1b18;">
+    <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f5f4f0;">
         <tr>
-            <td align="center" style="padding: 40px 20px;">
-                <table role="presentation" style="width: 100%; max-width: 700px; border-collapse: collapse; background: linear-gradient(135deg, rgba(23, 23, 23, 0.98) 0%, rgba(15, 15, 15, 0.98) 100%); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; overflow: hidden;">
-
-                    <!-- Header with Logo -->
+            <td align="center" style="padding: 32px 16px;">
+                <table role="presentation" style="width: 100%; max-width: 560px; border-collapse: collapse; background: #ffffff; border: 1px solid #e5e3de; border-radius: 10px;">
                     <tr>
-                        <td style="padding: 40px 40px 30px; text-align: center; background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(139, 92, 246, 0.04) 100%);">
-                            <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #f8fafc; letter-spacing: -0.5px;">Matrix Portal</h1>
-                            <p style="margin: 8px 0 0; font-size: 14px; color: #a3a3a3;">Certification Expiration Reminder</p>
-                        </td>
-                    </tr>
+                        <td style="padding: 32px 36px;">
+                            <h1 style="margin: 0 0 24px; font-size: 18px; font-weight: 600; color: #1c1b18;">Matrix Portal</h1>
 
-                    <!-- Alert Banner -->
-                    <tr>
-                        <td style="padding: 0 40px;">
-                            <div style="padding: 16px 20px; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.2); border-radius: 8px; text-align: center;">
-                                <span style="font-size: 15px; font-weight: 600; color: #fbbf24;">
-                                    ${competencies.length} certification${competencies.length > 1 ? 's' : ''} due for renewal
-                                </span>
-                            </div>
-                        </td>
-                    </tr>
+                            <p style="margin: 0 0 8px; font-size: 14px; line-height: 1.6; color: #1c1b18;">Hi ${escapeHtml(recipientName)},</p>
 
-                    <!-- Content -->
-                    <tr>
-                        <td style="padding: 30px 40px 40px;">
-                            <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600; color: #f8fafc;">
-                                Hi ${escapeHtml(recipientName)},
-                            </h2>
-
-                            <p style="margin: 0 0 24px; font-size: 15px; line-height: 1.6; color: #a3a3a3;">
-                                The following certifications are expiring soon or have recently expired. Please ensure you renew them to maintain compliance.
+                            <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #4a4845;">
+                                The following certification${competencies.length > 1 ? 's are' : ' is'} due for renewal. Please renew ${competencies.length > 1 ? 'them' : 'it'} to stay compliant.
                             </p>
 
-                            <!-- Competency Lists by Urgency -->
-                            ${renderSection('Expired', expired, '#ef4444')}
-                            ${renderSection('Expiring Soon (< 30 days)', critical, '#f97316')}
-                            ${renderSection('Expiring (< 90 days)', warning, '#fbbf24')}
-                            ${renderSection('Upcoming', upcoming, '#3b82f6')}
+                            ${renderSection('Expired', expired)}
+                            ${renderSection('Expiring within 30 days', critical)}
+                            ${renderSection('Expiring within 90 days', warning)}
+                            ${renderSection('Upcoming', upcoming)}
 
-                            <!-- CTA Button -->
-                            <table role="presentation" style="width: 100%; border-collapse: collapse; margin: 32px 0;">
-                                <tr>
-                                    <td align="center">
-                                        <a href="${appUrl}/profile" style="display: inline-block; padding: 14px 32px; font-size: 15px; font-weight: 600; color: #ffffff; background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%); border-radius: 10px; text-decoration: none; box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);">
-                                            View & Update My Certifications
-                                        </a>
-                                    </td>
-                                </tr>
-                            </table>
-
-                            <!-- Info Notice -->
-                            <div style="margin-top: 24px; padding: 16px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px;">
-                                <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #60a5fa;">
-                                    <strong>Need to renew?</strong> Upload your updated certification documents through your profile page. Your manager will be notified once submitted.
-                                </p>
-                            </div>
-                        </td>
-                    </tr>
-
-                    <!-- Footer -->
-                    <tr>
-                        <td style="padding: 30px 40px; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.08);">
-                            <p style="margin: 0 0 8px; font-size: 13px; color: #525252;">
-                                Need help? Contact support at
-                                <a href="mailto:support@matrixinspectionservices.com" style="color: #60a5fa; text-decoration: none;">support@matrixinspectionservices.com</a>
+                            <p style="margin: 24px 0 0; font-size: 14px; line-height: 1.6; color: #4a4845;">
+                                You can view and update your certifications at
+                                <a href="${appUrl}/profile" style="color: #2d8a4e;">${appUrl.replace(/^https?:\/\//, '')}/profile</a>.
+                                Upload renewed documents through your profile page and your manager will be notified.
                             </p>
-                            <p style="margin: 8px 0 0; font-size: 12px; color: #404040;">
-                                &copy; ${new Date().getFullYear()} Matrix Inspection Services. All rights reserved.
-                            </p>
-                            <p style="margin: 12px 0 0; font-size: 11px; color: #404040;">
+
+                            <p style="margin: 24px 0 0; padding-top: 16px; border-top: 1px solid #e5e3de; font-size: 13px; line-height: 1.6; color: #7a7672;">
+                                Need help? Contact <a href="mailto:support@matrixinspectionservices.com" style="color: #2d8a4e;">support@matrixinspectionservices.com</a>.<br>
                                 You received this email because you have certifications tracked in Matrix Portal.
                             </p>
                         </td>
@@ -467,8 +408,7 @@ serve(async (req) => {
         html,
         senderFrom,
         settings.manager_emails.length > 0 ? settings.manager_emails : undefined,
-        text,
-        REMINDER_EMAIL_HEADERS
+        text
       )
 
       // Log the result with threshold=-1 to indicate manual single send
@@ -555,8 +495,7 @@ serve(async (req) => {
           html,
           senderFrom,
           settings.manager_emails.length > 0 ? settings.manager_emails : undefined,
-          text,
-          REMINDER_EMAIL_HEADERS
+          text
         )
 
         // Log the result

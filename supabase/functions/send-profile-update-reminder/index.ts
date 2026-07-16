@@ -4,7 +4,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
-import { htmlToText, REMINDER_EMAIL_HEADERS, SUPPORT_EMAIL } from '../_shared/email.ts'
+import { htmlToText, SUPPORT_EMAIL } from '../_shared/email.ts'
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 
@@ -239,7 +239,8 @@ serve(async (req) => {
               html: EMAIL_HTML,
               text: EMAIL_TEXT,
               reply_to: SUPPORT_EMAIL,
-              headers: REMINDER_EMAIL_HEADERS,
+              // DELIVERABILITY: no List-Unsubscribe — it marks the mail as bulk,
+              // which routes it to junk/quarantine at strict M365 tenants.
             }),
           })
 
