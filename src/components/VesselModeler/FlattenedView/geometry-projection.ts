@@ -159,6 +159,19 @@ export function axialFrac(posMm: number, vesselLength: number, reversed: boolean
   return reversed ? 1 - f : f;
 }
 
+/**
+ * Apply the circumferential handedness flip used when the axial axis is mirrored
+ * (reverse scan → the developed view is read from the opposite end). This is a
+ * 180° rotation about the vertical axis: TDC (0) and BDC (½ circumference) stay
+ * put while 3 o'clock and 9 o'clock swap, so the view stays a proper rotation
+ * instead of a mirror image. It is its own inverse. No-op when not reversed or
+ * when circumference is non-positive.
+ */
+export function circumDisplayMm(circumMm: number, circumference: number, reversed: boolean): number {
+  if (!reversed || circumference <= 0) return circumMm;
+  return ((circumference - circumMm) % circumference + circumference) % circumference;
+}
+
 export interface PlotScale {
   /** Pixels per mm, applied equally to both axes (1:1 / to-scale). */
   pxPerMm: number;
