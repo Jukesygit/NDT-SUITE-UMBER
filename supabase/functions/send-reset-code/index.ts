@@ -87,6 +87,24 @@ function getEmailHtml(code: string): string {
   `
 }
 
+// Plain-text alternative for the reset code email (multipart/alternative).
+// Security mail: no List-Unsubscribe header.
+function getEmailText(code: string): string {
+  return [
+    'Matrix Portal - Password Reset Code',
+    '',
+    'You requested to reset your password. Enter this code on the password reset page:',
+    '',
+    `    ${code}`,
+    '',
+    'This code will expire in 15 minutes.',
+    '',
+    "If you didn't request this code, please ignore this email. Your password will remain unchanged.",
+    '',
+    'Need help? Contact support at support@matrixinspectionservices.com',
+  ].join('\n')
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -197,6 +215,7 @@ serve(async (req) => {
         to: [normalizedEmail],
         subject: 'Your Password Reset Code - Matrix Portal',
         html: getEmailHtml(code),
+        text: getEmailText(code),
       }),
     })
 

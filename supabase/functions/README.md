@@ -62,24 +62,13 @@ supabase functions deploy send-email
 ### Usage
 
 ```javascript
-import { sendEmail, sendCompetencyExpirationNotification } from './services/email-service';
+import { sendEmail } from './services/email-service';
 
 // Simple email
 await sendEmail({
     to: 'user@example.com',
     subject: 'Hello',
     html: '<h1>Hello World</h1>',
-});
-
-// Competency expiration notification
-await sendCompetencyExpirationNotification({
-    recipientEmail: 'user@example.com',
-    recipientName: 'John Smith',
-    competency: {
-        name: 'NDT Level II',
-        expiryDate: '2025-02-15',
-    },
-    daysUntilExpiry: 30,
 });
 ```
 

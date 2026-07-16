@@ -5,6 +5,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import { isAdmin } from '../_shared/auth.ts'
+import { REMINDER_EMAIL_HEADERS, SUPPORT_EMAIL } from '../_shared/email.ts'
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
@@ -117,21 +118,6 @@ function generateConsolidatedEmail(
                     <!-- Header with Logo -->
                     <tr>
                         <td style="padding: 40px 40px 30px; text-align: center; background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(139, 92, 246, 0.04) 100%);">
-                            <!-- Matrix Logo with Gradient -->
-                            <div style="margin: 0 auto 20px;">
-                                <svg width="120" height="64" viewBox="0 0 2256 1202" fill="none" style="display: block; margin: 0 auto;">
-                                    <defs>
-                                        <linearGradient id="logoGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
-                                            <stop offset="0%" stop-color="#10b981" />
-                                            <stop offset="50%" stop-color="#3b82f6" />
-                                            <stop offset="100%" stop-color="#8b5cf6" />
-                                        </linearGradient>
-                                    </defs>
-                                    <path d="M36 1199.2 c-17.1 -4.5 -30.8 -18.8 -34 -35.7 -0.8 -4.4 -1 -75 -0.8 -266 l0.3 -260 3.3 -9.5 c4 -11.5 10.6 -22.3 18.1 -29.9 5.6 -5.6 778.3 -585.2 787.1 -590.3 7 -4.1 16.1 -6.1 25 -5.5 19 1.3 34.9 13.6 41.1 31.7 l2.2 6.5 0.8 239.5 c0.5 140.3 1.3 241.8 1.8 245.2 2.3 13.5 12.2 26.1 25.7 32.5 7.8 3.7 8.1 3.8 19.9 3.8 11.4 0 12.3 -0.2 18.5 -3.1 3.8 -1.8 30.2 -20.7 64.5 -46.1 31.9 -23.6 197.5 -146.4 368 -272.9 181 -134.2 312.7 -231.2 316.5 -233.1 14.7 -7.4 31.1 -6.1 45.8 3.5 7 4.6 11.7 10.2 16.1 19.2 l3.6 7.5 0.6 56 c0.4 30.8 1 146 1.3 256 0.5 129.9 1.1 201.9 1.8 205.5 2.4 12.9 12.6 27.8 23.9 35.1 2.8 1.7 8 4.4 11.7 5.8 l6.7 2.6 193 0.5 c182.3 0.5 193.3 0.7 199 2.4 27.8 8.4 47.4 28.1 55.2 55.7 1.7 6.1 1.8 16.8 1.8 241.9 0 264.2 0.7 239.6 -7.4 256.5 -9.3 19.4 -24.4 32.7 -45.6 40.2 l-8 2.8 -186 0 -186 0 -8.8 -3.1 c-28.6 -10.3 -48 -34.1 -51.7 -63.8 -1.6 -12.8 -1.4 -382.3 0.3 -382.9 0.9 -0.4 0.9 -0.6 0 -0.6 -1 -0.1 -1.3 -6.6 -1.3 -28.9 0 -31.8 -0.5 -35.7 -6.2 -46.6 -4.1 -7.7 -14.5 -18.2 -22.3 -22.3 -17 -8.9 -37 -9.1 -53 -0.4 -2.7 1.5 -166.1 124.2 -363 272.6 -196.9 148.5 -360.4 271.4 -363.4 273.2 -7.8 4.7 -18.6 6.9 -27.8 5.6 -20 -2.9 -36.8 -18.3 -40.3 -37.2 -0.7 -3.5 -1 -90 -1 -249 0 -266.9 0.4 -249.6 -5.7 -260.1 -12.5 -21.4 -39.4 -29.9 -60.8 -19.3 -10.9 5.5 -98.7 71.1 -414.5 309.8 -181.2 136.9 -332 250.2 -335 251.7 -9.8 4.9 -19.9 5.9 -31 3z" fill="url(#logoGrad2)" />
-                                    <path d="M1515.5 1196.4 c-30.2 -4.3 -51 -11.8 -73.2 -26.6 -13.6 -9 -33.2 -28.3 -42 -41.3 -33.3 -49.4 -37.2 -110.3 -10.2 -162.5 14.9 -28.8 39.1 -53 67.9 -67.9 45.1 -23.3 97.8 -23.8 142.7 -1.3 16.6 8.4 27.6 16.4 41.4 30.1 23.6 23.7 37.6 49.8 44.1 82.6 2.9 14.3 3.1 42.2 0.5 56 -6.3 33.6 -21 61.6 -44.6 85 -23.8 23.6 -51.3 38 -84.3 44.1 -8 1.5 -36.2 2.7 -42.3 1.8z" fill="url(#logoGrad2)" />
-                                    <path d="M1983.5 515.5 c-45.6 -7.3 -86.1 -34.1 -110.3 -73 -36.1 -58.2 -30.8 -132.3 13.2 -185 22.7 -27.2 53.8 -45.8 90 -53.7 8.7 -2 13.1 -2.3 31.6 -2.2 18.4 0 22.9 0.3 31.3 2.2 21.9 4.9 42.6 13.9 59.7 26 11.9 8.4 29.6 26 37.7 37.5 12.7 18.1 22.8 42.1 26.9 64.2 2.8 14.9 2.6 42.1 -0.4 57.2 -13 65.1 -64.2 115.3 -128.7 126.3 -13.7 2.3 -38.1 2.6 -51 0.5z" fill="url(#logoGrad2)" />
-                                </svg>
-                            </div>
                             <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #f8fafc; letter-spacing: -0.5px;">Matrix Portal</h1>
                             <p style="margin: 8px 0 0; font-size: 14px; color: #a3a3a3;">Certification Expiration Reminder</p>
                         </td>
@@ -190,7 +176,7 @@ function generateConsolidatedEmail(
                         <td style="padding: 30px 40px; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.08);">
                             <p style="margin: 0 0 8px; font-size: 13px; color: #525252;">
                                 Need help? Contact support at
-                                <a href="mailto:jonas@matrixinspectionservices.com" style="color: #60a5fa; text-decoration: none;">jonas@matrixinspectionservices.com</a>
+                                <a href="mailto:support@matrixinspectionservices.com" style="color: #60a5fa; text-decoration: none;">support@matrixinspectionservices.com</a>
                             </p>
                             <p style="margin: 8px 0 0; font-size: 12px; color: #404040;">
                                 &copy; ${new Date().getFullYear()} Matrix Inspection Services. All rights reserved.
@@ -222,6 +208,51 @@ function escapeHtml(str: string): string {
 }
 
 /**
+ * Plain-text alternative for the consolidated reminder email.
+ * Sent alongside the HTML (multipart/alternative) — HTML-only mail is a spam
+ * signal at Microsoft 365 / Outlook.
+ */
+function generateConsolidatedText(
+  recipientName: string,
+  competencies: Competency[],
+  appUrl: string
+): string {
+  const formatDate = (dateStr: string) =>
+    new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+
+  const line = (c: Competency) => {
+    const status = c.days_until_expiry <= 0 ? 'EXPIRED' : `${c.days_until_expiry} days`
+    return `- ${c.name} — expires ${formatDate(c.expiry_date)} (${status})`
+  }
+
+  const section = (title: string, comps: Competency[]): string[] =>
+    comps.length === 0 ? [] : [`${title} (${comps.length}):`, ...comps.map(line), '']
+
+  const expired = competencies.filter(c => c.days_until_expiry <= 0)
+  const critical = competencies.filter(c => c.days_until_expiry > 0 && c.days_until_expiry <= 30)
+  const warning = competencies.filter(c => c.days_until_expiry > 30 && c.days_until_expiry <= 90)
+  const upcoming = competencies.filter(c => c.days_until_expiry > 90)
+
+  return [
+    'Matrix Portal - Certification Expiration Reminder',
+    '',
+    `Hi ${recipientName},`,
+    '',
+    'The following certifications are expiring soon or have recently expired. Please ensure you renew them to maintain compliance.',
+    '',
+    ...section('Expired', expired),
+    ...section('Expiring soon (< 30 days)', critical),
+    ...section('Expiring (< 90 days)', warning),
+    ...section('Upcoming', upcoming),
+    `View and update your certifications: ${appUrl}/profile`,
+    '',
+    'Need help? Contact support at support@matrixinspectionservices.com',
+    '',
+    'You received this email because you have certifications tracked in Matrix Portal.',
+  ].join('\n')
+}
+
+/**
  * Send email via Resend API
  */
 async function sendEmail(
@@ -229,7 +260,9 @@ async function sendEmail(
   subject: string,
   html: string,
   from: string,
-  cc?: string[]
+  cc?: string[],
+  text?: string,
+  headers?: Record<string, string>
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   if (!RESEND_API_KEY) {
     return { success: false, error: 'RESEND_API_KEY not configured' }
@@ -240,10 +273,19 @@ async function sendEmail(
     to: [to],
     subject,
     html,
+    reply_to: SUPPORT_EMAIL,
+  }
+
+  if (text) {
+    payload.text = text
   }
 
   if (cc && cc.length > 0) {
     payload.cc = cc
+  }
+
+  if (headers) {
+    payload.headers = headers
   }
 
   const response = await fetch('https://api.resend.com/emails', {
@@ -403,11 +445,16 @@ serve(async (req) => {
       // Generate subject line
       const urgentCount = competencies.filter(c => c.days_until_expiry <= 30).length
       const subject = urgentCount > 0
-        ? `Action Required: ${competencies.length} certification(s) expiring soon`
+        ? `${competencies.length} certification(s) expiring soon`
         : `Reminder: ${competencies.length} certification(s) require attention`
 
-      // Generate email HTML
+      // Generate email HTML + plain-text alternative
       const html = generateConsolidatedEmail(
+        userProfile.username || userProfile.email.split('@')[0],
+        competencies,
+        APP_URL
+      )
+      const text = generateConsolidatedText(
         userProfile.username || userProfile.email.split('@')[0],
         competencies,
         APP_URL
@@ -419,7 +466,9 @@ serve(async (req) => {
         subject,
         html,
         senderFrom,
-        settings.manager_emails.length > 0 ? settings.manager_emails : undefined
+        settings.manager_emails.length > 0 ? settings.manager_emails : undefined,
+        text,
+        REMINDER_EMAIL_HEADERS
       )
 
       // Log the result with threshold=-1 to indicate manual single send
@@ -484,11 +533,16 @@ serve(async (req) => {
         // Generate subject line
         const urgentCount = user.competencies.filter(c => c.days_until_expiry <= 30).length
         const subject = urgentCount > 0
-          ? `Action Required: ${user.competencies.length} certification(s) expiring soon`
+          ? `${user.competencies.length} certification(s) expiring soon`
           : `Reminder: ${user.competencies.length} certification(s) expiring within ${threshold} months`
 
-        // Generate email HTML
+        // Generate email HTML + plain-text alternative
         const html = generateConsolidatedEmail(
+          user.username || user.email.split('@')[0],
+          user.competencies,
+          APP_URL
+        )
+        const text = generateConsolidatedText(
           user.username || user.email.split('@')[0],
           user.competencies,
           APP_URL
@@ -500,7 +554,9 @@ serve(async (req) => {
           subject,
           html,
           senderFrom,
-          settings.manager_emails.length > 0 ? settings.manager_emails : undefined
+          settings.manager_emails.length > 0 ? settings.manager_emails : undefined,
+          text,
+          REMINDER_EMAIL_HEADERS
         )
 
         // Log the result

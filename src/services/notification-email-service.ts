@@ -11,6 +11,19 @@ const supabase: SupabaseClient | null = supabaseModule.supabase;
 
 import { sendEmail } from './email-service';
 
+/**
+ * List-Unsubscribe header for bulk / notification mail. The admin broadcast is
+ * bulk mail, so it carries this header to improve sender reputation at Outlook /
+ * Microsoft 365.
+ *
+ * MUST stay in sync with REMINDER_EMAIL_HEADERS in
+ * supabase/functions/_shared/email.ts — the supabase/ tree is outside the src
+ * tsconfig, so that module cannot be imported here directly.
+ */
+const REMINDER_EMAIL_HEADERS: Record<string, string> = {
+    'List-Unsubscribe': '<mailto:support@matrixinspectionservices.com?subject=unsubscribe>',
+};
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -140,12 +153,7 @@ function generateNotificationEmailHtml(body: string, recipientName: string): str
                     <!-- Header -->
                     <tr>
                         <td style="padding: 40px 40px 30px; text-align: center; background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%);">
-                            <div style="width: 64px; height: 64px; margin: 0 auto 20px; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 16px; display: flex; align-items: center; justify-content: center;">
-                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" style="display: block; margin: 16px auto;">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                </svg>
-                            </div>
-                            <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #f8fafc; letter-spacing: -0.5px;">NDT Suite</h1>
+                            <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #f8fafc; letter-spacing: -0.5px;">Matrix Portal</h1>
                         </td>
                     </tr>
                     <!-- Content -->
@@ -263,7 +271,7 @@ export async function sendNotificationEmails(
         try {
             // Use raw HTML if template provided, otherwise wrap in default template
             const html = isHtmlTemplate ? body : generateNotificationEmailHtml(body, recipient.username);
-            await sendEmail({ to: recipient.email, subject, html });
+            await sendEmail({ to: recipient.email, subject, html, headers: REMINDER_EMAIL_HEADERS });
 
             // Update individual recipient status
             await supabase

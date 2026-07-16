@@ -2,6 +2,12 @@
 
 This folder contains professionally designed email templates for the NDT Suite application.
 
+> **Note (Outlook deliverability):** The inline `<svg>` logo has been removed from every
+> template and replaced with a plain-text "Matrix Portal" wordmark, because Outlook /
+> Microsoft 365 cannot render inline SVG and treats it as a spam signal. These files are
+> pasted **manually** into the Supabase Dashboard, so the changes only take effect after you
+> re-paste each updated template into **Supabase Dashboard → Authentication → Email Templates**.
+
 ## Available Templates
 
 ### 1. **reset-password.html**
