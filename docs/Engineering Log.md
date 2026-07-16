@@ -14,11 +14,14 @@ Use this page as the running handoff point between Obsidian notes and code work.
 
 - Vessel modeler coverage, piping, viewport rendering, and material handling.
 - Industrial theme polish across admin, documents, personnel, projects, profile, demos, and layout styles.
+- Clean design rollout: login page restyled 2026-07-16 (`src/pages/login.css`, `lg-` prefix) to match personnel/projects/profile.
+- Email deliverability to Outlook/M365: code hardening extended 2026-07-16 to client senders + auth templates; committed (`ed0ab75`) and the 4 sender edge functions deployed. Auth templates still need re-pasting into the Supabase dashboard; corporate allow-list/quarantine check outstanding.
 - Project inspection workflow, report readiness, scan viewer, and companion app integration.
 - Supabase migrations, storage policies, and user/account security workflows.
 
 ## Recent Handovers
 
+- [[plans/2026-07-12-tools-projects-comprehensive-review]] - verified review + pivot analysis of Tools/Projects (18 claims adversarially verified; roadmap Phases 0-4)
 - [[plans/2026-06-11-cscan-offset-filename-arbitration]]
 - [[plans/2026-05-01-industrial-theme-handover]]
 - [[plans/2026-04-30-industrial-instrument-handover]]
