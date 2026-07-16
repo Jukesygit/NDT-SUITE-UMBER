@@ -31,20 +31,30 @@ WITH CHECK (
     AND (storage.foldername(name))[2] = auth.uid()::text
 );
 
--- Policy 2: Users can view their own documents (admins can see all)
+-- Policy 2: Users can view their own documents (super_admins/admins/managers see all)
+-- NOTE: role list MUST stay in sync with the employee_competencies table policies
+-- (supabase/migrations/20260618120000_fix_super_admin_competency_access.sql).
+-- Omitting super_admin/manager here makes createSignedUrl 400 for those reviewers.
 CREATE POLICY "Users can view their own competency documents"
 ON storage.objects FOR SELECT
 TO authenticated
 USING (
     bucket_id = 'documents'
+    AND (storage.foldername(name))[1] = 'competency-documents'
     AND (
         -- User can see their own documents
         (storage.foldername(name))[2] = auth.uid()::text
         OR
-        -- Admins can see all documents
+        -- Super admins and admins can see all documents
         EXISTS (
             SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
+            WHERE id = auth.uid() AND role IN ('super_admin', 'admin')
+        )
+        OR
+        -- Managers can review all competency documents
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'manager'
         )
         OR
         -- Org admins can see documents from users in their org
@@ -53,34 +63,63 @@ USING (
             JOIN public.profiles p2 ON p1.organization_id = p2.organization_id
             WHERE p1.id = auth.uid()
             AND p1.role = 'org_admin'
+            AND p1.organization_id IS NOT NULL
             AND p2.id::text = (storage.foldername(name))[2]
         )
     )
 );
 
--- Policy 3: Users can update their own documents
+-- Policy 3: Users can update their own documents (admins can update any)
 CREATE POLICY "Users can update their own competency documents"
 ON storage.objects FOR UPDATE
 TO authenticated
 USING (
     bucket_id = 'documents'
-    AND (storage.foldername(name))[2] = auth.uid()::text
+    AND (storage.foldername(name))[1] = 'competency-documents'
+    AND (
+        (storage.foldername(name))[2] = auth.uid()::text
+        OR
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role IN ('super_admin', 'admin')
+        )
+        OR
+        EXISTS (
+            SELECT 1 FROM public.profiles p1
+            JOIN public.profiles p2 ON p1.organization_id = p2.organization_id
+            WHERE p1.id = auth.uid()
+            AND p1.role = 'org_admin'
+            AND p1.organization_id IS NOT NULL
+            AND p2.id::text = (storage.foldername(name))[2]
+        )
+    )
 );
 
--- Policy 4: Users can delete their own documents (admins can delete any)
+-- Policy 4: Users can delete their own documents (super_admins/admins/org_admins delete any)
 CREATE POLICY "Users can delete their own competency documents"
 ON storage.objects FOR DELETE
 TO authenticated
 USING (
     bucket_id = 'documents'
+    AND (storage.foldername(name))[1] = 'competency-documents'
     AND (
         -- User can delete their own documents
         (storage.foldername(name))[2] = auth.uid()::text
         OR
-        -- Admins can delete any documents
+        -- Super admins and admins can delete any documents
         EXISTS (
             SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role IN ('admin', 'org_admin')
+            WHERE id = auth.uid() AND role IN ('super_admin', 'admin')
+        )
+        OR
+        -- Org admins can delete documents from users in their org
+        EXISTS (
+            SELECT 1 FROM public.profiles p1
+            JOIN public.profiles p2 ON p1.organization_id = p2.organization_id
+            WHERE p1.id = auth.uid()
+            AND p1.role = 'org_admin'
+            AND p1.organization_id IS NOT NULL
+            AND p2.id::text = (storage.foldername(name))[2]
         )
     )
 );
