@@ -440,7 +440,7 @@ serve(async (req) => {
       }).sort((a, b) => a.days_until_expiry - b.days_until_expiry)
 
       // Use hardcoded verified domain - updates.matrixportal.io is verified in Resend
-      const senderFrom = 'Matrix Portal <notifications@updates.matrixportal.io>'
+      const senderFrom = 'Matrix Portal <noreply@updates.matrixportal.io>'
 
       // Generate subject line
       const urgentCount = competencies.filter(c => c.days_until_expiry <= 30).length
@@ -528,7 +528,7 @@ serve(async (req) => {
       // Send emails to each user
       for (const user of users) {
         // Use hardcoded verified domain - updates.matrixportal.io is verified in Resend
-      const senderFrom = 'Matrix Portal <notifications@updates.matrixportal.io>'
+      const senderFrom = 'Matrix Portal <noreply@updates.matrixportal.io>'
 
         // Generate subject line
         const urgentCount = user.competencies.filter(c => c.days_until_expiry <= 30).length

@@ -45,7 +45,7 @@ serve(async (req) => {
 
     // Build email payload — SECURITY: from is always hardcoded server-side
     const emailPayload: Record<string, unknown> = {
-      from: 'Matrix Portal <notifications@updates.matrixportal.io>',
+      from: 'Matrix Portal <noreply@updates.matrixportal.io>',
       to: Array.isArray(to) ? to : [to],
       subject,
       html,

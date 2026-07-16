@@ -233,7 +233,7 @@ serve(async (req) => {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              from: 'Matrix Portal <notifications@updates.matrixportal.io>',
+              from: 'Matrix Portal <noreply@updates.matrixportal.io>',
               to: [recipient.email],
               subject: 'Please review your Matrix Portal profile',
               html: EMAIL_HTML,
