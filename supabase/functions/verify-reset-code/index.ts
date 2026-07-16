@@ -5,6 +5,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import { validatePassword } from '../_shared/password-validation.ts'
+import { logAuditEvent } from '../_shared/audit.ts'
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -73,6 +74,17 @@ serve(async (req) => {
         .update({ used_at: new Date().toISOString() })
         .eq('id', resetCode.id)
 
+      // Audit: lockout. Target user id is not resolved on this path (profile
+      // lookup only runs after a code match), so actorId is null.
+      await logAuditEvent(supabaseAdmin, {
+        actorId: null,
+        actionType: 'password_reset_failed',
+        category: 'security',
+        description: 'Password reset blocked: too many attempts',
+        details: { reason: 'locked_out' },
+        entityType: 'user',
+      })
+
       return errorResponse(req, 'Too many failed attempts. Please request a new code.', 400)
     }
 
@@ -83,6 +95,17 @@ serve(async (req) => {
         .from('password_reset_codes')
         .update({ attempts: resetCode.attempts + 1 })
         .eq('id', resetCode.id)
+
+      // Audit: wrong code. Target user id is not resolved on this path (profile
+      // lookup only runs after a code match), so actorId is null.
+      await logAuditEvent(supabaseAdmin, {
+        actorId: null,
+        actionType: 'password_reset_failed',
+        category: 'security',
+        description: 'Password reset failed: invalid code',
+        details: { reason: 'invalid_code' },
+        entityType: 'user',
+      })
 
       return errorResponse(req, 'Invalid or expired reset code. Please request a new one.', 400)
     }
@@ -121,6 +144,18 @@ serve(async (req) => {
       .from('password_reset_codes')
       .update({ used_at: new Date().toISOString() })
       .eq('id', resetCode.id)
+
+    // Audit: password reset succeeded. Actor is the server-resolved account
+    // owner (email -> code -> profile.id), never a client-supplied id.
+    await logAuditEvent(supabaseAdmin, {
+      actorId: profile.id,
+      actionType: 'password_reset',
+      category: 'security',
+      description: 'Password reset via reset code',
+      details: { source: 'reset_code' },
+      entityType: 'user',
+      entityId: profile.id,
+    })
 
     return jsonResponse(req, {
       success: true,

@@ -3,7 +3,6 @@
  */
 
 import authManager from '../auth-manager.js';
-import { logActivity } from './activity-log-service';
 import type {
   Organization,
   OrganizationStats,
@@ -82,48 +81,17 @@ export async function getOrganizationsWithStats(): Promise<OrganizationStats[]> 
 export async function createOrganization(name: string): Promise<ServiceResult<Organization>> {
   const result = await authManager.createOrganization(name);
 
-  if (result.success) {
-    logActivity({
-      actionType: 'organization_created',
-      actionCategory: 'admin',
-      description: `Created organization: ${name}`,
-      entityType: 'organization',
-      entityName: name,
-    });
-  }
-
   return toServiceResult<Organization>(result);
 }
 
 export async function updateOrganization(id: string, data: { name: string }): Promise<ServiceResult<Organization>> {
   const result = await authManager.updateOrganization(id, data);
 
-  if (result.success) {
-    logActivity({
-      actionType: 'organization_updated',
-      actionCategory: 'admin',
-      description: `Updated organization: ${data.name}`,
-      entityType: 'organization',
-      entityId: id,
-      entityName: data.name,
-    });
-  }
-
   return toServiceResult<Organization>(result);
 }
 
 export async function deleteOrganization(id: string): Promise<ServiceResult> {
   const result = await authManager.deleteOrganization(id);
-
-  if (result.success) {
-    logActivity({
-      actionType: 'organization_deleted',
-      actionCategory: 'admin',
-      description: `Deleted organization: ${id}`,
-      entityType: 'organization',
-      entityId: id,
-    });
-  }
 
   return toServiceResult(result);
 }

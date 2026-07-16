@@ -5,6 +5,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import { requireAdmin } from '../_shared/auth.ts'
+import { logAuditEvent, maskEmail } from '../_shared/audit.ts'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -28,6 +29,14 @@ serve(async (req) => {
     if (userId === auth.user!.id) {
       return errorResponse(req, 'Cannot delete your own account', 400)
     }
+
+    // AUDIT: Capture the target user's identity BEFORE any deletion/purge,
+    // since the cleanup below destroys their activity_log rows and the profile.
+    const { data: targetProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('username, email, role')
+      .eq('id', userId)
+      .single()
 
     // Clean up related data that might have foreign key constraints
     // Delete records where user is the owner
@@ -106,6 +115,23 @@ serve(async (req) => {
     }
 
     console.log('User deleted successfully:', userId)
+
+    // AUDIT: Record the deletion with the JWT-verified admin as actor. The actor's
+    // own activity_log rows are not purged, so logging here is safe.
+    await logAuditEvent(supabaseAdmin, {
+      actorId: auth.user!.id,
+      actorRole: auth.user!.role,
+      actionType: 'user_deleted',
+      category: 'admin',
+      description: `Admin deleted user ${targetProfile?.username ?? userId}`,
+      entityType: 'user',
+      entityId: userId,
+      entityName: targetProfile?.username ?? null,
+      details: {
+        role: targetProfile?.role ?? null,
+        email_masked: maskEmail(targetProfile?.email),
+      },
+    })
 
     return jsonResponse(req, { success: true, message: 'User deleted successfully' })
 

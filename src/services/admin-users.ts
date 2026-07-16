@@ -45,16 +45,8 @@ export async function createUser(data: CreateUserData): Promise<ServiceResult> {
 
   const result = await authManager.createUser(userData);
 
-  if (result.success) {
-    logActivity({
-      actionType: 'user_created',
-      actionCategory: 'admin',
-      description: `Created user: ${data.username}`,
-      entityType: 'user',
-      entityName: data.username,
-      details: { email: data.email, role: data.role },
-    });
-  }
+  // Audit: user_created is logged server-side in the create-user edge function
+  // (actor resolved from the JWT) to capture privileged actions reliably.
 
   return toServiceResult(result);
 }
@@ -70,17 +62,8 @@ export async function updateUser(id: string, data: UpdateUserData): Promise<Serv
 
   const result = await authManager.updateUser(id, updates);
 
-  if (result.success) {
-    logActivity({
-      actionType: 'user_updated',
-      actionCategory: 'admin',
-      description: `Updated user: ${data.username || id}`,
-      entityType: 'user',
-      entityId: id,
-      entityName: data.username,
-      details: { updatedFields: Object.keys(data) },
-    });
-  }
+  // Audit: profile changes are captured by the profiles AFTER UPDATE trigger
+  // (audit_row_change), which records the actor and a redacted field diff.
 
   return toServiceResult<Profile>(result);
 }
@@ -88,15 +71,8 @@ export async function updateUser(id: string, data: UpdateUserData): Promise<Serv
 export async function deleteUser(id: string): Promise<ServiceResult> {
   const result = await authManager.deleteUser(id);
 
-  if (result.success) {
-    logActivity({
-      actionType: 'user_deleted',
-      actionCategory: 'admin',
-      description: `Deleted user: ${id}`,
-      entityType: 'user',
-      entityId: id,
-    });
-  }
+  // Audit: user_deleted is logged server-side in the delete-user edge function,
+  // which captures the target's identity before the row is removed.
 
   return toServiceResult(result);
 }
@@ -112,15 +88,8 @@ export async function getAccountRequests(): Promise<AccountRequest[]> {
 export async function approveAccountRequest(id: string): Promise<ServiceResult> {
   const result = await authManager.approveAccountRequest(id);
 
-  if (result.success) {
-    logActivity({
-      actionType: 'account_approved',
-      actionCategory: 'admin',
-      description: `Approved account request`,
-      entityType: 'account_request',
-      entityId: id,
-    });
-  }
+  // Audit: account_request_approved is logged server-side in the
+  // approve-account-request edge function (actor resolved from the JWT).
 
   return toServiceResult(result);
 }

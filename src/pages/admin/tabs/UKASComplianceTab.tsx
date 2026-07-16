@@ -53,19 +53,19 @@ const complianceSections: ComplianceSection[] = [
             { title: 'Users can only view own competencies (unless admin/manager)', verified: true, evidence: 'competency-schema.sql:118-134 - Policy checks user_id = auth.uid()' },
             { title: 'Organisation isolation enforced', verified: true, evidence: 'Org admin policy checks organization_id matching. Cross-tenant access prevented' },
             { title: 'Cross-organisation access blocked for Org Admins', verified: true, evidence: 'All org_admin policies include organisation matching requirements' },
-            { title: 'Activity logs restricted by role', verified: true, evidence: 'activity-log-schema.sql:72-86 - Only admin/manager can view all logs' },
+            { title: 'Activity logs restricted by role', verified: true, evidence: 'Migration 20260626150000 - only super_admin/admin can view all logs (managers no longer have access)' },
         ]
     },
     {
         id: 'audit-trail',
         title: 'Audit Trail',
         items: [
-            { title: 'Activity log captures all user actions', verified: true, evidence: 'activity-log-schema.sql:8-35 - Comprehensive table with user, action, entity, timestamp' },
-            { title: 'User email/name cached (survives user deletion)', verified: true, evidence: 'user_email and user_name columns exist in activity_log table' },
-            { title: 'IP address and user agent logged', verified: true, evidence: 'activity-log-schema.sql:29-30 - ip_address INET and user_agent TEXT columns' },
+            { title: 'Activity log captures actions across the platform', verified: true, evidence: 'Server-side DB triggers (20260626160000) audit every project/vessel/scan/document/competency/admin change; edge functions audit user lifecycle' },
+            { title: 'Actor PII not cached (GDPR-compliant audit identity)', verified: true, evidence: 'Migrations 20260225120000/20260626160000 - actor email/name never stored; identity resolved by join at read; deleted actors shown as "Deleted user"' },
+            { title: 'Actor recorded server-side (forgery-proof, append-only)', verified: true, evidence: 'Migrations 20260626150000/160000 - actor derived from auth.uid(); clients cannot forge entries; log is immutable (no UPDATE/DELETE)' },
             { title: 'Competency changes logged to dedicated history table', verified: true, evidence: 'competency_history table captures all changes with old/new values' },
             { title: 'Email reminders logged with status', verified: true, evidence: 'email_reminder_log table tracks sent, failed, bounced with error messages' },
-            { title: 'Retention period configured (365+ days)', verified: true, evidence: 'cleanup_old_activity_logs() function defaults to 365 day TTL' },
+            { title: 'Retention configured with controlled, audited purge', verified: true, evidence: 'purge_activity_logs() is super_admin-gated and self-auditing (default 730 days; migration 20260626150000); scheduled variant in 20260626170000' },
         ]
     },
     {

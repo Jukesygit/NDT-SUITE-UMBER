@@ -14,15 +14,19 @@ const supabase: SupabaseClient | null = supabaseModule.supabase;
 // Type Definitions
 // ============================================================================
 
-// Action categories
+// Action categories (single source of truth; mirrors the DB check constraint in
+// migration 20260626140000_activity_log_v2_schema.sql)
 export type ActionCategory =
     | 'auth'
+    | 'security'
     | 'profile'
     | 'competency'
     | 'admin'
     | 'asset'
+    | 'inspection'
+    | 'document'
     | 'config'
-    | 'document';
+    | 'data';
 
 // Specific action types
 export type ActionType =
@@ -72,6 +76,7 @@ export type ActionType =
     | 'pii_revealed'
     | 'data_exported'
     | 'account_deleted'
+    | 'report_generated'
     // Sharing
     | 'share_created'
     | 'share_deleted'
@@ -97,7 +102,9 @@ export interface ActivityLogEntry {
     user_id: string | null;
     user_email: string | null;
     user_name: string | null;
-    action_type: ActionType;
+    // Free-form: DB triggers and edge functions emit dynamic action types
+    // (e.g. 'vessel_created', 'user_email_changed') beyond the client ActionType union.
+    action_type: string;
     action_category: ActionCategory;
     description: string;
     details: Record<string, unknown> | null;
@@ -107,6 +114,10 @@ export interface ActivityLogEntry {
     ip_address: string | null;
     user_agent: string | null;
     created_at: string;
+    organization_id: string | null;
+    actor_role: string | null;
+    /** Joined actor profile, resolved at read time (actor PII is never cached). */
+    actor?: { username: string | null; email: string | null } | null;
 }
 
 export interface ActivityLogFilters {
@@ -233,7 +244,8 @@ export async function getActivityLogs(
 
     let query = supabase
         .from('activity_log')
-        .select('*', { count: 'exact' });
+        // Resolve actor identity by join (actor email/name are not cached on the row).
+        .select('*, actor:profiles!activity_log_user_id_fkey(username, email)', { count: 'exact' });
 
     // Apply filters
     if (filters.userId) {
@@ -263,7 +275,7 @@ export async function getActivityLogs(
 
         if (sanitizedQuery.length > 0) {
             query = query.or(
-                `description.ilike.%${sanitizedQuery}%,user_name.ilike.%${sanitizedQuery}%,entity_name.ilike.%${sanitizedQuery}%`
+                `description.ilike.%${sanitizedQuery}%,action_type.ilike.%${sanitizedQuery}%,entity_name.ilike.%${sanitizedQuery}%`
             );
         }
     }
@@ -299,25 +311,27 @@ export async function getActivityUsers(): Promise<Array<{ id: string; name: stri
 
     const { data, error } = await supabase
         .from('activity_log')
-        .select('user_id, user_name, user_email')
-        .not('user_id', 'is', null)
-        .order('user_name');
+        .select('user_id, actor:profiles!activity_log_user_id_fkey(username, email)')
+        .not('user_id', 'is', null);
 
     if (error) throw error;
 
-    // Deduplicate by user_id
+    // Deduplicate by user_id (actor identity resolved via join; PII not cached on the row).
+    // PostgREST may type the embedded actor as an object or a single-element array.
+    type ActorEmbed = { username: string | null; email: string | null };
     const uniqueUsers = new Map<string, { id: string; name: string; email: string }>();
-    data?.forEach((row: { user_id: string; user_name: string | null; user_email: string | null }) => {
+    (data as Array<{ user_id: string; actor: ActorEmbed | ActorEmbed[] | null }> | null)?.forEach((row) => {
+        const actor = Array.isArray(row.actor) ? row.actor[0] : row.actor;
         if (row.user_id && !uniqueUsers.has(row.user_id)) {
             uniqueUsers.set(row.user_id, {
                 id: row.user_id,
-                name: row.user_name || 'Unknown',
-                email: row.user_email || '',
+                name: actor?.username || 'Deleted user',
+                email: actor?.email || '',
             });
         }
     });
 
-    return Array.from(uniqueUsers.values());
+    return Array.from(uniqueUsers.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /**
@@ -342,12 +356,15 @@ export async function getActivityStats(since?: Date): Promise<Record<ActionCateg
 
     const stats: Record<ActionCategory, number> = {
         auth: 0,
+        security: 0,
         profile: 0,
         competency: 0,
         admin: 0,
         asset: 0,
-        config: 0,
+        inspection: 0,
         document: 0,
+        config: 0,
+        data: 0,
     };
 
     data?.forEach((row: { action_category: string }) => {
@@ -358,6 +375,18 @@ export async function getActivityStats(since?: Date): Promise<Record<ActionCateg
     });
 
     return stats;
+}
+
+/**
+ * Fetch up to `max` matching rows (no pagination) for CSV export of the current
+ * filtered view. Capped to bound payload size on large logs.
+ */
+export async function getActivityLogsForExport(
+    filters: ActivityLogFilters = {},
+    max = 5000
+): Promise<ActivityLogEntry[]> {
+    const result = await getActivityLogs(filters, 1, max);
+    return result.data;
 }
 
 // ============================================================================
@@ -377,4 +406,5 @@ export default {
     getActivityLogs,
     getActivityUsers,
     getActivityStats,
+    getActivityLogsForExport,
 };

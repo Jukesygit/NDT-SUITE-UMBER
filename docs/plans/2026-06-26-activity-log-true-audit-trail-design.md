@@ -10,7 +10,7 @@ tags:
 # Activity Log → True Audit Trail
 
 **Date:** 2026-06-26
-**Status:** Designed (approved, pre-implementation)
+**Status:** Implemented (P1–P5 complete; migrations pending apply + manual QA)
 **Owner area:** Admin / Security
 
 ## Goal
@@ -195,3 +195,26 @@ per-edge-fn logging, viewer rebuild as concurrent tracks with adversarial verifi
 - **Manager access removal** is a visible change — call out in PR/release notes.
 - **Schema drift** between `ActionCategory` union, DB check constraint, and UI filter
   list — mitigated by a single shared source-of-truth map.
+
+## Implementation Outcome (as built, 2026-06-26)
+
+Migrations (apply in order):
+- `20260626140000_activity_log_v2_schema.sql` — organization_id, actor_role, indexes, NOT VALID category check.
+- `20260626150000_activity_log_integrity.sql` — hardened `log_activity` (actor = auth.uid()), dropped BOTH permissive INSERT policy names, revoked direct INSERT/UPDATE/DELETE, admin/super_admin read, re-asserted service-role policy, dropped legacy `cleanup_old_activity_logs`, added super_admin `purge_activity_logs`.
+- `20260626160000_activity_log_audit_triggers.sql` — `audit_row_change()` + triggers on 19 tables (profiles UPDATE-only).
+- `20260626170000_activity_log_retention.sql` — system `scheduled_purge_activity_logs` + commented pg_cron schedule.
+
+Key as-built decisions / deviations:
+- **Legacy asset-hierarchy tables excluded** (`vessels`, `scans`, `inspections` — TEXT PKs) as a deliberate, documented exclusion; the active workflow is project-based (`project_vessels`, `scan_log_entries`, `scan_composites`). Easy to add later.
+- **profiles trigger is UPDATE-only**; user creation/deletion are audited in the edge functions (service-role writes have no `auth.uid()`), avoiding null-actor rows and double-logging. Self-profile edits categorized `profile`, admin edits of others `admin`.
+- **Triggers skip null-actor (service-role) writes** for the same reason.
+- **Two adversarial review passes** ran during build: P1 migrations (found + fixed the stale INSERT-policy name and the legacy ungated purge); edge-function instrumentation (found + fixed masked-email keyed under the PII field `email`, dropped by the sanitizer — renamed to `email_masked`; trimmed unused `maskEmail` imports).
+- **Latent bug fixed:** the 2026-02 PII removal left the viewer reading the now-null `user_name`/`user_email`, so every actor rendered as "System". The read path now joins `profiles` for actor identity (`getActivityLogs`, `getActivityUsers`).
+- Edge functions instrumented: create-user, delete-user, admin-update-email, approve-account-request, bulk-create-users, sync-users, verify-reset-code, update-password-confirm-email (via `_shared/audit.ts`).
+- Client de-dup: removed redundant `logActivity` calls in admin-orgs, competency-mutations, competency-definitions, document-control-service, useUpdateProfile, and admin-users (user CRUD + account_approved). Kept account_rejected and permission_approved/rejected (RPC paths, not trigger-covered).
+- UKAS compliance evidence strings updated to the new reality (admin-only read, no actor-PII caching, forgery-proof/append-only, purge_activity_logs retention).
+
+Follow-ups (not in this change):
+- Apply the four migrations to the live DB and run the cross-domain QA checklist.
+- Enable pg_cron and uncomment the retention schedule (ops).
+- Optional: add `report_generated` client logging at the vessel/report download sites; optional "My Activity" profile panel; optional `permission_requests`/`account_requests` triggers if RPC-path reasons aren't needed.

@@ -5,6 +5,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { personnelKeys, Person, PersonCompetency } from '../queries/usePersonnel';
+import { extractFunctionErrorMessage } from '../../utils/edge-function-error';
 
 // Services - ES module imports
 // @ts-ignore - JS module without types
@@ -88,21 +89,32 @@ export function useUpdatePerson() {
                 }
             }
 
-            // If email is changing, update auth.users via edge function (admin/super_admin only)
+            // Email change updates auth.users via edge function (admin/super_admin only).
+            // The form always resubmits the current email, so only call when it actually
+            // differs — otherwise every save (role, mobile, …) would hit the email endpoint.
             if (cleanedData.email && typeof cleanedData.email === 'string') {
-                const { data: fnData, error: fnError } = await supabase.functions.invoke('admin-update-email', {
-                    body: { userId: personId, newEmail: cleanedData.email },
-                });
+                const newEmail = (cleanedData.email as string).trim();
+                const { data: existing, error: existingError } = await supabase
+                    .from('profiles')
+                    .select('email')
+                    .eq('id', personId)
+                    .single();
+                if (existingError) throw existingError;
 
-                if (fnError) {
-                    throw new Error(fnError.message || 'Failed to update login email');
+                if (newEmail.toLowerCase() !== (existing?.email ?? '').trim().toLowerCase()) {
+                    const { data: fnData, error: fnError } = await supabase.functions.invoke(
+                        'admin-update-email',
+                        { body: { userId: personId, newEmail } }
+                    );
+                    if (fnError) {
+                        throw new Error(await extractFunctionErrorMessage(fnError, 'Failed to update login email'));
+                    }
+                    if (fnData?.error) {
+                        throw new Error(fnData.error);
+                    }
                 }
 
-                if (fnData?.error) {
-                    throw new Error(fnData.error);
-                }
-
-                // Edge function already updated profiles.email, so remove from local update
+                // The edge function (when called) already synced profiles.email.
                 delete cleanedData.email;
             }
 

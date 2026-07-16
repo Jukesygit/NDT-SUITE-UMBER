@@ -6,6 +6,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import { validatePassword } from '../_shared/password-validation.ts'
 import { requireAdmin } from '../_shared/auth.ts'
+import { logAuditEvent, maskEmail } from '../_shared/audit.ts'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -85,6 +86,24 @@ serve(async (req) => {
         console.error('Failed to set user role:', roleError.message)
       }
     }
+
+    // AUDIT: Record the user-creation event with the JWT-verified admin as actor
+    await logAuditEvent(supabaseAdmin, {
+      actorId: auth.user!.id,
+      actorRole: auth.user!.role,
+      organizationId: organization_id || auth.user!.organization_id,
+      actionType: 'user_created',
+      category: 'admin',
+      description: `Admin created user ${username}`,
+      details: {
+        role: validatedRole,
+        organization_id: organization_id || null,
+        email_masked: maskEmail(email)
+      },
+      entityType: 'user',
+      entityId: authData.user.id,
+      entityName: username
+    })
 
     return jsonResponse(req, {
       success: true,

@@ -337,17 +337,19 @@ describe('Activity Log Service', () => {
   // getActivityUsers
   // =========================================================================
   describe('getActivityUsers', () => {
-    // Current implementation: queries activity_log for user_id, user_name, user_email
-    // with .not('user_id', 'is', null).order('user_name'), then deduplicates in JS.
+    // Implementation: queries activity_log for user_id + joined actor profile
+    // (actor:profiles(username,email)) with .not('user_id','is',null) as the
+    // terminal call, then deduplicates and sorts by name in JS. Actor PII is not
+    // cached on the row, so identity is resolved via the join.
 
     it('should query activity_log and deduplicate unique users', async () => {
       const qb = mockSupabase.from();
-      // Chain: select -> not -> order (terminal)
-      qb.order.mockResolvedValueOnce({
+      // Chain: select -> not (terminal)
+      qb.not.mockResolvedValueOnce({
         data: [
-          { user_id: 'u1', user_name: 'Alice', user_email: 'a@t.com' },
-          { user_id: 'u1', user_name: 'Alice', user_email: 'a@t.com' }, // duplicate
-          { user_id: 'u2', user_name: 'Bob', user_email: 'b@t.com' },
+          { user_id: 'u1', actor: { username: 'Alice', email: 'a@t.com' } },
+          { user_id: 'u1', actor: { username: 'Alice', email: 'a@t.com' } }, // duplicate
+          { user_id: 'u2', actor: { username: 'Bob', email: 'b@t.com' } },
         ],
         error: null,
       });
@@ -359,31 +361,43 @@ describe('Activity Log Service', () => {
       expect(users[1].name).toBe('Bob');
     });
 
-    it('should use "Unknown" for null user_name', async () => {
+    it('should use "Deleted user" when the joined actor profile is null', async () => {
       const qb = mockSupabase.from();
-      qb.order.mockResolvedValueOnce({
-        data: [{ user_id: 'u1', user_name: null, user_email: null }],
+      qb.not.mockResolvedValueOnce({
+        data: [{ user_id: 'u1', actor: null }],
         error: null,
       });
 
       const users = await getActivityUsers();
-      expect(users[0].name).toBe('Unknown');
+      expect(users[0].name).toBe('Deleted user');
       expect(users[0].email).toBe('');
+    });
+
+    it('should handle the actor embed arriving as a single-element array', async () => {
+      const qb = mockSupabase.from();
+      qb.not.mockResolvedValueOnce({
+        data: [{ user_id: 'u1', actor: [{ username: 'Carol', email: 'c@t.com' }] }],
+        error: null,
+      });
+
+      const users = await getActivityUsers();
+      expect(users[0].name).toBe('Carol');
+      expect(users[0].email).toBe('c@t.com');
     });
 
     it('should throw on query error', async () => {
       const qb = mockSupabase.from();
-      qb.order.mockResolvedValueOnce({ data: null, error: { message: 'fail' } });
+      qb.not.mockResolvedValueOnce({ data: null, error: { message: 'fail' } });
 
       await expect(getActivityUsers()).rejects.toEqual({ message: 'fail' });
     });
 
     it('should filter null user_ids via DB query', async () => {
       const qb = mockSupabase.from();
-      qb.order.mockResolvedValueOnce({
+      qb.not.mockResolvedValueOnce({
         data: [
-          { user_id: 'u1', user_name: 'Alice', user_email: 'a@t.com' },
-          { user_id: 'u2', user_name: 'Bob', user_email: 'b@t.com' },
+          { user_id: 'u1', actor: { username: 'Alice', email: 'a@t.com' } },
+          { user_id: 'u2', actor: { username: 'Bob', email: 'b@t.com' } },
         ],
         error: null,
       });
@@ -395,7 +409,7 @@ describe('Activity Log Service', () => {
 
     it('should return empty array when no users found', async () => {
       const qb = mockSupabase.from();
-      qb.order.mockResolvedValueOnce({ data: [], error: null });
+      qb.not.mockResolvedValueOnce({ data: [], error: null });
 
       const users = await getActivityUsers();
       expect(users).toHaveLength(0);

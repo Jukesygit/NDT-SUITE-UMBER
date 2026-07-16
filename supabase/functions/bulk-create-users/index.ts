@@ -5,6 +5,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import { requireAdmin } from '../_shared/auth.ts'
+import { logAuditEvent, maskEmail } from '../_shared/audit.ts'
 
 interface UserToCreate {
   email: string
@@ -131,6 +132,19 @@ serve(async (req) => {
           user_id: authData?.user?.id
         })
 
+        // AUDIT: Record successful user creation (actor is the JWT-verified admin)
+        await logAuditEvent(supabaseAdmin, {
+          actorId: auth.user!.id,
+          actorRole: auth.user!.role,
+          actionType: 'user_created',
+          category: 'admin',
+          description: `Bulk-created user ${user.username}`,
+          entityType: 'user',
+          entityId: authData?.user?.id ?? null,
+          entityName: user.username,
+          details: { role: validatedRole, email_masked: maskEmail(user.email) }
+        })
+
       } catch (err) {
         results.push({
           email: user.email,
@@ -142,6 +156,16 @@ serve(async (req) => {
 
     const successCount = results.filter(r => r.success).length
     const failCount = results.filter(r => !r.success).length
+
+    // AUDIT: Record the bulk operation summary (actor is the JWT-verified admin)
+    await logAuditEvent(supabaseAdmin, {
+      actorId: auth.user!.id,
+      actorRole: auth.user!.role,
+      actionType: 'bulk_user_create_completed',
+      category: 'data',
+      description: `Bulk user creation completed: ${successCount} created, ${failCount} failed`,
+      details: { success_count: successCount, fail_count: failCount }
+    })
 
     return jsonResponse(req, {
       message: `Created ${successCount} users, ${failCount} failed`,
