@@ -11,7 +11,6 @@ const supabase: SupabaseClient = supabaseModule.supabase;
 // @ts-ignore
 const isSupabaseConfigured: () => boolean = supabaseModule.isSupabaseConfigured;
 
-import { documentLogger } from './activity-log-service.ts';
 import type {
     DocumentCategory,
     Document,
@@ -207,12 +206,6 @@ export async function createDocument(docData: CreateDocumentData): Promise<Docum
 
     if (error) throw error;
 
-    documentLogger('controlled_document_created', `Created document ${docData.doc_number}: ${docData.title}`, {
-        entityType: 'document',
-        entityId: data.id,
-        entityName: `${docData.doc_number} - ${docData.title}`,
-    });
-
     return data;
 }
 
@@ -228,13 +221,6 @@ export async function updateDocument(id: string, updates: UpdateDocumentData): P
 
     if (error) throw error;
 
-    documentLogger('controlled_document_updated', `Updated document ${data.doc_number}`, {
-        entityType: 'document',
-        entityId: id,
-        entityName: `${data.doc_number} - ${data.title}`,
-        details: updates as Record<string, unknown>,
-    });
-
     return data;
 }
 
@@ -249,12 +235,6 @@ export async function withdrawDocument(id: string): Promise<Document> {
         .single();
 
     if (error) throw error;
-
-    documentLogger('controlled_document_withdrawn', `Withdrew document ${data.doc_number}`, {
-        entityType: 'document',
-        entityId: id,
-        entityName: `${data.doc_number} - ${data.title}`,
-    });
 
     return data;
 }
@@ -324,12 +304,6 @@ export async function createRevision(
 
     if (error) throw error;
 
-    documentLogger('document_revision_created', `Created revision ${nextRevision} for document`, {
-        entityType: 'document',
-        entityId: documentId,
-        details: { revision_number: nextRevision },
-    });
-
     return data;
 }
 
@@ -369,12 +343,6 @@ export async function submitForReview(revisionId: string): Promise<DocumentRevis
         .from('documents')
         .update({ status: 'under_review' })
         .eq('id', data.document_id);
-
-    documentLogger('document_submitted_for_review', `Submitted revision ${data.revision_number} for review`, {
-        entityType: 'document',
-        entityId: data.document_id,
-        details: { revision_id: revisionId, revision_number: data.revision_number },
-    });
 
     return data;
 }
@@ -453,13 +421,6 @@ export async function approveRevision(revisionId: string, comments?: string): Pr
             });
     }
 
-    documentLogger('document_revision_approved', `Approved revision ${revision.revision_number}`, {
-        entityType: 'document',
-        entityId: revision.document_id,
-        entityName: doc ? `${doc.doc_number} - ${doc.title}` : undefined,
-        details: { revision_id: revisionId, revision_number: revision.revision_number },
-    });
-
     return revision;
 }
 
@@ -494,12 +455,6 @@ export async function rejectRevision(revisionId: string, comments: string): Prom
         .single();
 
     if (error) throw error;
-
-    documentLogger('document_revision_rejected', `Rejected revision ${data.revision_number}`, {
-        entityType: 'document',
-        entityId: data.document_id,
-        details: { revision_id: revisionId, revision_number: data.revision_number, reason: comments },
-    });
 
     return data;
 }
@@ -635,13 +590,6 @@ export async function completeReviewNoChanges(documentId: string, reviewNotes?: 
                 status: 'pending',
             });
     }
-
-    documentLogger('document_review_completed', `Completed review - no changes needed`, {
-        entityType: 'document',
-        entityId: documentId,
-        entityName: doc ? `${doc.doc_number} - ${doc.title}` : undefined,
-        details: { no_changes_needed: true, review_notes: reviewNotes },
-    });
 }
 
 // ============================================================================

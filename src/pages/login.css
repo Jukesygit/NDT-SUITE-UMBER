@@ -1,0 +1,321 @@
+/**
+ * Login - Clean Design
+ * Flat card on warm surface. No skeuomorphism.
+ * Same vocabulary as personnel.css / projects.css / profile.css (prefix: lg-).
+ */
+
+/* ---- Page ---- */
+.lg-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--clean-bg);
+  font-family: var(--font-sans);
+}
+
+.lg-shell {
+  width: 100%;
+  max-width: 400px;
+}
+
+/* ---- Brand ---- */
+.lg-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 24px;
+  color: var(--clean-green);
+}
+
+.lg-brand-name {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--clean-text-primary);
+}
+
+/* ---- Card ---- */
+.lg-card {
+  background: var(--clean-surface);
+  border: 1px solid var(--clean-border);
+  border-radius: 14px;
+  padding: 28px;
+  animation: lg-rise 200ms ease-out;
+}
+
+@keyframes lg-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lg-card {
+    animation: none;
+  }
+}
+
+.lg-card-head {
+  margin-bottom: 20px;
+}
+
+.lg-heading {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--clean-text-primary);
+}
+
+.lg-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--clean-text-secondary);
+}
+
+/* ---- Alerts ---- */
+.lg-alert {
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  margin-bottom: 16px;
+}
+
+.lg-alert.error {
+  background: var(--clean-badge-red-bg);
+  color: var(--clean-badge-red-text);
+}
+
+.lg-alert.success {
+  background: var(--clean-badge-green-bg);
+  color: var(--clean-badge-green-text);
+}
+
+/* ---- Form ---- */
+.lg-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lg-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lg-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--clean-text-secondary);
+}
+
+.lg-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+/* Scoped under .lg-page so these beat main.css's global input[type=...] rules */
+.lg-page .lg-input,
+.lg-page .two-factor-verify-input input {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--clean-input-border);
+  background: var(--clean-input-bg);
+  color: var(--clean-input-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.lg-page .lg-input::placeholder,
+.lg-page .two-factor-verify-input input::placeholder {
+  color: var(--clean-input-placeholder);
+}
+
+.lg-page .lg-input:focus,
+.lg-page .two-factor-verify-input input:focus {
+  border-color: var(--clean-input-border-focus);
+  box-shadow: 0 0 0 3px var(--clean-focus-ring);
+}
+
+.lg-page .lg-input:disabled,
+.lg-page .two-factor-verify-input input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Chrome autofill paints its own background; pin it to the input tokens */
+.lg-page .lg-input:-webkit-autofill,
+.lg-page .lg-input:-webkit-autofill:hover,
+.lg-page .lg-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--clean-input-bg) inset;
+  -webkit-text-fill-color: var(--clean-input-text);
+  caret-color: var(--clean-input-text);
+}
+
+.lg-page .lg-input.code {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.35em;
+  text-align: center;
+}
+
+.lg-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--clean-text-tertiary);
+}
+
+/* ---- Submit ---- */
+.lg-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 10px;
+  background: var(--clean-green);
+  color: var(--clean-green-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.lg-submit:hover:not(:disabled) {
+  background: var(--clean-green-hover);
+}
+
+.lg-submit:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.lg-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lg-submit:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--clean-focus-ring);
+}
+
+/* ---- Inline link buttons ---- */
+.lg-link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: inherit;
+  font-weight: 500;
+  color: var(--clean-green);
+}
+
+.lg-link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.lg-link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lg-link:focus-visible {
+  outline: 2px solid var(--clean-focus-ring);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.lg-link.sm {
+  font-size: 12px;
+}
+
+/* ---- Card footer ---- */
+.lg-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--clean-divider);
+  font-size: 13px;
+  color: var(--clean-text-secondary);
+  text-align: center;
+}
+
+/* ---- Processing state ---- */
+.lg-processing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 0;
+}
+
+.lg-processing p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--clean-text-tertiary);
+}
+
+/* ---- Two-factor input block ---- */
+.lg-page .two-factor-verify-input {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lg-page .two-factor-error {
+  margin: 0;
+  font-size: 13px;
+}
+
+/* ---- Meta row under the card ---- */
+.lg-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--clean-text-quaternary);
+}
+
+.lg-meta a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.lg-meta a:hover {
+  color: var(--clean-text-tertiary);
+  text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+  .lg-card {
+    padding: 22px 20px;
+  }
+}

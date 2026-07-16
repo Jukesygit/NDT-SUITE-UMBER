@@ -9,7 +9,6 @@ import authManager from '../auth-manager.js';
 
 // Supabase is guaranteed initialized when services are called
 const sb = supabase!;
-import { logActivity } from './activity-log-service.ts';
 import { getCompetencyDefinitions } from './competency-queries.ts';
 
 export interface UpsertCompetencyData {
@@ -63,37 +62,17 @@ export async function upsertCompetency(
         .single();
     if (error) throw error;
 
-    const competencyName = result.competency?.name || 'Unknown';
-    const isNew = result.created_at === result.updated_at;
-    logActivity({
-        userId,
-        actionType: isNew ? 'competency_created' : 'competency_updated',
-        actionCategory: 'competency',
-        description: `${isNew ? 'Created' : 'Updated'} competency: ${competencyName}`,
-        entityType: 'competency', entityId: result.id, entityName: competencyName,
-        details: { competencyId, value: data.value, hasDocument: !!data.documentUrl },
-    });
     return result;
 }
 
 /** Delete a competency */
 export async function deleteCompetency(competencyId: string): Promise<boolean> {
     ensureConfigured();
-    const { data: existing } = await sb
-        .from('employee_competencies')
-        .select('competency:competency_definitions(name)')
-        .eq('id', competencyId).single();
-    const competencyName = (existing?.competency as any)?.name || 'Unknown';
 
     const { error } = await sb
         .from('employee_competencies').delete().eq('id', competencyId);
     if (error) throw error;
 
-    logActivity({
-        actionType: 'competency_deleted', actionCategory: 'competency',
-        description: `Deleted competency: ${competencyName}`,
-        entityType: 'competency', entityId: competencyId, entityName: competencyName,
-    });
     return true;
 }
 
@@ -116,14 +95,6 @@ export async function verifyCompetency(
         .select('*, competency:competency_definitions(name)').single();
     if (error) throw error;
 
-    const competencyName = data.competency?.name || 'Unknown';
-    logActivity({
-        actionType: approved ? 'competency_approved' : 'competency_rejected',
-        actionCategory: 'competency',
-        description: `${approved ? 'Approved' : 'Rejected'} competency: ${competencyName}${reason ? ` — ${reason}` : ''}`,
-        entityType: 'competency', entityId: competencyId, entityName: competencyName,
-        details: { approved, reason },
-    });
     return data;
 }
 
@@ -143,13 +114,6 @@ export async function requestChanges(competencyId: string, comment: string): Pro
         .select('*, competency:competency_definitions(name)').single();
     if (error) throw error;
 
-    const competencyName = data.competency?.name || 'Unknown';
-    logActivity({
-        actionType: 'competency_rejected', actionCategory: 'competency',
-        description: `Requested changes on competency: ${competencyName} — ${comment}`,
-        entityType: 'competency', entityId: competencyId, entityName: competencyName,
-        details: { action: 'changes_requested', comment },
-    });
     return data;
 }
 

@@ -81,7 +81,7 @@ export async function getEmailReminderSettings(): Promise<EmailReminderSettings>
                 is_enabled: true,
                 thresholds_months: [6, 3, 1, 0],
                 manager_emails: [],
-                sender_email: 'notifications@updates.matrixportal.io',
+                sender_email: 'noreply@updates.matrixportal.io',
                 sender_name: 'Matrix Portal',
                 created_at: null,
                 updated_at: null,
@@ -262,7 +262,7 @@ export async function sendTestReminder(userId: string, email: string): Promise<S
 
     await sendEmail({
         to: email,
-        subject: '[TEST] Certification Expiration Reminder',
+        subject: 'Certification renewal reminder (test)',
         html,
     });
 

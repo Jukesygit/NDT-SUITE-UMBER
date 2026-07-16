@@ -5,6 +5,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import { requireAdmin } from '../_shared/auth.ts'
+import { logAuditEvent, maskEmail } from '../_shared/audit.ts'
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -143,6 +144,25 @@ serve(async (req) => {
     }
 
     console.log('Account approval completed successfully')
+
+    // Audit log: forgery-proof record with JWT-verified actor (never client-supplied)
+    await logAuditEvent(supabaseAdmin, {
+      actorId: auth.user!.id,
+      actorRole: auth.user!.role,
+      organizationId: request.organization_id,
+      actionType: 'account_request_approved',
+      category: 'admin',
+      description: 'Account request approved',
+      entityType: 'account_request',
+      entityId: request_id,
+      entityName: request.username,
+      details: {
+        granted_role: validatedRole,
+        organization_id: request.organization_id,
+        created_new_user: !existingUser,
+        email_masked: maskEmail(request.email),
+      },
+    })
 
     return jsonResponse(req, {
       success: true,

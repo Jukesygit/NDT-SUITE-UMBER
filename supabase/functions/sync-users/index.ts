@@ -5,6 +5,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import { requireAdmin } from '../_shared/auth.ts'
+import { logAuditEvent } from '../_shared/audit.ts'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -75,6 +76,20 @@ serve(async (req) => {
         }
       }
     }
+
+    await logAuditEvent(supabaseAdmin, {
+      actorId: auth.user!.id,
+      actorRole: auth.user!.role,
+      organizationId: auth.user!.organization_id,
+      actionType: 'user_sync_run',
+      category: 'admin',
+      description: `User sync run: ${results.authUsersCount} auth users, ${results.profilesCount} profiles, ${results.createdProfiles.length} profiles created.`,
+      details: {
+        auth_users_count: results.authUsersCount,
+        profiles_count: results.profilesCount,
+        created_profiles_count: results.createdProfiles.length
+      }
+    })
 
     return jsonResponse(req, {
       success: true,

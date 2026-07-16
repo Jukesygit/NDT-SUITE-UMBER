@@ -8,7 +8,6 @@ import authManager from '../auth-manager.js';
 
 // Supabase is guaranteed initialized when services are called
 const sb = supabase!;
-import { logActivity } from './activity-log-service.ts';
 import type { CompetencyCategory, CompetencyDefinition } from '../types/database.types';
 
 export interface CategoryCreateData {
@@ -56,7 +55,7 @@ export function requireAdmin(): any {
 /** Create a new competency category (admin only) */
 export async function createCategory(data: CategoryCreateData): Promise<CompetencyCategory> {
     ensureConfigured();
-    const currentUser = requireAdmin();
+    requireAdmin();
 
     const { data: existing } = await sb
         .from('competency_categories').select('display_order')
@@ -69,18 +68,13 @@ export async function createCategory(data: CategoryCreateData): Promise<Competen
         .select().single();
     if (error) throw error;
 
-    logActivity({
-        userId: currentUser.id, actionType: 'category_created', actionCategory: 'admin',
-        description: `Created competency category: ${data.name}`,
-        entityType: 'competency_category', entityId: result.id, details: { name: data.name }
-    });
     return result;
 }
 
 /** Update a competency category (admin only) */
 export async function updateCategory(id: string, data: CategoryUpdateData): Promise<CompetencyCategory> {
     ensureConfigured();
-    const currentUser = requireAdmin();
+    requireAdmin();
 
     const updates: Record<string, any> = {};
     if (data.name !== undefined) updates.name = data.name;
@@ -91,18 +85,13 @@ export async function updateCategory(id: string, data: CategoryUpdateData): Prom
         .from('competency_categories').update(updates).eq('id', id).select().single();
     if (error) throw error;
 
-    logActivity({
-        userId: currentUser.id, actionType: 'category_updated', actionCategory: 'admin',
-        description: `Updated competency category: ${result.name}`,
-        entityType: 'competency_category', entityId: id, details: updates
-    });
     return result;
 }
 
 /** Delete (deactivate) a competency category (admin only) */
 export async function deleteCategory(id: string, hardDelete: boolean = false): Promise<DeleteResult> {
     ensureConfigured();
-    const currentUser = requireAdmin();
+    requireAdmin();
 
     const { data: definitions } = await sb
         .from('competency_definitions').select('id').eq('category_id', id).limit(1);
@@ -111,11 +100,6 @@ export async function deleteCategory(id: string, hardDelete: boolean = false): P
     if (hardDelete && !hasDefinitions) {
         const { error } = await sb.from('competency_categories').delete().eq('id', id);
         if (error) throw error;
-        logActivity({
-            userId: currentUser.id, actionType: 'category_deleted', actionCategory: 'admin',
-            description: 'Permanently deleted competency category',
-            entityType: 'competency_category', entityId: id
-        });
     } else {
         await updateCategory(id, { is_active: false });
     }
@@ -137,7 +121,7 @@ export async function reorderCategories(orderedIds: string[]): Promise<{ success
 /** Create a new competency definition (admin only) */
 export async function createDefinition(data: DefinitionCreateData): Promise<any> {
     ensureConfigured();
-    const currentUser = requireAdmin();
+    requireAdmin();
 
     const { data: existing } = await sb
         .from('competency_definitions').select('display_order')
@@ -156,19 +140,13 @@ export async function createDefinition(data: DefinitionCreateData): Promise<any>
         .select(DEFINITION_WITH_CATEGORY).single();
     if (error) throw error;
 
-    logActivity({
-        userId: currentUser.id, actionType: 'definition_created', actionCategory: 'admin',
-        description: `Created competency type: ${data.name}`,
-        entityType: 'competency_definition', entityId: result.id,
-        details: { name: data.name, category_id: data.category_id, field_type: data.field_type }
-    });
     return result;
 }
 
 /** Update a competency definition (admin only) */
 export async function updateDefinition(id: string, data: DefinitionUpdateData): Promise<any> {
     ensureConfigured();
-    const currentUser = requireAdmin();
+    requireAdmin();
 
     const updates: Record<string, any> = {};
     if (data.name !== undefined) updates.name = data.name;
@@ -184,18 +162,13 @@ export async function updateDefinition(id: string, data: DefinitionUpdateData): 
         .select(DEFINITION_WITH_CATEGORY).single();
     if (error) throw error;
 
-    logActivity({
-        userId: currentUser.id, actionType: 'definition_updated', actionCategory: 'admin',
-        description: `Updated competency type: ${result.name}`,
-        entityType: 'competency_definition', entityId: id, details: updates
-    });
     return result;
 }
 
 /** Delete (deactivate) a competency definition (admin only) */
 export async function deleteDefinition(id: string, hardDelete: boolean = false): Promise<DeleteResult> {
     ensureConfigured();
-    const currentUser = requireAdmin();
+    requireAdmin();
 
     const { data: employeeCompetencies } = await sb
         .from('employee_competencies').select('id').eq('competency_id', id).limit(1);
@@ -204,11 +177,6 @@ export async function deleteDefinition(id: string, hardDelete: boolean = false):
     if (hardDelete && !hasEmployeeRecords) {
         const { error } = await sb.from('competency_definitions').delete().eq('id', id);
         if (error) throw error;
-        logActivity({
-            userId: currentUser.id, actionType: 'definition_deleted', actionCategory: 'admin',
-            description: 'Permanently deleted competency type',
-            entityType: 'competency_definition', entityId: id
-        });
     } else {
         await updateDefinition(id, { is_active: false });
     }

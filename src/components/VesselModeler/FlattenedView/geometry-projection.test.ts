@@ -20,6 +20,7 @@ import {
   axialToIndexMm,
   axialFrac,
   fitScale,
+  circumDisplayMm,
 } from './geometry-projection';
 
 // ---------------------------------------------------------------------------
@@ -211,5 +212,43 @@ describe('fitScale (1:1 aspect, letterboxed)', () => {
   it('returns zeros for degenerate inputs', () => {
     expect(fitScale(0, 500, 5000, 2500)).toEqual({ pxPerMm: 0, marginX: 0, marginY: 0 });
     expect(fitScale(1000, 500, 0, 2500)).toEqual({ pxPerMm: 0, marginX: 0, marginY: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// circumDisplayMm — circumferential handedness flip (view from the other end)
+// ---------------------------------------------------------------------------
+// When the axial axis is mirrored (reverse scan), the developed view is viewed
+// from the opposite end — a 180° rotation about the vertical axis. That also
+// reverses the circumferential handedness (3 o'clock ↔ 9 o'clock) while keeping
+// TDC (y=0) fixed, so the view stays a proper rotation rather than a mirror.
+// ---------------------------------------------------------------------------
+describe('circumDisplayMm (circumferential handedness flip)', () => {
+  const C = 100;
+
+  it('is identity when not reversed', () => {
+    expect(circumDisplayMm(0, C, false)).toBe(0);
+    expect(circumDisplayMm(25, C, false)).toBe(25);
+    expect(circumDisplayMm(75, C, false)).toBe(75);
+  });
+
+  it('keeps TDC (0) and BDC (½) fixed when reversed', () => {
+    expect(circumDisplayMm(0, C, true)).toBeCloseTo(0, 6);
+    expect(circumDisplayMm(50, C, true)).toBeCloseTo(50, 6);
+  });
+
+  it('swaps the quarter points (3 o\'clock ↔ 9 o\'clock) when reversed', () => {
+    expect(circumDisplayMm(25, C, true)).toBeCloseTo(75, 6);
+    expect(circumDisplayMm(75, C, true)).toBeCloseTo(25, 6);
+  });
+
+  it('is its own inverse', () => {
+    for (const v of [0, 10, 25, 50, 75, 90]) {
+      expect(circumDisplayMm(circumDisplayMm(v, C, true), C, true)).toBeCloseTo(v, 6);
+    }
+  });
+
+  it('falls back to the raw value for non-positive circumference', () => {
+    expect(circumDisplayMm(25, 0, true)).toBe(25);
   });
 });

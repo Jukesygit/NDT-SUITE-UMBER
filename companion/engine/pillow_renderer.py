@@ -16,6 +16,7 @@ import h5py
 import numpy as np
 from PIL import Image, ImageDraw
 
+from . import nde_format
 from .models import FileIndex
 
 logger = logging.getLogger(__name__)
@@ -163,7 +164,7 @@ def render_bscan_pillow(
     # Read a thin 1-sample-wide slice directly from HDF5 for maximum speed.
     # This bypasses extract_region's 300mm limit since B-scans span the full axis.
     with h5py.File(file_index.path, "r") as f:
-        amp_ds = f["Public/Groups/0/Datasets/0-AScanAmplitude"]
+        amp_ds = f[nde_format.resolve_amplitude_path(f)]
 
         if axis == "axial":
             # Slice at index_mm → one index row, all scan positions
@@ -236,7 +237,7 @@ def render_ascan_pillow(
     idx_i = _mm_to_index(index_mm, ia.offset, ia.resolution, ia.quantity)
 
     with h5py.File(file_index.path, "r") as f:
-        waveform = f["Public/Groups/0/Datasets/0-AScanAmplitude"][scan_i, idx_i, :]
+        waveform = f[nde_format.resolve_amplitude_path(f)][scan_i, idx_i, :]
 
     waveform = waveform.astype(np.float32)
     # Normalize to 0-200% scale (UT convention: 32767 = 200%)

@@ -30,6 +30,7 @@ import {
   axialToIndexMm,
   axialFrac,
   fitScale,
+  circumDisplayMm,
 } from './geometry-projection';
 import {
   drawColorBar,
@@ -142,10 +143,13 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
 
     const toCanvasY = useCallback(
       (mm: number) => {
-        const { pxPerMm, marginY } = getPlotMetrics();
+        const { pxPerMm, marginY, circumference, reversed } = getPlotMetrics();
         const { zoom, offsetY } = viewRef.current;
         if (pxPerMm <= 0) return PADDING.top;
-        return PADDING.top + marginY + mm * pxPerMm * zoom + offsetY;
+        // Flip circumferential handedness when the axial axis is mirrored, so the
+        // developed view is a proper view-from-the-other-end (not a mirror).
+        const yMm = circumDisplayMm(mm, circumference, reversed);
+        return PADDING.top + marginY + yMm * pxPerMm * zoom + offsetY;
       },
       [getPlotMetrics],
     );
@@ -164,10 +168,12 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
 
     const fromCanvasY = useCallback(
       (py: number) => {
-        const { pxPerMm, marginY } = getPlotMetrics();
+        const { pxPerMm, marginY, circumference, reversed } = getPlotMetrics();
         const { zoom, offsetY } = viewRef.current;
         if (pxPerMm <= 0 || zoom <= 0) return 0;
-        return (py - PADDING.top - marginY - offsetY) / (pxPerMm * zoom);
+        const yMm = (py - PADDING.top - marginY - offsetY) / (pxPerMm * zoom);
+        // circumDisplayMm is its own inverse, so the same call undoes the flip.
+        return circumDisplayMm(yMm, circumference, reversed);
       },
       [getPlotMetrics],
     );
@@ -200,11 +206,17 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
         return;
       }
 
-      // 2. Vessel outline rectangle
+      // 2. Vessel outline rectangle. The vertical edges use the LINEAR
+      //    circumferential extent (top = 0, bottom = circumference). They cannot
+      //    use toCanvasY(circumference): under the handedness flip that wraps the
+      //    seam back to the top (circumference ≡ TDC), collapsing the rect — and
+      //    its clip — to zero height, which hides the heatmap.
       const x0 = toCanvasX(0);
-      const y0 = toCanvasY(0);
       const x1 = toCanvasX(vesselLength);
-      const y1 = toCanvasY(circumference);
+      const { pxPerMm: vPx, marginY: vMarginY } = getPlotMetrics();
+      const { zoom: vZoom, offsetY: vOffsetY } = viewRef.current;
+      const y0 = PADDING.top + vMarginY + vOffsetY;
+      const y1 = PADDING.top + vMarginY + circumference * vPx * vZoom + vOffsetY;
       ctx.strokeStyle = '#999';
       ctx.lineWidth = 1;
       ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
@@ -348,9 +360,19 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
       drawAxialScale(ctx, vesselLength, toCanvasX, y1 + 4, (mm) =>
         axialToIndexMm(mm, axialOri),
       );
-      // Anchor the circumferential scale to the actual left edge — when the
-      // axial axis is mirrored, toCanvasX(0) becomes the right edge.
-      drawCircumScale(ctx, circumference, toCanvasY, Math.min(x0, x1) - 4);
+      // Circumferential scale: anchor to the actual left edge (toCanvasX(0) is
+      // the right edge when the axial axis is mirrored), and place ticks with a
+      // plain linear mapping — NOT the flipping toCanvasY, which would scramble
+      // the tick order. The labels are distance-from-TDC, which is the same in
+      // either handedness, so a linear 0→circumference placement stays correct.
+      const { pxPerMm: circPx, marginY: circMargin } = getPlotMetrics();
+      const { zoom: circZoom, offsetY: circOffsetY } = viewRef.current;
+      drawCircumScale(
+        ctx,
+        circumference,
+        (mm) => PADDING.top + circMargin + mm * circPx * circZoom + circOffsetY,
+        Math.min(x0, x1) - 4,
+      );
 
       // 5. Metadata header
       drawMetadataHeader(ctx, vesselState, PADDING.left, 10);
@@ -373,7 +395,7 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
       }
 
       ctx.restore();
-    }, [vesselState, selectedWeldIndex, selectedNozzleIndex, selectedSaddleIndex, selectedLugIndex, toCanvasX, toCanvasY]);
+    }, [vesselState, selectedWeldIndex, selectedNozzleIndex, selectedSaddleIndex, selectedLugIndex, toCanvasX, toCanvasY, getPlotMetrics]);
 
     // -----------------------------------------------------------------------
     // Heatmap rendering helper — per-pixel mapping to screen-space ImageData
@@ -469,8 +491,12 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(
             let circumMmNext = datumCircMm + nextOffset;
             circumMmNext = ((circumMmNext % circumference) + circumference) % circumference;
 
-            colPy[col] = marginY + circumMm * pxPerMm * zoom + offsetY;
-            colPyNext[col] = marginY + circumMmNext * pxPerMm * zoom + offsetY;
+            // Flip circumferential handedness when the axis is mirrored (same as
+            // toCanvasY) so the scan and the features share one orientation.
+            const yMm = circumDisplayMm(circumMm, circumference, reversed);
+            const yMmNext = circumDisplayMm(circumMmNext, circumference, reversed);
+            colPy[col] = marginY + yMm * pxPerMm * zoom + offsetY;
+            colPyNext[col] = marginY + yMmNext * pxPerMm * zoom + offsetY;
           }
 
           for (let row = 0; row < data.length; row++) {

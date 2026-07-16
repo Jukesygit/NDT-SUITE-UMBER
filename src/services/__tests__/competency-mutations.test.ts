@@ -104,7 +104,9 @@ describe('upsertCompetency', () => {
 
 describe('deleteCompetency', () => {
     it('deletes a competency and returns true', async () => {
-        mockChain.single.mockResolvedValueOnce({ data: { competency: { name: 'RT' } }, error: null });
+        // deleteCompetency no longer pre-fetches the competency name (that lookup
+        // existed only for the now-removed client-side activity log, which is
+        // covered by the employee_competencies audit trigger instead).
         mockChain._resolved = { error: null };
         const result = await deleteCompetency('ec1');
         expect(result).toBe(true);

@@ -47,14 +47,14 @@ export function TwoFactorVerifyInput({ onSubmit, isLoading, error }: TwoFactorVe
         onPaste={handlePaste}
         disabled={isLoading}
         style={{
-          fontFamily: 'monospace',
+          fontFamily: 'var(--font-mono, monospace)',
           textAlign: 'center',
           letterSpacing: '0.5em',
           fontSize: '1.5rem',
         }}
       />
       {error && (
-        <p role="alert" className="two-factor-error" style={{ color: 'red' }}>
+        <p role="alert" className="two-factor-error" style={{ color: 'var(--clean-badge-red-text, #c0392b)' }}>
           {error}
         </p>
       )}

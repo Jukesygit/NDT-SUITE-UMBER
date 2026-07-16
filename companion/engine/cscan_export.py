@@ -12,6 +12,7 @@ from typing import Optional
 import h5py
 import numpy as np
 
+from . import nde_format
 from .models import CscanResult, FileIndex, GateControlParams
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,63 @@ def get_gate_time(gate_bytes: bytes, recovery_mode: str, min_amplitude: int) -> 
     return None
 
 
+def _process_scan_line(
+    scan_data: np.ndarray,
+    ref_gate_id: int,
+    meas_gate_id: int,
+    params: GateControlParams,
+    velocity: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute one scan line's thickness + measurement amplitude from raw gate bytes.
+
+    scan_data: (n_index, n_gates, 24) uint8 array of packed gate structs.
+    Returns (thickness_mm, meas_amp_percent) arrays of shape (n_index,).
+    """
+    # --- Reference gate (vectorized) ---
+    ref = scan_data[:, ref_gate_id]
+    ref_status = np.frombuffer(ref[:, 0:4].tobytes(), dtype=np.int32)
+    ref_amp = np.frombuffer(ref[:, 4:8].tobytes(), dtype=np.int32)
+    ref_crossing = np.frombuffer(ref[:, 8:12].tobytes(), dtype=np.float32)
+    ref_peak = np.frombuffer(ref[:, 12:16].tobytes(), dtype=np.float32)
+
+    ref_valid = ((ref_status == 0) | (ref_status == 1)) & (ref_amp >= params.min_amplitude_ref)
+    ref_recovered = (
+        (ref_status == 2)
+        & (params.ref_recovery == "peak_fallback")
+        & (ref_amp >= params.min_amplitude_ref)
+    )
+    ref_time = np.where(ref_valid, ref_crossing, np.where(ref_recovered, ref_peak, np.nan))
+
+    # --- Measurement gate (vectorized) ---
+    meas = scan_data[:, meas_gate_id]
+    meas_status = np.frombuffer(meas[:, 0:4].tobytes(), dtype=np.int32)
+    meas_amp = np.frombuffer(meas[:, 4:8].tobytes(), dtype=np.int32)
+    meas_crossing = np.frombuffer(meas[:, 8:12].tobytes(), dtype=np.float32)
+    meas_peak = np.frombuffer(meas[:, 12:16].tobytes(), dtype=np.float32)
+
+    meas_valid = (meas_status == 0) & (meas_amp >= params.min_amplitude_meas)
+    meas_recovered = (
+        (meas_status == 2)
+        & (params.meas_recovery == "peak_fallback")
+        & (meas_amp >= params.min_amplitude_meas)
+    )
+    meas_time = np.where(meas_valid, meas_crossing, np.where(meas_recovered, meas_peak, np.nan))
+
+    # --- Thickness computation ---
+    thickness = (meas_time - ref_time) * velocity / 2.0 * 1000.0
+
+    # Apply thickness range filters
+    if params.thickness_min is not None:
+        thickness[thickness < params.thickness_min] = np.nan
+    if params.thickness_max is not None:
+        thickness[thickness > params.thickness_max] = np.nan
+
+    # Measurement gate amplitude as percentage (0-200%)
+    amp_pct = meas_amp.astype(np.float32) / 32767.0 * 200.0
+
+    return thickness, amp_pct
+
+
 def extract_cscan(file_index: FileIndex, params: GateControlParams) -> CscanResult:
     """Extract thickness C-scan from RawCScan using vectorized numpy operations.
 
@@ -79,69 +137,46 @@ def extract_cscan(file_index: FileIndex, params: GateControlParams) -> CscanResu
     amplitude_grid = np.full((n_scans, n_index), np.nan, dtype=np.float32)
 
     with h5py.File(file_index.path, "r") as f:
-        ds = f["Private/MXU/RawCScan"]
-        chunks = ds.chunks or (1, n_index, n_gates)
-        scan_chunk_size = chunks[0]
+        rawcscan_path = nde_format.resolve_rawcscan_path(f)
+        if rawcscan_path is None:
+            raise ValueError(f"File {file_index.filename} does not contain RawCScan data")
+        ds = f[rawcscan_path]
 
-        for chunk_start in range(0, n_scans, scan_chunk_size):
-            chunk_end = min(chunk_start + scan_chunk_size, n_scans)
-            try:
-                _, raw_chunk = ds.id.read_direct_chunk((chunk_start, 0, 0))
-            except RuntimeError:
-                # Chunk not allocated — scanner didn't reach this position
-                continue
-            actual_scans = chunk_end - chunk_start
-            # Chunk may be padded to full chunk_size even if fewer valid scan lines remain
-            raw_arr = np.frombuffer(raw_chunk, dtype=np.uint8)
-            chunk_scans_allocated = len(raw_arr) // (n_index * n_gates * 24)
-            chunk_arr = raw_arr.reshape(chunk_scans_allocated, n_index, n_gates, 24)
-
-            for local_i in range(actual_scans):
-                scan_i = chunk_start + local_i
-                scan_data = chunk_arr[local_i]
-
-                # --- Reference gate (vectorized) ---
-                ref = scan_data[:, ref_gate_id]
-                ref_status = np.frombuffer(ref[:, 0:4].tobytes(), dtype=np.int32)
-                ref_amp = np.frombuffer(ref[:, 4:8].tobytes(), dtype=np.int32)
-                ref_crossing = np.frombuffer(ref[:, 8:12].tobytes(), dtype=np.float32)
-                ref_peak = np.frombuffer(ref[:, 12:16].tobytes(), dtype=np.float32)
-
-                ref_valid = ((ref_status == 0) | (ref_status == 1)) & (ref_amp >= params.min_amplitude_ref)
-                ref_recovered = (
-                    (ref_status == 2)
-                    & (params.ref_recovery == "peak_fallback")
-                    & (ref_amp >= params.min_amplitude_ref)
+        if ds.ndim == 2:
+            # Legacy 3.0.1: 2D flattened (n_scans, n_index*n_gates), contiguous.
+            # Contiguous datasets are fully allocated — read whole and reshape.
+            raw = nde_format.read_opaque_2d(ds)
+            data = raw.reshape(raw.shape[0], n_index, n_gates, 24)
+            for scan_i in range(min(n_scans, data.shape[0])):
+                thickness, amp_pct = _process_scan_line(
+                    data[scan_i], ref_gate_id, meas_gate_id, params, velocity
                 )
-                ref_time = np.where(ref_valid, ref_crossing, np.where(ref_recovered, ref_peak, np.nan))
-
-                # --- Measurement gate (vectorized) ---
-                meas = scan_data[:, meas_gate_id]
-                meas_status = np.frombuffer(meas[:, 0:4].tobytes(), dtype=np.int32)
-                meas_amp = np.frombuffer(meas[:, 4:8].tobytes(), dtype=np.int32)
-                meas_crossing = np.frombuffer(meas[:, 8:12].tobytes(), dtype=np.float32)
-                meas_peak = np.frombuffer(meas[:, 12:16].tobytes(), dtype=np.float32)
-
-                meas_valid = (meas_status == 0) & (meas_amp >= params.min_amplitude_meas)
-                meas_recovered = (
-                    (meas_status == 2)
-                    & (params.meas_recovery == "peak_fallback")
-                    & (meas_amp >= params.min_amplitude_meas)
-                )
-                meas_time = np.where(meas_valid, meas_crossing, np.where(meas_recovered, meas_peak, np.nan))
-
-                # --- Thickness computation ---
-                thickness = (meas_time - ref_time) * velocity / 2.0 * 1000.0
-
-                # Apply thickness range filters
-                if params.thickness_min is not None:
-                    thickness[thickness < params.thickness_min] = np.nan
-                if params.thickness_max is not None:
-                    thickness[thickness > params.thickness_max] = np.nan
-
                 thickness_grid[scan_i, :] = thickness
-                # Store measurement gate amplitude as percentage (0-200%)
-                amplitude_grid[scan_i, :] = meas_amp.astype(np.float32) / 32767.0 * 200.0
+                amplitude_grid[scan_i, :] = amp_pct
+        else:
+            chunks = ds.chunks or (1, n_index, n_gates)
+            scan_chunk_size = chunks[0]
+
+            for chunk_start in range(0, n_scans, scan_chunk_size):
+                chunk_end = min(chunk_start + scan_chunk_size, n_scans)
+                try:
+                    _, raw_chunk = ds.id.read_direct_chunk((chunk_start, 0, 0))
+                except RuntimeError:
+                    # Chunk not allocated — scanner didn't reach this position
+                    continue
+                actual_scans = chunk_end - chunk_start
+                # Chunk may be padded to full chunk_size even if fewer valid scan lines remain
+                raw_arr = np.frombuffer(raw_chunk, dtype=np.uint8)
+                chunk_scans_allocated = len(raw_arr) // (n_index * n_gates * 24)
+                chunk_arr = raw_arr.reshape(chunk_scans_allocated, n_index, n_gates, 24)
+
+                for local_i in range(actual_scans):
+                    scan_i = chunk_start + local_i
+                    thickness, amp_pct = _process_scan_line(
+                        chunk_arr[local_i], ref_gate_id, meas_gate_id, params, velocity
+                    )
+                    thickness_grid[scan_i, :] = thickness
+                    amplitude_grid[scan_i, :] = amp_pct
 
     # Build axis arrays
     scan_axis_mm = np.array([

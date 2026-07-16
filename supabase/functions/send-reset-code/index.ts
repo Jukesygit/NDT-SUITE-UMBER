@@ -71,7 +71,7 @@ function getEmailHtml(code: string): string {
                         <td style="padding: 30px 40px; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.08);">
                             <p style="margin: 0 0 8px; font-size: 13px; color: #525252;">
                                 Need help? Contact support at
-                                <a href="mailto:support@matrixinspectionservices.com" style="color: #60a5fa; text-decoration: none;">support@matrixinspectionservices.com</a>
+                                <a href="mailto:jonas@matrixinspectionservices.com" style="color: #60a5fa; text-decoration: none;">jonas@matrixinspectionservices.com</a>
                             </p>
                             <p style="margin: 8px 0 0; font-size: 12px; color: #404040;">
                                 &copy; Matrix Inspection Services. All rights reserved.
@@ -85,6 +85,24 @@ function getEmailHtml(code: string): string {
 </body>
 </html>
   `
+}
+
+// Plain-text alternative for the reset code email (multipart/alternative).
+// Security mail: no List-Unsubscribe header.
+function getEmailText(code: string): string {
+  return [
+    'Matrix Portal - Password Reset Code',
+    '',
+    'You requested to reset your password. Enter this code on the password reset page:',
+    '',
+    `    ${code}`,
+    '',
+    'This code will expire in 15 minutes.',
+    '',
+    "If you didn't request this code, please ignore this email. Your password will remain unchanged.",
+    '',
+    'Need help? Contact support at jonas@matrixinspectionservices.com',
+  ].join('\n')
 }
 
 serve(async (req) => {
@@ -197,6 +215,7 @@ serve(async (req) => {
         to: [normalizedEmail],
         subject: 'Your Password Reset Code - Matrix Portal',
         html: getEmailHtml(code),
+        text: getEmailText(code),
       }),
     })
 

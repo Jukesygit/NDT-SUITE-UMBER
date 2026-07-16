@@ -20,6 +20,7 @@ Use this before searching. Pick the relevant area, read the nearby files, then s
 ## Auth, Roles, And Security
 
 - `src/contexts/AuthContext.tsx` - auth context.
+- `src/pages/LoginPageNew.tsx` + `src/pages/login.css` - login page (clean design, `lg-` prefix; input rules must stay scoped under `.lg-page` to beat main.css global `input[type=...]` rules).
 - `src/auth/` - auth managers, Supabase auth helpers, password reset flow.
 - `src/components/auth/` - route-level auth requirements.
 - `src/components/RequireAccess.tsx`, `src/components/RequireTabVisible.tsx` - access gating.

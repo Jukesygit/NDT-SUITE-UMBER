@@ -5,6 +5,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import { validatePassword } from '../_shared/password-validation.ts'
+import { logAuditEvent } from '../_shared/audit.ts'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -86,6 +87,17 @@ serve(async (req) => {
     }
 
     console.log('Password updated and email confirmed for user')
+
+    // Audit: self-service password change by the JWT-verified caller.
+    await logAuditEvent(supabaseAdmin, {
+      actorId: user.id,
+      actionType: 'password_changed',
+      category: 'security',
+      description: 'User changed their password via self-service reset',
+      details: { source: 'self_service' },
+      entityType: 'user',
+      entityId: user.id,
+    })
 
     return jsonResponse(req, {
       success: true,

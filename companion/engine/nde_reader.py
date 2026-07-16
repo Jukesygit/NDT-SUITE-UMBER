@@ -1,12 +1,12 @@
 """
 NDE file reader/indexer for HDF5-based NDE files from Evident HydroFORM instruments.
 
-Reads Public/Setup JSON metadata and Private/MXU/RawCScan datasets to build
-a FileIndex describing the file's structure, axes, gates, and data availability.
+Reads Setup JSON metadata and RawCScan datasets to build a FileIndex describing
+the file's structure, axes, gates, and data availability. Supports both the
+current 4.x layout and legacy 3.0.1 files via engine.nde_format.
 """
 
 import glob
-import json
 import logging
 import os
 from typing import Optional
@@ -14,26 +14,10 @@ from typing import Optional
 import h5py
 import numpy as np
 
+from . import nde_format
 from .models import AxisInfo, FileIndex, GateInfo, ThicknessProcessInfo
 
 logger = logging.getLogger(__name__)
-
-
-def _parse_properties(f: h5py.File) -> tuple[Optional[str], Optional[str]]:
-    """Extract creation/modification dates from Properties dataset."""
-    try:
-        raw = f["Properties"][()]
-        if isinstance(raw, bytes):
-            props = json.loads(raw.decode("utf-8"))
-        elif isinstance(raw, np.ndarray):
-            props = json.loads(raw.tobytes().decode("utf-8"))
-        else:
-            props = json.loads(str(raw))
-        file_info = props.get("file", {})
-        return file_info.get("creationDate"), file_info.get("modificationDate")
-    except Exception:
-        logger.debug("Could not parse Properties dataset", exc_info=True)
-        return None, None
 
 
 def _parse_probe(setup: dict) -> Optional["ProbeInfo"]:
@@ -114,19 +98,11 @@ def index_file(path: str) -> Optional[FileIndex]:
         size_mb = os.path.getsize(path) / (1024 * 1024)
 
         with h5py.File(path, "r") as f:
-            # --- Parse Setup JSON ---
-            raw = f["Public/Setup"][()]
-            if isinstance(raw, bytes):
-                setup_str = raw.decode("utf-8")
-            elif isinstance(raw, np.ndarray):
-                setup_str = raw.tobytes().decode("utf-8")
-            else:
-                setup_str = str(raw)
-
-            setup = json.loads(setup_str)
+            # --- Parse Setup JSON (normalized across NDE format versions) ---
+            setup = nde_format.load_setup(f)
 
             # --- Properties metadata ---
-            creation_date, modification_date = _parse_properties(f)
+            creation_date, modification_date = nde_format.read_file_dates(f)
 
             # --- Rich setup metadata ---
             probe = _parse_probe(setup)
@@ -198,23 +174,34 @@ def index_file(path: str) -> Optional[FileIndex]:
             wave_mode = upa.get("waveMode", "Unknown")
 
             # --- RawCScan ---
-            rawcscan_available = "Private/MXU/RawCScan" in f
+            rawcscan_path = nde_format.resolve_rawcscan_path(f)
+            rawcscan_available = rawcscan_path is not None
             rawcscan_chunk_valid = False
             n_gates_in_rawcscan = 0
 
             if rawcscan_available:
-                ds = f["Private/MXU/RawCScan"]
+                ds = f[rawcscan_path]
                 shape = ds.shape
                 chunks = ds.chunks
-                n_gates_in_rawcscan = shape[2] if len(shape) >= 3 else 0
-                n_index = shape[1] if len(shape) >= 2 else 0
-                if chunks is not None and len(shape) >= 3:
-                    rawcscan_chunk_valid = chunks == (1, n_index, n_gates_in_rawcscan)
+                if len(shape) >= 3:
+                    n_gates_in_rawcscan = shape[2]
+                    n_index = shape[1]
+                    if chunks is not None:
+                        rawcscan_chunk_valid = chunks == (1, n_index, n_gates_in_rawcscan)
+                elif len(shape) == 2:
+                    # Legacy 3.0.1: 2D flattened (n_scans, n_index*n_gates),
+                    # read whole via nde_format.read_opaque_2d — no chunk requirement
+                    n_index = index_axis.quantity
+                    if n_index > 0 and shape[1] % n_index == 0:
+                        n_gates_in_rawcscan = shape[1] // n_index
+                        rawcscan_chunk_valid = True
+                    else:
+                        rawcscan_available = False
 
             # --- Valid point count from AScanStatus ---
             valid_point_count = 0
-            status_path = "Public/Groups/0/Datasets/1-AScanStatus"
-            if status_path in f:
+            status_path = nde_format.resolve_status_path(f)
+            if status_path is not None:
                 status_data = f[status_path][()]
                 valid_point_count = int(np.count_nonzero(
                     (status_data.astype(np.uint8) & 1) > 0
