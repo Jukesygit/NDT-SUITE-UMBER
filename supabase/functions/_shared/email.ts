@@ -17,7 +17,7 @@
  */
 
 /** Support mailbox (already advertised in the email footers). */
-export const SUPPORT_EMAIL = 'support@matrixinspectionservices.com'
+export const SUPPORT_EMAIL = 'jonas@matrixinspectionservices.com'
 
 /**
  * `List-Unsubscribe` header for bulk / notification email. mailto-based because

@@ -134,7 +134,7 @@ Before going live:
 ## Support
 
 For issues with these templates, contact:
-- **Email**: support@matrixinspectionservices.com
+- **Email**: jonas@matrixinspectionservices.com
 - **Supabase Docs**: https://supabase.com/docs/guides/auth/auth-email-templates
 
 ---

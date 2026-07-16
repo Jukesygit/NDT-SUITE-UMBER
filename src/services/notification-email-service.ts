@@ -21,7 +21,7 @@ import { sendEmail } from './email-service';
  * tsconfig, so that module cannot be imported here directly.
  */
 const REMINDER_EMAIL_HEADERS: Record<string, string> = {
-    'List-Unsubscribe': '<mailto:support@matrixinspectionservices.com?subject=unsubscribe>',
+    'List-Unsubscribe': '<mailto:jonas@matrixinspectionservices.com?subject=unsubscribe>',
 };
 
 // ============================================================================
@@ -172,7 +172,7 @@ function generateNotificationEmailHtml(body: string, recipientName: string): str
                         <td style="padding: 30px 40px; text-align: center; border-top: 1px solid rgba(148, 163, 184, 0.1);">
                             <p style="margin: 0 0 8px; font-size: 13px; color: #64748b;">
                                 Need help? Contact support at
-                                <a href="mailto:support@matrixinspectionservices.com" style="color: #60a5fa; text-decoration: none;">support@matrixinspectionservices.com</a>
+                                <a href="mailto:jonas@matrixinspectionservices.com" style="color: #60a5fa; text-decoration: none;">jonas@matrixinspectionservices.com</a>
                             </p>
                             <p style="margin: 8px 0 0; font-size: 12px; color: #475569;">
                                 &copy; ${new Date().getFullYear()} Matrix Inspection Services. All rights reserved.

@@ -122,7 +122,7 @@ function generateConsolidatedEmail(
                             </p>
 
                             <p style="margin: 24px 0 0; padding-top: 16px; border-top: 1px solid #e5e3de; font-size: 13px; line-height: 1.6; color: #7a7672;">
-                                Need help? Contact <a href="mailto:support@matrixinspectionservices.com" style="color: #2d8a4e;">support@matrixinspectionservices.com</a>.<br>
+                                Need help? Contact <a href="mailto:jonas@matrixinspectionservices.com" style="color: #2d8a4e;">jonas@matrixinspectionservices.com</a>.<br>
                                 You received this email because you have certifications tracked in Matrix Portal.
                             </p>
                         </td>
@@ -187,7 +187,7 @@ function generateConsolidatedText(
     ...section('Upcoming', upcoming),
     `View and update your certifications: ${appUrl}/profile`,
     '',
-    'Need help? Contact support at support@matrixinspectionservices.com',
+    'Need help? Contact support at jonas@matrixinspectionservices.com',
     '',
     'You received this email because you have certifications tracked in Matrix Portal.',
   ].join('\n')
