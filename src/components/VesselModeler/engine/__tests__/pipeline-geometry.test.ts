@@ -132,6 +132,17 @@ function freePipeline(segment: PipeSegment): Pipeline {
   };
 }
 
+/** A free-standing pipeline with an explicit multi-segment chain. */
+function freeMultiSegmentPipeline(segments: PipeSegment[]): Pipeline {
+  return {
+    id: 'pipe-1',
+    nozzleIndex: -1,
+    pipeDiameter: 100,
+    segments,
+    freeOrigin: { position: [0, 0, 0], direction: [0, 1, 0] },
+  };
+}
+
 function hasConnectionRing(group: THREE.Group): boolean {
   return group.children.some((child) => child.userData?.isConnectionPoint === true);
 }
@@ -168,6 +179,24 @@ describe('buildPipelineGroup — dome termination', () => {
     const group = buildPipelineGroup(freePipeline(cap), null, null, 500, mat, ringMat);
     expect(hasConnectionRing(group)).toBe(false);
   });
+
+  it('advances the frame through a preceding straight run before placing a terminal dome (multi-segment chain)', () => {
+    const segments: PipeSegment[] = [
+      { id: 's-1', type: 'straight', rotation: 0, length: 300 },
+      { id: 's-2', type: 'dome', rotation: 0 },
+    ];
+    const group = buildPipelineGroup(
+      freeMultiSegmentPipeline(segments),
+      null,
+      null,
+      500,
+      mat,
+      ringMat
+    );
+    const domeMesh = group.children.find((child) => child.userData?.segmentId === 's-2');
+    expect(domeMesh).toBeDefined();
+    expect(domeMesh!.position.y).toBeCloseTo(300 * SCALE, 5);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -197,5 +226,23 @@ describe('getConnectionPoints — dome termination', () => {
 
     const points = getConnectionPoints([pipeline], [makeNozzle()], vesselGroup, 500);
     expect(points).toHaveLength(0);
+  });
+
+  it('yields exactly one open endpoint for a straight-terminated (non-terminal) pipeline', () => {
+    const nozzleGroup = new THREE.Group();
+    nozzleGroup.userData = { type: 'nozzle', nozzleIdx: 0 };
+    const vesselGroup = new THREE.Group();
+    vesselGroup.add(nozzleGroup);
+
+    const pipeline: Pipeline = {
+      id: 'pipe-1',
+      nozzleIndex: 0,
+      pipeDiameter: 100,
+      segments: [{ id: 'straight-1', type: 'straight', rotation: 0, length: 300 }],
+    };
+
+    const points = getConnectionPoints([pipeline], [makeNozzle()], vesselGroup, 500);
+    expect(points).toHaveLength(1);
+    expect(points[0].type).toBe('pipeline');
   });
 });
