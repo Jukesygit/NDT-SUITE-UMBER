@@ -1,8 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 
-import { isTerminalSegment, type PipeSegmentType, type PipeSegment } from '../../types';
-import { advanceFrame, buildDomeMesh, type PipeFrame } from '../pipeline-geometry';
+import {
+  isTerminalSegment,
+  type PipeSegmentType,
+  type PipeSegment,
+  type Pipeline,
+  type NozzleConfig,
+} from '../../types';
+import {
+  advanceFrame,
+  buildDomeMesh,
+  buildPipelineGroup,
+  getConnectionPoints,
+  type PipeFrame,
+} from '../pipeline-geometry';
 import { SCALE } from '../materials';
 
 // ---------------------------------------------------------------------------
@@ -100,5 +112,90 @@ describe('buildDomeMesh', () => {
     const box = new THREE.Box3().setFromObject(mesh);
 
     expect(box.max.y).toBeCloseTo(radius, 6);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fixtures for the buildPipelineGroup/getConnectionPoints suites below.
+// ---------------------------------------------------------------------------
+
+const ringMat = new THREE.MeshBasicMaterial();
+
+/** A free-standing (not nozzle-attached) single-segment pipeline. */
+function freePipeline(segment: PipeSegment): Pipeline {
+  return {
+    id: 'pipe-1',
+    nozzleIndex: -1,
+    pipeDiameter: 100,
+    segments: [segment],
+    freeOrigin: { position: [0, 0, 0], direction: [0, 1, 0] },
+  };
+}
+
+function hasConnectionRing(group: THREE.Group): boolean {
+  return group.children.some((child) => child.userData?.isConnectionPoint === true);
+}
+
+function hasSegmentMesh(group: THREE.Group, segmentId: string): boolean {
+  return group.children.some((child) => child.userData?.segmentId === segmentId);
+}
+
+// ---------------------------------------------------------------------------
+// buildPipelineGroup — a dome-terminated chain builds a dome mesh and
+// suppresses the end-of-chain connection ring, same as cap. Non-terminal
+// chains are unaffected by the isTerminalSegment refactor.
+// ---------------------------------------------------------------------------
+
+describe('buildPipelineGroup — dome termination', () => {
+  it('builds a dome mesh for a dome-terminated chain', () => {
+    const group = buildPipelineGroup(freePipeline(domeSegment()), null, null, 500, mat, ringMat);
+    expect(hasSegmentMesh(group, 'dome-1')).toBe(true);
+  });
+
+  it('suppresses the connection-point ring for a dome-terminated chain', () => {
+    const group = buildPipelineGroup(freePipeline(domeSegment()), null, null, 500, mat, ringMat);
+    expect(hasConnectionRing(group)).toBe(false);
+  });
+
+  it('still adds the ring for a non-terminal (straight) chain', () => {
+    const straight: PipeSegment = { id: 'straight-1', type: 'straight', rotation: 0, length: 100 };
+    const group = buildPipelineGroup(freePipeline(straight), null, null, 500, mat, ringMat);
+    expect(hasConnectionRing(group)).toBe(true);
+  });
+
+  it('still suppresses the ring for a cap-terminated chain (regression)', () => {
+    const cap: PipeSegment = { id: 'cap-1', type: 'cap', rotation: 0 };
+    const group = buildPipelineGroup(freePipeline(cap), null, null, 500, mat, ringMat);
+    expect(hasConnectionRing(group)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getConnectionPoints — a dome-terminated pipeline is closed, same as cap:
+// it contributes no snap target at its end.
+// ---------------------------------------------------------------------------
+
+describe('getConnectionPoints — dome termination', () => {
+  function makeNozzle(overrides: Partial<NozzleConfig> = {}): NozzleConfig {
+    return { name: 'N', pos: 0, proj: 300, angle: 90, size: 100, ...overrides };
+  }
+
+  it('yields no endpoint for a dome-terminated pipeline', () => {
+    // Minimal vesselGroup/nozzleGroup fixture: computeInitialFrame only reads
+    // matrixWorld, so a bare tagged Group (no real nozzle geometry) suffices.
+    const nozzleGroup = new THREE.Group();
+    nozzleGroup.userData = { type: 'nozzle', nozzleIdx: 0 };
+    const vesselGroup = new THREE.Group();
+    vesselGroup.add(nozzleGroup);
+
+    const pipeline: Pipeline = {
+      id: 'pipe-1',
+      nozzleIndex: 0,
+      pipeDiameter: 100,
+      segments: [domeSegment()],
+    };
+
+    const points = getConnectionPoints([pipeline], [makeNozzle()], vesselGroup, 500);
+    expect(points).toHaveLength(0);
   });
 });

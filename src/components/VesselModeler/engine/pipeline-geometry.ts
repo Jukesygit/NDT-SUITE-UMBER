@@ -14,6 +14,7 @@ import {
   type Pipeline,
   type PipeSegment,
   findClosestPipeSize,
+  isTerminalSegment,
 } from '../types';
 import { SCALE } from './materials';
 
@@ -484,6 +485,9 @@ export function buildPipelineGroup(
       case 'cap':
         mesh = buildCapMesh(frame, segment, currentDiameter, material);
         break;
+      case 'dome':
+        mesh = buildDomeMesh(frame, segment, currentDiameter, material);
+        break;
       default:
         // Unsupported type — skip (tee, valve added in later phases)
         frame = advanceFrame(frame, segment, currentDiameter);
@@ -500,9 +504,9 @@ export function buildPipelineGroup(
     frame = advanceFrame(frame, segment, prevDiameter);
   }
 
-  // Add connection point ring at chain end (unless capped)
+  // Add connection point ring at chain end (unless the run is closed off)
   const lastSegment = pipeline.segments[pipeline.segments.length - 1];
-  if (!lastSegment || lastSegment.type !== 'cap') {
+  if (!lastSegment || !isTerminalSegment(lastSegment.type)) {
     const ringRadius = (currentDiameter / 2) * SCALE;
     const ringGeom = new THREE.RingGeometry(ringRadius * 0.8, ringRadius * 1.2, 32);
     const ring = new THREE.Mesh(ringGeom, connectionPointMaterial);
@@ -578,7 +582,7 @@ export function getConnectionPoints(
   for (const pipeline of pipelines) {
     if (pipeline.visible === false) continue;
     const lastSeg = pipeline.segments[pipeline.segments.length - 1];
-    if (lastSeg?.type === 'cap') continue; // capped — no connection point
+    if (lastSeg && isTerminalSegment(lastSeg.type)) continue; // closed off — no connection point
 
     const nozzle = nozzles[pipeline.nozzleIndex];
     const nozzleGroup = nozzleGroups.get(pipeline.nozzleIndex);
