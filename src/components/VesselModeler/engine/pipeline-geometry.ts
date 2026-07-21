@@ -394,7 +394,7 @@ export function buildDomeMesh(
   material: THREE.Material
 ): THREE.Mesh {
   const radius = (pipeDiameter / 2) * SCALE;
-  const headRatio = segment.headRatio ?? 2.0;
+  const headRatio = Math.max(0.1, segment.headRatio ?? 2.0);
   const wallThickness = radius * WALL_RATIO;
 
   // Outer shell: upper hemisphere (pole on +Y), squashed along the pipe axis.

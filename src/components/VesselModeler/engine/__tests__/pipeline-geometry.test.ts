@@ -113,6 +113,15 @@ describe('buildDomeMesh', () => {
 
     expect(box.max.y).toBeCloseTo(radius, 6);
   });
+
+  it('clamps a degenerate headRatio of 0 to a finite, non-degenerate dome', () => {
+    const pipeDiameter = 100; // mm
+    const mesh = buildDomeMesh(identityFrame(), domeSegment({ headRatio: 0 }), pipeDiameter, mat);
+    const box = new THREE.Box3().setFromObject(mesh);
+
+    expect(Number.isFinite(box.max.y)).toBe(true);
+    expect(box.max.y).toBeGreaterThan(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
