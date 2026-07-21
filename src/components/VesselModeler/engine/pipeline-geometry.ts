@@ -8,7 +8,13 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { type FreeOrigin, type NozzleConfig, type Pipeline, type PipeSegment, findClosestPipeSize } from '../types';
+import {
+  type FreeOrigin,
+  type NozzleConfig,
+  type Pipeline,
+  type PipeSegment,
+  findClosestPipeSize,
+} from '../types';
 import { SCALE } from './materials';
 
 // ---------------------------------------------------------------------------
@@ -16,9 +22,9 @@ import { SCALE } from './materials';
 // ---------------------------------------------------------------------------
 
 export interface PipeFrame {
-  origin: THREE.Vector3;    // world-space connection point
+  origin: THREE.Vector3; // world-space connection point
   direction: THREE.Vector3; // unit vector along pipe axis (outward)
-  up: THREE.Vector3;        // unit vector for bend plane reference
+  up: THREE.Vector3; // unit vector for bend plane reference
 }
 
 // ---------------------------------------------------------------------------
@@ -64,7 +70,7 @@ export function computeNozzleTipY(nozzle: NozzleConfig, shellRadius: number): nu
 export function computeInitialFrame(
   nozzleGroup: THREE.Group,
   nozzleConfig: NozzleConfig,
-  shellRadius: number,
+  shellRadius: number
 ): PipeFrame {
   nozzleGroup.updateMatrixWorld(true);
   const tipY = computeNozzleTipY(nozzleConfig, shellRadius);
@@ -114,7 +120,7 @@ export function computeFreeOriginFrame(freeOrigin: FreeOrigin): PipeFrame {
 export function advanceFrame(
   frame: PipeFrame,
   segment: PipeSegment,
-  pipeDiameter: number,
+  pipeDiameter: number
 ): PipeFrame {
   const { origin, direction, up } = frame;
 
@@ -158,6 +164,7 @@ export function advanceFrame(
     }
 
     case 'cap':
+    case 'dome':
       // Terminal — no further connection
       return { origin: origin.clone(), direction: direction.clone(), up: up.clone() };
 
@@ -176,7 +183,7 @@ function hollowCylinderGeometry(
   outerRadiusBottom: number,
   outerRadiusTop: number,
   length: number,
-  segments = 32,
+  segments = 32
 ): THREE.BufferGeometry {
   const wallBottom = outerRadiusBottom * WALL_RATIO;
   const wallTop = outerRadiusTop * WALL_RATIO;
@@ -185,7 +192,14 @@ function hollowCylinderGeometry(
   const h = length / 2;
 
   // Outer cylinder (normals face out)
-  const outer = new THREE.CylinderGeometry(outerRadiusTop, outerRadiusBottom, length, segments, 1, true);
+  const outer = new THREE.CylinderGeometry(
+    outerRadiusTop,
+    outerRadiusBottom,
+    length,
+    segments,
+    1,
+    true
+  );
   // Inner cylinder (normals face out → scale -1 to flip inward so visible from inside)
   const inner = new THREE.CylinderGeometry(innerTop, innerBottom, length, segments, 1, true);
   inner.scale(1, 1, -1);
@@ -212,7 +226,7 @@ export function buildStraightMesh(
   frame: PipeFrame,
   segment: PipeSegment,
   pipeDiameter: number,
-  material: THREE.Material,
+  material: THREE.Material
 ): THREE.Mesh {
   const len = (segment.length ?? pipeDiameter * 3) * SCALE;
   const radius = (pipeDiameter / 2) * SCALE;
@@ -237,7 +251,7 @@ export function buildElbowMesh(
   frame: PipeFrame,
   segment: PipeSegment,
   pipeDiameter: number,
-  material: THREE.Material,
+  material: THREE.Material
 ): THREE.Mesh {
   const bendAngle = ((segment.angle ?? 90) * Math.PI) / 180;
   const rotationRad = ((segment.rotation ?? 0) * Math.PI) / 180;
@@ -249,7 +263,13 @@ export function buildElbowMesh(
   const tubularSegments = Math.max(8, Math.round((bendAngle / Math.PI) * 32));
 
   const outerGeom = new THREE.TorusGeometry(bendRadius, pipeRadius, 16, tubularSegments, bendAngle);
-  const innerGeom = new THREE.TorusGeometry(bendRadius, innerPipeRadius, 16, tubularSegments, bendAngle);
+  const innerGeom = new THREE.TorusGeometry(
+    bendRadius,
+    innerPipeRadius,
+    16,
+    tubularSegments,
+    bendAngle
+  );
   innerGeom.scale(1, 1, -1);
 
   const combinedGeom = mergeGeometries([outerGeom, innerGeom]);
@@ -277,7 +297,7 @@ export function buildReducerMesh(
   frame: PipeFrame,
   segment: PipeSegment,
   pipeDiameter: number,
-  material: THREE.Material,
+  material: THREE.Material
 ): THREE.Mesh {
   const len = (segment.length ?? pipeDiameter * 2) * SCALE;
   const radiusStart = (pipeDiameter / 2) * SCALE;
@@ -302,7 +322,7 @@ export function buildFlangeMesh(
   frame: PipeFrame,
   segment: PipeSegment,
   pipeDiameter: number,
-  material: THREE.Material,
+  material: THREE.Material
 ): THREE.Mesh {
   const len = (segment.length ?? 25) * SCALE;
   const flangeRadius = (pipeDiameter / 2) * SCALE * 1.6;
@@ -339,7 +359,7 @@ export function buildCapMesh(
   frame: PipeFrame,
   segment: PipeSegment,
   pipeDiameter: number,
-  material: THREE.Material,
+  material: THREE.Material
 ): THREE.Mesh {
   const radius = (pipeDiameter / 2) * SCALE;
   let geom: THREE.BufferGeometry;
@@ -356,6 +376,50 @@ export function buildCapMesh(
   // Orient to face along pipe direction
   const defaultNormal = new THREE.Vector3(0, 0, 1);
   mesh.quaternion.setFromUnitVectors(defaultNormal, frame.direction);
+
+  mesh.userData = { type: 'pipeSegment', segmentId: segment.id };
+  return mesh;
+}
+
+/**
+ * Build a dome segment as a semi-ellipsoidal head (2:1 by default, matching
+ * the vessel's own headRatio convention) — a hemisphere squashed along the
+ * pipe axis by 1/headRatio.
+ */
+export function buildDomeMesh(
+  frame: PipeFrame,
+  segment: PipeSegment,
+  pipeDiameter: number,
+  material: THREE.Material
+): THREE.Mesh {
+  const radius = (pipeDiameter / 2) * SCALE;
+  const headRatio = segment.headRatio ?? 2.0;
+  const wallThickness = radius * WALL_RATIO;
+
+  // Outer shell: upper hemisphere (pole on +Y), squashed along the pipe axis.
+  const outer = new THREE.SphereGeometry(radius, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+  outer.scale(1, 1 / headRatio, 1);
+
+  // Inner shell: same squash, radius reduced by wall thickness, winding
+  // flipped so it reads as wall thickness from the open side.
+  const inner = new THREE.SphereGeometry(
+    radius - wallThickness,
+    32,
+    16,
+    0,
+    Math.PI * 2,
+    0,
+    Math.PI / 2
+  );
+  inner.scale(1, 1 / headRatio, -1);
+
+  const geom = mergeGeometries([outer, inner]) ?? outer;
+  const mesh = new THREE.Mesh(geom, material);
+  mesh.position.copy(frame.origin);
+
+  // Orient to face along pipe direction (same pattern as straight/reducer)
+  const defaultDir = new THREE.Vector3(0, 1, 0);
+  mesh.quaternion.setFromUnitVectors(defaultDir, frame.direction);
 
   mesh.userData = { type: 'pipeSegment', segmentId: segment.id };
   return mesh;
@@ -378,7 +442,7 @@ export function buildPipelineGroup(
   nozzleConfig: NozzleConfig | null,
   shellRadius: number,
   material: THREE.Material,
-  connectionPointMaterial: THREE.Material,
+  connectionPointMaterial: THREE.Material
 ): THREE.Group {
   const group = new THREE.Group();
   group.userData = { type: 'pipeline', pipelineId: pipeline.id };
@@ -393,7 +457,11 @@ export function buildPipelineGroup(
   } else if (pipeline.freeOrigin) {
     frame = computeFreeOriginFrame(pipeline.freeOrigin);
   } else {
-    frame = { origin: new THREE.Vector3(0, 0, 0), direction: new THREE.Vector3(0, 1, 0), up: new THREE.Vector3(0, 0, 1) };
+    frame = {
+      origin: new THREE.Vector3(0, 0, 0),
+      direction: new THREE.Vector3(0, 1, 0),
+      up: new THREE.Vector3(0, 0, 1),
+    };
   }
   let currentDiameter = pipeline.pipeDiameter;
 
@@ -473,7 +541,7 @@ export function getConnectionPoints(
   pipelines: Pipeline[],
   nozzles: NozzleConfig[],
   vesselGroup: THREE.Group,
-  shellRadius: number,
+  shellRadius: number
 ): ConnectionPoint[] {
   const points: ConnectionPoint[] = [];
 
@@ -486,7 +554,7 @@ export function getConnectionPoints(
   });
 
   // Plain-pipe nozzles that don't have a pipeline attached
-  const attachedNozzleIndices = new Set(pipelines.map(p => p.nozzleIndex));
+  const attachedNozzleIndices = new Set(pipelines.map((p) => p.nozzleIndex));
 
   nozzles.forEach((nozzle, idx) => {
     if (nozzle.style !== 'plain-pipe') return;
