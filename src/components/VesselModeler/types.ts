@@ -13,7 +13,16 @@ export type Orientation = 'horizontal' | 'vertical';
 
 export type MaterialKey = 'blue' | 'cs' | 'ss' | 'red';
 
-export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | 'annotation' | 'inspectionImage' | 'weld' | 'scanGizmo' | 'domeGizmo';
+export type DragType =
+  | 'nozzle'
+  | 'liftingLug'
+  | 'saddle'
+  | 'texture'
+  | 'annotation'
+  | 'inspectionImage'
+  | 'weld'
+  | 'scanGizmo'
+  | 'domeGizmo';
 
 export type AnnotationTool =
   | 'arrow'
@@ -38,20 +47,13 @@ export interface ScenePreset {
 }
 
 export const SCENE_PRESETS: Record<ScenePresetKey, ScenePreset> = {
-  dark:        { name: 'Dark',         backgroundColor: '#111111', lighting: 'studio' },
-  light:       { name: 'Light',        backgroundColor: '#e8e8e8', lighting: 'flat' },
-  blueprint:   { name: 'Blueprint',    backgroundColor: '#0a1628', lighting: 'highContrast' },
+  dark: { name: 'Dark', backgroundColor: '#111111', lighting: 'studio' },
+  light: { name: 'Light', backgroundColor: '#e8e8e8', lighting: 'flat' },
+  blueprint: { name: 'Blueprint', backgroundColor: '#0a1628', lighting: 'highContrast' },
   studioWhite: { name: 'Studio White', backgroundColor: '#f5f5f5', lighting: 'studio' },
 };
 
-export type ViewPresetKey =
-  | 'front'
-  | 'back'
-  | 'left'
-  | 'right'
-  | 'top'
-  | 'bottom'
-  | 'isometric';
+export type ViewPresetKey = 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom' | 'isometric';
 
 export type StampType = 'pass' | 'fail' | 'defect' | 'inspector' | 'date';
 
@@ -213,7 +215,15 @@ export interface ScanCompositeConfig {
   /** Index axis coordinates in mm (longitudinal) */
   yAxis: number[];
   /** Pre-computed statistics */
-  stats: { min: number; max: number; mean: number; median: number; stdDev: number; validArea?: number; totalArea?: number };
+  stats: {
+    min: number;
+    max: number;
+    mean: number;
+    median: number;
+    stdDev: number;
+    validArea?: number;
+    totalArea?: number;
+  };
   /** Longitudinal start position on vessel (mm from tangent line) */
   indexStartMm: number;
   /** Circumferential datum angle in degrees (0-360). 0 = TDC (12 o'clock) */
@@ -283,7 +293,15 @@ export interface DomeScanConfig {
   data: (number | null)[][];
   xAxis: number[];
   yAxis: number[];
-  stats: { min: number; max: number; mean: number; median: number; stdDev: number; validArea?: number; totalArea?: number };
+  stats: {
+    min: number;
+    max: number;
+    mean: number;
+    median: number;
+    stdDev: number;
+    validArea?: number;
+    totalArea?: number;
+  };
 
   colorScale: string;
   rangeMin: number | null;
@@ -292,8 +310,10 @@ export interface DomeScanConfig {
 
   sourceFiles?: Array<{
     filename: string;
-    minX: number; maxX: number;
-    minY: number; maxY: number;
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
   }>;
 }
 
@@ -756,10 +776,22 @@ export interface MaterialPreset {
 }
 
 export const MATERIAL_PRESETS: Record<MaterialKey, MaterialPreset> = {
-  blue: { color: 0x4db8ff, name: 'Default Blue', emissive: 0x001133, roughness: 0.4, metalness: 0.6 },
-  cs:   { color: 0x555555, name: 'Carbon Steel', emissive: 0x111111, roughness: 0.6, metalness: 0.7 },
-  ss:   { color: 0xeef1f5, name: 'Stainless Steel', emissive: 0x222222, roughness: 0.2, metalness: 0.9 },
-  red:  { color: 0x803333, name: 'Red Oxide', emissive: 0x220000, roughness: 0.8, metalness: 0.3 },
+  blue: {
+    color: 0x4db8ff,
+    name: 'Default Blue',
+    emissive: 0x001133,
+    roughness: 0.4,
+    metalness: 0.6,
+  },
+  cs: { color: 0x555555, name: 'Carbon Steel', emissive: 0x111111, roughness: 0.6, metalness: 0.7 },
+  ss: {
+    color: 0xeef1f5,
+    name: 'Stainless Steel',
+    emissive: 0x222222,
+    roughness: 0.2,
+    metalness: 0.9,
+  },
+  red: { color: 0x803333, name: 'Red Oxide', emissive: 0x220000, roughness: 0.8, metalness: 0.3 },
 };
 
 // ---------------------------------------------------------------------------
@@ -826,13 +858,13 @@ export interface ViewPreset {
 }
 
 export const VIEW_PRESETS: Record<ViewPresetKey, ViewPreset> = {
-  front:     { name: 'Front',     position: [0, 0, 1],  target: [0, 0, 0] },
-  back:      { name: 'Back',      position: [0, 0, -1], target: [0, 0, 0] },
-  left:      { name: 'Left',      position: [-1, 0, 0], target: [0, 0, 0] },
-  right:     { name: 'Right',     position: [1, 0, 0],  target: [0, 0, 0] },
-  top:       { name: 'Top',       position: [0, 1, 0],  target: [0, 0, 0] },
-  bottom:    { name: 'Bottom',    position: [0, -1, 0], target: [0, 0, 0] },
-  isometric: { name: 'Isometric', position: [1, 1, 1],  target: [0, 0, 0] },
+  front: { name: 'Front', position: [0, 0, 1], target: [0, 0, 0] },
+  back: { name: 'Back', position: [0, 0, -1], target: [0, 0, 0] },
+  left: { name: 'Left', position: [-1, 0, 0], target: [0, 0, 0] },
+  right: { name: 'Right', position: [1, 0, 0], target: [0, 0, 0] },
+  top: { name: 'Top', position: [0, 1, 0], target: [0, 0, 0] },
+  bottom: { name: 'Bottom', position: [0, -1, 0], target: [0, 0, 0] },
+  isometric: { name: 'Isometric', position: [1, 1, 1], target: [0, 0, 0] },
 };
 
 // ---------------------------------------------------------------------------
@@ -847,11 +879,21 @@ export interface StampPreset {
 }
 
 export const STAMP_PRESETS: Record<StampType, StampPreset> = {
-  pass:      { label: 'PASS', color: '#00cc66', icon: '\u2713', bgColor: 'rgba(0, 204, 102, 0.2)' },
-  fail:      { label: 'FAIL', color: '#ff4d4d', icon: '\u2717', bgColor: 'rgba(255, 77, 77, 0.2)' },
-  defect:    { label: 'D',    color: '#ff9900', icon: '\u26A0', bgColor: 'rgba(255, 153, 0, 0.2)' },
-  inspector: { label: 'INSP', color: '#4db8ff', icon: '\uD83D\uDC64', bgColor: 'rgba(77, 184, 255, 0.2)' },
-  date:      { label: 'DATE', color: '#888888', icon: '\uD83D\uDCC5', bgColor: 'rgba(136, 136, 136, 0.2)' },
+  pass: { label: 'PASS', color: '#00cc66', icon: '\u2713', bgColor: 'rgba(0, 204, 102, 0.2)' },
+  fail: { label: 'FAIL', color: '#ff4d4d', icon: '\u2717', bgColor: 'rgba(255, 77, 77, 0.2)' },
+  defect: { label: 'D', color: '#ff9900', icon: '\u26A0', bgColor: 'rgba(255, 153, 0, 0.2)' },
+  inspector: {
+    label: 'INSP',
+    color: '#4db8ff',
+    icon: '\uD83D\uDC64',
+    bgColor: 'rgba(77, 184, 255, 0.2)',
+  },
+  date: {
+    label: 'DATE',
+    color: '#888888',
+    icon: '\uD83D\uDCC5',
+    bgColor: 'rgba(136, 136, 136, 0.2)',
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -872,33 +914,81 @@ export interface PipeSize {
 }
 
 export const PIPE_SIZES: PipeSize[] = [
-  { nps: '2"',    od: 60.3,   id: 52.5,   flangeOD: 152,  flangeThk: 22 },
-  { nps: '3"',    od: 88.9,   id: 77.9,   flangeOD: 190,  flangeThk: 24 },
-  { nps: '4"',    od: 114.3,  id: 102.3,  flangeOD: 229,  flangeThk: 24 },
-  { nps: '6"',    od: 168.3,  id: 154.1,  flangeOD: 279,  flangeThk: 25 },
-  { nps: '8"',    od: 219.1,  id: 202.7,  flangeOD: 343,  flangeThk: 29 },
-  { nps: '10"',   od: 273.1,  id: 254.5,  flangeOD: 406,  flangeThk: 30 },
-  { nps: '12"',   od: 323.9,  id: 303.2,  flangeOD: 483,  flangeThk: 32 },
-  { nps: '14"',   od: 355.6,  id: 333.4,  flangeOD: 533,  flangeThk: 35 },
-  { nps: '16"',   od: 406.4,  id: 381.0,  flangeOD: 597,  flangeThk: 37 },
-  { nps: '18"',   od: 457.2,  id: 428.7,  flangeOD: 635,  flangeThk: 40 },
-  { nps: '20"',   od: 508.0,  id: 477.8,  flangeOD: 699,  flangeThk: 43 },
-  { nps: '24"',   od: 609.6,  id: 574.6,  flangeOD: 813,  flangeThk: 48 },
-  { nps: '30"',   od: 762.0,  id: 723.9,  flangeOD: 978,  flangeThk: 54 },
-  { nps: '36"',   od: 914.4,  id: 876.3,  flangeOD: 1143, flangeThk: 60 },
+  { nps: '2"', od: 60.3, id: 52.5, flangeOD: 152, flangeThk: 22 },
+  { nps: '3"', od: 88.9, id: 77.9, flangeOD: 190, flangeThk: 24 },
+  { nps: '4"', od: 114.3, id: 102.3, flangeOD: 229, flangeThk: 24 },
+  { nps: '6"', od: 168.3, id: 154.1, flangeOD: 279, flangeThk: 25 },
+  { nps: '8"', od: 219.1, id: 202.7, flangeOD: 343, flangeThk: 29 },
+  { nps: '10"', od: 273.1, id: 254.5, flangeOD: 406, flangeThk: 30 },
+  { nps: '12"', od: 323.9, id: 303.2, flangeOD: 483, flangeThk: 32 },
+  { nps: '14"', od: 355.6, id: 333.4, flangeOD: 533, flangeThk: 35 },
+  { nps: '16"', od: 406.4, id: 381.0, flangeOD: 597, flangeThk: 37 },
+  { nps: '18"', od: 457.2, id: 428.7, flangeOD: 635, flangeThk: 40 },
+  { nps: '20"', od: 508.0, id: 477.8, flangeOD: 699, flangeThk: 43 },
+  { nps: '24"', od: 609.6, id: 574.6, flangeOD: 813, flangeThk: 48 },
+  { nps: '30"', od: 762.0, id: 723.9, flangeOD: 978, flangeThk: 54 },
+  { nps: '36"', od: 914.4, id: 876.3, flangeOD: 1143, flangeThk: 60 },
 ];
 
 export const LIFTING_LUG_SIZES: LiftingLugSize[] = [
-  { label: '1t',  swlTonnes: 1,  width: 80,  height: 100, thickness: 12, holeDiameter: 25, baseDiameter: 120 },
-  { label: '2t',  swlTonnes: 2,  width: 100, height: 120, thickness: 16, holeDiameter: 30, baseDiameter: 150 },
-  { label: '5t',  swlTonnes: 5,  width: 120, height: 150, thickness: 20, holeDiameter: 35, baseDiameter: 180 },
-  { label: '10t', swlTonnes: 10, width: 150, height: 180, thickness: 25, holeDiameter: 42, baseDiameter: 220 },
-  { label: '20t', swlTonnes: 20, width: 180, height: 220, thickness: 32, holeDiameter: 50, baseDiameter: 260 },
-  { label: '50t', swlTonnes: 50, width: 220, height: 280, thickness: 40, holeDiameter: 65, baseDiameter: 320 },
+  {
+    label: '1t',
+    swlTonnes: 1,
+    width: 80,
+    height: 100,
+    thickness: 12,
+    holeDiameter: 25,
+    baseDiameter: 120,
+  },
+  {
+    label: '2t',
+    swlTonnes: 2,
+    width: 100,
+    height: 120,
+    thickness: 16,
+    holeDiameter: 30,
+    baseDiameter: 150,
+  },
+  {
+    label: '5t',
+    swlTonnes: 5,
+    width: 120,
+    height: 150,
+    thickness: 20,
+    holeDiameter: 35,
+    baseDiameter: 180,
+  },
+  {
+    label: '10t',
+    swlTonnes: 10,
+    width: 150,
+    height: 180,
+    thickness: 25,
+    holeDiameter: 42,
+    baseDiameter: 220,
+  },
+  {
+    label: '20t',
+    swlTonnes: 20,
+    width: 180,
+    height: 220,
+    thickness: 32,
+    holeDiameter: 50,
+    baseDiameter: 260,
+  },
+  {
+    label: '50t',
+    swlTonnes: 50,
+    width: 220,
+    height: 280,
+    thickness: 40,
+    holeDiameter: 65,
+    baseDiameter: 320,
+  },
 ];
 
 export function findLiftingLugSize(swl: string): LiftingLugSize {
-  return LIFTING_LUG_SIZES.find(s => s.label === swl) || LIFTING_LUG_SIZES[0];
+  return LIFTING_LUG_SIZES.find((s) => s.label === swl) || LIFTING_LUG_SIZES[0];
 }
 
 /**
@@ -924,7 +1014,15 @@ export function findClosestPipeSize(boreId: number): PipeSize {
 // Piping Attachments
 // ---------------------------------------------------------------------------
 
-export type PipeSegmentType = 'straight' | 'elbow' | 'reducer' | 'tee' | 'valve' | 'flange' | 'cap';
+export type PipeSegmentType =
+  | 'straight'
+  | 'elbow'
+  | 'reducer'
+  | 'tee'
+  | 'valve'
+  | 'flange'
+  | 'cap'
+  | 'dome';
 
 export interface PipeSegment {
   id: string;
@@ -943,6 +1041,13 @@ export interface PipeSegment {
   branchDiameter?: number;
   /** Sub-style: cap 'flat'|'dished' */
   style?: string;
+  /** Head ratio D/2h for dome ends (2.0 = 2:1 semi-ellipsoidal, 1.0 = hemi) */
+  headRatio?: number;
+}
+
+/** Single source of truth for "this part ends the pipe run" — cap and dome. */
+export function isTerminalSegment(type: PipeSegmentType): boolean {
+  return type === 'cap' || type === 'dome';
 }
 
 /** World-space origin for a free-standing pipeline (not attached to a nozzle) */
@@ -1009,7 +1114,7 @@ export const DEFAULT_VESSEL_STATE: VesselState = {
     shellOpacity: 1.0,
     nozzleOpacity: 1.0,
     roughness: 0.62,
-    metalness: 0.30,
+    metalness: 0.3,
     backgroundColor: '#C4C4C4',
     showGrid: false,
     showAxes: false,
@@ -1039,8 +1144,20 @@ export interface VesselCallbacks {
   onAnnotationSelected?: (id: number) => void;
   onAnnotationMoved?: (id: number, newPos: number, newAngle: number) => void;
   onAnnotationLabelOffsetChanged?: (id: number, offset: [number, number, number]) => void;
-  onAnnotationCreated?: (type: AnnotationShapeType, pos: number, angle: number, width: number, height: number) => void;
-  onAnnotationPreview?: (type: AnnotationShapeType, pos: number, angle: number, width: number, height: number) => void;
+  onAnnotationCreated?: (
+    type: AnnotationShapeType,
+    pos: number,
+    angle: number,
+    width: number,
+    height: number
+  ) => void;
+  onAnnotationPreview?: (
+    type: AnnotationShapeType,
+    pos: number,
+    angle: number,
+    width: number,
+    height: number
+  ) => void;
   onRulerCreated?: (startPos: number, startAngle: number, endPos: number, endAngle: number) => void;
   onRulerPreview?: (startPos: number, startAngle: number, endPos: number, endAngle: number) => void;
   onCoverageRectCreated?: (pos: number, angle: number, width: number, height: number) => void;
@@ -1053,12 +1170,25 @@ export interface VesselCallbacks {
   onWeldSelected?: (index: number) => void;
   onWeldMoved?: (index: number, newPos: number, newAngle: number) => void;
   onScanCompositeSelected?: (id: string) => void;
-  onScanCompositeHover?: (id: string, thickness: number | null, scanMm: number, indexMm: number, screenX: number, screenY: number) => void;
+  onScanCompositeHover?: (
+    id: string,
+    thickness: number | null,
+    scanMm: number,
+    indexMm: number,
+    screenX: number,
+    screenY: number
+  ) => void;
   onDomeScanHover?: (info: DomeScanHoverInfo | null) => void;
   onScanGizmoDatumMoved?: (compositeId: string, angleDeg: number, posMm: number) => void;
-  onScanGizmoDirectionToggle?: (compositeId: string, field: 'scanDirection' | 'indexDirection') => void;
+  onScanGizmoDirectionToggle?: (
+    compositeId: string,
+    field: 'scanDirection' | 'indexDirection'
+  ) => void;
   onDomeGizmoDatumMoved?: (compositeId: string, phiDeg: number, thetaDeg: number) => void;
-  onDomeGizmoDirectionToggle?: (compositeId: string, field: 'scanDirection' | 'indexDirection') => void;
+  onDomeGizmoDirectionToggle?: (
+    compositeId: string,
+    field: 'scanDirection' | 'indexDirection'
+  ) => void;
   onDomeGizmoClicked?: (compositeId: string) => void;
   onPipeSegmentSelected?: (pipelineId: string, segmentIndex: number) => void;
   onPipeConnectionPointClicked?: (pipelineId: string) => void;
