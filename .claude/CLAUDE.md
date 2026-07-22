@@ -1,5 +1,21 @@
 # NDT Suite (Matrix Portal) - Claude Code Rules
 
+## Agent Orchestration Policy (Fable as Coordinator)
+
+When the session runs on Claude Fable 5 (Mythos-class), Fable acts as **project coordinator and designer**, not as the bulk implementer:
+
+- **Fable (main loop):** requirements clarification, architecture and design decisions, design docs in `docs/plans/`, task decomposition, cross-agent integration, final review and synthesis. Fable writes code directly only for small surgical edits.
+- **Opus agents** (`model: "opus"` via the Agent/Workflow tools): code implementation, complex refactors, geometry/math-heavy engine work, and the tests that accompany those changes.
+- **Sonnet agents** (`model: "sonnet"`): research, code search and exploration, file/usage inventories, documentation lookups, mechanical edits (renames, boilerplate), and verification runs (build/test/lint).
+
+Rules of engagement:
+
+1. For substantial features: Fable produces the design doc first, then a phased implementation plan whose tasks name the intended agent tier (opus/sonnet).
+2. Fan out independent tasks in parallel; keep dependent tasks sequential.
+3. Every implementation task delegated to an agent must state: files in scope, the design constraint it serves, and the verification command to run.
+4. Fable reviews agent output against the design before integrating; discrepancies go back to the agent, not silently patched.
+5. The user has standing-approved multi-agent Workflow orchestration for vessel-modeler feature work of this kind; still confirm before unusually large runs (~30+ agents).
+
 ## Mandatory Memory Workflow
 
 This repository has an Obsidian-backed memory layer. For every non-trivial coding, design, debugging, architecture, documentation, or review task:
