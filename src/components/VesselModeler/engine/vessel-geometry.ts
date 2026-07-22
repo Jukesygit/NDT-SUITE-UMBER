@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { type VesselState, type TextureConfig } from '../types';
 import { SCALE } from './materials';
+import { resolveBodyFrame } from './body-frame';
 import { createFlangedNozzle, rotateNormalAboutVertical } from './nozzle-geometry';
 import { createLiftingLug } from './lifting-lug-geometry';
 import { createSaddleGroup } from './saddle-geometry';
@@ -50,7 +51,7 @@ function createTexturePlane(
   shellRadius: number,
   state: VesselState,
   threeTexture: THREE.Texture,
-  selectedTextureId: number,
+  selectedTextureId: number
 ): THREE.Mesh | null {
   if (!threeTexture) return null;
 
@@ -283,10 +284,7 @@ function createTexturePlane(
     }
 
     const borderGeom = new THREE.BufferGeometry();
-    borderGeom.setAttribute(
-      'position',
-      new THREE.Float32BufferAttribute(borderVertices, 3),
-    );
+    borderGeom.setAttribute('position', new THREE.Float32BufferAttribute(borderVertices, 3));
     borderGeom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     borderGeom.setIndex(indices);
 
@@ -341,7 +339,7 @@ export function buildVesselScene(
   selectedSaddleIndex: number,
   selectedTextureId: number,
   selectedScanCompositeId: string = '',
-  selectedDomeScanId: string = '',
+  selectedDomeScanId: string = ''
 ): BuildSceneResult {
   const vesselGroup = new THREE.Group();
   const nozzleMeshes: THREE.Object3D[] = [];
@@ -354,7 +352,16 @@ export function buildVesselScene(
 
   // -- Return empty group if no model data yet ------------------------------
   if (!state.hasModel) {
-    return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes, scanCompositeMeshes, domeScanMeshes, gizmoMeshes };
+    return {
+      vesselGroup,
+      nozzleMeshes,
+      lugMeshes,
+      saddleMeshes,
+      textureMeshes,
+      scanCompositeMeshes,
+      domeScanMeshes,
+      gizmoMeshes,
+    };
   }
 
   // -- Vessel dimensions ----------------------------------------------------
@@ -362,6 +369,9 @@ export function buildVesselScene(
   const TAN_TAN = state.length;
   const HEAD_DEPTH = state.headRatio > 0 ? state.id / (2 * state.headRatio) : 0;
   const isVertical = state.orientation === 'vertical';
+
+  // Shared main-shell frame: single source for surface-mount normals (nozzles).
+  const mainFrame = resolveBodyFrame(state);
 
   // -- Shell cylinder -------------------------------------------------------
   const isPipeShape = state.vesselShape === 'pipe';
@@ -386,7 +396,12 @@ export function buildVesselScene(
     shellGeom = mergeGeometries([outer, inner, topRing, bottomRing]) ?? outer;
   } else {
     shellGeom = new THREE.CylinderGeometry(
-      RADIUS * SCALE, RADIUS * SCALE, TAN_TAN * SCALE, 64, 1, true,
+      RADIUS * SCALE,
+      RADIUS * SCALE,
+      TAN_TAN * SCALE,
+      64,
+      1,
+      true
     );
   }
 
@@ -433,9 +448,16 @@ export function buildVesselScene(
     const mat = idx === selectedNozzleIndex ? nozzleHighlightMaterial : nozzleMaterial;
     const nozzleGroup = createFlangedNozzle(n, RADIUS, mat);
 
-    // DYNAMIC RADIUS AND NORMAL CALCULATION
+    // Surface normal (nozzle mount orientation) comes from the shared frame,
+    // which reproduces the legacy nozzle-mount normal math exactly.
+    const normal = mainFrame.surfaceNormal(n.pos, n.angle);
+
+    // DYNAMIC RADIUS + POSITION. Kept inline (not via frame.surfacePoint) because
+    // a head nozzle collapses to the axis using Math.min(1, …), whereas the
+    // frame's surfacePoint uses the shell/annotation cap Math.min(0.99, …); the
+    // two differ only near the head apex, so preserving exact placement means
+    // keeping this radius branching here.
     let r_local = RADIUS;
-    const normal = new THREE.Vector3();
     const rad = (n.angle * Math.PI) / 180;
 
     if (isVertical) {
@@ -444,40 +466,15 @@ export function buildVesselScene(
 
       if (n.pos < 0) {
         // BOTTOM HEAD (Ellipsoid)
-        const y_local = n.pos;
-        const ratio = Math.min(1, Math.abs(y_local / HEAD_DEPTH));
+        const ratio = Math.min(1, Math.abs(n.pos / HEAD_DEPTH));
         r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
-
-        const x_u = r_local * Math.cos(rad);
-        const z_u = r_local * Math.sin(rad);
-
-        normal
-          .set(
-            x_u / (RADIUS * RADIUS),
-            y_local / (HEAD_DEPTH * HEAD_DEPTH),
-            z_u / (RADIUS * RADIUS),
-          )
-          .normalize();
       } else if (n.pos > TAN_TAN) {
         // TOP HEAD
-        const y_local = n.pos - TAN_TAN;
-        const ratio = Math.min(1, Math.abs(y_local / HEAD_DEPTH));
+        const ratio = Math.min(1, Math.abs((n.pos - TAN_TAN) / HEAD_DEPTH));
         r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
-
-        const x_u = r_local * Math.cos(rad);
-        const z_u = r_local * Math.sin(rad);
-
-        normal
-          .set(
-            x_u / (RADIUS * RADIUS),
-            y_local / (HEAD_DEPTH * HEAD_DEPTH),
-            z_u / (RADIUS * RADIUS),
-          )
-          .normalize();
       } else {
         // CYLINDER SHELL
         r_local = RADIUS;
-        normal.set(Math.cos(rad), 0, Math.sin(rad)).normalize();
       }
 
       // Calculate final 3D position for vertical vessel
@@ -490,40 +487,15 @@ export function buildVesselScene(
 
       if (n.pos < 0) {
         // LEFT HEAD (Ellipsoid)
-        const x_local = n.pos;
-        const ratio = Math.min(1, Math.abs(x_local / HEAD_DEPTH));
+        const ratio = Math.min(1, Math.abs(n.pos / HEAD_DEPTH));
         r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
-
-        const y_u = r_local * Math.sin(rad);
-        const z_u = r_local * Math.cos(rad);
-
-        normal
-          .set(
-            x_local / (HEAD_DEPTH * HEAD_DEPTH),
-            y_u / (RADIUS * RADIUS),
-            z_u / (RADIUS * RADIUS),
-          )
-          .normalize();
       } else if (n.pos > TAN_TAN) {
         // RIGHT HEAD
-        const x_local = n.pos - TAN_TAN;
-        const ratio = Math.min(1, Math.abs(x_local / HEAD_DEPTH));
+        const ratio = Math.min(1, Math.abs((n.pos - TAN_TAN) / HEAD_DEPTH));
         r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
-
-        const y_u = r_local * Math.sin(rad);
-        const z_u = r_local * Math.cos(rad);
-
-        normal
-          .set(
-            x_local / (HEAD_DEPTH * HEAD_DEPTH),
-            y_u / (RADIUS * RADIUS),
-            z_u / (RADIUS * RADIUS),
-          )
-          .normalize();
       } else {
         // CYLINDER SHELL
         r_local = RADIUS;
-        normal.set(0, Math.sin(rad), Math.cos(rad)).normalize();
       }
 
       // Calculate final 3D position for horizontal vessel
@@ -590,9 +562,9 @@ export function buildVesselScene(
         r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
         normal
           .set(
-            r_local * Math.cos(rad) / (RADIUS * RADIUS),
+            (r_local * Math.cos(rad)) / (RADIUS * RADIUS),
             y_local / (HEAD_DEPTH * HEAD_DEPTH),
-            r_local * Math.sin(rad) / (RADIUS * RADIUS),
+            (r_local * Math.sin(rad)) / (RADIUS * RADIUS)
           )
           .normalize();
       } else if (lug.pos > TAN_TAN) {
@@ -601,9 +573,9 @@ export function buildVesselScene(
         r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
         normal
           .set(
-            r_local * Math.cos(rad) / (RADIUS * RADIUS),
+            (r_local * Math.cos(rad)) / (RADIUS * RADIUS),
             y_local / (HEAD_DEPTH * HEAD_DEPTH),
-            r_local * Math.sin(rad) / (RADIUS * RADIUS),
+            (r_local * Math.sin(rad)) / (RADIUS * RADIUS)
           )
           .normalize();
       } else {
@@ -623,8 +595,8 @@ export function buildVesselScene(
         normal
           .set(
             x_local / (HEAD_DEPTH * HEAD_DEPTH),
-            r_local * Math.sin(rad) / (RADIUS * RADIUS),
-            r_local * Math.cos(rad) / (RADIUS * RADIUS),
+            (r_local * Math.sin(rad)) / (RADIUS * RADIUS),
+            (r_local * Math.cos(rad)) / (RADIUS * RADIUS)
           )
           .normalize();
       } else if (lug.pos > TAN_TAN) {
@@ -634,8 +606,8 @@ export function buildVesselScene(
         normal
           .set(
             x_local / (HEAD_DEPTH * HEAD_DEPTH),
-            r_local * Math.sin(rad) / (RADIUS * RADIUS),
-            r_local * Math.cos(rad) / (RADIUS * RADIUS),
+            (r_local * Math.sin(rad)) / (RADIUS * RADIUS),
+            (r_local * Math.cos(rad)) / (RADIUS * RADIUS)
           )
           .normalize();
       } else {
@@ -666,7 +638,7 @@ export function buildVesselScene(
         state,
         idx === selectedSaddleIndex,
         saddleHighlightMaterial,
-        shellMaterial,
+        shellMaterial
       );
       // Tag all children for raycasting walk-up
       saddleGroup.traverse((child) => {
@@ -701,7 +673,7 @@ export function buildVesselScene(
 
   // -- Dome Scan Composites (only for vessel shapes with heads) --------------
   if (state.vesselShape !== 'pipe') {
-    for (const ds of (state.domeScanComposites ?? [])) {
+    for (const ds of state.domeScanComposites ?? []) {
       if (!ds.orientationConfirmed) continue;
       const mesh = createDomeScanPlane(ds, state, selectedDomeScanId);
       if (mesh) {
@@ -713,18 +685,13 @@ export function buildVesselScene(
 
   // -- Scan Orientation Gizmo (for selected composite only) -----------------
   if (selectedScanCompositeId) {
-    const selectedComposite = state.scanComposites.find(
-      sc => sc.id === selectedScanCompositeId,
-    );
+    const selectedComposite = state.scanComposites.find((sc) => sc.id === selectedScanCompositeId);
     if (selectedComposite && !selectedComposite.orientationConfirmed) {
-      const { group: gizmoGroup, originMesh } = buildScanOrientationGizmo(
-        selectedComposite,
-        state,
-      );
+      const { group: gizmoGroup, originMesh } = buildScanOrientationGizmo(selectedComposite, state);
       vesselGroup.add(gizmoGroup);
       gizmoMeshes.push(originMesh);
       // Also add arrow groups for click-to-toggle raycasting
-      gizmoGroup.children.forEach(child => {
+      gizmoGroup.children.forEach((child) => {
         if (child !== originMesh) gizmoMeshes.push(child);
       });
     }
@@ -732,21 +699,28 @@ export function buildVesselScene(
 
   // -- Dome Scan Orientation Gizmo (for selected dome scan, pre-confirmation) --
   if (selectedDomeScanId) {
-    const selectedDs = (state.domeScanComposites ?? []).find(
-      ds => ds.id === selectedDomeScanId,
-    );
+    const selectedDs = (state.domeScanComposites ?? []).find((ds) => ds.id === selectedDomeScanId);
     if (selectedDs && !selectedDs.orientationConfirmed) {
       const { group: domeGizmoGroup, originMesh: domeOrigin } = buildDomeScanGizmo(
         selectedDs,
-        state,
+        state
       );
       vesselGroup.add(domeGizmoGroup);
       gizmoMeshes.push(domeOrigin);
-      domeGizmoGroup.children.forEach(child => {
+      domeGizmoGroup.children.forEach((child) => {
         if (child !== domeOrigin) gizmoMeshes.push(child);
       });
     }
   }
 
-  return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes, scanCompositeMeshes, domeScanMeshes, gizmoMeshes };
+  return {
+    vesselGroup,
+    nozzleMeshes,
+    lugMeshes,
+    saddleMeshes,
+    textureMeshes,
+    scanCompositeMeshes,
+    domeScanMeshes,
+    gizmoMeshes,
+  };
 }

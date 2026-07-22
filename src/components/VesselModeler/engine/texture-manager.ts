@@ -13,7 +13,7 @@
 import * as THREE from 'three';
 import type { TextureConfig, ScanCompositeConfig, VesselState } from '../types';
 import { createHeatmapTexture, type HeatmapTextureResult } from './heatmap-texture';
-import { SCALE } from './materials';
+import { resolveBodyFrame, type SurfaceFrame } from './body-frame';
 
 // ---------------------------------------------------------------------------
 // UV Transform Helper
@@ -28,7 +28,7 @@ function transformUV(
   v: number,
   rotation: number,
   flipH: boolean,
-  flipV: boolean,
+  flipV: boolean
 ): [number, number] {
   let tu = flipH ? 1 - u : u;
   let tv = flipV ? 1 - v : v;
@@ -51,92 +51,66 @@ function transformUV(
 }
 
 // ---------------------------------------------------------------------------
-// Selection Border Builder
+// Shared Surface Vertex Grid
 // ---------------------------------------------------------------------------
 
 /**
- * Build a slightly-larger yellow mesh behind the texture to indicate selection.
- * Uses the same vertex computation as the main texture plane but scaled by
- * `borderScale` and offset slightly behind the surface.
+ * A rectangular patch on a body surface, expressed in the body's own
+ * (pos mm, angle radians) coordinates. Angles are kept in radians to match the
+ * historic loop math; the frame boundary converts to degrees.
  */
-function buildSelectionBorder(
-  tex: TextureConfig,
-  vesselState: VesselState,
-  texWidth: number,
-  angularSpan: number,
-  segmentsX: number,
-  segmentsY: number,
-): THREE.Mesh {
-  const shellRadius = vesselState.id / 2;
-  const TAN_TAN = vesselState.length;
-  const HEAD_DEPTH = vesselState.headRatio > 0 ? vesselState.id / (2 * vesselState.headRatio) : 0;
-  const RADIUS = shellRadius;
-  const isVertical = vesselState.orientation === 'vertical';
+interface SurfaceGridOptions {
+  /** Patch centre: axial position in mm. */
+  centerPos: number;
+  /** Patch centre: circumferential angle in radians. */
+  centerAngleRad: number;
+  /** Axial extent of the patch in mm. */
+  width: number;
+  /** Circumferential extent of the patch in radians. */
+  angularSpanRad: number;
+  /** Radial offset above the surface in mm. */
+  offset: number;
+  segmentsX: number;
+  segmentsY: number;
+  /** Optional per-vertex UV producer; omit for untextured meshes (borders). */
+  uv?: (u: number, v: number) => [number, number];
+}
 
-  const borderScale = 1.08;
-  const borderOffset = 1; // surfaceOffset(2) - 1 = sits slightly behind the texture
+/**
+ * Build the position (and optional UV) grid plus triangle indices for a patch
+ * that conforms to a body surface. This is the single generator behind every
+ * texture / scan-composite mesh AND its selection border, so base and border
+ * geometry can never drift from each other or from the surface the frame
+ * defines. Each vertex is resolved through {@link SurfaceFrame.surfacePoint};
+ * for the main shell this reproduces the legacy cylinder + ellipsoidal-head
+ * vertex math exactly.
+ */
+function buildSurfaceGrid(
+  frame: SurfaceFrame,
+  opts: SurfaceGridOptions
+): { vertices: number[]; uvs: number[]; indices: number[] } {
+  const { centerPos, centerAngleRad, width, angularSpanRad, offset, segmentsX, segmentsY, uv } =
+    opts;
 
-  const borderWidth = texWidth * borderScale;
-  const borderAngularSpan = angularSpan * borderScale;
-
-  const centerAngle = (tex.angle * Math.PI) / 180;
-
-  const geometry = new THREE.BufferGeometry();
   const vertices: number[] = [];
+  const uvs: number[] = [];
   const indices: number[] = [];
 
   for (let iy = 0; iy <= segmentsY; iy++) {
     const v = iy / segmentsY;
-    const angleOffset = (v - 0.5) * borderAngularSpan;
-    const currentAngle = centerAngle + angleOffset;
+    const currentAngleRad = centerAngleRad + (v - 0.5) * angularSpanRad;
 
     for (let ix = 0; ix <= segmentsX; ix++) {
       const u = ix / segmentsX;
-      const posOffset = (u - 0.5) * borderWidth;
-      const currentPos = tex.pos + posOffset;
+      const currentPos = centerPos + (u - 0.5) * width;
 
-      let x: number, y: number, z: number;
-      const posGlobal = (currentPos - TAN_TAN / 2) * SCALE;
+      const p = frame.surfacePoint(currentPos, (currentAngleRad * 180) / Math.PI, offset);
+      vertices.push(p.x, p.y, p.z);
 
-      if (currentPos < 0) {
-        const posLocal = currentPos;
-        const ratio = Math.min(0.99, Math.abs(posLocal / HEAD_DEPTH));
-        const rLocal = RADIUS * Math.sqrt(1 - ratio * ratio);
-        if (isVertical) {
-          x = (rLocal + borderOffset) * SCALE * Math.cos(currentAngle);
-          y = posGlobal;
-          z = (rLocal + borderOffset) * SCALE * Math.sin(currentAngle);
-        } else {
-          x = posGlobal;
-          y = (rLocal + borderOffset) * SCALE * Math.sin(currentAngle);
-          z = (rLocal + borderOffset) * SCALE * Math.cos(currentAngle);
-        }
-      } else if (currentPos > TAN_TAN) {
-        const posLocal = currentPos - TAN_TAN;
-        const ratio = Math.min(0.99, Math.abs(posLocal / HEAD_DEPTH));
-        const rLocal = RADIUS * Math.sqrt(1 - ratio * ratio);
-        if (isVertical) {
-          x = (rLocal + borderOffset) * SCALE * Math.cos(currentAngle);
-          y = posGlobal;
-          z = (rLocal + borderOffset) * SCALE * Math.sin(currentAngle);
-        } else {
-          x = posGlobal;
-          y = (rLocal + borderOffset) * SCALE * Math.sin(currentAngle);
-          z = (rLocal + borderOffset) * SCALE * Math.cos(currentAngle);
-        }
-      } else {
-        if (isVertical) {
-          x = (RADIUS + borderOffset) * SCALE * Math.cos(currentAngle);
-          y = posGlobal;
-          z = (RADIUS + borderOffset) * SCALE * Math.sin(currentAngle);
-        } else {
-          x = posGlobal;
-          y = (RADIUS + borderOffset) * SCALE * Math.sin(currentAngle);
-          z = (RADIUS + borderOffset) * SCALE * Math.cos(currentAngle);
-        }
+      if (uv) {
+        const [tu, tv] = uv(u, v);
+        uvs.push(tu, tv);
       }
-
-      vertices.push(x, y, z);
     }
   }
 
@@ -151,6 +125,40 @@ function buildSelectionBorder(
     }
   }
 
+  return { vertices, uvs, indices };
+}
+
+// ---------------------------------------------------------------------------
+// Selection Border Builder
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a slightly-larger yellow mesh behind the texture to indicate selection.
+ * Uses the same vertex computation as the main texture plane but scaled by
+ * `borderScale` and offset slightly behind the surface.
+ */
+function buildSelectionBorder(
+  tex: TextureConfig,
+  frame: SurfaceFrame,
+  texWidth: number,
+  angularSpan: number,
+  segmentsX: number,
+  segmentsY: number
+): THREE.Mesh {
+  const borderScale = 1.08;
+  const borderOffset = 1; // surfaceOffset(2) - 1 = sits slightly behind the texture
+
+  const { vertices, indices } = buildSurfaceGrid(frame, {
+    centerPos: tex.pos,
+    centerAngleRad: (tex.angle * Math.PI) / 180,
+    width: texWidth * borderScale,
+    angularSpanRad: angularSpan * borderScale,
+    offset: borderOffset,
+    segmentsX,
+    segmentsY,
+  });
+
+  const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
@@ -188,7 +196,7 @@ export function createTexturePlane(
   tex: TextureConfig,
   vesselState: VesselState,
   textureObjects: Record<number, THREE.Texture>,
-  selectedTextureId: number,
+  selectedTextureId: number
 ): THREE.Mesh | null {
   const threeTexture = textureObjects[tex.id];
   if (!threeTexture) return null;
@@ -210,8 +218,6 @@ export function createTexturePlane(
   const curvatureCompensation = 1.15;
   const texHeight = baseSize * tex.scaleY * curvatureCompensation;
 
-  const TAN_TAN = vesselState.length;
-  const HEAD_DEPTH = vesselState.headRatio > 0 ? vesselState.id / (2 * vesselState.headRatio) : 0;
   const RADIUS = shellRadius;
 
   const circumference = 2 * Math.PI * RADIUS;
@@ -222,92 +228,24 @@ export function createTexturePlane(
   const segmentsX = Math.ceil(baseSegments * Math.max(1, tex.scaleX * 1.5));
   const segmentsY = Math.ceil(baseSegments * Math.max(1, tex.scaleY * 2));
 
-  // --- Build geometry ---
-  const geometry = new THREE.BufferGeometry();
-  const vertices: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
-
-  const centerAngle = (tex.angle * Math.PI) / 180;
+  // --- Build geometry (shared frame-driven vertex grid) ---
+  const frame = resolveBodyFrame(vesselState);
   const surfaceOffset = 2; // mm above the shell surface
-
   const flipH = tex.flipH || false;
   const flipV = tex.flipV || false;
-  const isVertical = vesselState.orientation === 'vertical';
 
-  for (let iy = 0; iy <= segmentsY; iy++) {
-    const v = iy / segmentsY;
-    const angleOffset = (v - 0.5) * angularSpan;
-    const currentAngle = centerAngle + angleOffset;
+  const { vertices, uvs, indices } = buildSurfaceGrid(frame, {
+    centerPos: tex.pos,
+    centerAngleRad: (tex.angle * Math.PI) / 180,
+    width: texWidth,
+    angularSpanRad: angularSpan,
+    offset: surfaceOffset,
+    segmentsX,
+    segmentsY,
+    uv: (u, v) => transformUV(u, 1 - v, rotation, flipH, flipV),
+  });
 
-    for (let ix = 0; ix <= segmentsX; ix++) {
-      const u = ix / segmentsX;
-      const posOffset = (u - 0.5) * texWidth;
-      const currentPos = tex.pos + posOffset;
-
-      let x: number, y: number, z: number;
-      const posGlobal = (currentPos - TAN_TAN / 2) * SCALE;
-
-      if (currentPos < 0) {
-        // --- Left head (ellipsoidal) ---
-        const posLocal = currentPos;
-        const ratio = Math.min(0.99, Math.abs(posLocal / HEAD_DEPTH));
-        const rLocal = RADIUS * Math.sqrt(1 - ratio * ratio);
-        if (isVertical) {
-          x = (rLocal + surfaceOffset) * SCALE * Math.cos(currentAngle);
-          y = posGlobal;
-          z = (rLocal + surfaceOffset) * SCALE * Math.sin(currentAngle);
-        } else {
-          x = posGlobal;
-          y = (rLocal + surfaceOffset) * SCALE * Math.sin(currentAngle);
-          z = (rLocal + surfaceOffset) * SCALE * Math.cos(currentAngle);
-        }
-      } else if (currentPos > TAN_TAN) {
-        // --- Right head (ellipsoidal) ---
-        const posLocal = currentPos - TAN_TAN;
-        const ratio = Math.min(0.99, Math.abs(posLocal / HEAD_DEPTH));
-        const rLocal = RADIUS * Math.sqrt(1 - ratio * ratio);
-        if (isVertical) {
-          x = (rLocal + surfaceOffset) * SCALE * Math.cos(currentAngle);
-          y = posGlobal;
-          z = (rLocal + surfaceOffset) * SCALE * Math.sin(currentAngle);
-        } else {
-          x = posGlobal;
-          y = (rLocal + surfaceOffset) * SCALE * Math.sin(currentAngle);
-          z = (rLocal + surfaceOffset) * SCALE * Math.cos(currentAngle);
-        }
-      } else {
-        // --- Cylindrical shell ---
-        if (isVertical) {
-          x = (RADIUS + surfaceOffset) * SCALE * Math.cos(currentAngle);
-          y = posGlobal;
-          z = (RADIUS + surfaceOffset) * SCALE * Math.sin(currentAngle);
-        } else {
-          x = posGlobal;
-          y = (RADIUS + surfaceOffset) * SCALE * Math.sin(currentAngle);
-          z = (RADIUS + surfaceOffset) * SCALE * Math.cos(currentAngle);
-        }
-      }
-
-      vertices.push(x, y, z);
-
-      const [tu, tv] = transformUV(u, 1 - v, rotation, flipH, flipV);
-      uvs.push(tu, tv);
-    }
-  }
-
-  // --- Index buffer (two triangles per quad) ---
-  for (let iy = 0; iy < segmentsY; iy++) {
-    for (let ix = 0; ix < segmentsX; ix++) {
-      const a = ix + (segmentsX + 1) * iy;
-      const b = ix + (segmentsX + 1) * (iy + 1);
-      const c = ix + 1 + (segmentsX + 1) * (iy + 1);
-      const d = ix + 1 + (segmentsX + 1) * iy;
-      indices.push(a, b, d);
-      indices.push(b, c, d);
-    }
-  }
-
+  const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   geometry.setIndex(indices);
@@ -326,14 +264,7 @@ export function createTexturePlane(
 
   // --- Selection highlight border (always created, hidden when not selected) ---
   {
-    const border = buildSelectionBorder(
-      tex,
-      vesselState,
-      texWidth,
-      angularSpan,
-      segmentsX,
-      segmentsY,
-    );
+    const border = buildSelectionBorder(tex, frame, texWidth, angularSpan, segmentsX, segmentsY);
     border.userData = { type: 'texture-border', id: tex.id };
     border.visible = tex.id === selectedTextureId;
     mesh.add(border);
@@ -353,7 +284,13 @@ const heatmapCache = new Map<string, HeatmapTextureResult>();
  * Build a cache key that includes visual parameters so colorscale/range/opacity
  * changes naturally invalidate the entry without explicit clearing.
  */
-function heatmapCacheKey(composite: { id: string; colorScale: string; rangeMin: number | null; rangeMax: number | null; opacity: number }): string {
+function heatmapCacheKey(composite: {
+  id: string;
+  colorScale: string;
+  rangeMin: number | null;
+  rangeMax: number | null;
+  opacity: number;
+}): string {
   return `${composite.id}_${composite.colorScale}_${composite.rangeMin}_${composite.rangeMax}_${composite.opacity}`;
 }
 
@@ -416,7 +353,7 @@ export function clearHeatmapCache(compositeId?: string): void {
 export function createScanCompositePlane(
   composite: ScanCompositeConfig,
   vesselState: VesselState,
-  selectedId: string,
+  selectedId: string
 ): THREE.Mesh | null {
   if (
     composite.data.length === 0 ||
@@ -445,20 +382,14 @@ export function createScanCompositePlane(
   // --- Vessel geometry constants ---
   const shellRadius = vesselState.id / 2;
   const RADIUS = shellRadius;
-  const TAN_TAN = vesselState.length;
-  const HEAD_DEPTH = vesselState.headRatio > 0 ? vesselState.id / (2 * vesselState.headRatio) : 0;
-  const isVertical = vesselState.orientation === 'vertical';
+  const frame = resolveBodyFrame(vesselState);
   const circumference = 2 * Math.PI * RADIUS;
 
   // --- Dimensions from axis data ---
-  const scanRange = Math.abs(
-    composite.xAxis[composite.xAxis.length - 1] - composite.xAxis[0],
-  ); // mm around circumference
+  const scanRange = Math.abs(composite.xAxis[composite.xAxis.length - 1] - composite.xAxis[0]); // mm around circumference
   const angularSpan = (scanRange / circumference) * 2 * Math.PI; // radians
 
-  const indexRange = Math.abs(
-    composite.yAxis[composite.yAxis.length - 1] - composite.yAxis[0],
-  ); // mm along vessel
+  const indexRange = Math.abs(composite.yAxis[composite.yAxis.length - 1] - composite.yAxis[0]); // mm along vessel
   const texWidth = indexRange; // direct mm
 
   // --- Center position (longitudinal) ---
@@ -480,111 +411,43 @@ export function createScanCompositePlane(
   const scanHalf = angularSpan / 2;
   const startAngle =
     composite.scanDirection === 'cw'
-      ? datumRad - scanStartRad   // CW: angle decreases from datum
-      : datumRad + scanStartRad;  // CCW: angle increases from datum
-  const centerAngle = composite.scanDirection === 'cw'
-    ? startAngle - scanHalf   // CW: scan extends toward decreasing angles
-    : startAngle + scanHalf;  // CCW: scan extends toward increasing angles
+      ? datumRad - scanStartRad // CW: angle decreases from datum
+      : datumRad + scanStartRad; // CCW: angle increases from datum
+  const centerAngle =
+    composite.scanDirection === 'cw'
+      ? startAngle - scanHalf // CW: scan extends toward decreasing angles
+      : startAngle + scanHalf; // CCW: scan extends toward increasing angles
 
   // --- Segment counts (scale with physical size) ---
   const baseSegments = 64;
-  const segmentsX = Math.max(
-    16,
-    Math.ceil(baseSegments * Math.max(1, texWidth / RADIUS)),
-  );
+  const segmentsX = Math.max(16, Math.ceil(baseSegments * Math.max(1, texWidth / RADIUS)));
   const segmentsY = Math.max(
     16,
-    Math.ceil(baseSegments * Math.max(1, (angularSpan / Math.PI) * 2)),
+    Math.ceil(baseSegments * Math.max(1, (angularSpan / Math.PI) * 2))
   );
 
-  // --- Build geometry ---
-  const geometry = new THREE.BufferGeometry();
-  const vertices: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
+  // --- Build geometry (shared frame-driven vertex grid) ---
   const surfaceOffset = 2; // mm above the shell surface
 
-  for (let iy = 0; iy <= segmentsY; iy++) {
-    const v = iy / segmentsY;
-    const angleOffset = (v - 0.5) * angularSpan;
-    const currentAngle = centerAngle + angleOffset;
+  const { vertices, uvs, indices } = buildSurfaceGrid(frame, {
+    centerPos: indexCenter,
+    centerAngleRad: centerAngle,
+    width: texWidth,
+    angularSpanRad: angularSpan,
+    offset: surfaceOffset,
+    segmentsX,
+    segmentsY,
+    // UV mapping: uv.x → circumferential (scan/xAxis), uv.y → longitudinal (index/yAxis)
+    // CW: 1-v keeps column 0 at datum side; CCW: v flips so column 0 is still at datum
+    // Forward: 1-u maps longitudinal rows; Reverse: u flips row order
+    uv: (u, v) => [
+      composite.scanDirection === 'ccw' ? v : 1 - v,
+      composite.indexDirection === 'reverse' ? u : 1 - u,
+    ],
+  });
 
-    for (let ix = 0; ix <= segmentsX; ix++) {
-      const u = ix / segmentsX;
-      const posOffset = (u - 0.5) * texWidth;
-      const currentPos = indexCenter + posOffset;
-
-      let x: number, y: number, z: number;
-      const posGlobal = (currentPos - TAN_TAN / 2) * SCALE;
-
-      if (currentPos < 0) {
-        // --- Left head (ellipsoidal) ---
-        const posLocal = currentPos;
-        const ratio = Math.min(0.99, Math.abs(posLocal / HEAD_DEPTH));
-        const rLocal = RADIUS * Math.sqrt(1 - ratio * ratio);
-        if (isVertical) {
-          x = (rLocal + surfaceOffset) * SCALE * Math.cos(currentAngle);
-          y = posGlobal;
-          z = (rLocal + surfaceOffset) * SCALE * Math.sin(currentAngle);
-        } else {
-          x = posGlobal;
-          y = (rLocal + surfaceOffset) * SCALE * Math.sin(currentAngle);
-          z = (rLocal + surfaceOffset) * SCALE * Math.cos(currentAngle);
-        }
-      } else if (currentPos > TAN_TAN) {
-        // --- Right head (ellipsoidal) ---
-        const posLocal = currentPos - TAN_TAN;
-        const ratio = Math.min(0.99, Math.abs(posLocal / HEAD_DEPTH));
-        const rLocal = RADIUS * Math.sqrt(1 - ratio * ratio);
-        if (isVertical) {
-          x = (rLocal + surfaceOffset) * SCALE * Math.cos(currentAngle);
-          y = posGlobal;
-          z = (rLocal + surfaceOffset) * SCALE * Math.sin(currentAngle);
-        } else {
-          x = posGlobal;
-          y = (rLocal + surfaceOffset) * SCALE * Math.sin(currentAngle);
-          z = (rLocal + surfaceOffset) * SCALE * Math.cos(currentAngle);
-        }
-      } else {
-        // --- Cylindrical shell ---
-        if (isVertical) {
-          x = (RADIUS + surfaceOffset) * SCALE * Math.cos(currentAngle);
-          y = posGlobal;
-          z = (RADIUS + surfaceOffset) * SCALE * Math.sin(currentAngle);
-        } else {
-          x = posGlobal;
-          y = (RADIUS + surfaceOffset) * SCALE * Math.sin(currentAngle);
-          z = (RADIUS + surfaceOffset) * SCALE * Math.cos(currentAngle);
-        }
-      }
-
-      vertices.push(x, y, z);
-
-      // UV mapping: uv.x → circumferential (scan/xAxis), uv.y → longitudinal (index/yAxis)
-      // CW: 1-v keeps column 0 at datum side; CCW: v flips so column 0 is still at datum
-      // Forward: 1-u maps longitudinal rows; Reverse: u flips row order
-      const vMapped = composite.scanDirection === 'ccw' ? v : 1 - v;
-      const uMapped = composite.indexDirection === 'reverse' ? u : 1 - u;
-      uvs.push(vMapped, uMapped);
-    }
-  }
-
-  // --- Index buffer (two triangles per quad) ---
-  for (let iy = 0; iy < segmentsY; iy++) {
-    for (let ix = 0; ix < segmentsX; ix++) {
-      const a = ix + (segmentsX + 1) * iy;
-      const b = ix + (segmentsX + 1) * (iy + 1);
-      const c = ix + 1 + (segmentsX + 1) * (iy + 1);
-      const d = ix + 1 + (segmentsX + 1) * iy;
-      indices.push(a, b, d);
-      indices.push(b, c, d);
-    }
-  }
-
-  geometry.setAttribute(
-    'position',
-    new THREE.Float32BufferAttribute(vertices, 3),
-  );
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
@@ -622,84 +485,20 @@ export function createScanCompositePlane(
     });
 
     const borderScale = 1.08;
-    const borderWidth = texWidth * borderScale;
-    const borderAngularSpan = angularSpan * borderScale;
     const borderOffset = 1;
 
+    const { vertices: borderVertices, indices: borderIndices } = buildSurfaceGrid(frame, {
+      centerPos: indexCenter,
+      centerAngleRad: centerAngle,
+      width: texWidth * borderScale,
+      angularSpanRad: angularSpan * borderScale,
+      offset: borderOffset,
+      segmentsX,
+      segmentsY,
+    });
+
     const borderGeometry = new THREE.BufferGeometry();
-    const borderVertices: number[] = [];
-    const borderIndices: number[] = [];
-
-    for (let iy = 0; iy <= segmentsY; iy++) {
-      const v = iy / segmentsY;
-      const angleOffset = (v - 0.5) * borderAngularSpan;
-      const currentAngle = centerAngle + angleOffset;
-
-      for (let ix = 0; ix <= segmentsX; ix++) {
-        const u = ix / segmentsX;
-        const posOffset = (u - 0.5) * borderWidth;
-        const currentPos = indexCenter + posOffset;
-
-        let bx: number, by: number, bz: number;
-        const posGlobal = (currentPos - TAN_TAN / 2) * SCALE;
-
-        if (currentPos < 0) {
-          const posLocal = currentPos;
-          const ratio = Math.min(0.99, Math.abs(posLocal / HEAD_DEPTH));
-          const rLocal = RADIUS * Math.sqrt(1 - ratio * ratio);
-          if (isVertical) {
-            bx = (rLocal + borderOffset) * SCALE * Math.cos(currentAngle);
-            by = posGlobal;
-            bz = (rLocal + borderOffset) * SCALE * Math.sin(currentAngle);
-          } else {
-            bx = posGlobal;
-            by = (rLocal + borderOffset) * SCALE * Math.sin(currentAngle);
-            bz = (rLocal + borderOffset) * SCALE * Math.cos(currentAngle);
-          }
-        } else if (currentPos > TAN_TAN) {
-          const posLocal = currentPos - TAN_TAN;
-          const ratio = Math.min(0.99, Math.abs(posLocal / HEAD_DEPTH));
-          const rLocal = RADIUS * Math.sqrt(1 - ratio * ratio);
-          if (isVertical) {
-            bx = (rLocal + borderOffset) * SCALE * Math.cos(currentAngle);
-            by = posGlobal;
-            bz = (rLocal + borderOffset) * SCALE * Math.sin(currentAngle);
-          } else {
-            bx = posGlobal;
-            by = (rLocal + borderOffset) * SCALE * Math.sin(currentAngle);
-            bz = (rLocal + borderOffset) * SCALE * Math.cos(currentAngle);
-          }
-        } else {
-          if (isVertical) {
-            bx = (RADIUS + borderOffset) * SCALE * Math.cos(currentAngle);
-            by = posGlobal;
-            bz = (RADIUS + borderOffset) * SCALE * Math.sin(currentAngle);
-          } else {
-            bx = posGlobal;
-            by = (RADIUS + borderOffset) * SCALE * Math.sin(currentAngle);
-            bz = (RADIUS + borderOffset) * SCALE * Math.cos(currentAngle);
-          }
-        }
-
-        borderVertices.push(bx, by, bz);
-      }
-    }
-
-    for (let iy = 0; iy < segmentsY; iy++) {
-      for (let ix = 0; ix < segmentsX; ix++) {
-        const a = ix + (segmentsX + 1) * iy;
-        const b = ix + (segmentsX + 1) * (iy + 1);
-        const c = ix + 1 + (segmentsX + 1) * (iy + 1);
-        const d = ix + 1 + (segmentsX + 1) * iy;
-        borderIndices.push(a, b, d);
-        borderIndices.push(b, c, d);
-      }
-    }
-
-    borderGeometry.setAttribute(
-      'position',
-      new THREE.Float32BufferAttribute(borderVertices, 3),
-    );
+    borderGeometry.setAttribute('position', new THREE.Float32BufferAttribute(borderVertices, 3));
     borderGeometry.setIndex(borderIndices);
     borderGeometry.computeVertexNormals();
 
@@ -731,7 +530,7 @@ export function createScanCompositePlane(
  */
 export function loadTextureFromFile(
   file: File,
-  renderer: THREE.WebGLRenderer,
+  renderer: THREE.WebGLRenderer
 ): Promise<{ texture: THREE.Texture; imageData: string; name: string; aspectRatio: number }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -801,7 +600,7 @@ export function loadTextureFromFile(
  */
 export function loadTextureFromData(
   imageData: string,
-  renderer: THREE.WebGLRenderer,
+  renderer: THREE.WebGLRenderer
 ): Promise<{ texture: THREE.Texture; aspectRatio: number }> {
   return new Promise((resolve, reject) => {
     const img = new Image();

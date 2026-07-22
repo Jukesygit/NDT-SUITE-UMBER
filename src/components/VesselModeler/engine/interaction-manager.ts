@@ -20,13 +20,26 @@ import * as THREE from 'three';
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { VesselState, AnnotationShapeType } from '../types';
 import { SCALE } from './materials';
+import { resolveBodyFrame } from './body-frame';
 import { domePhiThetaFromPoint } from './dome-scan-geometry';
 
 // ---------------------------------------------------------------------------
 // Public Types
 // ---------------------------------------------------------------------------
 
-export type DragType = 'nozzle' | 'liftingLug' | 'saddle' | 'texture' | 'annotation' | 'coverageRect' | 'inspectionImage' | 'weld' | 'scanGizmo' | 'domeGizmo' | 'pipeSegment' | null;
+export type DragType =
+  | 'nozzle'
+  | 'liftingLug'
+  | 'saddle'
+  | 'texture'
+  | 'annotation'
+  | 'coverageRect'
+  | 'inspectionImage'
+  | 'weld'
+  | 'scanGizmo'
+  | 'domeGizmo'
+  | 'pipeSegment'
+  | null;
 
 export interface InteractionCallbacks {
   onNozzleSelected: (index: number) => void;
@@ -40,8 +53,20 @@ export interface InteractionCallbacks {
   onLugMoved: (index: number, pos: number, angle: number) => void;
   onAnnotationSelected: (id: number) => void;
   onAnnotationMoved: (id: number, pos: number, angle: number) => void;
-  onAnnotationCreated: (type: AnnotationShapeType, pos: number, angle: number, width: number, height: number) => void;
-  onAnnotationPreview: (type: AnnotationShapeType, pos: number, angle: number, width: number, height: number) => void;
+  onAnnotationCreated: (
+    type: AnnotationShapeType,
+    pos: number,
+    angle: number,
+    width: number,
+    height: number
+  ) => void;
+  onAnnotationPreview: (
+    type: AnnotationShapeType,
+    pos: number,
+    angle: number,
+    width: number,
+    height: number
+  ) => void;
   onRulerCreated: (startPos: number, startAngle: number, endPos: number, endAngle: number) => void;
   onRulerPreview: (startPos: number, startAngle: number, endPos: number, endAngle: number) => void;
   onCoverageRectCreated: (pos: number, angle: number, width: number, height: number) => void;
@@ -52,12 +77,36 @@ export interface InteractionCallbacks {
   onInspectionImageMoved: (id: number, pos: number, angle: number) => void;
   onWeldSelected: (index: number) => void;
   onWeldMoved: (index: number, pos: number, angle: number) => void;
-  onScanCompositeHover: (id: string, thickness: number | null, scanMm: number, indexMm: number, screenX: number, screenY: number) => void;
-  onDomeScanHover: (info: { scanId: string; thickness: number | null; phiDeg: number; thetaDeg: number; row: number; col: number; screenX: number; screenY: number } | null) => void;
+  onScanCompositeHover: (
+    id: string,
+    thickness: number | null,
+    scanMm: number,
+    indexMm: number,
+    screenX: number,
+    screenY: number
+  ) => void;
+  onDomeScanHover: (
+    info: {
+      scanId: string;
+      thickness: number | null;
+      phiDeg: number;
+      thetaDeg: number;
+      row: number;
+      col: number;
+      screenX: number;
+      screenY: number;
+    } | null
+  ) => void;
   onScanGizmoDatumMoved: (compositeId: string, angleDeg: number, posMm: number) => void;
-  onScanGizmoDirectionToggle: (compositeId: string, field: 'scanDirection' | 'indexDirection') => void;
+  onScanGizmoDirectionToggle: (
+    compositeId: string,
+    field: 'scanDirection' | 'indexDirection'
+  ) => void;
   onDomeGizmoDatumMoved: (compositeId: string, phiDeg: number, thetaDeg: number) => void;
-  onDomeGizmoDirectionToggle: (compositeId: string, field: 'scanDirection' | 'indexDirection') => void;
+  onDomeGizmoDirectionToggle: (
+    compositeId: string,
+    field: 'scanDirection' | 'indexDirection'
+  ) => void;
   onDomeGizmoClicked: (compositeId: string) => void;
   onPipeSegmentSelected: (pipelineId: string, segmentIndex: number) => void;
   onPipeConnectionPointClicked: (pipelineId: string) => void;
@@ -166,7 +215,7 @@ export class InteractionManager {
     camera: THREE.PerspectiveCamera,
     controls: OrbitControls,
     vesselState: VesselState,
-    callbacks: InteractionCallbacks,
+    callbacks: InteractionCallbacks
   ) {
     this.canvas = canvas;
     this.camera = camera;
@@ -246,16 +295,11 @@ export class InteractionManager {
 
       const point = hits[0].point;
       const state = this.vesselState;
-      const isVertical = state.orientation === 'vertical';
 
-      this.drawStartPos = isVertical
-        ? (point.y / SCALE) + (state.length / 2)
-        : (point.x / SCALE) + (state.length / 2);
-
-      const rad = isVertical
-        ? Math.atan2(point.z, point.x)
-        : Math.atan2(point.y, point.z);
-      this.drawStartAngle = ((rad * 180) / Math.PI + 360) % 360;
+      // Single frame inverse: world point -> (pos mm, angle deg).
+      const start = resolveBodyFrame(state).toLocal(point);
+      this.drawStartPos = start.pos;
+      this.drawStartAngle = start.angle;
 
       this.isDrawing = !!this.drawMode;
       this.isDrawingCoverage = this.coverageDrawMode;
@@ -360,9 +404,8 @@ export class InteractionManager {
       ...pipeSegmentMeshes,
     ];
 
-    const hits = allInteractables.length > 0
-      ? this.raycaster.intersectObjects(allInteractables, true)
-      : [];
+    const hits =
+      allInteractables.length > 0 ? this.raycaster.intersectObjects(allInteractables, true) : [];
 
     for (const hit of hits) {
       const entityData = this.findEntityData(hit.object);
@@ -380,7 +423,7 @@ export class InteractionManager {
       // --- Annotation (per-item lock) ---
       if (entityData.annotationId !== undefined) {
         const annId = entityData.annotationId as number;
-        const ann = this.vesselState.annotations.find(a => a.id === annId);
+        const ann = this.vesselState.annotations.find((a) => a.id === annId);
         if (!ann?.locked) {
           this.startDrag('annotation', -1, -1, -1, -1, annId);
         }
@@ -391,7 +434,7 @@ export class InteractionManager {
       // --- Coverage Rect (per-item lock) ---
       if (entityData.coverageRectId !== undefined) {
         const covId = entityData.coverageRectId as number;
-        const rect = this.vesselState.coverageRects.find(r => r.id === covId);
+        const rect = this.vesselState.coverageRects.find((r) => r.id === covId);
         if (rect?.locked) {
           this.callbacks.onCoverageRectSelected(covId);
           return;
@@ -408,7 +451,7 @@ export class InteractionManager {
       // --- Inspection Image (per-item lock) ---
       if (entityData.inspectionImageId !== undefined) {
         const imgId = entityData.inspectionImageId as number;
-        const img = this.vesselState.inspectionImages.find(i => i.id === imgId);
+        const img = this.vesselState.inspectionImages.find((i) => i.id === imgId);
         if (!img?.locked) {
           this.selectedInspectionImageId = imgId;
           this.isDown = true;
@@ -471,7 +514,7 @@ export class InteractionManager {
         const segmentId = entityData.segmentId as string;
         // Find pipeline and segment index from segmentId
         for (const pl of this.vesselState.pipelines) {
-          const segIdx = pl.segments.findIndex(s => s.id === segmentId);
+          const segIdx = pl.segments.findIndex((s) => s.id === segmentId);
           if (segIdx >= 0) {
             this.callbacks.onPipeSegmentSelected(pl.id, segIdx);
             return;
@@ -513,15 +556,9 @@ export class InteractionManager {
 
       const point = hits[0].point;
       const state = this.vesselState;
-      const isVertical = state.orientation === 'vertical';
 
-      const currentPos = isVertical
-        ? (point.y / SCALE) + (state.length / 2)
-        : (point.x / SCALE) + (state.length / 2);
-      const rad = isVertical
-        ? Math.atan2(point.z, point.x)
-        : Math.atan2(point.y, point.z);
-      const currentAngle = ((rad * 180) / Math.PI + 360) % 360;
+      // Single frame inverse: world point -> (pos mm, angle deg).
+      const { pos: currentPos, angle: currentAngle } = resolveBodyFrame(state).toLocal(point);
 
       const circumference = Math.PI * state.id;
       const axialDelta = Math.abs(currentPos - this.drawStartPos);
@@ -533,13 +570,24 @@ export class InteractionManager {
       const centerAngle = (this.drawStartAngle + currentAngle) / 2;
 
       if (this.isDrawingRuler) {
-        this.callbacks.onRulerPreview(this.drawStartPos, this.drawStartAngle, currentPos, currentAngle);
+        this.callbacks.onRulerPreview(
+          this.drawStartPos,
+          this.drawStartAngle,
+          currentPos,
+          currentAngle
+        );
       } else if (this.isDrawingCoverage) {
         const width = Math.max(axialDelta, 20);
         const height = Math.max(circumDelta, 20);
         this.callbacks.onCoverageRectPreview(centerPos, centerAngle, width, height);
       } else {
-        this.callbacks.onAnnotationPreview(this.drawMode!, centerPos, centerAngle, axialDelta, circumDelta);
+        this.callbacks.onAnnotationPreview(
+          this.drawMode!,
+          centerPos,
+          centerAngle,
+          axialDelta,
+          circumDelta
+        );
       }
       return;
     }
@@ -568,7 +616,8 @@ export class InteractionManager {
                 thickness,
                 phiDeg: ud.centerPhi,
                 thetaDeg: ud.centerTheta,
-                row, col,
+                row,
+                col,
                 screenX: event.clientX,
                 screenY: event.clientY,
               });
@@ -599,7 +648,7 @@ export class InteractionManager {
                 userData.xAxis[col] ?? 0,
                 userData.yAxis[row] ?? 0,
                 event.clientX,
-                event.clientY,
+                event.clientY
               );
             }
           } else {
@@ -619,6 +668,8 @@ export class InteractionManager {
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
     const state = this.vesselState;
+    // Single frame inverse used by every shell drag handler below.
+    const frame = resolveBodyFrame(state);
 
     if (this.dragType === 'coverageRect') {
       const shellMeshes = this.getShellMeshes();
@@ -627,15 +678,7 @@ export class InteractionManager {
       if (hits.length === 0) return;
 
       const point = hits[0].point;
-      const isVertical = state.orientation === 'vertical';
-      const newPos = isVertical
-        ? (point.y / SCALE) + (state.length / 2)
-        : (point.x / SCALE) + (state.length / 2);
-      const rad = isVertical
-        ? Math.atan2(point.z, point.x)
-        : Math.atan2(point.y, point.z);
-      let deg = (rad * 180) / Math.PI;
-      if (deg < 0) deg += 360;
+      const { pos: newPos, angle: deg } = frame.toLocal(point);
 
       this.callbacks.onCoverageRectMoved(this.selectedCoverageRectId, newPos, deg);
       return;
@@ -648,17 +691,9 @@ export class InteractionManager {
       if (hits.length === 0) return;
 
       const point = hits[0].point;
-      const isVertical = state.orientation === 'vertical';
-      let newPos = isVertical
-        ? (point.y / SCALE) + (state.length / 2)
-        : (point.x / SCALE) + (state.length / 2);
+      const { pos, angle: deg } = frame.toLocal(point);
       const headDepth = state.id / (2 * state.headRatio);
-      newPos = Math.max(-headDepth, Math.min(state.length + headDepth, newPos));
-      const rad = isVertical
-        ? Math.atan2(point.z, point.x)
-        : Math.atan2(point.y, point.z);
-      let deg = (rad * 180) / Math.PI;
-      if (deg < 0) deg += 360;
+      const newPos = Math.max(-headDepth, Math.min(state.length + headDepth, pos));
 
       this.callbacks.onInspectionImageMoved(this.selectedInspectionImageId, newPos, deg);
       return;
@@ -671,17 +706,9 @@ export class InteractionManager {
       if (hits.length === 0) return;
 
       const point = hits[0].point;
-      const isVertical = state.orientation === 'vertical';
-      let newPos = isVertical
-        ? (point.y / SCALE) + (state.length / 2)
-        : (point.x / SCALE) + (state.length / 2);
+      const { pos, angle: deg } = frame.toLocal(point);
       const headDepth = state.id / (2 * state.headRatio);
-      newPos = Math.max(-headDepth, Math.min(state.length + headDepth, newPos));
-      const rad = isVertical
-        ? Math.atan2(point.z, point.x)
-        : Math.atan2(point.y, point.z);
-      let deg = (rad * 180) / Math.PI;
-      if (deg < 0) deg += 360;
+      const newPos = Math.max(-headDepth, Math.min(state.length + headDepth, pos));
 
       this.callbacks.onWeldMoved(this.selectedWeldIdx, newPos, deg);
       return;
@@ -694,18 +721,12 @@ export class InteractionManager {
       if (hits.length === 0) return;
 
       const point = hits[0].point;
-      const isVertical = state.orientation === 'vertical';
-      let newPos = isVertical
-        ? (point.y / SCALE) + (state.length / 2)
-        : (point.x / SCALE) + (state.length / 2);
+      const local = frame.toLocal(point);
       // Clamp to vessel tan-tan range
-      newPos = Math.max(0, Math.min(state.length, newPos));
+      const newPos = Math.max(0, Math.min(state.length, local.pos));
 
-      const rad = isVertical
-        ? Math.atan2(point.z, point.x)
-        : Math.atan2(point.y, point.z);
       // Convert internal angle (0°=3-o'clock) to user-facing (0°=TDC) by subtracting 90°
-      let deg = (rad * 180) / Math.PI - 90;
+      let deg = local.angle - 90;
       deg = ((deg % 360) + 360) % 360;
       deg = Math.round(deg);
 
@@ -724,13 +745,18 @@ export class InteractionManager {
       const RADIUS = state.id / 2;
       const HEAD_DEPTH = RADIUS / (state.headRatio || 2);
 
-      const ds = state.domeScanComposites?.find(d => d.id === this.selectedGizmoCompositeId);
+      const ds = state.domeScanComposites?.find((d) => d.id === this.selectedGizmoCompositeId);
       if (!ds) return;
       const headSign = ds.head === 'right' ? 1 : -1;
       const tangentLineWorld = (ds.head === 'right' ? state.length / 2 : -state.length / 2) * SCALE;
 
       const result = domePhiThetaFromPoint(
-        point, RADIUS, HEAD_DEPTH, tangentLineWorld, headSign, isVertical,
+        point,
+        RADIUS,
+        HEAD_DEPTH,
+        tangentLineWorld,
+        headSign,
+        isVertical
       );
       if (!result) return;
 
@@ -741,7 +767,12 @@ export class InteractionManager {
       return;
     }
 
-    if (this.dragType === 'nozzle' || this.dragType === 'texture' || this.dragType === 'liftingLug' || this.dragType === 'annotation') {
+    if (
+      this.dragType === 'nozzle' ||
+      this.dragType === 'texture' ||
+      this.dragType === 'liftingLug' ||
+      this.dragType === 'annotation'
+    ) {
       // Raycast against the vessel shell to find the surface point
       const shellMeshes = this.getShellMeshes();
       if (shellMeshes.length === 0) return;
@@ -751,22 +782,12 @@ export class InteractionManager {
 
       const point = hits[0].point;
 
-      // Calculate position in mm along the vessel axis
-      const isVertical = state.orientation === 'vertical';
-      let newPos = isVertical
-        ? (point.y / SCALE) + (state.length / 2)
-        : (point.x / SCALE) + (state.length / 2);
+      // Position (mm) and angle (deg) via the single frame inverse.
+      const { pos, angle: deg } = frame.toLocal(point);
 
       // Clamp to vessel extent (including head depth)
       const headDepth = state.id / (2 * state.headRatio);
-      newPos = Math.max(-headDepth, Math.min(state.length + headDepth, newPos));
-
-      // Calculate angle in degrees around the circumference
-      const rad = isVertical
-        ? Math.atan2(point.z, point.x)
-        : Math.atan2(point.y, point.z);
-      let deg = (rad * 180) / Math.PI;
-      if (deg < 0) deg += 360;
+      const newPos = Math.max(-headDepth, Math.min(state.length + headDepth, pos));
 
       if (this.dragType === 'nozzle') {
         // Nozzles snap to the chosen angular increment when snapping is enabled.
@@ -787,7 +808,7 @@ export class InteractionManager {
       const intersection = new THREE.Vector3();
 
       if (this.raycaster.ray.intersectPlane(plane, intersection)) {
-        let newPos = (intersection.x / SCALE) + (state.length / 2);
+        let newPos = intersection.x / SCALE + state.length / 2;
         newPos = Math.max(0, Math.min(state.length, newPos));
 
         this.callbacks.onSaddleMoved(this.selectedSaddleIdx, newPos);
@@ -823,15 +844,9 @@ export class InteractionManager {
       if (hits.length > 0) {
         const point = hits[0].point;
         const state = this.vesselState;
-        const isVertical = state.orientation === 'vertical';
 
-        const endPos = isVertical
-          ? (point.y / SCALE) + (state.length / 2)
-          : (point.x / SCALE) + (state.length / 2);
-        const rad = isVertical
-          ? Math.atan2(point.z, point.x)
-          : Math.atan2(point.y, point.z);
-        const endAngle = ((rad * 180) / Math.PI + 360) % 360;
+        // Single frame inverse: world point -> (pos mm, angle deg).
+        const { pos: endPos, angle: endAngle } = resolveBodyFrame(state).toLocal(point);
 
         const circumference = Math.PI * state.id;
         const axialDelta = Math.abs(endPos - this.drawStartPos);
@@ -885,7 +900,7 @@ export class InteractionManager {
     saddleIdx: number,
     textureIdx: number,
     lugIdx: number = -1,
-    annotationIdx: number = -1,
+    annotationIdx: number = -1
   ): void {
     this.isDown = true;
     this.isDragging = true;

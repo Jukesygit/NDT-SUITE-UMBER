@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import type { AnnotationShapeConfig, RulerConfig, VesselState } from '../types';
 import { SCALE } from './materials';
+import { resolveBodyFrame } from './body-frame';
 
 // ---------------------------------------------------------------------------
 // Shell Surface Point Calculator
@@ -18,49 +19,23 @@ import { SCALE } from './materials';
 /**
  * Compute a 3D point on the vessel shell surface at a given axial position
  * (mm from left tangent line) and circumferential angle (radians).
+ *
+ * Thin delegate to the shared {@link SurfaceFrame} so the forward (build) path
+ * can never drift from the inverse (drag) path. The frame's `surfacePoint`
+ * takes DEGREES; this function keeps its historic radians contract for all
+ * existing callers and converts at the boundary.
  */
 export function shellPoint(
   posMm: number,
   angleRad: number,
   vesselState: VesselState,
-  surfaceOffset: number,
+  surfaceOffset: number
 ): THREE.Vector3 {
-  const RADIUS = vesselState.id / 2;
-  const TAN_TAN = vesselState.length;
-  const HEAD_DEPTH = vesselState.id / (2 * vesselState.headRatio);
-  const isVertical = vesselState.orientation === 'vertical';
-  const posGlobal = (posMm - TAN_TAN / 2) * SCALE;
-
-  let rLocal: number;
-
-  if (posMm < 0) {
-    // Left head (ellipsoidal)
-    const ratio = Math.min(0.99, Math.abs(posMm / HEAD_DEPTH));
-    rLocal = RADIUS * Math.sqrt(1 - ratio * ratio);
-  } else if (posMm > TAN_TAN) {
-    // Right head (ellipsoidal)
-    const ratio = Math.min(0.99, Math.abs((posMm - TAN_TAN) / HEAD_DEPTH));
-    rLocal = RADIUS * Math.sqrt(1 - ratio * ratio);
-  } else {
-    // Cylindrical shell
-    rLocal = RADIUS;
-  }
-
-  const r = (rLocal + surfaceOffset) * SCALE;
-
-  if (isVertical) {
-    return new THREE.Vector3(
-      r * Math.cos(angleRad),
-      posGlobal,
-      r * Math.sin(angleRad),
-    );
-  } else {
-    return new THREE.Vector3(
-      posGlobal,
-      r * Math.sin(angleRad),
-      r * Math.cos(angleRad),
-    );
-  }
+  return resolveBodyFrame(vesselState).surfacePoint(
+    posMm,
+    (angleRad * 180) / Math.PI,
+    surfaceOffset
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -76,7 +51,7 @@ const SEVERITY_COLORS: Record<string, string> = {
 /** Resolve outline color: severity level overrides the user-chosen color. */
 function resolveOutlineColor(config: AnnotationShapeConfig): string {
   return config.severityLevel
-    ? SEVERITY_COLORS[config.severityLevel] ?? config.color
+    ? (SEVERITY_COLORS[config.severityLevel] ?? config.color)
     : config.color;
 }
 
@@ -87,7 +62,7 @@ function resolveOutlineColor(config: AnnotationShapeConfig): string {
 export function createRectOutline(
   config: AnnotationShapeConfig,
   vesselState: VesselState,
-  surfaceOffset: number,
+  surfaceOffset: number
 ): THREE.LineLoop {
   const circumference = Math.PI * vesselState.id;
   const centerAngle = (config.angle * Math.PI) / 180;
@@ -143,7 +118,7 @@ export function createRectOutline(
 export function createRectFill(
   config: AnnotationShapeConfig,
   vesselState: VesselState,
-  surfaceOffset: number,
+  surfaceOffset: number
 ): THREE.Mesh {
   const circumference = Math.PI * vesselState.id;
   const centerAngle = (config.angle * Math.PI) / 180;
@@ -169,7 +144,7 @@ export function createRectFill(
         config.pos + posOffset,
         centerAngle + angOffset,
         vesselState,
-        surfaceOffset - 0.5,
+        surfaceOffset - 0.5
       );
       vertices.push(pt.x, pt.y, pt.z);
     }
@@ -213,7 +188,7 @@ export function createRectFill(
 export function createAnnotationShape(
   config: AnnotationShapeConfig,
   vesselState: VesselState,
-  isSelected: boolean,
+  isSelected: boolean
 ): THREE.Group {
   const group = new THREE.Group();
   const surfaceOffset = 3; // mm above shell (above textures at 2mm)
@@ -248,15 +223,17 @@ export function createAnnotationShape(
  * Compute the shell-surface distance between two points on the vessel,
  * following the surface path (not straight-line through air).
  */
-export function computeRulerDistance(
-  config: RulerConfig,
-  vesselState: VesselState,
-): number {
+export function computeRulerDistance(config: RulerConfig, vesselState: VesselState): number {
   const segments = 64;
   const surfaceOffset = 3;
   let totalDist = 0;
 
-  let prev = shellPoint(config.startPos, (config.startAngle * Math.PI) / 180, vesselState, surfaceOffset);
+  let prev = shellPoint(
+    config.startPos,
+    (config.startAngle * Math.PI) / 180,
+    vesselState,
+    surfaceOffset
+  );
   for (let i = 1; i <= segments; i++) {
     const t = i / segments;
     const pos = config.startPos + (config.endPos - config.startPos) * t;
@@ -273,10 +250,7 @@ export function computeRulerDistance(
 /**
  * Create a THREE.Group containing the ruler line with endpoint markers.
  */
-export function createRulerLine(
-  config: RulerConfig,
-  vesselState: VesselState,
-): THREE.Group {
+export function createRulerLine(config: RulerConfig, vesselState: VesselState): THREE.Group {
   const group = new THREE.Group();
   const surfaceOffset = 3;
   const segments = 64;
