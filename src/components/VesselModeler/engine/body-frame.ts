@@ -268,40 +268,23 @@ export function buildAppendageFrame(
 // Public resolver
 // ---------------------------------------------------------------------------
 
-/** Minimal shape read off state for appendage bodies (Phase 1 supplies the real type). */
-interface AppendageBodyLike extends AppendageFrameParams {
-  id: string;
-}
-
 /**
  * Resolve the SurfaceFrame for a body.
  *
  * `bodyId === undefined` returns the main-shell frame (the existing code path).
- * Otherwise the matching appendage is looked up on `state.appendages` (added in
- * Phase 1) and built via `buildAppendageFrame`. Phase 0 has no appendages yet,
- * so callers that need an appendage frame use `buildAppendageFrame` directly.
+ * Otherwise the matching appendage is looked up on `state.appendages` and built
+ * via `buildAppendageFrame`. `AppendageConfig` structurally satisfies
+ * `AppendageFrameParams`, so the config is passed straight through.
  */
 export function resolveBodyFrame(state: VesselState, bodyId?: string): SurfaceFrame {
   if (bodyId === undefined) {
     return buildMainFrame(state);
   }
 
-  const bodies = (state as VesselState & { appendages?: AppendageBodyLike[] }).appendages;
-  const body = bodies?.find((b) => b.id === bodyId);
+  const body = state.appendages.find((b) => b.id === bodyId);
   if (!body) {
     throw new Error(`resolveBodyFrame: no appendage body with id "${bodyId}"`);
   }
 
-  return buildAppendageFrame(
-    state,
-    {
-      mountPos: body.mountPos,
-      mountAngle: body.mountAngle,
-      diameter: body.diameter,
-      length: body.length,
-      endClosure: body.endClosure,
-      headRatio: body.headRatio,
-    },
-    body.id
-  );
+  return buildAppendageFrame(state, body, body.id);
 }

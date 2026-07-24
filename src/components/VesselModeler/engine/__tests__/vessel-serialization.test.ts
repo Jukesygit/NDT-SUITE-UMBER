@@ -234,6 +234,34 @@ function makeFixture(): VesselState {
         opacity: 1,
       },
     ],
+    appendages: [
+      {
+        id: 'app-1',
+        name: 'Sump',
+        mountPos: 4500,
+        mountAngle: 270,
+        diameter: 1000,
+        length: 1500,
+        endClosure: 'dished',
+        headRatio: 2.0,
+        flangeJoint: { show: true, od: 1200, thickness: 40 },
+        nominalThickness: 12,
+        visible: true,
+        locked: false,
+      },
+      {
+        id: 'app-2',
+        name: 'Boot',
+        mountPos: 2000,
+        mountAngle: 90,
+        diameter: 600,
+        length: 900,
+        endClosure: 'flat',
+        headRatio: 2.0,
+        visible: true,
+        locked: false,
+      },
+    ],
     pipelines: [
       {
         id: 'pipe-1',
@@ -294,6 +322,7 @@ describe('serializeVesselState / deserializeVesselState round-trip', () => {
         expect(restored.inspectionImages).toEqual(fixture.inspectionImages));
       it('preserves scanComposites', () =>
         expect(restored.scanComposites).toEqual(fixture.scanComposites));
+      it('preserves appendages', () => expect(restored.appendages).toEqual(fixture.appendages));
       it('preserves pipelines', () => expect(restored.pipelines).toEqual(fixture.pipelines));
       it('preserves referenceDrawings', () =>
         expect(restored.referenceDrawings).toEqual(fixture.referenceDrawings));
@@ -420,12 +449,23 @@ describe('legacy payload defaulting', () => {
     expect(restored.domeScanComposites).toEqual([]);
   });
 
+  it('loads appendages as [] on the local path', () => {
+    const restored = deserializeVesselState(legacy, { path: 'local', textures: [] });
+    expect(restored.appendages).toEqual([]);
+  });
+
+  it('loads appendages as [] on the cloud path', () => {
+    const restored = deserializeVesselState(legacy, { path: 'cloud', textures: [] });
+    expect(restored.appendages).toEqual([]);
+  });
+
   it('still hydrates other arrays and defaults from a sparse legacy payload', () => {
     const restored = deserializeVesselState(legacy, { path: 'local', textures: [] });
     expect(restored.nozzles).toHaveLength(1);
     expect(restored.nozzles[0].name).toBe('N1');
     expect(restored.coverageRects).toEqual([]);
     expect(restored.scanComposites).toEqual([]);
+    expect(restored.appendages).toEqual([]);
     expect(restored.hasModel).toBe(true);
   });
 });

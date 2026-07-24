@@ -17,6 +17,7 @@ import { resolveBodyFrame } from './body-frame';
 import { createFlangedNozzle, rotateNormalAboutVertical } from './nozzle-geometry';
 import { createLiftingLug } from './lifting-lug-geometry';
 import { createSaddleGroup } from './saddle-geometry';
+import { buildAppendageGroup } from './appendage-geometry';
 import { createScanCompositePlane } from './texture-manager';
 import { createDomeScanPlane } from './dome-scan-geometry';
 import { buildScanOrientationGizmo } from './scan-gizmo-geometry';
@@ -31,6 +32,7 @@ export interface BuildSceneResult {
   nozzleMeshes: THREE.Object3D[];
   lugMeshes: THREE.Object3D[];
   saddleMeshes: THREE.Object3D[];
+  appendageMeshes: THREE.Object3D[];
   textureMeshes: THREE.Mesh[];
   scanCompositeMeshes: THREE.Mesh[];
   domeScanMeshes: THREE.Mesh[];
@@ -345,6 +347,7 @@ export function buildVesselScene(
   const nozzleMeshes: THREE.Object3D[] = [];
   const lugMeshes: THREE.Object3D[] = [];
   const saddleMeshes: THREE.Object3D[] = [];
+  const appendageMeshes: THREE.Object3D[] = [];
   const textureMeshes: THREE.Mesh[] = [];
   const scanCompositeMeshes: THREE.Mesh[] = [];
   const domeScanMeshes: THREE.Mesh[] = [];
@@ -357,6 +360,7 @@ export function buildVesselScene(
       nozzleMeshes,
       lugMeshes,
       saddleMeshes,
+      appendageMeshes,
       textureMeshes,
       scanCompositeMeshes,
       domeScanMeshes,
@@ -649,6 +653,15 @@ export function buildVesselScene(
     });
   }
 
+  // -- Appendage bodies (sumps / boots / risers) ----------------------------
+  // Each appendage is a self-contained group placed via its own SurfaceFrame
+  // (see appendage-geometry.ts). bodyId === undefined attachables are unaffected.
+  for (const appendage of state.appendages) {
+    const appendageGroup = buildAppendageGroup(appendage, state, shellMaterial);
+    vesselGroup.add(appendageGroup);
+    appendageMeshes.push(appendageGroup);
+  }
+
   // -- Textures / Decals ----------------------------------------------------
   state.textures.forEach((tex) => {
     const threeTexture = textureObjects[Number(tex.id)];
@@ -718,6 +731,7 @@ export function buildVesselScene(
     nozzleMeshes,
     lugMeshes,
     saddleMeshes,
+    appendageMeshes,
     textureMeshes,
     scanCompositeMeshes,
     domeScanMeshes,

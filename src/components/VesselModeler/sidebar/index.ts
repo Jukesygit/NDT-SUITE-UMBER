@@ -3,6 +3,7 @@ export { ProjectInfoSection } from './ProjectInfoSection';
 export { DimensionsSection } from './DimensionsSection';
 export { VisualsSection } from './VisualsSection';
 export { NozzleSection } from './NozzleSection';
+export { AppendageSection } from './AppendageSection';
 export { LiftingLugSection } from './LiftingLugSection';
 export { WeldSection } from './WeldSection';
 export { SaddleSection } from './SaddleSection';

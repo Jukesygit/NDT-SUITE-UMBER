@@ -18,6 +18,7 @@ import { DEFAULT_VESSEL_STATE, type VesselState } from '../types';
 import { deserializeNozzle } from './nozzle-geometry';
 import { deserializeSaddle } from './saddle-geometry';
 import { normalizeDomeScanComposite } from './dome-scan-geometry';
+import { normalizeAppendage } from './appendage-config';
 import {
   type FieldSpec,
   type RawItem,
@@ -33,6 +34,7 @@ import {
   INSPECTION_IMAGE_SPEC,
   SCAN_COMPOSITE_SPEC,
   DOME_SCAN_SPEC,
+  APPENDAGE_SPEC,
 } from './vessel-serialization-spec';
 
 // Re-export the path discriminator so callers depend only on this entry point.
@@ -163,6 +165,7 @@ export function serializeVesselState(
     domeScanComposites: state.domeScanComposites.map((ds) =>
       serializeItem(ds, DOME_SCAN_SPEC, path)
     ),
+    appendages: state.appendages.map((a) => serializeItem(a, APPENDAGE_SPEC, path)),
   };
 
   return {
@@ -252,6 +255,7 @@ export function deserializeVesselState(
       deserializeItem(sc, SCAN_COMPOSITE_SPEC, path)
     ) as unknown as VesselState['scanComposites'],
     domeScanComposites: asArray(raw.domeScanComposites).map(normalizeDomeScanComposite),
+    appendages: asArray(raw.appendages).map(normalizeAppendage),
     pipelines: asArray(raw.pipelines).map(
       deserializePipeline
     ) as unknown as VesselState['pipelines'],

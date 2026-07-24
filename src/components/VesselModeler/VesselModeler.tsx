@@ -37,6 +37,7 @@ import {
   DEFAULT_VESSEL_STATE,
   type VesselState,
   type NozzleConfig,
+  type AppendageConfig,
   type SaddleConfig,
   type TextureConfig,
   type LiftingLugConfig,
@@ -158,6 +159,7 @@ function validateVesselState(state: VesselState): VesselState {
 
 interface SelectionState {
   nozzleIndex: number;
+  appendageIndex: number;
   saddleIndex: number;
   textureId: number;
   lugIndex: number;
@@ -228,6 +230,7 @@ interface VesselModelerState {
 
 const DESELECTED: SelectionState = {
   nozzleIndex: -1,
+  appendageIndex: -1,
   saddleIndex: -1,
   textureId: -1,
   lugIndex: -1,
@@ -277,6 +280,7 @@ type VesselAction =
   | { type: 'SET_VESSEL'; vessel: VesselState }
   | { type: 'UPDATE_VESSEL_FN'; updater: (prev: VesselState) => VesselState }
   | { type: 'SELECT_NOZZLE'; index: number }
+  | { type: 'SELECT_APPENDAGE'; index: number }
   | { type: 'SELECT_SADDLE'; index: number }
   | { type: 'SELECT_TEXTURE'; id: number }
   | { type: 'SELECT_LUG'; index: number }
@@ -331,6 +335,8 @@ function vesselReducer(state: VesselModelerState, action: VesselAction): VesselM
       return { ...state, vessel: action.updater(state.vessel) };
     case 'SELECT_NOZZLE':
       return { ...state, selection: { ...DESELECTED, nozzleIndex: action.index } };
+    case 'SELECT_APPENDAGE':
+      return { ...state, selection: { ...DESELECTED, appendageIndex: action.index } };
     case 'SELECT_SADDLE':
       return { ...state, selection: { ...DESELECTED, saddleIndex: action.index } };
     case 'SELECT_TEXTURE':
@@ -834,6 +840,40 @@ export default function VesselModeler() {
           .map((p) => (p.nozzleIndex > index ? { ...p, nozzleIndex: p.nozzleIndex - 1 } : p)),
       }));
       dispatch({ type: 'SELECT_NOZZLE', index: -1 });
+    },
+    [updateVessel]
+  );
+
+  // --- Appendage handlers ---
+  const addAppendage = useCallback(
+    (appendage: AppendageConfig) => {
+      updateVessel((prev) => ({
+        ...prev,
+        appendages: [...prev.appendages, appendage],
+        hasModel: true,
+      }));
+    },
+    [updateVessel]
+  );
+
+  const updateAppendage = useCallback(
+    (index: number, updates: Partial<AppendageConfig>) => {
+      updateVessel((prev) => ({
+        ...prev,
+        appendages: prev.appendages.map((a, i) => (i === index ? { ...a, ...updates } : a)),
+      }));
+    },
+    [updateVessel]
+  );
+
+  const removeAppendage = useCallback(
+    (index: number) => {
+      // Phase 2: cascade/guard attachables referencing this bodyId
+      updateVessel((prev) => ({
+        ...prev,
+        appendages: prev.appendages.filter((_, i) => i !== index),
+      }));
+      dispatch({ type: 'SELECT_APPENDAGE', index: -1 });
     },
     [updateVessel]
   );
@@ -1758,6 +1798,13 @@ export default function VesselModeler() {
   // --- Interaction callbacks (from Three.js viewport) ---
   const vesselCallbacks: VesselCallbacks = {
     onNozzleSelected: (idx) => dispatch({ type: 'SELECT_NOZZLE', index: idx }),
+    onAppendageSelected: (idx) => dispatch({ type: 'SELECT_APPENDAGE', index: idx }),
+    onAppendageMoved: (idx, mountPos, mountAngle) => {
+      updateAppendage(idx, {
+        mountPos: Math.round(mountPos),
+        mountAngle: Math.round(mountAngle),
+      });
+    },
     onSaddleSelected: (idx) => dispatch({ type: 'SELECT_SADDLE', index: idx }),
     onTextureSelected: (id) => dispatch({ type: 'SELECT_TEXTURE', id }),
     onLugSelected: (idx) => dispatch({ type: 'SELECT_LUG', index: idx }),
@@ -3240,6 +3287,11 @@ export default function VesselModeler() {
             onUpdateNozzle={updateNozzle}
             onRemoveNozzle={removeNozzle}
             onSelectNozzle={(index) => dispatch({ type: 'SELECT_NOZZLE', index })}
+            selectedAppendageIndex={selection.appendageIndex}
+            onAddAppendage={addAppendage}
+            onUpdateAppendage={updateAppendage}
+            onRemoveAppendage={removeAppendage}
+            onSelectAppendage={(index) => dispatch({ type: 'SELECT_APPENDAGE', index })}
             selectedLugIndex={selection.lugIndex}
             onAddLug={addLug}
             onUpdateLug={updateLug}

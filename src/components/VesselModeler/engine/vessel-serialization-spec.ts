@@ -267,3 +267,23 @@ export const DOME_SCAN_SPEC: FieldSpec[] = [
   { key: 'sourceFiles' },
   { key: 'sectionType', saveOn: 'cloud', save: { compute: (ds) => `dome_${String(ds.head)}` } },
 ];
+
+// ---------------------------------------------------------------------------
+// Appendage bodies — save: passthrough field list; load: normalizeAppendage()
+// (the single appendage defaulting point, mirroring domeScanComposites). No
+// heavy data to strip, so every field passes straight through on save.
+// ---------------------------------------------------------------------------
+export const APPENDAGE_SPEC: FieldSpec[] = [
+  { key: 'id' },
+  { key: 'name' },
+  { key: 'mountPos' },
+  { key: 'mountAngle' },
+  { key: 'diameter' },
+  { key: 'length' },
+  { key: 'endClosure' },
+  { key: 'headRatio' },
+  { key: 'flangeJoint' },
+  { key: 'nominalThickness' },
+  { key: 'visible' },
+  { key: 'locked' },
+];
