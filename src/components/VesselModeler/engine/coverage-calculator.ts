@@ -177,6 +177,57 @@ export function validAreaFromGrid(
   return validPoints * cellArea;
 }
 
+/**
+ * Valid scanned area of a composite in mm². Prefers the persisted
+ * `stats.validArea` (already computed) and falls back to recomputing from the
+ * data grid when it is missing/non-positive — the same pattern Scan Coverage
+ * uses so dome/appendage scans that never carried validArea still register.
+ */
+export function compositeValidArea(c: {
+  stats: { validArea?: number };
+  data: (number | null)[][];
+  xAxis: number[];
+  yAxis: number[];
+}): number {
+  const persisted = c.stats.validArea;
+  if (typeof persisted === 'number' && persisted > 0) return persisted;
+  return validAreaFromGrid(c.data, c.xAxis, c.yAxis);
+}
+
+/** Per-appendage coverage totals (design §9). */
+export interface AppendageCoverageTotals {
+  appendageId: string;
+  name: string;
+  /** Coverable lateral cylinder area in mm² (2πr·L). No end-closure area and no
+   *  cutout on the appendage side in v1 (design §9.2). */
+  totalMm2: number;
+  /** Achieved scanned area in mm² — Σ validArea of this body's scan composites. */
+  achievedMm2: number;
+}
+
+/**
+ * Per-body coverage wrapper: for every appendage, its coverable lateral area and
+ * the achieved area from scans mounted on that body (design §9). The main shell
+ * keeps flowing through {@link computeRegionTotalAreas} / {@link computeCoverage}.
+ *
+ * Dimensions come straight from `AppendageConfig` (radius = diameter/2, length),
+ * which are exactly `resolveBodyFrame(state, id)`'s `radius` / `axialLength`; read
+ * as scalars here so this pure module stays free of the THREE-backed frame.
+ */
+export function computeAppendageCoverageTotals(vesselState: VesselState): AppendageCoverageTotals[] {
+  const appendages = vesselState.appendages ?? [];
+  return appendages.map((a) => {
+    const radius = a.diameter / 2;
+    const totalMm2 = 2 * Math.PI * radius * a.length;
+    let achievedMm2 = 0;
+    for (const sc of vesselState.scanComposites) {
+      if (sc.bodyId !== a.id) continue;
+      achievedMm2 += compositeValidArea(sc);
+    }
+    return { appendageId: a.id, name: a.name, totalMm2, achievedMm2 };
+  });
+}
+
 export function computeRegionTotalAreas(vesselState: VesselState): { leftHead: number; cylinder: number; rightHead: number } {
   const R = vesselState.id / 2;
   const D = vesselState.id / (2 * vesselState.headRatio);

@@ -593,6 +593,10 @@ export interface CoverageTargets {
   leftHead: CoverageTargetEntry;
   cylinder: CoverageTargetEntry;
   rightHead: CoverageTargetEntry;
+  /** Per-appendage coverage targets, keyed by AppendageConfig.id. Additive
+   *  (design §9): legacy JSON without this key loads unchanged via the consumer's
+   *  `?? DEFAULT_TARGETS` defaulting. */
+  appendages?: Record<string, CoverageTargetEntry>;
 }
 
 // ---------------------------------------------------------------------------

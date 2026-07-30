@@ -72,6 +72,32 @@ export interface FootprintParamsSlim {
   diameter: number;
 }
 
+/**
+ * One appendage body for the per-body distribution (design §9.3, §16). The MAIN
+ * shell stays described by the flat `WallLossRequest` fields (byte-identical to
+ * the pre-appendage path); each appendage cylinder is its own body here, carrying
+ * only its own scans + geometry. Appendages have no dome scans and no footprints
+ * in v1 (design §9.2). Its scans are pre-grouped by bodyId, so the occlusion
+ * sweep — which only ever looks within the body's own composite list — can never
+ * let a main-shell scan occlude an appendage cell (or vice versa).
+ */
+export interface WallLossBodyInput {
+  /** Appendage id (mirrors AppendageConfig.id). */
+  bodyId: string;
+  /** Display name for the per-body selector. */
+  name: string;
+  /** Scans mounted on this appendage (bodyId === this.bodyId). */
+  composites: CompositeSlim[];
+  /** Appendage inner diameter in mm. */
+  vesselId: number;
+  /** Appendage cylinder length in mm (tan-tan for the body). */
+  vesselLength: number;
+  /** Appendage head ratio (for headDepth; v1 appendage scans stay on the cylinder). */
+  headRatio: number;
+  /** Appendage nominal wall thickness in mm (defaults to shell NWT upstream). */
+  nominalThickness: number;
+}
+
 export interface WallLossRequest {
   id: number;
   composites: CompositeSlim[];
@@ -83,6 +109,12 @@ export interface WallLossRequest {
    * Absent/empty → no cutout → byte-identical to the pre-appendage behaviour.
    */
   footprints?: FootprintParamsSlim[];
+  /**
+   * Appendage bodies (design §9.3). The flat fields below describe the MAIN
+   * shell; each entry here is an appendage cylinder with its own scans/geometry.
+   * Absent/empty → one body (main) → byte-identical to the pre-appendage path.
+   */
+  bodies?: WallLossBodyInput[];
   vesselId: number;
   vesselLength: number;
   headRatio: number;
@@ -106,8 +138,30 @@ export interface BinResult {
   label?: string;
 }
 
+/**
+ * One body's wall-loss distribution. `bins` share the request's bin template
+ * (identical boundaries) so they merge index-for-index into the combined result.
+ * `bodyId === undefined` is the main shell.
+ */
+export interface WallLossBodyResult {
+  bodyId?: string;
+  /** Display name for the selector; undefined for the main shell. */
+  name?: string;
+  bins: BinResult[];
+  totalScannedArea: number;
+  totalDataPoints: number;
+  spuriousArea: number;
+  spuriousCount: number;
+  spuriousAreaPercent: number;
+}
+
 export interface WallLossResponse {
   id: number;
+  /**
+   * Combined distribution (design §16 default view) — the per-body bins summed
+   * index-for-index. For a main-only model this equals the single body's result,
+   * byte-identical to the pre-appendage behaviour.
+   */
   bins: BinResult[];
   totalScannedArea: number;
   totalDataPoints: number;
@@ -116,6 +170,8 @@ export interface WallLossResponse {
   spuriousArea: number;
   spuriousCount: number;
   spuriousAreaPercent: number;
+  /** Per-body breakdown for the selector; main shell first, then appendages. */
+  bodies: WallLossBodyResult[];
 }
 
 // ---------------------------------------------------------------------------
@@ -381,51 +437,61 @@ function assignBin(
 // Main computation
 // ---------------------------------------------------------------------------
 
-export function compute(req: WallLossRequest): WallLossResponse {
-  const t0 = performance.now();
+/** Build the shared bin template for a request (boundaries only; areas zeroed). */
+function buildBinTemplate(
+  mode: BinMode,
+  shellNwt: number,
+  ca: number,
+  customBoundaries: number[] | undefined,
+  binCount: number,
+): BinResult[] {
+  if (mode === 'ca-based') return buildCABins(shellNwt, ca);
+  if (mode === 'custom' && customBoundaries && customBoundaries.length >= 2) {
+    return buildCustomBins(customBoundaries);
+  }
+  return buildEqualBins(binCount);
+}
+
+/** Fresh zeroed copy of a bin template so each body accumulates independently. */
+function cloneBins(bins: BinResult[]): BinResult[] {
+  return bins.map((b) => ({ ...b, area: 0, areaPercent: 0, count: 0 }));
+}
+
+/**
+ * All parameters `computeBodyDistribution` needs for ONE body. Composites are
+ * pre-filtered to confirmed and pre-grouped by body — that grouping is exactly
+ * what scopes occlusion: `higherComps` is sliced from this body's own list, so a
+ * main-shell scan can never occlude an appendage cell (design §9.3).
+ */
+interface BodyComputeInput {
+  bodyId?: string;
+  name?: string;
+  shellComposites: CompositeSlim[];
+  domeComposites: DomeCompositeSlim[];
+  footprints: ReturnType<typeof buildJunctionFootprint>[];
+  radius: number;
+  headDepth: number;
+  tanTan: number;
+  circumference: number;
+  shellNwt: number;
+  domeNwt: number;
+  mode: BinMode;
+  /** Fresh (already cloned) bins this body accumulates into. */
+  bins: BinResult[];
+  binCount: number;
+  binWidth: number;
+}
+
+/**
+ * Wall-loss distribution for a single body. Line-for-line the same shell + dome
+ * loops as the pre-appendage `compute`, parameterised by body geometry — so the
+ * main shell (called with the flat request fields) stays byte-identical.
+ */
+function computeBodyDistribution(input: BodyComputeInput): WallLossBodyResult {
   const {
-    composites, domeComposites, footprints: footprintParams, vesselId, vesselLength, headRatio,
-    nominalThickness, binCount, binMode, customBoundaries,
-    corrosionAllowance, shellNominalThickness, domeNominalThickness,
-  } = req;
-
-  const mode = binMode || 'equal';
-  const ca = corrosionAllowance ?? 0;
-  const shellNwt = shellNominalThickness ?? nominalThickness;
-  const domeNwt = domeNominalThickness ?? shellNwt;
-
-  let bins: BinResult[];
-  if (mode === 'ca-based') {
-    bins = buildCABins(shellNwt, ca);
-  } else if (mode === 'custom' && customBoundaries && customBoundaries.length >= 2) {
-    bins = buildCustomBins(customBoundaries);
-  } else {
-    bins = buildEqualBins(binCount);
-  }
-
-  const binWidth = mode === 'equal' ? 100 / binCount : 0;
-
-  const confirmed = composites.filter(c => c.orientationConfirmed);
-  const domeConfirmed = (domeComposites ?? []).filter(d => d.orientationConfirmed);
-
-  if ((confirmed.length === 0 && domeConfirmed.length === 0) || nominalThickness <= 0) {
-    return {
-      id: req.id, bins,
-      totalScannedArea: 0, totalDataPoints: 0, nominalThickness,
-      computeMs: performance.now() - t0,
-      spuriousArea: 0, spuriousCount: 0, spuriousAreaPercent: 0,
-    };
-  }
-
-  const radius = vesselId / 2;
-  const headDepth = vesselId / (2 * headRatio);
-  const tanTan = vesselLength;
-  const circumference = Math.PI * vesselId;
-
-  // Appendage cutout predicates, rebuilt from serialisable params via the shared
-  // buildJunctionFootprint (design §9.4). Empty when there are no appendages, so
-  // the loops below are byte-identical to the pre-appendage path.
-  const footprints = (footprintParams ?? []).map((f) => buildJunctionFootprint(radius, f));
+    bodyId, name, shellComposites: confirmed, domeComposites: domeConfirmed, footprints,
+    radius, headDepth, tanTan, circumference, shellNwt, domeNwt, mode, bins, binCount, binWidth,
+  } = input;
 
   let totalArea = 0;
   let totalPoints = 0;
@@ -438,6 +504,8 @@ export function compute(req: WallLossRequest): WallLossResponse {
     const { data } = comp;
     if (data.length < 2 || data[0].length < 2) continue;
 
+    // Occlusion is scoped to THIS body: higherComps comes from this body's own
+    // composite list, so a scan on another body is never considered here.
     const higherComps = confirmed.slice(ci + 1);
 
     for (let row = 0; row < data.length - 1; row++) {
@@ -536,8 +604,133 @@ export function compute(req: WallLossRequest): WallLossResponse {
   const spuriousAreaPercent = totalArea > 0 ? (spuriousArea / totalArea) * 100 : 0;
 
   return {
-    id: req.id,
+    bodyId,
+    name,
     bins,
+    totalScannedArea: totalArea,
+    totalDataPoints: totalPoints,
+    spuriousArea,
+    spuriousCount,
+    spuriousAreaPercent,
+  };
+}
+
+export function compute(req: WallLossRequest): WallLossResponse {
+  const t0 = performance.now();
+  const {
+    composites, domeComposites, footprints: footprintParams, bodies: appendageBodies,
+    vesselId, vesselLength, headRatio,
+    nominalThickness, binCount, binMode, customBoundaries,
+    corrosionAllowance, shellNominalThickness, domeNominalThickness,
+  } = req;
+
+  const mode = binMode || 'equal';
+  const ca = corrosionAllowance ?? 0;
+  const shellNwt = shellNominalThickness ?? nominalThickness;
+  const domeNwt = domeNominalThickness ?? shellNwt;
+
+  // One shared bin template — identical boundaries across every body so the
+  // per-body bins merge index-for-index into the combined result (design §16).
+  const template = buildBinTemplate(mode, shellNwt, ca, customBoundaries, binCount);
+  const binWidth = mode === 'equal' ? 100 / binCount : 0;
+
+  const mainConfirmed = composites.filter((c) => c.orientationConfirmed);
+  const domeConfirmed = (domeComposites ?? []).filter((d) => d.orientationConfirmed);
+  const appBodies = (appendageBodies ?? []).map((b) => ({
+    ...b,
+    confirmed: b.composites.filter((c) => c.orientationConfirmed),
+  }));
+
+  const anyScans =
+    mainConfirmed.length > 0 ||
+    domeConfirmed.length > 0 ||
+    appBodies.some((b) => b.confirmed.length > 0);
+
+  if (!anyScans || nominalThickness <= 0) {
+    return {
+      id: req.id, bins: template,
+      totalScannedArea: 0, totalDataPoints: 0, nominalThickness,
+      computeMs: performance.now() - t0,
+      spuriousArea: 0, spuriousCount: 0, spuriousAreaPercent: 0,
+      bodies: [],
+    };
+  }
+
+  const bodyResults: WallLossBodyResult[] = [];
+
+  // --- Main shell (flat request fields; footprints + dome scans live here) ---
+  const mainRadius = vesselId / 2;
+  bodyResults.push(
+    computeBodyDistribution({
+      bodyId: undefined,
+      name: undefined,
+      shellComposites: mainConfirmed,
+      domeComposites: domeConfirmed,
+      footprints: (footprintParams ?? []).map((f) => buildJunctionFootprint(mainRadius, f)),
+      radius: mainRadius,
+      headDepth: vesselId / (2 * headRatio),
+      tanTan: vesselLength,
+      circumference: Math.PI * vesselId,
+      shellNwt,
+      domeNwt,
+      mode,
+      bins: cloneBins(template),
+      binCount,
+      binWidth,
+    })
+  );
+
+  // --- Appendage bodies: own cylinder geometry, own scans, no dome/footprints
+  //     (design §9.2). Each body's own scan list scopes occlusion. ---
+  for (const b of appBodies) {
+    bodyResults.push(
+      computeBodyDistribution({
+        bodyId: b.bodyId,
+        name: b.name,
+        shellComposites: b.confirmed,
+        domeComposites: [],
+        footprints: [],
+        radius: b.vesselId / 2,
+        headDepth: b.vesselId / (2 * b.headRatio),
+        tanTan: b.vesselLength,
+        circumference: Math.PI * b.vesselId,
+        shellNwt: b.nominalThickness,
+        domeNwt: b.nominalThickness,
+        mode,
+        bins: cloneBins(template),
+        binCount,
+        binWidth,
+      })
+    );
+  }
+
+  // --- Combined = per-body bins summed index-for-index (design §16 default). A
+  //     main-only model has one body, so combined === main (byte-identical). ---
+  const combinedBins = cloneBins(template);
+  let totalArea = 0;
+  let totalPoints = 0;
+  let spuriousArea = 0;
+  let spuriousCount = 0;
+  for (const body of bodyResults) {
+    for (let i = 0; i < combinedBins.length; i++) {
+      combinedBins[i].area += body.bins[i].area;
+      combinedBins[i].count += body.bins[i].count;
+    }
+    totalArea += body.totalScannedArea;
+    totalPoints += body.totalDataPoints;
+    spuriousArea += body.spuriousArea;
+    spuriousCount += body.spuriousCount;
+  }
+  if (totalArea > 0) {
+    for (const bin of combinedBins) {
+      bin.areaPercent = (bin.area / totalArea) * 100;
+    }
+  }
+  const spuriousAreaPercent = totalArea > 0 ? (spuriousArea / totalArea) * 100 : 0;
+
+  return {
+    id: req.id,
+    bins: combinedBins,
     totalScannedArea: totalArea,
     totalDataPoints: totalPoints,
     nominalThickness,
@@ -545,5 +738,6 @@ export function compute(req: WallLossRequest): WallLossResponse {
     spuriousArea,
     spuriousCount,
     spuriousAreaPercent,
+    bodies: bodyResults,
   };
 }

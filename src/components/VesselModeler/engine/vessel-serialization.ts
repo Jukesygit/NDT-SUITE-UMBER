@@ -200,6 +200,10 @@ export function serializeVesselState(
     annotationTablePosition: state.annotationTablePosition,
     annotationTableSize: state.annotationTableSize,
     wallLossGroups: state.wallLossGroups,
+    // Coverage targets round-trip as an opaque object on both paths (plain data,
+    // no functions). The nested `appendages` map therefore survives automatically.
+    // undefined for legacy models → dropped by JSON → shape unchanged.
+    coverageTargets: state.coverageTargets,
     visuals: { ...state.visuals },
   };
 }
@@ -285,6 +289,10 @@ export function deserializeVesselState(
       ...((raw.visuals ?? {}) as Partial<VesselState['visuals']>),
     },
     wallLossGroups: raw.wallLossGroups as VesselState['wallLossGroups'],
+    // Coverage targets restore as an opaque object (undefined for legacy models;
+    // the consumer defaults via `?? DEFAULT_TARGETS`). The nested `appendages`
+    // map round-trips with it.
+    coverageTargets: raw.coverageTargets as VesselState['coverageTargets'],
   };
 
   // The cloud load mapper (applyModelConfig) restored these three; the local

@@ -525,6 +525,64 @@ describe('scan composite bodyId (appendage mount)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Coverage targets — the extended CoverageTargets (base regions + per-appendage
+// map) must survive save -> load on BOTH paths. Legacy JSON without the key
+// loads as undefined (the consumer defaults via ?? DEFAULT_TARGETS).
+// ---------------------------------------------------------------------------
+
+describe('coverageTargets round-trip (incl. appendage targets)', () => {
+  function makeTargetsFixture(): VesselState {
+    const fixture = makeFixture();
+    fixture.coverageTargets = {
+      leftHead: { rbaPct: 10, scopedPct: 20 },
+      cylinder: { rbaPct: 30, scopedPct: 40 },
+      rightHead: { rbaPct: 5, scopedPct: 15 },
+      appendages: {
+        'app-1': { rbaPct: 50, scopedPct: 60 },
+        'app-2': { rbaPct: 70, scopedPct: 80 },
+      },
+    };
+    return fixture;
+  }
+
+  for (const path of ['local', 'cloud'] as const) {
+    it(`round-trips coverageTargets including the appendage map on the ${path} path`, () => {
+      const fixture = makeTargetsFixture();
+      const restored = roundTrip(fixture, path);
+      expect(restored.coverageTargets).toEqual(fixture.coverageTargets);
+      // The nested appendage entries specifically survive the JSON boundary.
+      expect(restored.coverageTargets?.appendages?.['app-1']).toEqual({ rbaPct: 50, scopedPct: 60 });
+      expect(restored.coverageTargets?.appendages?.['app-2']).toEqual({ rbaPct: 70, scopedPct: 80 });
+    });
+  }
+
+  it('serializes coverageTargets on both paths', () => {
+    const fixture = makeTargetsFixture();
+    for (const path of ['local', 'cloud'] as const) {
+      const out = serializeVesselState(fixture, { path, modelType: 'blank' }) as {
+        coverageTargets?: unknown;
+      };
+      expect(out.coverageTargets).toBeDefined();
+    }
+  });
+
+  it('loads a legacy payload with no coverageTargets key as undefined (defaults downstream)', () => {
+    const legacy = {
+      version: 1,
+      vessel: { id: 3000, length: 8000, headRatio: 2.0, orientation: 'horizontal' },
+    };
+    expect(deserializeVesselState(legacy, { path: 'local', textures: [] }).coverageTargets).toBeUndefined();
+    expect(deserializeVesselState(legacy, { path: 'cloud', textures: [] }).coverageTargets).toBeUndefined();
+  });
+
+  it('a model without coverageTargets omits the key from the serialized JSON (shape unchanged)', () => {
+    const fixture = makeFixture(); // no coverageTargets set
+    const local = JSON.parse(JSON.stringify(serializeVesselState(fixture, { path: 'local' })));
+    expect(local).not.toHaveProperty('coverageTargets');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Legacy payloads — no domeScanComposites key must load as [] (not undefined).
 // ---------------------------------------------------------------------------
 

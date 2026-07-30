@@ -1,25 +1,11 @@
 import { useMemo, useState, useCallback, type KeyboardEvent } from 'react';
 import type { VesselState, CoverageTargets, CoverageTargetEntry } from '../types';
-import { computeRegionTotalAreas, validAreaFromGrid } from '../engine/coverage-calculator';
+import {
+  computeRegionTotalAreas,
+  compositeValidArea,
+  computeAppendageCoverageTotals,
+} from '../engine/coverage-calculator';
 import { cardinalForHead } from '../engine/cardinal-directions';
-
-/**
- * Valid scanned area for a composite in mm². Prefers the persisted
- * stats.validArea (cheap, already computed) but falls back to recomputing
- * from the data grid when it is missing or non-positive — without this,
- * dome scans whose stats never carried validArea contribute 0 to achieved
- * coverage even though they have data.
- */
-function compositeValidArea(c: {
-  stats: { validArea?: number };
-  data: (number | null)[][];
-  xAxis: number[];
-  yAxis: number[];
-}): number {
-  const persisted = c.stats.validArea;
-  if (typeof persisted === 'number' && persisted > 0) return persisted;
-  return validAreaFromGrid(c.data, c.xAxis, c.yAxis);
-}
 
 interface ScanCoverageStatsSectionProps {
   vesselState: VesselState;
@@ -103,6 +89,40 @@ function StatCell({ pct, area, isAchieved }: { pct: string; area: string; isAchi
   );
 }
 
+/** A single editable RBA / Scoped / Achieved row (shared by shell + appendage rows). */
+function TargetRow({
+  label,
+  totalMm2,
+  achievedMm2,
+  entry,
+  onUpdate,
+}: {
+  label: string;
+  totalMm2: number;
+  achievedMm2: number;
+  entry: CoverageTargetEntry;
+  onUpdate: (field: TargetField, value: number) => void;
+}) {
+  const rbaSqm = (entry.rbaPct / 100) * totalMm2;
+  const scopedSqm = (entry.scopedPct / 100) * totalMm2;
+  const achievedPct = totalMm2 > 0 ? (achievedMm2 / totalMm2) * 100 : 0;
+
+  return (
+    <div className="vm-scancov-row">
+      <span className="vm-scancov-section-col">{label}</span>
+      <div className="vm-scancov-cell">
+        <InlineEdit value={entry.rbaPct} onCommit={(v) => onUpdate('rbaPct', v)} />
+        <span className="vm-scancov-cell-area">{formatArea(rbaSqm)} m²</span>
+      </div>
+      <div className="vm-scancov-cell">
+        <InlineEdit value={entry.scopedPct} onCommit={(v) => onUpdate('scopedPct', v)} />
+        <span className="vm-scancov-cell-area">{formatArea(scopedSqm)} m²</span>
+      </div>
+      <StatCell pct={`${formatPct(achievedPct)}%`} area={formatArea(achievedMm2)} isAchieved />
+    </div>
+  );
+}
+
 export default function ScanCoverageStatsSection({
   vesselState,
   onUpdateTargets,
@@ -111,15 +131,25 @@ export default function ScanCoverageStatsSection({
   const isPipe = vesselState.vesselShape === 'pipe';
   const isVertical = vesselState.orientation === 'vertical';
 
+  // Cutout-adjusted region areas — recompute when appendages change (the footprint
+  // subtraction depends on the appendage set), not just on vessel dimensions.
   const regionAreas = useMemo(
     () => computeRegionTotalAreas(vesselState),
-    [vesselState.id, vesselState.length, vesselState.headRatio]
+    [vesselState.id, vesselState.length, vesselState.headRatio, vesselState.appendages]
+  );
+
+  // Per-appendage coverable + achieved areas (design §9). Recompute when the
+  // appendage set or any scan changes so rows appear/update live.
+  const appendageTotals = useMemo(
+    () => computeAppendageCoverageTotals(vesselState),
+    [vesselState.appendages, vesselState.scanComposites]
   );
 
   const achievedMm2 = useMemo(() => {
     const result = { leftHead: 0, cylinder: 0, rightHead: 0 };
     for (const sc of vesselState.scanComposites) {
-      // Phase 3: appendage-body scans get per-body stats; excluded here so numbers stay correct in the interim (design §9).
+      // Appendage scans are surfaced in the per-appendage rows below (via
+      // appendageTotals), not folded into the main shell.
       if (sc.bodyId) continue;
       result.cylinder += compositeValidArea(sc);
     }
@@ -136,6 +166,19 @@ export default function ScanCoverageStatsSection({
       const updated: CoverageTargets = {
         ...targets,
         [section]: { ...targets[section], [field]: value },
+      };
+      onUpdateTargets(updated);
+    },
+    [targets, onUpdateTargets]
+  );
+
+  const handleUpdateAppendage = useCallback(
+    (appId: string, field: TargetField, value: number) => {
+      const prevAppendages = targets.appendages ?? {};
+      const entry = prevAppendages[appId] ?? DEFAULT_ENTRY;
+      const updated: CoverageTargets = {
+        ...targets,
+        appendages: { ...prevAppendages, [appId]: { ...entry, [field]: value } },
       };
       onUpdateTargets(updated);
     },
@@ -160,16 +203,31 @@ export default function ScanCoverageStatsSection({
 
   const visibleSections = sections.filter((s) => s.show);
 
-  const totalArea = visibleSections.reduce((sum, s) => sum + regionAreas[s.key], 0);
-  const totalRba = visibleSections.reduce(
-    (sum, s) => sum + ((targets[s.key]?.rbaPct ?? 0) / 100) * regionAreas[s.key],
-    0
-  );
-  const totalScoped = visibleSections.reduce(
-    (sum, s) => sum + ((targets[s.key]?.scopedPct ?? 0) / 100) * regionAreas[s.key],
-    0
-  );
-  const totalAchieved = visibleSections.reduce((sum, s) => sum + achievedMm2[s.key], 0);
+  // Totals span the main shell sections AND every appendage body.
+  const appendageTargetFor = (id: string): CoverageTargetEntry =>
+    targets.appendages?.[id] ?? DEFAULT_ENTRY;
+
+  const totalArea =
+    visibleSections.reduce((sum, s) => sum + regionAreas[s.key], 0) +
+    appendageTotals.reduce((sum, a) => sum + a.totalMm2, 0);
+  const totalRba =
+    visibleSections.reduce(
+      (sum, s) => sum + ((targets[s.key]?.rbaPct ?? 0) / 100) * regionAreas[s.key],
+      0
+    ) +
+    appendageTotals.reduce((sum, a) => sum + (appendageTargetFor(a.appendageId).rbaPct / 100) * a.totalMm2, 0);
+  const totalScoped =
+    visibleSections.reduce(
+      (sum, s) => sum + ((targets[s.key]?.scopedPct ?? 0) / 100) * regionAreas[s.key],
+      0
+    ) +
+    appendageTotals.reduce(
+      (sum, a) => sum + (appendageTargetFor(a.appendageId).scopedPct / 100) * a.totalMm2,
+      0
+    );
+  const totalAchieved =
+    visibleSections.reduce((sum, s) => sum + achievedMm2[s.key], 0) +
+    appendageTotals.reduce((sum, a) => sum + a.achievedMm2, 0);
 
   return (
     <div className="vm-stats-section">
@@ -181,32 +239,27 @@ export default function ScanCoverageStatsSection({
         <span className="vm-scancov-group-label vm-scancov-group-label--achieved">Achieved</span>
       </div>
 
-      {visibleSections.map(({ key, label }) => {
-        const totalMm2 = regionAreas[key];
-        const entry = targets[key] ?? DEFAULT_ENTRY;
-        const rbaSqm = (entry.rbaPct / 100) * totalMm2;
-        const scopedSqm = (entry.scopedPct / 100) * totalMm2;
-        const achieved = achievedMm2[key];
-        const achievedPct = totalMm2 > 0 ? (achieved / totalMm2) * 100 : 0;
+      {visibleSections.map(({ key, label }) => (
+        <TargetRow
+          key={key}
+          label={label}
+          totalMm2={regionAreas[key]}
+          achievedMm2={achievedMm2[key]}
+          entry={targets[key] ?? DEFAULT_ENTRY}
+          onUpdate={(field, value) => handleUpdate(key, field, value)}
+        />
+      ))}
 
-        return (
-          <div key={key} className="vm-scancov-row">
-            <span className="vm-scancov-section-col">{label}</span>
-            <div className="vm-scancov-cell">
-              <InlineEdit value={entry.rbaPct} onCommit={(v) => handleUpdate(key, 'rbaPct', v)} />
-              <span className="vm-scancov-cell-area">{formatArea(rbaSqm)} m²</span>
-            </div>
-            <div className="vm-scancov-cell">
-              <InlineEdit
-                value={entry.scopedPct}
-                onCommit={(v) => handleUpdate(key, 'scopedPct', v)}
-              />
-              <span className="vm-scancov-cell-area">{formatArea(scopedSqm)} m²</span>
-            </div>
-            <StatCell pct={`${formatPct(achievedPct)}%`} area={formatArea(achieved)} isAchieved />
-          </div>
-        );
-      })}
+      {appendageTotals.map((a) => (
+        <TargetRow
+          key={a.appendageId}
+          label={a.name}
+          totalMm2={a.totalMm2}
+          achievedMm2={a.achievedMm2}
+          entry={appendageTargetFor(a.appendageId)}
+          onUpdate={(field, value) => handleUpdateAppendage(a.appendageId, field, value)}
+        />
+      ))}
 
       <div className="vm-scancov-row vm-scancov-row--total">
         <span className="vm-scancov-section-col">Total</span>

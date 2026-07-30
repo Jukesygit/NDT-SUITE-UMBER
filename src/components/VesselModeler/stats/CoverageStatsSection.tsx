@@ -1,6 +1,10 @@
 import { useMemo } from 'react';
 import type { VesselState } from '../types';
-import { computeCoverage, type CoverageResult } from '../engine/coverage-calculator';
+import {
+  computeCoverage,
+  computeAppendageCoverageTotals,
+  type CoverageResult,
+} from '../engine/coverage-calculator';
 
 interface CoverageStatsSectionProps {
   vesselState: VesselState;
@@ -15,9 +19,25 @@ function formatPct(pct: number): string {
 }
 
 export default function CoverageStatsSection({ vesselState }: CoverageStatsSectionProps) {
+  // Cutout-adjusted region coverage — recompute when appendages change (the
+  // footprint exclusion depends on the appendage set), not just on dimensions.
   const result: CoverageResult = useMemo(
     () => computeCoverage(vesselState.coverageRects, vesselState),
-    [vesselState.coverageRects, vesselState.id, vesselState.length, vesselState.headRatio],
+    [
+      vesselState.coverageRects,
+      vesselState.id,
+      vesselState.length,
+      vesselState.headRatio,
+      vesselState.appendages,
+    ],
+  );
+
+  // Per-appendage coverable area (design §9). Coverage rects cannot target an
+  // appendage in v1 (CoverageRectConfig has no bodyId), so covered is 0 for now;
+  // the row still surfaces the appendage's lateral area in the breakdown.
+  const appendageTotals = useMemo(
+    () => computeAppendageCoverageTotals(vesselState),
+    [vesselState.appendages, vesselState.scanComposites],
   );
 
   if (vesselState.coverageRects.length === 0) return null;
@@ -45,6 +65,17 @@ export default function CoverageStatsSection({ vesselState }: CoverageStatsSecti
           <span className="vm-coverage-pct">{formatPct(data.percent)}%</span>
         </div>
       ))}
+      {appendageTotals.map((a) => {
+        const totalM2 = a.totalMm2 / 1_000_000;
+        return (
+          <div key={a.appendageId} className="vm-coverage-row">
+            <span className="vm-coverage-label">{a.name}</span>
+            <span className="vm-coverage-area">{formatArea(totalM2)} m&sup2;</span>
+            <span className="vm-coverage-covered">{formatArea(0)} m&sup2;</span>
+            <span className="vm-coverage-pct">{formatPct(0)}%</span>
+          </div>
+        );
+      })}
       <div className="vm-coverage-divider" />
       <div className="vm-coverage-row vm-coverage-total">
         <span className="vm-coverage-label">Total</span>
