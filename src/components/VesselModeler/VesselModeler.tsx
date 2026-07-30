@@ -27,6 +27,8 @@ import {
   Settings2,
   FolderOpen,
   AlignVerticalDistributeCenter,
+  Undo2,
+  Redo2,
 } from 'lucide-react';
 import ThreeViewport from './ThreeViewport';
 import ErrorBoundary from '../ErrorBoundary';
@@ -66,6 +68,18 @@ import type { ExtractionResult } from './engine/drawing-parser';
 import { loadTextureFromData, clearHeatmapCache } from './engine/texture-manager';
 import { clearDomeHeatmapCache } from './engine/dome-scan-geometry';
 import { serializeVesselState, deserializeVesselState } from './engine/vessel-serialization';
+import {
+  createEmptyHistory,
+  recordCheckpoint,
+  undoStep,
+  redoStep,
+  breakGroup,
+  type VesselHistoryState,
+  type HistoryMeta,
+} from './engine/vessel-history';
+import { cascadeRemoveAppendage } from './engine/appendage-cascade';
+import { remapNozzleRefs } from './engine/nozzle-ref-remap';
+import { useTextureRehydration } from './useTextureRehydration';
 import { exportVesselGLB } from './engine/gltf-export';
 import { recomputeAllAnnotationStats } from './engine/annotation-stats';
 import {
@@ -149,6 +163,12 @@ function validateVesselState(state: VesselState): VesselState {
       ...n,
       pos: clamp(n.pos, -HEAD_DEPTH, length + HEAD_DEPTH),
       angle: ((n.angle % 360) + 360) % 360,
+      proj: clamp(n.proj, 0, 50000),
+      size: clamp(n.size, 10, 3000),
+    })),
+    saddles: state.saddles.map((s) => ({
+      ...s,
+      pos: clamp(s.pos, 0, length),
     })),
   };
 }
@@ -226,6 +246,8 @@ interface VesselModelerState {
   drawMode: DrawModeState;
   previews: PreviewsState;
   ui: UIState;
+  /** Snapshot undo/redo over the document (vessel) slice; never serialized. */
+  history: VesselHistoryState;
 }
 
 const DESELECTED: SelectionState = {
@@ -274,11 +296,31 @@ const INITIAL_STATE: VesselModelerState = {
     showStatsWallLoss: false,
     showStatsScanCoverage: false,
   },
+  history: createEmptyHistory(),
 };
 
+/** Optional per-action history control shared by the vessel-mutating actions. */
+type HistoryControl = HistoryMeta & { skip?: boolean };
+
+/**
+ * Derive a coalescing history key from a domain wrapper's arguments so drag
+ * storms and per-keystroke sidebar edits collapse into a single undo entry.
+ * Shape: `<entity>:<id-or-index>:<sorted-changed-field-names>` (e.g.
+ * `nozzle:3:angle,pos`). Date.now() is read here on the DISPATCHER side — never
+ * in the reducer — keeping the reducer pure/StrictMode-safe.
+ */
+function historyFor(entity: string, id: string | number, updates: object): HistoryMeta {
+  const fields = Object.keys(updates).sort().join(',');
+  return { key: `${entity}:${id}:${fields}`, at: Date.now() };
+}
+
 type VesselAction =
-  | { type: 'SET_VESSEL'; vessel: VesselState }
-  | { type: 'UPDATE_VESSEL_FN'; updater: (prev: VesselState) => VesselState }
+  | { type: 'SET_VESSEL'; vessel: VesselState; history?: HistoryControl }
+  | {
+      type: 'UPDATE_VESSEL_FN';
+      updater: (prev: VesselState) => VesselState;
+      history?: HistoryControl;
+    }
   | { type: 'SELECT_NOZZLE'; index: number }
   | { type: 'SELECT_APPENDAGE'; index: number }
   | { type: 'SELECT_SADDLE'; index: number }
@@ -309,7 +351,11 @@ type VesselAction =
   | { type: 'TOGGLE_SNAP' }
   | { type: 'SET_SNAP_DEG'; deg: number }
   | { type: 'CANCEL_ALL_DRAW_MODES' }
-  | { type: 'UPDATE_THICKNESS_THRESHOLDS'; thresholds: VesselState['thicknessThresholds'] }
+  | {
+      type: 'UPDATE_THICKNESS_THRESHOLDS';
+      thresholds: VesselState['thicknessThresholds'];
+      history?: HistoryControl;
+    }
   | {
       type: 'ENTER_INSPECTION_MODE';
       annotationId: number;
@@ -318,21 +364,61 @@ type VesselAction =
   | { type: 'CYCLE_INSPECTION'; annotationId: number }
   | { type: 'EXIT_INSPECTION_MODE' }
   | { type: 'SET_VIEW_MODE'; mode: '3d' | 'flattened' }
-  | { type: 'TOGGLE_LABELS_TIDIED' }
+  | { type: 'TOGGLE_LABELS_TIDIED'; history?: HistoryControl }
   | { type: 'TOGGLE_STATS_COVERAGE' }
   | { type: 'TOGGLE_STATS_WALL_LOSS' }
-  | { type: 'TOGGLE_STATS_SCAN_COVERAGE' };
+  | { type: 'TOGGLE_STATS_SCAN_COVERAGE' }
+  | { type: 'UNDO' }
+  | { type: 'REDO' }
+  | { type: 'HISTORY_BREAK' };
+
+/**
+ * Apply an undo/redo restore: swap in the restored vessel + history, then reset
+ * the transient slices that could dangle against a differently-shaped document —
+ * selection (stale indices/ids), draw modes and previews (in-progress gestures),
+ * and the inspection/hover/image UI. Locks, sidebar, snap, view mode and stats
+ * toggles are intentionally preserved (they are not part of the document).
+ */
+function withRestoredVessel(
+  state: VesselModelerState,
+  result: { history: VesselHistoryState; vessel: VesselState }
+): VesselModelerState {
+  return {
+    ...state,
+    vessel: result.vessel,
+    history: result.history,
+    selection: { ...DESELECTED },
+    drawMode: { annotation: null, coverage: false, ruler: false },
+    previews: { annotation: null, coverageRect: null, ruler: null },
+    ui: {
+      ...state.ui,
+      labelsTidied: result.vessel.labelsTidied ?? false,
+      inspectingAnnotationId: null,
+      savedCameraState: null,
+      viewingInspectionImageId: -1,
+      hoverData: null,
+    },
+  };
+}
 
 function vesselReducer(state: VesselModelerState, action: VesselAction): VesselModelerState {
   switch (action.type) {
     case 'SET_VESSEL':
+      // A load/import is a document boundary — undo never crosses it (v1).
       return {
         ...state,
         vessel: action.vessel,
+        history: createEmptyHistory(),
         ui: { ...state.ui, labelsTidied: action.vessel.labelsTidied ?? false },
       };
     case 'UPDATE_VESSEL_FN':
-      return { ...state, vessel: action.updater(state.vessel) };
+      return {
+        ...state,
+        vessel: action.updater(state.vessel),
+        history: action.history?.skip
+          ? state.history
+          : recordCheckpoint(state.history, state.vessel, action.history),
+      };
     case 'SELECT_NOZZLE':
       return { ...state, selection: { ...DESELECTED, nozzleIndex: action.index } };
     case 'SELECT_APPENDAGE':
@@ -429,6 +515,9 @@ function vesselReducer(state: VesselModelerState, action: VesselAction): VesselM
       return {
         ...state,
         vessel: { ...state.vessel, thicknessThresholds: action.thresholds },
+        history: action.history?.skip
+          ? state.history
+          : recordCheckpoint(state.history, state.vessel, action.history),
       };
     case 'ENTER_INSPECTION_MODE':
       return {
@@ -467,6 +556,9 @@ function vesselReducer(state: VesselModelerState, action: VesselAction): VesselM
           annotations: state.vessel.annotations.map((a) => ({ ...a, labelMode: newMode })),
           labelsTidied: newTidied,
         },
+        history: action.history?.skip
+          ? state.history
+          : recordCheckpoint(state.history, state.vessel, action.history),
         ui: { ...state.ui, labelsTidied: newTidied },
       };
     }
@@ -479,6 +571,19 @@ function vesselReducer(state: VesselModelerState, action: VesselAction): VesselM
         ...state,
         ui: { ...state.ui, showStatsScanCoverage: !state.ui.showStatsScanCoverage },
       };
+    case 'UNDO': {
+      const result = undoStep(state.history, state.vessel);
+      return result ? withRestoredVessel(state, result) : state;
+    }
+    case 'REDO': {
+      const result = redoStep(state.history, state.vessel);
+      return result ? withRestoredVessel(state, result) : state;
+    }
+    case 'HISTORY_BREAK': {
+      // Gesture boundary (Phase 2 wires this to onDragEnd). No-op if already broken.
+      const history = breakGroup(state.history);
+      return history === state.history ? state : { ...state, history };
+    }
     default:
       return state;
   }
@@ -547,6 +652,10 @@ export default function VesselModeler() {
   // Three.js texture objects (imperative, not React state)
   const textureObjectsRef = useRef<Record<number, THREE.Texture>>({});
   const [, setTextureObjectsVersion] = useState(0);
+  const bumpTextureObjectsVersion = useCallback(
+    () => setTextureObjectsVersion((v) => v + 1),
+    []
+  );
   const nextTextureIdRef = useRef(1);
 
   // ID counter refs
@@ -560,6 +669,15 @@ export default function VesselModeler() {
   const flattenedViewportRef = useRef<{ exportImage: () => string | null }>(null);
   const viewportContainerRef = useRef<HTMLDivElement>(null);
   const cursorTooltipRef = useRef<HTMLDivElement>(null);
+
+  // Rebuild THREE.Texture objects for texture configs restored by undo/redo
+  // (the load path builds them up-front; undo restores only the config).
+  useTextureRehydration({
+    textures: vesselState.textures,
+    viewportRef,
+    textureObjectsRef,
+    bumpVersion: bumpTextureObjectsVersion,
+  });
 
   // Toolbar popout menus
   const [locksMenuOpen, setLocksMenuOpen] = useState(false);
@@ -676,6 +794,8 @@ export default function VesselModeler() {
           clearHeatmapCache(sc.id);
           dispatch({
             type: 'UPDATE_VESSEL_FN',
+            // System rehydration after load, not a user edit — never an undo step.
+            history: { skip: true, at: 0 },
             updater: (prev) => ({
               ...prev,
               scanComposites: prev.scanComposites.map((existing) =>
@@ -709,6 +829,8 @@ export default function VesselModeler() {
           clearDomeHeatmapCache(ds.id);
           dispatch({
             type: 'UPDATE_VESSEL_FN',
+            // System rehydration after load, not a user edit — never an undo step.
+            history: { skip: true, at: 0 },
             updater: (prev) => ({
               ...prev,
               domeScanComposites: prev.domeScanComposites.map((existing) =>
@@ -786,27 +908,43 @@ export default function VesselModeler() {
   }, []);
 
   // --- Helper: dispatch vessel update via functional updater ---
-  const updateVessel = useCallback((updater: (prev: VesselState) => VesselState) => {
-    dispatch({ type: 'UPDATE_VESSEL_FN', updater });
-  }, []);
+  // Domain wrappers pass a derived history key (see historyFor) so continuous
+  // edits coalesce; opaque callers omit it and get a discrete undo entry.
+  const updateVessel = useCallback(
+    (updater: (prev: VesselState) => VesselState, history?: HistoryControl) => {
+      dispatch({ type: 'UPDATE_VESSEL_FN', updater, history });
+    },
+    []
+  );
 
   // --- Model mode handler ---
   const handleSetModelMode = useCallback(
     (mode: ModelMode) => {
+      const shape = mode === 'pipe' ? 'pipe' : 'vessel';
       setModelMode(mode);
-      updateVessel((prev) => ({
-        ...prev,
-        hasModel: true,
-        vesselShape: mode === 'pipe' ? 'pipe' : 'vessel',
-      }));
+      // Redundant clicks on the already-active mode must not dispatch — they
+      // would record a spurious undo entry for a no-op vessel change.
+      if (vesselState.hasModel && (vesselState.vesselShape ?? 'vessel') === shape) return;
+      updateVessel((prev) => ({ ...prev, hasModel: true, vesselShape: shape }));
     },
-    [updateVessel]
+    [updateVessel, vesselState.hasModel, vesselState.vesselShape]
   );
+
+  // Keep the transient mode toggle in lockstep with the document state so
+  // undo/redo across a mode switch (or a project load) cannot desync them.
+  useEffect(() => {
+    if (!vesselState.hasModel) return;
+    const shapeMode: ModelMode = vesselState.vesselShape === 'pipe' ? 'pipe' : 'vessel';
+    setModelMode((m) => (m === shapeMode ? m : shapeMode));
+  }, [vesselState.hasModel, vesselState.vesselShape]);
 
   // --- Vessel dimension handlers ---
   const updateDimensions = useCallback(
     (updates: Partial<VesselState>) => {
-      updateVessel((prev) => ({ ...prev, ...updates, hasModel: true }));
+      updateVessel(
+        (prev) => ({ ...prev, ...updates, hasModel: true }),
+        historyFor('dimensions', '', updates)
+      );
     },
     [updateVessel]
   );
@@ -821,10 +959,13 @@ export default function VesselModeler() {
 
   const updateNozzle = useCallback(
     (index: number, updates: Partial<NozzleConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        nozzles: prev.nozzles.map((n, i) => (i === index ? { ...n, ...updates } : n)),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          nozzles: prev.nozzles.map((n, i) => (i === index ? { ...n, ...updates } : n)),
+        }),
+        historyFor('nozzle', index, updates)
+      );
     },
     [updateVessel]
   );
@@ -858,21 +999,23 @@ export default function VesselModeler() {
 
   const updateAppendage = useCallback(
     (index: number, updates: Partial<AppendageConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        appendages: prev.appendages.map((a, i) => (i === index ? { ...a, ...updates } : a)),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          appendages: prev.appendages.map((a, i) => (i === index ? { ...a, ...updates } : a)),
+        }),
+        historyFor('appendage', index, updates)
+      );
     },
     [updateVessel]
   );
 
   const removeAppendage = useCallback(
     (index: number) => {
-      // Phase 2: cascade/guard attachables referencing this bodyId
-      updateVessel((prev) => ({
-        ...prev,
-        appendages: prev.appendages.filter((_, i) => i !== index),
-      }));
+      // Cascade: deleting an appendage removes its own nozzles (bodyId match) and
+      // their pipelines via the shared removeNozzle index-shift semantics. Main-
+      // shell nozzles/pipelines are left untouched. (See engine/appendage-cascade.)
+      updateVessel((prev) => ({ ...prev, ...cascadeRemoveAppendage(prev, index) }));
       dispatch({ type: 'SELECT_APPENDAGE', index: -1 });
     },
     [updateVessel]
@@ -933,17 +1076,20 @@ export default function VesselModeler() {
 
   const updateFreePipelineOrigin = useCallback(
     (pipelineId: string, updates: Partial<FreeOrigin>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        pipelines: prev.pipelines.map((p) => {
-          if (p.id !== pipelineId || p.nozzleIndex !== -1) return p;
-          const current = p.freeOrigin ?? {
-            position: [0, 0, 0] as [number, number, number],
-            direction: [0, 1, 0] as [number, number, number],
-          };
-          return { ...p, freeOrigin: { ...current, ...updates } };
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          pipelines: prev.pipelines.map((p) => {
+            if (p.id !== pipelineId || p.nozzleIndex !== -1) return p;
+            const current = p.freeOrigin ?? {
+              position: [0, 0, 0] as [number, number, number],
+              direction: [0, 1, 0] as [number, number, number],
+            };
+            return { ...p, freeOrigin: { ...current, ...updates } };
+          }),
         }),
-      }));
+        historyFor('freePipelineOrigin', pipelineId, updates)
+      );
     },
     [updateVessel]
   );
@@ -973,17 +1119,20 @@ export default function VesselModeler() {
 
   const updateSegment = useCallback(
     (pipelineId: string, segmentId: string, updates: Partial<PipeSegment>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        pipelines: prev.pipelines.map((p) =>
-          p.id === pipelineId
-            ? {
-                ...p,
-                segments: p.segments.map((s) => (s.id === segmentId ? { ...s, ...updates } : s)),
-              }
-            : p
-        ),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          pipelines: prev.pipelines.map((p) =>
+            p.id === pipelineId
+              ? {
+                  ...p,
+                  segments: p.segments.map((s) => (s.id === segmentId ? { ...s, ...updates } : s)),
+                }
+              : p
+          ),
+        }),
+        historyFor('pipeSegment', `${pipelineId}:${segmentId}`, updates)
+      );
     },
     [updateVessel]
   );
@@ -1029,24 +1178,33 @@ export default function VesselModeler() {
 
   const updateSaddle = useCallback(
     (index: number, updates: Partial<SaddleConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        saddles: prev.saddles.map((s, i) => (i === index ? { ...s, ...updates } : s)),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          saddles: prev.saddles.map((s, i) => (i === index ? { ...s, ...updates } : s)),
+        }),
+        historyFor('saddle', index, updates)
+      );
     },
     [updateVessel]
   );
 
   const updateAllSaddleHeights = useCallback(
     (height: number) => {
-      updateVessel((prev) => ({ ...prev, saddles: prev.saddles.map((s) => ({ ...s, height })) }));
+      updateVessel(
+        (prev) => ({ ...prev, saddles: prev.saddles.map((s) => ({ ...s, height })) }),
+        historyFor('allSaddle', '', { height })
+      );
     },
     [updateVessel]
   );
 
   const updateAllSaddleDepths = useCallback(
     (depth: number) => {
-      updateVessel((prev) => ({ ...prev, saddles: prev.saddles.map((s) => ({ ...s, depth })) }));
+      updateVessel(
+        (prev) => ({ ...prev, saddles: prev.saddles.map((s) => ({ ...s, depth })) }),
+        historyFor('allSaddle', '', { depth })
+      );
     },
     [updateVessel]
   );
@@ -1054,10 +1212,13 @@ export default function VesselModeler() {
   // Wear plate is configured universally across all supports, not per-saddle.
   const updateAllSaddleWearPlate = useCallback(
     (updates: Partial<SaddleConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        saddles: prev.saddles.map((s) => ({ ...s, ...updates })),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          saddles: prev.saddles.map((s) => ({ ...s, ...updates })),
+        }),
+        historyFor('allSaddleWearPlate', '', updates)
+      );
     },
     [updateVessel]
   );
@@ -1084,10 +1245,13 @@ export default function VesselModeler() {
 
   const updateLug = useCallback(
     (index: number, updates: Partial<LiftingLugConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        liftingLugs: prev.liftingLugs.map((l, i) => (i === index ? { ...l, ...updates } : l)),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          liftingLugs: prev.liftingLugs.map((l, i) => (i === index ? { ...l, ...updates } : l)),
+        }),
+        historyFor('lug', index, updates)
+      );
     },
     [updateVessel]
   );
@@ -1113,10 +1277,13 @@ export default function VesselModeler() {
 
   const updateWeld = useCallback(
     (index: number, updates: Partial<WeldConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        welds: prev.welds.map((w, i) => (i === index ? { ...w, ...updates } : w)),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          welds: prev.welds.map((w, i) => (i === index ? { ...w, ...updates } : w)),
+        }),
+        historyFor('weld', index, updates)
+      );
     },
     [updateVessel]
   );
@@ -1141,10 +1308,13 @@ export default function VesselModeler() {
 
   const updateTexture = useCallback(
     (id: number, updates: Partial<TextureConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        textures: prev.textures.map((t) => (Number(t.id) === id ? { ...t, ...updates } : t)),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          textures: prev.textures.map((t) => (Number(t.id) === id ? { ...t, ...updates } : t)),
+        }),
+        historyFor('texture', id, updates)
+      );
     },
     [updateVessel]
   );
@@ -1180,10 +1350,13 @@ export default function VesselModeler() {
 
   const updateAnnotation = useCallback(
     (id: number, updates: Partial<AnnotationShapeConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        annotations: prev.annotations.map((a) => (a.id === id ? { ...a, ...updates } : a)),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          annotations: prev.annotations.map((a) => (a.id === id ? { ...a, ...updates } : a)),
+        }),
+        historyFor('annotation', id, updates)
+      );
     },
     [updateVessel]
   );
@@ -1381,28 +1554,41 @@ export default function VesselModeler() {
 
   const updateMeasurementConfig = useCallback(
     (updates: Partial<MeasurementConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        measurementConfig: { ...prev.measurementConfig, ...updates },
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          measurementConfig: { ...prev.measurementConfig, ...updates },
+        }),
+        historyFor('measurementConfig', '', updates)
+      );
     },
     [updateVessel]
   );
 
   const updateThicknessThresholds = useCallback((thresholds: ThicknessThresholds) => {
-    dispatch({ type: 'UPDATE_THICKNESS_THRESHOLDS', thresholds });
+    dispatch({
+      type: 'UPDATE_THICKNESS_THRESHOLDS',
+      thresholds,
+      history: historyFor('thicknessThresholds', '', thresholds),
+    });
   }, []);
 
   const handleUpdateWallLossGroups = useCallback(
     (config: WallLossGroupConfig) => {
-      updateVessel((prev) => ({ ...prev, wallLossGroups: config }));
+      updateVessel(
+        (prev) => ({ ...prev, wallLossGroups: config }),
+        historyFor('wallLossGroups', '', config)
+      );
     },
     [updateVessel]
   );
 
   const handleUpdateCoverageTargets = useCallback(
     (targets: CoverageTargets) => {
-      updateVessel((prev) => ({ ...prev, coverageTargets: targets }));
+      updateVessel(
+        (prev) => ({ ...prev, coverageTargets: targets }),
+        historyFor('coverageTargets', '', targets)
+      );
     },
     [updateVessel]
   );
@@ -1421,10 +1607,13 @@ export default function VesselModeler() {
 
   const updateCoverageRect = useCallback(
     (id: number, updates: Partial<CoverageRectConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        coverageRects: prev.coverageRects.map((r) => (r.id === id ? { ...r, ...updates } : r)),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          coverageRects: prev.coverageRects.map((r) => (r.id === id ? { ...r, ...updates } : r)),
+        }),
+        historyFor('coverageRect', id, updates)
+      );
     },
     [updateVessel]
   );
@@ -1463,10 +1652,13 @@ export default function VesselModeler() {
 
   const updateRuler = useCallback(
     (id: number, updates: Partial<RulerConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        rulers: prev.rulers.map((r) => (r.id === id ? { ...r, ...updates } : r)),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          rulers: prev.rulers.map((r) => (r.id === id ? { ...r, ...updates } : r)),
+        }),
+        historyFor('ruler', id, updates)
+      );
     },
     [updateVessel]
   );
@@ -1485,12 +1677,15 @@ export default function VesselModeler() {
 
   const updateInspectionImage = useCallback(
     (id: number, updates: Partial<InspectionImageConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        inspectionImages: prev.inspectionImages.map((i) =>
-          i.id === id ? { ...i, ...updates } : i
-        ),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          inspectionImages: prev.inspectionImages.map((i) =>
+            i.id === id ? { ...i, ...updates } : i
+          ),
+        }),
+        historyFor('inspectionImage', id, updates)
+      );
     },
     [updateVessel]
   );
@@ -1686,7 +1881,7 @@ export default function VesselModeler() {
           };
         }
         return updated;
-      });
+      }, historyFor('scanComposite', id, updates));
     },
     [updateVessel]
   );
@@ -1698,12 +1893,15 @@ export default function VesselModeler() {
 
   const handleUpdateDomeScan = useCallback(
     (id: string, updates: Partial<DomeScanConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        domeScanComposites: prev.domeScanComposites.map((ds) =>
-          ds.id === id ? { ...ds, ...updates } : ds
-        ),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          domeScanComposites: prev.domeScanComposites.map((ds) =>
+            ds.id === id ? { ...ds, ...updates } : ds
+          ),
+        }),
+        historyFor('domeScan', id, updates)
+      );
     },
     [updateVessel]
   );
@@ -2035,16 +2233,23 @@ export default function VesselModeler() {
       updateLug(idx, { pos: Math.round(pos), angle: Math.round(angle) });
     },
     onDragEnd: () => {
-      // No-op, state is already updated per-move
+      // Gesture boundary: end the coalescing group so the next drag of the same
+      // object is a separate undo step. Per-move state is already committed.
+      dispatch({ type: 'HISTORY_BREAK' });
     },
     onAnnotationTableMoved: (position) => {
       dispatch({
         type: 'UPDATE_VESSEL_FN',
         updater: (v) => ({ ...v, annotationTablePosition: position }),
+        history: { key: 'annotationTable:move', at: Date.now() },
       });
     },
     onAnnotationTableResized: (size) => {
-      dispatch({ type: 'UPDATE_VESSEL_FN', updater: (v) => ({ ...v, annotationTableSize: size }) });
+      dispatch({
+        type: 'UPDATE_VESSEL_FN',
+        updater: (v) => ({ ...v, annotationTableSize: size }),
+        history: { key: 'annotationTable:resize', at: Date.now() },
+      });
     },
   };
 
@@ -2425,6 +2630,8 @@ export default function VesselModeler() {
               clearHeatmapCache(sc.id);
               dispatch({
                 type: 'UPDATE_VESSEL_FN',
+                // System rehydration after load, not a user edit — never an undo step.
+                history: { skip: true, at: 0 },
                 updater: (prev) => ({
                   ...prev,
                   scanComposites: prev.scanComposites.map((existing) =>
@@ -2457,6 +2664,8 @@ export default function VesselModeler() {
               clearDomeHeatmapCache(ds.id);
               dispatch({
                 type: 'UPDATE_VESSEL_FN',
+                // System rehydration after load, not a user edit — never an undo step.
+                history: { skip: true, at: 0 },
                 updater: (prev) => ({
                   ...prev,
                   domeScanComposites: prev.domeScanComposites.map((existing) =>
@@ -2488,6 +2697,31 @@ export default function VesselModeler() {
   // --- Drawing import apply handler ---
   const handleDrawingApply = useCallback(
     (result: ExtractionResult) => {
+      const newNozzles = result.nozzles.map((n) => ({
+        name: n.name,
+        pos: n.pos,
+        proj: n.proj,
+        angle: n.angle,
+        size: n.size,
+      }));
+
+      // The drawing replaces nozzles wholesale, so re-anchor existing pipelines
+      // by nozzle name (their positional nozzleIndex is about to go stale).
+      // Pipelines whose anchor is gone are dropped — but never silently.
+      const { pipelines: remappedPipelines, removed } = remapNozzleRefs(
+        vesselState.nozzles,
+        newNozzles,
+        vesselState.pipelines
+      );
+      if (removed.length > 0) {
+        const removedNames = removed.map((r) => r.oldNozzleName || '(unnamed)').join(', ');
+        const proceed = window.confirm(
+          `Applying this drawing will remove ${removed.length} pipeline(s) whose anchor ` +
+            `nozzle is no longer present in the drawing: ${removedNames}.\n\nApply anyway?`
+        );
+        if (!proceed) return;
+      }
+
       updateVessel((prev) =>
         validateVesselState({
           ...prev,
@@ -2495,23 +2729,18 @@ export default function VesselModeler() {
           length: result.length,
           headRatio: result.headRatio,
           orientation: result.orientation,
-          nozzles: result.nozzles.map((n) => ({
-            name: n.name,
-            pos: n.pos,
-            proj: n.proj,
-            angle: n.angle,
-            size: n.size,
-          })),
+          nozzles: newNozzles,
           saddles: result.saddles.map((s) => ({
             pos: s.pos,
             color: s.color || '#2244ff',
           })),
+          pipelines: remappedPipelines,
           hasModel: true,
         })
       );
       dispatch({ type: 'DESELECT_ALL' });
     },
-    [updateVessel]
+    [updateVessel, vesselState.nozzles, vesselState.pipelines]
   );
 
   // --- Inspection mode handlers ---
@@ -2664,7 +2893,10 @@ export default function VesselModeler() {
     downloadReport(blob, vesselState);
   }, [vesselState]);
 
-  // --- Escape key cancels draw mode or exits inspection mode ---
+  // --- Keyboard: Escape cancels draw/inspection; Ctrl/Cmd+Z / +Y undo-redo ---
+  // Note: VesselModeler does not render <ScreenshotMode> (that component owns its
+  // own key handler when mounted elsewhere), so there is no screenshot-mode
+  // visibility state here to guard against — only the text-field guard applies.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -2673,6 +2905,27 @@ export default function VesselModeler() {
         } else if (drawModeState.annotation || drawModeState.coverage || drawModeState.ruler) {
           dispatch({ type: 'CANCEL_ALL_DRAW_MODES' });
         }
+        return;
+      }
+
+      // Undo/redo — let native text-editing undo win inside form fields.
+      const target = e.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+      if ((e.ctrlKey || e.metaKey) && key === 'z') {
+        e.preventDefault();
+        dispatch({ type: e.shiftKey ? 'REDO' : 'UNDO' });
+      } else if (e.ctrlKey && key === 'y') {
+        e.preventDefault();
+        dispatch({ type: 'REDO' });
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -3463,6 +3716,23 @@ export default function VesselModeler() {
           ref={actionsMenuRef}
           style={{ display: 'flex', alignItems: 'center', gap: 6 }}
         >
+          {/* Undo / redo */}
+          <button
+            className="vm-popout-trigger"
+            onClick={() => dispatch({ type: 'UNDO' })}
+            disabled={state.history.past.length === 0}
+            title="Undo (Ctrl+Z)"
+          >
+            <Undo2 size={14} />
+          </button>
+          <button
+            className="vm-popout-trigger"
+            onClick={() => dispatch({ type: 'REDO' })}
+            disabled={state.history.future.length === 0}
+            title="Redo (Ctrl+Y)"
+          >
+            <Redo2 size={14} />
+          </button>
           {/* 3D/2D toggle */}
           <div className="vm-toolbar-segmented">
             {(['3d', 'flattened'] as const).map((mode) => (

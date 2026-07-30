@@ -65,6 +65,10 @@ export type NozzleOrientationMode = 'radial' | 'horizontal' | 'vertical-up' | 'v
 
 export interface NozzleConfig {
   name: string;
+  /** Body this nozzle mounts on. undefined = main shell (legacy path). When set
+   *  to an appendage id, `pos` is interpreted as mm along the appendage axis from
+   *  the junction and `angle` per the appendage datum (see engine/body-frame.ts). */
+  bodyId?: string;
   /** Distance from left tangent line in mm */
   pos: number;
   /** Projection from centerline in mm */
@@ -208,6 +212,12 @@ export interface ScanCompositeConfig {
   name: string;
   /** Supabase record ID (if saved to cloud) */
   cloudId?: string;
+  /** Body this scan mounts on. undefined = main shell (legacy path). When set to
+   *  an appendage id, `indexStartMm` is interpreted as mm along the appendage
+   *  axis from the junction and `datumAngleDeg` per the appendage datum (see
+   *  engine/body-frame.ts). Appendage scans ignore `useGlobalOrigin` /
+   *  coordinateOrigin (main-shell concepts) in v1. */
+  bodyId?: string;
   /** 2D thickness matrix [rows][cols] - index axis x scan axis */
   data: (number | null)[][];
   /** Scan axis coordinates in mm (circumferential) */
