@@ -197,3 +197,27 @@ Recurring constraints (do not regress):
 - The private **`documents` bucket is shared**: `competency-documents/<userId>/…` (competency certs) and `controlled-documents/<docId>/…` (document control) each have their **own folder-scoped** policies. The competency policies are now scoped via `(storage.foldername(name))[1] = 'competency-documents'` (matching the existing INSERT policy and the document-control policies); keep them folder-scoped so the two features never cross-grant.
 
 Consequences: apply the migration to the live DB (`supabase db push`, or run the SQL in the dashboard). Verify by reopening a pending document as a super_admin/manager — the PDF/image preview should render and the 400 disappear.
+
+## 2026-07-24 - Engineering Skills Config (Issue Tracker = GitLab)
+
+Decision: ran `setup-matt-pocock-skills`. The mattpocock engineering skills (`to-tickets`, `triage`, `to-spec`, `wayfinder`, …) are configured via `docs/agents/`: issues live in GitLab Issues (`matrix-adv-inspections/portal`, `glab` CLI), triage uses the five default label names, and domain docs use the single-context layout (`CONTEXT.md` + `docs/adr/` at the repo root, created lazily by `/domain-modeling`).
+
+Reasoning: CI/CD and the canonical remote are GitLab; the GitHub `origin` remote is a mirror only. Single Vite app → single-context domain docs.
+
+Consequences:
+
+- Root `CLAUDE.md` has an `## Agent skills` section pointing at `docs/agents/*.md`; edit those files directly to change conventions (re-running the setup skill is only for switching trackers or starting over).
+- MRs are not a triage surface (flag set to `no` in `docs/agents/issue-tracker.md`).
+- `CONTEXT.md` / `docs/adr/` do not exist yet — skills proceed silently until `/domain-modeling` creates them. Durable decisions continue to live here in the Decision Log; ADRs are complementary, not a replacement.
+
+## 2026-07-28 - Competency Attribution & Deferred Auth-Lock Rework
+
+Decision: after the cross-user competency incident (an admin filed Ben Wilkes' cert under Richard Biggar — human error; RLS behaved as designed), competency writes now carry attribution, and the Supabase auth no-op lock is deliberately NOT reworked yet. Design: `docs/plans/2026-07-28-competency-attribution-and-session-hardening-design.md`.
+
+Attribution (do not regress):
+
+- `employee_competencies.created_by` (and `competency_documents.created_by`) is **server-set only** — the `set_created_by()` BEFORE INSERT trigger overwrites any client value with `auth.uid()` (migration `20260728130000`). Never trust or add a client-supplied `created_by`; service-role writes may supply their own (trigger leaves it when `auth.uid()` is NULL). FK targets **profiles(id)** (not auth.users) so PostgREST can embed the author name.
+- `audit_row_change()` appends `details.on_behalf_of = <row user_id>` whenever an audited row has a `user_id` differing from the actor. It stores the UUID only (no PII), on INSERT/UPDATE/DELETE alike. Any future audited table with a `user_id` ownership column inherits this for free.
+- Storage INSERT policy privileged branch is `role IN ('admin','super_admin')` (`20260728131000`); manager stays SELECT-only. This is the third instance of the role-omission class — the 2026-06-29 "both table AND storage" grep rule applies to INSERT policies too.
+
+Deferred: the no-op `lock` override + fixed `storageKey` in `src/supabase-client.ts` stays. The no-op exists because the default `navigator.locks` deadlocks (signInWithPassword holds the lock while notifying onAuthStateChange listeners whose DB queries call getSession). The incident did not involve multi-tab clobbering, and the user-facing risk is now mitigated by: header identity display, restored-session banner, identity-change guard in `auth-supabase.ts` (`session.user.id !== currentUser?.id`), and `assertActiveUser` on self-service writes. Revisit the lock alongside a supabase-js upgrade; do not silently re-enable the default lock without retesting the sign-in deadlock.

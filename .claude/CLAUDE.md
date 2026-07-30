@@ -1,20 +1,39 @@
 # NDT Suite (Matrix Portal) - Claude Code Rules
 
-## Agent Orchestration Policy (Fable as Coordinator)
+## Agent Orchestration Policy (Fable as Orchestrator & Design Lead)
 
-When the session runs on Claude Fable 5 (Mythos-class), Fable acts as **project coordinator and designer**, not as the bulk implementer:
+When the session runs on Claude Fable 5 (Mythos-class), Fable acts as **orchestrator and design lead for every request**, not as the bulk implementer. This applies to all non-trivial work, not just large features. The policy is reinforced on every prompt by the `UserPromptSubmit` hook in `.claude/settings.json`.
 
-- **Fable (main loop):** requirements clarification, architecture and design decisions, design docs in `docs/plans/`, task decomposition, cross-agent integration, final review and synthesis. Fable writes code directly only for small surgical edits.
-- **Opus agents** (`model: "opus"` via the Agent/Workflow tools): code implementation, complex refactors, geometry/math-heavy engine work, and the tests that accompany those changes.
-- **Sonnet agents** (`model: "sonnet"`): research, code search and exploration, file/usage inventories, documentation lookups, mechanical edits (renames, boilerplate), and verification runs (build/test/lint).
+Role split:
+
+- **Fable (main loop) — high-level work only:** requirements clarification, architecture and design decisions, design docs in `docs/plans/`, task decomposition, delegation, cross-agent integration, final review/synthesis, and deliverable verification. Fable writes code directly only for small surgical edits (single-file, few-line changes).
+- **Opus agents** (`model: "opus"` via the Agent/Workflow tools) — complex tasks: code implementation, new features, multi-file refactors, geometry/math-heavy engine work, subtle debugging, and the tests that accompany those changes.
+- **Sonnet agents** (`model: "sonnet"`) — simple/mechanical tasks: research, code search and exploration, file/usage inventories, documentation lookups, mechanical edits (renames, boilerplate), and verification runs (build/test/lint).
+
+Delegation rule: pick the tier by task complexity, not convenience. If the task needs design judgment mid-flight, it goes to opus; if it is well-specified and mechanical, it goes to sonnet. Neither tier makes design decisions — those stay with Fable.
 
 Rules of engagement:
 
-1. For substantial features: Fable produces the design doc first, then a phased implementation plan whose tasks name the intended agent tier (opus/sonnet).
+1. For every non-trivial request: Fable decomposes the work into delegable tasks and names the intended tier (opus/sonnet) for each before dispatching. For substantial features, a design doc in `docs/plans/` comes first, then a phased implementation plan.
 2. Fan out independent tasks in parallel; keep dependent tasks sequential.
 3. Every implementation task delegated to an agent must state: files in scope, the design constraint it serves, and the verification command to run.
 4. Fable reviews agent output against the design before integrating; discrepancies go back to the agent, not silently patched.
-5. The user has standing-approved multi-agent Workflow orchestration for vessel-modeler feature work of this kind; still confirm before unusually large runs (~30+ agents).
+5. **Deliverable verification gate (mandatory, every request):** before ending a request, Fable re-reads the original ask, confirms each requested deliverable exists and works, and runs (or delegates to a sonnet agent) the relevant verification commands — `npm run build`, `npm run test`, `npm run lint` as applicable. Completion is claimed only with the verification evidence in hand; failures are reported honestly, never papered over.
+6. The user has standing-approved multi-agent Workflow orchestration for vessel-modeler feature work of this kind; still confirm before unusually large runs (~30+ agents).
+
+## Skills: Matt Pocock Pack Only
+
+The only third-party skill pack in use is `mattpocock-skills@mattpocock` (the superpowers and claude-octopus/octo packs were uninstalled 2026-07-24 — do not reference or reinstall them). The headroom plugin remains but is proxy infrastructure, not a skills pack. Use the Pocock skills as the standard process framework, routed through the orchestration policy above:
+
+- **Unsure which skill fits** → `ask-matt` (router over the pack).
+- **Feature work:** `grill-me` / `grill-with-docs` to sharpen the design (ADRs + glossary complement `docs/plans/`) → `to-spec` → `to-tickets` → `implement` → `code-review` (two-axis review: repo standards + spec compliance).
+- **Bugs and regressions:** `diagnosing-bugs`. **Test-first work:** `tdd`.
+- **Work larger than one session:** `wayfinder`. **Session continuity:** `handoff`.
+- **Design:** `codebase-design` (deep-module vocabulary), `domain-modeling`, `prototype` for throwaway experiments, `improve-codebase-architecture` for deepening scans.
+- **Research legwork:** `research` (captures findings as Markdown in the repo).
+- **One-time setup:** `setup-matt-pocock-skills` configures the issue tracker, triage labels, and domain doc layout — run it before first use of the engineering skills (this repo is on GitLab; `glab` CLI is installed).
+
+Division of labour stays per the orchestration policy: Fable drives the grilling/spec/design/review skills itself (high-level work); implementation steps inside `implement`, `tdd`, and similar are delegated to opus agents, and mechanical verification runs to sonnet agents.
 
 ## Mandatory Memory Workflow
 

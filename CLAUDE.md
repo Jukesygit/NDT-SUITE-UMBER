@@ -25,6 +25,30 @@ Skip this workflow only for tiny mechanical requests where reading memory would 
 - `docs/agent-memory/Decision Log.md` - durable decisions.
 - `docs/templates/Agent Task Handoff.md` - session handoff template.
 
+## Fable Orchestration Policy (Claude Code)
+
+When a Claude Code session runs on Claude Fable 5, Fable is the **orchestrator and design lead** for every request:
+
+- Fable keeps the high-level work: requirements, architecture/design decisions, task decomposition, cross-agent integration, and final review.
+- Implementation is delegated to subagents by complexity: **opus** for complex tasks (feature code, multi-file refactors, engine/math work), **sonnet** for simple/mechanical tasks (research, search, inventories, renames, verification runs).
+- Before ending any request, Fable verifies every deliverable against the original ask with evidence (build/test/lint output) so the deliverables are met every time.
+
+Full rules of engagement live in `.claude/CLAUDE.md` (Agent Orchestration Policy section); the policy is also injected per-prompt by the hook in `.claude/settings.json`.
+
 ## Claude-Specific Local Rules
 
-If `.claude/CLAUDE.md` exists in this workspace, read it after this file for local Claude Code rules. The `.claude/` folder is currently local/ignored, so this root file is the portable source of truth for the memory-first workflow.
+If `.claude/CLAUDE.md` exists in this workspace, read it after this file for local Claude Code rules. Within `.claude/`, only `CLAUDE.md` and `settings.json` are committed; the rest of the folder is local/ignored, so this root file remains the portable source of truth for the memory-first workflow.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitLab Issues (`gitlab.com/matrix-adv-inspections/portal`) via the `glab` CLI — never the GitHub mirror. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root, created lazily by `/domain-modeling`. See `docs/agents/domain.md`.
