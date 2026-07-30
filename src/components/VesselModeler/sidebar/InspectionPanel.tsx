@@ -172,6 +172,9 @@ export default function InspectionPanel({
   const heatmapContainerRef = useRef<HTMLDivElement>(null);
   const overlappingComposite = findOverlappingComposite(annotation, vesselState);
   const heatmapColorScale = overlappingComposite?.colorScale ?? null;
+  // Heatmap surfaces for any annotation with sampled data — a cylindrical
+  // overlap OR (via computed stats) a dome-end annotation over dome scans.
+  const hasScanData = overlappingComposite !== undefined || stats !== undefined;
 
   useEffect(() => {
     const container = heatmapContainerRef.current;
@@ -320,7 +323,7 @@ export default function InspectionPanel({
             </span>
           )}
         </div>
-        {overlappingComposite ? (
+        {hasScanData ? (
           <div
             ref={heatmapContainerRef}
             style={{
