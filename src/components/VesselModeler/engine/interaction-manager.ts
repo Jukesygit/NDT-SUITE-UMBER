@@ -22,6 +22,22 @@ import type { VesselState, AnnotationShapeType } from '../types';
 import { SCALE } from './materials';
 import { resolveBodyFrame } from './body-frame';
 import { domePhiThetaFromPoint } from './dome-scan-geometry';
+import { buildMeridianProfile, arcFromAxial, axialFromArc, displayRadiusAtArc } from './dome-arc';
+
+/**
+ * Resolve the appendage body id a raycast hit belongs to. Main-shell meshes
+ * carry no `bodyId` tag (returns undefined); appendage shells (and their group)
+ * carry `userData.bodyId`. Used to scope appendage-mounted drags to their body.
+ */
+function hitBodyId(object: THREE.Object3D): string | undefined {
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    const id = current.userData?.bodyId;
+    if (id !== undefined) return id as string;
+    current = current.parent;
+  }
+  return undefined;
+}
 
 // ---------------------------------------------------------------------------
 // Public Types
@@ -581,12 +597,20 @@ export class InteractionManager {
         const height = Math.max(circumDelta, 20);
         this.callbacks.onCoverageRectPreview(centerPos, centerAngle, width, height);
       } else {
+        // Annotations size in meridian-arc space so the preview matches the
+        // committed footprint on dome ends (see onPointerUp create path).
+        const fp = this.annotationFootprint(
+          this.drawStartPos,
+          this.drawStartAngle,
+          currentPos,
+          currentAngle
+        );
         this.callbacks.onAnnotationPreview(
           this.drawMode!,
-          centerPos,
-          centerAngle,
-          axialDelta,
-          circumDelta
+          fp.centerPos,
+          fp.centerAngle,
+          fp.width,
+          fp.height
         );
       }
       return;
@@ -678,9 +702,19 @@ export class InteractionManager {
       if (hits.length === 0) return;
 
       const point = hits[0].point;
-      const { pos: newPos, angle: deg } = frame.toLocal(point);
-
-      this.callbacks.onCoverageRectMoved(this.selectedCoverageRectId, newPos, deg);
+      const { pos: posH, angle: thetaH } = frame.toLocal(point);
+      // Coverage rects render through the same drape geometry, so their drag uses
+      // the shared dome-stable resolver (holds/flips the angle near the pole).
+      const rect = state.coverageRects.find((r) => r.id === this.selectedCoverageRectId);
+      const drag = this.resolveDrapeDrag(
+        posH,
+        thetaH,
+        this.radialAxisDistanceMm(point, state),
+        rect?.pos ?? posH,
+        rect?.angle ?? thetaH,
+        state
+      );
+      this.callbacks.onCoverageRectMoved(this.selectedCoverageRectId, drag.pos, drag.angle);
       return;
     }
 
@@ -720,10 +754,21 @@ export class InteractionManager {
       const hits = this.raycaster.intersectObjects(shellMeshes, true);
       if (hits.length === 0) return;
 
-      const point = hits[0].point;
-      const local = frame.toLocal(point);
-      // Clamp to vessel tan-tan range
-      const newPos = Math.max(0, Math.min(state.length, local.pos));
+      // A scan composite can live on an appendage body: scope the datum drag to
+      // that body's surface and invert through the body frame (mirroring the
+      // nozzle-drag scoping). Main-shell composites stay on the main frame; with
+      // no appendages present the first hit is the only hit, identical to legacy.
+      const gizmoComposite = state.scanComposites.find(
+        (c) => c.id === this.selectedGizmoCompositeId
+      );
+      const gizmoBodyId = gizmoComposite?.bodyId;
+      const gizmoFrame = gizmoBodyId !== undefined ? resolveBodyFrame(state, gizmoBodyId) : frame;
+      const hit = hits.find((h) => hitBodyId(h.object) === gizmoBodyId);
+      if (!hit) return;
+
+      const local = gizmoFrame.toLocal(hit.point);
+      // Clamp to the body's axial span (tan-tan for main, cylinder length for appendage).
+      const newPos = Math.max(0, Math.min(gizmoFrame.axialLength, local.pos));
 
       // Convert internal angle (0°=3-o'clock) to user-facing (0°=TDC) by subtracting 90°
       let deg = local.angle - 90;
@@ -780,6 +825,37 @@ export class InteractionManager {
       const hits = this.raycaster.intersectObjects(shellMeshes, true);
       if (hits.length === 0) return;
 
+      // A nozzle can mount on an appendage body: scope its drag to that body's
+      // surface and convert through the body frame. Main-shell nozzles (and every
+      // texture / lug / annotation drag) stay on the exact legacy main-shell path.
+      if (this.dragType === 'nozzle') {
+        const nozzleBodyId = state.nozzles[this.selectedNozzleIdx]?.bodyId;
+        if (nozzleBodyId !== undefined) {
+          const bodyHit = hits.find((h) => hitBodyId(h.object) === nozzleBodyId);
+          if (!bodyHit) return;
+          const bodyFrame = resolveBodyFrame(state, nozzleBodyId);
+          const local = bodyFrame.toLocal(bodyHit.point);
+          const clampedPos = Math.max(0, Math.min(bodyFrame.axialLength, local.pos));
+          this.callbacks.onNozzleMoved(
+            this.selectedNozzleIdx,
+            clampedPos,
+            this.snapAngle(local.angle)
+          );
+          return;
+        }
+        // Main-shell nozzle: only accept a main-shell hit (no bodyId tag), so the
+        // nozzle can't snap onto an appendage surface. With no appendages present
+        // this is the first hit, identical to the legacy path.
+        const mainHit = hits.find((h) => hitBodyId(h.object) === undefined);
+        if (!mainHit) return;
+        const { pos, angle: deg } = frame.toLocal(mainHit.point);
+        const headDepth = state.id / (2 * state.headRatio);
+        const newPos = Math.max(-headDepth, Math.min(state.length + headDepth, pos));
+        // Nozzles snap to the chosen angular increment when snapping is enabled.
+        this.callbacks.onNozzleMoved(this.selectedNozzleIdx, newPos, this.snapAngle(deg));
+        return;
+      }
+
       const point = hits[0].point;
 
       // Position (mm) and angle (deg) via the single frame inverse.
@@ -789,14 +865,22 @@ export class InteractionManager {
       const headDepth = state.id / (2 * state.headRatio);
       const newPos = Math.max(-headDepth, Math.min(state.length + headDepth, pos));
 
-      if (this.dragType === 'nozzle') {
-        // Nozzles snap to the chosen angular increment when snapping is enabled.
-        this.callbacks.onNozzleMoved(this.selectedNozzleIdx, newPos, this.snapAngle(deg));
-      } else if (this.dragType === 'liftingLug') {
+      if (this.dragType === 'liftingLug') {
         // Lifting lugs snap to the chosen angular increment when snapping is enabled.
         this.callbacks.onLugMoved(this.selectedLugIdx, newPos, this.snapAngle(deg));
       } else if (this.dragType === 'annotation') {
-        this.callbacks.onAnnotationMoved(this.selectedAnnotationIdx, newPos, deg);
+        // Dome-stable drag: hold/flip the angle reference near the pole so a rect
+        // can be dragged onto and through the dome centre without spinning.
+        const ann = state.annotations.find((a) => a.id === this.selectedAnnotationIdx);
+        const drag = this.resolveDrapeDrag(
+          pos,
+          deg,
+          this.radialAxisDistanceMm(point, state),
+          ann?.pos ?? pos,
+          ann?.angle ?? deg,
+          state
+        );
+        this.callbacks.onAnnotationMoved(this.selectedAnnotationIdx, drag.pos, drag.angle);
       } else {
         this.callbacks.onTextureMoved(this.selectedTextureIdx, newPos, deg);
       }
@@ -865,9 +949,25 @@ export class InteractionManager {
           const height = Math.max(circumDelta, minSize);
           this.callbacks.onCoverageRectCreated(centerPos, centerAngle, width, height);
         } else {
-          const width = Math.max(axialDelta, minSize);
-          const height = Math.max(circumDelta, minSize);
-          this.callbacks.onAnnotationCreated(this.drawMode!, centerPos, centerAngle, width, height);
+          // Annotations size in meridian-arc space: width = true surface arc
+          // across shell + dome; height = circumferential mm at the local dome
+          // radius; centre = arc-midpoint mapped back to axial. Reduces to the
+          // legacy axial/equatorial math on the cylinder. minSize floor kept.
+          const fp = this.annotationFootprint(
+            this.drawStartPos,
+            this.drawStartAngle,
+            endPos,
+            endAngle
+          );
+          const width = Math.max(fp.width, minSize);
+          const height = Math.max(fp.height, minSize);
+          this.callbacks.onAnnotationCreated(
+            this.drawMode!,
+            fp.centerPos,
+            fp.centerAngle,
+            width,
+            height
+          );
         }
       }
       return;
@@ -921,6 +1021,99 @@ export class InteractionManager {
    */
   private snapAngle(deg: number): number {
     return this.angleSnapEnabled ? snapAngleToIncrement(deg, this.angleSnapDeg) : deg;
+  }
+
+  /** Distance (mm) of a world point from the vessel axis. */
+  private radialAxisDistanceMm(point: THREE.Vector3, state: VesselState): number {
+    // Horizontal: axis = X, radial = sqrt(y^2 + z^2). Vertical: axis = Y.
+    const sq =
+      state.orientation === 'vertical'
+        ? point.x * point.x + point.z * point.z
+        : point.y * point.y + point.z * point.z;
+    return Math.sqrt(sq) / SCALE;
+  }
+
+  /**
+   * Stable centre for an annotation/coverage rect dragged onto or across a dome
+   * end (design Addendum 2). The raycast angle is unreliable near the vessel
+   * axis, so this keeps an angle reference (the item's stored angle):
+   *
+   *  - Pure shell (neither hit nor stored centre on a head): the exact legacy
+   *    path — clamp pos, adopt the hit angle.
+   *  - Same side of the pole (|wrap(theta_h - theta_ref)| <= 90):
+   *      r_hit >= 0.2 R -> track the hit (pos_h, theta_h);
+   *      r_hit <  0.2 R -> adopt pos_h but HOLD theta_ref (no spin at the centre).
+   *  - Opposite side (cursor emerged past the pole): adopt (pos_h, theta_ref+180)
+   *    — the drape at (apex-delta, theta) tends to (apex-delta, theta+180) as
+   *    delta -> 0, so the crossing is visually continuous.
+   *
+   * Pos always keeps the existing [-headDepth, L+headDepth] clamp; no snapping.
+   */
+  private resolveDrapeDrag(
+    posH: number,
+    thetaH: number,
+    rHit: number,
+    storedPos: number,
+    storedAngle: number,
+    state: VesselState
+  ): { pos: number; angle: number } {
+    const L = state.length;
+    const R = state.id / 2;
+    const headDepth = state.id / (2 * state.headRatio);
+    const clampedPos = Math.max(-headDepth, Math.min(L + headDepth, posH));
+
+    const onHead = posH < 0 || posH > L || storedPos < 0 || storedPos > L;
+    if (!onHead) {
+      return { pos: clampedPos, angle: thetaH };
+    }
+
+    let diff = Math.abs(thetaH - storedAngle) % 360;
+    if (diff > 180) diff = 360 - diff;
+
+    let angle: number;
+    if (diff <= 90) {
+      angle = rHit >= 0.2 * R ? thetaH : storedAngle;
+    } else {
+      angle = (((storedAngle + 180) % 360) + 360) % 360;
+    }
+    return { pos: clampedPos, angle };
+  }
+
+  /**
+   * Meridian arc-space footprint for an annotation drawn between two shell
+   * points. `width` = extent along the meridian arc (true surface mm, continuous
+   * across shell and dome); `height` = circumferential mm honoured at the local
+   * dome radius; `centerPos` = the arc-midpoint mapped back to axial mm. On the
+   * cylinder every term reduces exactly to the legacy axial-delta /
+   * equatorial-circumference values. The minSize floor is applied by the caller
+   * (create path only) so the preview stays unfloored, matching prior behaviour.
+   */
+  private annotationFootprint(
+    startPos: number,
+    startAngle: number,
+    endPos: number,
+    endAngle: number
+  ): { width: number; height: number; centerPos: number; centerAngle: number } {
+    const state = this.vesselState;
+    const R = state.id / 2;
+    const D = state.id / (2 * state.headRatio);
+    const L = state.length;
+    const profile = buildMeridianProfile(R, D);
+
+    const sStart = arcFromAxial(profile, L, startPos);
+    const sEnd = arcFromAxial(profile, L, endPos);
+    const centerS = (sStart + sEnd) / 2;
+
+    let angleDelta = Math.abs(endAngle - startAngle);
+    if (angleDelta > 180) angleDelta = 360 - angleDelta;
+    const angleDeltaRad = (angleDelta * Math.PI) / 180;
+
+    return {
+      width: Math.abs(sEnd - sStart),
+      height: angleDeltaRad * displayRadiusAtArc(profile, L, centerS),
+      centerPos: axialFromArc(profile, L, centerS),
+      centerAngle: (startAngle + endAngle) / 2,
+    };
   }
 
   /**

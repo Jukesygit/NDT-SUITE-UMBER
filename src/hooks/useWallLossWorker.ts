@@ -15,7 +15,7 @@ const DEBOUNCE_MS = 300;
 
 export function useWallLossWorker(
   vesselState: VesselState,
-  config: WallLossGroupConfig | undefined,
+  config: WallLossGroupConfig | undefined
 ): WallLossDistribution | null {
   const workerRef = useRef<Worker | null>(null);
   const idRef = useRef(0);
@@ -25,10 +25,9 @@ export function useWallLossWorker(
 
   const getWorker = useCallback(() => {
     if (!workerRef.current) {
-      workerRef.current = new Worker(
-        new URL('../workers/wall-loss.worker.ts', import.meta.url),
-        { type: 'module' },
-      );
+      workerRef.current = new Worker(new URL('../workers/wall-loss.worker.ts', import.meta.url), {
+        type: 'module',
+      });
       workerRef.current.onmessage = (e: MessageEvent<WallLossResponse>) => {
         const resp = e.data;
         if (resp.id !== latestIdRef.current) return;
@@ -54,8 +53,8 @@ export function useWallLossWorker(
     };
   }, []);
 
-  const hasShellScans = vesselState.scanComposites.some(c => c.orientationConfirmed);
-  const hasDomeScans = (vesselState.domeScanComposites ?? []).some(d => d.orientationConfirmed);
+  const hasShellScans = vesselState.scanComposites.some((c) => c.orientationConfirmed);
+  const hasDomeScans = (vesselState.domeScanComposites ?? []).some((d) => d.orientationConfirmed);
   const hasScans = hasShellScans || hasDomeScans;
 
   useEffect(() => {
@@ -70,25 +69,30 @@ export function useWallLossWorker(
       const id = ++idRef.current;
       latestIdRef.current = id;
 
-      const composites: CompositeSlim[] = vesselState.scanComposites.map(c => ({
-        id: c.id,
-        orientationConfirmed: c.orientationConfirmed,
-        data: c.data,
-        xAxis: c.xAxis,
-        yAxis: c.yAxis,
-        indexStartMm: c.indexStartMm,
-        datumAngleDeg: c.datumAngleDeg,
-        scanDirection: c.scanDirection,
-        indexDirection: c.indexDirection,
-      }));
+      // Phase 3: appendage-body scans get per-body stats; excluded here so numbers stay correct in the interim (design §9).
+      const composites: CompositeSlim[] = vesselState.scanComposites
+        .filter((c) => !c.bodyId)
+        .map((c) => ({
+          id: c.id,
+          orientationConfirmed: c.orientationConfirmed,
+          data: c.data,
+          xAxis: c.xAxis,
+          yAxis: c.yAxis,
+          indexStartMm: c.indexStartMm,
+          datumAngleDeg: c.datumAngleDeg,
+          scanDirection: c.scanDirection,
+          indexDirection: c.indexDirection,
+        }));
 
-      const domeComposites: DomeCompositeSlim[] = (vesselState.domeScanComposites ?? []).map(d => ({
-        id: d.id,
-        orientationConfirmed: d.orientationConfirmed,
-        data: d.data,
-        xAxis: d.xAxis,
-        yAxis: d.yAxis,
-      }));
+      const domeComposites: DomeCompositeSlim[] = (vesselState.domeScanComposites ?? []).map(
+        (d) => ({
+          id: d.id,
+          orientationConfirmed: d.orientationConfirmed,
+          data: d.data,
+          xAxis: d.xAxis,
+          yAxis: d.yAxis,
+        })
+      );
 
       const req: WallLossRequest = {
         id,

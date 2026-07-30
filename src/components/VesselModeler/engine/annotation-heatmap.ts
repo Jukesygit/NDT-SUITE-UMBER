@@ -39,7 +39,7 @@ function angularDelta(a: number, b: number): number {
 function compositeOverlapsAnnotation(
   composite: ScanCompositeConfig,
   ann: AnnotationShapeConfig,
-  circumference: number,
+  circumference: number
 ): boolean {
   if (!composite.orientationConfirmed) return false;
 
@@ -64,7 +64,7 @@ function compositeOverlapsAnnotation(
 
   // Annotation bounds
   const halfWidthMm = ann.width / 2;
-  const halfHeightDeg = ((ann.height / 2) / circumference) * 360;
+  const halfHeightDeg = (ann.height / 2 / circumference) * 360;
   const annAxialStart = ann.pos - halfWidthMm;
   const annAxialEnd = ann.pos + halfWidthMm;
 
@@ -81,9 +81,9 @@ function compositeOverlapsAnnotation(
   for (const testAngle of [annAngleMin, annAngleMax, ann.angle]) {
     let scanOffsetDeg: number;
     if (scanDirection === 'cw') {
-      scanOffsetDeg = ((datumConv - testAngle) % 360 + 360) % 360;
+      scanOffsetDeg = (((datumConv - testAngle) % 360) + 360) % 360;
     } else {
-      scanOffsetDeg = ((testAngle - datumConv) % 360 + 360) % 360;
+      scanOffsetDeg = (((testAngle - datumConv) % 360) + 360) % 360;
     }
     const scanOffsetMm = (scanOffsetDeg / 360) * circumference;
     if (scanOffsetMm >= scanStartMm && scanOffsetMm <= scanEndMm) return true;
@@ -114,7 +114,7 @@ function sampleComposite(
   composite: ScanCompositeConfig,
   posMm: number,
   angleDeg: number,
-  circumference: number,
+  circumference: number
 ): number | undefined {
   const { data, xAxis, yAxis, indexStartMm, datumAngleDeg, scanDirection, indexDirection } =
     composite;
@@ -141,15 +141,16 @@ function sampleComposite(
   const datumConv = normAngle(datumAngleDeg + 90);
   let scanOffsetDeg: number;
   if (scanDirection === 'cw') {
-    scanOffsetDeg = ((datumConv - angleDeg) % 360 + 360) % 360;
+    scanOffsetDeg = (((datumConv - angleDeg) % 360) + 360) % 360;
   } else {
-    scanOffsetDeg = ((angleDeg - datumConv) % 360 + 360) % 360;
+    scanOffsetDeg = (((angleDeg - datumConv) % 360) + 360) % 360;
   }
   const scanOffsetMm = (scanOffsetDeg / 360) * circumference;
   if (scanOffsetMm < scanStartMm || scanOffsetMm > scanEndMm) return undefined;
 
   const rowFrac = indexRangeMm > 0 ? (indexOffset / indexRangeMm) * (data.length - 1) : 0;
-  const colFrac = scanRangeMm > 0 ? ((scanOffsetMm - scanStartMm) / scanRangeMm) * (data[0].length - 1) : 0;
+  const colFrac =
+    scanRangeMm > 0 ? ((scanOffsetMm - scanStartMm) / scanRangeMm) * (data[0].length - 1) : 0;
 
   const row = Math.round(rowFrac);
   const col = Math.round(colFrac);
@@ -170,10 +171,11 @@ function sampleComposite(
  */
 export function findOverlappingComposite(
   ann: AnnotationShapeConfig,
-  vesselState: VesselState,
+  vesselState: VesselState
 ): ScanCompositeConfig | undefined {
   const circumference = Math.PI * vesselState.id;
-  const composites = vesselState.scanComposites;
+  // Phase 3: appendage-body scans get per-body stats; excluded here so numbers stay correct in the interim (design §9).
+  const composites = vesselState.scanComposites.filter((c) => !c.bodyId);
 
   // Iterate in reverse — last (topmost) composite wins
   for (let i = composites.length - 1; i >= 0; i--) {
@@ -194,7 +196,7 @@ export function findOverlappingComposite(
 export function createAnnotationHeatmapCanvas(
   ann: AnnotationShapeConfig,
   vesselState: VesselState,
-  colorScale: string = 'Jet',
+  colorScale: string = 'Jet'
 ): HTMLCanvasElement | null {
   const circumference = Math.PI * vesselState.id;
   const composite = findOverlappingComposite(ann, vesselState);
@@ -209,7 +211,7 @@ export function createAnnotationHeatmapCanvas(
 
   // Annotation spatial bounds
   const halfWidthMm = ann.width / 2;
-  const halfHeightDeg = ((ann.height / 2) / circumference) * 360;
+  const halfHeightDeg = (ann.height / 2 / circumference) * 360;
 
   const axialStart = ann.pos - halfWidthMm;
   const axialEnd = ann.pos + halfWidthMm;
@@ -248,10 +250,10 @@ export function createAnnotationHeatmapCanvas(
   const flipU = composite.indexDirection === 'forward';
 
   for (let py = 0; py < canvasH; py++) {
-    const yFrac = flipV ? (canvasH - 1 - py) : py;
+    const yFrac = flipV ? canvasH - 1 - py : py;
     const angle = angleStart + (yFrac + 0.5) * angleStep;
     for (let px = 0; px < canvasW; px++) {
-      const xFrac = flipU ? (canvasW - 1 - px) : px;
+      const xFrac = flipU ? canvasW - 1 - px : px;
       const axial = axialStart + (xFrac + 0.5) * axialStep;
       const idx = (py * canvasW + px) * 4;
 

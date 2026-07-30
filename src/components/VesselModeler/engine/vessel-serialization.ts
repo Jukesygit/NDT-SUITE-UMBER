@@ -60,7 +60,11 @@ function serializeItem(item: object, spec: FieldSpec[], path: SerPath): RawItem 
     if (f.saveOn && f.saveOn !== path) continue;
     if (f.save === 'skip') continue;
     if (f.save && 'compute' in f.save) {
-      out[f.key] = f.save.compute(src);
+      // A compute returning undefined omits the key entirely. This keeps
+      // main-shell scan composites byte-identical: only appendage scans emit a
+      // derived sectionType. (Dome sectionType always computes a string.)
+      const computed = f.save.compute(src);
+      if (computed !== undefined) out[f.key] = computed;
       continue;
     }
     const v = src[f.key];

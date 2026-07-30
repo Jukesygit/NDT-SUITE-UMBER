@@ -16,6 +16,9 @@
 //   - scanComposites.useGlobalOrigin : LOCAL path only (save + load).
 //   - domeScanComposites.sectionType : CLOUD save only (derived field for the
 //                            scan_composites.section_type column).
+//   - scanComposites.sectionType     : CLOUD save only, appendage scans only
+//                            ('appendage:<id>' for the same column; omitted for
+//                            main-shell scans so their shape is unchanged).
 //   - annotations.labelMode          : saved on both paths, restored on neither.
 //   - scanComposites.data            : stripped on save, defaulted on load.
 // =============================================================================
@@ -64,6 +67,7 @@ export interface FieldSpec {
 // ---------------------------------------------------------------------------
 export const NOZZLE_SPEC: FieldSpec[] = [
   { key: 'name' },
+  { key: 'bodyId' },
   { key: 'pos' },
   { key: 'proj' },
   { key: 'angle' },
@@ -217,13 +221,16 @@ export const INSPECTION_IMAGE_SPEC: FieldSpec[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Scan composites — data stripped on save; useGlobalOrigin is LOCAL-path only
-// (gains bodyId in a later appendage phase)
+// Scan composites — data stripped on save; useGlobalOrigin is LOCAL-path only.
+// bodyId round-trips on both paths (undefined = main shell). sectionType is a
+// CLOUD-save-only derived field for the scan_composites.section_type column,
+// emitted only for appendage scans (mirrors the dome_left/dome_right pattern).
 // ---------------------------------------------------------------------------
 export const SCAN_COMPOSITE_SPEC: FieldSpec[] = [
   { key: 'id', load: { or: () => `sc_${Date.now()}` } },
   { key: 'name', load: { or: 'Untitled' } },
   { key: 'cloudId' },
+  { key: 'bodyId' },
   { key: 'data', save: 'skip', load: { or: () => [] } },
   { key: 'xAxis', load: { or: () => [] } },
   { key: 'yAxis', load: { or: () => [] } },
@@ -240,6 +247,12 @@ export const SCAN_COMPOSITE_SPEC: FieldSpec[] = [
   { key: 'opacity', load: { nullish: 1 } },
   { key: 'sourceNdeFile' },
   { key: 'sourceFiles' },
+  {
+    key: 'sectionType',
+    saveOn: 'cloud',
+    save: { compute: (sc) => (sc.bodyId ? `appendage:${String(sc.bodyId)}` : undefined) },
+    load: 'skip',
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -268,11 +281,8 @@ export const DOME_SCAN_SPEC: FieldSpec[] = [
   { key: 'sectionType', saveOn: 'cloud', save: { compute: (ds) => `dome_${String(ds.head)}` } },
 ];
 
-// ---------------------------------------------------------------------------
-// Appendage bodies — save: passthrough field list; load: normalizeAppendage()
-// (the single appendage defaulting point, mirroring domeScanComposites). No
-// heavy data to strip, so every field passes straight through on save.
-// ---------------------------------------------------------------------------
+// Appendage bodies — save: passthrough (no heavy data to strip);
+// load: normalizeAppendage() (the single appendage defaulting point).
 export const APPENDAGE_SPEC: FieldSpec[] = [
   { key: 'id' },
   { key: 'name' },

@@ -5,250 +5,351 @@ import { PIPE_SIZES, findClosestPipeSize } from '../types';
 import { SubSection } from './SliderRow';
 
 export interface NozzleSectionProps {
-    vesselState: VesselState;
-    selectedNozzleIndex: number;
-    onAddNozzle: (nozzle: NozzleConfig) => void;
-    onUpdateNozzle: (index: number, updates: Partial<NozzleConfig>) => void;
-    onRemoveNozzle: (index: number) => void;
-    onSelectNozzle: (index: number) => void;
-    isOpen?: boolean;
-    onToggle?: () => void;
+  vesselState: VesselState;
+  selectedNozzleIndex: number;
+  onAddNozzle: (nozzle: NozzleConfig) => void;
+  onUpdateNozzle: (index: number, updates: Partial<NozzleConfig>) => void;
+  onRemoveNozzle: (index: number) => void;
+  onSelectNozzle: (index: number) => void;
+  isOpen?: boolean;
+  onToggle?: () => void;
 }
 
 export function NozzleSection({
-    vesselState, selectedNozzleIndex,
-    onAddNozzle, onUpdateNozzle, onRemoveNozzle, onSelectNozzle,
-    isOpen, onToggle,
+  vesselState,
+  selectedNozzleIndex,
+  onAddNozzle,
+  onUpdateNozzle,
+  onRemoveNozzle,
+  onSelectNozzle,
+  isOpen,
+  onToggle,
 }: NozzleSectionProps) {
-    // Filter out plain-pipe nozzles — those are managed in the Piping section
-    const flangedNozzles = vesselState.nozzles
-        .map((n, i) => ({ nozzle: n, index: i }))
-        .filter(({ nozzle }) => nozzle.style !== 'plain-pipe');
+  // Filter out plain-pipe nozzles — those are managed in the Piping section
+  const flangedNozzles = vesselState.nozzles
+    .map((n, i) => ({ nozzle: n, index: i }))
+    .filter(({ nozzle }) => nozzle.style !== 'plain-pipe');
 
-    const sel = selectedNozzleIndex >= 0 ? vesselState.nozzles[selectedNozzleIndex] : null;
+  const sel = selectedNozzleIndex >= 0 ? vesselState.nozzles[selectedNozzleIndex] : null;
 
-    const addFromLibrary = (size: number) => {
-        const pipe = findClosestPipeSize(size);
-        onAddNozzle({
-            name: `N${vesselState.nozzles.length + 1}`,
-            pos: vesselState.length / 2,
-            proj: pipe.od * 2,
-            angle: 90,
-            size: pipe.id,
-        });
-    };
+  const addFromLibrary = (size: number) => {
+    const pipe = findClosestPipeSize(size);
+    onAddNozzle({
+      name: `N${vesselState.nozzles.length + 1}`,
+      pos: vesselState.length / 2,
+      proj: pipe.od * 2,
+      angle: 90,
+      size: pipe.id,
+    });
+  };
 
-    return (
-        <SubSection title="Nozzles" count={flangedNozzles.length} isOpen={isOpen} onToggle={onToggle}>
-            {/* Library grid - drag onto 3D canvas or click to add */}
-            <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', margin: '0 0 8px 0' }}>
-                Drag a nozzle size onto the vessel
-            </p>
-            <div className="vm-library-grid">
-                {PIPE_SIZES.map(p => (
-                    <div
-                        key={p.nps}
-                        className="vm-library-item"
-                        draggable
-                        onDragStart={(e) => {
-                            e.dataTransfer.setData('application/x-nozzle-pipe', JSON.stringify(p));
-                            e.dataTransfer.effectAllowed = 'copy';
-                        }}
-                        onClick={() => addFromLibrary(p.id)}
-                        title={`Drag or click to add ${p.nps} nozzle (${p.od}mm OD)`}
-                        style={{ userSelect: 'none' }}
-                    >
-                        <div className="size-label">{p.nps}</div>
-                        <div className="size-mm">{p.od}mm</div>
-                    </div>
-                ))}
+  return (
+    <SubSection title="Nozzles" count={flangedNozzles.length} isOpen={isOpen} onToggle={onToggle}>
+      {/* Library grid - drag onto 3D canvas or click to add */}
+      <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', margin: '0 0 8px 0' }}>
+        Drag a nozzle size onto the vessel
+      </p>
+      <div className="vm-library-grid">
+        {PIPE_SIZES.map((p) => (
+          <div
+            key={p.nps}
+            className="vm-library-item"
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData('application/x-nozzle-pipe', JSON.stringify(p));
+              e.dataTransfer.effectAllowed = 'copy';
+            }}
+            onClick={() => addFromLibrary(p.id)}
+            title={`Drag or click to add ${p.nps} nozzle (${p.od}mm OD)`}
+            style={{ userSelect: 'none' }}
+          >
+            <div className="size-label">{p.nps}</div>
+            <div className="size-mm">{p.od}mm</div>
+          </div>
+        ))}
+      </div>
+
+      {flangedNozzles.length > 0 && <div className="vm-library-separator" />}
+
+      {/* Nozzle list (flanged only — plain-pipe nozzles are in Piping section) */}
+      {flangedNozzles.map(({ nozzle: n, index: i }) => (
+        <React.Fragment key={i}>
+          <div
+            className={`vm-list-item ${i === selectedNozzleIndex ? 'selected' : ''}`}
+            onClick={() => onSelectNozzle(i)}
+          >
+            <div className="vm-list-item-info">
+              <strong>{n.name}</strong>{' '}
+              <span style={{ color: 'var(--color-primary-400, #60a5fa)', fontWeight: 600 }}>
+                {findClosestPipeSize(n.size).nps}
+              </span>
+              <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
+                {Math.round(n.pos)}mm &middot; {Math.round(n.angle)}&deg;
+              </div>
             </div>
-
-            {flangedNozzles.length > 0 && <div className="vm-library-separator" />}
-
-            {/* Nozzle list (flanged only — plain-pipe nozzles are in Piping section) */}
-            {flangedNozzles.map(({ nozzle: n, index: i }) => (
-                <React.Fragment key={i}>
-                    <div
-                        className={`vm-list-item ${i === selectedNozzleIndex ? 'selected' : ''}`}
-                        onClick={() => onSelectNozzle(i)}
-                    >
-                        <div className="vm-list-item-info">
-                            <strong>{n.name}</strong> <span style={{ color: 'var(--color-primary-400, #60a5fa)', fontWeight: 600 }}>{findClosestPipeSize(n.size).nps}</span>
-                            <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
-                                {Math.round(n.pos)}mm &middot; {Math.round(n.angle)}&deg;
-                            </div>
-                        </div>
-                        <button className="vm-btn-icon" onClick={e => { e.stopPropagation(); onRemoveNozzle(i); }}>
-                            <Trash2 size={14} />
-                        </button>
-                    </div>
-                    {i === selectedNozzleIndex && sel && (
-                        <div className="vm-form edit-mode" style={{ marginTop: 8, position: 'relative', zIndex: 1 }} onClick={e => e.stopPropagation()}>
-                            <div className="vm-control-group">
-                                <div className="vm-label"><span>Name</span></div>
-                                <input
-                                    className="vm-input"
-                                    value={sel.name}
-                                    onChange={e => onUpdateNozzle(selectedNozzleIndex, { name: e.target.value })}
-                                />
-                            </div>
-                            <div className="vm-form-row">
-                                <div className="vm-control-group">
-                                    <div className="vm-label"><span>Position</span></div>
-                                    <input
-                                        type="number"
-                                        className="vm-input"
-                                        value={sel.pos}
-                                        min={Math.round(-(vesselState.id / (2 * vesselState.headRatio)))}
-                                        max={Math.round(vesselState.length + vesselState.id / (2 * vesselState.headRatio))}
-                                        onChange={e => onUpdateNozzle(selectedNozzleIndex, { pos: Number(e.target.value) })}
-                                    />
-                                </div>
-                                <div className="vm-control-group">
-                                    <div className="vm-label"><span>Angle</span></div>
-                                    <input
-                                        type="number"
-                                        className="vm-input"
-                                        value={sel.angle}
-                                        min={0}
-                                        max={360}
-                                        onChange={e => onUpdateNozzle(selectedNozzleIndex, { angle: Number(e.target.value) })}
-                                    />
-                                </div>
-                            </div>
-                            <div className="vm-form-row">
-                                <div className="vm-control-group">
-                                    <div className="vm-label"><span>Projection</span></div>
-                                    <input
-                                        type="number"
-                                        className="vm-input"
-                                        value={sel.proj}
-                                        onChange={e => onUpdateNozzle(selectedNozzleIndex, { proj: Number(e.target.value) })}
-                                    />
-                                </div>
-                                <div className="vm-control-group">
-                                    <div className="vm-label"><span>Size (ID)</span></div>
-                                    <input
-                                        type="number"
-                                        className="vm-input"
-                                        value={sel.size}
-                                        onChange={e => onUpdateNozzle(selectedNozzleIndex, { size: Number(e.target.value) })}
-                                    />
-                                </div>
-                            </div>
-                            <div className="vm-control-group">
-                                <div className="vm-label"><span>Reinforcing Pad</span></div>
-                                <div className="vm-toggle-group">
-                                    <button
-                                        className={`vm-toggle-btn ${(sel.showRepad ?? false) ? 'active' : ''}`}
-                                        onClick={() => onUpdateNozzle(selectedNozzleIndex, { showRepad: true })}
-                                        title="Show the reinforcing pad (curved plate conforming to the shell)"
-                                    >
-                                        On
-                                    </button>
-                                    <button
-                                        className={`vm-toggle-btn ${!(sel.showRepad ?? false) ? 'active' : ''}`}
-                                        onClick={() => onUpdateNozzle(selectedNozzleIndex, { showRepad: false })}
-                                        title="Hide the reinforcing pad"
-                                    >
-                                        Off
-                                    </button>
-                                </div>
-                            </div>
-                            {(sel.showRepad ?? false) && (
-                                <div className="vm-form-row">
-                                    <div className="vm-control-group">
-                                        <div className="vm-label"><span>Pad OD (mm)</span></div>
-                                        <input
-                                            type="number"
-                                            className="vm-input"
-                                            value={sel.repadOD ?? Math.round((sel.pipeOD || findClosestPipeSize(sel.size).od) * 1.8)}
-                                            onChange={e => onUpdateNozzle(selectedNozzleIndex, { repadOD: Number(e.target.value) })}
-                                        />
-                                    </div>
-                                    <div className="vm-control-group">
-                                        <div className="vm-label"><span>Pad Thk (mm)</span></div>
-                                        <input
-                                            type="number"
-                                            className="vm-input"
-                                            value={sel.repadThickness ?? 10}
-                                            onChange={e => onUpdateNozzle(selectedNozzleIndex, { repadThickness: Number(e.target.value) })}
-                                        />
-                                    </div>
-                                </div>
-                            )}
-                            <div className="vm-control-group">
-                                <div className="vm-label"><span>Weld Neck</span></div>
-                                <div className="vm-toggle-group">
-                                    <button
-                                        className={`vm-toggle-btn ${(sel.showWeldNeck ?? (sel.hideRepad !== true)) ? 'active' : ''}`}
-                                        onClick={() => onUpdateNozzle(selectedNozzleIndex, { showWeldNeck: true })}
-                                        title="Show weld neck at shell junction"
-                                    >
-                                        On
-                                    </button>
-                                    <button
-                                        className={`vm-toggle-btn ${!(sel.showWeldNeck ?? (sel.hideRepad !== true)) ? 'active' : ''}`}
-                                        onClick={() => onUpdateNozzle(selectedNozzleIndex, { showWeldNeck: false })}
-                                        title="Hide weld neck (plain cylinder at junction)"
-                                    >
-                                        Off
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="vm-control-group">
-                                <div className="vm-label"><span>Orientation</span></div>
-                                <div className="vm-toggle-group">
-                                    {([
-                                        ['radial', 'Radial'],
-                                        ['horizontal', 'Horiz'],
-                                        ['vertical-up', '\u25B2'],
-                                        ['vertical-down', '\u25BC'],
-                                    ] as [NozzleOrientationMode, string][]).map(([mode, label]) => (
-                                        <button
-                                            key={mode}
-                                            className={`vm-toggle-btn ${(sel.orientationMode || 'radial') === mode ? 'active' : ''}`}
-                                            onClick={() => onUpdateNozzle(selectedNozzleIndex, { orientationMode: mode })}
-                                            title={mode === 'radial' ? 'Radial (outward from center)' :
-                                                   mode === 'horizontal' ? 'Horizontal (fixed axis)' :
-                                                   mode === 'vertical-up' ? 'Vertical Up' : 'Vertical Down'}
-                                        >
-                                            {label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                            <div className="vm-control-group">
-                                <div className="vm-label"><span>Rotate (vert. axis)</span></div>
-                                <button
-                                    className={`vm-toggle-btn ${(sel.azimuthRotation ?? 0) !== 0 ? 'active' : ''}`}
-                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%' }}
-                                    onClick={() => onUpdateNozzle(selectedNozzleIndex, { azimuthRotation: ((sel.azimuthRotation ?? 0) + 90) % 360 })}
-                                    title="Rotate the nozzle 90&deg; about the vertical axis. Click repeatedly to step it around so a dome-end nozzle points straight out the end."
-                                >
-                                    <RotateCw size={13} />
-                                    {sel.azimuthRotation ?? 0}&deg;
-                                </button>
-                            </div>
-                            <button
-                                className="vm-btn-sm"
-                                onClick={() => onRemoveNozzle(selectedNozzleIndex)}
-                                title="Delete this nozzle"
-                                style={{
-                                    fontSize: '0.7rem',
-                                    padding: '3px 8px',
-                                    marginTop: 8,
-                                    color: 'var(--color-danger, #ef4444)',
-                                    width: '100%',
-                                }}
-                            >
-                                Delete Nozzle
-                            </button>
-                        </div>
+            <button
+              className="vm-btn-icon"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemoveNozzle(i);
+              }}
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+          {i === selectedNozzleIndex && sel && (
+            <div
+              className="vm-form edit-mode"
+              style={{ marginTop: 8, position: 'relative', zIndex: 1 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="vm-control-group">
+                <div className="vm-label">
+                  <span>Name</span>
+                </div>
+                <input
+                  className="vm-input"
+                  value={sel.name}
+                  onChange={(e) => onUpdateNozzle(selectedNozzleIndex, { name: e.target.value })}
+                />
+              </div>
+              {vesselState.appendages.length > 0 && (
+                <div className="vm-control-group">
+                  <div className="vm-label">
+                    <span>Mount on</span>
+                  </div>
+                  <select
+                    className="vm-select"
+                    value={sel.bodyId ?? ''}
+                    onChange={(e) =>
+                      onUpdateNozzle(selectedNozzleIndex, {
+                        bodyId: e.target.value === '' ? undefined : e.target.value,
+                      })
+                    }
+                    title="Mount this nozzle on the main vessel or an appendage body. Position and angle are reinterpreted in the chosen body's frame — adjust them after switching."
+                  >
+                    <option value="">Main vessel</option>
+                    {vesselState.appendages.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="vm-form-row">
+                <div className="vm-control-group">
+                  <div className="vm-label">
+                    <span>Position</span>
+                  </div>
+                  <input
+                    type="number"
+                    className="vm-input"
+                    value={sel.pos}
+                    min={Math.round(-(vesselState.id / (2 * vesselState.headRatio)))}
+                    max={Math.round(
+                      vesselState.length + vesselState.id / (2 * vesselState.headRatio)
                     )}
-                </React.Fragment>
-            ))}
-        </SubSection>
-    );
+                    onChange={(e) =>
+                      onUpdateNozzle(selectedNozzleIndex, { pos: Number(e.target.value) })
+                    }
+                  />
+                </div>
+                <div className="vm-control-group">
+                  <div className="vm-label">
+                    <span>Angle</span>
+                  </div>
+                  <input
+                    type="number"
+                    className="vm-input"
+                    value={sel.angle}
+                    min={0}
+                    max={360}
+                    onChange={(e) =>
+                      onUpdateNozzle(selectedNozzleIndex, { angle: Number(e.target.value) })
+                    }
+                  />
+                </div>
+              </div>
+              <div className="vm-form-row">
+                <div className="vm-control-group">
+                  <div className="vm-label">
+                    <span>Projection</span>
+                  </div>
+                  <input
+                    type="number"
+                    className="vm-input"
+                    value={sel.proj}
+                    onChange={(e) =>
+                      onUpdateNozzle(selectedNozzleIndex, { proj: Number(e.target.value) })
+                    }
+                  />
+                </div>
+                <div className="vm-control-group">
+                  <div className="vm-label">
+                    <span>Size (ID)</span>
+                  </div>
+                  <input
+                    type="number"
+                    className="vm-input"
+                    value={sel.size}
+                    onChange={(e) =>
+                      onUpdateNozzle(selectedNozzleIndex, { size: Number(e.target.value) })
+                    }
+                  />
+                </div>
+              </div>
+              <div className="vm-control-group">
+                <div className="vm-label">
+                  <span>Reinforcing Pad</span>
+                </div>
+                <div className="vm-toggle-group">
+                  <button
+                    className={`vm-toggle-btn ${(sel.showRepad ?? false) ? 'active' : ''}`}
+                    onClick={() => onUpdateNozzle(selectedNozzleIndex, { showRepad: true })}
+                    title="Show the reinforcing pad (curved plate conforming to the shell)"
+                  >
+                    On
+                  </button>
+                  <button
+                    className={`vm-toggle-btn ${!(sel.showRepad ?? false) ? 'active' : ''}`}
+                    onClick={() => onUpdateNozzle(selectedNozzleIndex, { showRepad: false })}
+                    title="Hide the reinforcing pad"
+                  >
+                    Off
+                  </button>
+                </div>
+              </div>
+              {(sel.showRepad ?? false) && (
+                <div className="vm-form-row">
+                  <div className="vm-control-group">
+                    <div className="vm-label">
+                      <span>Pad OD (mm)</span>
+                    </div>
+                    <input
+                      type="number"
+                      className="vm-input"
+                      value={
+                        sel.repadOD ??
+                        Math.round((sel.pipeOD || findClosestPipeSize(sel.size).od) * 1.8)
+                      }
+                      onChange={(e) =>
+                        onUpdateNozzle(selectedNozzleIndex, { repadOD: Number(e.target.value) })
+                      }
+                    />
+                  </div>
+                  <div className="vm-control-group">
+                    <div className="vm-label">
+                      <span>Pad Thk (mm)</span>
+                    </div>
+                    <input
+                      type="number"
+                      className="vm-input"
+                      value={sel.repadThickness ?? 10}
+                      onChange={(e) =>
+                        onUpdateNozzle(selectedNozzleIndex, {
+                          repadThickness: Number(e.target.value),
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              )}
+              <div className="vm-control-group">
+                <div className="vm-label">
+                  <span>Weld Neck</span>
+                </div>
+                <div className="vm-toggle-group">
+                  <button
+                    className={`vm-toggle-btn ${(sel.showWeldNeck ?? sel.hideRepad !== true) ? 'active' : ''}`}
+                    onClick={() => onUpdateNozzle(selectedNozzleIndex, { showWeldNeck: true })}
+                    title="Show weld neck at shell junction"
+                  >
+                    On
+                  </button>
+                  <button
+                    className={`vm-toggle-btn ${!(sel.showWeldNeck ?? sel.hideRepad !== true) ? 'active' : ''}`}
+                    onClick={() => onUpdateNozzle(selectedNozzleIndex, { showWeldNeck: false })}
+                    title="Hide weld neck (plain cylinder at junction)"
+                  >
+                    Off
+                  </button>
+                </div>
+              </div>
+              <div className="vm-control-group">
+                <div className="vm-label">
+                  <span>Orientation</span>
+                </div>
+                <div className="vm-toggle-group">
+                  {(
+                    [
+                      ['radial', 'Radial'],
+                      ['horizontal', 'Horiz'],
+                      ['vertical-up', '\u25B2'],
+                      ['vertical-down', '\u25BC'],
+                    ] as [NozzleOrientationMode, string][]
+                  ).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      className={`vm-toggle-btn ${(sel.orientationMode || 'radial') === mode ? 'active' : ''}`}
+                      onClick={() => onUpdateNozzle(selectedNozzleIndex, { orientationMode: mode })}
+                      title={
+                        mode === 'radial'
+                          ? 'Radial (outward from center)'
+                          : mode === 'horizontal'
+                            ? 'Horizontal (fixed axis)'
+                            : mode === 'vertical-up'
+                              ? 'Vertical Up'
+                              : 'Vertical Down'
+                      }
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="vm-control-group">
+                <div className="vm-label">
+                  <span>Rotate (vert. axis)</span>
+                </div>
+                <button
+                  className={`vm-toggle-btn ${(sel.azimuthRotation ?? 0) !== 0 ? 'active' : ''}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    width: '100%',
+                  }}
+                  onClick={() =>
+                    onUpdateNozzle(selectedNozzleIndex, {
+                      azimuthRotation: ((sel.azimuthRotation ?? 0) + 90) % 360,
+                    })
+                  }
+                  title="Rotate the nozzle 90&deg; about the vertical axis. Click repeatedly to step it around so a dome-end nozzle points straight out the end."
+                >
+                  <RotateCw size={13} />
+                  {sel.azimuthRotation ?? 0}&deg;
+                </button>
+              </div>
+              <button
+                className="vm-btn-sm"
+                onClick={() => onRemoveNozzle(selectedNozzleIndex)}
+                title="Delete this nozzle"
+                style={{
+                  fontSize: '0.7rem',
+                  padding: '3px 8px',
+                  marginTop: 8,
+                  color: 'var(--color-danger, #ef4444)',
+                  width: '100%',
+                }}
+              >
+                Delete Nozzle
+              </button>
+            </div>
+          )}
+        </React.Fragment>
+      ))}
+    </SubSection>
+  );
 }

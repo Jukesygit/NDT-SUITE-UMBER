@@ -24,10 +24,11 @@ import { normAngle, sampleComposite } from './scan-sampling';
  */
 export function computeAnnotationThicknessStats(
   ann: AnnotationShapeConfig,
-  vesselState: VesselState,
+  vesselState: VesselState
 ): AnnotationThicknessStats | undefined {
   const circumference = Math.PI * vesselState.id;
-  const composites = vesselState.scanComposites;
+  // Phase 3: appendage-body scans get per-body stats; excluded here so numbers stay correct in the interim (design §9).
+  const composites = vesselState.scanComposites.filter((c) => !c.bodyId);
   const STEP = 2; // mm spacing for sample grid
 
   // Annotation dimensions
@@ -55,7 +56,6 @@ export function computeAnnotationThicknessStats(
 
   for (let axial = axialStart; axial <= axialEnd; axial += STEP) {
     for (let angle = angleStart; angle <= angleEnd; angle += angleDegStep) {
-
       const sampleAngle = normAngle(angle);
 
       // Iterate composites in reverse (last = topmost wins)
@@ -126,7 +126,7 @@ export function computeAnnotationThicknessStats(
  */
 export function computeSeverityLevel(
   stats: AnnotationThicknessStats | undefined,
-  thresholds: ThicknessThresholds | undefined,
+  thresholds: ThicknessThresholds | undefined
 ): 'red' | 'yellow' | 'green' | null {
   if (!stats || !thresholds) return null;
 
@@ -155,9 +155,7 @@ export function computeSeverityLevel(
  * Recompute thickness stats and severity levels for all annotations in the
  * vessel state. Returns a new array of annotations with updated fields.
  */
-export function recomputeAllAnnotationStats(
-  vesselState: VesselState,
-): AnnotationShapeConfig[] {
+export function recomputeAllAnnotationStats(vesselState: VesselState): AnnotationShapeConfig[] {
   return vesselState.annotations.map((ann) => {
     const thicknessStats = computeAnnotationThicknessStats(ann, vesselState);
     const severityLevel = computeSeverityLevel(thicknessStats, vesselState.thicknessThresholds);

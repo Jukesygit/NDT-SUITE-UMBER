@@ -62,10 +62,13 @@ function InlineEdit({ value, onCommit }: { value: number; onCommit: (v: number) 
     setEditing(false);
   }, [draft, onCommit]);
 
-  const handleKey = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') commit();
-    if (e.key === 'Escape') setEditing(false);
-  }, [commit]);
+  const handleKey = useCallback(
+    (e: KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') commit();
+      if (e.key === 'Escape') setEditing(false);
+    },
+    [commit]
+  );
 
   if (editing) {
     return (
@@ -76,7 +79,7 @@ function InlineEdit({ value, onCommit }: { value: number; onCommit: (v: number) 
         max={100}
         step={0.1}
         value={draft}
-        onChange={e => setDraft(e.target.value)}
+        onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={handleKey}
         autoFocus
@@ -108,13 +111,16 @@ export default function ScanCoverageStatsSection({
   const isPipe = vesselState.vesselShape === 'pipe';
   const isVertical = vesselState.orientation === 'vertical';
 
-  const regionAreas = useMemo(() => computeRegionTotalAreas(vesselState), [
-    vesselState.id, vesselState.length, vesselState.headRatio,
-  ]);
+  const regionAreas = useMemo(
+    () => computeRegionTotalAreas(vesselState),
+    [vesselState.id, vesselState.length, vesselState.headRatio]
+  );
 
   const achievedMm2 = useMemo(() => {
     const result = { leftHead: 0, cylinder: 0, rightHead: 0 };
     for (const sc of vesselState.scanComposites) {
+      // Phase 3: appendage-body scans get per-body stats; excluded here so numbers stay correct in the interim (design §9).
+      if (sc.bodyId) continue;
       result.cylinder += compositeValidArea(sc);
     }
     for (const ds of vesselState.domeScanComposites ?? []) {
@@ -133,7 +139,7 @@ export default function ScanCoverageStatsSection({
       };
       onUpdateTargets(updated);
     },
-    [targets, onUpdateTargets],
+    [targets, onUpdateTargets]
   );
 
   // Horizontal heads face world ±X; name them by the scene's North Heading.
@@ -152,11 +158,17 @@ export default function ScanCoverageStatsSection({
     },
   ];
 
-  const visibleSections = sections.filter(s => s.show);
+  const visibleSections = sections.filter((s) => s.show);
 
   const totalArea = visibleSections.reduce((sum, s) => sum + regionAreas[s.key], 0);
-  const totalRba = visibleSections.reduce((sum, s) => sum + (targets[s.key]?.rbaPct ?? 0) / 100 * regionAreas[s.key], 0);
-  const totalScoped = visibleSections.reduce((sum, s) => sum + (targets[s.key]?.scopedPct ?? 0) / 100 * regionAreas[s.key], 0);
+  const totalRba = visibleSections.reduce(
+    (sum, s) => sum + ((targets[s.key]?.rbaPct ?? 0) / 100) * regionAreas[s.key],
+    0
+  );
+  const totalScoped = visibleSections.reduce(
+    (sum, s) => sum + ((targets[s.key]?.scopedPct ?? 0) / 100) * regionAreas[s.key],
+    0
+  );
   const totalAchieved = visibleSections.reduce((sum, s) => sum + achievedMm2[s.key], 0);
 
   return (
@@ -181,18 +193,17 @@ export default function ScanCoverageStatsSection({
           <div key={key} className="vm-scancov-row">
             <span className="vm-scancov-section-col">{label}</span>
             <div className="vm-scancov-cell">
-              <InlineEdit value={entry.rbaPct} onCommit={v => handleUpdate(key, 'rbaPct', v)} />
+              <InlineEdit value={entry.rbaPct} onCommit={(v) => handleUpdate(key, 'rbaPct', v)} />
               <span className="vm-scancov-cell-area">{formatArea(rbaSqm)} m²</span>
             </div>
             <div className="vm-scancov-cell">
-              <InlineEdit value={entry.scopedPct} onCommit={v => handleUpdate(key, 'scopedPct', v)} />
+              <InlineEdit
+                value={entry.scopedPct}
+                onCommit={(v) => handleUpdate(key, 'scopedPct', v)}
+              />
               <span className="vm-scancov-cell-area">{formatArea(scopedSqm)} m²</span>
             </div>
-            <StatCell
-              pct={`${formatPct(achievedPct)}%`}
-              area={formatArea(achieved)}
-              isAchieved
-            />
+            <StatCell pct={`${formatPct(achievedPct)}%`} area={formatArea(achieved)} isAchieved />
           </div>
         );
       })}

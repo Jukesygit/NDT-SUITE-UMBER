@@ -49,6 +49,9 @@ export function ConnectionPointList({
 }: ConnectionPointListProps) {
   const { pipelines, nozzles } = vesselState;
 
+  // Appendage names for the "on <body>" suffix on appendage-mounted connection points.
+  const appendageNameById = new Map(vesselState.appendages.map((a) => [a.id, a.name]));
+
   // Track which connection point accordions are expanded
   const [expandedPoints, setExpandedPoints] = useState<Set<number>>(() => new Set());
   const toggleExpanded = (index: number) => {
@@ -172,6 +175,9 @@ export function ConnectionPointList({
                   <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.45)' }}>
                     {findClosestPipeSize(nozzle.size).nps} @ {Math.round(nozzle.pos)}mm,{' '}
                     {Math.round(nozzle.angle)}&deg;
+                    {nozzle.bodyId && appendageNameById.has(nozzle.bodyId) && (
+                      <> &middot; on {appendageNameById.get(nozzle.bodyId)}</>
+                    )}
                     {segCount > 0 && (
                       <>
                         {' '}

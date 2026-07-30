@@ -379,10 +379,12 @@ export function createScanCompositePlane(
     evictHeatmapCache();
   }
 
-  // --- Vessel geometry constants ---
-  const shellRadius = vesselState.id / 2;
-  const RADIUS = shellRadius;
-  const frame = resolveBodyFrame(vesselState);
+  // --- Body geometry constants (main shell OR appendage, via the frame) ---
+  // Resolving through composite.bodyId keeps main-shell composites byte-identical
+  // (frame.radius === vesselState.id / 2 for the main frame) while appendage
+  // composites pick up the appendage radius/circumference automatically.
+  const frame = resolveBodyFrame(vesselState, composite.bodyId);
+  const RADIUS = frame.radius;
   const circumference = 2 * Math.PI * RADIUS;
 
   // --- Dimensions from axis data ---
@@ -418,6 +420,21 @@ export function createScanCompositePlane(
       ? startAngle - scanHalf // CW: scan extends toward decreasing angles
       : startAngle + scanHalf; // CCW: scan extends toward increasing angles
 
+  // --- Axial span (longitudinal) ---
+  // The appendage frame is purely cylindrical: unlike the main shell it applies
+  // no ellipsoidal head-cap wrap in v1, so clamp the scan's axial extent to the
+  // cylinder span [0, axialLength] — the coverage can't float past the end
+  // closure or dip below the junction into the shell. Main-shell composites are
+  // untouched (byte-identical legacy path).
+  let effectiveCenter = indexCenter;
+  let effectiveWidth = texWidth;
+  if (frame.kind === 'appendage') {
+    const spanMin = Math.max(0, Math.min(frame.axialLength, indexCenter - texWidth / 2));
+    const spanMax = Math.max(0, Math.min(frame.axialLength, indexCenter + texWidth / 2));
+    effectiveCenter = (spanMin + spanMax) / 2;
+    effectiveWidth = Math.max(spanMax - spanMin, 0);
+  }
+
   // --- Segment counts (scale with physical size) ---
   const baseSegments = 64;
   const segmentsX = Math.max(16, Math.ceil(baseSegments * Math.max(1, texWidth / RADIUS)));
@@ -430,9 +447,9 @@ export function createScanCompositePlane(
   const surfaceOffset = 2; // mm above the shell surface
 
   const { vertices, uvs, indices } = buildSurfaceGrid(frame, {
-    centerPos: indexCenter,
+    centerPos: effectiveCenter,
     centerAngleRad: centerAngle,
-    width: texWidth,
+    width: effectiveWidth,
     angularSpanRad: angularSpan,
     offset: surfaceOffset,
     segmentsX,
@@ -488,9 +505,9 @@ export function createScanCompositePlane(
     const borderOffset = 1;
 
     const { vertices: borderVertices, indices: borderIndices } = buildSurfaceGrid(frame, {
-      centerPos: indexCenter,
+      centerPos: effectiveCenter,
       centerAngleRad: centerAngle,
-      width: texWidth * borderScale,
+      width: effectiveWidth * borderScale,
       angularSpanRad: angularSpan * borderScale,
       offset: borderOffset,
       segmentsX,

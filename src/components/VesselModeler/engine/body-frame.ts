@@ -85,14 +85,20 @@ function buildMainFrame(state: VesselState): SurfaceFrame {
   const HEAD_DEPTH = state.id / (2 * state.headRatio);
   const isVertical = state.orientation === 'vertical';
 
-  /** Cylindrical radius at an axial position (mirrors shellPoint). */
+  /**
+   * Cylindrical radius at an axial position (mirrors shellPoint). The head ratio
+   * clamps at 1 (not 0.99), so the surface reaches the true pole (radius 0) at
+   * the apex. The former 0.99 floor bottomed the radius out at ~0.141*R, leaving
+   * a forbidden disk at each apex that coverage/annotation rects could not touch;
+   * clamping at 1 lets the meridian close all the way to the pole.
+   */
   function radiusAt(posMm: number): number {
     if (posMm < 0) {
-      const ratio = Math.min(0.99, Math.abs(posMm / HEAD_DEPTH));
+      const ratio = Math.min(1, Math.abs(posMm / HEAD_DEPTH));
       return RADIUS * Math.sqrt(1 - ratio * ratio);
     }
     if (posMm > TAN_TAN) {
-      const ratio = Math.min(0.99, Math.abs((posMm - TAN_TAN) / HEAD_DEPTH));
+      const ratio = Math.min(1, Math.abs((posMm - TAN_TAN) / HEAD_DEPTH));
       return RADIUS * Math.sqrt(1 - ratio * ratio);
     }
     return RADIUS;

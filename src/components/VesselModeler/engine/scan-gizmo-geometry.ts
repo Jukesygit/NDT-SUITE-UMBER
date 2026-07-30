@@ -10,7 +10,6 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import type { ScanCompositeConfig, VesselState } from '../types';
-import { shellPoint } from './annotation-geometry';
 import { resolveBodyFrame, type SurfaceFrame } from './body-frame';
 
 // ---------------------------------------------------------------------------
@@ -158,7 +157,7 @@ function buildCircumferentialArrow(
   composite: ScanCompositeConfig,
   vesselState: VesselState
 ): THREE.Group {
-  const frame = resolveBodyFrame(vesselState);
+  const frame = resolveBodyFrame(vesselState, composite.bodyId);
   const points: THREE.Vector3[] = [];
   for (let i = 0; i <= CIRC_SEGMENTS; i++) {
     const t = i / CIRC_SEGMENTS;
@@ -168,8 +167,7 @@ function buildCircumferentialArrow(
       composite.scanDirection === 'cw'
         ? composite.datumAngleDeg + 90 - offsetDeg
         : composite.datumAngleDeg + 90 + offsetDeg;
-    const angleRad = (angleDeg * Math.PI) / 180;
-    points.push(shellPoint(composite.indexStartMm, angleRad, vesselState, SURFACE_OFFSET));
+    points.push(frame.surfacePoint(composite.indexStartMm, angleDeg, SURFACE_OFFSET));
   }
 
   const center = getVesselCenter(frame, composite.indexStartMm);
@@ -192,8 +190,8 @@ function buildLongitudinalArrow(
   composite: ScanCompositeConfig,
   vesselState: VesselState
 ): THREE.Group {
-  const frame = resolveBodyFrame(vesselState);
-  const datumRad = ((composite.datumAngleDeg + 90) * Math.PI) / 180;
+  const frame = resolveBodyFrame(vesselState, composite.bodyId);
+  const datumDeg = composite.datumAngleDeg + 90;
   const arrowLengthMm = Math.min(3000, frame.axialLength * 0.4);
 
   const points: THREE.Vector3[] = [];
@@ -203,7 +201,7 @@ function buildLongitudinalArrow(
       composite.indexDirection === 'forward'
         ? Math.min(composite.indexStartMm + t * arrowLengthMm, frame.axialLength)
         : Math.max(composite.indexStartMm - t * arrowLengthMm, 0);
-    points.push(shellPoint(posMm, datumRad, vesselState, SURFACE_OFFSET));
+    points.push(frame.surfacePoint(posMm, datumDeg, SURFACE_OFFSET));
   }
 
   const center = getVesselCenter(frame, composite.indexStartMm);
@@ -227,10 +225,11 @@ export function buildScanOrientationGizmo(
   vesselState: VesselState
 ): { group: THREE.Group; originMesh: THREE.Mesh } {
   const group = new THREE.Group();
-  const datumRad = ((composite.datumAngleDeg + 90) * Math.PI) / 180;
+  const frame = resolveBodyFrame(vesselState, composite.bodyId);
+  const datumDeg = composite.datumAngleDeg + 90;
 
   // --- Origin sphere (draggable handle) ---
-  const originPos = shellPoint(composite.indexStartMm, datumRad, vesselState, SURFACE_OFFSET);
+  const originPos = frame.surfacePoint(composite.indexStartMm, datumDeg, SURFACE_OFFSET);
   const sphereGeom = new THREE.SphereGeometry(ORIGIN_RADIUS, 12, 8);
   const sphereMat = new THREE.MeshBasicMaterial({
     color: 0xffffff,

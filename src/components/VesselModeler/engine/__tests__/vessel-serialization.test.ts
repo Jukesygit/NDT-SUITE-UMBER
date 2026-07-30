@@ -428,6 +428,103 @@ describe('per-path field differences', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Nozzle bodyId — an appendage-mounted nozzle round-trips on both paths, while a
+// main-shell nozzle keeps no bodyId tag (byte-identical legacy shape).
+// ---------------------------------------------------------------------------
+
+describe('nozzle bodyId (appendage mount)', () => {
+  function makeMixedNozzleFixture(): VesselState {
+    const fixture = makeFixture();
+    fixture.nozzles = [
+      { name: 'N-main', pos: 1000, proj: 200, angle: 90, size: 150 },
+      { name: 'N-app', pos: 500, proj: 200, angle: 0, size: 100, bodyId: 'app-1' },
+    ];
+    return fixture;
+  }
+
+  for (const path of ['local', 'cloud'] as const) {
+    it(`round-trips an appendage-mounted nozzle on the ${path} path`, () => {
+      const restored = roundTrip(makeMixedNozzleFixture(), path);
+      expect(restored.nozzles[1].bodyId).toBe('app-1');
+      expect(restored.nozzles[1].pos).toBe(500);
+      expect(restored.nozzles[1].angle).toBe(0);
+      // The main-shell nozzle is untouched — no bodyId tag.
+      expect(restored.nozzles[0].bodyId).toBeUndefined();
+    });
+
+    it(`persists bodyId only for the appendage nozzle on the ${path} path`, () => {
+      // JSON boundary mirrors the real save (undefined bodyId is dropped there).
+      const serialized = JSON.parse(
+        JSON.stringify(serializeVesselState(makeMixedNozzleFixture(), { path }))
+      ) as { nozzles: Array<Record<string, unknown>> };
+      expect(serialized.nozzles[0]).not.toHaveProperty('bodyId');
+      expect(serialized.nozzles[1].bodyId).toBe('app-1');
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Scan composite bodyId (appendage mount) — an appendage-mounted scan round-trips
+// on both paths; on the cloud path it derives section_type = 'appendage:<id>'.
+// Main-shell scans keep no bodyId and emit no section_type (byte-identical shape).
+// ---------------------------------------------------------------------------
+
+describe('scan composite bodyId (appendage mount)', () => {
+  function makeMixedScanFixture(): VesselState {
+    const fixture = makeFixture();
+    const base = fixture.scanComposites[0];
+    fixture.scanComposites = [
+      { ...base, id: 'sc-main', bodyId: undefined },
+      { ...base, id: 'sc-app', bodyId: 'app-1' },
+    ];
+    return fixture;
+  }
+
+  for (const path of ['local', 'cloud'] as const) {
+    it(`round-trips an appendage-mounted scan on the ${path} path`, () => {
+      const restored = roundTrip(makeMixedScanFixture(), path);
+      expect(restored.scanComposites[1].bodyId).toBe('app-1');
+      // The main-shell scan is untouched — no bodyId tag.
+      expect(restored.scanComposites[0].bodyId).toBeUndefined();
+    });
+
+    it(`persists bodyId only for the appendage scan on the ${path} path`, () => {
+      // JSON boundary mirrors the real save (undefined bodyId is dropped there).
+      const serialized = JSON.parse(
+        JSON.stringify(serializeVesselState(makeMixedScanFixture(), { path }))
+      ) as { scanComposites: Array<Record<string, unknown>> };
+      expect(serialized.scanComposites[0]).not.toHaveProperty('bodyId');
+      expect(serialized.scanComposites[1].bodyId).toBe('app-1');
+    });
+  }
+
+  it('derives section_type = appendage:<id> for appendage scans on the cloud path only', () => {
+    const cloud = serializeVesselState(makeMixedScanFixture(), {
+      path: 'cloud',
+      modelType: 'blank',
+    }) as { scanComposites: Array<Record<string, unknown>> };
+    expect(cloud.scanComposites[1].sectionType).toBe('appendage:app-1');
+    // Main-shell scans emit no sectionType (shape unchanged from before bodyId).
+    expect(cloud.scanComposites[0]).not.toHaveProperty('sectionType');
+  });
+
+  it('omits scan sectionType entirely on the local path', () => {
+    const local = serializeVesselState(makeMixedScanFixture(), { path: 'local' }) as {
+      scanComposites: Array<Record<string, unknown>>;
+    };
+    expect(local.scanComposites[0]).not.toHaveProperty('sectionType');
+    expect(local.scanComposites[1]).not.toHaveProperty('sectionType');
+  });
+
+  it('never restores a derived sectionType onto the loaded scan config', () => {
+    const restored = roundTrip(makeMixedScanFixture(), 'cloud') as unknown as {
+      scanComposites: Array<Record<string, unknown>>;
+    };
+    expect(restored.scanComposites[1]).not.toHaveProperty('sectionType');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Legacy payloads — no domeScanComposites key must load as [] (not undefined).
 // ---------------------------------------------------------------------------
 

@@ -452,60 +452,77 @@ export function buildVesselScene(
     const mat = idx === selectedNozzleIndex ? nozzleHighlightMaterial : nozzleMaterial;
     const nozzleGroup = createFlangedNozzle(n, RADIUS, mat);
 
-    // Surface normal (nozzle mount orientation) comes from the shared frame,
-    // which reproduces the legacy nozzle-mount normal math exactly.
-    const normal = mainFrame.surfaceNormal(n.pos, n.angle);
-
-    // DYNAMIC RADIUS + POSITION. Kept inline (not via frame.surfacePoint) because
-    // a head nozzle collapses to the axis using Math.min(1, …), whereas the
-    // frame's surfacePoint uses the shell/annotation cap Math.min(0.99, …); the
-    // two differ only near the head apex, so preserving exact placement means
-    // keeping this radius branching here.
-    let r_local = RADIUS;
+    // Angle in radians — shared by the placement branches below and the
+    // orientation-mode override that follows.
     const rad = (n.angle * Math.PI) / 180;
+    let normal: THREE.Vector3;
 
-    if (isVertical) {
-      // VERTICAL VESSEL - position along Y axis
-      const y_global = (n.pos - TAN_TAN / 2) * SCALE;
-
-      if (n.pos < 0) {
-        // BOTTOM HEAD (Ellipsoid)
-        const ratio = Math.min(1, Math.abs(n.pos / HEAD_DEPTH));
-        r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
-      } else if (n.pos > TAN_TAN) {
-        // TOP HEAD
-        const ratio = Math.min(1, Math.abs((n.pos - TAN_TAN) / HEAD_DEPTH));
-        r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
-      } else {
-        // CYLINDER SHELL
-        r_local = RADIUS;
-      }
-
-      // Calculate final 3D position for vertical vessel
-      const x = r_local * SCALE * Math.cos(rad);
-      const z = r_local * SCALE * Math.sin(rad);
-      nozzleGroup.position.set(x, y_global, z);
+    if (n.bodyId !== undefined) {
+      // APPENDAGE-MOUNTED NOZZLE. `pos` is mm along the appendage axis from the
+      // junction, `angle` per the appendage datum (engine/body-frame.ts). Place
+      // on the cylinder surface via the body frame, clamping to the cylinder span
+      // [0, length] — no head-region branch for appendages in v1. The
+      // orientationMode / azimuthRotation / quaternion pipeline below then runs
+      // unchanged on this position + normal.
+      const bodyFrame = resolveBodyFrame(state, n.bodyId);
+      const posMm = Math.max(0, Math.min(bodyFrame.axialLength, n.pos));
+      nozzleGroup.position.copy(bodyFrame.surfacePoint(posMm, n.angle));
+      normal = bodyFrame.surfaceNormal(posMm, n.angle);
     } else {
-      // HORIZONTAL VESSEL - position along X axis
-      const x_global = (n.pos - TAN_TAN / 2) * SCALE;
+      // Surface normal (nozzle mount orientation) comes from the shared frame,
+      // which reproduces the legacy nozzle-mount normal math exactly.
+      normal = mainFrame.surfaceNormal(n.pos, n.angle);
 
-      if (n.pos < 0) {
-        // LEFT HEAD (Ellipsoid)
-        const ratio = Math.min(1, Math.abs(n.pos / HEAD_DEPTH));
-        r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
-      } else if (n.pos > TAN_TAN) {
-        // RIGHT HEAD
-        const ratio = Math.min(1, Math.abs((n.pos - TAN_TAN) / HEAD_DEPTH));
-        r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
+      // DYNAMIC RADIUS + POSITION. Kept inline (not via frame.surfacePoint) because
+      // a head nozzle collapses to the axis using Math.min(1, …), whereas the
+      // frame's surfacePoint uses the shell/annotation cap Math.min(0.99, …); the
+      // two differ only near the head apex, so preserving exact placement means
+      // keeping this radius branching here.
+      let r_local = RADIUS;
+
+      if (isVertical) {
+        // VERTICAL VESSEL - position along Y axis
+        const y_global = (n.pos - TAN_TAN / 2) * SCALE;
+
+        if (n.pos < 0) {
+          // BOTTOM HEAD (Ellipsoid)
+          const ratio = Math.min(1, Math.abs(n.pos / HEAD_DEPTH));
+          r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
+        } else if (n.pos > TAN_TAN) {
+          // TOP HEAD
+          const ratio = Math.min(1, Math.abs((n.pos - TAN_TAN) / HEAD_DEPTH));
+          r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
+        } else {
+          // CYLINDER SHELL
+          r_local = RADIUS;
+        }
+
+        // Calculate final 3D position for vertical vessel
+        const x = r_local * SCALE * Math.cos(rad);
+        const z = r_local * SCALE * Math.sin(rad);
+        nozzleGroup.position.set(x, y_global, z);
       } else {
-        // CYLINDER SHELL
-        r_local = RADIUS;
-      }
+        // HORIZONTAL VESSEL - position along X axis
+        const x_global = (n.pos - TAN_TAN / 2) * SCALE;
 
-      // Calculate final 3D position for horizontal vessel
-      const y = r_local * SCALE * Math.sin(rad);
-      const z = r_local * SCALE * Math.cos(rad);
-      nozzleGroup.position.set(x_global, y, z);
+        if (n.pos < 0) {
+          // LEFT HEAD (Ellipsoid)
+          const ratio = Math.min(1, Math.abs(n.pos / HEAD_DEPTH));
+          r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
+        } else if (n.pos > TAN_TAN) {
+          // RIGHT HEAD
+          const ratio = Math.min(1, Math.abs((n.pos - TAN_TAN) / HEAD_DEPTH));
+          r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
+        } else {
+          // CYLINDER SHELL
+          r_local = RADIUS;
+        }
+
+        // Calculate final 3D position for horizontal vessel
+        const y = r_local * SCALE * Math.sin(rad);
+        const z = r_local * SCALE * Math.cos(rad);
+        nozzleGroup.position.set(x_global, y, z);
+      }
     }
 
     // Override normal based on orientation mode (default is radial = no change)
