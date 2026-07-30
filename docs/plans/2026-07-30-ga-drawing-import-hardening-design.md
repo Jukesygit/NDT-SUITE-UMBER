@@ -106,6 +106,28 @@ export function toExtractionResult(review: ExtractionReview): ExtractionResult; 
 - `npm run build`, `npm run lint` clean.
 - Manual: import a real GA PDF via /verify recipe; confirm missing fields render as missing (not 1000/3000 defaults), re-running extraction twice gives identical voted output.
 
+## Addendum 2026-07-30 (post-implementation feedback, BRT1-VA1 GA)
+
+Field test against `BRT1_VA1_VA_P3_01_01001_C5` (horizontal HP separator, 3900 ID, 13650 T/T, 24" manways M1/M3 mounted axially on both dome ends) surfaced two gaps:
+
+### Phase D — Head-mounted nozzles
+
+The extraction schema cannot express a nozzle on a vessel head, so end manways get placed as shell nozzles at a wrong axial position. The engine already supports dome-end nozzles (`NozzleConfig.orientationMode` + `azimuthRotation` + `pos` beyond the tangent line).
+
+- Extraction nozzle gains `mount: 'shell' | 'head-left' | 'head-right'` (enum, voted; null → missing, blocks apply like any field) and `radialOffset` (mm from vessel centerline as seen in the end view; required only when mount is a head — for shell mounts it is absent and never gates apply). Prompt updated: identify head/end-mounted nozzles (manways on dished ends), report their offset from centerline; `pos` stays tangent-line-referenced for shell nozzles only.
+- Pure helper `engine/head-nozzle-placement.ts`: `placeExtractedNozzle(nozzle, vessel {id, length, headRatio})` → `Pick<NozzleConfig, 'pos'|'proj'|'angle'|'size'|'orientationMode'|'azimuthRotation'>`. Head mapping: headDepth = id/(2·headRatio); axial depth d = headDepth·√(1−(r/R)²); pos = −d (left) or length+d (right); orientation = axial (per the manual dome-end recipe in NozzleSection — implementer must read NozzleSection.tsx + nozzle-geometry.ts and mirror the exact convention, reporting the derived mapping). Shell mapping unchanged.
+- Verifier: `radialOffset` must be < id/2 (`out-of-range`); a head-mounted nozzle also carrying a shell `pos` is not an error (models may emit both) — placement ignores `pos` for head mounts.
+- `handleDrawingApply` uses the helper for every nozzle.
+
+### Phase E — Compact review UI
+
+The stacked per-field list is overwhelming on real drawings (20+ nozzles × 5-7 fields). Replace with a dense editable grid:
+
+- Vessel scalars: one compact row (4 inline inputs).
+- Nozzles: table, one row per nozzle — columns name/mount/pos-or-offset/proj/angle/size + remove. Cells are inline inputs. Confidence surfaces only where it matters: missing/low cells get the warning/danger treatment (tinted cell + dot/tooltip); high/medium cells stay visually quiet; edited cells get the success tint. Header shows an aggregate ("34 of 38 fields read cleanly — 4 need attention") and a "show issues only" toggle filtering to rows with missing/low/flagged cells.
+- Saddles: same dense treatment, one row each.
+- Apply gating unchanged (no missing fields, where `radialOffset` only counts for head mounts).
+
 ## Future (explicitly deferred)
 
 - Cross-model second opinion on low-agreement fields (Claude Opus 4.8 high-res vision or GPT-5.x).
