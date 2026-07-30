@@ -1,7 +1,8 @@
 import { supabase } from '../../../supabase-client';
 
-const GEMINI_API_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent';
+const GEMINI_API_BASE =
+  'https://generativelanguage.googleapis.com/v1beta/models';
+const DEFAULT_MODEL = 'gemini-3.5-flash';
 
 export interface GeminiImagePart {
   mimeType: string;
@@ -11,6 +12,15 @@ export interface GeminiImagePart {
 export interface GeminiResponse {
   text: string;
   error?: string;
+  /** Gemini API error status (e.g. 'NOT_FOUND') when the call failed. */
+  errorStatus?: string;
+}
+
+export interface GeminiCallOptions {
+  /** Gemini generationConfig (responseSchema, temperature, seed, ...). */
+  generationConfig?: Record<string, unknown>;
+  /** Override the model ID (defaults to the current known-good Flash model). */
+  model?: string;
 }
 
 /** Cached API key — fetched once per session from the edge function */
@@ -52,6 +62,7 @@ async function getApiKey(): Promise<string> {
 export async function callGeminiProxy(
   imageParts: GeminiImagePart[],
   prompt: string,
+  options: GeminiCallOptions = {},
 ): Promise<GeminiResponse> {
   try {
     const apiKey = await getApiKey();
@@ -66,18 +77,30 @@ export async function callGeminiProxy(
       });
     }
 
-    const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+    const body: Record<string, unknown> = {
+      contents: [{ parts: contentParts }],
+    };
+    if (options.generationConfig) {
+      body.generationConfig = options.generationConfig;
+    }
+
+    const model = options.model || DEFAULT_MODEL;
+    const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`;
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: contentParts }],
-      }),
+      body: JSON.stringify(body),
     });
 
     const data = await response.json();
 
     if (data.error) {
-      return { text: '', error: data.error.message || 'Gemini API error' };
+      return {
+        text: '',
+        error: data.error.message || 'Gemini API error',
+        errorStatus: data.error.status,
+      };
     }
 
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
