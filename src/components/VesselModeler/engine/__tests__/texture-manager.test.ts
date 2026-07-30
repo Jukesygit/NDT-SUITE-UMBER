@@ -15,8 +15,9 @@ import {
   type ScanCompositeConfig,
   type VesselState,
 } from '../../types';
-import { createScanCompositePlane } from '../texture-manager';
+import { buildFootprintExcludeMask, createScanCompositePlane } from '../texture-manager';
 import { resolveBodyFrame, type SurfaceFrame } from '../body-frame';
+import { buildAllFootprints } from '../junction-footprint';
 
 // createScanCompositePlane offsets vertices this many mm above the surface; the
 // frame round-trip re-applies it so vertices land exactly on the offset shell.
@@ -117,5 +118,52 @@ describe('createScanCompositePlane — appendage body surface', () => {
     const mesh = createScanCompositePlane(makeComposite({}), state, ''); // no bodyId → main shell
     expect(mesh).not.toBeNull();
     expect(maxSurfaceDeviation(mesh!, resolveBodyFrame(state))).toBeLessThan(1e-6);
+  });
+});
+
+// ===========================================================================
+// buildFootprintExcludeMask — the shared containsCell predicate over pixels
+// (P3-T2, design §9.4). Vessel id 2000 (R 1000); appendage at (2000, 90°,
+// dia 800 → r 400). Main-shell composite: datum 0 (+90 TDC), cw, forward,
+// indexStartMm 2000, xAxis [0, 800], yAxis [0, 300, 900].
+//   (row0,col0) → pos 2000, angle 90  → inside  (mount centre)
+//   (row0,col1) → pos 2000, angle ~44 → outside (angular offset)
+//   (row2,col0) → pos 2900, angle 90  → outside (axial offset > r)
+// ===========================================================================
+describe('buildFootprintExcludeMask — main-shell pixel exclusion', () => {
+  const maskState: VesselState = {
+    ...DEFAULT_VESSEL_STATE,
+    id: 2000,
+    length: 6000,
+    appendages: [
+      { id: 'app-1', name: 'Sump', mountPos: 2000, mountAngle: 90, diameter: 800, length: 1000, endClosure: 'flat' },
+    ],
+  };
+  const footprints = buildAllFootprints(maskState);
+  const maskComposite = {
+    bodyId: undefined as string | undefined,
+    xAxis: [0, 800],
+    yAxis: [0, 300, 900],
+    indexStartMm: 2000,
+    datumAngleDeg: 0,
+    scanDirection: 'cw' as const,
+    indexDirection: 'forward' as const,
+  };
+
+  it('marks pixels inside the footprint and clears those outside', () => {
+    const mask = buildFootprintExcludeMask(maskComposite, maskState, footprints);
+    expect(mask).toBeDefined();
+    expect(mask!(0, 0)).toBe(true); // mount centre
+    expect(mask!(0, 1)).toBe(false); // rotated ~46° away
+    expect(mask!(2, 0)).toBe(false); // 900 mm axially past the mount (> r)
+  });
+
+  it('returns undefined for an appendage-mounted composite (its body has no cutout)', () => {
+    const mask = buildFootprintExcludeMask({ ...maskComposite, bodyId: 'app-1' }, maskState, footprints);
+    expect(mask).toBeUndefined();
+  });
+
+  it('returns undefined when the vessel has no footprints (legacy path)', () => {
+    expect(buildFootprintExcludeMask(maskComposite, maskState, [])).toBeUndefined();
   });
 });

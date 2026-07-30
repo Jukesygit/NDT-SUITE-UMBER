@@ -7,6 +7,18 @@
 // =============================================================================
 
 import type { CoverageRectConfig, VesselState } from '../types';
+import { buildAllFootprints, type JunctionFootprint } from './junction-footprint';
+
+/**
+ * Junction footprints for every appendage, or [] when the vessel has none.
+ * Guards the undefined/empty case so no-appendage vessels never build a
+ * footprint and stay byte-identical (design §9.4 shared predicate).
+ */
+function footprintsFor(vesselState: VesselState): JunctionFootprint[] {
+  return vesselState.appendages && vesselState.appendages.length > 0
+    ? buildAllFootprints(vesselState)
+    : [];
+}
 
 // ---------------------------------------------------------------------------
 // Result Interface
@@ -185,9 +197,15 @@ export function computeRegionTotalAreas(vesselState: VesselState): { leftHead: n
 
   const cylinderArea = 2 * Math.PI * R * vesselState.length;
 
+  // Appendage cutout (design §9.1): each junction footprint removes real shell
+  // surface, so subtract its exact excluded area from the cylinder total. With
+  // no appendages this is a no-op, keeping legacy models byte-identical. The
+  // reconciliation is exact: (cylinder − Σarea) + Σarea === uncut cylinder.
+  const cutoutArea = footprintsFor(vesselState).reduce((sum, fp) => sum + fp.areaMm2, 0);
+
   return {
     leftHead: headArea,
-    cylinder: cylinderArea,
+    cylinder: cylinderArea - cutoutArea,
     rightHead: headArea, // symmetric
   };
 }
@@ -221,6 +239,11 @@ export function computeCoverage(
   const TAN_TAN = vesselState.length;
 
   const unwrapped = toUnwrappedRects(rects, vesselState);
+
+  // Appendage cutout predicates (design §9.4): a covered cell whose centre lies
+  // inside a junction footprint sits over the shell opening and is not coverable.
+  // Same buildAllFootprints predicate as the wall-loss worker and heatmap mask.
+  const footprints = footprintsFor(vesselState);
 
   // Collect unique coordinates for coordinate compression
   const posSet = new Set<number>();
@@ -269,6 +292,13 @@ export function computeCoverage(
       // Compute true surface area for this cell
       let cellArea: number;
       const midPos = (pMin + pMax) / 2;
+
+      // Skip cells inside an appendage cutout — no shell surface there. The
+      // footprint predicate is wrap-safe, so angles are passed unnormalised.
+      if (footprints.length > 0) {
+        const midAngle = (aMin + aMax) / 2;
+        if (footprints.some(fp => fp.containsCell(midPos, midAngle))) continue;
+      }
 
       if (midPos < 0) {
         // Left head

@@ -16,7 +16,17 @@
  * their grid spacing already equals surface distance — each dome data point
  * contributes a flat grid-cell area (xSpacing × ySpacing), matching the C-scan
  * distribution engine and the `validArea` used by Scan Coverage.
+ *
+ * Appendage cutout (design §9.4): where a perpendicular appendage body meets the
+ * shell there is no main-shell surface, so main-shell cells whose centre lies
+ * inside a junction footprint contribute ZERO area. The footprints are rebuilt
+ * here from serialisable params via the SAME `buildJunctionFootprint` predicate
+ * that drives the coverage sweep and the heatmap alpha mask — no re-derived
+ * geometry — so stats and visuals always agree. junction-footprint.ts is a pure
+ * math module (types-only imports, no THREE/DOM), safe for the worker bundle.
  */
+
+import { buildJunctionFootprint } from '../components/VesselModeler/engine/junction-footprint';
 
 // ---------------------------------------------------------------------------
 // Message types
@@ -49,11 +59,30 @@ export interface DomeCompositeSlim {
 
 export type BinMode = 'equal' | 'ca-based' | 'custom';
 
+/**
+ * Serialisable junction-footprint parameters. Functions cannot cross the worker
+ * boundary, so the shell-side geometry of each appendage is passed as data and
+ * the `containsCell` predicate is rebuilt inside `compute` via
+ * `buildJunctionFootprint`. Structurally a subset of `AppendageConfig`.
+ */
+export interface FootprintParamsSlim {
+  id: string;
+  mountPos: number;
+  mountAngle: number;
+  diameter: number;
+}
+
 export interface WallLossRequest {
   id: number;
   composites: CompositeSlim[];
   /** Confirmed dome scans to fold into the same distribution. */
   domeComposites?: DomeCompositeSlim[];
+  /**
+   * Appendage junction footprints on the main shell. Main-shell cells inside a
+   * footprint are the shell cutout and contribute zero area (design §9.4).
+   * Absent/empty → no cutout → byte-identical to the pre-appendage behaviour.
+   */
+  footprints?: FootprintParamsSlim[];
   vesselId: number;
   vesselLength: number;
   headRatio: number;
@@ -355,8 +384,8 @@ function assignBin(
 export function compute(req: WallLossRequest): WallLossResponse {
   const t0 = performance.now();
   const {
-    composites, domeComposites, vesselId, vesselLength, headRatio, nominalThickness,
-    binCount, binMode, customBoundaries,
+    composites, domeComposites, footprints: footprintParams, vesselId, vesselLength, headRatio,
+    nominalThickness, binCount, binMode, customBoundaries,
     corrosionAllowance, shellNominalThickness, domeNominalThickness,
   } = req;
 
@@ -393,6 +422,11 @@ export function compute(req: WallLossRequest): WallLossResponse {
   const tanTan = vesselLength;
   const circumference = Math.PI * vesselId;
 
+  // Appendage cutout predicates, rebuilt from serialisable params via the shared
+  // buildJunctionFootprint (design §9.4). Empty when there are no appendages, so
+  // the loops below are byte-identical to the pre-appendage path.
+  const footprints = (footprintParams ?? []).map((f) => buildJunctionFootprint(radius, f));
+
   let totalArea = 0;
   let totalPoints = 0;
   let spuriousArea = 0;
@@ -412,6 +446,14 @@ export function compute(req: WallLossRequest): WallLossResponse {
         if (thickness == null) continue;
 
         const cell = cellToVessel(comp, row, col, circumference);
+
+        // Appendage cutout: main-shell cells whose centre lies inside a junction
+        // footprint are the shell opening — no shell surface there — so they
+        // contribute zero area (design §9.4). Same predicate as the coverage
+        // sweep and heatmap mask. No footprints ⇒ never taken ⇒ byte-identical.
+        if (footprints.length > 0 && footprints.some((fp) => fp.containsCell(cell.posMid, cell.angleMid))) {
+          continue;
+        }
 
         if (higherComps.length > 0) {
           let occluded = false;

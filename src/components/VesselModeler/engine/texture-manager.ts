@@ -11,9 +11,11 @@
 // =============================================================================
 
 import * as THREE from 'three';
-import type { TextureConfig, ScanCompositeConfig, VesselState } from '../types';
+import type { AppendageConfig, TextureConfig, ScanCompositeConfig, VesselState } from '../types';
 import { createHeatmapTexture, type HeatmapTextureResult } from './heatmap-texture';
 import { resolveBodyFrame, type SurfaceFrame } from './body-frame';
+import { buildAllFootprints, type JunctionFootprint } from './junction-footprint';
+import { normAngle } from './scan-sampling';
 
 // ---------------------------------------------------------------------------
 // UV Transform Helper
@@ -274,6 +276,78 @@ export function createTexturePlane(
 }
 
 // ---------------------------------------------------------------------------
+// Appendage Cutout Mask (design §9.4 shared predicate)
+// ---------------------------------------------------------------------------
+
+/** The composite fields the footprint mask needs; a subset of ScanCompositeConfig. */
+type MaskComposite = Pick<
+  ScanCompositeConfig,
+  'bodyId' | 'xAxis' | 'yAxis' | 'indexStartMm' | 'datumAngleDeg' | 'scanDirection' | 'indexDirection'
+>;
+
+/**
+ * Build the per-pixel exclusion predicate that stamps main-shell heatmap pixels
+ * transparent where they overlap an appendage junction footprint (design §9.4).
+ *
+ * Returns undefined — "no masking, legacy path" — for appendage-mounted
+ * composites (their own body has no cutout) and for shells with no footprints,
+ * so those textures stay byte-identical.
+ *
+ * The (row, col) → (posMm, angleDeg) mapping is the developed-coordinate
+ * convention shared with the scan-overlay geometry and the wall-loss cell
+ * mapping (datum + 90° TDC offset, scan-direction sign). Membership is decided
+ * by the SAME {@link JunctionFootprint.containsCell} that drives coverage and
+ * wall-loss — one predicate for visuals and stats.
+ */
+export function buildFootprintExcludeMask(
+  composite: MaskComposite,
+  vesselState: Pick<VesselState, 'id'>,
+  footprints: JunctionFootprint[]
+): ((row: number, col: number) => boolean) | undefined {
+  if (composite.bodyId) return undefined; // appendage body → no shell cutout
+  if (footprints.length === 0) return undefined;
+
+  const { xAxis, yAxis, indexStartMm, datumAngleDeg, scanDirection, indexDirection } = composite;
+  if (xAxis.length === 0 || yAxis.length === 0) return undefined;
+
+  const circumference = Math.PI * vesselState.id; // 2πR of the main shell
+  const degPerMm = 360 / circumference;
+  const datumConv = normAngle(datumAngleDeg + 90);
+  const y0 = yAxis[0];
+
+  return (row: number, col: number): boolean => {
+    const indexOffset = yAxis[row] - y0;
+    const pos =
+      indexDirection === 'forward' ? indexStartMm + indexOffset : indexStartMm - indexOffset;
+    const scanMm = xAxis[col];
+    const angle =
+      scanDirection === 'cw'
+        ? normAngle(datumConv - scanMm * degPerMm)
+        : normAngle(datumConv + scanMm * degPerMm);
+    return footprints.some((fp) => fp.containsCell(pos, angle));
+  };
+}
+
+/**
+ * Heatmap cache-key suffix for the cutout mask. Empty (legacy key unchanged,
+ * byte-identical) for appendage composites and appendage-free shells. Otherwise
+ * it encodes BOTH the appendage geometry AND this composite's placement, since
+ * together they decide which pixels are stamped — so moving an appendage or
+ * re-datuming the scan invalidates the cached texture through the existing
+ * structural-hash rebuild (no new invalidation path invented).
+ */
+function footprintCacheSuffix(
+  composite: ScanCompositeConfig,
+  appendages: AppendageConfig[]
+): string {
+  if (composite.bodyId || appendages.length === 0) return '';
+  const apps = appendages
+    .map((a) => `${a.id}:${a.mountPos}:${a.mountAngle}:${a.diameter}`)
+    .join('|');
+  return `_fp[${apps}#${composite.indexStartMm}:${composite.datumAngleDeg}:${composite.scanDirection}:${composite.indexDirection}]`;
+}
+
+// ---------------------------------------------------------------------------
 // Scan Composite Heatmap Cache
 // ---------------------------------------------------------------------------
 
@@ -364,8 +438,18 @@ export function createScanCompositePlane(
     return null;
   }
 
-  // --- Get or create cached heatmap texture (keyed by visual params) ---
-  const cacheKey = heatmapCacheKey(composite);
+  // --- Appendage cutout mask (main-shell composites only) ---
+  // Build the junction footprints from state and derive the per-pixel exclusion
+  // predicate; both are empty/undefined for appendage-free shells and appendage
+  // composites, keeping the legacy path byte-identical. The same footprints feed
+  // the coverage sweep and the wall-loss worker (design §9.4).
+  const appendages = vesselState.appendages ?? [];
+  const footprints =
+    !composite.bodyId && appendages.length > 0 ? buildAllFootprints(vesselState) : [];
+  const excludeMask = buildFootprintExcludeMask(composite, vesselState, footprints);
+
+  // --- Get or create cached heatmap texture (keyed by visual params + cutout) ---
+  const cacheKey = heatmapCacheKey(composite) + footprintCacheSuffix(composite, appendages);
   let heatmapResult = heatmapCache.get(cacheKey);
   if (!heatmapResult) {
     heatmapResult = createHeatmapTexture(composite.data, composite.stats, {
@@ -374,6 +458,7 @@ export function createScanCompositePlane(
       rangeMax: composite.rangeMax,
       opacity: composite.opacity,
       reverseScale: true, // NDT convention: thin (low) = red (danger), thick (high) = blue (safe)
+      excludeMask,
     });
     heatmapCache.set(cacheKey, heatmapResult);
     evictHeatmapCache();

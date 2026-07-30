@@ -159,3 +159,61 @@ describe('compute - dome scans (new)', () => {
     expect(res.totalDataPoints).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Appendage cutout (P3-T2, design §9.4): main-shell cells whose centre lies
+// inside a junction footprint contribute ZERO area. The predicate is rebuilt
+// worker-side from the serialisable footprint params.
+//
+// makeShellComposite cells (id 3000 → R 1500, circ = π·3000):
+//   row0 pos 1000–1100 (mid 1050), row1 pos 1100–1200 (mid 1150)
+//   col0 angle ≈ 88.09°, col1 angle ≈ 84.27° (datum 0 + 90 TDC, cw)
+// A footprint at (mountPos 1100, mountAngle 86, dia 400 → r 200) covers all four.
+// ---------------------------------------------------------------------------
+describe('compute - appendage cutout footprints', () => {
+  it('excludes every main-shell cell inside a covering footprint (zero area)', () => {
+    const res = compute(
+      makeRequest({
+        composites: [makeShellComposite()],
+        footprints: [{ id: 'app-1', mountPos: 1100, mountAngle: 86, diameter: 400 }],
+      })
+    );
+    expect(res.totalDataPoints).toBe(0);
+    expect(res.totalScannedArea).toBe(0);
+    expect(res.bins.every((b) => b.area === 0 && b.count === 0)).toBe(true);
+  });
+
+  it('excludes only the cells inside the footprint, keeping the rest intact', () => {
+    // Rows placed 1000 mm apart so a small footprint catches row 0 but not row 1.
+    //   row0 pos 1000–2000 (mid 1500) — under the footprint
+    //   row1 pos 2000–3000 (mid 2500) — clear of it
+    const composite = makeShellComposite({ yAxis: [0, 1000, 2000] });
+    const footprints = [{ id: 'app-1', mountPos: 1500, mountAngle: 86, diameter: 400 }];
+
+    const withCut = compute(makeRequest({ composites: [composite], footprints }));
+    const noCut = compute(makeRequest({ composites: [composite] }));
+
+    // 4 cells total; the 2 row-0 cells drop out, the 2 row-1 cells stay.
+    expect(noCut.totalDataPoints).toBe(4);
+    expect(withCut.totalDataPoints).toBe(2);
+    // Each surviving cylinder cell: 1500 · (100·2π/circ) · 1000 = 0.1 m².
+    expect(withCut.totalScannedArea).toBeCloseTo(0.2, 6);
+    expect(noCut.totalScannedArea).toBeCloseTo(0.4, 6);
+    // Surviving cells (8 mm vs 10 mm NWT = 20% loss) land in bin 1.
+    expect(withCut.bins[1].count).toBe(2);
+    expect(withCut.bins[1].area).toBeCloseTo(0.2, 6);
+  });
+
+  it('is byte-identical with no footprints vs an empty footprint list (regression)', () => {
+    const base = makeRequest({ composites: [makeShellComposite()] });
+    const undefinedFp = compute(base);
+    const emptyFp = compute({ ...base, id: 2, footprints: [] });
+    // Bins and totals match the pre-appendage behaviour exactly.
+    expect(emptyFp.bins).toEqual(undefinedFp.bins);
+    expect(emptyFp.totalScannedArea).toBe(undefinedFp.totalScannedArea);
+    expect(emptyFp.totalDataPoints).toBe(undefinedFp.totalDataPoints);
+    // Anchored to the known baseline (matches the shell regression test above).
+    expect(undefinedFp.totalScannedArea).toBeCloseTo(0.04, 4);
+    expect(undefinedFp.bins[1].count).toBe(4);
+  });
+});

@@ -7,6 +7,7 @@ import type {
 import type {
   CompositeSlim,
   DomeCompositeSlim,
+  FootprintParamsSlim,
   WallLossRequest,
   WallLossResponse,
 } from '../workers/wall-loss-compute';
@@ -94,10 +95,21 @@ export function useWallLossWorker(
         })
       );
 
+      // Appendage junction footprints (design §9.4): main-shell cells inside a
+      // footprint are the shell cutout and drop out of the distribution. The
+      // predicate is rebuilt worker-side from these serialisable params.
+      const footprints: FootprintParamsSlim[] = (vesselState.appendages ?? []).map((a) => ({
+        id: a.id,
+        mountPos: a.mountPos,
+        mountAngle: a.mountAngle,
+        diameter: a.diameter,
+      }));
+
       const req: WallLossRequest = {
         id,
         composites,
         domeComposites,
+        footprints,
         vesselId: vesselState.id,
         vesselLength: vesselState.length,
         headRatio: vesselState.headRatio,
@@ -120,6 +132,7 @@ export function useWallLossWorker(
     config?.customBoundaries,
     vesselState.scanComposites,
     vesselState.domeScanComposites,
+    vesselState.appendages,
     vesselState.id,
     vesselState.length,
     vesselState.headRatio,
