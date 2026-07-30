@@ -2,15 +2,12 @@
  * EditCompetencyModal - Modal for adding/editing competencies
  */
 
-import { useState, useCallback, useEffect, ChangeEvent, DragEvent } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Modal, FormField, FormTextarea, FormSelect } from '../../components/ui';
-import { RandomMatrixSpinner } from '../../components/MatrixSpinners';
+import { CompetencyDocumentsField } from './CompetencyDocumentsField';
 import type { CompetencyDefinition } from './CompetencyCard';
+import type { CompetencyDocumentInput } from '../../services/competency-mutations';
 import './profile.css';
-
-// Valid file types for competency documents
-const VALID_FILE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export interface CompetencyFormData {
     competency_id: string;
@@ -18,8 +15,8 @@ export interface CompetencyFormData {
     certification_id: string;
     issued_date: string;
     expiry_date: string;
-    document_url: string;
-    document_name: string;
+    /** Ordered document set (array order = page order). */
+    documents: CompetencyDocumentInput[];
     notes: string;
     level?: string;
     definition?: CompetencyDefinition;
@@ -65,62 +62,22 @@ function shouldShowCertificationFields(definition?: CompetencyDefinition): boole
     return definition.is_certification !== false;
 }
 
-/**
- * Upload icon
- */
-function UploadIcon() {
-    return (
-        <svg
-            style={{ width: '28px', height: '28px', color: 'rgba(53, 160, 88, 0.30)', marginBottom: '8px' }}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-        >
-            <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-            />
-        </svg>
-    );
-}
-
-/**
- * Document icon
- */
-function DocumentIcon() {
-    return (
-        <svg
-            style={{ width: '20px', height: '20px', color: 'rgba(53, 160, 88, 0.60)', flexShrink: 0 }}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-        >
-            <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-            />
-        </svg>
-    );
-}
-
-/**
- * Close/X icon
- */
-function CloseIcon({ size = 16 }: { size?: number }) {
-    return (
-        <svg
-            style={{ width: `${size}px`, height: `${size}px` }}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-        >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-    );
+/** Build the initial form state from optional seed data. */
+function buildFormData(
+    initialData: Partial<CompetencyFormData> | undefined,
+    definition: CompetencyDefinition | undefined
+): CompetencyFormData {
+    return {
+        competency_id: initialData?.competency_id || definition?.id || '',
+        issuing_body: initialData?.issuing_body || '',
+        certification_id: initialData?.certification_id || '',
+        issued_date: initialData?.issued_date || '',
+        expiry_date: initialData?.expiry_date || '',
+        documents: initialData?.documents ? [...initialData.documents] : [],
+        notes: initialData?.notes || '',
+        level: initialData?.level || '',
+        definition,
+    };
 }
 
 /**
@@ -140,37 +97,14 @@ export function EditCompetencyModal({
     isUploadingDocument = false,
 }: EditCompetencyModalProps) {
     // Form state
-    const [formData, setFormData] = useState<CompetencyFormData>({
-        competency_id: initialData?.competency_id || definition?.id || '',
-        issuing_body: initialData?.issuing_body || '',
-        certification_id: initialData?.certification_id || '',
-        issued_date: initialData?.issued_date || '',
-        expiry_date: initialData?.expiry_date || '',
-        document_url: initialData?.document_url || '',
-        document_name: initialData?.document_name || '',
-        notes: initialData?.notes || '',
-        level: initialData?.level || '',
-        definition,
-    });
-
-    // Drag-and-drop state
-    const [isDragging, setIsDragging] = useState(false);
+    const [formData, setFormData] = useState<CompetencyFormData>(() =>
+        buildFormData(initialData, definition)
+    );
 
     // Sync form state when modal opens with new definition/initialData
     useEffect(() => {
         if (isOpen) {
-            setFormData({
-                competency_id: initialData?.competency_id || definition?.id || '',
-                issuing_body: initialData?.issuing_body || '',
-                certification_id: initialData?.certification_id || '',
-                issued_date: initialData?.issued_date || '',
-                expiry_date: initialData?.expiry_date || '',
-                document_url: initialData?.document_url || '',
-                document_name: initialData?.document_name || '',
-                notes: initialData?.notes || '',
-                level: initialData?.level || '',
-                definition,
-            });
+            setFormData(buildFormData(initialData, definition));
         }
     }, [isOpen, definition, initialData]);
 
@@ -179,86 +113,9 @@ export function EditCompetencyModal({
         setFormData((prev) => ({ ...prev, [field]: value }));
     }, []);
 
-    // Process and upload a file (shared by click and drag-and-drop)
-    const processFile = useCallback(
-        async (file: File) => {
-            if (!file || !onDocumentUpload) return;
-
-            // Validate file type
-            if (!VALID_FILE_TYPES.includes(file.type)) {
-                alert('Please upload a PDF or image file');
-                return;
-            }
-
-            // Validate file size (max 10MB)
-            if (file.size > MAX_FILE_SIZE) {
-                alert('File must be less than 10MB');
-                return;
-            }
-
-            try {
-                const result = await onDocumentUpload(file);
-                setFormData((prev) => {
-                    return {
-                        ...prev,
-                        document_url: result.url,
-                        document_name: result.name,
-                    };
-                });
-            } catch {
-                alert('Failed to upload document');
-            }
-        },
-        [onDocumentUpload]
-    );
-
-    // Handle document upload via file input
-    const handleDocumentChange = useCallback(
-        async (e: ChangeEvent<HTMLInputElement>) => {
-            const file = e.target.files?.[0];
-            if (file) {
-                await processFile(file);
-            }
-            // Reset input to allow re-selecting the same file
-            e.target.value = '';
-        },
-        [processFile]
-    );
-
-    // Drag-and-drop handlers
-    const handleDrop = useCallback(
-        async (e: DragEvent<HTMLLabelElement>) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setIsDragging(false);
-
-            const file = e.dataTransfer.files[0];
-            if (file) {
-                await processFile(file);
-            }
-        },
-        [processFile]
-    );
-
-    const handleDragOver = useCallback((e: DragEvent<HTMLLabelElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragging(true);
-    }, []);
-
-    const handleDragLeave = useCallback((e: DragEvent<HTMLLabelElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragging(false);
-    }, []);
-
-    // Remove document
-    const handleRemoveDocument = useCallback(() => {
-        setFormData((prev) => ({
-            ...prev,
-            document_url: '',
-            document_name: '',
-        }));
+    // Update the document set
+    const updateDocuments = useCallback((documents: CompetencyDocumentInput[]) => {
+        setFormData((prev) => ({ ...prev, documents }));
     }, []);
 
     // Handle save
@@ -268,17 +125,7 @@ export function EditCompetencyModal({
 
     // Handle close - reset form
     const handleClose = useCallback(() => {
-        setFormData({
-            competency_id: '',
-            issuing_body: '',
-            certification_id: '',
-            issued_date: '',
-            expiry_date: '',
-            document_url: '',
-            document_name: '',
-            notes: '',
-            level: '',
-        });
+        setFormData(buildFormData(undefined, undefined));
         onClose();
     }, [onClose]);
 
@@ -376,60 +223,13 @@ export function EditCompetencyModal({
                     />
                 )}
 
-                {/* Document Upload */}
-                <div>
-                    <span className="pf-display-label" style={{ marginBottom: '6px', display: 'block' }}>
-                        Certificate Document
-                        <span style={{ fontSize: '9px', fontWeight: '400', marginLeft: '8px', letterSpacing: '0.06em' }}>
-                            (PDF or image - max 10MB)
-                        </span>
-                    </span>
-
-                    {formData.document_name ? (
-                        <div className="pf-document-row">
-                            <DocumentIcon />
-                            <span className="pf-document-name">{formData.document_name}</span>
-                            <button
-                                type="button"
-                                onClick={handleRemoveDocument}
-                                className="pf-document-remove"
-                            >
-                                <CloseIcon />
-                            </button>
-                        </div>
-                    ) : (
-                        <label
-                            className={`pf-upload-zone${isDragging ? ' dragging' : ''}${isUploadingDocument ? ' uploading' : ''}`}
-                            onDrop={handleDrop}
-                            onDragOver={handleDragOver}
-                            onDragLeave={handleDragLeave}
-                        >
-                            {isUploadingDocument ? (
-                                <>
-                                    <div style={{ marginBottom: '8px' }}>
-                                        <RandomMatrixSpinner size={32} />
-                                    </div>
-                                    <span className="pf-upload-text">Uploading...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <UploadIcon />
-                                    <span className="pf-upload-text">
-                                        {isDragging ? 'Drop file here' : 'Drag & drop or click to upload'}
-                                    </span>
-                                    <span className="pf-upload-hint">PDF or image of your certificate</span>
-                                </>
-                            )}
-                            <input
-                                type="file"
-                                accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,.pdf"
-                                onChange={handleDocumentChange}
-                                disabled={isUploadingDocument}
-                                style={{ display: 'none' }}
-                            />
-                        </label>
-                    )}
-                </div>
+                {/* Document Upload (multi-page) */}
+                <CompetencyDocumentsField
+                    documents={formData.documents}
+                    onChange={updateDocuments}
+                    onUpload={onDocumentUpload}
+                    isUploading={isUploadingDocument}
+                />
 
                 {/* Notes */}
                 <FormTextarea

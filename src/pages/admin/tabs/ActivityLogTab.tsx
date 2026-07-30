@@ -6,12 +6,14 @@
  * captured before/after diff. Actor identity is resolved by join (PII not cached).
  */
 
-import { useState, useMemo, useEffect, Fragment } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useActivityLogs, useActivityUsers } from '../../../hooks/queries/useActivityLog';
+import { useAdminUsers } from '../../../hooks/queries/useAdminUsers';
 import { getActivityLogsForExport } from '../../../services/activity-log-service';
 import { DataTable, Column } from '../../../components/ui/DataTable/DataTable';
 import { SectionSpinner } from '../../../components/ui/LoadingSpinner';
 import { ErrorDisplay } from '../../../components/ui/ErrorDisplay';
+import { DetailsView, titleCase } from './ActivityLogDetails';
 import type {
     ActivityLogEntry,
     ActionCategory,
@@ -51,73 +53,14 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
 const labelMuted = { display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'rgba(53, 160, 88, 0.45)' } as const;
 
-function titleCase(value: string): string {
-    return value
-        .split(/[_\s]+/)
-        .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : ''))
-        .join(' ');
-}
-
-/** Render the captured details: a before/after diff, a delete snapshot, or key/value pairs. */
-function DetailsView({ details }: { details: Record<string, unknown> | null }) {
-    if (!details || Object.keys(details).length === 0) {
-        return <span style={{ color: 'rgba(53, 160, 88, 0.45)', fontSize: '13px' }}>No additional details.</span>;
-    }
-
-    const changes = (details as { changes?: Record<string, { old?: unknown; new?: unknown; changed?: boolean; pii_redacted?: boolean }> }).changes;
-
-    if (changes && typeof changes === 'object') {
-        return (
-            <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
-                <thead>
-                    <tr style={{ color: 'rgba(53, 160, 88, 0.45)', textAlign: 'left' }}>
-                        <th style={{ padding: '4px 12px 4px 0', fontWeight: 600 }}>Field</th>
-                        <th style={{ padding: '4px 12px', fontWeight: 600 }}>Before</th>
-                        <th style={{ padding: '4px 12px', fontWeight: 600 }}>After</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {Object.entries(changes).map(([field, change]) => {
-                        const redacted = change?.pii_redacted;
-                        const bulkOnly = change?.changed && change.old === undefined && change.new === undefined;
-                        return (
-                            <tr key={field} style={{ borderTop: '1px solid rgba(53, 160, 88, 0.15)' }}>
-                                <td style={{ padding: '4px 12px 4px 0', color: 'var(--green)' }}>{titleCase(field)}</td>
-                                {redacted || bulkOnly ? (
-                                    <td colSpan={2} style={{ padding: '4px 12px', color: 'rgba(53, 160, 88, 0.45)', fontStyle: 'italic' }}>
-                                        {redacted ? 'changed (value redacted)' : 'changed'}
-                                    </td>
-                                ) : (
-                                    <>
-                                        <td style={{ padding: '4px 12px', color: 'rgba(245, 158, 11, 0.85)', fontFamily: 'monospace' }}>{formatValue(change?.old)}</td>
-                                        <td style={{ padding: '4px 12px', color: 'var(--green-bright)', fontFamily: 'monospace' }}>{formatValue(change?.new)}</td>
-                                    </>
-                                )}
-                            </tr>
-                        );
-                    })}
-                </tbody>
-            </table>
-        );
-    }
-
-    // Generic key/value rendering (edge-function details, delete snapshots, etc.)
-    return (
-        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 16px', fontSize: '13px' }}>
-            {Object.entries(details).map(([key, value]) => (
-                <Fragment key={key}>
-                    <span style={{ color: 'var(--green)' }}>{titleCase(key)}</span>
-                    <span style={{ color: 'rgba(53, 160, 88, 0.70)', fontFamily: 'monospace', wordBreak: 'break-word' }}>{formatValue(value)}</span>
-                </Fragment>
-            ))}
-        </div>
-    );
-}
-
-function formatValue(value: unknown): string {
-    if (value === null || value === undefined) return '—';
-    if (typeof value === 'object') return JSON.stringify(value);
-    return String(value);
+/**
+ * Read the `on_behalf_of` target (the row owner's uuid) from a log entry's
+ * details when the actor wrote a row belonging to someone else. Enriched by the
+ * `audit_row_change()` trigger; absent for self-actions and legacy rows.
+ */
+function getOnBehalfOf(details: Record<string, unknown> | null): string | null {
+    const value = details?.on_behalf_of;
+    return typeof value === 'string' && value ? value : null;
 }
 
 function csvEscape(value: string): string {
@@ -135,9 +78,18 @@ export default function ActivityLogTab() {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [isExporting, setIsExporting] = useState(false);
+    // Client-side toggle: show only entries an actor performed on another user's behalf.
+    const [onBehalfOnly, setOnBehalfOnly] = useState(false);
 
     const { data: logsData, isLoading, error } = useActivityLogs(filters, currentPage, pageSize);
     const { data: users = [] } = useActivityUsers();
+    // All profiles (admin-context) → resolve the on_behalf_of target uuid to a name.
+    const { data: allUsers = [] } = useAdminUsers();
+    const nameById = useMemo(() => {
+        const map = new Map<string, string>();
+        allUsers.forEach((u) => map.set(u.id, u.username || u.email || u.id));
+        return map;
+    }, [allUsers]);
 
     // Debounce the free-text search into filters.
     useEffect(() => {
@@ -171,12 +123,15 @@ export default function ActivityLogTab() {
         setSearchInput('');
         setStartDate('');
         setEndDate('');
+        setOnBehalfOnly(false);
         setCurrentPage(1);
     };
 
-    const hasActiveFilters = Object.keys(filters).some(
-        (key) => filters[key as keyof ActivityLogFilters] !== undefined
-    );
+    const hasActiveFilters =
+        onBehalfOnly ||
+        Object.keys(filters).some(
+            (key) => filters[key as keyof ActivityLogFilters] !== undefined
+        );
 
     const handleExport = async () => {
         setIsExporting(true);
@@ -229,16 +184,24 @@ export default function ActivityLogTab() {
                 key: 'user',
                 header: 'Actor',
                 width: '190px',
-                render: (row) => (
-                    <div>
-                        <p style={{ fontWeight: 500, color: 'rgba(53, 160, 88, 0.70)', fontSize: '13px' }}>
-                            {row.actor?.username || (row.user_id ? 'Deleted user' : 'System')}
-                        </p>
-                        <p style={{ fontSize: '12px', color: 'rgba(53, 160, 88, 0.45)' }}>
-                            {row.actor_role || '—'}
-                        </p>
-                    </div>
-                ),
+                render: (row) => {
+                    const onBehalfOf = getOnBehalfOf(row.details);
+                    return (
+                        <div>
+                            <p style={{ fontWeight: 500, color: 'rgba(53, 160, 88, 0.70)', fontSize: '13px' }}>
+                                {row.actor?.username || (row.user_id ? 'Deleted user' : 'System')}
+                            </p>
+                            <p style={{ fontSize: '12px', color: 'rgba(53, 160, 88, 0.45)' }}>
+                                {row.actor_role || '—'}
+                            </p>
+                            {onBehalfOf && (
+                                <p style={{ fontSize: '12px', fontWeight: 500, color: 'var(--amber)' }} title="Performed on another user's behalf">
+                                    for {nameById.get(onBehalfOf) || 'another user'}
+                                </p>
+                            )}
+                        </div>
+                    );
+                },
             },
             {
                 key: 'category',
@@ -290,23 +253,29 @@ export default function ActivityLogTab() {
                     ),
             },
         ],
-        []
+        [nameById]
     );
 
-    const renderExpanded = (row: ActivityLogEntry) => (
-        <div style={{ display: 'grid', gap: '12px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px 24px', fontSize: '13px' }}>
-                <div><span style={labelMuted}>Action</span><span style={{ color: 'var(--green)' }}>{titleCase(row.action_type)}</span></div>
-                <div><span style={labelMuted}>Actor</span><span style={{ color: 'var(--green)' }}>{row.actor?.username || (row.user_id ? 'Deleted user' : 'System')}{row.actor?.email ? ` · ${row.actor.email}` : ''}</span></div>
-                <div><span style={labelMuted}>Entity</span><span style={{ color: 'var(--green)' }}>{row.entity_type ? titleCase(row.entity_type) : '—'}{row.entity_name ? `: ${row.entity_name}` : ''}</span></div>
-                <div><span style={labelMuted}>When</span><span style={{ color: 'var(--green)' }}>{new Date(row.created_at).toLocaleString()}</span></div>
+    const renderExpanded = (row: ActivityLogEntry) => {
+        const onBehalfOf = getOnBehalfOf(row.details);
+        return (
+            <div style={{ display: 'grid', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px 24px', fontSize: '13px' }}>
+                    <div><span style={labelMuted}>Action</span><span style={{ color: 'var(--green)' }}>{titleCase(row.action_type)}</span></div>
+                    <div><span style={labelMuted}>Actor</span><span style={{ color: 'var(--green)' }}>{row.actor?.username || (row.user_id ? 'Deleted user' : 'System')}{row.actor?.email ? ` · ${row.actor.email}` : ''}</span></div>
+                    {onBehalfOf && (
+                        <div><span style={labelMuted}>On Behalf Of</span><span style={{ color: 'var(--amber)' }}>{nameById.get(onBehalfOf) || 'another user'}</span></div>
+                    )}
+                    <div><span style={labelMuted}>Entity</span><span style={{ color: 'var(--green)' }}>{row.entity_type ? titleCase(row.entity_type) : '—'}{row.entity_name ? `: ${row.entity_name}` : ''}</span></div>
+                    <div><span style={labelMuted}>When</span><span style={{ color: 'var(--green)' }}>{new Date(row.created_at).toLocaleString()}</span></div>
+                </div>
+                <div>
+                    <span style={labelMuted}>Details</span>
+                    <DetailsView details={row.details} />
+                </div>
             </div>
-            <div>
-                <span style={labelMuted}>Details</span>
-                <DetailsView details={row.details} />
-            </div>
-        </div>
-    );
+        );
+    };
 
     if (isLoading && !logsData) {
         return <SectionSpinner message="Loading activity logs..." />;
@@ -316,6 +285,8 @@ export default function ActivityLogTab() {
     }
 
     const { data: logs = [], count = 0, totalPages = 1 } = logsData || {};
+    // On-behalf toggle filters the loaded page client-side (audit convenience).
+    const visibleLogs = onBehalfOnly ? logs.filter((row) => getOnBehalfOf(row.details)) : logs;
 
     return (
         <div className="space-y-4">
@@ -377,20 +348,37 @@ export default function ActivityLogTab() {
                     {/* Date Range */}
                     <div>
                         <label style={labelMuted}>Date Range</label>
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="ad-input" style={{ flex: 1 }} />
+                        {/* flexWrap + minWidth:0 so a tight grid column wraps the Apply
+                            button below the inputs instead of clipping it off-panel. */}
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="ad-input" style={{ flex: 1, minWidth: 0 }} />
                             <span style={{ color: 'rgba(53, 160, 88, 0.45)', fontSize: '12px' }}>to</span>
-                            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="ad-input" style={{ flex: 1 }} />
+                            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="ad-input" style={{ flex: 1, minWidth: 0 }} />
                             <button onClick={applyDateFilter} className="ad-btn primary" style={{ padding: '8px 12px', fontSize: '13px' }}>Apply</button>
                         </div>
                     </div>
+
                 </div>
+
+                {/* On-behalf-of toggle — own row: a checkbox doesn't warrant a 200px
+                    grid column, and a fifth cell starves the Date Range cell. */}
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginTop: '12px' }}>
+                    <input
+                        type="checkbox"
+                        checked={onBehalfOnly}
+                        onChange={(e) => setOnBehalfOnly(e.target.checked)}
+                        style={{ width: '16px', height: '16px', accentColor: 'var(--amber)' }}
+                    />
+                    <span style={{ fontSize: '13px', color: 'rgba(53, 160, 88, 0.70)' }}>
+                        Only show on-behalf actions (performed for another user)
+                    </span>
+                </label>
             </div>
 
             {/* DataTable */}
             <div style={{ padding: 0, overflow: 'hidden', border: '1px solid rgba(53, 160, 88, 0.30)', borderRadius: '6px', background: 'rgba(53, 160, 88, 0.05)' }}>
                 <DataTable
-                    data={logs}
+                    data={visibleLogs}
                     columns={columns}
                     rowKey={(row) => row.id}
                     expandable

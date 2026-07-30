@@ -9,6 +9,8 @@ import type { Person } from '../../hooks/queries/usePersonnel';
 import { getPendingApprovalCompetencies } from '../../hooks/queries/usePersonnel';
 import { useApproveCompetency, useRejectCompetency, useRequestChanges } from '../../hooks/mutations/useCompetencyMutations';
 import competencyService from '../../services/competency-service.ts';
+import { normalizeCompetencyDocuments } from '../../utils/competency-documents';
+import { DocumentViewerColumn } from './DocumentViewerColumn';
 
 interface PersonDocumentReviewModalProps {
     isOpen: boolean;
@@ -102,10 +104,17 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
     // Current competency being reviewed
     const currentCompetency = pendingCompetencies[currentIndex];
 
+    // All documents ("pages") for the current competency, in page order.
+    const documents = useMemo(
+        () => (currentCompetency ? normalizeCompetencyDocuments(currentCompetency) : []),
+        [currentCompetency]
+    );
+
     // Document loading state
-    const [documentUrl, setDocumentUrl] = useState<string | null>(null);
-    const [loadingDocument, setLoadingDocument] = useState(true);
+    const [documentUrls, setDocumentUrls] = useState<Record<string, string>>({});
+    const [loadingDocuments, setLoadingDocuments] = useState(true);
     const [documentError, setDocumentError] = useState<string | null>(null);
+    const [selectedDocIndex, setSelectedDocIndex] = useState(0);
 
     // Action state
     const [activeAction, setActiveAction] = useState<ActionType>(null);
@@ -120,35 +129,40 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
     // Remaining count (excluding reviewed ones)
     const remainingCount = pendingCompetencies.length - reviewedIds.size;
 
-    // Load document URL when current competency changes
+    // Batch-resolve signed URLs for every document when the competency changes.
     useEffect(() => {
-        async function loadDocumentUrl() {
-            if (!currentCompetency?.document_url) {
+        let cancelled = false;
+        async function loadDocumentUrls() {
+            if (documents.length === 0) {
                 setDocumentError('No document attached');
-                setLoadingDocument(false);
+                setLoadingDocuments(false);
                 return;
             }
 
-            setLoadingDocument(true);
+            setLoadingDocuments(true);
             setDocumentError(null);
 
             try {
-                const url = await competencyService.getDocumentUrl(currentCompetency.document_url);
-                setDocumentUrl(url);
+                const urls = await competencyService.getDocumentUrls(documents.map((d) => d.document_url));
+                if (!cancelled) setDocumentUrls(urls);
             } catch {
-                setDocumentError('Failed to load document');
+                if (!cancelled) setDocumentError('Failed to load document');
             } finally {
-                setLoadingDocument(false);
+                if (!cancelled) setLoadingDocuments(false);
             }
         }
 
-        loadDocumentUrl();
-    }, [currentCompetency?.document_url, currentCompetency?.id]);
+        loadDocumentUrls();
+        return () => {
+            cancelled = true;
+        };
+    }, [currentCompetency?.id, documents]);
 
-    // Reset action state when competency changes
+    // Reset action state and page selection when competency changes
     useEffect(() => {
         setActiveAction(null);
         setComment('');
+        setSelectedDocIndex(0);
     }, [currentIndex]);
 
     // Handle Escape key
@@ -272,9 +286,6 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
 
     if (!isOpen || pendingCompetencies.length === 0) return null;
 
-    const isImage = currentCompetency?.document_name?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-    const isPdf = currentCompetency?.document_name?.match(/\.pdf$/i);
-
     const modalContent = (
         <div
             className="pm-modal-overlay pm-modal-overlay--animated"
@@ -348,74 +359,14 @@ export function PersonDocumentReviewModal({ isOpen, onClose, person }: PersonDoc
                 {/* Body - Split View */}
                 <div className="flex-1 overflow-hidden flex pm-doc-split-body">
                     {/* Left: Document Viewer */}
-                    <div className="flex-1 border-r border-white/10 overflow-hidden flex flex-col pm-doc-viewer-col">
-                        <div className="pm-doc-viewer-header">
-                            <div className="pm-display-label">Document Preview</div>
-                            {currentCompetency?.document_name && (
-                                <div className="pm-doc-filename">
-                                    {currentCompetency.document_name}
-                                </div>
-                            )}
-                        </div>
-                        <div className="flex-1 overflow-auto p-4 pm-doc-viewer-bg">
-                            {loadingDocument ? (
-                                <div className="flex items-center justify-center h-full">
-                                    <div className="pm-text-center">
-                                        <Spinner />
-                                        <p className="pm-loading-text">
-                                            Loading document...
-                                        </p>
-                                    </div>
-                                </div>
-                            ) : documentError ? (
-                                <div className="flex items-center justify-center h-full">
-                                    <div className="pm-text-center" style={{ color: '#ef4444' }}>
-                                        <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24" className="pm-error-icon">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                        </svg>
-                                        <p className="pm-error-text">{documentError}</p>
-                                    </div>
-                                </div>
-                            ) : isImage && documentUrl ? (
-                                <div className="flex items-center justify-center h-full">
-                                    <img
-                                        src={documentUrl}
-                                        alt={currentCompetency?.document_name || 'Document'}
-                                        className="pm-doc-img"
-                                    />
-                                </div>
-                            ) : isPdf && documentUrl ? (
-                                <iframe
-                                    src={documentUrl}
-                                    title={currentCompetency?.document_name || 'Document'}
-                                    style={{ width: '100%', height: '100%', border: 'none', borderRadius: '8px' }}
-                                />
-                            ) : documentUrl ? (
-                                <div className="flex items-center justify-center h-full">
-                                    <div style={{ textAlign: 'center' }}>
-                                        <svg width="64" height="64" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ margin: '0 auto 16px', opacity: 0.4 }}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
-                                        <p style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '14px', marginBottom: '16px' }}>
-                                            Document preview not available
-                                        </p>
-                                        <a
-                                            href={documentUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="pm-btn"
-                                            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
-                                        >
-                                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                            </svg>
-                                            Download Document
-                                        </a>
-                                    </div>
-                                </div>
-                            ) : null}
-                        </div>
-                    </div>
+                    <DocumentViewerColumn
+                        documents={documents}
+                        documentUrls={documentUrls}
+                        loading={loadingDocuments}
+                        error={documentError}
+                        selectedIndex={selectedDocIndex}
+                        onSelect={setSelectedDocIndex}
+                    />
 
                     {/* Right: Details & Actions */}
                     <div className="w-96 flex-shrink-0 overflow-y-auto flex flex-col">

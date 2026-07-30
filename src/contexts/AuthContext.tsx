@@ -43,6 +43,7 @@ interface AuthContextType {
     profile: AuthProfile | null;
     isLoading: boolean;
     isAuthenticated: boolean;
+    sessionWasRestored: boolean;  // session silently restored from persistence (H3)
 
     // Role checks
     isSuperAdmin: boolean;
@@ -87,7 +88,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const [isLoading, setIsLoading] = useState(true);
     const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
     const [twoFactorVerified, setTwoFactorVerified] = useState(false);
+    const [sessionWasRestored, setSessionWasRestored] = useState(false);
     const isInitializedRef = useRef(false); // Track if auth has fully initialized (ref for event handlers)
+    const prevUserIdRef = useRef<string | null>(null); // Last known authenticated id — detect identity swaps (H2)
 
     // Load auth state from authManager
     const loadAuthState = useCallback(() => {
@@ -110,6 +113,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
                 if (mounted) {
                     loadAuthState();
+                    setSessionWasRestored(authManager.sessionWasRestored);
+                    prevUserIdRef.current = authManager.getCurrentUser()?.id ?? null;
                     setIsLoading(false);
                     isInitializedRef.current = true;
                     // Initialize session manager if user is already logged in
@@ -143,7 +148,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const handleAuthChange = () => {
             if (mounted) {
                 const u = authManager.getCurrentUser();
-                console.log(`[AUTH-DEBUG] authStateChanged event → user=${u?.email || 'null'}`);
+                const nextId = u?.id ?? null;
+                // If the authenticated identity CHANGED under us (swap, not just
+                // login/logout), purge the React Query cache so no cross-user data
+                // survives the transition (H2).
+                if (prevUserIdRef.current && nextId && prevUserIdRef.current !== nextId) {
+                    clearQueryCache();
+                }
+                prevUserIdRef.current = nextId;
                 loadAuthState();
             }
         };
@@ -152,9 +164,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Listen for login events (dispatched AFTER profile is loaded in auth-manager)
         const handleLogin = async () => {
             if (mounted) {
-                const u = authManager.getCurrentUser();
-                console.log(`[AUTH-DEBUG] userLoggedIn event → user=${u?.email || 'null'}`);
                 loadAuthState();
+                setSessionWasRestored(false); // explicit sign-in — not a restored session (H3)
+                prevUserIdRef.current = authManager.getCurrentUser()?.id ?? null;
                 // Initialize session manager for proactive refresh
                 sessionManager.initialize();
                 // Check 2FA status
@@ -174,13 +186,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Listen for logout events
         const handleLogout = () => {
             if (mounted) {
-                console.log('[AUTH-DEBUG] userLoggedOut event → clearing state');
                 // Stop session manager
                 sessionManager.stop();
                 setUser(null);
                 setProfile(null);
                 setTwoFactorEnabled(false);
                 setTwoFactorVerified(false);
+                setSessionWasRestored(false);
+                prevUserIdRef.current = null;
                 // Clear React Query cache to prevent stale data on next login
                 clearQueryCache();
             }
@@ -192,8 +205,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
             if (!mounted) return;
 
             if (event.type === 'refreshed') {
-                const u = authManager.getCurrentUser();
-                console.log(`[AUTH-DEBUG] sessionManager refreshed → user=${u?.email || 'null'}`);
                 loadAuthState();
                 // Invalidate stale queries (not all - prevents thundering herd)
                 invalidateStaleQueries();
@@ -201,7 +212,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 // Refresh failed but this does NOT mean the session is expired.
                 // Common cause: Supabase's auto-refresh consumed the token first.
                 // True session expiry is handled by the SIGNED_OUT event in auth-supabase.ts.
-                console.log('[AUTH-DEBUG] sessionManager refresh error - will retry next cycle');
             }
         });
 
@@ -286,6 +296,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         profile,
         isLoading,
         isAuthenticated,
+        sessionWasRestored,
         isSuperAdmin,
         isAdmin,
         isManager,

@@ -15,6 +15,29 @@ export interface Organization {
     slug?: string;
 }
 
+/**
+ * A single document/page attached to a certification. Rows live in the
+ * competency_documents child table; ordered by `position` (page order).
+ */
+export interface CompetencyDocument {
+    id: string;
+    employee_competency_id: string;
+    document_url: string; // storage path in the 'documents' bucket
+    document_name: string;
+    position: number;
+    created_at?: string;
+}
+
+/**
+ * Embedded author profile resolved from a competency's `created_by` FK.
+ * PostgREST returns a to-one embed as an object (or, defensively, a 1-element
+ * array); `null` when `created_by` is null or the profile is unavailable.
+ */
+export type CompetencyAuthorProfile =
+    | { username: string | null }
+    | { username: string | null }[]
+    | null;
+
 export interface PersonCompetency {
     id: string;
     competency_id: string;
@@ -32,7 +55,12 @@ export interface PersonCompetency {
     witness_notes?: string;
     document_url?: string;
     document_name?: string;
+    documents?: CompetencyDocument[];
     level?: string;
+    /** Author of the row (server-set trigger; null on legacy rows). */
+    created_by?: string | null;
+    /** Embedded author profile via the created_by FK (to-one PostgREST embed). */
+    created_by_profile?: CompetencyAuthorProfile;
     competency?: {
         id: string;
         name: string;

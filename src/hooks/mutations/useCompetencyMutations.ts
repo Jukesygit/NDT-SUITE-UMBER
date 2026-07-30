@@ -6,6 +6,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 // ES module import
 import competencyService from '../../services/competency-service.ts';
+import { documentsRequireReview } from '../../utils/competency-documents';
+import type { CompetencyDocumentInput } from '../../services/competency-mutations';
 
 interface CompetencyData {
     competency_id: string;
@@ -15,6 +17,7 @@ interface CompetencyData {
     expiry_date?: string;
     document_url?: string;
     document_name?: string;
+    documents?: CompetencyDocumentInput[];
     notes?: string;
     field_value?: string;
     level?: string;
@@ -29,6 +32,7 @@ interface UpdateCompetencyParams {
     competencyId: string;
     userId: string;
     data: Partial<CompetencyData>;
+    previousDocuments?: { document_url: string }[]; // Prior document set (multi-doc path)
 }
 
 interface DeleteCompetencyParams {
@@ -44,16 +48,29 @@ export function useCreateCompetency() {
 
     return useMutation({
         mutationFn: async ({ userId, data }: CreateCompetencyParams) => {
-            return competencyService.upsertCompetency(userId, data.competency_id, {
+            const documents = data.documents;
+            // When a document set is provided it owns the mirror scalars and the
+            // re-review decision (shared helper); a new competency has no prior set.
+            const status = documents
+                ? documentsRequireReview([], documents)
+                    ? 'pending_approval'
+                    : 'active'
+                : undefined;
+            const result = await competencyService.upsertCompetency(userId, data.competency_id, {
                 value: data.field_value || data.certification_id,
                 expiryDate: data.expiry_date,
                 issuingBody: data.issuing_body,
                 certificationId: data.certification_id,
-                documentUrl: data.document_url,
-                documentName: data.document_name,
+                documentUrl: documents ? undefined : data.document_url,
+                documentName: documents ? undefined : data.document_name,
                 notes: data.notes,
                 level: data.level,
+                status,
             });
+            if (documents) {
+                await competencyService.setCompetencyDocuments(result.id, documents);
+            }
+            return result;
         },
         onSuccess: (_, variables) => {
             // Invalidate all competency queries for this user
@@ -73,17 +90,30 @@ export function useUpdateCompetency() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: async ({ competencyId, userId, data }: UpdateCompetencyParams) => {
-            return competencyService.upsertCompetency(userId, competencyId, {
+        mutationFn: async ({ competencyId, userId, data, previousDocuments }: UpdateCompetencyParams) => {
+            const documents = data.documents;
+            // When a document set is provided it owns the mirror scalars and the
+            // re-review decision (shared helper) against the prior set.
+            const status = documents
+                ? documentsRequireReview(previousDocuments ?? [], documents)
+                    ? 'pending_approval'
+                    : 'active'
+                : undefined;
+            const result = await competencyService.upsertCompetency(userId, competencyId, {
                 value: data.field_value || data.certification_id,
                 expiryDate: data.expiry_date,
                 issuingBody: data.issuing_body,
                 certificationId: data.certification_id,
-                documentUrl: data.document_url,
-                documentName: data.document_name,
+                documentUrl: documents ? undefined : data.document_url,
+                documentName: documents ? undefined : data.document_name,
                 notes: data.notes,
                 level: data.level,
+                status,
             });
+            if (documents) {
+                await competencyService.setCompetencyDocuments(result.id, documents);
+            }
+            return result;
         },
         onSuccess: (_, variables) => {
             // Invalidate all competency queries for this user

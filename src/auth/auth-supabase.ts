@@ -26,6 +26,8 @@ export async function initializeSupabase(this: any): Promise<void> {
         const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
 
         if (session?.user) {
+            // Session restored from persistence at boot — flag for the banner (H3).
+            this.sessionWasRestored = true;
             await this.loadUserProfile(session.user.id);
         }
     } catch (_error) {
@@ -67,11 +69,13 @@ export async function initializeSupabase(this: any): Promise<void> {
             this.currentProfile = null;
             window.dispatchEvent(new CustomEvent('authStateChanged'));
         } else if (event === 'TOKEN_REFRESHED') {
-            if (session?.user && !this.currentUser) {
+            // Reload on identity CHANGE, not merely when we have no user. A stale
+            // `!this.currentUser` check never refreshed after an identity swap (H2).
+            if (session?.user && session.user.id !== this.currentUser?.id) {
                 await this.loadUserProfile(session.user.id);
                 window.dispatchEvent(new CustomEvent('authStateChanged'));
             }
-        } else if (session?.user && !this.currentUser) {
+        } else if (session?.user && session.user.id !== this.currentUser?.id) {
             await this.loadUserProfile(session.user.id);
             window.dispatchEvent(new CustomEvent('authStateChanged'));
         }
@@ -92,7 +96,6 @@ export async function loadUserProfile(
         .single();
 
     if (profileError || !profile) {
-        console.log(`[AUTH-DEBUG] loadUserProfile FAILED for ${userId}:`, profileError?.message || 'no profile found');
         return;
     }
 
@@ -143,6 +146,8 @@ export async function loginSupabase(
     }
 
     if (data.user) {
+        // Explicit sign-in — this session was NOT silently restored (H3).
+        this.sessionWasRestored = false;
         await this.loadUserProfile(data.user.id);
 
         if (!this.currentUser) {

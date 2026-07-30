@@ -5,17 +5,13 @@
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import type { PersonCompetency } from '../../hooks/queries/usePersonnel';
-import { useUpdatePersonCompetency, useUploadCompetencyDocument, useAddPersonCompetency } from '../../hooks/mutations';
+import { useUpdatePersonCompetency, useUploadCompetencyDocument, useAddPersonCompetency, useDeletePersonCompetency } from '../../hooks/mutations';
 import { useCompetencyDefinitions, useCompetencyCategories } from '../../hooks/queries/useCompetencies';
 import type { CompetencyDefinition, CompetencyCategory } from '../../hooks/queries/useCompetencies';
 import type { CompetencyFormData } from '../profile/EditCompetencyModal';
 import type { WitnessCheckData } from '../../components/features/witness/WitnessCheckModal';
-
-// @ts-ignore - JS module without types
-import supabaseImport from '../../supabase-client';
-import type { SupabaseClient } from '@supabase/supabase-js';
-// @ts-ignore - typing JS module import
-const supabaseClient: SupabaseClient = supabaseImport;
+import { normalizeCompetencyDocuments, toDocumentInputs } from '../../utils/competency-documents';
+import competencyService from '../../services/competency-service.ts';
 
 export function useCompetencyManagement(personId: string, onUpdate?: () => void) {
     // Competency editing modal state
@@ -31,7 +27,9 @@ export function useCompetencyManagement(personId: string, onUpdate?: () => void)
 
     // Certificate detail modal state
     const [viewingCompetency, setViewingCompetency] = useState<PersonCompetency | null>(null);
-    const [resolvedDocumentUrl, setResolvedDocumentUrl] = useState<string | null>(null);
+    // Batched signed URLs (storage path -> signed URL) for every document/page of
+    // the competency being viewed.
+    const [viewingDocumentUrls, setViewingDocumentUrls] = useState<Record<string, string>>({});
 
     // Witness check modal state
     const [witnessingCompetency, setWitnessingCompetency] = useState<PersonCompetency | null>(null);
@@ -42,44 +40,38 @@ export function useCompetencyManagement(personId: string, onUpdate?: () => void)
     const [pickerSearchTerm, setPickerSearchTerm] = useState('');
     const [pickerCategory, setPickerCategory] = useState<string>('all');
 
-    // Resolve document URL when viewing a competency
+    // Resolve signed URLs for every document/page when viewing a competency,
+    // batched through the shared service (no ad-hoc createSignedUrl here).
     useEffect(() => {
-        async function resolveUrl() {
-            if (!viewingCompetency?.document_url) {
-                setResolvedDocumentUrl(null);
+        let cancelled = false;
+        async function resolveUrls() {
+            if (!viewingCompetency) {
+                setViewingDocumentUrls({});
                 return;
             }
-
-            // If it's already a full URL, use it directly
-            if (viewingCompetency.document_url.startsWith('http')) {
-                setResolvedDocumentUrl(viewingCompetency.document_url);
+            const docs = normalizeCompetencyDocuments(viewingCompetency);
+            if (docs.length === 0) {
+                setViewingDocumentUrls({});
                 return;
             }
-
-            // It's a storage path - get a signed URL from the 'documents' bucket
             try {
-                const { data, error } = await supabaseClient.storage
-                    .from('documents')
-                    .createSignedUrl(viewingCompetency.document_url, 3600); // 1 hour expiry
-
-                if (error) {
-                    setResolvedDocumentUrl(null);
-                    return;
-                }
-
-                setResolvedDocumentUrl(data.signedUrl);
+                const urls = await competencyService.getDocumentUrls(docs.map((d) => d.document_url));
+                if (!cancelled) setViewingDocumentUrls(urls);
             } catch {
-                setResolvedDocumentUrl(null);
+                if (!cancelled) setViewingDocumentUrls({});
             }
         }
-
-        resolveUrl();
-    }, [viewingCompetency?.document_url]);
+        resolveUrls();
+        return () => {
+            cancelled = true;
+        };
+    }, [viewingCompetency]);
 
     // Mutations
     const updateCompetency = useUpdatePersonCompetency();
     const uploadDocument = useUploadCompetencyDocument();
     const addCompetency = useAddPersonCompetency();
+    const deleteCompetency = useDeletePersonCompetency();
 
     // Query hooks for competency definitions (for add picker)
     const definitionsQuery = useCompetencyDefinitions();
@@ -174,17 +166,36 @@ export function useCompetencyManagement(personId: string, onUpdate?: () => void)
                     certification_id: data.certification_id || null,
                     expiry_date: data.expiry_date || null,
                     notes: data.notes || null,
-                    document_url: data.document_url || null,
-                    document_name: data.document_name || null,
+                    documents: data.documents,
                     level: data.level || null,
                 },
-                // Pass previous document URL to detect new uploads (triggers pending_approval status)
-                previousDocumentUrl: editingCompetency.competency.document_url,
+                // Prior document set drives the re-review decision in the hook.
+                previousDocuments: toDocumentInputs(editingCompetency.competency),
             });
             setEditingCompetency(null);
             onUpdate?.();
         },
         [editingCompetency, personId, updateCompetency, onUpdate]
+    );
+
+    // Delete a competency on behalf of the person (admin action). Confirms first,
+    // then removes the row and all of its documents via the mutation.
+    const handleDeleteCompetency = useCallback(
+        async (comp: PersonCompetency) => {
+            const name = comp.competency?.name || 'this certification';
+            if (
+                !window.confirm(
+                    `Are you sure you want to delete "${name}"? All of its documents will also be removed. This cannot be undone.`
+                )
+            ) {
+                return;
+            }
+            await deleteCompetency.mutateAsync({ competencyId: comp.id, personId });
+            // Close the edit modal if the delete was triggered from within it.
+            setEditingCompetency(null);
+            onUpdate?.();
+        },
+        [personId, deleteCompetency, onUpdate]
     );
 
     // Handle selecting a competency type from picker
@@ -227,8 +238,7 @@ export function useCompetencyManagement(personId: string, onUpdate?: () => void)
                 certification_id: data.certification_id || undefined,
                 expiry_date: data.expiry_date || undefined,
                 notes: data.notes || undefined,
-                document_url: data.document_url || undefined,
-                document_name: data.document_name || undefined,
+                documents: data.documents,
                 level: data.level || undefined,
             });
             setAddingCompetency(null);
@@ -275,8 +285,7 @@ export function useCompetencyManagement(personId: string, onUpdate?: () => void)
                       expiry_date: editingCompetency.competency.expiry_date
                           ? new Date(editingCompetency.competency.expiry_date).toISOString().split('T')[0]
                           : '',
-                      document_url: editingCompetency.competency.document_url || '',
-                      document_name: editingCompetency.competency.document_name || '',
+                      documents: toDocumentInputs(editingCompetency.competency),
                       notes: editingCompetency.competency.notes || '',
                       level: editingCompetency.competency.level || '',
                   }
@@ -288,6 +297,7 @@ export function useCompetencyManagement(personId: string, onUpdate?: () => void)
             editingCompetency?.competency.expiry_date,
             editingCompetency?.competency.document_url,
             editingCompetency?.competency.document_name,
+            editingCompetency?.competency.documents,
             editingCompetency?.competency.notes,
             editingCompetency?.competency.level,
         ]
@@ -299,6 +309,7 @@ export function useCompetencyManagement(personId: string, onUpdate?: () => void)
         setEditingCompetency,
         handleEditCompetency,
         handleSaveCompetencyModal,
+        handleDeleteCompetency,
         handleDocumentUpload,
         editModalDefinition,
         editModalInitialData,
@@ -308,7 +319,7 @@ export function useCompetencyManagement(personId: string, onUpdate?: () => void)
         // Certificate detail
         viewingCompetency,
         setViewingCompetency,
-        resolvedDocumentUrl,
+        viewingDocumentUrls,
 
         // Witness check
         witnessingCompetency,

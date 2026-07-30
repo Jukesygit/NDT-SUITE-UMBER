@@ -118,6 +118,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                 competencies={person.competencies || []}
                 isAdmin={isAdmin}
                 onEditCompetency={cm.handleEditCompetency}
+                onDeleteCompetency={cm.handleDeleteCompetency}
                 onWitnessCheck={cm.handleWitnessCheck}
                 onViewCertificate={cm.setViewingCompetency}
                 onAddCompetency={() => cm.setShowCompetencyPicker(true)}
@@ -126,7 +127,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
             {/* Certificate Detail Modal */}
             <CertificateDetailModal
                 competency={cm.viewingCompetency}
-                resolvedDocumentUrl={cm.resolvedDocumentUrl}
+                documentUrls={cm.viewingDocumentUrls}
                 onClose={() => cm.setViewingCompetency(null)}
             />
 
@@ -136,6 +137,7 @@ export function PersonnelExpandedRow({ person, isAdmin, organizations, onUpdate 
                     isOpen={!!cm.editingCompetency}
                     onClose={() => cm.setEditingCompetency(null)}
                     onSave={cm.handleSaveCompetencyModal}
+                    onDelete={() => cm.handleDeleteCompetency(cm.editingCompetency!.competency)}
                     isNew={false}
                     initialData={cm.editModalInitialData}
                     definition={cm.editModalDefinition}

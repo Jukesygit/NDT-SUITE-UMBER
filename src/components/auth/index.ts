@@ -3,3 +3,4 @@
  */
 
 export { RequireAuth, RequireRole, AccessDenied } from './RequireAuth';
+export { SessionRestoredBanner } from './SessionRestoredBanner';

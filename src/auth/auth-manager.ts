@@ -74,6 +74,10 @@ class AuthManager {
     _authSubscription: { unsubscribe: () => void } | null = null;
     useSupabase: boolean;
     initPromise: Promise<void>;
+    // True when the active session was silently restored from persistence at app
+    // boot (rather than established by an explicit sign-in this session). Drives
+    // the restored-session banner (H3).
+    sessionWasRestored: boolean = false;
 
     constructor() {
         this.useSupabase = isSupabaseConfigured();

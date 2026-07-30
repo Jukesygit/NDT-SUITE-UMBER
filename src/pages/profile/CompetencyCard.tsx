@@ -5,12 +5,8 @@
 
 import { useMemo, useState, useEffect } from 'react';
 import { Modal } from '../../components/ui';
-
-import type { SupabaseClient } from '@supabase/supabase-js';
-// @ts-ignore - JS module without types
-import supabaseImport from '../../supabase-client';
-// @ts-ignore - typing JS module import
-const supabaseClient: SupabaseClient = supabaseImport;
+import competencyService from '../../services/competency-service.ts';
+import { normalizeCompetencyDocuments } from '../../utils/competency-documents';
 
 export interface CompetencyCategory {
     id: string;
@@ -30,6 +26,7 @@ export interface CompetencyDefinition {
 export interface Competency {
     id: string;
     competency_id: string;
+    user_id?: string;
     issuing_body?: string;
     certification_id?: string;
     issued_date?: string;
@@ -40,6 +37,23 @@ export interface Competency {
     field_value?: string;
     level?: string;
     status?: 'active' | 'expired' | 'pending_approval' | 'rejected' | 'changes_requested';
+    /** Author of the row (server-set; null on legacy rows). */
+    created_by?: string | null;
+    /** Embedded author profile via the created_by FK (to-one PostgREST embed). */
+    created_by_profile?: { username: string | null } | { username: string | null }[] | null;
+}
+
+/**
+ * Resolve a "Added by {name}" label for a competency written by someone other
+ * than the record owner. Returns null for legacy rows (no created_by) and for
+ * self-authored rows (created_by === user_id).
+ */
+function resolveAddedBy(competency: Competency): string | null {
+    const createdBy = competency.created_by;
+    if (!createdBy || createdBy === competency.user_id) return null;
+    const embed = competency.created_by_profile;
+    const profile = Array.isArray(embed) ? embed[0] : embed;
+    return profile?.username || 'another user';
 }
 
 interface CompetencyCardProps {
@@ -80,6 +94,14 @@ function formatDate(dateString?: string): string {
     return new Date(dateString).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+function getDocumentType(url?: string): 'image' | 'pdf' | 'other' {
+    if (!url) return 'other';
+    const lower = url.toLowerCase();
+    if (lower.match(/\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i)) return 'image';
+    if (lower.match(/\.pdf(\?|$)/i)) return 'pdf';
+    return 'other';
+}
+
 export function CompetencyCard({
     competency,
     definition,
@@ -90,35 +112,40 @@ export function CompetencyCard({
     const expiryStatus = useExpiryStatus(competency.expiry_date);
     const approvalStatus = getApprovalStatus(competency.status);
     const [showDocumentModal, setShowDocumentModal] = useState(false);
-    const [resolvedDocumentUrl, setResolvedDocumentUrl] = useState<string | null>(null);
+    const [documentUrls, setDocumentUrls] = useState<Record<string, string>>({});
+    const [selectedIndex, setSelectedIndex] = useState(0);
 
     const name = definition?.name || 'Unknown Certification';
     const isCertification = definition?.is_certification !== false;
 
+    const documents = useMemo(() => normalizeCompetencyDocuments(competency), [competency]);
+    const hasDocuments = documents.length > 0;
+    const addedBy = resolveAddedBy(competency);
+
+    // Resolve signed URLs for every document via the shared batched service.
     useEffect(() => {
-        async function resolveUrl() {
-            if (!competency.document_url) { setResolvedDocumentUrl(null); return; }
-            if (competency.document_url.startsWith('http')) { setResolvedDocumentUrl(competency.document_url); return; }
+        let cancelled = false;
+        async function resolve() {
+            if (documents.length === 0) {
+                setDocumentUrls({});
+                return;
+            }
             try {
-                const { data, error } = await supabaseClient.storage
-                    .from('documents')
-                    .createSignedUrl(competency.document_url, 3600);
-                if (error) { setResolvedDocumentUrl(null); return; }
-                setResolvedDocumentUrl(data.signedUrl);
-            } catch { setResolvedDocumentUrl(null); }
+                const urls = await competencyService.getDocumentUrls(documents.map((d) => d.document_url));
+                if (!cancelled) setDocumentUrls(urls);
+            } catch {
+                if (!cancelled) setDocumentUrls({});
+            }
         }
-        resolveUrl();
-    }, [competency.document_url]);
+        resolve();
+        return () => {
+            cancelled = true;
+        };
+    }, [documents.map((d) => d.document_url).join('|')]);
 
-    const getDocumentType = (url?: string): 'image' | 'pdf' | 'other' => {
-        if (!url) return 'other';
-        const lower = url.toLowerCase();
-        if (lower.match(/\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i)) return 'image';
-        if (lower.match(/\.pdf(\?|$)/i)) return 'pdf';
-        return 'other';
-    };
-
-    const documentType = getDocumentType(competency.document_url);
+    const currentDoc = documents[selectedIndex] ?? documents[0];
+    const resolvedDocumentUrl = currentDoc ? documentUrls[currentDoc.document_url] || null : null;
+    const documentType = getDocumentType(currentDoc?.document_url);
 
     return (
         <div className={`pf-competency-card${compact ? ' compact' : ''}`}>
@@ -187,12 +214,12 @@ export function CompetencyCard({
                 <div className="pf-detail-value">{competency.field_value}</div>
             )}
 
-            {competency.document_url && (
-                <button className="pf-doc-link" onClick={() => setShowDocumentModal(true)}>
+            {hasDocuments && (
+                <button className="pf-doc-link" onClick={() => { setSelectedIndex(0); setShowDocumentModal(true); }}>
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ width: '12px', height: '12px' }}>
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    View Certificate
+                    View Certificate{documents.length > 1 ? `s (${documents.length})` : ''}
                 </button>
             )}
 
@@ -209,13 +236,33 @@ export function CompetencyCard({
                 </div>
             ) : null}
 
-            {showDocumentModal && competency.document_url && (
+            {addedBy && (
+                <div className="pf-card-category" style={{ marginTop: '8px' }}>
+                    Added by {addedBy}
+                </div>
+            )}
+
+            {showDocumentModal && hasDocuments && (
                 <Modal
                     isOpen={showDocumentModal}
                     onClose={() => setShowDocumentModal(false)}
-                    title={`${name} - Certificate`}
+                    title={`${name} - Certificate${documents.length > 1 ? ` (Page ${selectedIndex + 1} of ${documents.length})` : ''}`}
                     size="large"
                 >
+                    {documents.length > 1 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+                            {documents.map((doc, index) => (
+                                <button
+                                    key={`${doc.document_url}-${index}`}
+                                    onClick={() => setSelectedIndex(index)}
+                                    className={`pf-btn sm${index === selectedIndex ? ' primary' : ''}`}
+                                    title={doc.document_name}
+                                >
+                                    Page {index + 1}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                     <div style={{ minHeight: '400px' }}>
                         {!resolvedDocumentUrl && (
                             <div style={{ textAlign: 'center', padding: '40px' }}>

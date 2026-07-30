@@ -18,6 +18,7 @@ import { useCreateUser } from '../../../hooks/mutations/useUserMutations';
 import { useOrganizations } from '../../../hooks/queries/useAdminOrganizations';
 import type { UserRole as AdminUserRole } from '../../../types/admin';
 import { useAuth } from '../../../contexts/AuthContext';
+import { validatePasswordStrength } from '../../../config/security';
 
 export interface CreateUserModalProps {
     isOpen: boolean;
@@ -52,7 +53,7 @@ function isValidEmail(email: string): boolean {
 /**
  * Validate form data
  */
-function validateForm(data: FormData): FormErrors {
+export function validateForm(data: FormData): FormErrors {
     const errors: FormErrors = {};
 
     // Username validation
@@ -69,19 +70,21 @@ function validateForm(data: FormData): FormErrors {
         errors.email = 'Please enter a valid email address';
     }
 
-    // Password validation (must match server-side policy in password-validation.ts)
+    // Password validation — mirror ALL server-side checks (length, case, number,
+    // special, common-password, and username/email-local-part) via the shared
+    // validator so no server-only rejection produces an opaque 400. Any failed
+    // check pushes a feedback message; the user-info/common-password checks live
+    // only in feedback (not in `isValid`), so gate on feedback presence.
     if (!data.password) {
         errors.password = 'Password is required';
-    } else if (data.password.length < 12) {
-        errors.password = 'Password must be at least 12 characters';
-    } else if (!/[A-Z]/.test(data.password)) {
-        errors.password = 'Password must contain at least one uppercase letter';
-    } else if (!/[a-z]/.test(data.password)) {
-        errors.password = 'Password must contain at least one lowercase letter';
-    } else if (!/[0-9]/.test(data.password)) {
-        errors.password = 'Password must contain at least one number';
-    } else if (!/[!@#$%^&*()_+\-=[\]{}|;:,.<>?]/.test(data.password)) {
-        errors.password = 'Password must contain at least one special character (!@#$%^&*)';
+    } else {
+        const passwordResult = validatePasswordStrength(data.password, {
+            username: data.username,
+            email: data.email,
+        });
+        if (passwordResult.feedback.length > 0) {
+            errors.password = passwordResult.feedback[0] || 'Password does not meet requirements';
+        }
     }
 
     // Organization validation

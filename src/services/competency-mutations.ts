@@ -33,6 +33,22 @@ export interface DocumentUploadResult {
     path: string;
 }
 
+/** A document to persist for a competency (storage path + display name). */
+export interface CompetencyDocumentInput {
+    document_url: string;
+    document_name: string;
+}
+
+/** A persisted competency_documents row. */
+export interface CompetencyDocumentRow {
+    id: string;
+    employee_competency_id: string;
+    document_url: string;
+    document_name: string;
+    position: number;
+    created_at?: string;
+}
+
 function ensureConfigured(): void {
     if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
 }
@@ -65,13 +81,52 @@ export async function upsertCompetency(
     return result;
 }
 
-/** Delete a competency */
+/** Add a storage path to the cleanup set, skipping empties and absolute URLs. */
+function collectStoragePath(paths: Set<string>, value: string | null | undefined): void {
+    // Only bucket-relative paths are storage objects; http(s) values are
+    // external links and null/empty means "no document".
+    if (value && !value.startsWith('http')) paths.add(value);
+}
+
+/**
+ * Delete a competency (row + cascade-removed competency_documents children) and
+ * best-effort clean up the storage objects those rows referenced.
+ */
 export async function deleteCompetency(competencyId: string): Promise<boolean> {
     ensureConfigured();
 
+    // Gather the storage paths to remove BEFORE the row is gone. document_name is
+    // a display label (not a storage path), so only document_url values are kept.
+    const paths = new Set<string>();
+    const { data: parent } = await sb
+        .from('employee_competencies')
+        .select('document_url, document_name')
+        .eq('id', competencyId)
+        .maybeSingle();
+    collectStoragePath(paths, (parent as { document_url?: string | null } | null)?.document_url);
+
+    const { data: children } = await sb
+        .from('competency_documents')
+        .select('document_url')
+        .eq('employee_competency_id', competencyId);
+    for (const row of (children ?? []) as { document_url?: string | null }[]) {
+        collectStoragePath(paths, row.document_url);
+    }
+
+    // Delete the row; cascade removes the competency_documents children.
     const { error } = await sb
         .from('employee_competencies').delete().eq('id', competencyId);
     if (error) throw error;
+
+    // Best-effort storage cleanup — the row is already gone, so a storage failure
+    // must never surface as an error (orphaned objects are acceptable).
+    if (paths.size > 0) {
+        try {
+            await sb.storage.from('documents').remove([...paths]);
+        } catch {
+            // swallow
+        }
+    }
 
     return true;
 }
@@ -137,6 +192,119 @@ export async function deleteDocument(filePath: string): Promise<boolean> {
     const { error } = await sb.storage.from('documents').remove([filePath]);
     if (error) throw error;
     return true;
+}
+
+/**
+ * Replace the full document set for a competency (replace-set semantics): delete
+ * child rows no longer present, keep/insert the rest with `position` = array
+ * index, then mirror the parent scalars to the position-first document (or NULL
+ * when empty). Returns the new rows ordered by position.
+ */
+export async function setCompetencyDocuments(
+    employeeCompetencyId: string,
+    docs: CompetencyDocumentInput[]
+): Promise<CompetencyDocumentRow[]> {
+    ensureConfigured();
+    const uploadedBy = authManager.getCurrentUser()?.id ?? null;
+
+    const { data: existing, error: fetchError } = await sb
+        .from('competency_documents')
+        .select('id, document_url')
+        .eq('employee_competency_id', employeeCompetencyId);
+    if (fetchError) throw fetchError;
+
+    const existingRows = (existing ?? []) as { id: string; document_url: string }[];
+    const nextUrls = new Set(docs.map(d => d.document_url));
+
+    // Delete rows no longer present in the new set
+    const removedRows = existingRows.filter(row => !nextUrls.has(row.document_url));
+    const toDelete = removedRows.map(row => row.id);
+    if (toDelete.length > 0) {
+        const { error: deleteError } = await sb
+            .from('competency_documents').delete().in('id', toDelete);
+        if (deleteError) throw deleteError;
+
+        // Best-effort: remove the now-orphaned storage objects. The DB delete
+        // above still throws on failure; a storage failure here is swallowed.
+        const removedPaths = removedRows
+            .map(row => row.document_url)
+            .filter((url): url is string => !!url && !url.startsWith('http'));
+        if (removedPaths.length > 0) {
+            try {
+                await sb.storage.from('documents').remove(removedPaths);
+            } catch {
+                // swallow
+            }
+        }
+    }
+
+    // Keep/insert the rest with position = array index
+    const existingByUrl = new Map(existingRows.map(row => [row.document_url, row.id]));
+    for (let i = 0; i < docs.length; i++) {
+        const doc = docs[i];
+        const existingId = existingByUrl.get(doc.document_url);
+        if (existingId) {
+            const { error: updateError } = await sb
+                .from('competency_documents')
+                .update({ document_name: doc.document_name, position: i })
+                .eq('id', existingId);
+            if (updateError) throw updateError;
+        } else {
+            const { error: insertError } = await sb
+                .from('competency_documents')
+                .insert({
+                    employee_competency_id: employeeCompetencyId,
+                    document_url: doc.document_url,
+                    document_name: doc.document_name,
+                    position: i,
+                    uploaded_by: uploadedBy,
+                });
+            if (insertError) throw insertError;
+        }
+    }
+
+    // Mirror rule: parent scalars follow the position-first document
+    const first = docs[0];
+    const { error: mirrorError } = await sb
+        .from('employee_competencies')
+        .update({
+            document_url: first ? first.document_url : null,
+            document_name: first ? first.document_name : null,
+        })
+        .eq('id', employeeCompetencyId);
+    if (mirrorError) throw mirrorError;
+
+    const { data: result, error: resultError } = await sb
+        .from('competency_documents')
+        .select('id, employee_competency_id, document_url, document_name, position, created_at')
+        .eq('employee_competency_id', employeeCompetencyId)
+        .order('position', { ascending: true });
+    if (resultError) throw resultError;
+    return (result ?? []) as CompetencyDocumentRow[];
+}
+
+/**
+ * Batch-resolve signed URLs for competency document storage paths. Returns a map
+ * of input path → signed URL (valid 1 hour); already-absolute (http) paths pass
+ * through unchanged, and a path that fails to sign maps to an empty string.
+ */
+export async function getDocumentUrls(paths: string[]): Promise<Record<string, string>> {
+    ensureConfigured();
+    const result: Record<string, string> = {};
+    const toSign: string[] = [];
+    for (const path of paths) {
+        if (path.startsWith('http')) result[path] = path;
+        else toSign.push(path);
+    }
+    if (toSign.length === 0) return result;
+
+    const { data, error } = await sb.storage
+        .from('documents').createSignedUrls(toSign, 3600);
+    if (error) throw error;
+    for (const item of data ?? []) {
+        if (item.path) result[item.path] = item.signedUrl ?? '';
+    }
+    return result;
 }
 
 /** Bulk create competencies */

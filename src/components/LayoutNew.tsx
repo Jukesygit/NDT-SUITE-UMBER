@@ -28,6 +28,8 @@ import { NotificationBell } from './NotificationBell';
 import { AnnouncementBanner } from './AnnouncementBanner';
 import { useTabVisibility } from '../hooks/queries/useTabVisibility';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
+import { SessionRestoredBanner } from './auth/SessionRestoredBanner';
 
 interface LogoVariant {
   id: string;
@@ -216,6 +218,16 @@ const THEME_LABELS: Record<string, string> = {
   dark: 'Dark theme',
 };
 
+// Human-readable role labels for the header identity display (H1).
+const ROLE_LABELS: Record<string, string> = {
+  super_admin: 'Super Admin',
+  admin: 'Admin',
+  manager: 'Manager',
+  org_admin: 'Org Admin',
+  editor: 'Editor',
+  viewer: 'Viewer',
+};
+
 function ThemeToggle() {
   const { preference, cycle } = useTheme();
   return (
@@ -233,6 +245,7 @@ function ThemeToggle() {
 function LayoutNew() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [hasElevatedAccess, setHasElevatedAccess] = useState(false);
@@ -310,6 +323,19 @@ function LayoutNew() {
             <ActiveLogo size={44} />
             <span>Matrix Portal</span>
           </Link>
+
+          {user && (
+            <div className="flex items-center gap-2" title={user.email || undefined}>
+              <span className="text-secondary text-sm font-medium">
+                {user.username || user.email}
+              </span>
+              {user.role && (
+                <span className="badge badge--neutral">
+                  {ROLE_LABELS[user.role] || user.role}
+                </span>
+              )}
+            </div>
+          )}
 
           <nav className="header__nav">
             <div className="nav">
@@ -392,6 +418,8 @@ function LayoutNew() {
           </div>
         </div>
       </header>
+
+      <SessionRestoredBanner />
 
       {isMaintenanceMode ? (
         <div className="px-5 py-2.5 text-center text-sm border-b"

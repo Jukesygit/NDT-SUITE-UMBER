@@ -3,11 +3,13 @@
  * Split view with document on left, competency details + actions on right
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import type { PendingApproval } from '../../hooks/queries/useCompetencies';
 import { useApproveCompetency, useRejectCompetency, useRequestChanges } from '../../hooks/mutations/useCompetencyMutations';
 import competencyService from '../../services/competency-service.ts';
+import { normalizeCompetencyDocuments } from '../../utils/competency-documents';
+import { DocumentViewerColumn } from './DocumentViewerColumn';
 
 interface DocumentReviewModalProps {
     approval: PendingApproval;
@@ -70,9 +72,12 @@ function DetailRow({ label, value, highlight = false }: { label: string; value: 
  * DocumentReviewModal component
  */
 export function DocumentReviewModal({ approval, onClose, onActionComplete }: DocumentReviewModalProps) {
-    const [documentUrl, setDocumentUrl] = useState<string | null>(null);
-    const [loadingDocument, setLoadingDocument] = useState(true);
+    // All documents ("pages") for the competency under review, in page order.
+    const documents = useMemo(() => normalizeCompetencyDocuments(approval), [approval]);
+    const [documentUrls, setDocumentUrls] = useState<Record<string, string>>({});
+    const [loadingDocuments, setLoadingDocuments] = useState(true);
     const [documentError, setDocumentError] = useState<string | null>(null);
+    const [selectedIndex, setSelectedIndex] = useState(0);
     const [activeAction, setActiveAction] = useState<ActionType>(null);
     const [comment, setComment] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -81,27 +86,32 @@ export function DocumentReviewModal({ approval, onClose, onActionComplete }: Doc
     const rejectMutation = useRejectCompetency();
     const requestChangesMutation = useRequestChanges();
 
-    // Load document URL
+    // Batch-resolve signed URLs for every document via the shared service.
     useEffect(() => {
-        async function loadDocumentUrl() {
-            if (!approval.document_url) {
+        let cancelled = false;
+        async function loadDocumentUrls() {
+            if (documents.length === 0) {
                 setDocumentError('No document attached');
-                setLoadingDocument(false);
+                setLoadingDocuments(false);
                 return;
             }
-
+            setLoadingDocuments(true);
+            setDocumentError(null);
             try {
-                const url = await competencyService.getDocumentUrl(approval.document_url);
-                setDocumentUrl(url);
+                const urls = await competencyService.getDocumentUrls(documents.map((d) => d.document_url));
+                if (!cancelled) setDocumentUrls(urls);
             } catch {
-                setDocumentError('Failed to load document');
+                if (!cancelled) setDocumentError('Failed to load document');
             } finally {
-                setLoadingDocument(false);
+                if (!cancelled) setLoadingDocuments(false);
             }
         }
 
-        loadDocumentUrl();
-    }, [approval.document_url]);
+        loadDocumentUrls();
+        return () => {
+            cancelled = true;
+        };
+    }, [approval.id, documents]);
 
     // Handle Escape key
     useEffect(() => {
@@ -173,9 +183,6 @@ export function DocumentReviewModal({ approval, onClose, onActionComplete }: Doc
         }
     };
 
-    const isImage = approval.document_name?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-    const isPdf = approval.document_name?.match(/\.pdf$/i);
-
     const modalContent = (
         <div
             className="pm-modal-overlay"
@@ -220,74 +227,14 @@ export function DocumentReviewModal({ approval, onClose, onActionComplete }: Doc
                 {/* Body - Split View */}
                 <div className="flex-1 overflow-hidden flex" style={{ minHeight: 0 }}>
                     {/* Left: Document Viewer */}
-                    <div className="flex-1 border-r border-white/10 overflow-hidden flex flex-col" style={{ minWidth: 0 }}>
-                        <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', flexShrink: 0 }}>
-                            <div className="pm-display-label">Document Preview</div>
-                            {approval.document_name && (
-                                <div style={{ fontSize: '13px', color: '#60a5fa', marginTop: '4px' }}>
-                                    {approval.document_name}
-                                </div>
-                            )}
-                        </div>
-                        <div className="flex-1 overflow-auto p-4" style={{ backgroundColor: 'rgba(0, 0, 0, 0.2)' }}>
-                            {loadingDocument ? (
-                                <div className="flex items-center justify-center h-full">
-                                    <div style={{ textAlign: 'center' }}>
-                                        <Spinner />
-                                        <p style={{ marginTop: '12px', color: 'rgba(255, 255, 255, 0.5)', fontSize: '14px' }}>
-                                            Loading document...
-                                        </p>
-                                    </div>
-                                </div>
-                            ) : documentError ? (
-                                <div className="flex items-center justify-center h-full">
-                                    <div style={{ textAlign: 'center', color: '#ef4444' }}>
-                                        <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ margin: '0 auto 12px', opacity: 0.6 }}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                        </svg>
-                                        <p style={{ fontSize: '14px' }}>{documentError}</p>
-                                    </div>
-                                </div>
-                            ) : isImage && documentUrl ? (
-                                <div className="flex items-center justify-center h-full">
-                                    <img
-                                        src={documentUrl}
-                                        alt={approval.document_name || 'Document'}
-                                        style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '8px' }}
-                                    />
-                                </div>
-                            ) : isPdf && documentUrl ? (
-                                <iframe
-                                    src={documentUrl}
-                                    title={approval.document_name || 'Document'}
-                                    style={{ width: '100%', height: '100%', border: 'none', borderRadius: '8px' }}
-                                />
-                            ) : documentUrl ? (
-                                <div className="flex items-center justify-center h-full">
-                                    <div style={{ textAlign: 'center' }}>
-                                        <svg width="64" height="64" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ margin: '0 auto 16px', opacity: 0.4 }}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
-                                        <p style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '14px', marginBottom: '16px' }}>
-                                            Document preview not available
-                                        </p>
-                                        <a
-                                            href={documentUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="pm-btn"
-                                            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
-                                        >
-                                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                            </svg>
-                                            Download Document
-                                        </a>
-                                    </div>
-                                </div>
-                            ) : null}
-                        </div>
-                    </div>
+                    <DocumentViewerColumn
+                        documents={documents}
+                        documentUrls={documentUrls}
+                        loading={loadingDocuments}
+                        error={documentError}
+                        selectedIndex={selectedIndex}
+                        onSelect={setSelectedIndex}
+                    />
 
                     {/* Right: Details & Actions */}
                     <div className="w-96 flex-shrink-0 overflow-y-auto flex flex-col">

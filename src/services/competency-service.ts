@@ -40,6 +40,8 @@ class CompetencyService {
     requestChanges = mutations.requestChanges;
     uploadDocument = mutations.uploadDocument;
     deleteDocument = mutations.deleteDocument;
+    setCompetencyDocuments = mutations.setCompetencyDocuments;
+    getDocumentUrls = mutations.getDocumentUrls;
     bulkCreateCompetencies = mutations.bulkCreateCompetencies;
     bulkImportCompetencies = mutations.bulkImportCompetencies;
 

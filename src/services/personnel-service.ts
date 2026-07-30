@@ -2,6 +2,85 @@
 import supabase, { isSupabaseConfigured } from '../supabase-client';
 import authManager from '../auth-manager.js';
 import competencyService from './competency-service.ts';
+import {
+    withCompetencyDocumentsFallback,
+    competencyDocumentsEmbedFragment,
+} from './competency-queries.ts';
+
+/** Per-module tracker for whether the `competency_documents` embed is available. */
+const competencyDocumentsEmbedState = { available: true };
+
+/** Select for the personnel grid's competencies; embeds document pages when available. */
+function personnelCompetenciesSelect(includeDocuments: boolean): string {
+    return `
+        id,
+        user_id,
+        value,
+        expiry_date,
+        status,
+        document_url,
+        document_name,
+        notes,
+        competency_id,
+        created_at,
+        issuing_body,
+        certification_id,
+        witness_checked,
+        witnessed_by,
+        witnessed_at,
+        witness_notes,
+        level,
+        created_by,
+        created_by_profile:profiles!employee_competencies_created_by_fkey(username),
+        ${competencyDocumentsEmbedFragment(includeDocuments)}
+        competency_definitions!inner(
+            id,
+            name,
+            description,
+            field_type,
+            category_id,
+            is_active,
+            competency_categories(
+                id,
+                name,
+                description
+            )
+        )
+    `;
+}
+
+/** Select for a single person's compliance-report competencies; embeds document pages when available. */
+function complianceReportCompetenciesSelect(includeDocuments: boolean): string {
+    return `
+        id,
+        value,
+        expiry_date,
+        status,
+        document_url,
+        document_name,
+        notes,
+        verified_by,
+        verified_at,
+        created_at,
+        updated_at,
+        competency_id,
+        ${competencyDocumentsEmbedFragment(includeDocuments)}
+        competency_definitions!inner(
+            id,
+            name,
+            description,
+            field_type,
+            requires_document,
+            requires_approval,
+            category_id,
+            is_active,
+            competency_categories(
+                id,
+                name
+            )
+        )
+    `;
+}
 
 /**
  * Service for managing personnel and their competencies
@@ -16,7 +95,7 @@ class PersonnelService {
         }
 
         // Fetch profiles and all competencies in parallel (2 queries instead of N+1)
-        const [profilesResult, competenciesResult] = await Promise.all([
+        const [profilesResult, competenciesData] = await Promise.all([
             supabase!
                 .from('profiles')
                 .select(`
@@ -37,48 +116,20 @@ class PersonnelService {
                     organizations(id, name)
                 `)
                 .order('username', { ascending: true }),
-            supabase!
-                .from('employee_competencies')
-                .select(`
-                    id,
-                    user_id,
-                    value,
-                    expiry_date,
-                    status,
-                    document_url,
-                    document_name,
-                    notes,
-                    competency_id,
-                    created_at,
-                    issuing_body,
-                    certification_id,
-                    witness_checked,
-                    witnessed_by,
-                    witnessed_at,
-                    witness_notes,
-                    level,
-                    competency_definitions!inner(
-                        id,
-                        name,
-                        description,
-                        field_type,
-                        category_id,
-                        is_active,
-                        competency_categories(
-                            id,
-                            name,
-                            description
-                        )
-                    )
-                `)
-                .eq('competency_definitions.is_active', true)
+            withCompetencyDocumentsFallback<Record<string, unknown>[]>(
+                competencyDocumentsEmbedState,
+                include =>
+                    supabase!
+                        .from('employee_competencies')
+                        .select(personnelCompetenciesSelect(include))
+                        .eq('competency_definitions.is_active', true)
+            ),
         ]);
 
         if (profilesResult.error) throw profilesResult.error;
-        if (competenciesResult.error) throw competenciesResult.error;
 
         const profiles = profilesResult.data;
-        const allCompetencies = competenciesResult.data || [];
+        const allCompetencies = competenciesData || [];
 
         // Group competencies by user_id for efficient lookup
         const competenciesByUser: Record<string, unknown[]> = {};
@@ -88,6 +139,13 @@ class PersonnelService {
                 competenciesByUser[userId] = [];
             }
             const compDefs = comp.competency_definitions as Record<string, unknown> | undefined;
+            // Order nested documents (pages) by position
+            const documents = comp.documents;
+            if (Array.isArray(documents)) {
+                (documents as Array<{ position?: number }>).sort(
+                    (a, b) => (a.position ?? 0) - (b.position ?? 0)
+                );
+            }
             // Flatten the competency_definitions structure
             competenciesByUser[userId].push({
                 ...comp,
@@ -333,44 +391,26 @@ class PersonnelService {
         if (personError) throw personError;
 
         // Get competencies with definitions and categories (only active definitions)
-        const { data: competencies, error: compError } = await supabase!
-            .from('employee_competencies')
-            .select(`
-                id,
-                value,
-                expiry_date,
-                status,
-                document_url,
-                document_name,
-                notes,
-                verified_by,
-                verified_at,
-                created_at,
-                updated_at,
-                competency_id,
-                competency_definitions!inner(
-                    id,
-                    name,
-                    description,
-                    field_type,
-                    requires_document,
-                    requires_approval,
-                    category_id,
-                    is_active,
-                    competency_categories(
-                        id,
-                        name
-                    )
-                )
-            `)
-            .eq('user_id', userId)
-            .eq('competency_definitions.is_active', true);
-
-        if (compError) throw compError;
+        const competencies = await withCompetencyDocumentsFallback<Record<string, unknown>[]>(
+            competencyDocumentsEmbedState,
+            include =>
+                supabase!
+                    .from('employee_competencies')
+                    .select(complianceReportCompetenciesSelect(include))
+                    .eq('user_id', userId)
+                    .eq('competency_definitions.is_active', true)
+        );
 
         // Flatten and attach competencies
         (person as Record<string, unknown>).competencies = (competencies || []).map((comp: Record<string, unknown>) => {
             const compDefs = comp.competency_definitions as Record<string, unknown>;
+            // Order nested documents (pages) by position
+            const documents = comp.documents;
+            if (Array.isArray(documents)) {
+                (documents as Array<{ position?: number }>).sort(
+                    (a, b) => (a.position ?? 0) - (b.position ?? 0)
+                );
+            }
             return {
                 ...comp,
                 competency: {

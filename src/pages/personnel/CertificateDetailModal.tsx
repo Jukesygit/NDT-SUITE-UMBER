@@ -1,29 +1,46 @@
 /**
- * CertificateDetailModal - Modal for viewing certificate details and document preview
+ * CertificateDetailModal - Modal for viewing certificate details and document preview.
+ * Supports multiple documents ("pages") with a page selector.
  */
 
+import { useEffect, useState } from 'react';
 import type { PersonCompetency } from '../../hooks/queries/usePersonnel';
 import { Modal } from '../../components/ui';
 import { getDocumentType, formatDate, getCompetencyStatus } from './PersonnelExpandedRowUtils';
+import { normalizeCompetencyDocuments } from '../../utils/competency-documents';
 
 interface CertificateDetailModalProps {
     competency: PersonCompetency | null;
-    resolvedDocumentUrl: string | null;
+    /** Batched signed URLs keyed by storage path (from getDocumentUrls). */
+    documentUrls: Record<string, string>;
     onClose: () => void;
 }
 
 export function CertificateDetailModal({
     competency,
-    resolvedDocumentUrl,
+    documentUrls,
     onClose,
 }: CertificateDetailModalProps) {
+    const [selectedIndex, setSelectedIndex] = useState(0);
+
+    // Reset to the first page whenever the viewed competency changes.
+    useEffect(() => {
+        setSelectedIndex(0);
+    }, [competency?.id]);
+
     if (!competency) return null;
+
+    const docs = normalizeCompetencyDocuments(competency);
+    const currentDoc = docs[selectedIndex] ?? docs[0];
+    const resolvedDocumentUrl = currentDoc ? documentUrls[currentDoc.document_url] || null : null;
+    const docType = currentDoc ? getDocumentType(currentDoc.document_url) : 'other';
+    const certName = competency.competency?.name || 'Certificate';
 
     return (
         <Modal
             isOpen={!!competency}
             onClose={onClose}
-            title={`${competency.competency?.name || 'Certificate'} - Details`}
+            title={`${certName} - Details`}
             size="large"
         >
             {/* Certificate Details */}
@@ -74,11 +91,28 @@ export function CertificateDetailModal({
             </div>
 
             {/* Document Preview */}
-            {competency.document_url && (
+            {currentDoc && (
                 <div style={{ minHeight: '300px' }}>
                     <div className="pm-display-label" style={{ marginBottom: '12px' }}>
-                        Certificate Document
+                        Certificate Document{docs.length > 1 ? `s (${docs.length})` : ''}
                     </div>
+
+                    {/* Page selector when multiple documents are attached */}
+                    {docs.length > 1 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+                            {docs.map((doc, index) => (
+                                <button
+                                    key={`${doc.document_url}-${index}`}
+                                    onClick={() => setSelectedIndex(index)}
+                                    className={`pm-btn sm${index === selectedIndex ? ' primary' : ''}`}
+                                    title={doc.document_name}
+                                >
+                                    Page {index + 1}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
                     {!resolvedDocumentUrl && (
                         <div style={{ textAlign: 'center', padding: '40px' }}>
                             <p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
@@ -86,17 +120,12 @@ export function CertificateDetailModal({
                             </p>
                         </div>
                     )}
-                    {resolvedDocumentUrl && getDocumentType(competency.document_url) === 'image' && (
+                    {resolvedDocumentUrl && docType === 'image' && (
                         <div className="pm-doc-preview">
                             <img
                                 src={resolvedDocumentUrl}
-                                alt={`${competency.competency?.name || 'Certificate'}`}
-                                style={{
-                                    width: '100%',
-                                    height: 'auto',
-                                    maxHeight: '50vh',
-                                    objectFit: 'contain',
-                                }}
+                                alt={certName}
+                                style={{ width: '100%', height: 'auto', maxHeight: '50vh', objectFit: 'contain' }}
                                 onError={(e) => {
                                     const target = e.target as HTMLImageElement;
                                     target.style.display = 'none';
@@ -107,7 +136,7 @@ export function CertificateDetailModal({
                         </div>
                     )}
                     {/* Fallback for failed image load */}
-                    {resolvedDocumentUrl && getDocumentType(competency.document_url) === 'image' && (
+                    {resolvedDocumentUrl && docType === 'image' && (
                         <div style={{ display: 'none', textAlign: 'center', padding: '40px' }}>
                             <p style={{ color: 'rgba(255, 255, 255, 0.7)', marginBottom: '16px' }}>
                                 Unable to load image preview.
@@ -122,19 +151,14 @@ export function CertificateDetailModal({
                             </a>
                         </div>
                     )}
-                    {resolvedDocumentUrl && getDocumentType(competency.document_url) === 'pdf' && (
+                    {resolvedDocumentUrl && docType === 'pdf' && (
                         <iframe
                             src={resolvedDocumentUrl}
-                            title={`${competency.competency?.name || 'Certificate'}`}
-                            style={{
-                                width: '100%',
-                                height: '50vh',
-                                border: 'none',
-                                borderRadius: '8px',
-                            }}
+                            title={certName}
+                            style={{ width: '100%', height: '50vh', border: 'none', borderRadius: '8px' }}
                         />
                     )}
-                    {resolvedDocumentUrl && getDocumentType(competency.document_url) === 'other' && (
+                    {resolvedDocumentUrl && docType === 'other' && (
                         <div style={{ textAlign: 'center', padding: '40px' }}>
                             <p style={{ color: 'rgba(255, 255, 255, 0.7)', marginBottom: '16px' }}>
                                 This document type cannot be previewed.

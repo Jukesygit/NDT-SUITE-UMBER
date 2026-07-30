@@ -5,6 +5,7 @@
 import { supabase, isSupabaseConfigured } from '../supabase-client';
 // @ts-ignore - JS module without type declarations
 import authManager from '../auth-manager.js';
+import { isMissingCompetencyDocumentsRelationship } from '../utils/competency-documents';
 
 // Supabase is guaranteed initialized when services are called
 const sb = supabase!;
@@ -13,6 +14,53 @@ import type { CompetencyCategory } from '../types/database.types';
 function ensureConfigured(): void {
     if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
 }
+
+/**
+ * Sort each row's nested `documents` (competency_documents) by position
+ * ascending, in place. Client-side ordering keeps the nested-relation sort
+ * consistent across every competency read path.
+ */
+function sortNestedDocuments(rows: unknown): void {
+    if (!Array.isArray(rows)) return;
+    for (const row of rows as Array<{ documents?: { position?: number }[] }>) {
+        if (Array.isArray(row.documents)) {
+            row.documents.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+        }
+    }
+}
+
+/**
+ * PostgREST embed for a competency's `competency_documents` child rows, with a
+ * trailing comma so it slots into a select. Empty when the relationship is absent.
+ */
+export function competencyDocumentsEmbedFragment(include: boolean): string {
+    return include
+        ? 'documents:competency_documents(id, employee_competency_id, document_url, document_name, position, created_at),'
+        : '';
+}
+
+/**
+ * Run a competency read that embeds `competency_documents`, degrading gracefully
+ * when that relationship is missing from PostgREST's schema cache: `run(include)`
+ * builds the select with/without the embed; on the missing-relationship error the
+ * embed is disabled for `state` and retried once (other errors throw). `T` is the
+ * caller's expected row-array type (the untyped client returns `unknown`).
+ */
+export async function withCompetencyDocumentsFallback<T>(
+    state: { available: boolean },
+    run: (includeDocumentsEmbed: boolean) => PromiseLike<{ data: unknown; error: unknown }>
+): Promise<T> {
+    let result = await run(state.available);
+    if (result.error && state.available && isMissingCompetencyDocumentsRelationship(result.error)) {
+        state.available = false;
+        result = await run(false);
+    }
+    if (result.error) throw result.error;
+    return result.data as T;
+}
+
+/** Per-module tracker for whether the `competency_documents` embed is available. */
+const competencyDocumentsEmbedState = { available: true };
 
 /** Get all active competency categories */
 export async function getCategories(): Promise<CompetencyCategory[]> {
@@ -52,22 +100,29 @@ export async function getAllCompetencyDefinitions(): Promise<any[]> {
 /** Get competencies for a specific user */
 export async function getUserCompetencies(userId: string): Promise<any[]> {
     ensureConfigured();
-    const { data, error } = await sb
-        .from('employee_competencies')
-        .select(`
-            id, user_id, competency_id, value, expiry_date, document_url,
-            document_name, notes, status, witness_checked, witnessed_by,
-            witnessed_at, witness_notes, level, created_at, updated_at,
-            competency:competency_definitions!inner(
-                id, name, description, field_type, is_active,
-                category:competency_categories(id, name)
-            )
-        `)
-        .eq('user_id', userId)
-        .eq('competency_definitions.is_active', true)
-        .order('created_at', { ascending: false });
-    if (error) throw error;
-    return data;
+    const data = await withCompetencyDocumentsFallback<unknown[]>(
+        competencyDocumentsEmbedState,
+        include =>
+            sb
+                .from('employee_competencies')
+                .select(`
+                    id, user_id, competency_id, value, expiry_date, document_url,
+                    document_name, notes, status, witness_checked, witnessed_by,
+                    witnessed_at, witness_notes, level, created_at, updated_at,
+                    created_by,
+                    created_by_profile:profiles!employee_competencies_created_by_fkey(username),
+                    ${competencyDocumentsEmbedFragment(include)}
+                    competency:competency_definitions!inner(
+                        id, name, description, field_type, is_active,
+                        category:competency_categories(id, name)
+                    )
+                `)
+                .eq('user_id', userId)
+                .eq('competency_definitions.is_active', true)
+                .order('created_at', { ascending: false })
+    );
+    sortNestedDocuments(data);
+    return data ?? [];
 }
 
 /** Get competencies grouped by category for a user */
@@ -128,22 +183,27 @@ export async function canManageCompetencies(targetUserId: string): Promise<boole
 /** Get all competencies pending document approval */
 export async function getPendingApprovals(): Promise<any[]> {
     ensureConfigured();
-    const { data: competencies, error: compError } = await sb
-        .from('employee_competencies')
-        .select(`
-            id, user_id, competency_id, value, expiry_date, document_url,
-            document_name, notes, status, created_at, updated_at,
-            issuing_body, certification_id,
-            competency:competency_definitions(
-                id, name, description, field_type,
-                category:competency_categories(id, name)
-            )
-        `)
-        .eq('status', 'pending_approval')
-        .not('document_url', 'is', null)
-        .order('created_at', { ascending: false });
-    if (compError) throw compError;
+    const competencies = await withCompetencyDocumentsFallback<unknown[]>(
+        competencyDocumentsEmbedState,
+        include =>
+            sb
+                .from('employee_competencies')
+                .select(`
+                    id, user_id, competency_id, value, expiry_date, document_url,
+                    document_name, notes, status, created_at, updated_at,
+                    issuing_body, certification_id,
+                    ${competencyDocumentsEmbedFragment(include)}
+                    competency:competency_definitions(
+                        id, name, description, field_type,
+                        category:competency_categories(id, name)
+                    )
+                `)
+                .eq('status', 'pending_approval')
+                .not('document_url', 'is', null)
+                .order('created_at', { ascending: false })
+    );
     if (!competencies || competencies.length === 0) return [];
+    sortNestedDocuments(competencies);
 
     const userIds = [...new Set(competencies.map((c: any) => c.user_id))];
     const { data: profiles, error: profileError } = await sb

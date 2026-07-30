@@ -4,6 +4,7 @@
 
 import type { PersonCompetency } from '../../hooks/queries/usePersonnel';
 import { requiresWitnessCheck } from '../../utils/competency-field-utils';
+import { normalizeCompetencyDocuments } from '../../utils/competency-documents';
 import {
     CertIcon,
     WitnessIcon,
@@ -17,15 +18,29 @@ interface CompetencySectionProps {
     competencies: PersonCompetency[];
     isAdmin: boolean;
     onEditCompetency: (comp: PersonCompetency) => void;
+    onDeleteCompetency: (comp: PersonCompetency) => void;
     onWitnessCheck: (comp: PersonCompetency) => void;
     onViewCertificate: (comp: PersonCompetency) => void;
     onAddCompetency: () => void;
+}
+
+/**
+ * Resolve a "Added by {name}" label for a competency written by someone other
+ * than the record owner. Returns null for legacy rows (no created_by) and for
+ * self-authored rows (created_by === user_id).
+ */
+function resolveAddedBy(comp: PersonCompetency): string | null {
+    if (!comp.created_by || comp.created_by === comp.user_id) return null;
+    const embed = comp.created_by_profile;
+    const profile = Array.isArray(embed) ? embed[0] : embed;
+    return profile?.username || 'another user';
 }
 
 export function CompetencySection({
     competencies,
     isAdmin,
     onEditCompetency,
+    onDeleteCompetency,
     onWitnessCheck,
     onViewCertificate,
     onAddCompetency,
@@ -81,6 +96,8 @@ export function CompetencySection({
                                 {competenciesByCategory[categoryName].map((comp) => {
                                     const status = getCompetencyStatus(comp);
                                     const needsWitness = requiresWitnessCheck(comp);
+                                    const docCount = normalizeCompetencyDocuments(comp).length;
+                                    const addedBy = resolveAddedBy(comp);
 
                                     return (
                                         <div key={comp.id} className="pm-comp-card">
@@ -121,6 +138,28 @@ export function CompetencySection({
                                                             </svg>
                                                         </button>
                                                     )}
+                                                    {isAdmin && (
+                                                        <button
+                                                            onClick={() => onDeleteCompetency(comp)}
+                                                            className="btn-icon pm-btn-icon--ml"
+                                                            title="Delete certification"
+                                                        >
+                                                            <svg
+                                                                className="pm-icon-12"
+                                                                style={{ color: 'var(--clean-badge-red-text)' }}
+                                                                fill="none"
+                                                                stroke="currentColor"
+                                                                viewBox="0 0 24 24"
+                                                            >
+                                                                <path
+                                                                    strokeLinecap="round"
+                                                                    strokeLinejoin="round"
+                                                                    strokeWidth="2"
+                                                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                                                />
+                                                            </svg>
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
 
@@ -149,14 +188,20 @@ export function CompetencySection({
                                                         {new Date(comp.expiry_date).toLocaleDateString('en-GB')}
                                                     </div>
                                                 )}
-                                                {comp.document_url && (
+                                                {docCount > 0 && (
                                                     <button
                                                         onClick={() => onViewCertificate(comp)}
                                                         className="pm-view-cert-btn"
                                                     >
                                                         <DocumentIcon />
-                                                        View Certificate
+                                                        View Certificate{docCount > 1 ? `s (${docCount})` : ''}
                                                     </button>
+                                                )}
+                                                {addedBy && (
+                                                    <div>
+                                                        <span className="pm-comp-meta-label">Added by:</span>{' '}
+                                                        {addedBy}
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>

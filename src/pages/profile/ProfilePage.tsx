@@ -3,8 +3,9 @@
  * Industrial instrument theme: chassis > panel > wells
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import './profile.css';
+import { toDocumentInputs } from '../../utils/competency-documents';
 
 // React Query hooks
 import { useProfile } from '../../hooks/queries/useProfile';
@@ -21,6 +22,7 @@ import type { Competency, CompetencyDefinition } from './CompetencyCard';
 
 // Auth - ES module import
 import authManager from '../../auth-manager.js';
+import { assertActiveUser } from '../../auth/active-user-guard';
 
 // 2FA
 import { useTwoFactorStatus } from '../../hooks/queries/useTwoFactor';
@@ -105,6 +107,9 @@ export default function ProfilePage() {
             if (!user?.id || !editingCompetency?.definition?.name) {
                 throw new Error('User or competency not available');
             }
+            // Verify the live session identity before filing a document against
+            // this user — a wrong-identity session must fail loudly (H4).
+            await assertActiveUser(user.id);
             return uploadDocumentMutation.mutateAsync({
                 userId: user.id,
                 competencyName: editingCompetency.definition?.name || 'certificate',
@@ -159,8 +164,16 @@ export default function ProfilePage() {
     );
 
     const handleSaveCompetency = useCallback(
-        (data: CompetencyFormData) => {
+        async (data: CompetencyFormData) => {
             if (!user?.id) return;
+            // Verify the live session identity before writing a competency for
+            // this user — a wrong-identity session must fail loudly (H4).
+            try {
+                await assertActiveUser(user.id);
+            } catch (err) {
+                alert(err instanceof Error ? err.message : 'Session verification failed. Please sign out and sign in again.');
+                return;
+            }
             if (editingCompetency?.isNew) {
                 createCompetencyMutation.mutate(
                     { userId: user.id, data },
@@ -175,6 +188,7 @@ export default function ProfilePage() {
                         competencyId: data.competency_id || editingCompetency.competency.competency_id,
                         userId: user.id,
                         data,
+                        previousDocuments: toDocumentInputs(editingCompetency.competency),
                     },
                     {
                         onSuccess: () => { setEditingCompetency(null); },
@@ -203,6 +217,12 @@ export default function ProfilePage() {
         },
         [user?.id, deleteCompetencyMutation, definitionsQuery.data]
     );
+
+    // Seed the edit modal's documents via normalize (keeps legacy scalar-only certs).
+    const editInitialData = useMemo(() => {
+        const c = editingCompetency?.competency;
+        return c ? { ...c, documents: toDocumentInputs(c) } : undefined;
+    }, [editingCompetency]);
 
     const profileFormData: ProfileFormData = {
         username: user?.username || '',
@@ -527,7 +547,7 @@ export default function ProfilePage() {
                         setEditingCompetency(null);
                     } : undefined}
                     isNew={editingCompetency.isNew}
-                    initialData={editingCompetency.competency}
+                    initialData={editInitialData}
                     definition={editingCompetency.definition}
                     isSaving={createCompetencyMutation.isPending || updateCompetencyMutation.isPending}
                     isDeleting={deleteCompetencyMutation.isPending}

@@ -18,6 +18,32 @@ import {
 // Supabase is guaranteed initialized when auth services are called
 const sb = supabase!;
 
+/**
+ * Extract the server-provided error message from a Supabase Functions invoke error.
+ *
+ * supabase-js v2 wraps a non-2xx invoke in a FunctionsHttpError whose `.context`
+ * is the raw fetch `Response` — so the old `.context?.error` read was always
+ * undefined. The edge functions return `{ "error": "<message>" }` JSON bodies
+ * (see supabase/functions/_shared/cors.ts errorResponse), so read that body to
+ * surface the real message; fall back to `error.message` on anything else.
+ */
+async function extractInvokeError(error: unknown): Promise<string> {
+    const err = error as { message?: string; context?: { json?: () => Promise<unknown> } };
+
+    if (typeof err?.context?.json === 'function') {
+        try {
+            const body = (await err.context.json()) as { error?: unknown };
+            if (typeof body?.error === 'string' && body.error.length > 0) {
+                return body.error;
+            }
+        } catch {
+            // Body was not JSON or already consumed — fall through to error.message
+        }
+    }
+
+    return err?.message || 'User creation failed';
+}
+
 // ── User CRUD ──────────────────────────────────────────────────────────────
 
 export async function createUser(
@@ -53,7 +79,7 @@ export async function createUser(
     });
 
     if (error) {
-        const errorMessage = (error as any).context?.error || error.message;
+        const errorMessage = await extractInvokeError(error);
         return { success: false, error: errorMessage };
     }
 

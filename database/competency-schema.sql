@@ -41,6 +41,12 @@ CREATE TABLE IF NOT EXISTS employee_competencies (
     verified_by UUID REFERENCES auth.users(id),
     verified_at TIMESTAMPTZ,
     notes TEXT,
+    -- Author of this record; references profiles(id) so PostgREST can embed the
+    -- author's name. Set tamper-proof by the set_created_by() BEFORE INSERT
+    -- trigger (auth.uid() overwrites any client value). NULL for legacy rows and
+    -- for service-role writes without an explicit value. Added by migration
+    -- supabase/migrations/20260728130000_competency_attribution.sql.
+    created_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(user_id, competency_id)

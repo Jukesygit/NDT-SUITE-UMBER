@@ -3,7 +3,9 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockChain, mockIsConfigured, mockGetCurrentUser } = vi.hoisted(() => {
+const { mockChain, mockIsConfigured, mockGetCurrentUser, mockStorageRemove } = vi.hoisted(() => {
+    // Stable storage.remove spy so tests can assert on / override cleanup calls.
+    const storageRemove = vi.fn(() => Promise.resolve({ data: {}, error: null }));
     function buildChain(resolved = { data: [], error: null }) {
         const chain: Record<string, any> = { _resolved: resolved };
         chain.resolveWith = (v: any) => { chain._resolved = v; return chain; };
@@ -18,7 +20,7 @@ const { mockChain, mockIsConfigured, mockGetCurrentUser } = vi.hoisted(() => {
         chain.storage = {
             from: vi.fn(() => ({
                 upload: vi.fn(() => Promise.resolve({ data: {}, error: null })),
-                remove: vi.fn(() => Promise.resolve({ data: {}, error: null })),
+                remove: storageRemove,
                 createSignedUrl: vi.fn(() => Promise.resolve({ data: { signedUrl: 'https://signed-url.test' }, error: null })),
             })),
         };
@@ -30,6 +32,7 @@ const { mockChain, mockIsConfigured, mockGetCurrentUser } = vi.hoisted(() => {
         mockChain: buildChain(),
         mockIsConfigured: vi.fn(() => true),
         mockGetCurrentUser: vi.fn((): any => ({ id: 'user-1', role: 'admin', organizationId: 'org-1' })),
+        mockStorageRemove: storageRemove,
     };
 });
 
@@ -46,7 +49,8 @@ vi.mock('../competency-queries.ts', () => ({
 
 import {
     upsertCompetency, deleteCompetency, verifyCompetency, requestChanges,
-    uploadDocument, deleteDocument, bulkCreateCompetencies, bulkImportCompetencies,
+    uploadDocument, deleteDocument, setCompetencyDocuments,
+    bulkCreateCompetencies, bulkImportCompetencies,
 } from '../competency-mutations';
 
 function resetChain() {
@@ -67,6 +71,8 @@ beforeEach(() => {
     resetChain();
     mockIsConfigured.mockReturnValue(true);
     mockGetCurrentUser.mockReturnValue({ id: 'user-1', role: 'admin', organizationId: 'org-1' });
+    mockStorageRemove.mockReset();
+    mockStorageRemove.mockResolvedValue({ data: {}, error: null });
 });
 
 describe('upsertCompetency', () => {
@@ -110,6 +116,78 @@ describe('deleteCompetency', () => {
         mockChain._resolved = { error: null };
         const result = await deleteCompetency('ec1');
         expect(result).toBe(true);
+    });
+
+    it('removes the collected storage paths after the row is deleted', async () => {
+        // Parent scalar document + one child-row document; both are storage paths.
+        mockChain.maybeSingle.mockResolvedValueOnce({ data: { document_url: 'parent.pdf' }, error: null });
+        // Child-rows select AND the row delete both read _resolved (delete only
+        // checks .error, so shared data is harmless).
+        mockChain._resolved = { data: [{ document_url: 'child.pdf' }], error: null };
+
+        const result = await deleteCompetency('ec1');
+
+        expect(result).toBe(true);
+        expect(mockStorageRemove).toHaveBeenCalledTimes(1);
+        expect(mockStorageRemove).toHaveBeenCalledWith(['parent.pdf', 'child.pdf']);
+    });
+
+    it('skips http and empty document values when collecting storage paths', async () => {
+        mockChain.maybeSingle.mockResolvedValueOnce({ data: { document_url: 'https://external/cert.pdf' }, error: null });
+        mockChain._resolved = { data: [{ document_url: '' }, { document_url: null }], error: null };
+
+        const result = await deleteCompetency('ec1');
+
+        expect(result).toBe(true);
+        expect(mockStorageRemove).not.toHaveBeenCalled();
+    });
+
+    it('swallows a storage-cleanup failure (row is already gone)', async () => {
+        mockChain.maybeSingle.mockResolvedValueOnce({ data: { document_url: 'parent.pdf' }, error: null });
+        mockChain._resolved = { data: [], error: null };
+        mockStorageRemove.mockImplementationOnce(() => Promise.reject(new Error('storage down')));
+
+        await expect(deleteCompetency('ec1')).resolves.toBe(true);
+        expect(mockStorageRemove).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws on a row-delete failure and does not touch storage', async () => {
+        mockChain.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
+        mockChain._resolved = { data: [], error: { message: 'delete failed' } };
+
+        await expect(deleteCompetency('ec1')).rejects.toEqual({ message: 'delete failed' });
+        expect(mockStorageRemove).not.toHaveBeenCalled();
+    });
+});
+
+describe('setCompetencyDocuments', () => {
+    it('storage-removes the paths of rows dropped from the set', async () => {
+        // Existing child rows: 'old.pdf' is dropped, 'keep.pdf' is retained.
+        mockChain._resolved = {
+            data: [
+                { id: 'd1', document_url: 'old.pdf' },
+                { id: 'd2', document_url: 'keep.pdf' },
+            ],
+            error: null,
+        };
+
+        await setCompetencyDocuments('ec1', [{ document_url: 'keep.pdf', document_name: 'Keep' }]);
+
+        expect(mockStorageRemove).toHaveBeenCalledTimes(1);
+        expect(mockStorageRemove).toHaveBeenCalledWith(['old.pdf']);
+    });
+
+    it('swallows a storage-cleanup failure while dropping rows', async () => {
+        mockChain._resolved = {
+            data: [{ id: 'd1', document_url: 'old.pdf' }],
+            error: null,
+        };
+        mockStorageRemove.mockImplementationOnce(() => Promise.reject(new Error('storage down')));
+
+        await expect(
+            setCompetencyDocuments('ec1', [{ document_url: 'keep.pdf', document_name: 'Keep' }]),
+        ).resolves.toBeDefined();
+        expect(mockStorageRemove).toHaveBeenCalledTimes(1);
     });
 });
 

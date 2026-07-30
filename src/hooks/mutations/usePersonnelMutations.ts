@@ -6,6 +6,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { personnelKeys, Person, PersonCompetency } from '../queries/usePersonnel';
 import { extractFunctionErrorMessage } from '../../utils/edge-function-error';
+import { documentsRequireReview } from '../../utils/competency-documents';
+import { setCompetencyDocuments, deleteCompetency, type CompetencyDocumentInput } from '../../services/competency-mutations';
 
 // Services - ES module imports
 // @ts-ignore - JS module without types
@@ -45,6 +47,7 @@ export interface UpdateCompetencyData {
     created_at?: string; // issued_date maps to this
     document_url?: string | null;
     document_name?: string | null;
+    documents?: CompetencyDocumentInput[];
     status?: string | null;
     level?: string | null;
 }
@@ -59,6 +62,7 @@ export interface AddCompetencyData {
     notes?: string;
     document_url?: string;
     document_name?: string;
+    documents?: CompetencyDocumentInput[];
     level?: string;
 }
 
@@ -182,15 +186,32 @@ export function useUpdatePersonCompetency() {
             competencyId,
             data,
             previousDocumentUrl,
+            previousDocuments,
         }: {
             competencyId: string;
             personId: string; // For cache invalidation
             data: UpdateCompetencyData;
             previousDocumentUrl?: string | null; // To detect if document was newly added
+            previousDocuments?: { document_url: string }[]; // Prior document set (multi-doc path)
         }): Promise<PersonCompetency> => {
-            // If a document is being added or changed, set status to pending_approval
-            const updateData = { ...data };
-            if (data.document_url && data.document_url !== previousDocumentUrl) {
+            const { documents, ...rest } = data;
+            const updateData: UpdateCompetencyData = { ...rest };
+
+            if (documents) {
+                // Multi-document path: the child set owns the mirror scalars and
+                // drives the re-review decision via the shared helper.
+                const previousDocs =
+                    previousDocuments ??
+                    (previousDocumentUrl ? [{ document_url: previousDocumentUrl }] : []);
+                if (documentsRequireReview(previousDocs, documents)) {
+                    updateData.status = 'pending_approval';
+                } else if (documents.length === 0) {
+                    updateData.status = 'active';
+                }
+                delete updateData.document_url;
+                delete updateData.document_name;
+            } else if (data.document_url && data.document_url !== previousDocumentUrl) {
+                // Legacy scalar path — unchanged for callers not yet migrated.
                 updateData.status = 'pending_approval';
             }
 
@@ -202,6 +223,10 @@ export function useUpdatePersonCompetency() {
                 .single();
 
             if (error) throw error;
+
+            if (documents) {
+                await setCompetencyDocuments(competencyId, documents);
+            }
             return updated;
         },
         onSuccess: (_, variables) => {
@@ -231,12 +256,8 @@ export function useDeletePersonCompetency() {
             competencyId: string;
             personId: string; // For cache invalidation
         }): Promise<void> => {
-            const { error } = await supabase
-                .from('employee_competencies')
-                .delete()
-                .eq('id', competencyId);
-
-            if (error) throw error;
+            // Delegate to the service so storage documents are cleaned up too.
+            await deleteCompetency(competencyId);
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: personnelKeys.list() });
@@ -244,6 +265,8 @@ export function useDeletePersonCompetency() {
                 queryKey: personnelKeys.detail(variables.personId),
             });
             queryClient.invalidateQueries({ queryKey: personnelKeys.matrix() });
+            queryClient.invalidateQueries({ queryKey: ['competencies'] });
+            queryClient.invalidateQueries({ queryKey: ['competencies', 'pendingApprovals'] });
         },
     });
 }
@@ -257,11 +280,20 @@ export function useAddPersonCompetency() {
 
     return useMutation({
         mutationFn: async (data: AddCompetencyData): Promise<PersonCompetency> => {
-            // If a document is included, set status to pending_approval
-            const insertData = {
-                ...data,
-                status: data.document_url ? 'pending_approval' : 'active',
-            };
+            const { documents, ...rest } = data;
+            const insertData: Record<string, unknown> = { ...rest };
+
+            if (documents) {
+                // Multi-document path: child set owns the mirror scalars.
+                delete insertData.document_url;
+                delete insertData.document_name;
+                insertData.status = documentsRequireReview([], documents)
+                    ? 'pending_approval'
+                    : 'active';
+            } else {
+                // Legacy scalar path — unchanged.
+                insertData.status = data.document_url ? 'pending_approval' : 'active';
+            }
 
             const { data: created, error } = await supabase
                 .from('employee_competencies')
@@ -270,6 +302,10 @@ export function useAddPersonCompetency() {
                 .single();
 
             if (error) throw error;
+
+            if (documents) {
+                await setCompetencyDocuments(created.id, documents);
+            }
             return created;
         },
         onSuccess: (_, variables) => {
