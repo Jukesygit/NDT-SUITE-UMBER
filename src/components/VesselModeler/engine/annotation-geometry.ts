@@ -11,6 +11,16 @@ import * as THREE from 'three';
 import type { AnnotationShapeConfig, RulerConfig, VesselState } from '../types';
 import { SCALE } from './materials';
 import { resolveBodyFrame } from './body-frame';
+import {
+  buildMeridianProfile,
+  arcFromAxial,
+  axialFromArc,
+  displayRadiusAtArc,
+  type MeridianProfile,
+} from './dome-arc';
+import { buildDrapeGrid, type DrapeCell } from './surface-drape';
+
+const DEG2RAD = Math.PI / 180;
 
 // ---------------------------------------------------------------------------
 // Shell Surface Point Calculator
@@ -56,47 +66,289 @@ function resolveOutlineColor(config: AnnotationShapeConfig): string {
 }
 
 // ---------------------------------------------------------------------------
+// Meridian arc-space footprint (shared by outline + fill)
+// ---------------------------------------------------------------------------
+//
+// Both the outline and the fill sample the rectangle in continuous
+// meridian-arc coordinates (s, theta) instead of (axial pos, constant angular
+// span). On the cylinder `s === axial pos` and `halfSpanRad` is constant, so
+// the output is byte-identical (to float32) to the legacy constant-span
+// formula. On a dome end, `s` follows the true surface arc and the angular
+// span honours the local radius at every station, so the stored mm footprint
+// is preserved past the tangent lines (matching the dome-scan fix's spirit).
+
+interface RectArcFootprint {
+  profile: MeridianProfile;
+  /** tan-tan length in mm */
+  L: number;
+  /** meridian-arc extent, clamped at the left/right apex arcs */
+  sLo: number;
+  sHi: number;
+  /** centre circumferential angle in radians */
+  centerAngle: number;
+  /** half the stored circumferential height in mm */
+  halfH: number;
+}
+
+/** Clamp a meridian-arc coordinate to the valid [-apex, L + apex] domain. */
+function clampArc(s: number, profile: MeridianProfile, L: number): number {
+  return Math.max(-profile.apexArc, Math.min(L + profile.apexArc, s));
+}
+
+/** Resolve the shared arc-space footprint for a rectangle annotation. */
+function rectArcFootprint(config: AnnotationShapeConfig, vesselState: VesselState): RectArcFootprint {
+  const R = vesselState.id / 2;
+  const D = vesselState.id / (2 * vesselState.headRatio);
+  const L = vesselState.length;
+  const profile = buildMeridianProfile(R, D);
+  const s0 = arcFromAxial(profile, L, config.pos);
+  const halfW = config.width / 2;
+  return {
+    profile,
+    L,
+    sLo: clampArc(s0 - halfW, profile, L),
+    sHi: clampArc(s0 + halfW, profile, L),
+    centerAngle: (config.angle * Math.PI) / 180,
+    halfH: config.height / 2,
+  };
+}
+
+/**
+ * Angular half-span (radians) that renders the stored circumferential height at
+ * meridian station `s`. Uses the SAME display radius the renderer places
+ * vertices at (incl. body-frame's pole-reaching clamp), and caps at PI so the
+ * band can never self-overlap near the apex.
+ *
+ * At/near the pole the display radius is 0; the guard returns PI directly so the
+ * band wraps the full ring there (any rect reaching the pole covers the whole
+ * polar cap) and avoids the 0/0 NaN when the stored height is also 0.
+ */
+function halfSpanRad(fp: RectArcFootprint, s: number): number {
+  const r = displayRadiusAtArc(fp.profile, fp.L, s);
+  if (r <= 1e-9) return Math.PI;
+  return Math.min(fp.halfH / r, Math.PI);
+}
+
+/** Place a vertex at meridian station `s` and circumferential angle `theta`. */
+function arcPoint(
+  fp: RectArcFootprint,
+  s: number,
+  theta: number,
+  vesselState: VesselState,
+  surfaceOffset: number
+): THREE.Vector3 {
+  return shellPoint(axialFromArc(fp.profile, fp.L, s), theta, vesselState, surfaceOffset);
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive segment density (sagitta-bounded)
+// ---------------------------------------------------------------------------
+
+/** Minimum segment count — keeps small-span fixtures byte-identical to legacy. */
+const MIN_SEGMENTS = 32;
+/** Maximum segment count — bounds vertex cost for very large bands. */
+const MAX_SEGMENTS = 256;
+
+/**
+ * Smallest segment count whose chord stays within HALF the hover offset of the
+ * true surface arc, so the midpoint of every segment stays above the shell and
+ * never clips into the vessel body.
+ *
+ * The sagitta — the largest gap between a chord and the arc it subtends — for one
+ * of `n` equal segments spanning `spanRad` on a circle of radius `radiusMm` is
+ * `radiusMm * (1 - cos(spanRad / (2n)))`. Requiring that gap to stay
+ * `<= offsetMm / 2` (half the offset, so a rect hovering `offsetMm` above the wall
+ * keeps head-room even at a segment's midpoint) yields the smallest admissible
+ * `n`, clamped to [MIN_SEGMENTS, MAX_SEGMENTS]. The MIN clamp reproduces the
+ * legacy fixed-32 sampling for small spans (goldens stay byte-identical); the MAX
+ * clamp caps cost for full-circumference bands.
+ */
+function adaptiveSegments(radiusMm: number, spanRad: number, offsetMm: number): number {
+  if (!(spanRad > 0) || !(radiusMm > 0) || !(offsetMm > 0)) return MIN_SEGMENTS;
+  const maxSagitta = offsetMm / 2;
+  for (let n = MIN_SEGMENTS; n < MAX_SEGMENTS; n++) {
+    if (radiusMm * (1 - Math.cos(spanRad / (2 * n))) <= maxSagitta) return n;
+  }
+  return MAX_SEGMENTS;
+}
+
+// ---------------------------------------------------------------------------
+// Pure-cylinder vs drape routing
+// ---------------------------------------------------------------------------
+//
+// A rect whose whole meridian-arc extent lies within [0, L] is a pure cylinder
+// rect: it takes the legacy constant-span arc path (byte-identical goldens). Any
+// rect that touches a head is draped as a rigid geodesic stencil
+// (surface-drape.ts) so it keeps its shape and can cross the pole.
+
+/** True when both meridian-arc extents of the rect lie on the cylinder [0, L]. */
+function rectIsPureCylinder(config: AnnotationShapeConfig, vesselState: VesselState): boolean {
+  const R = vesselState.id / 2;
+  const D = vesselState.id / (2 * vesselState.headRatio);
+  const L = vesselState.length;
+  const profile = buildMeridianProfile(R, D);
+  const s0 = arcFromAxial(profile, L, config.pos);
+  const halfW = config.width / 2;
+  return s0 - halfW >= 0 && s0 + halfW <= L;
+}
+
+/**
+ * Adaptive drape-grid resolution: `cols` stations along the meridian (width),
+ * `rows` lateral samples along the circumference (height). Both are sagitta-
+ * bounded so a large head-touching band never dips below the surface between
+ * samples. `rows` is forced even because {@link buildDrapeGrid} centres each
+ * column on an even row count.
+ *
+ * - rows: circumferential sag bounded at the body radius `R`.
+ * - cols: meridian sag bounded at the meridian's TIGHTEST bend — the minimum
+ *   curvature radius of the ellipse meridian, `D^2 / R`, at the tangent line. A
+ *   flat/open head (`D = 0`) has no meridian curvature, so cols stays at the floor.
+ */
+function drapeGridResolution(
+  vesselState: VesselState,
+  widthMm: number,
+  heightMm: number,
+  offsetMm: number
+): { cols: number; rows: number } {
+  const R = vesselState.id / 2;
+  const D = vesselState.id / (2 * vesselState.headRatio);
+
+  let rows = adaptiveSegments(R + offsetMm, heightMm / R, offsetMm);
+  if (rows % 2 !== 0) rows = Math.min(MAX_SEGMENTS, rows + 1); // buildDrapeGrid requires an even row count
+
+  let cols = MIN_SEGMENTS;
+  if (D > 0) {
+    const minCurveR = (D * D) / R; // tightest meridian bend (at the tangent line)
+    cols = Math.max(MIN_SEGMENTS, adaptiveSegments(minCurveR + offsetMm, widthMm / minCurveR, offsetMm));
+  }
+
+  return { cols, rows };
+}
+
+/** Build the rigid drape grid (surface coordinates) for a head-touching rect. */
+function drapeGridFor(
+  config: AnnotationShapeConfig,
+  vesselState: VesselState,
+  offsetMm: number
+): DrapeCell[][] {
+  const R = vesselState.id / 2;
+  const D = vesselState.id / (2 * vesselState.headRatio);
+  const L = vesselState.length;
+  const { cols, rows } = drapeGridResolution(vesselState, config.width, config.height, offsetMm);
+  return buildDrapeGrid({
+    R,
+    D,
+    L,
+    pos: config.pos,
+    angleDeg: config.angle,
+    widthMm: config.width,
+    heightMm: config.height,
+    cols,
+    rows,
+  }).grid;
+}
+
+/** Place a drape cell on the shell via the shared body frame. */
+function drapePoint(
+  cell: DrapeCell,
+  vesselState: VesselState,
+  surfaceOffset: number
+): THREE.Vector3 {
+  return shellPoint(cell.pos, cell.angleDeg * DEG2RAD, vesselState, surfaceOffset);
+}
+
+// ---------------------------------------------------------------------------
 // Rectangle Outline
 // ---------------------------------------------------------------------------
+
+/**
+ * Legacy constant-span outline points (pure cylinder). On the cylinder
+ * `halfSpanRad` is constant and `s === axial`, so this is byte-identical to the
+ * pre-dome formula (locked by the golden regression test).
+ */
+function cylinderOutlinePoints(
+  config: AnnotationShapeConfig,
+  vesselState: VesselState,
+  surfaceOffset: number
+): THREE.Vector3[] {
+  const fp = rectArcFootprint(config, vesselState);
+  const { centerAngle, sLo, sHi } = fp;
+  const span = sHi - sLo;
+  const R = vesselState.id / 2;
+  // Meridian (axial) edges carry no curvature on the cylinder, so a fixed 32 is
+  // always within offset. The circumferential sweeps do curve: their segment
+  // count adapts to the angular span so the chord never sags below the surface
+  // (striped-band fix). On the cylinder the span is constant across s, so the
+  // right and left sweeps share one adaptive count.
+  const axialSegs = 32;
+  const circSegs = adaptiveSegments(R + surfaceOffset, 2 * halfSpanRad(fp, sHi), surfaceOffset);
+
+  const points: THREE.Vector3[] = [];
+
+  // Bottom edge: sLo -> sHi at theta = centerAngle - halfSpan(s) (per station)
+  for (let i = 0; i <= axialSegs; i++) {
+    const s = sLo + (i / axialSegs) * span;
+    points.push(arcPoint(fp, s, centerAngle - halfSpanRad(fp, s), vesselState, surfaceOffset));
+  }
+  // Right edge: circumferential sweep at station sHi
+  {
+    const hs = halfSpanRad(fp, sHi);
+    for (let i = 1; i <= circSegs; i++) {
+      const ang = centerAngle - hs + (i / circSegs) * hs * 2;
+      points.push(arcPoint(fp, sHi, ang, vesselState, surfaceOffset));
+    }
+  }
+  // Top edge: sHi -> sLo at theta = centerAngle + halfSpan(s) (per station)
+  for (let i = 1; i <= axialSegs; i++) {
+    const s = sHi - (i / axialSegs) * span;
+    points.push(arcPoint(fp, s, centerAngle + halfSpanRad(fp, s), vesselState, surfaceOffset));
+  }
+  // Left edge: circumferential sweep at station sLo
+  {
+    const hs = halfSpanRad(fp, sLo);
+    for (let i = 1; i < circSegs; i++) {
+      const ang = centerAngle + hs - (i / circSegs) * hs * 2;
+      points.push(arcPoint(fp, sLo, ang, vesselState, surfaceOffset));
+    }
+  }
+
+  return points;
+}
+
+/**
+ * Rigid-drape outline points: the perimeter of the drape grid, ordered
+ * bottom -> right -> top -> left (matching the legacy edge order) so downstream
+ * consumers see the same layout. The perimeter length follows the drape grid's
+ * adaptive resolution (2*(cols + rows) points), so it is 128 only when the grid
+ * is the minimum 32x32; consumers must not assume a fixed count.
+ */
+function drapeOutlinePoints(
+  config: AnnotationShapeConfig,
+  vesselState: VesselState,
+  surfaceOffset: number
+): THREE.Vector3[] {
+  const grid = drapeGridFor(config, vesselState, surfaceOffset);
+  const cols = grid.length - 1;
+  const rows = grid[0].length - 1;
+  const points: THREE.Vector3[] = [];
+  const at = (c: number, r: number) => drapePoint(grid[c][r], vesselState, surfaceOffset);
+
+  for (let c = 0; c <= cols; c++) points.push(at(c, 0)); // bottom (row 0)
+  for (let r = 1; r <= rows; r++) points.push(at(cols, r)); // right (col cols)
+  for (let c = cols - 1; c >= 0; c--) points.push(at(c, rows)); // top (row rows)
+  for (let r = rows - 1; r >= 1; r--) points.push(at(0, r)); // left (col 0)
+
+  return points;
+}
 
 export function createRectOutline(
   config: AnnotationShapeConfig,
   vesselState: VesselState,
   surfaceOffset: number
 ): THREE.LineLoop {
-  const circumference = Math.PI * vesselState.id;
-  const centerAngle = (config.angle * Math.PI) / 180;
-  const halfW = config.width / 2;
-  const halfH = config.height / 2;
-  const angularHalfH = (halfH / circumference) * Math.PI * 2;
-  const segmentsPerEdge = 32;
-
-  const points: THREE.Vector3[] = [];
-
-  // Bottom edge: left-to-right at angle - angularHalfH
-  for (let i = 0; i <= segmentsPerEdge; i++) {
-    const t = i / segmentsPerEdge;
-    const pos = config.pos - halfW + t * config.width;
-    points.push(shellPoint(pos, centerAngle - angularHalfH, vesselState, surfaceOffset));
-  }
-  // Right edge: bottom-to-top at pos + halfW
-  for (let i = 1; i <= segmentsPerEdge; i++) {
-    const t = i / segmentsPerEdge;
-    const ang = centerAngle - angularHalfH + t * angularHalfH * 2;
-    points.push(shellPoint(config.pos + halfW, ang, vesselState, surfaceOffset));
-  }
-  // Top edge: right-to-left at angle + angularHalfH
-  for (let i = 1; i <= segmentsPerEdge; i++) {
-    const t = i / segmentsPerEdge;
-    const pos = config.pos + halfW - t * config.width;
-    points.push(shellPoint(pos, centerAngle + angularHalfH, vesselState, surfaceOffset));
-  }
-  // Left edge: top-to-bottom at pos - halfW
-  for (let i = 1; i < segmentsPerEdge; i++) {
-    const t = i / segmentsPerEdge;
-    const ang = centerAngle + angularHalfH - t * angularHalfH * 2;
-    points.push(shellPoint(config.pos - halfW, ang, vesselState, surfaceOffset));
-  }
+  const points = rectIsPureCylinder(config, vesselState)
+    ? cylinderOutlinePoints(config, vesselState, surfaceOffset)
+    : drapeOutlinePoints(config, vesselState, surfaceOffset);
 
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
   const material = new THREE.LineBasicMaterial({
@@ -115,47 +367,92 @@ export function createRectOutline(
  * Build a semi-transparent fill mesh for a rectangle area on the vessel shell.
  * Used for annotation selection highlights and coverage rect fills.
  */
+/**
+ * Legacy constant-span fill vertices (pure cylinder). Byte-identical to the
+ * pre-dome formula on the cylinder (locked by the golden fill test): the min-32
+ * clamp keeps small rects at a 32x32 grid, while wide circumferential bands add
+ * angular rows so the mesh never sags below the surface. Returns the grid
+ * dimensions so the caller builds a matching index buffer.
+ */
+function cylinderFillVertices(
+  config: AnnotationShapeConfig,
+  vesselState: VesselState,
+  surfaceOffset: number
+): { vertices: number[]; cols: number; rows: number } {
+  const fp = rectArcFootprint(config, vesselState);
+  const { centerAngle, sLo, sHi } = fp;
+  const span = sHi - sLo;
+  const R = vesselState.id / 2;
+  // Meridian columns carry no curvature axially -> fixed 32. Circumferential
+  // rows adapt to the angular span so mid-row chords stay above the surface.
+  const segX = 32;
+  const segY = adaptiveSegments(R + surfaceOffset, 2 * halfSpanRad(fp, sHi), surfaceOffset);
+
+  // Per-column (meridian) station data: axial position + local angular span.
+  const axialByCol: number[] = new Array(segX + 1);
+  const halfSpanByCol: number[] = new Array(segX + 1);
+  for (let ix = 0; ix <= segX; ix++) {
+    const s = sLo + (ix / segX) * span;
+    axialByCol[ix] = axialFromArc(fp.profile, fp.L, s);
+    halfSpanByCol[ix] = halfSpanRad(fp, s);
+  }
+
+  const vertices: number[] = [];
+  for (let iy = 0; iy <= segY; iy++) {
+    const v = iy / segY;
+    for (let ix = 0; ix <= segX; ix++) {
+      const hs = halfSpanByCol[ix];
+      const angOffset = -hs + v * hs * 2;
+      const pt = shellPoint(axialByCol[ix], centerAngle + angOffset, vesselState, surfaceOffset - 0.5);
+      vertices.push(pt.x, pt.y, pt.z);
+    }
+  }
+  return { vertices, cols: segX, rows: segY };
+}
+
+/**
+ * Rigid-drape fill vertices (head-touching rect): the drape grid as a mesh.
+ * Returns the grid dimensions so the caller builds a matching index buffer (the
+ * grid resolution is adaptive, not a fixed 32x32).
+ */
+function drapeFillVertices(
+  config: AnnotationShapeConfig,
+  vesselState: VesselState,
+  surfaceOffset: number
+): { vertices: number[]; cols: number; rows: number } {
+  const grid = drapeGridFor(config, vesselState, surfaceOffset);
+  const cols = grid.length - 1;
+  const rows = grid[0].length - 1;
+  const vertices: number[] = [];
+  // Row-major (iy outer, ix inner) so the index layout matches the legacy path.
+  for (let iy = 0; iy <= rows; iy++) {
+    for (let ix = 0; ix <= cols; ix++) {
+      const pt = drapePoint(grid[ix][iy], vesselState, surfaceOffset - 0.5);
+      vertices.push(pt.x, pt.y, pt.z);
+    }
+  }
+  return { vertices, cols, rows };
+}
+
 export function createRectFill(
   config: AnnotationShapeConfig,
   vesselState: VesselState,
   surfaceOffset: number
 ): THREE.Mesh {
-  const circumference = Math.PI * vesselState.id;
-  const centerAngle = (config.angle * Math.PI) / 180;
+  // Both paths return a row-major grid (iy outer, ix inner) with `cols + 1`
+  // columns per row; the index buffer below is built from the SAME cols/rows so
+  // the triangulation always matches the vertex grid (no mismatched buffer).
+  const { vertices, cols, rows } = rectIsPureCylinder(config, vesselState)
+    ? cylinderFillVertices(config, vesselState, surfaceOffset)
+    : drapeFillVertices(config, vesselState, surfaceOffset);
 
-  const segX = 32;
-  const segY = 32;
-  const halfW = config.width / 2;
-  const halfH = config.height / 2;
-  const angularHalfH = (halfH / circumference) * Math.PI * 2;
-
-  const vertices: number[] = [];
   const indices: number[] = [];
-
-  for (let iy = 0; iy <= segY; iy++) {
-    const v = iy / segY;
-    const angOffset = -angularHalfH + v * angularHalfH * 2;
-
-    for (let ix = 0; ix <= segX; ix++) {
-      const u = ix / segX;
-      const posOffset = -halfW + u * config.width;
-
-      const pt = shellPoint(
-        config.pos + posOffset,
-        centerAngle + angOffset,
-        vesselState,
-        surfaceOffset - 0.5
-      );
-      vertices.push(pt.x, pt.y, pt.z);
-    }
-  }
-
-  for (let iy = 0; iy < segY; iy++) {
-    for (let ix = 0; ix < segX; ix++) {
-      const a = ix + (segX + 1) * iy;
-      const b = ix + (segX + 1) * (iy + 1);
-      const c = ix + 1 + (segX + 1) * (iy + 1);
-      const d = ix + 1 + (segX + 1) * iy;
+  for (let iy = 0; iy < rows; iy++) {
+    for (let ix = 0; ix < cols; ix++) {
+      const a = ix + (cols + 1) * iy;
+      const b = ix + (cols + 1) * (iy + 1);
+      const c = ix + 1 + (cols + 1) * (iy + 1);
+      const d = ix + 1 + (cols + 1) * iy;
       indices.push(a, b, d);
       indices.push(b, c, d);
     }

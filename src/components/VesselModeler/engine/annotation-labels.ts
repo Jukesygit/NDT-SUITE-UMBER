@@ -400,10 +400,10 @@ export function createRulerLabel(
 
   let rLocal: number;
   if (midPos < 0) {
-    const ratio = Math.min(0.99, Math.abs(midPos / HEAD_DEPTH));
+    const ratio = Math.min(1, Math.abs(midPos / HEAD_DEPTH));
     rLocal = RADIUS * Math.sqrt(1 - ratio * ratio);
   } else if (midPos > TAN_TAN) {
-    const ratio = Math.min(0.99, Math.abs((midPos - TAN_TAN) / HEAD_DEPTH));
+    const ratio = Math.min(1, Math.abs((midPos - TAN_TAN) / HEAD_DEPTH));
     rLocal = RADIUS * Math.sqrt(1 - ratio * ratio);
   } else {
     rLocal = RADIUS;
