@@ -80,6 +80,25 @@ function normalizeDisplaySettings(settings?: Partial<DisplaySettings>): DisplayS
   };
 }
 
+// Load-complete status shared by the direct-add and post-repair paths.
+// Truncated exports (rows missing vs the header's declared count) surface as
+// an error-styled message with a longer display time.
+const loadStatusFor = (
+  scans: CscanData[]
+): { status: { type: 'success' | 'error'; message: string }; timeoutMs: number } => {
+  const truncated = scans.filter(s => s.metadata?.['_truncatedRows']).length;
+  const base = `${scans.length} file${scans.length !== 1 ? 's' : ''} loaded`;
+  return truncated > 0
+    ? {
+        status: {
+          type: 'error',
+          message: `${base} — ${truncated} truncated (fewer rows than the header declares)`,
+        },
+        timeoutMs: 6000,
+      }
+    : { status: { type: 'success', message: `${base} successfully` }, timeoutMs: 3000 };
+};
+
 const CscanVisualizer: React.FC = () => {
   // Project context from URL params
   const [searchParams] = useSearchParams();
@@ -217,11 +236,9 @@ const CscanVisualizer: React.FC = () => {
         } else {
           // No issues, add directly
           addScansToState(result.scans);
-          setStatusMessage({
-            type: 'success',
-            message: `${result.scans.length} file${result.scans.length !== 1 ? 's' : ''} loaded successfully`
-          });
-          setTimeout(() => setStatusMessage(null), 3000);
+          const { status, timeoutMs } = loadStatusFor(result.scans);
+          setStatusMessage(status);
+          setTimeout(() => setStatusMessage(null), timeoutMs);
         }
       }
     } catch (error) {
@@ -243,11 +260,9 @@ const CscanVisualizer: React.FC = () => {
 
     addScansToState(repairedScans);
     setPendingScans([]);
-    setStatusMessage({
-      type: 'success',
-      message: `${repairedScans.length} file${repairedScans.length !== 1 ? 's' : ''} loaded successfully`
-    });
-    setTimeout(() => setStatusMessage(null), 3000);
+    const { status, timeoutMs } = loadStatusFor(repairedScans);
+    setStatusMessage(status);
+    setTimeout(() => setStatusMessage(null), timeoutMs);
   }, [addScansToState]);
 
   const handleFileSelect = useCallback((fileId: string) => {

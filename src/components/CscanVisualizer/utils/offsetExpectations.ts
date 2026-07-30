@@ -4,205 +4,262 @@
  * Scanner exports often store the data matrix in local coordinates (rows
  * labelled 0..span) while the true strip position lives in the metadata
  * header and/or the filename. Some instruments write corrupted metadata
- * (e.g. IndexStart doubled on merged exports), so a filename range whose
- * span matches the actual data span is treated as more trustworthy than
- * metadata that disagrees with it.
+ * (e.g. starts doubled on merged exports), so range sources are arbitrated:
+ * a range whose span matches the actual data span is treated as more
+ * trustworthy than metadata that disagrees with it.
+ *
+ * Range sources, in precedence order per axis:
+ *  1. filename — token grammar in rangeTokens.ts; span-validated tokens
+ *     override disagreeing metadata.
+ *  2. datafile — the same grammar applied to the export's internal
+ *     `Data File =` header line, which carries the true MM-suffixed ranges
+ *     even when the on-disk filename was renamed or lacks the MM suffix.
+ *  3. metadata-halved — batch-level detection (metadataHalving.ts) flagged
+ *     this axis as doubled; expected start is metadata/2. Vetoed when a
+ *     validated range CORROBORATES the raw metadata (two independent
+ *     agreeing sources prove the position).
+ *  4. metadata — the raw header value.
+ *
+ * Anchoring is a property of the DATA, not of the winning source: when an
+ * axis carries the head-truncation signature (`truncatedLocalAxis` — the
+ * header promises more samples than the data holds, labels still top out at
+ * the nominal local span, and the label minimum sits above zero), the
+ * expected start describes local zero (`localZero`), so surviving rows keep
+ * their true positions no matter which source supplied the start. All other
+ * axes anchor at the data minimum (`dataMin`).
  *
  * Used by both the main-thread fileParser and the cscanProcessor worker so
  * detection and repair stay consistent.
  */
 
-// Tolerance for detecting offset mismatch (in mm)
-export const OFFSET_TOLERANCE = 10;
+import {
+  parseCandidates,
+  AxisFacts,
+  AxisCandidate,
+  OFFSET_TOLERANCE,
+  SPAN_TOLERANCE,
+  ExpectedStartAnchor,
+} from './rangeTokens';
+import type { HalvedAxes } from './metadataHalving';
 
-// Tolerance for matching a filename range's span against the actual data
-// span (in mm). Deliberately looser than OFFSET_TOLERANCE: operators name
-// files with nominal ranges (e.g. "8160-8990MM" for an 800mm-wide scan), so
-// the span only needs to identify which axis a range describes — adjacent
-// axis spans differ by far more than this.
-export const SPAN_TOLERANCE = 100;
+export { OFFSET_TOLERANCE, SPAN_TOLERANCE } from './rangeTokens';
+export type { ExpectedStartAnchor } from './rangeTokens';
 
-export type ExpectedStartSource = 'metadata' | 'filename';
+export type ExpectedStartSource = 'metadata' | 'filename' | 'datafile' | 'metadata-halved';
+
+export interface AxisExtents {
+  scanMin: number;
+  scanMax: number;
+  indexMin: number;
+  indexMax: number;
+}
+
+export interface ResolveOptions {
+  /** Actual axis extents; enables truncation-aware (localZero) anchoring */
+  extents?: AxisExtents;
+  /** Batch-level doubled-metadata detection result (metadataHalving.ts) */
+  halvedAxes?: HalvedAxes;
+}
 
 export interface ExpectedStarts {
   indexStart: number | null;
   scanStart: number | null;
   indexSource: ExpectedStartSource | null;
   scanSource: ExpectedStartSource | null;
+  indexAnchor: ExpectedStartAnchor;
+  scanAnchor: ExpectedStartAnchor;
 }
 
-interface RangeToken {
-  start: number;
-  end: number;
-}
-
-interface AxisCandidate {
-  start: number;
-  /** True when the token's span matches the actual data span */
-  validated: boolean;
-}
-
-const spanMatches = (token: RangeToken, dataSpan: number): boolean =>
-  Math.abs(Math.abs(token.end - token.start) - dataSpan) <= SPAN_TOLERANCE;
+export const numericOrNull = (value: unknown): number | null =>
+  typeof value === 'number' && isFinite(value) ? value : null;
 
 /**
- * Extract axis range candidates from a filename.
- *
- * Supports two conventions:
- * - Labelled: `S-{start}-{end}` (scan axis) and `I-{start}-{end}` (index axis)
- * - Positional: `{start}-{end}MM` tokens (e.g. "0-800MM 1000-2000MM",
- *   "3000MM-4000MM"), assigned to axes by matching each token's span
- *   against the actual data spans; ambiguous tokens fall back to the
- *   conventional order of scan range first, index range second.
- *
- * When `preferFilename` is set (operator placement override), a final pass
- * assigns any still-unassigned positional tokens to empty axis slots in
- * conventional order even when their span does not match the data — so the
- * filename can drive placement for loosely-named ranges. Such candidates are
- * marked `validated: false`, which `resolveAxis` honors only under the override.
+ * Head-truncation signature for one axis, corroborated by metadata: the
+ * header sample count promises a nominal local span the label maximum still
+ * matches, while the label minimum sits above zero and the data span falls
+ * short. Absolute-positioned data cannot satisfy this (its max reflects the
+ * absolute position, not the nominal span), so tail validation gated on this
+ * never relocates a healthy strip.
  */
-const parseFilenameCandidates = (
-  filename: string,
-  xSpan: number,
-  ySpan: number,
-  preferFilename = false
-): { scan: AxisCandidate | null; index: AxisCandidate | null } => {
-  // Labelled convention takes priority when present
-  const indexLabelled = filename.match(/I-(\d+)-(\d+)/i);
-  const scanLabelled = filename.match(/S-(\d+)-(\d+)/i);
-
-  let scan: AxisCandidate | null = scanLabelled
-    ? {
-        start: parseInt(scanLabelled[1], 10),
-        validated: spanMatches(
-          { start: parseInt(scanLabelled[1], 10), end: parseInt(scanLabelled[2], 10) },
-          xSpan
-        ),
-      }
-    : null;
-  let index: AxisCandidate | null = indexLabelled
-    ? {
-        start: parseInt(indexLabelled[1], 10),
-        validated: spanMatches(
-          { start: parseInt(indexLabelled[1], 10), end: parseInt(indexLabelled[2], 10) },
-          ySpan
-        ),
-      }
-    : null;
-
-  if (scan && index) return { scan, index };
-
-  // Positional "{start}-{end}MM" convention
-  const tokens: RangeToken[] = [];
-  for (const match of filename.matchAll(/(\d+)\s*(?:MM)?\s*-\s*(\d+)\s*MM/gi)) {
-    tokens.push({ start: parseInt(match[1], 10), end: parseInt(match[2], 10) });
-  }
-
-  const unassigned = [...tokens];
-
-  // Pass 1: tokens that match exactly one axis span
-  for (let i = unassigned.length - 1; i >= 0; i--) {
-    const token = unassigned[i];
-    const fitsX = spanMatches(token, xSpan);
-    const fitsY = spanMatches(token, ySpan);
-    if (fitsX && !fitsY && !scan) {
-      scan = { start: token.start, validated: true };
-      unassigned.splice(i, 1);
-    } else if (fitsY && !fitsX && !index) {
-      index = { start: token.start, validated: true };
-      unassigned.splice(i, 1);
-    }
-  }
-
-  // Pass 2: ambiguous tokens (matching both spans) by order convention —
-  // scan range appears before index range. Only assign when unambiguous:
-  // a single leftover token with both slots open is skipped.
-  const ambiguous = unassigned.filter(
-    token => spanMatches(token, xSpan) && spanMatches(token, ySpan)
+const truncatedLocalAxis = (
+  qty: number | null,
+  resol: number | null,
+  min: number | null,
+  max: number | null
+): boolean => {
+  if (qty === null || min === null || max === null) return false;
+  const nominalSpan = (qty - 1) * (resol ?? 1);
+  if (nominalSpan <= 0) return false;
+  return (
+    min > OFFSET_TOLERANCE &&
+    Math.abs(max - nominalSpan) <= SPAN_TOLERANCE &&
+    max - min < nominalSpan - OFFSET_TOLERANCE
   );
-  const consume = (token: RangeToken) => {
-    const at = unassigned.indexOf(token);
-    if (at >= 0) unassigned.splice(at, 1);
-  };
-  if (ambiguous.length >= 2 && !scan && !index) {
-    scan = { start: ambiguous[0].start, validated: true };
-    index = { start: ambiguous[1].start, validated: true };
-    consume(ambiguous[0]);
-    consume(ambiguous[1]);
-  } else if (ambiguous.length >= 1) {
-    if (!scan && index) {
-      scan = { start: ambiguous[0].start, validated: true };
-      consume(ambiguous[0]);
-    } else if (!index && scan) {
-      index = { start: ambiguous[0].start, validated: true };
-      consume(ambiguous[0]);
-    }
-  }
-
-  // Pass 3 (operator override): the filename is authoritative, so fill any
-  // still-empty axis from the remaining tokens in conventional order even when
-  // the span does not match. Candidates are flagged validated/unvalidated so
-  // callers can surface which placements rest on an unmatched span.
-  if (preferFilename) {
-    for (const token of [...unassigned]) {
-      if (!scan) scan = { start: token.start, validated: spanMatches(token, xSpan) };
-      else if (!index) index = { start: token.start, validated: spanMatches(token, ySpan) };
-      else break;
-    }
-  }
-
-  return { scan, index };
 };
+
+/**
+ * Flag truncated exports on parse: the header promises more rows than the
+ * file holds (seen on interrupted instrument exports/copies — BRT V-1001
+ * 2026-07). Shared by the main-thread parser and the worker.
+ */
+export const flagTruncatedRows = (
+  metadata: Record<string, unknown>,
+  rowCount: number
+): void => {
+  const expected = metadata['Index Qty. (sample)'];
+  if (typeof expected === 'number' && isFinite(expected) && rowCount < expected) {
+    metadata._truncatedRows = { expected, actual: rowCount };
+  }
+};
+
+/**
+ * Offset that moves a scan's axis values to the expected position, honoring
+ * the anchor. Shared by fileParser.detectOffsets and the worker's
+ * hasOffsetIssues so the modal's repairs and the worker's gate agree.
+ */
+export const offsetFromExpected = (
+  expected: number | null,
+  anchor: ExpectedStartAnchor,
+  actualMin: number
+): number => (expected === null ? 0 : expected - (anchor === 'localZero' ? 0 : actualMin));
+
+interface AxisResolution {
+  value: number | null;
+  source: ExpectedStartSource | null;
+  anchor: ExpectedStartAnchor;
+}
 
 const resolveAxis = (
   metadataStart: number | null,
-  candidate: AxisCandidate | null,
-  preferFilename: boolean
-): { value: number | null; source: ExpectedStartSource | null } => {
+  fileCandidate: AxisCandidate | null,
+  dataFileCandidate: AxisCandidate | null,
+  axisHalved: boolean,
+  preferFilename: boolean,
+  anchor: ExpectedStartAnchor
+): AxisResolution => {
   // Operator override: a parseable filename range drives placement regardless
   // of span-validation or metadata agreement. Metadata still fills axes the
   // filename has no range for (the fallbacks below).
-  if (preferFilename && candidate !== null) {
-    return { value: candidate.start, source: 'filename' };
+  if (preferFilename && fileCandidate !== null) {
+    return { value: fileCandidate.start, source: 'filename', anchor };
   }
-  // A span-validated filename range overrides metadata that disagrees with
-  // it — instruments are known to write corrupted absolute starts, while a
-  // range whose span matches the data demonstrably describes this strip.
-  if (
-    metadataStart !== null &&
-    candidate !== null &&
-    candidate.validated &&
-    Math.abs(metadataStart - candidate.start) > OFFSET_TOLERANCE
-  ) {
-    return { value: candidate.start, source: 'filename' };
-  }
-  if (metadataStart !== null) return { value: metadataStart, source: 'metadata' };
-  if (candidate !== null) return { value: candidate.start, source: 'filename' };
-  return { value: null, source: null };
-};
 
-const numericOrNull = (value: unknown): number | null =>
-  typeof value === 'number' && isFinite(value) ? value : null;
+  // Only halve when it moves the start by more than the offset tolerance —
+  // sub-tolerance starts (e.g. a 1.5mm probe offset) are not doubled values.
+  const halvedValue =
+    axisHalved && metadataStart !== null && metadataStart / 2 > OFFSET_TOLERANCE
+      ? metadataStart / 2
+      : null;
+
+  if (metadataStart !== null) {
+    // A span-validated range overrides metadata that disagrees with it —
+    // instruments are known to write corrupted absolute starts, while a
+    // range whose span matches the data demonstrably describes this strip.
+    if (
+      fileCandidate?.validated &&
+      Math.abs(metadataStart - fileCandidate.start) > OFFSET_TOLERANCE
+    ) {
+      return { value: fileCandidate.start, source: 'filename', anchor };
+    }
+    if (
+      dataFileCandidate?.validated &&
+      Math.abs(metadataStart - dataFileCandidate.start) > OFFSET_TOLERANCE
+    ) {
+      return { value: dataFileCandidate.start, source: 'datafile', anchor };
+    }
+    // A validated range AGREEING with metadata corroborates it — two
+    // independent sources prove the position, which vetoes the batch-level
+    // halving heuristic for this file.
+    const corroborated =
+      (fileCandidate?.validated === true &&
+        Math.abs(metadataStart - fileCandidate.start) <= OFFSET_TOLERANCE) ||
+      (dataFileCandidate?.validated === true &&
+        Math.abs(metadataStart - dataFileCandidate.start) <= OFFSET_TOLERANCE);
+    if (halvedValue !== null && !corroborated) {
+      return { value: halvedValue, source: 'metadata-halved', anchor };
+    }
+    return { value: metadataStart, source: 'metadata', anchor };
+  }
+
+  if (fileCandidate !== null) {
+    return { value: fileCandidate.start, source: 'filename', anchor };
+  }
+  if (dataFileCandidate !== null) {
+    return { value: dataFileCandidate.start, source: 'datafile', anchor };
+  }
+  return { value: null, source: null, anchor };
+};
 
 export const resolveExpectedStarts = (
   filename: string,
   metadata: Record<string, unknown> | undefined,
   xSpan: number,
   ySpan: number,
-  preferFilename = false
+  preferFilename = false,
+  options?: ResolveOptions
 ): ExpectedStarts => {
   const metaIndex = numericOrNull(metadata?.['IndexStart (mm)']);
   const metaScan = numericOrNull(metadata?.['ScanStart (mm)']);
+  const ext = options?.extents;
 
-  const candidates = parseFilenameCandidates(filename, xSpan, ySpan, preferFilename);
+  const scanTruncatedLocal = truncatedLocalAxis(
+    numericOrNull(metadata?.['Scan Qty.(sample)']),
+    numericOrNull(metadata?.['Scan Resol. (mm)']),
+    ext?.scanMin ?? null,
+    ext?.scanMax ?? null
+  );
+  const indexTruncatedLocal = truncatedLocalAxis(
+    numericOrNull(metadata?.['Index Qty. (sample)']),
+    numericOrNull(metadata?.['Index Resol. (mm)']),
+    ext?.indexMin ?? null,
+    ext?.indexMax ?? null
+  );
 
-  const index = resolveAxis(metaIndex, candidates.index, preferFilename);
-  const scan = resolveAxis(metaScan, candidates.scan, preferFilename);
+  const scanAxis: AxisFacts = {
+    span: xSpan,
+    max: ext?.scanMax ?? null,
+    truncatedLocal: scanTruncatedLocal,
+  };
+  const indexAxis: AxisFacts = {
+    span: ySpan,
+    max: ext?.indexMax ?? null,
+    truncatedLocal: indexTruncatedLocal,
+  };
+
+  const fromFilename = parseCandidates(filename, scanAxis, indexAxis, preferFilename);
+
+  // The export's internal "Data File" header carries the true MM-suffixed
+  // ranges even when the on-disk name was renamed or lacks the MM suffix.
+  // Never subject to the preferFilename override — that names the filename.
+  const dataFileText = metadata?.['Data File'];
+  const fromDataFile =
+    typeof dataFileText === 'string' && dataFileText.length > 0
+      ? parseCandidates(dataFileText, scanAxis, indexAxis, false)
+      : { scan: null, index: null };
+
+  const index = resolveAxis(
+    metaIndex,
+    fromFilename.index,
+    fromDataFile.index,
+    options?.halvedAxes?.index ?? false,
+    preferFilename,
+    indexTruncatedLocal ? 'localZero' : 'dataMin'
+  );
+  const scan = resolveAxis(
+    metaScan,
+    fromFilename.scan,
+    fromDataFile.scan,
+    options?.halvedAxes?.scan ?? false,
+    preferFilename,
+    scanTruncatedLocal ? 'localZero' : 'dataMin'
+  );
 
   return {
     indexStart: index.value,
     scanStart: scan.value,
     indexSource: index.source,
     scanSource: scan.source,
+    indexAnchor: index.anchor,
+    scanAnchor: scan.anchor,
   };
 };

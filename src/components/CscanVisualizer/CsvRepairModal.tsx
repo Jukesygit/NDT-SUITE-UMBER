@@ -1,7 +1,18 @@
 import React, { useState, useMemo } from 'react';
 import { X, AlertTriangle, Wrench, Check, ChevronDown, ChevronRight } from 'lucide-react';
-import { CscanData } from './types';
+import { CscanData, OffsetSource } from './types';
 import { detectOffsetsForScans, applyOffsetCorrections } from './utils/fileParser';
+import CsvRepairOverlapPanel, { useRepairCrossCheck } from './CsvRepairOverlapPanel';
+
+const SOURCE_LABELS: Record<OffsetSource, string> = {
+  metadata: 'metadata',
+  filename: 'filename',
+  datafile: 'data-file header',
+  'metadata-halved': 'metadata ÷2',
+};
+
+const sourceLabel = (source: OffsetSource | null | undefined): string =>
+  source ? SOURCE_LABELS[source] : '—';
 
 interface CsvRepairModalProps {
   isOpen: boolean;
@@ -31,6 +42,13 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
   // Separate by type
   const indexIssues = detections.filter(d => d.indexNeedsCorrection);
   const scanIssues = detections.filter(d => d.scanNeedsCorrection);
+
+  const { overlapChecks, truncatedFiles, usesHalving } = useRepairCrossCheck(
+    scans,
+    detections,
+    correctIndex,
+    correctScan
+  );
 
   const handleRepair = () => {
     const repairedScans = applyOffsetCorrections(scans, correctIndex, correctScan, preferFilename);
@@ -205,7 +223,7 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
                           )}
                         </td>
                         <td className="p-2 text-right text-gray-400">
-                          {(d.indexNeedsCorrection ? d.indexSource : d.scanSource) ?? '—'}
+                          {sourceLabel(d.indexNeedsCorrection ? d.indexSource : d.scanSource)}
                         </td>
                       </tr>
                     ))}
@@ -214,6 +232,13 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
               </div>
             )}
           </div>
+
+          {/* Halving note + truncation warnings + overlap cross-check */}
+          <CsvRepairOverlapPanel
+            checks={overlapChecks}
+            truncatedFiles={truncatedFiles}
+            usesHalving={usesHalving}
+          />
 
           {/* Preview Example */}
           {detections.length > 0 && (

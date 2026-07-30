@@ -1,5 +1,12 @@
 import { CscanData, CscanStats, SourceRegion, OffsetDetection } from '../types';
-import { resolveExpectedStarts, OFFSET_TOLERANCE } from './offsetExpectations';
+import {
+  resolveExpectedStarts,
+  offsetFromExpected,
+  flagTruncatedRows,
+  OFFSET_TOLERANCE,
+} from './offsetExpectations';
+import { halvedAxesFromScans, HalvedAxes } from './metadataHalving';
+import { axisExtents } from './axisMath';
 
 // Generate unique ID for files
 const generateId = () => `cscan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -120,10 +127,13 @@ export const parseCscanFile = async (file: File): Promise<CscanData> => {
       break;
     }
 
-    // Parse metadata as key=value pairs
+    // Parse metadata as key=value pairs. Coerce with Number, not parseFloat:
+    // mixed values like "Data File = 0-800MM ..." must stay strings (the
+    // datafile arbitration source reads them), not collapse to their leading
+    // digits.
     const parts = line.split('=').map(p => p.trim());
     if (parts.length === 2 && parts[0] && parts[1]) {
-      const value = parseFloat(parts[1]);
+      const value = Number(parts[1]);
       metadata[parts[0]] = isNaN(value) ? parts[1] : value;
     }
   }
@@ -174,6 +184,8 @@ export const parseCscanFile = async (file: File): Promise<CscanData> => {
   if (xAxis.length === 0 || yAxis.length === 0 || data.length === 0) {
     throw new Error('Failed to parse C-Scan data matrix');
   }
+
+  flagTruncatedRows(metadata, data.length);
 
   // Calculate statistics with coordinate info for area metrics
   const stats = calculateStats(data, xAxis, yAxis);
@@ -524,35 +536,55 @@ export const createComposite = (scans: CscanData[]): CscanData | null => {
 // =============================================================================
 
 /**
- * Detect if a scan file has incorrect axis offsets
- * Compares expected positions (filename ranges and metadata, arbitrated by
- * resolveExpectedStarts) against actual data values
+ * Batch-level doubled-metadata detection: when corrupted starts also match
+ * the matrix labels, per-file comparison sees agreement — but halving the
+ * starts closing the tiling holes across the batch exposes the corruption.
  */
-export const detectOffsets = (scan: CscanData, preferFilename = false): OffsetDetection => {
+export const halvedAxesForScans = (scans: CscanData[]): HalvedAxes =>
+  halvedAxesFromScans(scans);
+
+/**
+ * Detect if a scan file has incorrect axis offsets
+ * Compares expected positions (filename/Data File ranges and metadata,
+ * arbitrated by resolveExpectedStarts) against actual data values.
+ * `halvedAxes` carries the batch-level doubled-metadata detection; compute it
+ * once per batch via halvedAxesForScans.
+ */
+export const detectOffsets = (
+  scan: CscanData,
+  preferFilename = false,
+  halvedAxes?: HalvedAxes
+): OffsetDetection => {
   // Get actual values from parsed data
   // yAxis is Index (rows), xAxis is Scan (columns)
-  const actualIndexStart = scan.yAxis.length > 0 ? Math.min(...scan.yAxis) : 0;
-  const actualIndexEnd = scan.yAxis.length > 0 ? Math.max(...scan.yAxis) : 0;
-  const actualScanStart = scan.xAxis.length > 0 ? Math.min(...scan.xAxis) : 0;
-  const actualScanEnd = scan.xAxis.length > 0 ? Math.max(...scan.xAxis) : 0;
+  const indexExt = axisExtents(scan.yAxis);
+  const scanExt = axisExtents(scan.xAxis);
+  const actualIndexStart = indexExt?.min ?? 0;
+  const actualIndexEnd = indexExt?.max ?? 0;
+  const actualScanStart = scanExt?.min ?? 0;
+  const actualScanEnd = scanExt?.max ?? 0;
 
   const expected = resolveExpectedStarts(
     scan.filename,
     scan.metadata,
     actualScanEnd - actualScanStart,
     actualIndexEnd - actualIndexStart,
-    preferFilename
+    preferFilename,
+    {
+      halvedAxes,
+      extents: {
+        scanMin: actualScanStart,
+        scanMax: actualScanEnd,
+        indexMin: actualIndexStart,
+        indexMax: actualIndexEnd,
+      },
+    }
   );
   const expectedIndexStart = expected.indexStart;
   const expectedScanStart = expected.scanStart;
 
-  // Calculate offsets needed
-  const indexOffset = expectedIndexStart !== null
-    ? expectedIndexStart - actualIndexStart
-    : 0;
-  const scanOffset = expectedScanStart !== null
-    ? expectedScanStart - actualScanStart
-    : 0;
+  const indexOffset = offsetFromExpected(expectedIndexStart, expected.indexAnchor, actualIndexStart);
+  const scanOffset = offsetFromExpected(expectedScanStart, expected.scanAnchor, actualScanStart);
 
   // Determine if correction is needed (with tolerance)
   const indexNeedsCorrection = Math.abs(indexOffset) > OFFSET_TOLERANCE;
@@ -582,32 +614,47 @@ export const detectOffsetsForScans = (
   scans: CscanData[],
   preferFilename = false
 ): OffsetDetection[] => {
+  const halvedAxes = halvedAxesForScans(scans);
   return scans
     .filter(scan => !scan.isComposite) // Skip composite scans
-    .map(scan => detectOffsets(scan, preferFilename))
+    .map(scan => detectOffsets(scan, preferFilename, halvedAxes))
     .filter(detection => detection.indexNeedsCorrection || detection.scanNeedsCorrection);
 };
 
 /**
+ * The axis shift a detection implies under the current axis toggles.
+ * Shared by the repair path and the modal's overlap-check preview so the
+ * placement the cross-check scores is definitionally the one applied.
+ */
+export const detectionShift = (
+  detection: OffsetDetection,
+  correctIndex: boolean,
+  correctScan: boolean
+): { dx: number; dy: number } => ({
+  dx: correctScan && detection.scanNeedsCorrection ? detection.scanOffset : 0,
+  dy: correctIndex && detection.indexNeedsCorrection ? detection.indexOffset : 0,
+});
+
+/**
  * Apply offset correction to a single scan
- * Returns a new CscanData with corrected axis values
+ * Returns a new CscanData with corrected axis values.
+ * Pass `detection` when the caller already ran detectOffsets (the batch
+ * appliers do) to avoid re-running arbitration.
  */
 export const applyOffsetCorrection = (
   scan: CscanData,
   correctIndex: boolean,
   correctScan: boolean,
-  preferFilename = false
+  preferFilename = false,
+  halvedAxes?: HalvedAxes,
+  detection?: OffsetDetection
 ): CscanData => {
-  const detection = detectOffsets(scan, preferFilename);
+  const resolved = detection ?? detectOffsets(scan, preferFilename, halvedAxes);
+  const { dx, dy } = detectionShift(resolved, correctIndex, correctScan);
 
   // Create new axis arrays with corrections applied
-  const correctedYAxis = correctIndex && detection.indexNeedsCorrection
-    ? scan.yAxis.map(y => y + detection.indexOffset)
-    : [...scan.yAxis];
-
-  const correctedXAxis = correctScan && detection.scanNeedsCorrection
-    ? scan.xAxis.map(x => x + detection.scanOffset)
-    : [...scan.xAxis];
+  const correctedYAxis = dy !== 0 ? scan.yAxis.map(y => y + dy) : [...scan.yAxis];
+  const correctedXAxis = dx !== 0 ? scan.xAxis.map(x => x + dx) : [...scan.xAxis];
 
   // Recalculate stats with new coordinates (for area calculations)
   const stats = calculateStats(scan.data, correctedXAxis, correctedYAxis);
@@ -620,8 +667,8 @@ export const applyOffsetCorrection = (
     metadata: {
       ...scan.metadata,
       _correctionApplied: true,
-      _indexOffsetApplied: correctIndex ? detection.indexOffset : 0,
-      _scanOffsetApplied: correctScan ? detection.scanOffset : 0
+      _indexOffsetApplied: dy,
+      _scanOffsetApplied: dx
     }
   };
 };
@@ -635,17 +682,18 @@ export const applyOffsetCorrections = (
   correctScan: boolean,
   preferFilename = false
 ): CscanData[] => {
+  const halvedAxes = halvedAxesForScans(scans);
   return scans.map(scan => {
     if (scan.isComposite) return scan; // Don't correct composites
 
-    const detection = detectOffsets(scan, preferFilename);
+    const detection = detectOffsets(scan, preferFilename, halvedAxes);
     const needsCorrection =
       (correctIndex && detection.indexNeedsCorrection) ||
       (correctScan && detection.scanNeedsCorrection);
 
     if (!needsCorrection) return scan;
 
-    return applyOffsetCorrection(scan, correctIndex, correctScan, preferFilename);
+    return applyOffsetCorrection(scan, correctIndex, correctScan, preferFilename, halvedAxes, detection);
   });
 };
 
@@ -653,9 +701,10 @@ export const applyOffsetCorrections = (
  * Check if any scans in a collection need offset correction
  */
 export const hasOffsetsToCorrect = (scans: CscanData[]): boolean => {
+  const halvedAxes = halvedAxesForScans(scans);
   return scans.some(scan => {
     if (scan.isComposite) return false;
-    const detection = detectOffsets(scan);
+    const detection = detectOffsets(scan, false, halvedAxes);
     return detection.indexNeedsCorrection || detection.scanNeedsCorrection;
   });
 };

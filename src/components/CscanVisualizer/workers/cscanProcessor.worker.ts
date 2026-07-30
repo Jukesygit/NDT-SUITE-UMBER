@@ -20,7 +20,14 @@ import type {
   ThresholdAppliedMessage,
   ErrorMessage
 } from '../utils/efficientTypes';
-import { resolveExpectedStarts, OFFSET_TOLERANCE } from '../utils/offsetExpectations';
+import {
+  resolveExpectedStarts,
+  offsetFromExpected,
+  flagTruncatedRows,
+  OFFSET_TOLERANCE,
+} from '../utils/offsetExpectations';
+import { halvedAxesFromScans, HalvedAxes } from '../utils/metadataHalving';
+import { axisExtents } from '../utils/axisMath';
 
 /** Chrome-only Performance.memory API */
 interface PerformanceWithMemory extends Performance {
@@ -180,9 +187,11 @@ function parseSingleFile(buffer: ArrayBuffer, filename: string): EfficientCscanD
       break;
     }
 
+    // Number, not parseFloat: mixed values like "Data File = 0-800MM ..."
+    // must stay strings (the datafile arbitration source reads them).
     const parts = line.split('=').map(p => p.trim());
     if (parts.length === 2 && parts[0] && parts[1]) {
-      const value = parseFloat(parts[1]);
+      const value = Number(parts[1]);
       metadata[parts[0]] = isNaN(value) ? parts[1] : value;
     }
   }
@@ -232,6 +241,8 @@ function parseSingleFile(buffer: ArrayBuffer, filename: string): EfficientCscanD
   if (xAxisArr.length === 0 || yAxisArr.length === 0 || dataRows.length === 0) {
     throw new Error('Failed to parse C-Scan data matrix');
   }
+
+  flagTruncatedRows(metadata, dataRows.length);
 
   // Convert to efficient format
   const width = xAxisArr.length;
@@ -498,26 +509,35 @@ function parseGenericFormat(_buffer: ArrayBuffer, filename: string, lines: strin
 /**
  * Detect if a scan has offset issues
  * Must stay consistent with detectOffsets in utils/fileParser.ts — both
- * delegate expected-position arbitration to resolveExpectedStarts.
+ * delegate arbitration to resolveExpectedStarts + offsetFromExpected.
  */
-function hasOffsetIssues(scan: EfficientCscanData): boolean {
-  const yArr = Array.from(scan.yAxis);
-  const xArr = Array.from(scan.xAxis);
-
-  const actualIndexStart = yArr.length > 0 ? Math.min(...yArr) : 0;
-  const actualIndexEnd = yArr.length > 0 ? Math.max(...yArr) : 0;
-  const actualScanStart = xArr.length > 0 ? Math.min(...xArr) : 0;
-  const actualScanEnd = xArr.length > 0 ? Math.max(...xArr) : 0;
+function hasOffsetIssues(scan: EfficientCscanData, halvedAxes: HalvedAxes): boolean {
+  const indexExt = axisExtents(scan.yAxis);
+  const scanExt = axisExtents(scan.xAxis);
+  const actualIndexStart = indexExt?.min ?? 0;
+  const actualIndexEnd = indexExt?.max ?? 0;
+  const actualScanStart = scanExt?.min ?? 0;
+  const actualScanEnd = scanExt?.max ?? 0;
 
   const expected = resolveExpectedStarts(
     scan.filename,
     scan.metadata,
     actualScanEnd - actualScanStart,
-    actualIndexEnd - actualIndexStart
+    actualIndexEnd - actualIndexStart,
+    false,
+    {
+      halvedAxes,
+      extents: {
+        scanMin: actualScanStart,
+        scanMax: actualScanEnd,
+        indexMin: actualIndexStart,
+        indexMax: actualIndexEnd,
+      },
+    }
   );
 
-  const indexOffset = expected.indexStart !== null ? expected.indexStart - actualIndexStart : 0;
-  const scanOffset = expected.scanStart !== null ? expected.scanStart - actualScanStart : 0;
+  const indexOffset = offsetFromExpected(expected.indexStart, expected.indexAnchor, actualIndexStart);
+  const scanOffset = offsetFromExpected(expected.scanStart, expected.scanAnchor, actualScanStart);
 
   return Math.abs(indexOffset) > OFFSET_TOLERANCE || Math.abs(scanOffset) > OFFSET_TOLERANCE;
 }
@@ -531,7 +551,6 @@ async function processFilesInBatches(
   batchSize: number
 ): Promise<{ scans: EfficientCscanData[]; hasOffsetIssues: boolean }> {
   const results: EfficientCscanData[] = [];
-  let anyOffsetIssues = false;
   const total = buffers.length;
 
   for (let batchStart = 0; batchStart < total; batchStart += batchSize) {
@@ -553,11 +572,6 @@ async function processFilesInBatches(
         parsedScans.set(scan.id, scan);
         results.push(scan);
 
-        // Check for offset issues
-        if (hasOffsetIssues(scan)) {
-          anyOffsetIssues = true;
-        }
-
         postProgress(
           'PARSE_PROGRESS',
           i + 1,
@@ -576,6 +590,27 @@ async function processFilesInBatches(
 
     // Allow GC between batches
     await allowGC();
+  }
+
+  // Offset detection runs after the whole batch is parsed: doubled-metadata
+  // (halving) detection is a batch-level signal, not a per-file one.
+  // Per-scan try/catch: one undetectable file must not drop the whole
+  // successfully parsed batch (PARSE_COMPLETE must still be sent).
+  let anyOffsetIssues = false;
+  try {
+    const halvedAxes = halvedAxesFromScans(results);
+    for (const scan of results) {
+      try {
+        if (hasOffsetIssues(scan, halvedAxes)) {
+          anyOffsetIssues = true;
+          break;
+        }
+      } catch (error) {
+        postError(`Offset detection failed: ${(error as Error).message}`, scan.filename);
+      }
+    }
+  } catch (error) {
+    postError(`Offset detection failed: ${(error as Error).message}`);
   }
 
   return { scans: results, hasOffsetIssues: anyOffsetIssues };

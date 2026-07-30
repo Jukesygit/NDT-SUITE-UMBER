@@ -60,6 +60,7 @@ export default function TopologyViewer() {
   });
   const [processingProgress, setProcessingProgress] =
     useState<ProcessingProgress | null>(null);
+  const [truncationWarning, setTruncationWarning] = useState<string | null>(null);
   const [showRepairModal, setShowRepairModal] = useState(false);
   const [pendingScans, setPendingScans] = useState<CscanData[]>([]);
   const [lightAzimuth, setLightAzimuth] = useState(45);
@@ -87,6 +88,12 @@ export default function TopologyViewer() {
 
   const addScansToState = useCallback(
     (newScans: CscanData[]) => {
+      // Truncated exports still load, but the missing rows are absent from
+      // the surface — warn (count vs the header's declared sample count).
+      const truncated = newScans.filter(s => s.metadata?.['_truncatedRows']).length;
+      setTruncationWarning(truncated > 0
+        ? `${truncated} file${truncated !== 1 ? 's' : ''} truncated (fewer rows than the header declares) — missing regions stay empty`
+        : null);
       const allScans = [...processedScans, ...newScans];
       setProcessedScans(allScans);
 
@@ -281,6 +288,12 @@ export default function TopologyViewer() {
         <div className="topology-viewer__progress">
           Processing {processingProgress.current}/{processingProgress.total}...
         </div>
+      )}
+
+      {truncationWarning && (
+        <div className="topology-viewer__progress" role="alert" title="Click to dismiss"
+          style={{ background: 'rgba(58,47,15,0.95)', color: '#fcd34d', cursor: 'pointer' }}
+          onClick={() => setTruncationWarning(null)}>{truncationWarning}</div>
       )}
     </div>
   );
