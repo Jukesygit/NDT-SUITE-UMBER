@@ -12,6 +12,7 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
 import type { DomeScanConfig, VesselState } from '../types';
 import { domeLocalFromPhiTheta, PHI_EPSILON } from './dome-scan-geometry';
+import { resolveBodyFrame } from './body-frame';
 import { SCALE } from './materials';
 
 // ---------------------------------------------------------------------------
@@ -150,21 +151,47 @@ export function buildDomeScanGizmo(
 ): { group: THREE.Group; originMesh: THREE.Mesh } {
   const group = new THREE.Group();
 
-  const RADIUS = vesselState.id / 2;
-  const HEAD_DEPTH = RADIUS / (vesselState.headRatio || 2);
-  const TAN_TAN = vesselState.length;
-  const isVertical = vesselState.orientation === 'vertical';
-  const headSign = config.head === 'right' ? 1 : -1;
-  const tangentLineMm = config.head === 'right' ? TAN_TAN : 0;
-
   const centerPhi = Math.max(PHI_EPSILON, config.centerPhi);
   const centerTheta = config.centerTheta;
 
+  // Map (phi, theta) -> world surface point. Appendage end-closure scans resolve
+  // through the body's SurfaceFrame (dome axis = appendage axis, theta 0 = datum);
+  // main-shell scans keep the legacy axis-swap point builder unchanged.
+  let pointAt: (phiDeg: number, thetaDeg: number) => THREE.Vector3;
+  if (config.bodyId !== undefined) {
+    const frame = resolveBodyFrame(vesselState, config.bodyId);
+    const R = frame.radius;
+    const D = frame.headDepth;
+    const L = frame.axialLength;
+    const centerBase = frame.surfacePoint(0, 0, -R);
+    const axisN = frame.surfacePoint(1, 0, -R).sub(centerBase).normalize();
+    const datumD = frame.surfaceNormal(0, 0);
+    const crossE = frame.surfaceNormal(0, 90);
+    pointAt = (phiDeg, thetaDeg) => {
+      const local = domeLocalFromPhiTheta(phiDeg, thetaDeg, R, D);
+      const rOff = (local.rLocalMm + SURFACE_OFFSET_MM) * SCALE;
+      return centerBase
+        .clone()
+        .addScaledVector(axisN, (L + local.axialMm) * SCALE)
+        .addScaledVector(datumD, Math.cos(local.thetaRad) * rOff)
+        .addScaledVector(crossE, Math.sin(local.thetaRad) * rOff);
+    };
+  } else {
+    const RADIUS = vesselState.id / 2;
+    const HEAD_DEPTH = RADIUS / (vesselState.headRatio || 2);
+    const TAN_TAN = vesselState.length;
+    const isVertical = vesselState.orientation === 'vertical';
+    const headSign = config.head === 'right' ? 1 : -1;
+    const tangentLineMm = config.head === 'right' ? TAN_TAN : 0;
+    pointAt = (phiDeg, thetaDeg) =>
+      domeWorldPoint(
+        phiDeg, thetaDeg, RADIUS, HEAD_DEPTH,
+        tangentLineMm, TAN_TAN, headSign, isVertical, SURFACE_OFFSET_MM,
+      );
+  }
+
   // --- Origin sphere ---
-  const originPos = domeWorldPoint(
-    centerPhi, centerTheta, RADIUS, HEAD_DEPTH,
-    tangentLineMm, TAN_TAN, headSign, isVertical, SURFACE_OFFSET_MM,
-  );
+  const originPos = pointAt(centerPhi, centerTheta);
 
   const originGeom = new THREE.SphereGeometry(ORIGIN_RADIUS, 16, 16);
   const originMat = new THREE.MeshBasicMaterial({ color: 0xffffff, depthWrite: false });
@@ -192,10 +219,7 @@ export function buildDomeScanGizmo(
     const t = i / CIRC_SEGMENTS;
     const thetaOff = (t - 0.5) * CIRC_ARC_DEG;
     const theta = centerTheta + thetaOff;
-    circPoints.push(domeWorldPoint(
-      centerPhi, theta, RADIUS, HEAD_DEPTH,
-      tangentLineMm, TAN_TAN, headSign, isVertical, SURFACE_OFFSET_MM,
-    ));
+    circPoints.push(pointAt(centerPhi, theta));
   }
 
   const circArrow = buildRibbonArrow(circPoints, COLOR_CIRC, 'domeGizmoArrowCirc', config.id);
@@ -207,10 +231,7 @@ export function buildDomeScanGizmo(
     const t = i / LONG_SEGMENTS;
     const phiOff = (t - 0.5) * LONG_ARC_DEG;
     const phi = Math.max(PHI_EPSILON, Math.min(90, centerPhi + phiOff));
-    longPoints.push(domeWorldPoint(
-      phi, centerTheta, RADIUS, HEAD_DEPTH,
-      tangentLineMm, TAN_TAN, headSign, isVertical, SURFACE_OFFSET_MM,
-    ));
+    longPoints.push(pointAt(phi, centerTheta));
   }
 
   const longArrow = buildRibbonArrow(longPoints, COLOR_LONG, 'domeGizmoArrowLong', config.id);

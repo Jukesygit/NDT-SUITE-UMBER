@@ -525,6 +525,61 @@ describe('scan composite bodyId (appendage mount)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Dome scan bodyId (appendage end closure) — round-trips on both paths; the
+// cloud section_type follows the appendage:<id> convention for a body-mounted
+// dome scan and dome_left / dome_right for a main head.
+// ---------------------------------------------------------------------------
+
+describe('dome scan bodyId (appendage end closure)', () => {
+  function makeMixedDomeFixture(): VesselState {
+    const fixture = makeFixture();
+    const base = fixture.domeScanComposites[0];
+    fixture.domeScanComposites = [
+      { ...base, id: 'dome-main', bodyId: undefined, head: 'right' },
+      { ...base, id: 'dome-app', bodyId: 'app-1', head: 'end' },
+    ];
+    return fixture;
+  }
+
+  for (const path of ['local', 'cloud'] as const) {
+    it(`round-trips an appendage-mounted dome scan on the ${path} path`, () => {
+      const restored = roundTrip(makeMixedDomeFixture(), path);
+      expect(restored.domeScanComposites[1].bodyId).toBe('app-1');
+      expect(restored.domeScanComposites[1].head).toBe('end');
+      // The main-head dome scan is untouched — no bodyId, head preserved.
+      expect(restored.domeScanComposites[0].bodyId).toBeUndefined();
+      expect(restored.domeScanComposites[0].head).toBe('right');
+    });
+  }
+
+  it('derives section_type = appendage:<id> for an appendage dome scan (cloud path)', () => {
+    const cloud = serializeVesselState(makeMixedDomeFixture(), {
+      path: 'cloud',
+      modelType: 'blank',
+    }) as { domeScanComposites: Array<Record<string, unknown>> };
+    expect(cloud.domeScanComposites[1].sectionType).toBe('appendage:app-1');
+    // Main-head dome scans keep the dome_left / dome_right convention.
+    expect(cloud.domeScanComposites[0].sectionType).toBe('dome_right');
+  });
+
+  it('omits dome sectionType entirely on the local path', () => {
+    const local = serializeVesselState(makeMixedDomeFixture(), { path: 'local' }) as {
+      domeScanComposites: Array<Record<string, unknown>>;
+    };
+    expect(local.domeScanComposites[0]).not.toHaveProperty('sectionType');
+    expect(local.domeScanComposites[1]).not.toHaveProperty('sectionType');
+  });
+
+  it('persists bodyId only for the appendage dome scan (JSON boundary)', () => {
+    const serialized = JSON.parse(
+      JSON.stringify(serializeVesselState(makeMixedDomeFixture(), { path: 'local' }))
+    ) as { domeScanComposites: Array<Record<string, unknown>> };
+    expect(serialized.domeScanComposites[0]).not.toHaveProperty('bodyId');
+    expect(serialized.domeScanComposites[1].bodyId).toBe('app-1');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Weld / lug / coverage-rect bodyId (appendage mount) — each round-trips on both
 // paths; main-shell items keep no bodyId tag (byte-identical legacy shape).
 // ---------------------------------------------------------------------------

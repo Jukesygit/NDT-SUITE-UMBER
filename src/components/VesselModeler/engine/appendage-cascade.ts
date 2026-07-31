@@ -22,7 +22,13 @@ import type { VesselState } from '../types';
 /** The slice of state this cascade rewrites. */
 type CascadeState = Pick<
   VesselState,
-  'appendages' | 'nozzles' | 'pipelines' | 'welds' | 'liftingLugs' | 'coverageRects'
+  | 'appendages'
+  | 'nozzles'
+  | 'pipelines'
+  | 'welds'
+  | 'liftingLugs'
+  | 'coverageRects'
+  | 'domeScanComposites'
 >;
 
 /** Drop every item whose `bodyId` matches, preserving the array reference when
@@ -51,6 +57,7 @@ export function cascadeRemoveAppendage(state: CascadeState, index: number): Casc
       welds: state.welds,
       liftingLugs: state.liftingLugs,
       coverageRects: state.coverageRects,
+      domeScanComposites: state.domeScanComposites,
     };
   }
 
@@ -78,5 +85,6 @@ export function cascadeRemoveAppendage(state: CascadeState, index: number): Casc
     welds: stripByBody(state.welds, bodyId),
     liftingLugs: stripByBody(state.liftingLugs, bodyId),
     coverageRects: stripByBody(state.coverageRects, bodyId),
+    domeScanComposites: stripByBody(state.domeScanComposites, bodyId),
   };
 }

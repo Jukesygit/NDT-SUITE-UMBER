@@ -13,6 +13,7 @@ import { describe, it, expect } from 'vitest';
 import type {
   AppendageConfig,
   CoverageRectConfig,
+  DomeScanConfig,
   LiftingLugConfig,
   NozzleConfig,
   Pipeline,
@@ -57,6 +58,28 @@ function rect(id: number, bodyId?: string): CoverageRectConfig {
   };
 }
 
+function dome(id: string, bodyId?: string): DomeScanConfig {
+  return {
+    id,
+    name: id,
+    bodyId,
+    head: bodyId ? 'end' : 'right',
+    centerPhi: 30,
+    centerTheta: 0,
+    scanDirection: 'cw',
+    indexDirection: 'outward',
+    orientationConfirmed: true,
+    data: [],
+    xAxis: [0, 10],
+    yAxis: [0, 10],
+    stats: { min: 0, max: 0, mean: 0, median: 0, stdDev: 0 },
+    colorScale: 'Jet',
+    rangeMin: null,
+    rangeMax: null,
+    opacity: 1,
+  };
+}
+
 const appendages: AppendageConfig[] = [
   {
     id: 'app-1',
@@ -87,6 +110,7 @@ function makeState(overrides: Partial<Parameters<typeof cascadeRemoveAppendage>[
     welds: [] as WeldConfig[],
     liftingLugs: [] as LiftingLugConfig[],
     coverageRects: [] as CoverageRectConfig[],
+    domeScanComposites: [] as DomeScanConfig[],
     ...overrides,
   };
 }
@@ -184,13 +208,31 @@ describe('cascadeRemoveAppendage', () => {
       welds: [weld('W-main'), weld('W-app1', 'app-1')],
       liftingLugs: [lug('L-app1', 'app-1')],
       coverageRects: [rect(1)],
+      domeScanComposites: [dome('d-main'), dome('d-app1', 'app-1')],
     });
 
-    // Delete app-2, which owns no welds/lugs/rects — those arrays keep identity.
+    // Delete app-2, which owns no welds/lugs/rects/dome scans — arrays keep identity.
     const result = cascadeRemoveAppendage(state, 1);
 
     expect(result.welds).toBe(state.welds);
     expect(result.liftingLugs).toBe(state.liftingLugs);
     expect(result.coverageRects).toBe(state.coverageRects);
+    expect(result.domeScanComposites).toBe(state.domeScanComposites);
+  });
+
+  it('strips the body’s dome scans; keeps main + other-body dome scans', () => {
+    const state = makeState({
+      domeScanComposites: [
+        dome('d-main'),
+        dome('d-app1a', 'app-1'),
+        dome('d-app1b', 'app-1'),
+        dome('d-app2', 'app-2'),
+      ],
+    });
+
+    const result = cascadeRemoveAppendage(state, 0); // delete app-1
+
+    expect(result.domeScanComposites.map((d) => d.id)).toEqual(['d-main', 'd-app2']);
+    expect(result.domeScanComposites.every((d) => d.bodyId !== 'app-1')).toBe(true);
   });
 });

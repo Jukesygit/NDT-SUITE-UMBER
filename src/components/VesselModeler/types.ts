@@ -299,10 +299,22 @@ export interface DomeScanConfig {
   name: string;
   cloudId?: string;
 
-  head: 'left' | 'right';
+  /** Body this dome scan drapes on. undefined = main-shell head (legacy path,
+   *  byte-identical geometry/serialization). When set to an appendage id the scan
+   *  sits on that appendage's END CLOSURE: `head` is 'end', the dome axis is the
+   *  appendage axis (outward), the dome dimensions come from the appendage diameter
+   *  and its endClosure headRatio, and centerTheta is measured from the appendage
+   *  datum (see engine/body-frame.ts). Valid only when the appendage's endClosure
+   *  is 'dished'. */
+  bodyId?: string;
+  /** Which closure the scan sits on. 'left' | 'right' select a main-shell head;
+   *  'end' is an appendage end closure and is valid ONLY with `bodyId` set (an
+   *  appendage has a single closure). */
+  head: 'left' | 'right' | 'end';
   /** Polar angle from dome apex in degrees (0 = apex, 90 = equator) */
   centerPhi: number;
-  /** Azimuthal angle around dome axis in degrees (0° = 3-o'clock, 90° = TDC) */
+  /** Azimuthal angle around dome axis in degrees (0° = 3-o'clock, 90° = TDC).
+   *  On an appendage closure, 0° = the appendage datum. */
   centerTheta: number;
 
   scanDirection: 'cw' | 'ccw';

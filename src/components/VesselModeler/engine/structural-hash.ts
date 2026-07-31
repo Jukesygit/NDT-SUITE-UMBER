@@ -62,6 +62,9 @@ export function structuralHash(s: VesselState): string {
     domeScanComposites: (s.domeScanComposites ?? []).map((ds) => ({
       id: ds.id,
       hasData: (ds.data?.length ?? 0) > 0,
+      // bodyId selects the closure the scan drapes on (undefined = main head);
+      // changing it re-parameterises the geometry, so it must rebuild.
+      bodyId: ds.bodyId,
       head: ds.head,
       centerPhi: ds.centerPhi,
       centerTheta: ds.centerTheta,

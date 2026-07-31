@@ -267,6 +267,7 @@ export const DOME_SCAN_SPEC: FieldSpec[] = [
   { key: 'id' },
   { key: 'name' },
   { key: 'cloudId' },
+  { key: 'bodyId' },
   { key: 'head' },
   { key: 'centerPhi' },
   { key: 'centerTheta' },
@@ -281,7 +282,16 @@ export const DOME_SCAN_SPEC: FieldSpec[] = [
   { key: 'rangeMax' },
   { key: 'opacity' },
   { key: 'sourceFiles' },
-  { key: 'sectionType', saveOn: 'cloud', save: { compute: (ds) => `dome_${String(ds.head)}` } },
+  // Cloud-only derived section_type: appendage end-closure scans follow the
+  // Phase-2 `appendage:<id>` convention (bodyId branch); main-head scans keep
+  // dome_left / dome_right.
+  {
+    key: 'sectionType',
+    saveOn: 'cloud',
+    save: {
+      compute: (ds) => (ds.bodyId ? `appendage:${String(ds.bodyId)}` : `dome_${String(ds.head)}`),
+    },
+  },
 ];
 
 // Appendage bodies — save: passthrough (no heavy data to strip);

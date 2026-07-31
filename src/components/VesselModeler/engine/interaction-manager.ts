@@ -813,6 +813,34 @@ export class InteractionManager {
     }
 
     if (this.dragType === 'domeGizmo') {
+      const ds = state.domeScanComposites?.find((d) => d.id === this.selectedGizmoCompositeId);
+      if (!ds) return;
+
+      // Appendage end-closure gizmo: scope the drag to that body's surface
+      // (cylinder + closure) and invert through the body frame — mirroring the
+      // scan-gizmo / nozzle appendage drags. A closure hit gives pos in the dome
+      // region; phi = acos(sx / D) with sx the axial distance past the tangent
+      // line, theta = the appendage datum angle.
+      if (ds.bodyId !== undefined) {
+        const frame = resolveBodyFrame(state, ds.bodyId);
+        const D = frame.headDepth;
+        if (D <= 0) return;
+        const bodyMeshes = this.getBodySurfaceMeshes(ds.bodyId);
+        if (bodyMeshes.length === 0) return;
+        const hits = this.raycaster.intersectObjects(bodyMeshes, true);
+        const hit = hits.find((h) => hitBodyId(h.object) === ds.bodyId);
+        if (!hit) return;
+        const local = frame.toLocal(hit.point);
+        const sx = Math.max(0, Math.min(D, local.pos - frame.axialLength));
+        const phiDeg = Math.max(
+          1,
+          Math.min(89, Math.round((Math.acos(Math.min(1, sx / D)) * 180) / Math.PI))
+        );
+        const thetaDeg = ((Math.round(local.angle) % 360) + 360) % 360;
+        this.callbacks.onDomeGizmoDatumMoved(this.selectedGizmoCompositeId, phiDeg, thetaDeg);
+        return;
+      }
+
       const shellMeshes = this.getShellMeshes();
       if (shellMeshes.length === 0) return;
       const hits = this.raycaster.intersectObjects(shellMeshes, true);
@@ -822,9 +850,6 @@ export class InteractionManager {
       const isVertical = state.orientation === 'vertical';
       const RADIUS = state.id / 2;
       const HEAD_DEPTH = RADIUS / (state.headRatio || 2);
-
-      const ds = state.domeScanComposites?.find((d) => d.id === this.selectedGizmoCompositeId);
-      if (!ds) return;
       const headSign = ds.head === 'right' ? 1 : -1;
       const tangentLineWorld = (ds.head === 'right' ? state.length / 2 : -state.length / 2) * SCALE;
 
@@ -1233,5 +1258,24 @@ export class InteractionManager {
       }
     });
     return shells;
+  }
+
+  /**
+   * Surface meshes belonging to one appendage body — its cylinder shell AND its
+   * end closure. Unlike getShellMeshes (isShell only), this includes the closure
+   * cap so a dome-scan gizmo can be dragged across the dished end. Used by the
+   * appendage dome-gizmo drag to raycast the closure the scan sits on.
+   */
+  private getBodySurfaceMeshes(bodyId: string): THREE.Object3D[] {
+    if (!this.vesselGroup) return [];
+
+    const out: THREE.Object3D[] = [];
+    this.vesselGroup.traverse((child) => {
+      const ud = child.userData;
+      if (ud?.bodyId === bodyId && (ud.part === 'shell' || ud.part === 'closure')) {
+        out.push(child);
+      }
+    });
+    return out;
   }
 }

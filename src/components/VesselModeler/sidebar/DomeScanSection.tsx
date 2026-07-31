@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Check, Cloud, RotateCcw, Trash2 } from 'lucide-react';
-import type { DomeScanConfig, VesselState } from '../types';
+import type { AppendageConfig, DomeScanConfig, VesselState } from '../types';
 import { SliderRow, SubSection } from './SliderRow';
 
 export interface DomeScanCloudItem {
@@ -40,6 +40,11 @@ export function DomeScanSection({
     onToggle,
 }: DomeScanSectionProps) {
     const domeScanComposites = vesselState.domeScanComposites;
+    // Dome scans can only drape on a DISHED end closure, so an appendage is
+    // offered as a mount target only when its endClosure is dished.
+    const dishedAppendages = vesselState.appendages.filter(a => a.endClosure === 'dished');
+    const appendageName = (bodyId?: string) =>
+        vesselState.appendages.find(a => a.id === bodyId)?.name;
     const [showImport, setShowImport] = useState(false);
     const [importingId, setImportingId] = useState<string | null>(null);
     const [importHead, setImportHead] = useState<'left' | 'right'>('left');
@@ -78,7 +83,9 @@ export function DomeScanSection({
                             <div className="vm-list-item-info">
                                 <strong>{ds.name}</strong>
                                 <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    {ds.head === 'left' ? 'Left' : 'Right'} head
+                                    {ds.bodyId
+                                        ? `${appendageName(ds.bodyId) ?? 'Appendage'} end`
+                                        : `${ds.head === 'left' ? 'Left' : 'Right'} head`}
                                     {!ds.orientationConfirmed && (
                                         <span style={{
                                             fontSize: '0.65rem',
@@ -97,6 +104,7 @@ export function DomeScanSection({
                         {isSelected && (
                             <DomeScanEditPanel
                                 ds={ds}
+                                dishedAppendages={dishedAppendages}
                                 onUpdate={(updates) => onUpdateDomeScan(ds.id, updates)}
                                 onRemove={() => onRemoveDomeScan(ds.id)}
                             />
@@ -188,10 +196,12 @@ export function DomeScanSection({
 
 function DomeScanEditPanel({
     ds,
+    dishedAppendages,
     onUpdate,
     onRemove,
 }: {
     ds: DomeScanConfig;
+    dishedAppendages: AppendageConfig[];
     onUpdate: (updates: Partial<DomeScanConfig>) => void;
     onRemove: () => void;
 }) {
@@ -226,20 +236,44 @@ function DomeScanEditPanel({
                 </button>
             )}
 
-            {/* Head selection */}
-            <div className="vm-control-group">
-                <div className="vm-label"><span>Head</span></div>
-                <div className="vm-toggle-group">
-                    <button
-                        className={`vm-toggle-btn ${ds.head === 'left' ? 'active' : ''}`}
-                        onClick={() => onUpdate({ head: 'left' })}
-                    >Left</button>
-                    <button
-                        className={`vm-toggle-btn ${ds.head === 'right' ? 'active' : ''}`}
-                        onClick={() => onUpdate({ head: 'right' })}
-                    >Right</button>
+            {/* Mount on — a main-vessel head or a dished appendage end closure */}
+            {dishedAppendages.length > 0 && (
+                <div className="vm-control-group">
+                    <div className="vm-label"><span>Mount on</span></div>
+                    <select
+                        className="vm-select"
+                        value={ds.bodyId ?? ''}
+                        onChange={e => {
+                            const v = e.target.value;
+                            if (v === '') onUpdate({ bodyId: undefined, head: ds.head === 'end' ? 'right' : ds.head });
+                            else onUpdate({ bodyId: v, head: 'end' });
+                        }}
+                        title="Drape this dome scan on a main-vessel head or an appendage's dished end closure. Center φ/θ are reinterpreted on the chosen closure — adjust after switching."
+                    >
+                        <option value="">Main vessel</option>
+                        {dishedAppendages.map(a => (
+                            <option key={a.id} value={a.id}>{a.name}</option>
+                        ))}
+                    </select>
                 </div>
-            </div>
+            )}
+
+            {/* Head selection — main-vessel dome scans only (appendages have one closure) */}
+            {!ds.bodyId && (
+                <div className="vm-control-group">
+                    <div className="vm-label"><span>Head</span></div>
+                    <div className="vm-toggle-group">
+                        <button
+                            className={`vm-toggle-btn ${ds.head === 'left' ? 'active' : ''}`}
+                            onClick={() => onUpdate({ head: 'left' })}
+                        >Left</button>
+                        <button
+                            className={`vm-toggle-btn ${ds.head === 'right' ? 'active' : ''}`}
+                            onClick={() => onUpdate({ head: 'right' })}
+                        >Right</button>
+                    </div>
+                </div>
+            )}
 
             {/* Center phi */}
             <SliderRow

@@ -154,6 +154,10 @@ export default function ScanCoverageStatsSection({
       result.cylinder += compositeValidArea(sc);
     }
     for (const ds of vesselState.domeScanComposites ?? []) {
+      // Appendage end-closure dome scans belong to their body, not the main
+      // heads — they surface in the per-appendage rows (later phase), so keep
+      // them out of the main leftHead / rightHead totals.
+      if (ds.bodyId) continue;
       const area = compositeValidArea(ds);
       if (ds.head === 'left') result.leftHead += area;
       else result.rightHead += area;

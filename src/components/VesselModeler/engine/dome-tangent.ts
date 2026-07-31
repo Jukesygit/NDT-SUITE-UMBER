@@ -111,6 +111,35 @@ export function buildDomeTangentBasis(
 }
 
 // ---------------------------------------------------------------------------
+// Central projection: tangent-plane offsets -> dome-local surface point
+// ---------------------------------------------------------------------------
+
+/**
+ * Central-project a tangent-plane point `(scanMm, indexMm)` (offsets from the
+ * scan centre along `uTheta` / `uPhi`) onto the ellipsoid, returning the
+ * dome-local mm coordinate `[x, y, z]` (x = axial toward the apex, (y,z) = radial
+ * plane). This is the single projection step shared by the surface-coordinate
+ * conversion below AND the appendage dome-scan overlay geometry
+ * (`createAppendageDomeScanPlane`), so the drawn mesh and the sampler project
+ * identically for any head/closure — parameterised purely by `(R, D)`.
+ */
+export function tangentOffsetToDomeLocal(
+  basis: DomeTangentBasis,
+  R: number,
+  D: number,
+  scanMm: number,
+  indexMm: number,
+): Vec3 {
+  const { C, uPhi, uTheta } = basis;
+  const px = C[0] + scanMm * uTheta[0] + indexMm * uPhi[0];
+  const py = C[1] + scanMm * uTheta[1] + indexMm * uPhi[1];
+  const pz = C[2] + scanMm * uTheta[2] + indexMm * uPhi[2];
+
+  const denom = Math.sqrt((px * px) / (D * D) + (py * py + pz * pz) / (R * R));
+  return [px / denom, py / denom, pz / denom];
+}
+
+// ---------------------------------------------------------------------------
 // Forward: tangent-plane offsets -> surface (pos, angle)
 // ---------------------------------------------------------------------------
 
@@ -119,7 +148,9 @@ export function buildDomeTangentBasis(
  * scan centre along `uTheta` / `uPhi`) onto the ellipsoid and return the vessel
  * surface coordinate `(pos, angle)`. Mirrors createDomeScanPlane L339-365.
  *
- * @param head 'left' | 'right' — selects the head sign and tangent line.
+ * @param head 'left' | 'right' — selects the head sign and tangent line. An
+ *   appendage closure is the 'right'-analog (apex outward, tangent line at the
+ *   cylinder length), so callers pass `head: 'right'` with `L = cylinder length`.
  * @param L    tan-tan (cylinder) length in mm.
  */
 export function tangentOffsetsToSurface(
@@ -131,15 +162,7 @@ export function tangentOffsetsToSurface(
   scanMm: number,
   indexMm: number,
 ): { pos: number; angle: number } {
-  const { C, uPhi, uTheta } = basis;
-  const px = C[0] + scanMm * uTheta[0] + indexMm * uPhi[0];
-  const py = C[1] + scanMm * uTheta[1] + indexMm * uPhi[1];
-  const pz = C[2] + scanMm * uTheta[2] + indexMm * uPhi[2];
-
-  const denom = Math.sqrt((px * px) / (D * D) + (py * py + pz * pz) / (R * R));
-  const sx = px / denom;
-  const sy = py / denom;
-  const sz = pz / denom;
+  const [sx, sy, sz] = tangentOffsetToDomeLocal(basis, R, D, scanMm, indexMm);
 
   const headSign = head === 'right' ? 1 : -1;
   const tangentLineMm = head === 'right' ? L : 0;

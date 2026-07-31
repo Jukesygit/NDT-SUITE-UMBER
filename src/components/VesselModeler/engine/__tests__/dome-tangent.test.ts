@@ -139,3 +139,45 @@ describe('dome-tangent — forward matches createDomeScanPlane vertices', () => 
     }
   }
 });
+
+// ---------------------------------------------------------------------------
+// (3) Appendage end closure — the 'right'-head analog (apex outward)
+// ---------------------------------------------------------------------------
+// An appendage's dished closure is inverted by the SAME dome-tangent module,
+// parameterised by the appendage's own R/D/L and head 'right' (apex outward,
+// tangent line at the cylinder length). This proves the projection the appendage
+// overlay draws with is exactly invertible for the sampler (Phase 4C).
+
+describe('dome-tangent — appendage end closure round-trip', () => {
+  // Dished appendage: diameter 800 -> R 400, headRatio 2 -> D 200, cylinder 1200.
+  const AR = 400;
+  const AD = 200;
+  const AL = 1200;
+
+  const cells = [
+    { phi: 20, theta: 0, scanMm: 0, indexMm: 0 },
+    { phi: 35, theta: 120, scanMm: 60, indexMm: -40 },
+    { phi: 55, theta: 250, scanMm: -80, indexMm: 50 },
+    { phi: 70, theta: 315, scanMm: 30, indexMm: 90 },
+  ];
+
+  for (const c of cells) {
+    it(`round-trips a closure cell phi=${c.phi} theta=${c.theta} (${c.scanMm},${c.indexMm})`, () => {
+      const basis = buildDomeTangentBasis(AR, AD, c.phi, c.theta);
+      const surf = tangentOffsetsToSurface(basis, AR, AD, AL, 'right', c.scanMm, c.indexMm);
+      const back = surfaceToTangentOffsets(basis, AR, AD, AL, 'right', surf.pos, surf.angle);
+      // Large offsets near the equator can project past the tangent line onto the
+      // cylinder — not a closure point, so the inverse is null there.
+      const onClosure = surf.pos > AL + 1e-6;
+      if (!onClosure) {
+        expect(back).toBeNull();
+        return;
+      }
+      expect(back).not.toBeNull();
+      if (back) {
+        expect(back.scanMm).toBeCloseTo(c.scanMm, 4);
+        expect(back.indexMm).toBeCloseTo(c.indexMm, 4);
+      }
+    });
+  }
+});

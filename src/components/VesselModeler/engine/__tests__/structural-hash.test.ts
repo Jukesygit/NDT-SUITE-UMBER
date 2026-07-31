@@ -11,7 +11,12 @@
 
 import { describe, it, expect } from 'vitest';
 
-import { DEFAULT_VESSEL_STATE, type AppendageConfig, type VesselState } from '../../types';
+import {
+  DEFAULT_VESSEL_STATE,
+  type AppendageConfig,
+  type DomeScanConfig,
+  type VesselState,
+} from '../../types';
 import { structuralHash } from '../structural-hash';
 import { createAppendage } from '../appendage-config';
 
@@ -78,6 +83,48 @@ describe('structuralHash is stable across a cosmetic appendage edit', () => {
 // Regression: a default vessel with no appendages is stable and unaffected by
 // cosmetic (non-allowlisted) edits.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Dome scan bodyId is a structural (rebuild-triggering) field
+// ---------------------------------------------------------------------------
+
+describe('structuralHash — dome scan bodyId', () => {
+  function dome(bodyId?: string): DomeScanConfig {
+    return {
+      id: 'd1',
+      name: 'd1',
+      bodyId,
+      head: bodyId ? 'end' : 'right',
+      centerPhi: 30,
+      centerTheta: 0,
+      scanDirection: 'cw',
+      indexDirection: 'outward',
+      orientationConfirmed: true,
+      data: [[1]],
+      xAxis: [0, 1],
+      yAxis: [0, 1],
+      stats: { min: 0, max: 0, mean: 0, median: 0, stdDev: 0 },
+      colorScale: 'Jet',
+      rangeMin: null,
+      rangeMax: null,
+      opacity: 1,
+    };
+  }
+
+  it('changes when a dome scan moves from the main head to an appendage closure', () => {
+    const onMain: VesselState = {
+      ...DEFAULT_VESSEL_STATE,
+      appendages: [base],
+      domeScanComposites: [dome(undefined)],
+    };
+    const onBody: VesselState = {
+      ...DEFAULT_VESSEL_STATE,
+      appendages: [base],
+      domeScanComposites: [dome(base.id)],
+    };
+    expect(structuralHash(onMain)).not.toBe(structuralHash(onBody));
+  });
+});
 
 describe('structuralHash regression — no appendages', () => {
   it('is deterministic for the default vessel', () => {

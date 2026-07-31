@@ -137,8 +137,13 @@ export function sampleDomeComposite(
   const indexRangeMm = Math.abs(yAxis[yAxis.length - 1] - yAxis[0]);
   if (scanRangeMm <= 0 || indexRangeMm <= 0) return undefined;
 
+  // An appendage end closure ('end') is the 'right'-head analog (apex outward,
+  // tangent line at the cylinder length), so the caller passes the appendage's
+  // R/D/L in `dims` and (posMm, angleDeg) in the appendage frame, and the sampler
+  // inverts through the same 'right' projection the overlay geometry draws with.
+  const head: 'left' | 'right' = config.head === 'left' ? 'left' : 'right';
   const basis = buildDomeTangentBasis(dims.R, dims.D, config.centerPhi, config.centerTheta);
-  const offsets = surfaceToTangentOffsets(basis, dims.R, dims.D, dims.L, config.head, posMm, angleDeg);
+  const offsets = surfaceToTangentOffsets(basis, dims.R, dims.D, dims.L, head, posMm, angleDeg);
   if (!offsets) return undefined;
 
   // Grid parameter (0..1) from the centre-referenced tangent offsets.

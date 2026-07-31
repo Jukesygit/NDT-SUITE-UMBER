@@ -14,6 +14,8 @@ import { degToRad, radToDeg } from 'three/src/math/MathUtils.js';
 import type { DomeScanConfig, VesselState } from '../types';
 import { SCALE } from './materials';
 import { createHeatmapTexture, type HeatmapTextureResult } from './heatmap-texture';
+import { resolveBodyFrame, type SurfaceFrame } from './body-frame';
+import { buildDomeTangentBasis, tangentOffsetToDomeLocal } from './dome-tangent';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -41,9 +43,22 @@ const SURFACE_OFFSET = 2;
  * already performs.
  */
 export function normalizeDomeScanComposite(raw: any): DomeScanConfig {
+    const bodyId: string | undefined = raw.bodyId ?? undefined;
+    let head: DomeScanConfig['head'] =
+        raw.head || (raw.sectionType === 'dome_left' ? 'left' : 'right');
+    // Invariant: 'end' is the appendage end-closure head and is meaningful ONLY
+    // with a bodyId (an appendage has a single closure). Enforce both directions
+    // so a malformed/legacy record can never reach the geometry with an
+    // impossible (head, bodyId) pair:
+    //   - bodyId set        -> force head 'end' (its only closure).
+    //   - 'end' + no bodyId -> fall back to the right head (the closure-analog),
+    //     keeping the scan visible on the main shell rather than dropping it.
+    if (bodyId !== undefined) head = 'end';
+    else if (head === 'end') head = 'right';
     return {
         ...raw,
-        head: raw.head || (raw.sectionType === 'dome_left' ? 'left' : 'right'),
+        bodyId,
+        head,
         orientationConfirmed: raw.orientationConfirmed ?? false,
         data: raw.data ?? [],
         xAxis: raw.xAxis ?? [],
@@ -229,6 +244,12 @@ export function createDomeScanPlane(
     config.yAxis.length < 2
   ) {
     return null;
+  }
+
+  // Appendage end-closure dome scans take the frame-parameterised path. The
+  // main-shell path below is left byte-for-byte unchanged (golden-locked).
+  if (config.bodyId !== undefined) {
+    return createAppendageDomeScanPlane(config, vesselState, selectedId);
   }
 
   // --- Vessel dimensions ---
@@ -484,6 +505,212 @@ export function createDomeScanPlane(
       'position',
       new THREE.Float32BufferAttribute(borderVertices, 3),
     );
+    borderGeometry.setIndex(borderIndices);
+    borderGeometry.computeVertexNormals();
+
+    const border = new THREE.Mesh(borderGeometry, borderMaterial);
+    border.userData = { role: 'domeScan-border' };
+    border.visible = config.id === selectedId;
+    border.renderOrder = 1;
+    mesh.add(border);
+  }
+
+  return mesh;
+}
+
+// ---------------------------------------------------------------------------
+// Part C — Appendage End-Closure Dome Scans
+// ---------------------------------------------------------------------------
+
+/**
+ * Appendage variant of {@link createDomeScanPlane}: drapes the heatmap-textured
+ * scan grid over an appendage's dished END CLOSURE. Placement resolves entirely
+ * through the body's {@link SurfaceFrame} (engine/body-frame.ts) — no inline
+ * frame math:
+ *   - dome axis  = the appendage axis N (outward),
+ *   - dome dims  = appendage radius R and closure headDepth D (from the endClosure
+ *                  headRatio),
+ *   - apex       = the closure pole at pos = cylinderLength + D along N,
+ *   - theta = 0  = the appendage datum.
+ * The grid projection reuses dome-tangent's `tangentOffsetToDomeLocal`, so the
+ * drawn mesh and the annotation sampler project identically — `frame.toLocal()`
+ * of every vertex equals `tangentOffsetsToSurface(basis, R, D, L, 'right', …)`
+ * (a closure is the 'right'-head analog: apex outward, tangent line at L).
+ *
+ * Returns null when the referenced body is missing or its closure is not dished.
+ */
+function createAppendageDomeScanPlane(
+  config: DomeScanConfig,
+  vesselState: VesselState,
+  selectedId: string,
+): THREE.Mesh | null {
+  const body = vesselState.appendages.find((a) => a.id === config.bodyId);
+  if (!body || body.endClosure !== 'dished') return null;
+
+  const frame: SurfaceFrame = resolveBodyFrame(vesselState, config.bodyId);
+  const R = frame.radius;
+  const D = frame.headDepth;
+  const L = frame.axialLength;
+  if (D <= 0) return null;
+
+  // --- Heatmap texture (shared dome cache) ---
+  const cacheKey = domeCacheKey(config);
+  let heatmapResult = domeHeatmapCache.get(cacheKey);
+  if (!heatmapResult) {
+    heatmapResult = createHeatmapTexture(config.data, config.stats, {
+      colorScale: config.colorScale,
+      rangeMin: config.rangeMin,
+      rangeMax: config.rangeMax,
+      opacity: config.opacity,
+      reverseScale: true, // NDT convention: thin = red, thick = blue
+    });
+    domeHeatmapCache.set(cacheKey, heatmapResult);
+    evictDomeHeatmapCache();
+  }
+
+  // --- Frame-derived world basis (mirrors buildAppendageGroup) --------------
+  // Pulled from the SurfaceFrame's public API only: centerBase = the cylinder /
+  // closure centreline origin, axisN = outward axial unit, datumD / crossE =
+  // outward radial units at theta 0 / 90.
+  const centerBase = frame.surfacePoint(0, 0, -R);
+  const axisN = frame.surfacePoint(1, 0, -R).sub(centerBase).normalize();
+  const datumD = frame.surfaceNormal(0, 0);
+  const crossE = frame.surfaceNormal(0, 90);
+
+  // --- Tangent-plane basis at the scan centre (reused from dome-tangent) ----
+  const tanBasis = buildDomeTangentBasis(R, D, config.centerPhi, config.centerTheta);
+
+  const scanRangeMm = Math.abs(config.xAxis[config.xAxis.length - 1] - config.xAxis[0]);
+  const indexRangeMm = Math.abs(config.yAxis[config.yAxis.length - 1] - config.yAxis[0]);
+
+  // --- Segment counts (center-phi angular spans; same heuristic as the main path) ---
+  const centerPhiRad = degToRad(Math.max(PHI_EPSILON, config.centerPhi));
+  const cCosPhi = Math.cos(centerPhiRad);
+  const cSinPhi = Math.sin(centerPhiRad);
+  const hPhi = Math.sqrt(D * D * cSinPhi * cSinPhi + R * R * cCosPhi * cCosPhi);
+  const hThetaCenter = R * cSinPhi;
+  const thetaSpanCenter = Math.min(
+    hThetaCenter > 0.001 ? scanRangeMm / hThetaCenter : 2 * Math.PI,
+    2 * Math.PI,
+  );
+  const phiSpan = Math.min(hPhi > 0.001 ? indexRangeMm / hPhi : Math.PI / 2, Math.PI);
+  const segmentsX = Math.max(16, Math.round((64 * thetaSpanCenter) / Math.PI));
+  const segmentsY = Math.max(16, Math.round((64 * phiSpan) / Math.PI));
+
+  // Project a grid offset (scanMm circumferential, indexMm meridional) onto the
+  // closure and lift it `offsetMm` above the surface, expressed in the frame's
+  // world basis. `frame.toLocal()` of the result equals the sampler's
+  // tangentOffsetsToSurface(…, head 'right', L), keeping mesh and sampler exact.
+  const place = (scanMm: number, indexMm: number, offsetMm: number): THREE.Vector3 => {
+    const [sx, sy, sz] = tangentOffsetToDomeLocal(tanBasis, R, D, scanMm, indexMm);
+    const rLocal = Math.sqrt(sy * sy + sz * sz);
+    const localTheta = Math.atan2(sy, sz);
+    const rOff = (rLocal + offsetMm) * SCALE;
+    return centerBase
+      .clone()
+      .addScaledVector(axisN, (L + sx) * SCALE)
+      .addScaledVector(datumD, Math.cos(localTheta) * rOff)
+      .addScaledVector(crossE, Math.sin(localTheta) * rOff);
+  };
+
+  // --- Build geometry ---
+  const geometry = new THREE.BufferGeometry();
+  const vertices: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+
+  for (let iy = 0; iy <= segmentsY; iy++) {
+    const v = iy / segmentsY;
+    const indexMm = (v - 0.5) * indexRangeMm;
+    for (let ix = 0; ix <= segmentsX; ix++) {
+      const u = ix / segmentsX;
+      const scanMm = (u - 0.5) * scanRangeMm;
+      const p = place(scanMm, indexMm, SURFACE_OFFSET);
+      vertices.push(p.x, p.y, p.z);
+
+      const scanMapped = config.scanDirection === 'ccw' ? u : 1 - u;
+      const indexMapped = config.indexDirection === 'inward' ? v : 1 - v;
+      uvs.push(scanMapped, indexMapped);
+    }
+  }
+
+  for (let iy = 0; iy < segmentsY; iy++) {
+    for (let ix = 0; ix < segmentsX; ix++) {
+      const a = ix + (segmentsX + 1) * iy;
+      const b = ix + (segmentsX + 1) * (iy + 1);
+      const c = ix + 1 + (segmentsX + 1) * (iy + 1);
+      const d = ix + 1 + (segmentsX + 1) * iy;
+      indices.push(a, b, d);
+      indices.push(b, c, d);
+    }
+  }
+
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+
+  const material = new THREE.MeshBasicMaterial({
+    map: heatmapResult.texture,
+    transparent: true,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.userData = {
+    type: 'domeScan',
+    id: config.id,
+    bodyId: config.bodyId,
+    data: config.data,
+    xAxis: config.xAxis,
+    yAxis: config.yAxis,
+    stats: config.stats,
+    width: config.xAxis.length,
+    height: config.yAxis.length,
+    scanDirection: config.scanDirection,
+    indexDirection: config.indexDirection,
+    head: config.head,
+    centerPhi: config.centerPhi,
+    centerTheta: config.centerTheta,
+  };
+
+  // --- Selection highlight border (same pattern as the main path) -----------
+  {
+    const borderMaterial = new THREE.MeshBasicMaterial({
+      color: 0x00bfff,
+      transparent: true,
+      opacity: 0.5,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const borderScale = 1.08;
+    const borderOffset = 1;
+    const borderGeometry = new THREE.BufferGeometry();
+    const borderVertices: number[] = [];
+    const borderIndices: number[] = [];
+
+    for (let iy = 0; iy <= segmentsY; iy++) {
+      const v = iy / segmentsY;
+      const bIndexMm = (v - 0.5) * indexRangeMm * borderScale;
+      for (let ix = 0; ix <= segmentsX; ix++) {
+        const u = ix / segmentsX;
+        const bScanMm = (u - 0.5) * scanRangeMm * borderScale;
+        const p = place(bScanMm, bIndexMm, borderOffset);
+        borderVertices.push(p.x, p.y, p.z);
+      }
+    }
+    for (let iy = 0; iy < segmentsY; iy++) {
+      for (let ix = 0; ix < segmentsX; ix++) {
+        const a = ix + (segmentsX + 1) * iy;
+        const b = ix + (segmentsX + 1) * (iy + 1);
+        const c = ix + 1 + (segmentsX + 1) * (iy + 1);
+        const d = ix + 1 + (segmentsX + 1) * iy;
+        borderIndices.push(a, b, d);
+        borderIndices.push(b, c, d);
+      }
+    }
+    borderGeometry.setAttribute('position', new THREE.Float32BufferAttribute(borderVertices, 3));
     borderGeometry.setIndex(borderIndices);
     borderGeometry.computeVertexNormals();
 
