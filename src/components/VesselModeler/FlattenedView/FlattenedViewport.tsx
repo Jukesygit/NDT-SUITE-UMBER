@@ -22,9 +22,27 @@ import {
   getAxialOrientation,
   axialToIndexMm,
   axialFrac,
-  fitScale,
   circumDisplayMm,
+  developFootprintBoundary,
+  displayFootprintPolyline,
 } from './geometry-projection';
+import {
+  compositesForBody,
+  forEachCompositeCell,
+  mainSurfaceProjector,
+  stripSurfaceProjector,
+  findThicknessAt,
+  type SurfaceProjector,
+} from './scan-surface';
+import {
+  computeStackLayout,
+  buildStripSpecs,
+  stripToCanvasX,
+  stripToCanvasY,
+  stripFromCanvasX,
+  stripFromCanvasY,
+  type StackLayout,
+} from './appendage-panels';
 import {
   drawColorBar,
   drawMetadataHeader,
@@ -32,7 +50,7 @@ import {
   drawCircumScale,
 } from './legend-renderer';
 import type { LegendConfig } from './legend-renderer';
-import { interpolateColor, getColorscale } from '../../../utils/colorscales';
+import { buildJunctionFootprint } from '../engine/junction-footprint';
 
 // ---------------------------------------------------------------------------
 // Public handle exposed via ref
@@ -64,6 +82,12 @@ const ZOOM_IN_FACTOR = 1.1;
 const ZOOM_OUT_FACTOR = 0.9;
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 20;
+
+// Fixed per-appendage-panel overhead (px): a title band above each strip and a
+// gap separating it from the region above. Fixed pixels (not mm) so they shrink
+// the shared to-scale pxPerMm uniformly rather than distorting either axis.
+const PANEL_TITLE_PX = 18;
+const PANEL_GAP_PX = 16;
 
 // ---------------------------------------------------------------------------
 // Internal view state (mutable ref to avoid re-renders on every pan/zoom)
@@ -118,20 +142,33 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
   }, []);
 
   // Single to-scale (1:1) layout: equal mm/pixel on both axes so round bores
-  // render round and scan footprints are not axis-stretched. The looser axis
-  // is letterboxed (centred) via marginX/marginY.
+  // render round and scan footprints are not axis-stretched. The looser axis is
+  // letterboxed (centred) via marginX/marginY. The shared scale ALSO fits the
+  // stacked appendage panels below the main plot; with no appendage panels this
+  // reduces EXACTLY to fitScale, so the main plot stays byte-identical.
   const getPlotMetrics = useCallback(() => {
     const { drawWidth, drawHeight } = getDrawDimensions();
     const vesselLength = vesselState.length;
     const circumference = getCircumference(vesselState);
-    const { pxPerMm, marginX, marginY } = fitScale(
+    const strips = buildStripSpecs(vesselState);
+    const layout = computeStackLayout(
       drawWidth,
       drawHeight,
       vesselLength,
-      circumference
+      circumference,
+      strips,
+      { titlePx: PANEL_TITLE_PX, gapPx: PANEL_GAP_PX }
     );
     const reversed = getAxialOrientation(vesselState.scanComposites)?.reversed ?? false;
-    return { pxPerMm, marginX, marginY, vesselLength, circumference, reversed };
+    return {
+      pxPerMm: layout.pxPerMm,
+      marginX: layout.marginX,
+      marginY: layout.marginY,
+      vesselLength,
+      circumference,
+      reversed,
+      layout,
+    };
   }, [vesselState, getDrawDimensions]);
 
   const toCanvasX = useCallback(
@@ -217,13 +254,35 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
     //    its clip — to zero height, which hides the heatmap.
     const x0 = toCanvasX(0);
     const x1 = toCanvasX(vesselLength);
-    const { pxPerMm: vPx, marginY: vMarginY } = getPlotMetrics();
-    const { zoom: vZoom, offsetY: vOffsetY } = viewRef.current;
+    const {
+      pxPerMm: vPx,
+      marginX: vMarginX,
+      marginY: vMarginY,
+      reversed: vReversed,
+      layout,
+    } = getPlotMetrics();
+    const { zoom: vZoom, offsetX: vOffsetX, offsetY: vOffsetY } = viewRef.current;
     const y0 = PADDING.top + vMarginY + vOffsetY;
     const y1 = PADDING.top + vMarginY + circumference * vPx * vZoom + vOffsetY;
     ctx.strokeStyle = '#999';
     ctx.lineWidth = 1;
     ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+
+    // Shared view/scale for every developed surface (main shell + strips).
+    const surfaceView = {
+      pxPerMm: vPx,
+      marginX: vMarginX,
+      marginY: vMarginY,
+      zoom: vZoom,
+      offsetX: vOffsetX,
+      offsetY: vOffsetY,
+    };
+    const mainProjector = mainSurfaceProjector(
+      surfaceView,
+      vesselLength,
+      vesselState.id,
+      vReversed
+    );
 
     // 3. Clip to vessel rect for heatmap + overlays
     ctx.save();
@@ -231,13 +290,18 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
     ctx.rect(x0, y0, x1 - x0, y1 - y0);
     ctx.clip();
 
-    // 3a. Heatmap from scan composites
-    renderHeatmap(ctx, vesselState, circumference);
+    // 3a. Heatmap from MAIN-SHELL scan composites. Appendage-body scans are
+    //     routed to their own panels below (compositesForBody splits them out),
+    //     so a bodyId composite never contributes a pixel to the main surface.
+    paintComposites(ctx, compositesForBody(vesselState.scanComposites, undefined), mainProjector);
 
-    // 3b. Geometry overlays
+    // 3b. Geometry overlays (incl. appendage junction footprints)
     renderGeometry(ctx, vesselState);
 
     ctx.restore(); // un-clip
+
+    // 3b-ii. Appendage developed panels, stacked below the main plot.
+    renderStripPanels(ctx, vesselState, layout, surfaceView);
 
     // 3c. Selection glow — drawn OUTSIDE clip so it radiates freely.
     //     Uses concentric strokes with decreasing opacity for a soft halo.
@@ -406,15 +470,24 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
   ]);
 
   // -----------------------------------------------------------------------
-  // Heatmap rendering helper — per-pixel mapping to screen-space ImageData
+  // Heatmap painter — shared by the main shell and every appendage strip
   // -----------------------------------------------------------------------
+  // Paints a set of scan composites into a screen-space buffer via the injected
+  // SurfaceProjector, then blits it at the plot origin. The caller has already
+  // clipped to the target surface's rect. All cell math (nearest/blocky, seam
+  // skipping, colour) lives in the shared forEachCompositeCell so a strip renders
+  // measurement data identically to the main surface — no per-body distortion.
 
-  const renderHeatmap = useCallback(
-    (ctx: CanvasRenderingContext2D, state: VesselState, circumference: number) => {
+  const paintComposites = useCallback(
+    (
+      ctx: CanvasRenderingContext2D,
+      composites: ScanCompositeConfig[],
+      projector: SurfaceProjector
+    ) => {
+      if (composites.length === 0) return;
       const { drawWidth, drawHeight } = getDrawDimensions();
       if (drawWidth <= 0 || drawHeight <= 0) return;
 
-      // Create a screen-sized buffer to paint scan pixels into
       const bufW = Math.ceil(drawWidth);
       const bufH = Math.ceil(drawHeight);
       const offscreen = document.createElement('canvas');
@@ -424,134 +497,21 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
       if (!offCtx) return;
       const imageData = offCtx.createImageData(bufW, bufH);
       const pixels = imageData.data;
-
-      const vesselLength = state.length;
-      const { zoom, offsetX, offsetY } = viewRef.current;
-      // Axial axis follows the reference scan's index direction (scan start on
-      // the left). Mirror the row→pixel mapping the same way toCanvasX does.
-      const reversed = getAxialOrientation(state.scanComposites)?.reversed ?? false;
-      // Same 1:1 scale + letterbox margins as toCanvasX/Y. Buffer is blitted at
-      // (PADDING.left, PADDING.top), so pixels are relative to that origin.
-      const { pxPerMm, marginX, marginY } = fitScale(
-        drawWidth,
-        drawHeight,
-        vesselLength,
-        circumference
-      );
-      if (pxPerMm <= 0) return;
-      const circSpanZoomed = circumference * pxPerMm * zoom;
       let hasData = false;
 
-      for (const composite of state.scanComposites) {
-        if (!composite.orientationConfirmed) continue;
-        if (composite.data.length === 0) continue;
-        // Phase 3: appendage-body scans get per-body stats; excluded here so numbers stay correct in the interim (design §9).
-        if (composite.bodyId) continue;
-
-        const { yAxis, xAxis, data, indexStartMm, indexDirection, scanDirection } = composite;
-        const scale = getColorscale(composite.colorScale);
-        const rMin = composite.rangeMin ?? composite.stats.min;
-        const rMax = composite.rangeMax ?? composite.stats.max;
-        const range = rMax === rMin ? 1 : rMax - rMin;
-        const alpha = Math.round(Math.max(0, Math.min(1, composite.opacity)) * 255);
-
-        // datumAngleDeg is user-facing (0° = TDC). datumToCircumMm applies the
-        // +90° (same as the 3D path) so a datum-0 scan starts at the TDC line
-        // (Y = 0), aligned with the geometry overlays.
-        const datumCircMm = datumToCircumMm(composite.datumAngleDeg, state.id);
-
-        // Pre-compute axial pixel for each row
-        const rowPx: number[] = new Array(yAxis.length);
-        const rowPxNext: number[] = new Array(yAxis.length);
-        for (let row = 0; row < yAxis.length; row++) {
-          const axialMm =
-            indexDirection === 'forward' ? indexStartMm + yAxis[row] : indexStartMm - yAxis[row];
-          const nextMm =
-            row + 1 < yAxis.length
-              ? indexDirection === 'forward'
-                ? indexStartMm + yAxis[row + 1]
-                : indexStartMm - yAxis[row + 1]
-              : axialMm + (row > 0 ? Math.abs(yAxis[row] - yAxis[row - 1]) : 1);
-          // Convert to buffer pixel (relative to PADDING.left), to-scale and
-          // mirrored to match the scan-index axis orientation.
-          const pos = axialFrac(axialMm, vesselLength, reversed) * vesselLength;
-          const posNext = axialFrac(nextMm, vesselLength, reversed) * vesselLength;
-          rowPx[row] = marginX + pos * pxPerMm * zoom + offsetX;
-          rowPxNext[row] = marginX + posNext * pxPerMm * zoom + offsetX;
-        }
-
-        // Pre-compute circumferential pixel for each col
-        const colPy: number[] = new Array(xAxis.length);
-        const colPyNext: number[] = new Array(xAxis.length);
-        for (let col = 0; col < xAxis.length; col++) {
-          const circumOffset = scanDirection === 'cw' ? xAxis[col] : -xAxis[col];
-          let circumMm = datumCircMm + circumOffset;
-          circumMm = ((circumMm % circumference) + circumference) % circumference;
-
-          const nextOffset =
-            col + 1 < xAxis.length
-              ? scanDirection === 'cw'
-                ? xAxis[col + 1]
-                : -xAxis[col + 1]
-              : circumOffset +
-                (col > 0
-                  ? scanDirection === 'cw'
-                    ? xAxis[col] - xAxis[col - 1]
-                    : xAxis[col - 1] - xAxis[col]
-                  : 1);
-          let circumMmNext = datumCircMm + nextOffset;
-          circumMmNext = ((circumMmNext % circumference) + circumference) % circumference;
-
-          // Flip circumferential handedness when the axis is mirrored (same as
-          // toCanvasY) so the scan and the features share one orientation.
-          const yMm = circumDisplayMm(circumMm, circumference, reversed);
-          const yMmNext = circumDisplayMm(circumMmNext, circumference, reversed);
-          colPy[col] = marginY + yMm * pxPerMm * zoom + offsetY;
-          colPyNext[col] = marginY + yMmNext * pxPerMm * zoom + offsetY;
-        }
-
-        for (let row = 0; row < data.length; row++) {
-          const rowData = data[row];
-          if (!rowData) continue;
-          const px = rowPx[row];
-          const pxNext = rowPxNext[row];
-          const cellW = Math.abs(pxNext - px) || 1;
-          const cellX = Math.min(px, pxNext);
-
-          for (let col = 0; col < rowData.length; col++) {
-            const value = rowData[col];
-            if (value == null) continue;
-
-            const py = colPy[col];
-            const pyNext = colPyNext[col];
-            // Skip smearing: if the gap between adjacent pixels is more than
-            // half a circumference in pixels, the wrap crossed the seam — skip.
-            if (Math.abs(pyNext - py) > circSpanZoomed * 0.5) continue;
-
-            const cellH = Math.abs(pyNext - py) || 1;
-            const cellY = Math.min(py, pyNext);
-
-            const t = Math.max(0, Math.min(1, (value - rMin) / range));
-            const [r, g, b] = interpolateColor(t, scale, true);
-
-            // Fill the rectangle in the pixel buffer
-            const x0 = Math.max(0, Math.floor(cellX));
-            const y0 = Math.max(0, Math.floor(cellY));
-            const x1 = Math.min(bufW, Math.ceil(cellX + cellW));
-            const y1 = Math.min(bufH, Math.ceil(cellY + cellH));
-
-            for (let fy = y0; fy < y1; fy++) {
-              for (let fx = x0; fx < x1; fx++) {
-                const idx = (fy * bufW + fx) * 4;
-                pixels[idx] = r;
-                pixels[idx + 1] = g;
-                pixels[idx + 2] = b;
-                pixels[idx + 3] = alpha;
-              }
+      for (const composite of composites) {
+        forEachCompositeCell(composite, projector, bufW, bufH, (cell) => {
+          for (let fy = cell.y0; fy < cell.y1; fy++) {
+            for (let fx = cell.x0; fx < cell.x1; fx++) {
+              const idx = (fy * bufW + fx) * 4;
+              pixels[idx] = cell.r;
+              pixels[idx + 1] = cell.g;
+              pixels[idx + 2] = cell.b;
+              pixels[idx + 3] = cell.a;
             }
-            hasData = true;
           }
-        }
+          hasData = true;
+        });
       }
 
       if (hasData) {
@@ -559,7 +519,121 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
         ctx.drawImage(offscreen, PADDING.left, PADDING.top);
       }
     },
-    [getDrawDimensions, toCanvasX, toCanvasY]
+    [getDrawDimensions]
+  );
+
+  // -----------------------------------------------------------------------
+  // Appendage developed panels (stacked below the main plot)
+  // -----------------------------------------------------------------------
+  // One strip per appendage that carries scan composites, at the SHARED to-scale
+  // pxPerMm. X = axial position from the shell junction (left); Y = appendage
+  // circumference cut at the datum 0° meridian (top). A body's scans and its
+  // coverage rects render here and ONLY here (compositesForBody routing).
+
+  const renderStripPanels = useCallback(
+    (
+      ctx: CanvasRenderingContext2D,
+      state: VesselState,
+      layout: StackLayout,
+      view: {
+        pxPerMm: number;
+        marginX: number;
+        marginY: number;
+        zoom: number;
+        offsetX: number;
+        offsetY: number;
+      }
+    ) => {
+      if (layout.pxPerMm <= 0 || layout.panels.length === 0) return;
+      const { pxPerMm, marginX, marginY, zoom, offsetX, offsetY } = view;
+
+      for (const panel of layout.panels) {
+        const appendage = state.appendages.find((a) => a.id === panel.id);
+        if (!appendage) continue;
+        const appendageOD = appendage.diameter;
+
+        // Panel canvas rect — LINEAR vertical extents (top = datum 0°, bottom =
+        // circumference), never via a wrapping toCanvasY (Decision Log 2026-06-23).
+        const left = PADDING.left + marginX + offsetX;
+        const right = PADDING.left + marginX + panel.lengthMm * pxPerMm * zoom + offsetX;
+        const top = PADDING.top + marginY + panel.topBasePx * zoom + offsetY;
+        const bottom =
+          PADDING.top +
+          marginY +
+          (panel.topBasePx + panel.circumferenceMm * pxPerMm) * zoom +
+          offsetY;
+
+        // Title
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(panel.name, left, top - 4);
+
+        // Border + datum (0°) reference line at the top edge
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(left, top, right - left, bottom - top);
+        ctx.save();
+        ctx.strokeStyle = '#22c55e';
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(left, top);
+        ctx.lineTo(right, top);
+        ctx.stroke();
+        ctx.restore();
+
+        // Heatmap + coverage rects, clipped to the panel rect.
+        const projector = stripSurfaceProjector(view, panel.topBasePx, appendageOD);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(left, top, right - left, bottom - top);
+        ctx.clip();
+
+        paintComposites(ctx, compositesForBody(state.scanComposites, panel.id), projector);
+
+        // Body coverage rects. Appendage rect.angle is the appendage datum
+        // convention (0 = datum meridian); datumToCircumMm maps it to panel Y
+        // from the top, matching the scan datum mapping used above. Wrapped
+        // across the panel seam like circumferential markers.
+        const stripView = {
+          pxPerMm,
+          marginX,
+          marginY,
+          zoom,
+          offsetX,
+          offsetY,
+          paddingLeft: PADDING.left,
+          paddingTop: PADDING.top,
+          topBasePx: panel.topBasePx,
+        };
+        const appCirc = Math.PI * appendageOD;
+        for (const rect of state.coverageRects) {
+          if (rect.bodyId !== panel.id) continue;
+          const centerMm = datumToCircumMm(rect.angle, appendageOD);
+          const halfHmm = rect.height / 2;
+          const cxL = stripToCanvasX(rect.pos - rect.width / 2, stripView);
+          const cxR = stripToCanvasX(rect.pos + rect.width / 2, stripView);
+          for (const cyMm of wrapCircumCenters(centerMm, halfHmm, appCirc)) {
+            const yTop = stripToCanvasY(cyMm - halfHmm, stripView);
+            const yBot = stripToCanvasY(cyMm + halfHmm, stripView);
+            if (rect.filled) {
+              ctx.save();
+              ctx.globalAlpha = rect.fillOpacity ?? 0.2;
+              ctx.fillStyle = rect.color;
+              ctx.fillRect(cxL, yTop, cxR - cxL, yBot - yTop);
+              ctx.restore();
+            }
+            ctx.strokeStyle = rect.color;
+            ctx.lineWidth = 1.2;
+            ctx.strokeRect(cxL, yTop, cxR - cxL, yBot - yTop);
+          }
+        }
+
+        ctx.restore();
+      }
+    },
+    [paintComposites]
   );
 
   // -----------------------------------------------------------------------
@@ -591,6 +665,62 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
       // Left edge — toCanvasX(0) is the right edge when the axis is mirrored.
       ctx.fillText("12 o'clock (TDC)", Math.min(x0, x1) + 4, tdcY - 3);
       ctx.restore();
+
+      // Appendage junction footprints — the exact cylinder-on-cylinder opening
+      // each appendage cuts in the main shell, developed onto this surface. The
+      // boundary angles are the vessel clock convention (90 = TDC), so they map
+      // through angleToCircumMm exactly like nozzle markers (NEVER datumToCircumMm;
+      // that helper is only for scan datums — Decision Log 2026-06-22). Drawn as a
+      // base layer so nozzles/labels stay legible on top; each footprint is drawn
+      // at every seam-wrapped centre (same treatment class as wrapCircumCenters).
+      const {
+        pxPerMm: fpPxPerMm,
+        marginY: fpMarginY,
+        circumference: fpCirc,
+        reversed: fpReversed,
+      } = getPlotMetrics();
+      const { zoom: fpZoom, offsetY: fpOffsetY } = viewRef.current;
+      // Linear circ mm → canvas Y (the handedness flip is already baked into the
+      // developed polyline, so this must NOT re-apply the wrapping toCanvasY).
+      const fpCircToY = (mm: number) =>
+        PADDING.top + fpMarginY + mm * fpPxPerMm * fpZoom + fpOffsetY;
+      for (const appendage of state.appendages) {
+        const fp = buildJunctionFootprint(od / 2, appendage);
+        if (fp.boundary.length === 0) continue;
+        const developed = developFootprintBoundary(fp.boundary, appendage.mountAngle, od);
+        const disp = displayFootprintPolyline(developed, fpCirc, fpReversed);
+
+        ctx.save();
+        for (const copyCenter of wrapCircumCenters(disp.centerMm, disp.halfExtentMm, fpCirc)) {
+          const shift = copyCenter - disp.centerMm;
+          ctx.beginPath();
+          disp.points.forEach((p, i) => {
+            const px = toCanvasX(p.x);
+            const py = fpCircToY(p.yMm + shift);
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          });
+          ctx.closePath();
+          ctx.globalAlpha = 0.08;
+          ctx.fillStyle = '#8b5cf6';
+          ctx.fill();
+          ctx.globalAlpha = 0.9;
+          ctx.strokeStyle = '#8b5cf6';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([6, 4]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        ctx.globalAlpha = 1;
+        ctx.restore();
+
+        // Name label at the footprint centre (mount meridian).
+        ctx.fillStyle = '#6d28d9';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(appendage.name, toCanvasX(appendage.mountPos), fpCircToY(disp.centerMm));
+      }
 
       // Welds are rendered outside the clip region (see main draw fn)
 
@@ -679,7 +809,7 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
         ctx.fillText(marker.label, cx, cy - size - 3);
       }
     },
-    [toCanvasX, toCanvasY]
+    [toCanvasX, toCanvasY, getPlotMetrics]
   );
 
   // -----------------------------------------------------------------------
@@ -773,25 +903,63 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
 
-      const axialMm = fromCanvasX(mx);
-      const circumMm = fromCanvasY(my);
-
-      // Out of vessel bounds → no tooltip
       const vesselLength = vesselState.length;
       const circumference = getCircumference(vesselState);
-      if (axialMm < 0 || axialMm > vesselLength || circumMm < 0 || circumMm > circumference) {
-        setTooltip(null);
-        return;
+
+      // Resolve which developed surface the cursor is over, then look up thickness
+      // scoped to that body: the main shell ignores appendage scans, and a strip
+      // finds ONLY its own body's scans (body-scoped findThicknessAt).
+      let hit: number | null = null;
+      const mainAxial = fromCanvasX(mx);
+      const mainCircum = fromCanvasY(my);
+      if (
+        mainAxial >= 0 &&
+        mainAxial <= vesselLength &&
+        mainCircum >= 0 &&
+        mainCircum <= circumference
+      ) {
+        hit = findThicknessAt(
+          vesselState.scanComposites,
+          undefined,
+          mainAxial,
+          mainCircum,
+          circumference,
+          vesselState.id
+        );
+      } else {
+        const { layout } = getPlotMetrics();
+        const { zoom, offsetX, offsetY } = viewRef.current;
+        for (const panel of layout.panels) {
+          const appendage = vesselState.appendages.find((a) => a.id === panel.id);
+          if (!appendage) continue;
+          const stripView = {
+            pxPerMm: layout.pxPerMm,
+            marginX: layout.marginX,
+            marginY: layout.marginY,
+            zoom,
+            offsetX,
+            offsetY,
+            paddingLeft: PADDING.left,
+            paddingTop: PADDING.top,
+            topBasePx: panel.topBasePx,
+          };
+          const posMm = stripFromCanvasX(mx, stripView);
+          const circMm = stripFromCanvasY(my, stripView);
+          if (posMm < 0 || posMm > panel.lengthMm || circMm < 0 || circMm > panel.circumferenceMm) {
+            continue;
+          }
+          hit = findThicknessAt(
+            vesselState.scanComposites,
+            panel.id,
+            posMm,
+            circMm,
+            panel.circumferenceMm,
+            appendage.diameter
+          );
+          break;
+        }
       }
 
-      // Check composites for a thickness value at this position
-      const hit = findThicknessAt(
-        vesselState.scanComposites,
-        axialMm,
-        circumMm,
-        circumference,
-        vesselState.id
-      );
       if (hit != null) {
         setTooltip({
           x: e.clientX - rect.left + 12,
@@ -802,7 +970,7 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
         setTooltip(null);
       }
     },
-    [render, fromCanvasX, fromCanvasY, vesselState]
+    [render, fromCanvasX, fromCanvasY, getPlotMetrics, vesselState]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -871,66 +1039,3 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
 
 FlattenedViewport.displayName = 'FlattenedViewport';
 export default FlattenedViewport;
-
-// ---------------------------------------------------------------------------
-// Standalone helper: find thickness value at a given vessel coordinate
-// ---------------------------------------------------------------------------
-
-function findThicknessAt(
-  composites: ScanCompositeConfig[],
-  axialMm: number,
-  circumMm: number,
-  circumference: number,
-  vesselOD: number
-): number | null {
-  for (const composite of composites) {
-    if (!composite.orientationConfirmed || composite.data.length === 0) continue;
-    // Phase 3: appendage-body scans get per-body stats; excluded here so numbers stay correct in the interim (design §9).
-    if (composite.bodyId) continue;
-
-    const { yAxis, xAxis, data, indexStartMm, indexDirection, scanDirection } = composite;
-
-    const datumCircMm = datumToCircumMm(composite.datumAngleDeg, vesselOD);
-
-    // Find the closest row (axial)
-    let bestRow = -1;
-    let bestRowDist = Infinity;
-    for (let row = 0; row < yAxis.length; row++) {
-      const rowAxial =
-        indexDirection === 'forward' ? indexStartMm + yAxis[row] : indexStartMm - yAxis[row];
-      const dist = Math.abs(rowAxial - axialMm);
-      if (dist < bestRowDist) {
-        bestRowDist = dist;
-        bestRow = row;
-      }
-    }
-
-    // Find the closest col (circumferential)
-    let bestCol = -1;
-    let bestColDist = Infinity;
-    for (let col = 0; col < xAxis.length; col++) {
-      const offset = scanDirection === 'cw' ? xAxis[col] : -xAxis[col];
-      let colCirc = datumCircMm + offset;
-      colCirc = ((colCirc % circumference) + circumference) % circumference;
-      // Wraparound-aware distance
-      let dist = Math.abs(colCirc - circumMm);
-      if (dist > circumference / 2) dist = circumference - dist;
-      if (dist < bestColDist) {
-        bestColDist = dist;
-        bestCol = col;
-      }
-    }
-
-    if (bestRow < 0 || bestCol < 0) continue;
-
-    // Tolerance: accept if within half the grid spacing
-    const rowSpacing = yAxis.length > 1 ? Math.abs(yAxis[1] - yAxis[0]) : 10;
-    const colSpacing = xAxis.length > 1 ? Math.abs(xAxis[1] - xAxis[0]) : 10;
-    if (bestRowDist > rowSpacing || bestColDist > colSpacing) continue;
-
-    const value = data[bestRow]?.[bestCol];
-    if (value != null) return value;
-  }
-
-  return null;
-}

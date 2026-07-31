@@ -310,3 +310,90 @@ export function projectLiftingLug(lug: LiftingLugConfig, vesselOD: number): Flat
     cy: angleToCircumMm(lug.angle, vesselOD),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Appendage junction footprints (developed onto the MAIN shell surface)
+// ---------------------------------------------------------------------------
+// A JunctionFootprint (engine/junction-footprint.ts) is the exact cylinder-on-
+// cylinder intersection expressed in the main shell's DEVELOPED coordinates:
+//   pos   = mm from the left tangent line
+//   angle = degrees around the shell, 90 = TDC   (the VESSEL clock convention)
+// That is the SAME convention projectNozzle/projectLiftingLug feed into
+// `angleToCircumMm` — so a footprint boundary point maps to circumferential mm
+// with `angleToCircumMm(angle, vesselOD)`, NEVER `datumToCircumMm` (that helper
+// is only for scan composites, whose datum uses the user 0°=TDC convention).
+// ---------------------------------------------------------------------------
+
+export interface DevelopedPolyline {
+  /** Wrapped [0, circumference) circumferential mm of the footprint centre. */
+  centerMm: number;
+  /** Largest |yMm − centerMm| across the polyline (mm), i.e. the circ half-span. */
+  halfExtentMm: number;
+  /**
+   * Footprint boundary in developed mm. `x` = axial mm (from the left tangent).
+   * `yMm` is CONTINUOUS about `centerMm` — points may fall outside
+   * [0, circumference) by design so the polyline never tears at the TDC seam. The
+   * caller draws it once per `wrapCircumCenters(centerMm, halfExtentMm, circ)`
+   * copy (shifting yMm by `copyCenter − centerMm`) and lets the plot clip trim it.
+   */
+  points: Array<{ x: number; yMm: number }>;
+}
+
+/**
+ * Develop a junction-footprint boundary (vessel-convention angles, 90 = TDC)
+ * into a continuous developed polyline centred on the appendage's mount meridian.
+ *
+ * The centre uses `angleToCircumMm(mountAngle, …)` — identical to how a nozzle at
+ * the same clock angle is placed — and every boundary point is unwrapped toward
+ * that centre, so a footprint straddling Y = 0 / Y = circumference stays a single
+ * unbroken curve (no manual ±90; see Decision Log 2026-06-22 / 06-23).
+ */
+export function developFootprintBoundary(
+  boundary: Array<{ pos: number; angle: number }>,
+  mountAngleDeg: number,
+  vesselOD: number,
+): DevelopedPolyline {
+  const circumference = Math.PI * vesselOD;
+  const centerMm = angleToCircumMm(mountAngleDeg, vesselOD);
+  const points: Array<{ x: number; yMm: number }> = [];
+  let halfExtentMm = 0;
+
+  for (const bp of boundary) {
+    let yMm = angleToCircumMm(bp.angle, vesselOD);
+    if (circumference > 0) {
+      // Unwrap toward the centre (shortest way round the seam).
+      while (yMm - centerMm > circumference / 2) yMm -= circumference;
+      while (yMm - centerMm < -circumference / 2) yMm += circumference;
+    }
+    halfExtentMm = Math.max(halfExtentMm, Math.abs(yMm - centerMm));
+    points.push({ x: bp.pos, yMm });
+  }
+
+  return { centerMm, halfExtentMm, points };
+}
+
+/**
+ * Apply the circumferential handedness flip (reverse-scan view-from-the-other-end,
+ * see circumDisplayMm) to a developed footprint polyline.
+ *
+ * circumDisplayMm is the reflection y → circumference − y. Applied to a centred
+ * polyline it reflects the CENTRE (mod circumference) and negates each point's
+ * signed offset about it, so the curve stays continuous across the seam (the mod
+ * is applied only to the centre, exactly as circumDisplayMm does for one marker).
+ * The reflected centre equals `circumDisplayMm(centerMm, …)` — the same value a
+ * nozzle at the mount angle uses — so footprints move with the nozzle markers.
+ * A no-op when not reversed.
+ */
+export function displayFootprintPolyline(
+  developed: DevelopedPolyline,
+  circumference: number,
+  reversed: boolean,
+): DevelopedPolyline {
+  if (!reversed || circumference <= 0) return developed;
+  const centerDisp = circumDisplayMm(developed.centerMm, circumference, reversed);
+  const points = developed.points.map((p) => ({
+    x: p.x,
+    yMm: centerDisp - (p.yMm - developed.centerMm),
+  }));
+  return { centerMm: centerDisp, halfExtentMm: developed.halfExtentMm, points };
+}

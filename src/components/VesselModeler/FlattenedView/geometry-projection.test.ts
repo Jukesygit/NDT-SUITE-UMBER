@@ -21,7 +21,10 @@ import {
   axialFrac,
   fitScale,
   circumDisplayMm,
+  developFootprintBoundary,
+  displayFootprintPolyline,
 } from './geometry-projection';
+import { buildJunctionFootprint } from '../engine/junction-footprint';
 
 // ---------------------------------------------------------------------------
 // Convention under test
@@ -250,5 +253,98 @@ describe('circumDisplayMm (circumferential handedness flip)', () => {
 
   it('falls back to the raw value for non-positive circumference', () => {
     expect(circumDisplayMm(25, 0, true)).toBe(25);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Appendage junction footprints developed onto the main shell
+// ---------------------------------------------------------------------------
+// A footprint boundary carries VESSEL-convention angles (90 = TDC), exactly like
+// nozzle markers, so it maps through angleToCircumMm (never datumToCircumMm). The
+// developed polyline stays continuous about the mount meridian so it does not
+// tear at the TDC seam, and it flips with the reverse-scan view like the markers.
+// ---------------------------------------------------------------------------
+describe('developFootprintBoundary (footprint → developed coords)', () => {
+  const R = OD / 2; // shell radius
+
+  it('centres a TDC-mounted footprint (mountAngle 90) on Y = 0', () => {
+    const fp = buildJunctionFootprint(R, { id: 'a', mountPos: 1000, mountAngle: 90, diameter: 200 });
+    const dev = developFootprintBoundary(fp.boundary, 90, OD);
+    expect(dev.centerMm).toBeCloseTo(0, 6);
+    // Straddles the seam: some points above (yMm < 0), some below (yMm > 0).
+    const ys = dev.points.map((p) => p.yMm);
+    expect(Math.min(...ys)).toBeLessThan(0);
+    expect(Math.max(...ys)).toBeGreaterThan(0);
+    expect(dev.halfExtentMm).toBeGreaterThan(0);
+    // x is the axial position (mount ± the axial half-extent = radius).
+    const xs = dev.points.map((p) => p.x);
+    expect(Math.min(...xs)).toBeCloseTo(900, 4); // mountPos - r
+    expect(Math.max(...xs)).toBeCloseTo(1100, 4); // mountPos + r
+  });
+
+  it('centres the footprint on the same Y a nozzle at the mount angle uses', () => {
+    for (const mountAngle of [0, 45, 90, 210, 270]) {
+      const fp = buildJunctionFootprint(R, { id: 'a', mountPos: 500, mountAngle, diameter: 300 });
+      const dev = developFootprintBoundary(fp.boundary, mountAngle, OD);
+      // projectNozzle uses the same angleToCircumMm — centres must coincide.
+      expect(dev.centerMm).toBeCloseTo(projectNozzle(nozzle(mountAngle), OD).cy, 6);
+    }
+  });
+
+  it('keeps points continuous about the centre (no seam tear at TDC)', () => {
+    const fp = buildJunctionFootprint(R, { id: 'a', mountPos: 1000, mountAngle: 90, diameter: 400 });
+    const dev = developFootprintBoundary(fp.boundary, 90, OD);
+    for (const p of dev.points) {
+      expect(Math.abs(p.yMm - dev.centerMm)).toBeLessThanOrEqual(dev.halfExtentMm + 1e-6);
+    }
+  });
+
+  it('produces two seam-wrapped copies for a TDC footprint (crosses Y = 0)', () => {
+    const fp = buildJunctionFootprint(R, { id: 'a', mountPos: 1000, mountAngle: 90, diameter: 200 });
+    const dev = developFootprintBoundary(fp.boundary, 90, OD);
+    const centers = wrapCircumCenters(dev.centerMm, dev.halfExtentMm, CIRC);
+    expect(centers).toHaveLength(2);
+    expect(centers).toContain(dev.centerMm);
+    expect(centers).toContain(dev.centerMm + CIRC);
+  });
+
+  it('does not wrap a footprint well away from the seam (mid angle)', () => {
+    const fp = buildJunctionFootprint(R, { id: 'a', mountPos: 1000, mountAngle: 0, diameter: 200 });
+    const dev = developFootprintBoundary(fp.boundary, 0, OD);
+    expect(dev.centerMm).toBeCloseTo(CIRC / 4, 6);
+    expect(wrapCircumCenters(dev.centerMm, dev.halfExtentMm, CIRC)).toEqual([dev.centerMm]);
+  });
+});
+
+describe('displayFootprintPolyline (handedness flip, nozzle-consistent)', () => {
+  const R = OD / 2;
+
+  it('is identity when not reversed', () => {
+    const fp = buildJunctionFootprint(R, { id: 'a', mountPos: 800, mountAngle: 30, diameter: 250 });
+    const dev = developFootprintBoundary(fp.boundary, 30, OD);
+    const shown = displayFootprintPolyline(dev, CIRC, false);
+    expect(shown.centerMm).toBeCloseTo(dev.centerMm, 9);
+    expect(shown.points).toEqual(dev.points);
+  });
+
+  it('flips the centre exactly like a reversed nozzle marker', () => {
+    for (const mountAngle of [0, 45, 210, 270]) {
+      const fp = buildJunctionFootprint(R, { id: 'a', mountPos: 500, mountAngle, diameter: 300 });
+      const dev = developFootprintBoundary(fp.boundary, mountAngle, OD);
+      const shown = displayFootprintPolyline(dev, CIRC, true);
+      // A reversed nozzle at the same angle is placed at circumDisplayMm(cy).
+      const nozzleReversedCy = circumDisplayMm(projectNozzle(nozzle(mountAngle), OD).cy, CIRC, true);
+      expect(shown.centerMm).toBeCloseTo(nozzleReversedCy, 6);
+    }
+  });
+
+  it('preserves continuity and half-extent under the flip', () => {
+    const fp = buildJunctionFootprint(R, { id: 'a', mountPos: 500, mountAngle: 90, diameter: 400 });
+    const dev = developFootprintBoundary(fp.boundary, 90, OD);
+    const shown = displayFootprintPolyline(dev, CIRC, true);
+    expect(shown.halfExtentMm).toBeCloseTo(dev.halfExtentMm, 9);
+    for (const p of shown.points) {
+      expect(Math.abs(p.yMm - shown.centerMm)).toBeLessThanOrEqual(shown.halfExtentMm + 1e-6);
+    }
   });
 });
