@@ -82,7 +82,14 @@ export function WeldSection({
             </button>
 
             {/* Weld list */}
-            {vesselState.welds.map((w, i) => (
+            {vesselState.welds.map((w, i) => {
+                // Position sliders clamp to the mounted body's length (appendage) or
+                // the main vessel length. Only the selected weld drives the picker.
+                const mountLen =
+                    i === selectedWeldIndex && sel?.bodyId
+                        ? vesselState.appendages.find(a => a.id === sel.bodyId)?.length ?? vesselState.length
+                        : vesselState.length;
+                return (
                 <React.Fragment key={i}>
                     <div
                         className={`vm-list-item ${i === selectedWeldIndex ? 'selected' : ''}`}
@@ -106,6 +113,22 @@ export function WeldSection({
                                     onChange={e => onUpdateWeld(selectedWeldIndex, { name: e.target.value })}
                                 />
                             </div>
+                            {vesselState.appendages.length > 0 && (
+                                <div className="vm-control-group">
+                                    <div className="vm-label"><span>Mount on</span></div>
+                                    <select
+                                        className="vm-select"
+                                        value={sel.bodyId ?? ''}
+                                        onChange={e => onUpdateWeld(selectedWeldIndex, { bodyId: e.target.value === '' ? undefined : e.target.value })}
+                                        title="Mount this weld on the main vessel or an appendage body. Position/angle are reinterpreted in the chosen body's frame — adjust them after switching."
+                                    >
+                                        <option value="">Main vessel</option>
+                                        {vesselState.appendages.map(a => (
+                                            <option key={a.id} value={a.id}>{a.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <div className="vm-control-group">
                                 <div className="vm-label"><span>Type</span></div>
                                 <div className="vm-toggle-group">
@@ -127,16 +150,16 @@ export function WeldSection({
                                 label={sel.type === 'circumferential' ? 'Position' : 'Start Pos'}
                                 value={Math.round(sel.pos)}
                                 min={0}
-                                max={vesselState.length}
+                                max={mountLen}
                                 step={1}
                                 onChange={v => onUpdateWeld(selectedWeldIndex, { pos: v })}
                             />
                             {sel.type === 'longitudinal' && (
                                 <SliderRow
                                     label="End Pos"
-                                    value={Math.round(sel.endPos ?? vesselState.length)}
+                                    value={Math.round(sel.endPos ?? mountLen)}
                                     min={0}
-                                    max={vesselState.length}
+                                    max={mountLen}
                                     step={1}
                                     onChange={v => onUpdateWeld(selectedWeldIndex, { endPos: v })}
                                 />
@@ -176,7 +199,8 @@ export function WeldSection({
                         </div>
                     )}
                 </React.Fragment>
-            ))}
+                );
+            })}
         </SubSection>
     );
 }

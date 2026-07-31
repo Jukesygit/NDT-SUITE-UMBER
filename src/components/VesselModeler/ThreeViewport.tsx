@@ -18,6 +18,10 @@ import {
   createRulerLine,
 } from './engine/annotation-geometry';
 import {
+  createAppendageRectOutline,
+  createAppendageRectFill,
+} from './engine/appendage-rect-geometry';
+import {
   createAnnotationLabel,
   createAnnotationLeaderLine,
   createRulerLabel,
@@ -455,19 +459,28 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         showLabel: false,
       };
       const surfaceOffset = 4;
-      const outline = createRectOutline(shapeConfig, state, surfaceOffset);
+      // Appendage-mounted rects (bodyId set) render on the body's cylinder via the
+      // frame; main-shell rects keep the shell/dome drape path unchanged.
+      const onAppendage = rect.bodyId !== undefined;
+      const outline = onAppendage
+        ? createAppendageRectOutline(rect, state, surfaceOffset)
+        : createRectOutline(shapeConfig, state, surfaceOffset);
       outline.userData = { type: 'coverageRect', coverageRectId: rect.id };
       const covGroup = new THREE.Group();
       covGroup.add(outline);
 
       if (rect.filled) {
-        const fill = createRectFill(shapeConfig, state, surfaceOffset);
+        const fill = onAppendage
+          ? createAppendageRectFill(rect, state, surfaceOffset)
+          : createRectFill(shapeConfig, state, surfaceOffset);
         (fill.material as THREE.MeshBasicMaterial).opacity = rect.fillOpacity;
         fill.userData = { type: 'coverageRect', coverageRectId: rect.id };
         covGroup.add(fill);
       }
 
-      const hitMesh = createRectFill(shapeConfig, state, surfaceOffset);
+      const hitMesh = onAppendage
+        ? createAppendageRectFill(rect, state, surfaceOffset)
+        : createRectFill(shapeConfig, state, surfaceOffset);
       (hitMesh.material as THREE.MeshBasicMaterial).opacity = 0;
       hitMesh.userData = { type: 'coverageRect', coverageRectId: rect.id };
       covGroup.add(hitMesh);

@@ -525,6 +525,93 @@ describe('scan composite bodyId (appendage mount)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Weld / lug / coverage-rect bodyId (appendage mount) — each round-trips on both
+// paths; main-shell items keep no bodyId tag (byte-identical legacy shape).
+// ---------------------------------------------------------------------------
+
+describe('weld / lug / coverage-rect bodyId (appendage mount)', () => {
+  function makeMixed(): VesselState {
+    const fixture = makeFixture();
+    fixture.welds = [
+      { name: 'W-main', type: 'circumferential', pos: 500, color: '#777777' },
+      {
+        name: 'W-app',
+        type: 'longitudinal',
+        pos: 100,
+        endPos: 400,
+        angle: 0,
+        color: '#777777',
+        bodyId: 'app-1',
+      },
+    ];
+    fixture.liftingLugs = [
+      { name: 'L-main', pos: 2000, angle: 270, style: 'padEye', swl: '5t' },
+      { name: 'L-app', pos: 300, angle: 0, style: 'trunnion', swl: '10t', bodyId: 'app-1' },
+    ];
+    fixture.coverageRects = [
+      {
+        id: 1,
+        name: 'C-main',
+        pos: 500,
+        angle: 90,
+        width: 400,
+        height: 300,
+        color: '#00cc66',
+        lineWidth: 2,
+        filled: true,
+        fillOpacity: 0.2,
+        locked: false,
+      },
+      {
+        id: 2,
+        name: 'C-app',
+        pos: 200,
+        angle: 0,
+        width: 300,
+        height: 200,
+        color: '#00cc66',
+        lineWidth: 2,
+        filled: true,
+        fillOpacity: 0.2,
+        locked: false,
+        bodyId: 'app-1',
+      },
+    ];
+    return fixture;
+  }
+
+  for (const path of ['local', 'cloud'] as const) {
+    it(`round-trips appendage-mounted weld/lug/rect on the ${path} path`, () => {
+      const restored = roundTrip(makeMixed(), path);
+      expect(restored.welds[1].bodyId).toBe('app-1');
+      expect(restored.liftingLugs[1].bodyId).toBe('app-1');
+      expect(restored.coverageRects[1].bodyId).toBe('app-1');
+      // Main-shell items keep no bodyId tag.
+      expect(restored.welds[0].bodyId).toBeUndefined();
+      expect(restored.liftingLugs[0].bodyId).toBeUndefined();
+      expect(restored.coverageRects[0].bodyId).toBeUndefined();
+    });
+
+    it(`persists bodyId only for the appendage items on the ${path} path`, () => {
+      // JSON boundary mirrors the real save (undefined bodyId is dropped there).
+      const serialized = JSON.parse(
+        JSON.stringify(serializeVesselState(makeMixed(), { path }))
+      ) as {
+        welds: Array<Record<string, unknown>>;
+        liftingLugs: Array<Record<string, unknown>>;
+        coverageRects: Array<Record<string, unknown>>;
+      };
+      expect(serialized.welds[0]).not.toHaveProperty('bodyId');
+      expect(serialized.welds[1].bodyId).toBe('app-1');
+      expect(serialized.liftingLugs[0]).not.toHaveProperty('bodyId');
+      expect(serialized.liftingLugs[1].bodyId).toBe('app-1');
+      expect(serialized.coverageRects[0]).not.toHaveProperty('bodyId');
+      expect(serialized.coverageRects[1].bodyId).toBe('app-1');
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Coverage targets — the extended CoverageTargets (base regions + per-appendage
 // map) must survive save -> load on BOTH paths. Legacy JSON without the key
 // loads as undefined (the consumer defaults via ?? DEFAULT_TARGETS).

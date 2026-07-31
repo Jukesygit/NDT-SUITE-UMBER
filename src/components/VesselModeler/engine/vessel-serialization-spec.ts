@@ -90,6 +90,7 @@ export const NOZZLE_SPEC: FieldSpec[] = [
 // ---------------------------------------------------------------------------
 export const LUG_SPEC: FieldSpec[] = [
   { key: 'name', load: { or: 'L' } },
+  { key: 'bodyId' },
   { key: 'pos', load: { nullish: 0 } },
   { key: 'angle', load: { nullish: 90 } },
   { key: 'style', load: { or: 'padEye' } },
@@ -119,6 +120,7 @@ export const SADDLE_SPEC: FieldSpec[] = [
 // ---------------------------------------------------------------------------
 export const WELD_SPEC: FieldSpec[] = [
   { key: 'name', load: { or: 'W' } },
+  { key: 'bodyId' },
   { key: 'type', load: { or: 'circumferential' } },
   { key: 'pos', load: { nullish: 0 } },
   { key: 'endPos' },
@@ -184,11 +186,12 @@ export const RULER_SPEC: FieldSpec[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Coverage rectangles (gains bodyId in a later appendage phase)
+// Coverage rectangles — bodyId round-trips on both paths (undefined = main shell)
 // ---------------------------------------------------------------------------
 export const COVERAGE_RECT_SPEC: FieldSpec[] = [
   { key: 'id', load: { or: 0 } },
   { key: 'name', load: { or: 'C' } },
+  { key: 'bodyId' },
   { key: 'pos', load: { nullish: 0 } },
   { key: 'angle', load: { nullish: 90 } },
   { key: 'width', load: { nullish: 300 } },

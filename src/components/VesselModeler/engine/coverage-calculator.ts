@@ -52,8 +52,13 @@ interface UnwrappedRect {
 // Convert coverage rects to unwrapped 2D rectangles
 // ---------------------------------------------------------------------------
 
-function toUnwrappedRects(rects: CoverageRectConfig[], vesselState: VesselState): UnwrappedRect[] {
-  const circumference = Math.PI * vesselState.id;
+/**
+ * Unwrap coverage rects into 2D (pos, angle) rectangles for a body whose
+ * developed circumference is `circumference` (mm). Splits rects straddling the
+ * 0/360 seam into two. Shared by the main shell (circumference = π·id) and the
+ * per-appendage covered-area sweep (circumference = 2π·radius).
+ */
+function unwrapRects(rects: CoverageRectConfig[], circumference: number): UnwrappedRect[] {
   const result: UnwrappedRect[] = [];
 
   for (const r of rects) {
@@ -81,6 +86,10 @@ function toUnwrappedRects(rects: CoverageRectConfig[], vesselState: VesselState)
   }
 
   return result;
+}
+
+function toUnwrappedRects(rects: CoverageRectConfig[], vesselState: VesselState): UnwrappedRect[] {
+  return unwrapRects(rects, Math.PI * vesselState.id);
 }
 
 // ---------------------------------------------------------------------------
@@ -203,6 +212,63 @@ export interface AppendageCoverageTotals {
   totalMm2: number;
   /** Achieved scanned area in mm² — Σ validArea of this body's scan composites. */
   achievedMm2: number;
+  /** Covered (coverage-rect) area in mm² on this body's lateral cylinder —
+   *  overlap-aware Σ of the rects whose `bodyId` matches (Phase 4 §4). */
+  coveredMm2: number;
+}
+
+/**
+ * Overlap-aware covered area (mm²) of coverage rects on a plain cylinder of the
+ * given radius/length — the appendage lateral surface (design §9.2: no head
+ * regions, no cutout on the appendage side in v1). `pos` clamps to [0, length];
+ * `angle` wraps at 360. Reuses the same coordinate-compression sweep as the
+ * main-shell cylinder branch so overlapping rects never double-count.
+ */
+export function computeAppendageCoveredArea(
+  rects: CoverageRectConfig[],
+  radius: number,
+  length: number,
+): number {
+  if (rects.length === 0 || radius <= 0 || length <= 0) return 0;
+
+  const circumference = 2 * Math.PI * radius;
+  const unwrapped = unwrapRects(rects, circumference);
+  if (unwrapped.length === 0) return 0;
+
+  // Coordinate compression over the cylinder span [0, length] × [0, 360].
+  const posSet = new Set<number>([0, length]);
+  const angleSet = new Set<number>([0, 360]);
+  for (const ur of unwrapped) {
+    posSet.add(Math.max(0, Math.min(length, ur.posMin)));
+    posSet.add(Math.max(0, Math.min(length, ur.posMax)));
+    angleSet.add(Math.max(0, ur.angleMin));
+    angleSet.add(Math.min(360, ur.angleMax));
+  }
+
+  const posCoords = Array.from(posSet).sort((a, b) => a - b);
+  const angleCoords = Array.from(angleSet).sort((a, b) => a - b);
+
+  let covered = 0;
+  for (let pi = 0; pi < posCoords.length - 1; pi++) {
+    const pMin = posCoords[pi];
+    const pMax = posCoords[pi + 1];
+    if (pMax <= pMin) continue;
+
+    for (let ai = 0; ai < angleCoords.length - 1; ai++) {
+      const aMin = angleCoords[ai];
+      const aMax = angleCoords[ai + 1];
+      if (aMax <= aMin) continue;
+
+      const isCovered = unwrapped.some(
+        (ur) => ur.posMin <= pMin && ur.posMax >= pMax && ur.angleMin <= aMin && ur.angleMax >= aMax,
+      );
+      if (!isCovered) continue;
+
+      covered += cylinderCellArea(pMin, pMax, aMin, aMax, radius);
+    }
+  }
+
+  return covered;
 }
 
 /**
@@ -224,7 +290,12 @@ export function computeAppendageCoverageTotals(vesselState: VesselState): Append
       if (sc.bodyId !== a.id) continue;
       achievedMm2 += compositeValidArea(sc);
     }
-    return { appendageId: a.id, name: a.name, totalMm2, achievedMm2 };
+    // Covered = coverage rects that target THIS body (Phase 4 §4). Overlap-aware
+    // on the appendage's lateral cylinder; main-shell rects (bodyId undefined)
+    // never contribute here, and these rects never contribute to the main shell.
+    const bodyRects = vesselState.coverageRects.filter((r) => r.bodyId === a.id);
+    const coveredMm2 = computeAppendageCoveredArea(bodyRects, radius, a.length);
+    return { appendageId: a.id, name: a.name, totalMm2, achievedMm2, coveredMm2 };
   });
 }
 
@@ -269,6 +340,12 @@ export function computeCoverage(
   rects: CoverageRectConfig[],
   vesselState: VesselState,
 ): CoverageResult {
+  // Only main-shell rects (bodyId undefined) count toward main-shell coverage;
+  // appendage-targeted rects are measured per-body by computeAppendageCoverageTotals.
+  // With no bodyId rects present this is the full list, so legacy models stay
+  // byte-identical.
+  const mainRects = rects.filter((r) => r.bodyId === undefined);
+
   const regionAreas = computeRegionTotalAreas(vesselState);
   const emptyRegion = (total: number): RegionCoverage => ({
     covered: 0,
@@ -276,7 +353,7 @@ export function computeCoverage(
     percent: 0,
   });
 
-  if (rects.length === 0) {
+  if (mainRects.length === 0) {
     return {
       leftHead: emptyRegion(regionAreas.leftHead),
       cylinder: emptyRegion(regionAreas.cylinder),
@@ -289,7 +366,7 @@ export function computeCoverage(
   const D = vesselState.id / (2 * vesselState.headRatio);
   const TAN_TAN = vesselState.length;
 
-  const unwrapped = toUnwrappedRects(rects, vesselState);
+  const unwrapped = toUnwrappedRects(mainRects, vesselState);
 
   // Appendage cutout predicates (design §9.4): a covered cell whose centre lies
   // inside a junction footprint sits over the shell opening and is not coverable.

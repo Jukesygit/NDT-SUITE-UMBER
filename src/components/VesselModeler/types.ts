@@ -111,6 +111,10 @@ export type LiftingLugStyle = 'padEye' | 'trunnion';
 
 export interface LiftingLugConfig {
   name: string;
+  /** Body this lug mounts on. undefined = main shell (legacy path). When set to an
+   *  appendage id, `pos` is interpreted as mm along the appendage axis from the
+   *  junction and `angle` per the appendage datum (see engine/body-frame.ts). */
+  bodyId?: string;
   /** Distance from left tangent line in mm */
   pos: number;
   /** Degrees: 90 = Top, 270 = Bottom, 0 = Right, 180 = Left */
@@ -171,6 +175,11 @@ export type WeldType = 'circumferential' | 'longitudinal';
 
 export interface WeldConfig {
   name: string;
+  /** Body this weld mounts on. undefined = main shell (legacy path). When set to
+   *  an appendage id, `pos` is interpreted as mm along the appendage axis from the
+   *  junction and `angle` (long welds) per the appendage datum (see
+   *  engine/body-frame.ts). */
+  bodyId?: string;
   /** Weld seam type */
   type: WeldType;
   /** For circ welds: axial position. For long welds: start position. mm from left tangent */
@@ -414,6 +423,11 @@ export interface InspectionImageConfig {
 export interface CoverageRectConfig {
   id: number;
   name: string;
+  /** Body this coverage rect targets. undefined = main shell (legacy path). When
+   *  set to an appendage id, `pos` is interpreted as mm along the appendage axis
+   *  from the junction and `angle` per the appendage datum (see
+   *  engine/body-frame.ts); the rect contributes to that body's covered area. */
+  bodyId?: string;
   /** Center position: mm from left tangent line */
   pos: number;
   /** Center angle: degrees around circumference (90 = top) */

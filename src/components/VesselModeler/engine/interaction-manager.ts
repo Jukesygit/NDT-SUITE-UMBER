@@ -701,11 +701,28 @@ export class InteractionManager {
       const hits = this.raycaster.intersectObjects(shellMeshes, true);
       if (hits.length === 0) return;
 
-      const point = hits[0].point;
-      const { pos: posH, angle: thetaH } = frame.toLocal(point);
-      // Coverage rects render through the same drape geometry, so their drag uses
-      // the shared dome-stable resolver (holds/flips the angle near the pole).
       const rect = state.coverageRects.find((r) => r.id === this.selectedCoverageRectId);
+      const rectBodyId = rect?.bodyId;
+      if (rectBodyId !== undefined) {
+        // Appendage-mounted rect: scope to that body's surface and invert through
+        // its frame (pure cylinder, no dome drape). Clamp to the cylinder span.
+        const bodyHit = hits.find((h) => hitBodyId(h.object) === rectBodyId);
+        if (!bodyHit) return;
+        const bodyFrame = resolveBodyFrame(state, rectBodyId);
+        const local = bodyFrame.toLocal(bodyHit.point);
+        const clampedPos = Math.max(0, Math.min(bodyFrame.axialLength, local.pos));
+        this.callbacks.onCoverageRectMoved(this.selectedCoverageRectId, clampedPos, local.angle);
+        return;
+      }
+
+      // Main-shell rect: only accept a main-shell hit so it can't snap onto an
+      // appendage. Coverage rects render through the same drape geometry, so the
+      // drag uses the shared dome-stable resolver (holds/flips the angle near the
+      // pole). With no appendages present the first hit is the only hit — legacy.
+      const mainHit = hits.find((h) => hitBodyId(h.object) === undefined);
+      if (!mainHit) return;
+      const point = mainHit.point;
+      const { pos: posH, angle: thetaH } = frame.toLocal(point);
       const drag = this.resolveDrapeDrag(
         posH,
         thetaH,
@@ -739,8 +756,24 @@ export class InteractionManager {
       const hits = this.raycaster.intersectObjects(shellMeshes, true);
       if (hits.length === 0) return;
 
-      const point = hits[0].point;
-      const { pos, angle: deg } = frame.toLocal(point);
+      const weldBodyId = state.welds[this.selectedWeldIdx]?.bodyId;
+      if (weldBodyId !== undefined) {
+        // Appendage-mounted weld: scope to that body's surface, invert through its
+        // frame, clamp to the cylinder span (mirrors the nozzle-drag scoping).
+        const bodyHit = hits.find((h) => hitBodyId(h.object) === weldBodyId);
+        if (!bodyHit) return;
+        const bodyFrame = resolveBodyFrame(state, weldBodyId);
+        const local = bodyFrame.toLocal(bodyHit.point);
+        const clampedPos = Math.max(0, Math.min(bodyFrame.axialLength, local.pos));
+        this.callbacks.onWeldMoved(this.selectedWeldIdx, clampedPos, local.angle);
+        return;
+      }
+
+      // Main-shell weld: only accept a main-shell hit (no bodyId tag). With no
+      // appendages present the first hit is the only hit — identical to legacy.
+      const mainHit = hits.find((h) => hitBodyId(h.object) === undefined);
+      if (!mainHit) return;
+      const { pos, angle: deg } = frame.toLocal(mainHit.point);
       const headDepth = state.id / (2 * state.headRatio);
       const newPos = Math.max(-headDepth, Math.min(state.length + headDepth, pos));
 
@@ -856,6 +889,29 @@ export class InteractionManager {
         return;
       }
 
+      // A lifting lug can mount on an appendage body: scope its drag to that body's
+      // surface exactly like the nozzle path. The angle-snap treatment (shared with
+      // nozzles) extends to appendage-mounted lugs.
+      if (this.dragType === 'liftingLug') {
+        const lugBodyId = state.liftingLugs[this.selectedLugIdx]?.bodyId;
+        if (lugBodyId !== undefined) {
+          const bodyHit = hits.find((h) => hitBodyId(h.object) === lugBodyId);
+          if (!bodyHit) return;
+          const bodyFrame = resolveBodyFrame(state, lugBodyId);
+          const local = bodyFrame.toLocal(bodyHit.point);
+          const clampedPos = Math.max(0, Math.min(bodyFrame.axialLength, local.pos));
+          this.callbacks.onLugMoved(this.selectedLugIdx, clampedPos, this.snapAngle(local.angle));
+          return;
+        }
+        const mainHit = hits.find((h) => hitBodyId(h.object) === undefined);
+        if (!mainHit) return;
+        const { pos, angle: deg } = frame.toLocal(mainHit.point);
+        const headDepth = state.id / (2 * state.headRatio);
+        const newPos = Math.max(-headDepth, Math.min(state.length + headDepth, pos));
+        this.callbacks.onLugMoved(this.selectedLugIdx, newPos, this.snapAngle(deg));
+        return;
+      }
+
       const point = hits[0].point;
 
       // Position (mm) and angle (deg) via the single frame inverse.
@@ -865,10 +921,7 @@ export class InteractionManager {
       const headDepth = state.id / (2 * state.headRatio);
       const newPos = Math.max(-headDepth, Math.min(state.length + headDepth, pos));
 
-      if (this.dragType === 'liftingLug') {
-        // Lifting lugs snap to the chosen angular increment when snapping is enabled.
-        this.callbacks.onLugMoved(this.selectedLugIdx, newPos, this.snapAngle(deg));
-      } else if (this.dragType === 'annotation') {
+      if (this.dragType === 'annotation') {
         // Dome-stable drag: hold/flip the angle reference near the pole so a rect
         // can be dragged onto and through the dome centre without spinning.
         const ann = state.annotations.find((a) => a.id === this.selectedAnnotationIdx);

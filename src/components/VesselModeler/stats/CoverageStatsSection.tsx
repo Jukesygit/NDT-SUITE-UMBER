@@ -32,12 +32,12 @@ export default function CoverageStatsSection({ vesselState }: CoverageStatsSecti
     ],
   );
 
-  // Per-appendage coverable area (design §9). Coverage rects cannot target an
-  // appendage in v1 (CoverageRectConfig has no bodyId), so covered is 0 for now;
-  // the row still surfaces the appendage's lateral area in the breakdown.
+  // Per-appendage coverable + covered area (design §9 / Phase 4 §4). Coverage
+  // rects with a matching bodyId now feed the covered column, so the row reports
+  // real coverage on the appendage's lateral cylinder.
   const appendageTotals = useMemo(
     () => computeAppendageCoverageTotals(vesselState),
-    [vesselState.appendages, vesselState.scanComposites],
+    [vesselState.appendages, vesselState.scanComposites, vesselState.coverageRects],
   );
 
   if (vesselState.coverageRects.length === 0) return null;
@@ -67,12 +67,14 @@ export default function CoverageStatsSection({ vesselState }: CoverageStatsSecti
       ))}
       {appendageTotals.map((a) => {
         const totalM2 = a.totalMm2 / 1_000_000;
+        const coveredM2 = a.coveredMm2 / 1_000_000;
+        const pct = a.totalMm2 > 0 ? (a.coveredMm2 / a.totalMm2) * 100 : 0;
         return (
           <div key={a.appendageId} className="vm-coverage-row">
             <span className="vm-coverage-label">{a.name}</span>
             <span className="vm-coverage-area">{formatArea(totalM2)} m&sup2;</span>
-            <span className="vm-coverage-covered">{formatArea(0)} m&sup2;</span>
-            <span className="vm-coverage-pct">{formatPct(0)}%</span>
+            <span className="vm-coverage-covered">{formatArea(coveredM2)} m&sup2;</span>
+            <span className="vm-coverage-pct">{formatPct(pct)}%</span>
           </div>
         );
       })}

@@ -18,7 +18,12 @@ import {
   type CoverageRectConfig,
   type VesselState,
 } from '../../types';
-import { computeCoverage, computeRegionTotalAreas } from '../coverage-calculator';
+import {
+  computeAppendageCoverageTotals,
+  computeAppendageCoveredArea,
+  computeCoverage,
+  computeRegionTotalAreas,
+} from '../coverage-calculator';
 import { buildJunctionFootprint } from '../junction-footprint';
 
 const R = 1000; // shell outer radius (mm) → id 2000
@@ -140,5 +145,64 @@ describe('computeCoverage — sweep excludes cells inside a footprint', () => {
 
     expect(excludedM2).toBeGreaterThan(0); // footprint really overlaps the band
     expect(coveredWithout - coveredWith).toBeCloseTo(excludedM2, 6);
+  });
+});
+
+describe('coverage rects with bodyId — per-appendage covered area (Phase 4 §4)', () => {
+  const app = appendage(); // radius 400, length 1000
+  const appRadius = app.diameter / 2;
+
+  function appRect(bodyId: string | undefined): CoverageRectConfig {
+    return {
+      id: 1,
+      name: 'C',
+      pos: 500,
+      angle: 90,
+      width: 400,
+      height: 300,
+      color: '#0c6',
+      lineWidth: 1,
+      filled: false,
+      fillOpacity: 0,
+      bodyId,
+    };
+  }
+
+  it('a rect on app-1 populates that body’s covered area and NOT the main shell', () => {
+    const rects = [appRect('app-1')];
+    const state = makeState({ appendages: [app], coverageRects: rects });
+
+    // Main-shell coverage excludes the appendage rect entirely.
+    const main = computeCoverage(rects, state);
+    expect(main.cylinder.covered).toBeCloseTo(0, 9);
+    expect(main.total.covered).toBeCloseTo(0, 9);
+
+    // The appendage row gets real covered area, matching the analytic single-rect
+    // area on the appendage cylinder (radius · dTheta · dPos).
+    const row = computeAppendageCoverageTotals(state).find((t) => t.appendageId === 'app-1')!;
+    const circ = 2 * Math.PI * appRadius;
+    const angSpanDeg = (300 / circ) * 360;
+    const expectedMm2 = appRadius * ((angSpanDeg / 360) * 2 * Math.PI) * 400;
+    expect(row.coveredMm2).toBeGreaterThan(0);
+    expect(row.coveredMm2).toBeCloseTo(expectedMm2, 4);
+  });
+
+  it('a main-shell rect covers the shell and contributes 0 to the appendage row', () => {
+    const rects = [appRect(undefined)];
+    const state = makeState({ appendages: [app], coverageRects: rects });
+
+    expect(computeCoverage(rects, state).cylinder.covered).toBeGreaterThan(0);
+
+    const row = computeAppendageCoverageTotals(state).find((t) => t.appendageId === 'app-1')!;
+    expect(row.coveredMm2).toBe(0);
+  });
+
+  it('computeAppendageCoveredArea is overlap-aware (two identical rects = one area)', () => {
+    const r1 = appRect('app-1');
+    const r2 = { ...appRect('app-1'), id: 2 };
+    const one = computeAppendageCoveredArea([r1], appRadius, app.length);
+    const two = computeAppendageCoveredArea([r1, r2], appRadius, app.length);
+    expect(one).toBeGreaterThan(0);
+    expect(two).toBeCloseTo(one, 6);
   });
 });

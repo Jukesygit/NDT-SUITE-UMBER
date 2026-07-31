@@ -567,6 +567,24 @@ export function buildVesselScene(
   // -- Lifting Lugs -----------------------------------------------------------
   state.liftingLugs.forEach((lug, idx) => {
     const mat = idx === selectedLugIndex ? lugHighlightMaterial : lugMaterial;
+
+    if (lug.bodyId !== undefined) {
+      // APPENDAGE-MOUNTED LUG. `pos` is mm along the appendage axis from the
+      // junction, `angle` per the appendage datum (engine/body-frame.ts). The
+      // base plate curves to the appendage radius; placement/orientation come from
+      // the body frame, clamped to the cylinder span [0, length] (no head branch).
+      const bodyFrame = resolveBodyFrame(state, lug.bodyId);
+      const appLugGroup = createLiftingLug(lug, mat, bodyFrame.radius);
+      const posMm = Math.max(0, Math.min(bodyFrame.axialLength, lug.pos));
+      appLugGroup.position.copy(bodyFrame.surfacePoint(posMm, lug.angle));
+      const appNormal = bodyFrame.surfaceNormal(posMm, lug.angle);
+      appLugGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), appNormal);
+      appLugGroup.userData = { type: 'liftingLug', lugIdx: idx };
+      vesselGroup.add(appLugGroup);
+      lugMeshes.push(appLugGroup);
+      return;
+    }
+
     const lugGroup = createLiftingLug(lug, mat, RADIUS);
 
     // Same position/orientation logic as nozzles (pos/angle on shell surface)

@@ -10,18 +10,33 @@
 // descending so earlier indices stay valid as the array shrinks.
 //
 // Main-shell nozzles (bodyId undefined) and their pipelines are left untouched.
+// The body's other attachables — welds, lifting lugs and coverage rects that
+// carry its bodyId — are stripped too (simple filters; no index cascade). Arrays
+// with nothing to strip keep their original reference so a delete that touches no
+// attachables stays byte-identical downstream.
 // Kept pure (no React) so the shifting logic can be unit-tested directly.
 // =============================================================================
 
 import type { VesselState } from '../types';
 
 /** The slice of state this cascade rewrites. */
-type CascadeState = Pick<VesselState, 'appendages' | 'nozzles' | 'pipelines'>;
+type CascadeState = Pick<
+  VesselState,
+  'appendages' | 'nozzles' | 'pipelines' | 'welds' | 'liftingLugs' | 'coverageRects'
+>;
+
+/** Drop every item whose `bodyId` matches, preserving the array reference when
+ *  nothing is removed (so unrelated deletes cause no spurious identity change). */
+function stripByBody<T extends { bodyId?: string }>(items: T[], bodyId: string): T[] {
+  const next = items.filter((it) => it.bodyId !== bodyId);
+  return next.length === items.length ? items : next;
+}
 
 /**
- * Compute the post-removal { appendages, nozzles, pipelines } for deleting the
- * appendage at `index`. Returns the inputs unchanged (new appendages array only)
- * when the index is out of range or the removed body has no attached nozzles.
+ * Compute the post-removal state slice for deleting the appendage at `index`.
+ * Removes the body plus its nozzles (+ their pipelines, index-shifted) and its
+ * welds / lifting lugs / coverage rects. Returns the inputs unchanged (new
+ * appendages array only) when the index is out of range.
  */
 export function cascadeRemoveAppendage(state: CascadeState, index: number): CascadeState {
   const removed = state.appendages[index];
@@ -29,7 +44,14 @@ export function cascadeRemoveAppendage(state: CascadeState, index: number): Casc
 
   const bodyId = removed?.id;
   if (bodyId === undefined) {
-    return { appendages, nozzles: state.nozzles, pipelines: state.pipelines };
+    return {
+      appendages,
+      nozzles: state.nozzles,
+      pipelines: state.pipelines,
+      welds: state.welds,
+      liftingLugs: state.liftingLugs,
+      coverageRects: state.coverageRects,
+    };
   }
 
   // Indices of nozzles anchored to this body, descending so removals below don't
@@ -49,5 +71,12 @@ export function cascadeRemoveAppendage(state: CascadeState, index: number): Casc
       .map((p) => (p.nozzleIndex > nozzleIndex ? { ...p, nozzleIndex: p.nozzleIndex - 1 } : p));
   }
 
-  return { appendages, nozzles, pipelines };
+  return {
+    appendages,
+    nozzles,
+    pipelines,
+    welds: stripByBody(state.welds, bodyId),
+    liftingLugs: stripByBody(state.liftingLugs, bodyId),
+    coverageRects: stripByBody(state.coverageRects, bodyId),
+  };
 }

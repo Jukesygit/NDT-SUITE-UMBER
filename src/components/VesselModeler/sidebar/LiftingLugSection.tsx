@@ -79,7 +79,14 @@ export function LiftingLugSection({
             </div>
 
             {/* Lug list */}
-            {vesselState.liftingLugs.map((l, i) => (
+            {vesselState.liftingLugs.map((l, i) => {
+                // Position clamps to the mounted body's length (appendage) or the main
+                // vessel length. Only the selected lug drives the picker.
+                const mountLen =
+                    i === selectedLugIndex && sel?.bodyId
+                        ? vesselState.appendages.find(a => a.id === sel.bodyId)?.length ?? vesselState.length
+                        : vesselState.length;
+                return (
                 <React.Fragment key={i}>
                     <div
                         className={`vm-list-item ${i === selectedLugIndex ? 'selected' : ''}`}
@@ -102,6 +109,22 @@ export function LiftingLugSection({
                                     onChange={e => onUpdateLug(selectedLugIndex, { name: e.target.value })}
                                 />
                             </div>
+                            {vesselState.appendages.length > 0 && (
+                                <div className="vm-control-group">
+                                    <div className="vm-label"><span>Mount on</span></div>
+                                    <select
+                                        className="vm-select"
+                                        value={sel.bodyId ?? ''}
+                                        onChange={e => onUpdateLug(selectedLugIndex, { bodyId: e.target.value === '' ? undefined : e.target.value })}
+                                        title="Mount this lug on the main vessel or an appendage body. Position/angle are reinterpreted in the chosen body's frame — adjust them after switching."
+                                    >
+                                        <option value="">Main vessel</option>
+                                        {vesselState.appendages.map(a => (
+                                            <option key={a.id} value={a.id}>{a.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <div className="vm-control-group">
                                 <div className="vm-label"><span>Style</span></div>
                                 <div className="vm-toggle-group">
@@ -126,6 +149,8 @@ export function LiftingLugSection({
                                         type="number"
                                         className="vm-input"
                                         value={sel.pos}
+                                        min={0}
+                                        max={mountLen}
                                         onChange={e => onUpdateLug(selectedLugIndex, { pos: Number(e.target.value) })}
                                     />
                                 </div>
@@ -156,7 +181,8 @@ export function LiftingLugSection({
                         </div>
                     )}
                 </React.Fragment>
-            ))}
+                );
+            })}
         </SubSection>
     );
 }

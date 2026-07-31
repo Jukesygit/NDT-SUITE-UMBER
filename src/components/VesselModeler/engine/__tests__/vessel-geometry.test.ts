@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import {
   DEFAULT_VESSEL_STATE,
   type AppendageConfig,
+  type LiftingLugConfig,
   type NozzleConfig,
   type VesselState,
 } from '../../types';
@@ -90,5 +91,42 @@ describe('buildVesselScene appendage nozzle placement', () => {
     // On the cylinder region the legacy inline path equals the main-frame surface point.
     const expected = resolveBodyFrame(state).surfacePoint(1000, 90);
     expect(nozzleMeshes[0].position.distanceTo(expected)).toBeLessThan(1e-6);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Lifting lugs — same appendage placement contract as nozzles (Phase 4 §3).
+// ---------------------------------------------------------------------------
+
+function makeLugState(lugs: LiftingLugConfig[]): VesselState {
+  return { ...DEFAULT_VESSEL_STATE, id: 3000, length: 6000, appendages: [sump], liftingLugs: lugs };
+}
+
+describe('buildVesselScene appendage lifting-lug placement', () => {
+  it('places an appendage-mounted lug on the appendage surface via its body frame', () => {
+    const state = makeLugState([
+      { name: 'L-main', pos: 1000, angle: 90, style: 'padEye', swl: '5t' },
+      { name: 'L-app', pos: 500, angle: 0, style: 'padEye', swl: '5t', bodyId: 'app-1' },
+    ]);
+    const { lugMeshes } = buildScene(state);
+    const expected = resolveBodyFrame(state, 'app-1').surfacePoint(500, 0);
+    expect(lugMeshes[1].position.distanceTo(expected)).toBeLessThan(1e-6);
+  });
+
+  it('clamps the appendage lug pos to the cylinder span [0, length]', () => {
+    const state = makeLugState([
+      { name: 'L-app', pos: 99999, angle: 30, style: 'trunnion', swl: '5t', bodyId: 'app-1' },
+    ]);
+    const { lugMeshes } = buildScene(state);
+    const frame = resolveBodyFrame(state, 'app-1');
+    const expected = frame.surfacePoint(frame.axialLength, 30);
+    expect(lugMeshes[0].position.distanceTo(expected)).toBeLessThan(1e-6);
+  });
+
+  it('leaves a main-shell lug on the legacy cylinder path', () => {
+    const state = makeLugState([{ name: 'L-main', pos: 1500, angle: 90, style: 'padEye', swl: '5t' }]);
+    const { lugMeshes } = buildScene(state);
+    const expected = resolveBodyFrame(state).surfacePoint(1500, 90);
+    expect(lugMeshes[0].position.distanceTo(expected)).toBeLessThan(1e-6);
   });
 });

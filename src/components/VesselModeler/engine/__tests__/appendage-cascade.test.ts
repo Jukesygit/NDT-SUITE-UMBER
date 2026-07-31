@@ -1,15 +1,23 @@
 // =============================================================================
-// appendage-cascade — deleting an appendage removes its nozzles + pipelines
+// appendage-cascade — deleting an appendage removes its attachables
 // =============================================================================
-// Guards P2-T1's removeAppendage cascade: deleting an appendage drops every
-// nozzle whose bodyId matches AND their pipelines, remapping the remaining
-// pipelines' nozzleIndex exactly as the single-nozzle removeNozzle cascade does.
-// Main-shell nozzles and pipelines must be left untouched.
+// Guards the removeAppendage cascade: deleting an appendage drops every nozzle
+// whose bodyId matches AND their pipelines (remapping the remaining pipelines'
+// nozzleIndex exactly as the single-nozzle removeNozzle cascade does), plus the
+// body's welds / lifting lugs / coverage rects (Phase 4). Main-shell attachables
+// and attachables on OTHER appendages must be left untouched.
 // =============================================================================
 
 import { describe, it, expect } from 'vitest';
 
-import type { AppendageConfig, NozzleConfig, Pipeline } from '../../types';
+import type {
+  AppendageConfig,
+  CoverageRectConfig,
+  LiftingLugConfig,
+  NozzleConfig,
+  Pipeline,
+  WeldConfig,
+} from '../../types';
 import { cascadeRemoveAppendage } from '../appendage-cascade';
 
 function nozzle(name: string, bodyId?: string): NozzleConfig {
@@ -22,6 +30,30 @@ function pipeline(id: string, nozzleIndex: number): Pipeline {
     nozzleIndex,
     pipeDiameter: 100,
     segments: [{ id: `${id}-s`, type: 'straight', rotation: 0, length: 300 }],
+  };
+}
+
+function weld(name: string, bodyId?: string): WeldConfig {
+  return { name, type: 'circumferential', pos: 100, color: '#888', bodyId };
+}
+
+function lug(name: string, bodyId?: string): LiftingLugConfig {
+  return { name, pos: 100, angle: 90, style: 'padEye', swl: '5t', bodyId };
+}
+
+function rect(id: number, bodyId?: string): CoverageRectConfig {
+  return {
+    id,
+    name: `C${id}`,
+    pos: 100,
+    angle: 90,
+    width: 100,
+    height: 100,
+    color: '#0c6',
+    lineWidth: 2,
+    filled: true,
+    fillOpacity: 0.2,
+    bodyId,
   };
 }
 
@@ -46,14 +78,26 @@ const appendages: AppendageConfig[] = [
   },
 ];
 
+/** Full cascade-state slice with empty attachable arrays by default. */
+function makeState(overrides: Partial<Parameters<typeof cascadeRemoveAppendage>[0]> = {}) {
+  return {
+    appendages,
+    nozzles: [] as NozzleConfig[],
+    pipelines: [] as Pipeline[],
+    welds: [] as WeldConfig[],
+    liftingLugs: [] as LiftingLugConfig[],
+    coverageRects: [] as CoverageRectConfig[],
+    ...overrides,
+  };
+}
+
 describe('cascadeRemoveAppendage', () => {
   it('removes the body, its nozzles, and their pipelines with correct index shifting', () => {
     // Nozzles: 0 main, 1 app-1, 2 app-1, 3 main. Each has a pipeline.
-    const state = {
-      appendages,
+    const state = makeState({
       nozzles: [nozzle('N0'), nozzle('N1', 'app-1'), nozzle('N2', 'app-1'), nozzle('N3')],
       pipelines: [pipeline('p0', 0), pipeline('p1', 1), pipeline('p2', 2), pipeline('p3', 3)],
-    };
+    });
 
     const result = cascadeRemoveAppendage(state, 0);
 
@@ -74,8 +118,7 @@ describe('cascadeRemoveAppendage', () => {
   });
 
   it('preserves free-standing pipelines (nozzleIndex -1) untouched', () => {
-    const state = {
-      appendages,
+    const state = makeState({
       nozzles: [nozzle('N0'), nozzle('N1', 'app-1')],
       pipelines: [
         {
@@ -84,7 +127,7 @@ describe('cascadeRemoveAppendage', () => {
         } as Pipeline,
         pipeline('p1', 1),
       ],
-    };
+    });
 
     const result = cascadeRemoveAppendage(state, 0);
 
@@ -93,11 +136,10 @@ describe('cascadeRemoveAppendage', () => {
   });
 
   it('leaves nozzles and pipelines untouched when the body has no attached nozzles', () => {
-    const state = {
-      appendages,
+    const state = makeState({
       nozzles: [nozzle('N0'), nozzle('N1', 'app-1')],
       pipelines: [pipeline('p1', 1)],
-    };
+    });
 
     // Remove app-2, which has no nozzles.
     const result = cascadeRemoveAppendage(state, 1);
@@ -108,16 +150,47 @@ describe('cascadeRemoveAppendage', () => {
   });
 
   it('is a no-op on nozzles/pipelines for an out-of-range index', () => {
-    const state = {
-      appendages,
+    const state = makeState({
       nozzles: [nozzle('N0', 'app-1')],
       pipelines: [pipeline('p0', 0)],
-    };
+    });
 
     const result = cascadeRemoveAppendage(state, 99);
 
     expect(result.appendages).toHaveLength(2);
     expect(result.nozzles).toBe(state.nozzles);
     expect(result.pipelines).toBe(state.pipelines);
+  });
+
+  it('strips the body’s welds, lifting lugs, and coverage rects; keeps main + other-body', () => {
+    const state = makeState({
+      welds: [weld('W-main'), weld('W-app1', 'app-1'), weld('W-app2', 'app-2')],
+      liftingLugs: [lug('L-main'), lug('L-app1', 'app-1')],
+      coverageRects: [rect(1), rect(2, 'app-1'), rect(3, 'app-1'), rect(4, 'app-2')],
+    });
+
+    const result = cascadeRemoveAppendage(state, 0); // delete app-1
+
+    expect(result.welds.map((w) => w.name)).toEqual(['W-main', 'W-app2']);
+    expect(result.liftingLugs.map((l) => l.name)).toEqual(['L-main']);
+    expect(result.coverageRects.map((r) => r.id)).toEqual([1, 4]);
+    // Every surviving attachable is either main-shell or on the still-present body.
+    expect(result.welds.every((w) => w.bodyId !== 'app-1')).toBe(true);
+    expect(result.coverageRects.every((r) => r.bodyId !== 'app-1')).toBe(true);
+  });
+
+  it('preserves attachable array references when the deleted body owns none', () => {
+    const state = makeState({
+      welds: [weld('W-main'), weld('W-app1', 'app-1')],
+      liftingLugs: [lug('L-app1', 'app-1')],
+      coverageRects: [rect(1)],
+    });
+
+    // Delete app-2, which owns no welds/lugs/rects — those arrays keep identity.
+    const result = cascadeRemoveAppendage(state, 1);
+
+    expect(result.welds).toBe(state.welds);
+    expect(result.liftingLugs).toBe(state.liftingLugs);
+    expect(result.coverageRects).toBe(state.coverageRects);
   });
 });
