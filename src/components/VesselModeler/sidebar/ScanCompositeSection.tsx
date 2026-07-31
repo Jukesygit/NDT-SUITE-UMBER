@@ -1,7 +1,12 @@
-import React, { useState } from 'react';
-import { Trash2, Cloud } from 'lucide-react';
+import React, { useState, Suspense, lazy } from 'react';
+import { Trash2, Cloud, Mountain } from 'lucide-react';
 import type { VesselState, ScanCompositeConfig } from '../types';
 import { SliderRow, SubSection } from './SliderRow';
+import { hasReliefGrid } from '../engine/composite-relief-adapter';
+
+// Lazy so the topology/relief engine (Three.js surface builder) is only pulled
+// into the modeler bundle when a user actually opens a relief view.
+const ReliefViewModal = lazy(() => import('../ReliefViewModal'));
 
 export interface ScanCompositeSectionProps {
   vesselState: VesselState;
@@ -37,12 +42,20 @@ export function ScanCompositeSection({
 }: ScanCompositeSectionProps) {
   const [showImport, setShowImport] = useState(false);
   const [importingId, setImportingId] = useState<string | null>(null);
+  const [reliefCompositeId, setReliefCompositeId] = useState<string | null>(null);
   const handleImport = () => {
     if (!importingId) return;
     onImportComposite(importingId, { scanDirection: 'cw', indexDirection: 'forward' });
     setShowImport(false);
     setImportingId(null);
   };
+
+  // Composites are always cylindrical (dome scans live in a separate array), so
+  // no dome guard is needed here. The modal unmounts and disposes if the backing
+  // composite is removed while open.
+  const reliefComposite = reliefCompositeId
+    ? vesselState.scanComposites.find((c) => c.id === reliefCompositeId)
+    : undefined;
 
   return (
     <SubSection
@@ -260,6 +273,39 @@ export function ScanCompositeSection({
                     >
                       Re-adjust Orientation
                     </button>
+
+                    {/* --- Relief view (3D elevation surface of the grid) --- */}
+                    {(() => {
+                      const canRelief = hasReliefGrid(sc);
+                      return (
+                        <button
+                          className="vm-btn"
+                          style={{
+                            width: '100%',
+                            marginTop: 6,
+                            fontSize: '0.75rem',
+                            padding: '4px 0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6,
+                            opacity: canRelief ? 1 : 0.5,
+                            cursor: canRelief ? 'pointer' : 'not-allowed',
+                          }}
+                          aria-disabled={!canRelief}
+                          title={
+                            canRelief
+                              ? 'Open this composite as a 3D relief / elevation surface (pits render as valleys)'
+                              : 'Relief view needs a loaded thickness grid (at least 2×2 cells)'
+                          }
+                          onClick={() => {
+                            if (canRelief) setReliefCompositeId(sc.id);
+                          }}
+                        >
+                          <Mountain size={13} /> Relief view
+                        </button>
+                      );
+                    })()}
 
                     {/* --- Coordinate origin toggle --- */}
                     <div className="vm-control-group" style={{ marginTop: 8 }}>
@@ -519,6 +565,16 @@ export function ScanCompositeSection({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Relief view modal (lazy-loaded on demand) */}
+      {reliefComposite && (
+        <Suspense fallback={null}>
+          <ReliefViewModal
+            composite={reliefComposite}
+            onClose={() => setReliefCompositeId(null)}
+          />
+        </Suspense>
       )}
     </SubSection>
   );
