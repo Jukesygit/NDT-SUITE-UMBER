@@ -13,6 +13,7 @@ import { computeRulerDistance, shellPoint } from './annotation-geometry';
 import { SCALE } from './materials';
 import { getSaddleBaseY } from './saddle-geometry';
 import { computeNozzleTipY } from './pipeline-geometry';
+import { computeWeldLabelAnchor } from './weld-label-anchor';
 
 // ---------------------------------------------------------------------------
 // Canvas Text Rendering
@@ -441,27 +442,35 @@ export function createWeldLabelSprite(
     true,
   );
 
-  const radius = vesselState.id / 2;
-  const tanTan = vesselState.length;
-  const isVertical = vesselState.orientation === 'vertical';
-  const offset = (radius + 30) * SCALE;
-
-  if (config.type === 'circumferential') {
-    const axial = (config.pos - tanTan / 2) * SCALE;
-    if (isVertical) {
-      mesh.position.set(0, axial, offset);
-    } else {
-      mesh.position.set(axial, offset, 0);
-    }
+  if (config.bodyId !== undefined) {
+    // Appendage-mounted weld: anchor on the body's SurfaceFrame (circ labels at
+    // the top of the ring, matching the main-shell convention in the else branch)
+    // so the label follows the appendage instead of floating on the main shell.
+    mesh.position.copy(computeWeldLabelAnchor(config, vesselState));
   } else {
-    const midPos = (config.pos + (config.endPos ?? tanTan)) / 2;
-    const axial = (midPos - tanTan / 2) * SCALE;
-    const angleRad = ((config.angle ?? 90) * Math.PI) / 180;
-    const r = offset;
-    if (isVertical) {
-      mesh.position.set(r * Math.cos(angleRad), axial, r * Math.sin(angleRad));
+    // Legacy main-shell placement (byte-identical).
+    const radius = vesselState.id / 2;
+    const tanTan = vesselState.length;
+    const isVertical = vesselState.orientation === 'vertical';
+    const offset = (radius + 30) * SCALE;
+
+    if (config.type === 'circumferential') {
+      const axial = (config.pos - tanTan / 2) * SCALE;
+      if (isVertical) {
+        mesh.position.set(0, axial, offset);
+      } else {
+        mesh.position.set(axial, offset, 0);
+      }
     } else {
-      mesh.position.set(axial, r * Math.sin(angleRad), r * Math.cos(angleRad));
+      const midPos = (config.pos + (config.endPos ?? tanTan)) / 2;
+      const axial = (midPos - tanTan / 2) * SCALE;
+      const angleRad = ((config.angle ?? 90) * Math.PI) / 180;
+      const r = offset;
+      if (isVertical) {
+        mesh.position.set(r * Math.cos(angleRad), axial, r * Math.sin(angleRad));
+      } else {
+        mesh.position.set(axial, r * Math.sin(angleRad), r * Math.cos(angleRad));
+      }
     }
   }
 

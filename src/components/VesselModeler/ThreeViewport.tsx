@@ -34,6 +34,8 @@ import {
 } from './engine/inspection-image-labels';
 import { createAllInspectionImageMarkers } from './engine/inspection-image-geometry';
 import { createWeldGeometry } from './engine/weld-geometry';
+import { resolveBodyFrame } from './engine/body-frame';
+import { weldLabelAnchorOnFrame } from './engine/weld-label-anchor';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { updateCameraAnimation } from './engine/camera-animation';
 import {
@@ -367,6 +369,17 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
     const camLocal = cam.position.clone().applyMatrix4(invMatrix);
 
     for (const { label, weld } of labels) {
+      if (weld.bodyId !== undefined) {
+        // Appendage-mounted weld: anchor on the body's SurfaceFrame. Circ labels
+        // face the camera (its angle projected into the body datum), matching the
+        // main-shell circ label's camera-facing slide below; long labels use
+        // their own datum angle. Keeps the label on the appendage, not the shell.
+        const frame = resolveBodyFrame(state, weld.bodyId);
+        const circAngle =
+          weld.type === 'circumferential' ? frame.toLocal(camLocal).angle : 0;
+        label.position.copy(weldLabelAnchorOnFrame(frame, weld, circAngle));
+        continue;
+      }
       if (weld.type === 'circumferential') {
         const axial = (weld.pos - tanTan / 2) * SCALE;
         // Project camera onto the radial plane at this axial position
