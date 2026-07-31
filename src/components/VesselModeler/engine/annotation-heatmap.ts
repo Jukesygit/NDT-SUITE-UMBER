@@ -21,6 +21,7 @@ import {
   sampleComposite,
   sampleAnnotationDrapeGrid,
   rectIsPureCylinder,
+  resolveBodyDims,
 } from './scan-sampling';
 
 // ---------------------------------------------------------------------------
@@ -132,7 +133,7 @@ export function findOverlappingComposite(
   vesselState: VesselState,
   body?: string
 ): ScanCompositeConfig | undefined {
-  const circumference = Math.PI * vesselState.id;
+  const circumference = resolveBodyDims(vesselState, body).circumference;
   const composites = vesselState.scanComposites;
   // Iterate in reverse — last (topmost) composite wins
   for (let i = composites.length - 1; i >= 0; i--) {
@@ -164,7 +165,7 @@ function buildCylinderCropPixels(
   colorScale: string,
   body: string | undefined
 ): HeatmapPixelResult | null {
-  const circumference = Math.PI * vesselState.id;
+  const circumference = resolveBodyDims(vesselState, body).circumference;
   const composite = findOverlappingComposite(ann, vesselState, body);
   if (!composite) return null;
 

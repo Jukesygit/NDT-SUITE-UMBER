@@ -10,10 +10,10 @@
 // descending so earlier indices stay valid as the array shrinks.
 //
 // Main-shell nozzles (bodyId undefined) and their pipelines are left untouched.
-// The body's other attachables — welds, lifting lugs and coverage rects that
-// carry its bodyId — are stripped too (simple filters; no index cascade). Arrays
-// with nothing to strip keep their original reference so a delete that touches no
-// attachables stays byte-identical downstream.
+// The body's other attachables — welds, lifting lugs, coverage rects, annotations
+// and dome scans that carry its bodyId — are stripped too (simple filters; no
+// index cascade). Arrays with nothing to strip keep their original reference so a
+// delete that touches no attachables stays byte-identical downstream.
 // Kept pure (no React) so the shifting logic can be unit-tested directly.
 // =============================================================================
 
@@ -28,6 +28,7 @@ type CascadeState = Pick<
   | 'welds'
   | 'liftingLugs'
   | 'coverageRects'
+  | 'annotations'
   | 'domeScanComposites'
 >;
 
@@ -57,6 +58,7 @@ export function cascadeRemoveAppendage(state: CascadeState, index: number): Casc
       welds: state.welds,
       liftingLugs: state.liftingLugs,
       coverageRects: state.coverageRects,
+      annotations: state.annotations,
       domeScanComposites: state.domeScanComposites,
     };
   }
@@ -85,6 +87,7 @@ export function cascadeRemoveAppendage(state: CascadeState, index: number): Casc
     welds: stripByBody(state.welds, bodyId),
     liftingLugs: stripByBody(state.liftingLugs, bodyId),
     coverageRects: stripByBody(state.coverageRects, bodyId),
+    annotations: stripByBody(state.annotations, bodyId),
     domeScanComposites: stripByBody(state.domeScanComposites, bodyId),
   };
 }

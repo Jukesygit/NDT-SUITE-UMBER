@@ -115,7 +115,9 @@ export function computeSeverityLevel(
  */
 export function recomputeAllAnnotationStats(vesselState: VesselState): AnnotationShapeConfig[] {
   return vesselState.annotations.map((ann) => {
-    const thicknessStats = computeAnnotationThicknessStats(ann, vesselState);
+    // Sample the annotation's own body (undefined = main shell) so an appendage
+    // annotation reads that body's composites / dished-closure dome scans.
+    const thicknessStats = computeAnnotationThicknessStats(ann, vesselState, ann.bodyId);
     const severityLevel = computeSeverityLevel(thicknessStats, vesselState.thicknessThresholds);
     return { ...ann, thicknessStats, severityLevel };
   });

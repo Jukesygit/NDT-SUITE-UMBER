@@ -667,6 +667,44 @@ describe('weld / lug / coverage-rect bodyId (appendage mount)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Annotation bodyId (appendage mount) — an appendage-mounted annotation round-
+// trips on both paths; a main-shell annotation keeps no bodyId tag (byte-
+// identical legacy shape). Annotations carry no derived section_type.
+// ---------------------------------------------------------------------------
+
+describe('annotation bodyId (appendage mount)', () => {
+  function makeMixedAnnotationFixture(): VesselState {
+    const fixture = makeFixture();
+    const base = fixture.annotations[0];
+    fixture.annotations = [
+      { ...base, id: 1, name: 'A-main', bodyId: undefined },
+      { ...base, id: 2, name: 'A-app', pos: 300, angle: 0, bodyId: 'app-1' },
+    ];
+    return fixture;
+  }
+
+  for (const path of ['local', 'cloud'] as const) {
+    it(`round-trips an appendage-mounted annotation on the ${path} path`, () => {
+      const restored = roundTrip(makeMixedAnnotationFixture(), path);
+      expect(restored.annotations[1].bodyId).toBe('app-1');
+      expect(restored.annotations[1].pos).toBe(300);
+      expect(restored.annotations[1].angle).toBe(0);
+      // The main-shell annotation is untouched — no bodyId tag.
+      expect(restored.annotations[0].bodyId).toBeUndefined();
+    });
+
+    it(`persists bodyId only for the appendage annotation on the ${path} path`, () => {
+      // JSON boundary mirrors the real save (undefined bodyId is dropped there).
+      const serialized = JSON.parse(
+        JSON.stringify(serializeVesselState(makeMixedAnnotationFixture(), { path }))
+      ) as { annotations: Array<Record<string, unknown>> };
+      expect(serialized.annotations[0]).not.toHaveProperty('bodyId');
+      expect(serialized.annotations[1].bodyId).toBe('app-1');
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Coverage targets — the extended CoverageTargets (base regions + per-appendage
 // map) must survive save -> load on BOTH paths. Legacy JSON without the key
 // loads as undefined (the consumer defaults via ?? DEFAULT_TARGETS).

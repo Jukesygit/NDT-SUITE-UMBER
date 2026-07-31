@@ -20,7 +20,7 @@ import * as THREE from 'three';
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { VesselState, AnnotationShapeType } from '../types';
 import { SCALE } from './materials';
-import { resolveBodyFrame } from './body-frame';
+import { resolveBodyFrame, type SurfaceFrame } from './body-frame';
 import { domePhiThetaFromPoint } from './dome-scan-geometry';
 import { buildMeridianProfile, arcFromAxial, axialFromArc, displayRadiusAtArc } from './dome-arc';
 
@@ -937,6 +937,41 @@ export class InteractionManager {
         return;
       }
 
+      // An annotation can mount on an appendage body: scope its drag to that body's
+      // surface INCLUDING the dished closure (getBodySurfaceMeshes, so it can be
+      // dragged onto / through the end), invert through the body frame, and reuse
+      // the dome-stable hysteresis with the body's dims (junction floor minPos 0 —
+      // no left head). Main-shell annotations fall through to the legacy path below.
+      if (this.dragType === 'annotation') {
+        const ann = state.annotations.find((a) => a.id === this.selectedAnnotationIdx);
+        const annBodyId = ann?.bodyId;
+        if (annBodyId !== undefined) {
+          const bodyMeshes = this.getBodySurfaceMeshes(annBodyId);
+          const bodyHits =
+            bodyMeshes.length > 0 ? this.raycaster.intersectObjects(bodyMeshes, true) : [];
+          const bodyHit = bodyHits.find((h) => hitBodyId(h.object) === annBodyId);
+          if (!bodyHit) return;
+          const bodyFrame = resolveBodyFrame(state, annBodyId);
+          const local = bodyFrame.toLocal(bodyHit.point);
+          const drag = this.resolveDrapeDrag(
+            local.pos,
+            local.angle,
+            this.radialAxisDistanceFromFrame(bodyHit.point, bodyFrame),
+            ann?.pos ?? local.pos,
+            ann?.angle ?? local.angle,
+            state,
+            {
+              R: bodyFrame.radius,
+              L: bodyFrame.axialLength,
+              headDepth: bodyFrame.headDepth,
+              minPos: 0,
+            }
+          );
+          this.callbacks.onAnnotationMoved(this.selectedAnnotationIdx, drag.pos, drag.angle);
+          return;
+        }
+      }
+
       const point = hits[0].point;
 
       // Position (mm) and angle (deg) via the single frame inverse.
@@ -947,15 +982,21 @@ export class InteractionManager {
       const newPos = Math.max(-headDepth, Math.min(state.length + headDepth, pos));
 
       if (this.dragType === 'annotation') {
-        // Dome-stable drag: hold/flip the angle reference near the pole so a rect
-        // can be dragged onto and through the dome centre without spinning.
+        // Main-shell annotation: only accept a main-shell hit so it can't snap onto
+        // an appendage surface (mirrors the nozzle / lug / weld main-shell scoping).
+        // Dome-stable drag: hold/flip the angle reference near the pole so a rect can
+        // be dragged onto and through the dome centre without spinning. With no
+        // appendages present the first hit is the only hit — identical to legacy.
         const ann = state.annotations.find((a) => a.id === this.selectedAnnotationIdx);
+        const mainHit = hits.find((h) => hitBodyId(h.object) === undefined);
+        if (!mainHit) return;
+        const { pos: mPos, angle: mDeg } = frame.toLocal(mainHit.point);
         const drag = this.resolveDrapeDrag(
-          pos,
-          deg,
-          this.radialAxisDistanceMm(point, state),
-          ann?.pos ?? pos,
-          ann?.angle ?? deg,
+          mPos,
+          mDeg,
+          this.radialAxisDistanceMm(mainHit.point, state),
+          ann?.pos ?? mPos,
+          ann?.angle ?? mDeg,
           state
         );
         this.callbacks.onAnnotationMoved(this.selectedAnnotationIdx, drag.pos, drag.angle);
@@ -1112,6 +1153,21 @@ export class InteractionManager {
   }
 
   /**
+   * Distance (mm) of a world point from a body's axis, derived from the frame's
+   * public API only (centreline origin + outward axial unit). Used so the
+   * appendage annotation drag can tell "near the closure pole" (r → 0) with the
+   * SAME hysteresis the main shell uses, but relative to the appendage axis.
+   */
+  private radialAxisDistanceFromFrame(point: THREE.Vector3, frame: SurfaceFrame): number {
+    const R = frame.radius;
+    const centerBase = frame.surfacePoint(0, 0, -R);
+    const axisN = frame.surfacePoint(1, 0, -R).sub(centerBase).normalize();
+    const rel = point.clone().sub(centerBase);
+    const axial = rel.dot(axisN);
+    return rel.addScaledVector(axisN, -axial).length() / SCALE;
+  }
+
+  /**
    * Stable centre for an annotation/coverage rect dragged onto or across a dome
    * end (design Addendum 2). The raycast angle is unreliable near the vessel
    * axis, so this keeps an angle reference (the item's stored angle):
@@ -1133,14 +1189,23 @@ export class InteractionManager {
     rHit: number,
     storedPos: number,
     storedAngle: number,
-    state: VesselState
+    state: VesselState,
+    dims?: { R: number; L: number; headDepth: number; minPos: number }
   ): { pos: number; angle: number } {
-    const L = state.length;
-    const R = state.id / 2;
-    const headDepth = state.id / (2 * state.headRatio);
-    const clampedPos = Math.max(-headDepth, Math.min(L + headDepth, posH));
+    // dims override lets an appendage annotation reuse this hysteresis with the
+    // body's radius / cylinder length / closure depth and a junction floor
+    // (minPos 0 — an appendage has no left head). Absent = main shell, byte-identical.
+    const L = dims?.L ?? state.length;
+    const R = dims?.R ?? state.id / 2;
+    const headDepth = dims?.headDepth ?? state.id / (2 * state.headRatio);
+    const minPos = dims?.minPos ?? -headDepth;
+    const clampedPos = Math.max(minPos, Math.min(L + headDepth, posH));
 
-    const onHead = posH < 0 || posH > L || storedPos < 0 || storedPos > L;
+    // A body with a junction floor (minPos >= 0) has no left head, so only the far
+    // closure (pos > L) counts as "on a head".
+    const lowHead = minPos < 0;
+    const onHead =
+      (lowHead && (posH < 0 || storedPos < 0)) || posH > L || storedPos > L;
     if (!onHead) {
       return { pos: clampedPos, angle: thetaH };
     }

@@ -232,10 +232,28 @@ export function buildAppendageFrame(
     return datum.clone().multiplyScalar(Math.cos(t)).addScaledVector(cross, Math.sin(t));
   }
 
+  /**
+   * Cylindrical radius at an axial position. The cylinder body [0, length] keeps
+   * the full radius. Past the far tangent line (pos > length) a DISHED closure
+   * curves in as the ellipsoidal right-head analog — the SAME axial-parameterised
+   * ellipse the main frame's `radiusAt` uses (ratio clamp at 1 so the apex reaches
+   * the true pole), so a draped annotation lands on the actual closure surface. A
+   * flat/open closure (headDepth 0) or the junction end (pos < 0, no closure) keep
+   * the full radius. Because the point still sits at axial coordinate `pos`,
+   * `toLocal` recovers (pos, angle) on the closure unchanged.
+   */
+  function radiusAt(posMm: number): number {
+    if (headDepth > 0 && posMm > params.length) {
+      const ratio = Math.min(1, (posMm - params.length) / headDepth);
+      return radius * Math.sqrt(1 - ratio * ratio);
+    }
+    return radius;
+  }
+
   function surfacePoint(posMm: number, angleDeg: number, offsetMm = 0): THREE.Vector3 {
     const point = origin.clone();
     point.addScaledVector(axis, posMm * SCALE);
-    point.addScaledVector(radialDir(angleDeg), (radius + offsetMm) * SCALE);
+    point.addScaledVector(radialDir(angleDeg), (radiusAt(posMm) + offsetMm) * SCALE);
     return point;
   }
 

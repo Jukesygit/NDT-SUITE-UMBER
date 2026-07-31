@@ -110,6 +110,10 @@ export function AnnotationSection({
     const sel = vesselState.annotations.find(a => a.id === selectedAnnotationId);
     const selRuler = vesselState.rulers.find(r => r.id === selectedRulerId);
     const mc = vesselState.measurementConfig;
+    // Position clamps to the mounted body's length (appendage) or main vessel length.
+    const mountLen = sel?.bodyId
+        ? vesselState.appendages.find(a => a.id === sel.bodyId)?.length ?? vesselState.length
+        : vesselState.length;
 
     const restrictionImageRef = useRef<HTMLInputElement>(null);
     const [showProjectPicker, setShowProjectPicker] = useState(false);
@@ -279,6 +283,22 @@ export function AnnotationSection({
                                     onChange={e => onUpdateAnnotation(sel.id, { name: e.target.value })}
                                 />
                             </div>
+                            {vesselState.appendages.length > 0 && (
+                                <div className="vm-control-group">
+                                    <div className="vm-label"><span>Mount on</span></div>
+                                    <select
+                                        className="vm-select"
+                                        value={sel.bodyId ?? ''}
+                                        onChange={e => onUpdateAnnotation(sel.id, { bodyId: e.target.value === '' ? undefined : e.target.value })}
+                                        title="Place this annotation on the main vessel or an appendage body. Position/angle are reinterpreted in the chosen body's frame — adjust them after switching."
+                                    >
+                                        <option value="">Main vessel</option>
+                                        {vesselState.appendages.map(a => (
+                                            <option key={a.id} value={a.id}>{a.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <div className="vm-form-row">
                                 <div className="vm-control-group">
                                     <div className="vm-label"><span>Position (mm)</span></div>
@@ -286,6 +306,8 @@ export function AnnotationSection({
                                         type="number"
                                         className="vm-input"
                                         value={sel.pos}
+                                        min={0}
+                                        max={mountLen}
                                         onChange={e => onUpdateAnnotation(sel.id, { pos: Number(e.target.value) })}
                                     />
                                 </div>

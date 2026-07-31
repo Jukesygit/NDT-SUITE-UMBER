@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 
 import type {
   AnnotationShapeConfig,
+  AppendageConfig,
   DomeScanConfig,
   ScanCompositeConfig,
   VesselState,
@@ -13,6 +14,7 @@ import {
   sampleSurfacePoint,
   normAngle,
   sampleComposite,
+  rectIsPureCylinder,
 } from '../scan-sampling';
 import { computeAnnotationThicknessStats } from '../annotation-stats';
 import { buildAnnotationHeatmapPixels } from '../annotation-heatmap';
@@ -426,5 +428,143 @@ describe('agreement — heatmap min equals stats min on a mixed fixture', () => 
     expect(px).not.toBeNull();
     expect(px!.dataMin).toBe(stats!.min);
     expect(stats!.min).toBe(10); // the dome (thinner) side drives the minimum
+  });
+});
+
+// ---------------------------------------------------------------------------
+// (7) Appendage bodies — an annotation mounted on an appendage samples THAT
+// body's composites (cylinder) and its dished-closure dome scan (Phase 4B).
+// ---------------------------------------------------------------------------
+
+// A dished appendage: R 400, D 200 (headRatio 2), cylinder L 1200.
+const APP_R = 400;
+const APP_D = 200;
+const APP_L = 1200;
+
+function makeAppendage(over?: Partial<AppendageConfig>): AppendageConfig {
+  return {
+    id: 'app1',
+    name: 'Sump',
+    mountPos: L / 2,
+    mountAngle: 270,
+    diameter: 2 * APP_R,
+    length: APP_L,
+    endClosure: 'dished',
+    headRatio: 2,
+    ...over,
+  };
+}
+
+/** Uniform composite (value 8) spanning the whole appendage cylinder + circumference. */
+function makeAppendageShellComposite(over?: Partial<ScanCompositeConfig>): ScanCompositeConfig {
+  const rows = 13; // index (axial) axis, 0..1200
+  const cols = 13; // scan (circumferential) axis, 0..2π·R
+  const circ = 2 * Math.PI * APP_R;
+  return {
+    id: 'app-shell',
+    name: 'app-shell',
+    bodyId: 'app1',
+    data: Array.from({ length: rows }, () => Array.from({ length: cols }, () => 8)),
+    xAxis: Array.from({ length: cols }, (_, i) => (i / (cols - 1)) * circ),
+    yAxis: Array.from({ length: rows }, (_, i) => (i / (rows - 1)) * APP_L),
+    stats: { min: 8, max: 8, mean: 8, median: 8, stdDev: 0 },
+    indexStartMm: 0,
+    datumAngleDeg: 0,
+    scanDirection: 'ccw',
+    indexDirection: 'forward',
+    orientationConfirmed: true,
+    colorScale: 'Jet',
+    rangeMin: null,
+    rangeMax: null,
+    opacity: 1,
+    ...over,
+  };
+}
+
+describe('appendage — annotation on the appendage cylinder reads that body composite', () => {
+  const ann = makeAnn({ bodyId: 'app1', pos: APP_L / 2, angle: 90, width: 120, height: 90 });
+  const vessel = makeVessel({
+    appendages: [makeAppendage()],
+    scanComposites: [makeAppendageShellComposite()],
+  });
+
+  it('samples the appendage composite (uniform 8)', () => {
+    const stats = computeAnnotationThicknessStats(ann, vessel, ann.bodyId);
+    expect(stats).toBeDefined();
+    expect(stats!.sampleCount).toBeGreaterThan(50);
+    expect(stats!.min).toBe(8);
+    expect(stats!.max).toBe(8);
+  });
+
+  it('the appendage composite feeds ONLY the appendage annotation, not a main-shell one', () => {
+    const mainAnn = makeAnn({ bodyId: undefined, pos: APP_L / 2, angle: 90, width: 120, height: 90 });
+    expect(computeAnnotationThicknessStats(mainAnn, vessel, undefined)).toBeUndefined();
+  });
+
+  it('a MAIN composite does not feed the appendage annotation (scoping, other direction)', () => {
+    const mainVessel = makeVessel({
+      appendages: [makeAppendage()],
+      scanComposites: [makeAppendageShellComposite({ id: 'main', bodyId: undefined })],
+    });
+    expect(computeAnnotationThicknessStats(ann, mainVessel, ann.bodyId)).toBeUndefined();
+  });
+});
+
+describe('appendage — closure-touching annotation drapes onto the dished end + reads its dome scan', () => {
+  // Annotation centred on the closure at sx = 0.4·D (phi = acos(0.4) = 66.4°).
+  const ann = makeAnn({
+    bodyId: 'app1',
+    pos: APP_L + 0.4 * APP_D,
+    angle: 90,
+    width: 160,
+    height: 120,
+  });
+  // Synthetic closure dome scan (head 'end', bodyId app1) with a known min cell at centre.
+  const domeData: (number | null)[][] = Array.from({ length: 11 }, () =>
+    Array.from({ length: 11 }, () => 15),
+  );
+  domeData[5][5] = 5; // planted minimum at grid centre = annotation centre
+  const dome = makeDomeComposite({
+    id: 'app-dome',
+    bodyId: 'app1',
+    head: 'end',
+    centerPhi: 66.4,
+    centerTheta: 90,
+    data: domeData,
+    xAxis: Array.from({ length: 11 }, (_, i) => i * 24), // scan range 240 (circ)
+    yAxis: Array.from({ length: 11 }, (_, i) => i * 32), // index range 320 (meridian)
+    stats: { min: 5, max: 15, mean: 14, median: 15, stdDev: 2 },
+  });
+  const vessel = makeVessel({ appendages: [makeAppendage()], domeScanComposites: [dome] });
+
+  it('is head-touching (not pure cylinder) so it drapes onto the closure', () => {
+    expect(rectIsPureCylinder(ann, vessel)).toBe(false);
+  });
+
+  it('stats read the planted closure-scan minimum cell', () => {
+    const stats = computeAnnotationThicknessStats(ann, vessel, ann.bodyId);
+    expect(stats).toBeDefined();
+    expect(stats!.sampleCount).toBeGreaterThan(0);
+    expect(stats!.min).toBe(5); // planted min at the closure grid centre
+    expect(stats!.max).toBe(15);
+  });
+
+  it('heatmap min equals the stats min (same sampled closure cells)', () => {
+    const stats = computeAnnotationThicknessStats(ann, vessel, ann.bodyId);
+    const px = buildAnnotationHeatmapPixels(ann, vessel, 'Jet', ann.bodyId);
+    expect(px).not.toBeNull();
+    expect(px!.dataMin).toBe(stats!.min);
+  });
+
+  it('the appendage closure scan does NOT feed a main-shell annotation at the same pos', () => {
+    const mainAnn = makeAnn({
+      bodyId: undefined,
+      pos: APP_L + 0.4 * APP_D,
+      angle: 90,
+      width: 160,
+      height: 120,
+    });
+    // No main dome scan present; the appendage 'end' scan must not leak to the main shell.
+    expect(computeAnnotationThicknessStats(mainAnn, vessel, undefined)).toBeUndefined();
   });
 });

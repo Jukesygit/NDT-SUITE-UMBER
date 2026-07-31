@@ -13,6 +13,7 @@ import { describe, it, expect } from 'vitest';
 
 import {
   DEFAULT_VESSEL_STATE,
+  type AnnotationShapeConfig,
   type AppendageConfig,
   type DomeScanConfig,
   type VesselState,
@@ -121,6 +122,45 @@ describe('structuralHash — dome scan bodyId', () => {
       ...DEFAULT_VESSEL_STATE,
       appendages: [base],
       domeScanComposites: [dome(base.id)],
+    };
+    expect(structuralHash(onMain)).not.toBe(structuralHash(onBody));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Annotation bodyId is hash-covered. Annotations are hashed WHOLESALE (the
+// structuralHash spreads `...a`), so bodyId is included automatically — this
+// regression locks that a future refactor to a field-list keeps bodyId in it
+// (moving an annotation between bodies re-parameterises its geometry).
+// ---------------------------------------------------------------------------
+
+describe('structuralHash — annotation bodyId', () => {
+  function ann(bodyId?: string): AnnotationShapeConfig {
+    return {
+      id: 1,
+      name: 'A1',
+      type: 'scan',
+      pos: 100,
+      angle: 90,
+      width: 200,
+      height: 150,
+      color: '#ff3333',
+      lineWidth: 2,
+      showLabel: false,
+      bodyId,
+    };
+  }
+
+  it('changes when an annotation moves from the main shell to an appendage body', () => {
+    const onMain: VesselState = {
+      ...DEFAULT_VESSEL_STATE,
+      appendages: [base],
+      annotations: [ann(undefined)],
+    };
+    const onBody: VesselState = {
+      ...DEFAULT_VESSEL_STATE,
+      appendages: [base],
+      annotations: [ann(base.id)],
     };
     expect(structuralHash(onMain)).not.toBe(structuralHash(onBody));
   });

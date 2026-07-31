@@ -358,6 +358,12 @@ export interface AnnotationShapeConfig {
   id: number;
   name: string;
   type: AnnotationShapeType;
+  /** Body this annotation is mounted on. undefined = main shell (legacy path,
+   *  byte-identical). When set to an appendage id, `pos` is mm along the
+   *  appendage axis from the junction and `angle` is in the appendage datum (see
+   *  engine/body-frame.ts); its stats/heatmap sample that body's composites and
+   *  dished-closure dome scans. An annotation belongs to exactly one body. */
+  bodyId?: string;
   /** Center position: mm from left tangent line */
   pos: number;
   /** Center angle: degrees around circumference (90 = top) */

@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 
 import type {
+  AnnotationShapeConfig,
   AppendageConfig,
   CoverageRectConfig,
   DomeScanConfig,
@@ -54,6 +55,22 @@ function rect(id: number, bodyId?: string): CoverageRectConfig {
     lineWidth: 2,
     filled: true,
     fillOpacity: 0.2,
+    bodyId,
+  };
+}
+
+function annotation(id: number, bodyId?: string): AnnotationShapeConfig {
+  return {
+    id,
+    name: `A${id}`,
+    type: 'scan',
+    pos: 100,
+    angle: 90,
+    width: 100,
+    height: 100,
+    color: '#f33',
+    lineWidth: 2,
+    showLabel: false,
     bodyId,
   };
 }
@@ -110,6 +127,7 @@ function makeState(overrides: Partial<Parameters<typeof cascadeRemoveAppendage>[
     welds: [] as WeldConfig[],
     liftingLugs: [] as LiftingLugConfig[],
     coverageRects: [] as CoverageRectConfig[],
+    annotations: [] as AnnotationShapeConfig[],
     domeScanComposites: [] as DomeScanConfig[],
     ...overrides,
   };
@@ -203,20 +221,38 @@ describe('cascadeRemoveAppendage', () => {
     expect(result.coverageRects.every((r) => r.bodyId !== 'app-1')).toBe(true);
   });
 
+  it('strips the body’s annotations; keeps main + other-body annotations', () => {
+    const state = makeState({
+      annotations: [
+        annotation(1),
+        annotation(2, 'app-1'),
+        annotation(3, 'app-1'),
+        annotation(4, 'app-2'),
+      ],
+    });
+
+    const result = cascadeRemoveAppendage(state, 0); // delete app-1
+
+    expect(result.annotations.map((a) => a.id)).toEqual([1, 4]);
+    expect(result.annotations.every((a) => a.bodyId !== 'app-1')).toBe(true);
+  });
+
   it('preserves attachable array references when the deleted body owns none', () => {
     const state = makeState({
       welds: [weld('W-main'), weld('W-app1', 'app-1')],
       liftingLugs: [lug('L-app1', 'app-1')],
       coverageRects: [rect(1)],
+      annotations: [annotation(1), annotation(2, 'app-1')],
       domeScanComposites: [dome('d-main'), dome('d-app1', 'app-1')],
     });
 
-    // Delete app-2, which owns no welds/lugs/rects/dome scans — arrays keep identity.
+    // Delete app-2, which owns no welds/lugs/rects/annotations/dome scans — arrays keep identity.
     const result = cascadeRemoveAppendage(state, 1);
 
     expect(result.welds).toBe(state.welds);
     expect(result.liftingLugs).toBe(state.liftingLugs);
     expect(result.coverageRects).toBe(state.coverageRects);
+    expect(result.annotations).toBe(state.annotations);
     expect(result.domeScanComposites).toBe(state.domeScanComposites);
   });
 

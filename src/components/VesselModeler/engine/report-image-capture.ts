@@ -243,7 +243,7 @@ export function captureAnnotationHeatmap(
   annotation: AnnotationShapeConfig,
   vesselState: VesselState,
 ): string | null {
-  const canvas = createAnnotationHeatmapCanvas(annotation, vesselState, 'Jet');
+  const canvas = createAnnotationHeatmapCanvas(annotation, vesselState, 'Jet', annotation.bodyId);
   if (!canvas) return null;
 
   // Scale up for print quality

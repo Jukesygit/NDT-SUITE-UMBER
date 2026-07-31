@@ -610,7 +610,7 @@ function AnnotationCscanMap({ annotation, vesselState, colorScale }: {
 
     container.innerHTML = '';
 
-    const canvas = createAnnotationHeatmapCanvas(annotation, vesselState, colorScale);
+    const canvas = createAnnotationHeatmapCanvas(annotation, vesselState, colorScale, annotation.bodyId);
     if (canvas) {
       canvas.style.width = '100%';
       canvas.style.height = '100%';

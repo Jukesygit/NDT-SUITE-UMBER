@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import type { AnnotationShapeConfig, RulerConfig, VesselState } from '../types';
 import { SCALE } from './materials';
-import { resolveBodyFrame } from './body-frame';
+import { resolveBodyFrame, type SurfaceFrame } from './body-frame';
 import {
   buildMeridianProfile,
   arcFromAxial,
@@ -46,6 +46,23 @@ export function shellPoint(
     (angleRad * 180) / Math.PI,
     surfaceOffset
   );
+}
+
+/**
+ * Body-aware surface point used by the rectangle (annotation/coverage) builders.
+ * Identical to {@link shellPoint} but placed through a pre-resolved
+ * {@link SurfaceFrame}, so a `bodyId`-set annotation renders on its appendage
+ * (cylinder + dished closure) while a main-shell annotation is byte-identical to
+ * the legacy path (the main frame reproduces `shellPoint` exactly). Keeps the
+ * historic radians contract and converts to the frame's degrees at the boundary.
+ */
+function framePoint(
+  frame: SurfaceFrame,
+  posMm: number,
+  angleRad: number,
+  surfaceOffset: number
+): THREE.Vector3 {
+  return frame.surfacePoint(posMm, (angleRad * 180) / Math.PI, surfaceOffset);
 }
 
 // ---------------------------------------------------------------------------
@@ -96,10 +113,10 @@ function clampArc(s: number, profile: MeridianProfile, L: number): number {
 }
 
 /** Resolve the shared arc-space footprint for a rectangle annotation. */
-function rectArcFootprint(config: AnnotationShapeConfig, vesselState: VesselState): RectArcFootprint {
-  const R = vesselState.id / 2;
-  const D = vesselState.id / (2 * vesselState.headRatio);
-  const L = vesselState.length;
+function rectArcFootprint(config: AnnotationShapeConfig, frame: SurfaceFrame): RectArcFootprint {
+  const R = frame.radius;
+  const D = frame.headDepth;
+  const L = frame.axialLength;
   const profile = buildMeridianProfile(R, D);
   const s0 = arcFromAxial(profile, L, config.pos);
   const halfW = config.width / 2;
@@ -134,10 +151,10 @@ function arcPoint(
   fp: RectArcFootprint,
   s: number,
   theta: number,
-  vesselState: VesselState,
+  frame: SurfaceFrame,
   surfaceOffset: number
 ): THREE.Vector3 {
-  return shellPoint(axialFromArc(fp.profile, fp.L, s), theta, vesselState, surfaceOffset);
+  return framePoint(frame, axialFromArc(fp.profile, fp.L, s), theta, surfaceOffset);
 }
 
 // ---------------------------------------------------------------------------
@@ -182,10 +199,13 @@ function adaptiveSegments(radiusMm: number, spanRad: number, offsetMm: number): 
 // (surface-drape.ts) so it keeps its shape and can cross the pole.
 
 /** True when both meridian-arc extents of the rect lie on the cylinder [0, L]. */
-function rectIsPureCylinder(config: AnnotationShapeConfig, vesselState: VesselState): boolean {
-  const R = vesselState.id / 2;
-  const D = vesselState.id / (2 * vesselState.headRatio);
-  const L = vesselState.length;
+function rectIsPureCylinder(config: AnnotationShapeConfig, frame: SurfaceFrame): boolean {
+  const R = frame.radius;
+  const D = frame.headDepth;
+  const L = frame.axialLength;
+  // A flat/open closure (D = 0) has no curved head to drape on, so any rect stays
+  // pure cylinder. Keeps main-shell behaviour unchanged (a 2:1 head always has D>0).
+  if (!(D > 0)) return true;
   const profile = buildMeridianProfile(R, D);
   const s0 = arcFromAxial(profile, L, config.pos);
   const halfW = config.width / 2;
@@ -205,13 +225,13 @@ function rectIsPureCylinder(config: AnnotationShapeConfig, vesselState: VesselSt
  *   flat/open head (`D = 0`) has no meridian curvature, so cols stays at the floor.
  */
 function drapeGridResolution(
-  vesselState: VesselState,
+  frame: SurfaceFrame,
   widthMm: number,
   heightMm: number,
   offsetMm: number
 ): { cols: number; rows: number } {
-  const R = vesselState.id / 2;
-  const D = vesselState.id / (2 * vesselState.headRatio);
+  const R = frame.radius;
+  const D = frame.headDepth;
 
   let rows = adaptiveSegments(R + offsetMm, heightMm / R, offsetMm);
   if (rows % 2 !== 0) rows = Math.min(MAX_SEGMENTS, rows + 1); // buildDrapeGrid requires an even row count
@@ -228,13 +248,13 @@ function drapeGridResolution(
 /** Build the rigid drape grid (surface coordinates) for a head-touching rect. */
 function drapeGridFor(
   config: AnnotationShapeConfig,
-  vesselState: VesselState,
+  frame: SurfaceFrame,
   offsetMm: number
 ): DrapeCell[][] {
-  const R = vesselState.id / 2;
-  const D = vesselState.id / (2 * vesselState.headRatio);
-  const L = vesselState.length;
-  const { cols, rows } = drapeGridResolution(vesselState, config.width, config.height, offsetMm);
+  const R = frame.radius;
+  const D = frame.headDepth;
+  const L = frame.axialLength;
+  const { cols, rows } = drapeGridResolution(frame, config.width, config.height, offsetMm);
   return buildDrapeGrid({
     R,
     D,
@@ -251,10 +271,10 @@ function drapeGridFor(
 /** Place a drape cell on the shell via the shared body frame. */
 function drapePoint(
   cell: DrapeCell,
-  vesselState: VesselState,
+  frame: SurfaceFrame,
   surfaceOffset: number
 ): THREE.Vector3 {
-  return shellPoint(cell.pos, cell.angleDeg * DEG2RAD, vesselState, surfaceOffset);
+  return framePoint(frame, cell.pos, cell.angleDeg * DEG2RAD, surfaceOffset);
 }
 
 // ---------------------------------------------------------------------------
@@ -268,13 +288,13 @@ function drapePoint(
  */
 function cylinderOutlinePoints(
   config: AnnotationShapeConfig,
-  vesselState: VesselState,
+  frame: SurfaceFrame,
   surfaceOffset: number
 ): THREE.Vector3[] {
-  const fp = rectArcFootprint(config, vesselState);
+  const fp = rectArcFootprint(config, frame);
   const { centerAngle, sLo, sHi } = fp;
   const span = sHi - sLo;
-  const R = vesselState.id / 2;
+  const R = frame.radius;
   // Meridian (axial) edges carry no curvature on the cylinder, so a fixed 32 is
   // always within offset. The circumferential sweeps do curve: their segment
   // count adapts to the angular span so the chord never sags below the surface
@@ -288,27 +308,27 @@ function cylinderOutlinePoints(
   // Bottom edge: sLo -> sHi at theta = centerAngle - halfSpan(s) (per station)
   for (let i = 0; i <= axialSegs; i++) {
     const s = sLo + (i / axialSegs) * span;
-    points.push(arcPoint(fp, s, centerAngle - halfSpanRad(fp, s), vesselState, surfaceOffset));
+    points.push(arcPoint(fp, s, centerAngle - halfSpanRad(fp, s), frame, surfaceOffset));
   }
   // Right edge: circumferential sweep at station sHi
   {
     const hs = halfSpanRad(fp, sHi);
     for (let i = 1; i <= circSegs; i++) {
       const ang = centerAngle - hs + (i / circSegs) * hs * 2;
-      points.push(arcPoint(fp, sHi, ang, vesselState, surfaceOffset));
+      points.push(arcPoint(fp, sHi, ang, frame, surfaceOffset));
     }
   }
   // Top edge: sHi -> sLo at theta = centerAngle + halfSpan(s) (per station)
   for (let i = 1; i <= axialSegs; i++) {
     const s = sHi - (i / axialSegs) * span;
-    points.push(arcPoint(fp, s, centerAngle + halfSpanRad(fp, s), vesselState, surfaceOffset));
+    points.push(arcPoint(fp, s, centerAngle + halfSpanRad(fp, s), frame, surfaceOffset));
   }
   // Left edge: circumferential sweep at station sLo
   {
     const hs = halfSpanRad(fp, sLo);
     for (let i = 1; i < circSegs; i++) {
       const ang = centerAngle + hs - (i / circSegs) * hs * 2;
-      points.push(arcPoint(fp, sLo, ang, vesselState, surfaceOffset));
+      points.push(arcPoint(fp, sLo, ang, frame, surfaceOffset));
     }
   }
 
@@ -324,14 +344,14 @@ function cylinderOutlinePoints(
  */
 function drapeOutlinePoints(
   config: AnnotationShapeConfig,
-  vesselState: VesselState,
+  frame: SurfaceFrame,
   surfaceOffset: number
 ): THREE.Vector3[] {
-  const grid = drapeGridFor(config, vesselState, surfaceOffset);
+  const grid = drapeGridFor(config, frame, surfaceOffset);
   const cols = grid.length - 1;
   const rows = grid[0].length - 1;
   const points: THREE.Vector3[] = [];
-  const at = (c: number, r: number) => drapePoint(grid[c][r], vesselState, surfaceOffset);
+  const at = (c: number, r: number) => drapePoint(grid[c][r], frame, surfaceOffset);
 
   for (let c = 0; c <= cols; c++) points.push(at(c, 0)); // bottom (row 0)
   for (let r = 1; r <= rows; r++) points.push(at(cols, r)); // right (col cols)
@@ -346,9 +366,13 @@ export function createRectOutline(
   vesselState: VesselState,
   surfaceOffset: number
 ): THREE.LineLoop {
-  const points = rectIsPureCylinder(config, vesselState)
-    ? cylinderOutlinePoints(config, vesselState, surfaceOffset)
-    : drapeOutlinePoints(config, vesselState, surfaceOffset);
+  // Resolve the mounted body (undefined = main shell, byte-identical). Every
+  // dim + placement below flows through this frame, so an appendage annotation
+  // renders on its cylinder / dished closure with no other change.
+  const frame = resolveBodyFrame(vesselState, config.bodyId);
+  const points = rectIsPureCylinder(config, frame)
+    ? cylinderOutlinePoints(config, frame, surfaceOffset)
+    : drapeOutlinePoints(config, frame, surfaceOffset);
 
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
   const material = new THREE.LineBasicMaterial({
@@ -376,13 +400,13 @@ export function createRectOutline(
  */
 function cylinderFillVertices(
   config: AnnotationShapeConfig,
-  vesselState: VesselState,
+  frame: SurfaceFrame,
   surfaceOffset: number
 ): { vertices: number[]; cols: number; rows: number } {
-  const fp = rectArcFootprint(config, vesselState);
+  const fp = rectArcFootprint(config, frame);
   const { centerAngle, sLo, sHi } = fp;
   const span = sHi - sLo;
-  const R = vesselState.id / 2;
+  const R = frame.radius;
   // Meridian columns carry no curvature axially -> fixed 32. Circumferential
   // rows adapt to the angular span so mid-row chords stay above the surface.
   const segX = 32;
@@ -403,7 +427,7 @@ function cylinderFillVertices(
     for (let ix = 0; ix <= segX; ix++) {
       const hs = halfSpanByCol[ix];
       const angOffset = -hs + v * hs * 2;
-      const pt = shellPoint(axialByCol[ix], centerAngle + angOffset, vesselState, surfaceOffset - 0.5);
+      const pt = framePoint(frame, axialByCol[ix], centerAngle + angOffset, surfaceOffset - 0.5);
       vertices.push(pt.x, pt.y, pt.z);
     }
   }
@@ -417,17 +441,17 @@ function cylinderFillVertices(
  */
 function drapeFillVertices(
   config: AnnotationShapeConfig,
-  vesselState: VesselState,
+  frame: SurfaceFrame,
   surfaceOffset: number
 ): { vertices: number[]; cols: number; rows: number } {
-  const grid = drapeGridFor(config, vesselState, surfaceOffset);
+  const grid = drapeGridFor(config, frame, surfaceOffset);
   const cols = grid.length - 1;
   const rows = grid[0].length - 1;
   const vertices: number[] = [];
   // Row-major (iy outer, ix inner) so the index layout matches the legacy path.
   for (let iy = 0; iy <= rows; iy++) {
     for (let ix = 0; ix <= cols; ix++) {
-      const pt = drapePoint(grid[ix][iy], vesselState, surfaceOffset - 0.5);
+      const pt = drapePoint(grid[ix][iy], frame, surfaceOffset - 0.5);
       vertices.push(pt.x, pt.y, pt.z);
     }
   }
@@ -439,12 +463,14 @@ export function createRectFill(
   vesselState: VesselState,
   surfaceOffset: number
 ): THREE.Mesh {
+  // Resolve the mounted body (undefined = main shell, byte-identical).
+  const frame = resolveBodyFrame(vesselState, config.bodyId);
   // Both paths return a row-major grid (iy outer, ix inner) with `cols + 1`
   // columns per row; the index buffer below is built from the SAME cols/rows so
   // the triangulation always matches the vertex grid (no mismatched buffer).
-  const { vertices, cols, rows } = rectIsPureCylinder(config, vesselState)
-    ? cylinderFillVertices(config, vesselState, surfaceOffset)
-    : drapeFillVertices(config, vesselState, surfaceOffset);
+  const { vertices, cols, rows } = rectIsPureCylinder(config, frame)
+    ? cylinderFillVertices(config, frame, surfaceOffset)
+    : drapeFillVertices(config, frame, surfaceOffset);
 
   const indices: number[] = [];
   for (let iy = 0; iy < rows; iy++) {

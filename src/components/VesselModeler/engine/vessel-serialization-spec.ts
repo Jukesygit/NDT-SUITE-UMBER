@@ -151,6 +151,7 @@ export const TEXTURE_SPEC: FieldSpec[] = [
 export const ANNOTATION_SPEC: FieldSpec[] = [
   { key: 'id', load: { or: 0 } },
   { key: 'name', load: { or: 'A' } },
+  { key: 'bodyId' },
   { key: 'type', load: { transform: (r) => (r.type === 'restriction' ? 'restriction' : 'scan') } },
   { key: 'pos', load: { nullish: 0 } },
   { key: 'angle', load: { nullish: 90 } },

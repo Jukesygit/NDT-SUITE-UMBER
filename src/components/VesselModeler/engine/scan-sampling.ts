@@ -110,6 +110,37 @@ export interface HeadDims {
   L: number;
 }
 
+/** Body dims + circumference for a shell/appendage (all mm). */
+export interface BodyDims extends HeadDims {
+  /** Circumference at the body radius (2πR). */
+  circumference: number;
+}
+
+/**
+ * Pure (Three-free) mirror of body-frame.ts's frame dims for the sampler: main
+ * shell when `body` is undefined, otherwise the appendage's radius / dished-
+ * closure depth / cylinder length. Keeps this module worker-safe (body-frame
+ * carries THREE). An unknown body id falls back to main dims — a harmless no-op
+ * in a render loop, since no composite would match a missing body anyway.
+ */
+export function resolveBodyDims(vesselState: VesselState, body: string | undefined): BodyDims {
+  const mainDims = (): BodyDims => {
+    const R = vesselState.id / 2;
+    return {
+      R,
+      D: vesselState.id / (2 * vesselState.headRatio),
+      L: vesselState.length,
+      circumference: Math.PI * vesselState.id,
+    };
+  };
+  if (body === undefined) return mainDims();
+  const app = vesselState.appendages.find((a) => a.id === body);
+  if (!app) return mainDims();
+  const R = app.diameter / 2;
+  const D = app.endClosure === 'dished' ? app.diameter / (2 * (app.headRatio ?? 2.0)) : 0;
+  return { R, D, L: app.length, circumference: 2 * Math.PI * R };
+}
+
 /**
  * Look up a thickness value in a DOME scan composite for a vessel surface point
  * `(posMm, angleDeg)` on the head.
@@ -195,7 +226,15 @@ function sampleShellRegion(
   return undefined;
 }
 
-/** Topmost confirmed dome composite value at a head point (main shell only). */
+/**
+ * Topmost confirmed dome composite value at a head point, scoped by body.
+ *   - main shell (body undefined): the left head (pos<0) or right head (pos>L).
+ *   - appendage (body set): its single dished END closure, stored as head 'end'
+ *     (the right-head analog — apex outward, tangent line at the cylinder length;
+ *     sampleDomeComposite inverts through the 'right' projection with the body's
+ *     dims). Composites are matched by body so an appendage closure scan never
+ *     feeds a main-shell annotation and vice versa.
+ */
 function sampleDomeRegion(
   vesselState: VesselState,
   posMm: number,
@@ -203,16 +242,15 @@ function sampleDomeRegion(
   body: string | undefined,
   dims: HeadDims,
 ): number | undefined {
-  // Dome scans are main-shell only (DomeScanConfig carries no bodyId yet — that
-  // is a Tranche 1c follow-up); an appendage-bodied annotation never matches one.
-  if (body !== undefined) return undefined;
   const domes = vesselState.domeScanComposites;
   if (!domes || domes.length === 0) return undefined;
-  const head: 'left' | 'right' = posMm < 0 ? 'left' : 'right';
+  const targetHead: DomeScanConfig['head'] =
+    body !== undefined ? 'end' : posMm < 0 ? 'left' : 'right';
   for (let i = domes.length - 1; i >= 0; i--) {
     const dome = domes[i];
     if (!dome.orientationConfirmed) continue;
-    if (dome.head !== head) continue;
+    if ((dome.bodyId ?? undefined) !== (body ?? undefined)) continue;
+    if (dome.head !== targetHead) continue;
     const val = sampleDomeComposite(dome, posMm, angleDeg, dims);
     if (val !== undefined) return val;
   }
@@ -231,13 +269,11 @@ export function sampleSurfacePoint(
   angleDeg: number,
   body: string | undefined,
 ): number | undefined {
-  const L = vesselState.length;
-  if (posMm >= 0 && posMm <= L) {
-    return sampleShellRegion(vesselState, posMm, angleDeg, body, Math.PI * vesselState.id);
+  const dims = resolveBodyDims(vesselState, body);
+  if (posMm >= 0 && posMm <= dims.L) {
+    return sampleShellRegion(vesselState, posMm, angleDeg, body, dims.circumference);
   }
-  const R = vesselState.id / 2;
-  const D = vesselState.id / (2 * vesselState.headRatio);
-  return sampleDomeRegion(vesselState, posMm, angleDeg, body, { R, D, L });
+  return sampleDomeRegion(vesselState, posMm, angleDeg, body, dims);
 }
 
 // ---------------------------------------------------------------------------
@@ -257,9 +293,10 @@ export interface FootprintSample {
  * route to the legacy box vs the rigid drape EXACTLY where the geometry does.
  */
 export function rectIsPureCylinder(ann: AnnotationShapeConfig, vesselState: VesselState): boolean {
-  const R = vesselState.id / 2;
-  const D = vesselState.id / (2 * vesselState.headRatio);
-  const L = vesselState.length;
+  const { R, D, L } = resolveBodyDims(vesselState, ann.bodyId);
+  // A flat/open closure (D = 0) has no curved head to drape on — matches
+  // annotation-geometry.ts so stats/heatmap route exactly where geometry does.
+  if (!(D > 0)) return true;
   const profile = buildMeridianProfile(R, D);
   const s0 = arcFromAxial(profile, L, ann.pos);
   const halfW = ann.width / 2;
@@ -296,9 +333,9 @@ export function sampleAnnotationDrapeGrid(
   vesselState: VesselState,
   body?: string,
 ): DrapeSampleGrid {
-  const R = vesselState.id / 2;
-  const D = vesselState.id / (2 * vesselState.headRatio);
-  const L = vesselState.length;
+  // Drape dims come from the annotation's own body (main shell or appendage
+  // cylinder + dished closure), matching annotation-geometry's drape grid.
+  const { R, D, L } = resolveBodyDims(vesselState, ann.bodyId);
   const { cols, rows } = drapeSampleResolution(ann.width, ann.height);
   const { grid } = buildDrapeGrid({
     R,
@@ -329,7 +366,7 @@ function sampleCylinderBox(
   vesselState: VesselState,
   body: string | undefined,
 ): FootprintSample[] {
-  const circumference = Math.PI * vesselState.id;
+  const circumference = resolveBodyDims(vesselState, ann.bodyId).circumference;
   const halfWidthMm = ann.width / 2;
   const halfHeightMm = ann.height / 2;
   const halfHeightDeg = (halfHeightMm / circumference) * 360;

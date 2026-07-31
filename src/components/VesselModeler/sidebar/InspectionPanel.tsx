@@ -170,7 +170,7 @@ export default function InspectionPanel({
 
   // --- Mini heatmap ---
   const heatmapContainerRef = useRef<HTMLDivElement>(null);
-  const overlappingComposite = findOverlappingComposite(annotation, vesselState);
+  const overlappingComposite = findOverlappingComposite(annotation, vesselState, annotation.bodyId);
   const heatmapColorScale = overlappingComposite?.colorScale ?? null;
   // Heatmap surfaces for any annotation with sampled data — a cylindrical
   // overlap OR (via computed stats) a dome-end annotation over dome scans.
@@ -187,6 +187,7 @@ export default function InspectionPanel({
       annotation,
       vesselState,
       heatmapColorScale ?? 'Jet',
+      annotation.bodyId,
     );
 
     if (canvas) {
