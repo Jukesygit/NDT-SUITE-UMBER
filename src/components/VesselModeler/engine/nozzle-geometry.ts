@@ -40,6 +40,10 @@ export function deserializeNozzle(raw: any): NozzleConfig {
   // (shown unless the legacy `hideRepad` hid it).
   const legacyWeldNeckVisible = raw?.hideRepad !== true;
   return {
+    // Carry an existing id through verbatim; legacy records (no id) get a
+    // placeholder that backfillNozzleIds (engine/nozzle-id.ts) replaces with a
+    // stable, collision-free id at the array level in deserializeVesselState.
+    id: typeof raw?.id === 'string' && raw.id ? raw.id : '',
     name: typeof raw?.name === 'string' ? raw.name : 'N',
     bodyId: raw?.bodyId,
     pos: raw?.pos ?? 0,

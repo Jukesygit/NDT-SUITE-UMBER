@@ -80,6 +80,7 @@ import {
 } from './engine/vessel-history';
 import { cascadeRemoveAppendage } from './engine/appendage-cascade';
 import { remapNozzleRefs } from './engine/nozzle-ref-remap';
+import { nextNozzleId, removeNozzleById, backfillNozzleIds } from './engine/nozzle-id';
 import { placeExtractedNozzle } from './engine/head-nozzle-placement';
 import { useTextureRehydration } from './useTextureRehydration';
 import { exportVesselGLB } from './engine/gltf-export';
@@ -952,9 +953,15 @@ export default function VesselModeler() {
   );
 
   // --- Nozzle handlers ---
+  // The store owns nozzle ids: every UI-added nozzle is minted a stable, collision-
+  // free id here so no call site can invent (or forget) one.
   const addNozzle = useCallback(
-    (nozzle: NozzleConfig) => {
-      updateVessel((prev) => ({ ...prev, nozzles: [...prev.nozzles, nozzle], hasModel: true }));
+    (nozzle: Omit<NozzleConfig, 'id'>) => {
+      updateVessel((prev) => ({
+        ...prev,
+        nozzles: [...prev.nozzles, { ...nozzle, id: nextNozzleId(prev.nozzles) }],
+        hasModel: true,
+      }));
     },
     [updateVessel]
   );
@@ -974,14 +981,14 @@ export default function VesselModeler() {
 
   const removeNozzle = useCallback(
     (index: number) => {
-      // Atomic cascade: remove nozzle + associated pipelines + decrement higher indices
-      updateVessel((prev) => ({
-        ...prev,
-        nozzles: prev.nozzles.filter((_, i) => i !== index),
-        pipelines: prev.pipelines
-          .filter((p) => p.nozzleIndex !== index)
-          .map((p) => (p.nozzleIndex > index ? { ...p, nozzleIndex: p.nozzleIndex - 1 } : p)),
-      }));
+      // Atomic, id-correct cascade: drop the nozzle + the pipelines anchored to it.
+      // Every OTHER pipeline keeps its stable nozzleId, so it stays attached to the
+      // SAME physical nozzle — no index-shifting (see engine/nozzle-id.ts).
+      updateVessel((prev) => {
+        const target = prev.nozzles[index];
+        if (!target) return prev;
+        return { ...prev, ...removeNozzleById(prev.nozzles, prev.pipelines, target.id) };
+      });
       dispatch({ type: 'SELECT_NOZZLE', index: -1 });
     },
     [updateVessel]
@@ -1046,6 +1053,8 @@ export default function VesselModeler() {
   );
 
   const addPipeline = useCallback(
+    // `nozzleIndex` is the array index of the clicked nozzle in the sidebar list;
+    // it is resolved to the nozzle's stable id at this boundary and never stored.
     (nozzleIndex: number, segmentType: PipeSegmentType) => {
       const nozzle = vesselState.nozzles[nozzleIndex];
       if (!nozzle) return;
@@ -1053,7 +1062,7 @@ export default function VesselModeler() {
       const diameter = pipe.od;
       const newPipeline: Pipeline = {
         id: crypto.randomUUID(),
-        nozzleIndex,
+        nozzleId: nozzle.id,
         pipeDiameter: diameter,
         segments: [createDefaultSegment(segmentType, diameter)],
       };
@@ -1066,7 +1075,6 @@ export default function VesselModeler() {
     (pipeDiameter: number, segmentType: PipeSegmentType) => {
       const newPipeline: Pipeline = {
         id: crypto.randomUUID(),
-        nozzleIndex: -1,
         pipeDiameter,
         segments: [createDefaultSegment(segmentType, pipeDiameter)],
         freeOrigin: { position: [0, 0, 0], direction: [0, 1, 0] },
@@ -1082,7 +1090,7 @@ export default function VesselModeler() {
         (prev) => ({
           ...prev,
           pipelines: prev.pipelines.map((p) => {
-            if (p.id !== pipelineId || p.nozzleIndex !== -1) return p;
+            if (p.id !== pipelineId || p.nozzleId) return p;
             const current = p.freeOrigin ?? {
               position: [0, 0, 0] as [number, number, number],
               direction: [0, 1, 0] as [number, number, number],
@@ -2742,13 +2750,17 @@ export default function VesselModeler() {
         length: result.length,
         headRatio: result.headRatio,
       };
-      const newNozzles = result.nozzles.map((n) => ({
-        name: n.name,
-        ...placeExtractedNozzle(n, placementVessel),
-      }));
+      // The drawing replaces nozzles wholesale — mint fresh stable ids for them
+      // so pipelines can be re-anchored to the new nozzles by id via remapNozzleRefs.
+      const newNozzles = backfillNozzleIds(
+        result.nozzles.map((n) => ({
+          name: n.name,
+          ...placeExtractedNozzle(n, placementVessel),
+        })) as NozzleConfig[]
+      );
 
       // The drawing replaces nozzles wholesale, so re-anchor existing pipelines
-      // by nozzle name (their positional nozzleIndex is about to go stale).
+      // by nozzle name (their old nozzleId is about to go stale).
       // Pipelines whose anchor is gone are dropped — but never silently.
       const { pipelines: remappedPipelines, removed } = remapNozzleRefs(
         vesselState.nozzles,
@@ -3296,8 +3308,11 @@ export default function VesselModeler() {
         name = 'P' + nozzleNum;
       }
 
-      // Create plain-pipe nozzle + pipeline with first segment in one atomic update
+      // Create plain-pipe nozzle + pipeline with first segment in one atomic update.
+      // Mint the nozzle id up front so the pipeline can anchor to it by id.
+      const nozzleId = nextNozzleId(vesselState.nozzles);
       const nozzle: NozzleConfig = {
+        id: nozzleId,
         name,
         pos: Math.round(newPos),
         proj: defaultProj,
@@ -3309,7 +3324,7 @@ export default function VesselModeler() {
 
       const newPipeline: Pipeline = {
         id: crypto.randomUUID(),
-        nozzleIndex: vesselState.nozzles.length, // will be appended at end
+        nozzleId,
         pipeDiameter: defaultPipeSize.od,
         segments: [createDefaultSegment(segmentType, defaultPipeSize.od)],
       };

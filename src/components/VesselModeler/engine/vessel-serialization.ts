@@ -19,6 +19,7 @@ import { deserializeNozzle } from './nozzle-geometry';
 import { deserializeSaddle } from './saddle-geometry';
 import { normalizeDomeScanComposite } from './dome-scan-geometry';
 import { normalizeAppendage } from './appendage-config';
+import { backfillNozzleIds, migratePipelineNozzleRefs } from './nozzle-id';
 import {
   type FieldSpec,
   type RawItem,
@@ -110,9 +111,14 @@ function deserializeSegment(s: RawItem): RawItem {
 }
 
 function deserializePipeline(p: RawItem): RawItem {
+  // Carry both reference forms through untouched here; migratePipelineNozzleRefs
+  // (called once with the id-backfilled nozzle list) resolves legacy `nozzleIndex`
+  // to the stable `nozzleId` and drops the index. A pipeline saved by a current
+  // build already carries `nozzleId`; a legacy save carries only `nozzleIndex`.
   return {
     id: p.id || crypto.randomUUID(),
-    nozzleIndex: p.nozzleIndex ?? 0,
+    ...(p.nozzleId ? { nozzleId: p.nozzleId } : {}),
+    ...(p.nozzleIndex !== undefined ? { nozzleIndex: p.nozzleIndex } : {}),
     pipeDiameter: p.pipeDiameter ?? 100,
     color: p.color,
     segments: asArray(p.segments).map(deserializeSegment),
@@ -230,6 +236,14 @@ export function deserializeVesselState(
   const { path, textures } = opts;
   const vessel = (raw.vessel ?? {}) as RawItem;
 
+  // Deserialize + id-backfill nozzles up front so pipelines can migrate their
+  // legacy positional `nozzleIndex` onto the resolved stable `nozzleId`.
+  const nozzles = backfillNozzleIds(asArray(raw.nozzles).map(deserializeNozzle));
+  const pipelines = migratePipelineNozzleRefs(
+    asArray(raw.pipelines).map(deserializePipeline) as unknown as VesselState['pipelines'],
+    nozzles
+  );
+
   const state: VesselState = {
     id: (vessel.id as number) || 3000,
     length: (vessel.length as number) || 8000,
@@ -238,7 +252,7 @@ export function deserializeVesselState(
     vesselName: (vessel.vesselName as string) || '',
     location: (vessel.location as string) || '',
     inspectionDate: (vessel.inspectionDate as string) || '',
-    nozzles: asArray(raw.nozzles).map(deserializeNozzle),
+    nozzles,
     liftingLugs: asArray(raw.liftingLugs).map((l) =>
       deserializeItem(l, LUG_SPEC, path)
     ) as unknown as VesselState['liftingLugs'],
@@ -264,9 +278,7 @@ export function deserializeVesselState(
     ) as unknown as VesselState['scanComposites'],
     domeScanComposites: asArray(raw.domeScanComposites).map(normalizeDomeScanComposite),
     appendages: asArray(raw.appendages).map(normalizeAppendage),
-    pipelines: asArray(raw.pipelines).map(
-      deserializePipeline
-    ) as unknown as VesselState['pipelines'],
+    pipelines,
     referenceDrawings: asArray(raw.referenceDrawings).map(
       deserializeReferenceDrawing
     ) as unknown as VesselState['referenceDrawings'],

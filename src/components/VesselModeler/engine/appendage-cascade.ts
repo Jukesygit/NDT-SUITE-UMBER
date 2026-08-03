@@ -3,11 +3,11 @@
 // =============================================================================
 // Pure helper for deleting an appendage body and everything anchored to it.
 // Deleting an appendage removes its own nozzles (those whose `bodyId` matches the
-// appendage id) AND their pipelines, applying the SAME index-shift semantics the
-// single-nozzle `removeNozzle` cascade uses (VesselModeler.tsx): drop the nozzle,
-// drop pipelines whose `nozzleIndex` equals it, and decrement `nozzleIndex` for
-// every pipeline anchored to a later nozzle. Matching nozzle indices are handled
-// descending so earlier indices stay valid as the array shrinks.
+// appendage id) AND their pipelines. Because pipelines now reference nozzles by
+// stable `nozzleId` (never array position), this is a straight id-based filter —
+// drop the body's nozzles, then drop pipelines whose `nozzleId` was one of them.
+// No index-shifting: every surviving pipeline keeps pointing at the SAME physical
+// nozzle it always did (this replaced the old filter+decrement cascade).
 //
 // Main-shell nozzles (bodyId undefined) and their pipelines are left untouched.
 // The body's other attachables — welds, lifting lugs, coverage rects, annotations
@@ -63,22 +63,18 @@ export function cascadeRemoveAppendage(state: CascadeState, index: number): Casc
     };
   }
 
-  // Indices of nozzles anchored to this body, descending so removals below don't
-  // invalidate the indices still to process.
-  const doomed = state.nozzles
-    .map((n, i) => (n.bodyId === bodyId ? i : -1))
-    .filter((i) => i >= 0)
-    .sort((a, b) => b - a);
+  // Stable ids of the nozzles anchored to this body. Filtering by id means the
+  // surviving nozzles and their pipelines keep their identity — no re-indexing.
+  const doomedNozzleIds = new Set(
+    state.nozzles.filter((n) => n.bodyId === bodyId).map((n) => n.id)
+  );
 
-  let nozzles = state.nozzles;
-  let pipelines = state.pipelines;
-  for (const nozzleIndex of doomed) {
-    // Identical to the removeNozzle cascade, one nozzle at a time.
-    nozzles = nozzles.filter((_, i) => i !== nozzleIndex);
-    pipelines = pipelines
-      .filter((p) => p.nozzleIndex !== nozzleIndex)
-      .map((p) => (p.nozzleIndex > nozzleIndex ? { ...p, nozzleIndex: p.nozzleIndex - 1 } : p));
-  }
+  const nozzles = stripByBody(state.nozzles, bodyId);
+  const prunedPipelines = doomedNozzleIds.size
+    ? state.pipelines.filter((p) => !(p.nozzleId && doomedNozzleIds.has(p.nozzleId)))
+    : state.pipelines;
+  const pipelines =
+    prunedPipelines.length === state.pipelines.length ? state.pipelines : prunedPipelines;
 
   return {
     appendages,

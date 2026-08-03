@@ -71,7 +71,7 @@ export interface SidebarPanelProps {
   selectedSaddleIndex: number;
   selectedTextureId: number;
   onUpdateDimensions: (updates: Partial<VesselState>) => void;
-  onAddNozzle: (nozzle: NozzleConfig) => void;
+  onAddNozzle: (nozzle: Omit<NozzleConfig, 'id'>) => void;
   onUpdateNozzle: (index: number, updates: Partial<NozzleConfig>) => void;
   onRemoveNozzle: (index: number) => void;
   onSelectNozzle: (index: number) => void;

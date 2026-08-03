@@ -7,7 +7,7 @@ import { SubSection } from './SliderRow';
 export interface NozzleSectionProps {
   vesselState: VesselState;
   selectedNozzleIndex: number;
-  onAddNozzle: (nozzle: NozzleConfig) => void;
+  onAddNozzle: (nozzle: Omit<NozzleConfig, 'id'>) => void;
   onUpdateNozzle: (index: number, updates: Partial<NozzleConfig>) => void;
   onRemoveNozzle: (index: number) => void;
   onSelectNozzle: (index: number) => void;

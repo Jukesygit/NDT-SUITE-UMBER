@@ -66,6 +66,7 @@ export interface FieldSpec {
 // Nozzles — save: field list; load: deserializeNozzle() (own migration logic)
 // ---------------------------------------------------------------------------
 export const NOZZLE_SPEC: FieldSpec[] = [
+  { key: 'id' },
   { key: 'name' },
   { key: 'bodyId' },
   { key: 'pos' },

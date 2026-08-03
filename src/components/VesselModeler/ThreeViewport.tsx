@@ -1050,14 +1050,16 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
       pipelineParent.userData = { type: 'pipelineRoot' };
 
       for (const pl of state.pipelines) {
-        if (pl.nozzleIndex >= 0) {
-          // Nozzle-attached pipeline
-          const nozzle = state.nozzles[pl.nozzleIndex];
+        if (pl.nozzleId) {
+          // Nozzle-attached pipeline — resolve the stable id to the live array
+          // index the nozzle mesh groups are keyed by (nozzleIdx userData).
+          const nozzleIdx = state.nozzles.findIndex((n) => n.id === pl.nozzleId);
+          const nozzle = nozzleIdx >= 0 ? state.nozzles[nozzleIdx] : undefined;
           if (!nozzle) continue;
 
           let nozzleGroup: THREE.Group | null = null;
           result.vesselGroup.traverse((child) => {
-            if (child.userData?.type === 'nozzle' && child.userData?.nozzleIdx === pl.nozzleIndex) {
+            if (child.userData?.type === 'nozzle' && child.userData?.nozzleIdx === nozzleIdx) {
               nozzleGroup = child as THREE.Group;
             }
           });

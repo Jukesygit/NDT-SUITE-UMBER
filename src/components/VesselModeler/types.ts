@@ -64,6 +64,10 @@ export type StampType = 'pass' | 'fail' | 'defect' | 'inspector' | 'date';
 export type NozzleOrientationMode = 'radial' | 'horizontal' | 'vertical-up' | 'vertical-down';
 
 export interface NozzleConfig {
+  /** Stable unique id, e.g. 'noz-1'. Referenced by Pipeline.nozzleId. Minted at
+   *  creation and backfilled deterministically at load for legacy saves (see
+   *  engine/nozzle-id.ts). NEVER an array index. */
+  id: string;
   name: string;
   /** Body this nozzle mounts on. undefined = main shell (legacy path). When set
    *  to an appendage id, `pos` is interpreted as mm along the appendage axis from
@@ -1133,8 +1137,15 @@ export interface FreeOrigin {
 
 export interface Pipeline {
   id: string;
-  /** Index into vesselState.nozzles — the connection origin. -1 for free-standing pipes. */
-  nozzleIndex: number;
+  /** Stable id of the nozzle this pipeline attaches to (NozzleConfig.id). Absent
+   *  for free-standing pipes (see freeOrigin). Stable across nozzle add/delete/
+   *  reorder — resolve via engine/nozzle-id.ts findNozzleById, never by position. */
+  nozzleId?: string;
+  /** @deprecated Legacy positional index into vesselState.nozzles (-1 = free).
+   *  Retained ONLY as a load-time migration input: the loader resolves it to
+   *  `nozzleId` once (engine/nozzle-id.ts migratePipelineNozzleRefs); saves never
+   *  write it. Do not read at runtime. */
+  nozzleIndex?: number;
   /** Pipe outside diameter in mm */
   pipeDiameter: number;
   /** Optional hex color override */
@@ -1143,7 +1154,7 @@ export interface Pipeline {
   segments: PipeSegment[];
   locked?: boolean;
   visible?: boolean;
-  /** Origin for free-standing pipes (nozzleIndex === -1). Position in mm, direction as unit vector. */
+  /** Origin for free-standing pipes (no nozzleId). Position in mm, direction as unit vector. */
   freeOrigin?: FreeOrigin;
 }
 

@@ -42,6 +42,7 @@ function makeFixture(): VesselState {
     originSourceScanId: 'sc1',
     nozzles: [
       {
+        id: 'noz-1',
         name: 'N1',
         pos: 1000,
         proj: 250,
@@ -265,7 +266,7 @@ function makeFixture(): VesselState {
     pipelines: [
       {
         id: 'pipe-1',
-        nozzleIndex: 0,
+        nozzleId: 'noz-1',
         pipeDiameter: 168,
         color: '#abcdef',
         segments: [
@@ -277,7 +278,7 @@ function makeFixture(): VesselState {
       },
       {
         id: 'pipe-free',
-        nozzleIndex: -1,
+        // Free-standing: no nozzleId, carries a freeOrigin.
         pipeDiameter: 114,
         segments: [{ id: 'seg-f', type: 'straight', rotation: 0, length: 300 }],
         freeOrigin: { position: [1, 2, 3], direction: [1, 0, 0] },
@@ -803,4 +804,81 @@ describe('legacy payload defaulting', () => {
     expect(restored.appendages).toEqual([]);
     expect(restored.hasModel).toBe(true);
   });
+
+  it('backfills a stable id onto a legacy nozzle that has none', () => {
+    const restored = deserializeVesselState(legacy, { path: 'local', textures: [] });
+    expect(restored.nozzles[0].id).toBe('noz-1');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Legacy nozzleIndex -> nozzleId migration. Old saves referenced nozzles by
+// array position; the loader must resolve those to the backfilled stable ids
+// ONCE, preserving the exact physical pairing, and re-save must write nozzleId
+// only (never the deprecated index) while still round-tripping.
+// ---------------------------------------------------------------------------
+
+describe('legacy pipeline nozzleIndex migration', () => {
+  const legacy = {
+    version: 1,
+    vessel: { id: 3000, length: 8000, headRatio: 2.0, orientation: 'horizontal' },
+    // Three id-less nozzles -> backfilled noz-1, noz-2, noz-3 (positional).
+    nozzles: [
+      { name: 'A', pos: 100, size: 50 },
+      { name: 'B', pos: 200, size: 50 },
+      { name: 'C', pos: 300, size: 50 },
+    ],
+    pipelines: [
+      { id: 'pl-C', nozzleIndex: 2, pipeDiameter: 100, segments: [] },
+      { id: 'pl-A', nozzleIndex: 0, pipeDiameter: 100, segments: [] },
+      {
+        id: 'pl-free',
+        nozzleIndex: -1,
+        pipeDiameter: 100,
+        segments: [],
+        freeOrigin: { position: [0, 0, 0], direction: [0, 1, 0] },
+      },
+    ],
+  };
+
+  for (const path of ['local', 'cloud'] as const) {
+    it(`resolves nozzleIndex to the anchored nozzle's stable id on the ${path} path`, () => {
+      const restored = deserializeVesselState(legacy, { path, textures: [] });
+      const byId = new Map(restored.pipelines.map((p) => [p.id, p]));
+
+      // pl-C was index 2 -> the third nozzle 'C' (noz-3); pl-A was index 0 -> 'A' (noz-1).
+      expect(byId.get('pl-C')!.nozzleId).toBe('noz-3');
+      expect(byId.get('pl-A')!.nozzleId).toBe('noz-1');
+      // The resolved ids name the correct physical nozzles.
+      const nozById = new Map(restored.nozzles.map((n) => [n.id, n.name]));
+      expect(nozById.get(byId.get('pl-C')!.nozzleId!)).toBe('C');
+      expect(nozById.get(byId.get('pl-A')!.nozzleId!)).toBe('A');
+      // Free-standing pipeline stays free-standing.
+      expect(byId.get('pl-free')!.nozzleId).toBeUndefined();
+      // The deprecated index never survives onto runtime pipelines.
+      expect(restored.pipelines.every((p) => p.nozzleIndex === undefined)).toBe(true);
+    });
+
+    it(`re-saves nozzleId only and round-trips to the same pairing on the ${path} path`, () => {
+      const restored = deserializeVesselState(legacy, { path, textures: [] });
+      const serialized = JSON.parse(
+        JSON.stringify(serializeVesselState(restored, { path, modelType: 'blank' }))
+      ) as { pipelines: Array<Record<string, unknown>> };
+
+      // Saved shape carries nozzleId, never the deprecated index.
+      for (const p of serialized.pipelines) {
+        expect(p).not.toHaveProperty('nozzleIndex');
+      }
+      const savedC = serialized.pipelines.find((p) => p.id === 'pl-C')!;
+      expect(savedC.nozzleId).toBe('noz-3');
+
+      // Loading the re-saved payload preserves the pairing exactly.
+      const reloaded = deserializeVesselState(
+        JSON.parse(JSON.stringify(serializeVesselState(restored, { path, modelType: 'blank' }))),
+        { path, textures: [] }
+      );
+      const reC = reloaded.pipelines.find((p) => p.id === 'pl-C')!;
+      expect(reC.nozzleId).toBe('noz-3');
+    });
+  }
 });

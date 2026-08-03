@@ -46,5 +46,5 @@ export function getConnectionPoints(
 
 /** Free-standing pipelines (not attached to a nozzle). */
 export function getFreePipelines(pipelines: Pipeline[]): Pipeline[] {
-  return pipelines.filter((p) => p.nozzleIndex === -1);
+  return pipelines.filter((p) => !p.nozzleId);
 }

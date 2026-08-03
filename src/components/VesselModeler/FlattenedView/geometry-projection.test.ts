@@ -46,7 +46,7 @@ const OD = 1000;
 const CIRC = Math.PI * OD;
 
 function nozzle(angle: number): NozzleConfig {
-  return { name: 'N', pos: 1000, proj: 100, angle, size: 100 };
+  return { id: 'noz-1', name: 'N', pos: 1000, proj: 100, angle, size: 100 };
 }
 
 describe('flattened-view circumferential convention (TDC at top)', () => {

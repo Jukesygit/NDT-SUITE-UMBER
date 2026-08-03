@@ -13,7 +13,7 @@ export interface PipingSectionProps {
   selectedPipelineId: string;
   selectedSegmentIdx: number;
   selectedNozzleIndex: number;
-  onAddNozzle: (nozzle: NozzleConfig) => void;
+  onAddNozzle: (nozzle: Omit<NozzleConfig, 'id'>) => void;
   onUpdateNozzle: (index: number, updates: Partial<NozzleConfig>) => void;
   onRemoveNozzle: (index: number) => void;
   onSelectNozzle: (index: number) => void;

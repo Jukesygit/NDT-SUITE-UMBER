@@ -2,8 +2,8 @@
 // appendage-cascade — deleting an appendage removes its attachables
 // =============================================================================
 // Guards the removeAppendage cascade: deleting an appendage drops every nozzle
-// whose bodyId matches AND their pipelines (remapping the remaining pipelines'
-// nozzleIndex exactly as the single-nozzle removeNozzle cascade does), plus the
+// whose bodyId matches AND their pipelines (by stable nozzleId — no index shifting;
+// every surviving pipeline keeps pointing at the same physical nozzle), plus the
 // body's welds / lifting lugs / coverage rects (Phase 4). Main-shell attachables
 // and attachables on OTHER appendages must be left untouched.
 // =============================================================================
@@ -22,14 +22,16 @@ import type {
 } from '../../types';
 import { cascadeRemoveAppendage } from '../appendage-cascade';
 
+/** Nozzle with a stable id derived from its name (e.g. 'N1' -> 'noz-N1'). */
 function nozzle(name: string, bodyId?: string): NozzleConfig {
-  return { name, pos: 100, proj: 200, angle: 90, size: 100, bodyId };
+  return { id: `noz-${name}`, name, pos: 100, proj: 200, angle: 90, size: 100, bodyId };
 }
 
-function pipeline(id: string, nozzleIndex: number): Pipeline {
+/** Pipeline anchored to the nozzle named `nozzleName` by stable id. */
+function pipeline(id: string, nozzleName: string): Pipeline {
   return {
     id,
-    nozzleIndex,
+    nozzleId: `noz-${nozzleName}`,
     pipeDiameter: 100,
     segments: [{ id: `${id}-s`, type: 'straight', rotation: 0, length: 300 }],
   };
@@ -134,11 +136,16 @@ function makeState(overrides: Partial<Parameters<typeof cascadeRemoveAppendage>[
 }
 
 describe('cascadeRemoveAppendage', () => {
-  it('removes the body, its nozzles, and their pipelines with correct index shifting', () => {
+  it('removes the body + its nozzles and keeps surviving pipelines on the same nozzle', () => {
     // Nozzles: 0 main, 1 app-1, 2 app-1, 3 main. Each has a pipeline.
     const state = makeState({
       nozzles: [nozzle('N0'), nozzle('N1', 'app-1'), nozzle('N2', 'app-1'), nozzle('N3')],
-      pipelines: [pipeline('p0', 0), pipeline('p1', 1), pipeline('p2', 2), pipeline('p3', 3)],
+      pipelines: [
+        pipeline('p0', 'N0'),
+        pipeline('p1', 'N1'),
+        pipeline('p2', 'N2'),
+        pipeline('p3', 'N3'),
+      ],
     });
 
     const result = cascadeRemoveAppendage(state, 0);
@@ -150,37 +157,39 @@ describe('cascadeRemoveAppendage', () => {
     expect(result.nozzles.map((n) => n.name)).toEqual(['N0', 'N3']);
     expect(result.nozzles.every((n) => n.bodyId === undefined)).toBe(true);
 
-    // The app-1 pipelines are gone; the main pipelines remain, re-indexed to the
-    // new nozzle positions (N0 -> 0, N3 -> 1).
+    // The app-1 pipelines are gone; the main pipelines remain, STILL anchored to
+    // the same physical nozzle by stable id (regression: no index shifting could
+    // silently re-target p3 when the earlier nozzles were removed).
     expect(result.pipelines.map((p) => p.id)).toEqual(['p0', 'p3']);
-    const byId = new Map(result.pipelines.map((p) => [p.id, p.nozzleIndex]));
-    expect(byId.get('p0')).toBe(0);
-    expect(byId.get('p3')).toBe(1);
-    expect(result.nozzles[byId.get('p3')!].name).toBe('N3');
+    const byId = new Map(result.pipelines.map((p) => [p.id, p.nozzleId]));
+    expect(byId.get('p0')).toBe('noz-N0');
+    expect(byId.get('p3')).toBe('noz-N3');
+    // The surviving anchor id resolves to the same nozzle it always named.
+    expect(result.nozzles.find((n) => n.id === byId.get('p3'))!.name).toBe('N3');
   });
 
-  it('preserves free-standing pipelines (nozzleIndex -1) untouched', () => {
+  it('preserves free-standing pipelines (no nozzleId) untouched', () => {
+    const free: Pipeline = {
+      id: 'free',
+      pipeDiameter: 100,
+      segments: [{ id: 'free-s', type: 'straight', rotation: 0, length: 300 }],
+      freeOrigin: { position: [0, 0, 0], direction: [0, 1, 0] },
+    };
     const state = makeState({
       nozzles: [nozzle('N0'), nozzle('N1', 'app-1')],
-      pipelines: [
-        {
-          ...pipeline('free', -1),
-          freeOrigin: { position: [0, 0, 0], direction: [0, 1, 0] },
-        } as Pipeline,
-        pipeline('p1', 1),
-      ],
+      pipelines: [free, pipeline('p1', 'N1')],
     });
 
     const result = cascadeRemoveAppendage(state, 0);
 
     expect(result.pipelines.map((p) => p.id)).toEqual(['free']);
-    expect(result.pipelines[0].nozzleIndex).toBe(-1);
+    expect(result.pipelines[0].nozzleId).toBeUndefined();
   });
 
   it('leaves nozzles and pipelines untouched when the body has no attached nozzles', () => {
     const state = makeState({
       nozzles: [nozzle('N0'), nozzle('N1', 'app-1')],
-      pipelines: [pipeline('p1', 1)],
+      pipelines: [pipeline('p1', 'N1')],
     });
 
     // Remove app-2, which has no nozzles.
@@ -194,7 +203,7 @@ describe('cascadeRemoveAppendage', () => {
   it('is a no-op on nozzles/pipelines for an out-of-range index', () => {
     const state = makeState({
       nozzles: [nozzle('N0', 'app-1')],
-      pipelines: [pipeline('p0', 0)],
+      pipelines: [pipeline('p0', 'N0')],
     });
 
     const result = cascadeRemoveAppendage(state, 99);

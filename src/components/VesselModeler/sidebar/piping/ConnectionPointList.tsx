@@ -15,7 +15,7 @@ export interface ConnectionPointListProps {
   selectedPipelineId: string;
   selectedSegmentIdx: number;
   selectedNozzleIndex: number;
-  onAddNozzle: (nozzle: NozzleConfig) => void;
+  onAddNozzle: (nozzle: Omit<NozzleConfig, 'id'>) => void;
   onUpdateNozzle: (index: number, updates: Partial<NozzleConfig>) => void;
   onRemoveNozzle: (index: number) => void;
   onSelectNozzle: (index: number) => void;
@@ -66,12 +66,11 @@ export function ConnectionPointList({
   // All plain-pipe nozzles (connection points)
   const connectionPoints = getConnectionPoints(nozzles);
 
-  // Map nozzle index → pipeline for quick lookup
-  const pipelineByNozzle = new Map(
-    pipelines.filter((p) => p.nozzleIndex >= 0).map((p) => [p.nozzleIndex, p])
+  // Map nozzle id → pipeline (pipelines reference nozzles by stable id, not position).
+  const pipelineByNozzleId = new Map(
+    pipelines.filter((p) => p.nozzleId).map((p) => [p.nozzleId, p])
   );
-
-  const availableNozzles = connectionPoints.filter(({ index }) => !pipelineByNozzle.has(index));
+  const availableNozzles = connectionPoints.filter(({ nozzle }) => !pipelineByNozzleId.has(nozzle.id));
 
   const selectedNozzle = selectedNozzleIndex >= 0 ? nozzles[selectedNozzleIndex] : null;
 
@@ -147,7 +146,7 @@ export function ConnectionPointList({
 
       {/* Connection point accordions — each groups nozzle + its pipeline segments */}
       {connectionPoints.map(({ nozzle, index }) => {
-        const pl = pipelineByNozzle.get(index);
+        const pl = pipelineByNozzleId.get(nozzle.id);
         const isExpanded = expandedPoints.has(index);
         const isNozzleSelected = index === selectedNozzleIndex;
         const segCount = pl ? pl.segments.length : 0;
