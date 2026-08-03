@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import type { ScanCompositeConfig, WeldConfig, LiftingLugConfig } from '../types';
+import type { ScanCompositeConfig, WeldConfig, LiftingLugConfig, NozzleConfig } from '../types';
 import {
   attachablesForBody,
   compositesForBody,
@@ -180,6 +180,11 @@ describe('attachablesForBody (weld/lug/rect routing)', () => {
   const appLug = { name: 'L1', pos: 60, angle: 0, style: 'padEye', swl: '1t', bodyId: 'app-1' } as LiftingLugConfig;
   const lugs = [mainLug, appLug];
 
+  const mainNozzle = { name: 'N0', pos: 100, proj: 100, angle: 90, size: 80 } as NozzleConfig;
+  const appNozzle1 = { name: 'N1', pos: 40, proj: 60, angle: 0, size: 50, bodyId: 'app-1' } as NozzleConfig;
+  const appNozzle2 = { name: 'N2', pos: 90, proj: 60, angle: 0, size: 50, bodyId: 'app-2' } as NozzleConfig;
+  const nozzles = [mainNozzle, appNozzle1, appNozzle2];
+
   it('routes only main-shell welds to the main surface (a strip weld never on main)', () => {
     expect(attachablesForBody(welds, undefined).map((w) => w.name)).toEqual(['W0']);
   });
@@ -204,6 +209,22 @@ describe('attachablesForBody (weld/lug/rect routing)', () => {
     expect(attachablesForBody(lugs, 'app-1').map((l) => l.name)).toEqual(['L1']);
   });
 
+  it('applies the same routing to nozzles (a strip nozzle never on main, and vice-versa)', () => {
+    expect(attachablesForBody(nozzles, undefined).map((n) => n.name)).toEqual(['N0']);
+    expect(attachablesForBody(nozzles, 'app-1').map((n) => n.name)).toEqual(['N1']);
+    expect(attachablesForBody(nozzles, 'app-2').map((n) => n.name)).toEqual(['N2']);
+  });
+
+  it('partitions nozzles disjointly across the main surface and every strip', () => {
+    const partitioned = [
+      ...attachablesForBody(nozzles, undefined),
+      ...attachablesForBody(nozzles, 'app-1'),
+      ...attachablesForBody(nozzles, 'app-2'),
+    ];
+    expect(partitioned).toHaveLength(nozzles.length);
+    expect(new Set(partitioned.map((n) => n.name)).size).toBe(nozzles.length);
+  });
+
   it('main-surface set is byte-identical with vs without the appendage attachables (golden)', () => {
     const withAppendages = attachablesForBody(welds, undefined);
     const withoutAppendages = attachablesForBody(
@@ -212,5 +233,15 @@ describe('attachablesForBody (weld/lug/rect routing)', () => {
     );
     expect(withAppendages).toEqual(withoutAppendages);
     expect(withAppendages.length).toBeGreaterThan(0);
+  });
+
+  it('main-surface nozzle set is byte-identical with vs without the appendage nozzles (golden)', () => {
+    const withAppendages = attachablesForBody(nozzles, undefined);
+    const withoutAppendages = attachablesForBody(
+      nozzles.filter((n) => !n.bodyId),
+      undefined,
+    );
+    expect(withAppendages).toEqual(withoutAppendages);
+    expect(withAppendages.map((n) => n.name)).toEqual(['N0']);
   });
 });

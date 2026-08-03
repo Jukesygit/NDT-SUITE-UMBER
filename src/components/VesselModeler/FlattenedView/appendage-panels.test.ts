@@ -6,12 +6,14 @@ import type {
   AppendageConfig,
   WeldConfig,
   LiftingLugConfig,
+  NozzleConfig,
 } from '../types';
 import {
   fitScale,
   projectCircWeld,
   projectStripLongWeld,
   projectStripLiftingLug,
+  projectStripNozzle,
   wrapCircumCenters,
 } from './geometry-projection';
 import {
@@ -221,6 +223,9 @@ describe('strip weld & lug placement', () => {
   function lug(p: Partial<LiftingLugConfig>): LiftingLugConfig {
     return { name: 'L', pos: 200, angle: 0, style: 'padEye', swl: '1t', ...p } as LiftingLugConfig;
   }
+  function nozzle(p: Partial<NozzleConfig>): NozzleConfig {
+    return { name: 'N', pos: 200, proj: 100, angle: 0, size: 80, ...p } as NozzleConfig;
+  }
 
   it('lands a circ weld at the strip X of its axial pos', () => {
     const p = 333;
@@ -259,6 +264,38 @@ describe('strip weld & lug placement', () => {
     expect(centers).toHaveLength(2);
     expect(centers).toContain(0);
     expect(centers).toContain(APP_CIRC);
+  });
+
+  it('places a datum-0 nozzle at the strip top at its axial pos, seam-wrapped by bore radius', () => {
+    const m = projectStripNozzle(nozzle({ angle: 0, pos: 250, size: 80 }), APP_OD);
+    expect(stripToCanvasY(m.cy, view)).toBeCloseTo(panelTop, 9);
+    expect(stripToCanvasX(m.cx, view)).toBeCloseTo(stripToCanvasX(250, view), 9);
+    // The bore radius (size / 2 mm) wraps the datum-0 marker to both strip edges.
+    const centers = wrapCircumCenters(m.cy, m.radius, APP_CIRC);
+    expect(centers).toHaveLength(2);
+    expect(centers).toContain(0);
+    expect(centers).toContain(APP_CIRC);
+  });
+
+  it('does not wrap a nozzle comfortably inside the strip band (datum 180°)', () => {
+    const m = projectStripNozzle(nozzle({ angle: 180, size: 80 }), APP_OD);
+    expect(m.cy).toBeCloseTo(APP_CIRC / 2, 6);
+    expect(wrapCircumCenters(m.cy, m.radius, APP_CIRC)).toHaveLength(1);
+  });
+
+  it('derives per-axis nozzle pixel radii the way the render does — equal under the shared 1:1 scale', () => {
+    // The strip nozzle marker takes rxPx from the X transform and ryPx from the Y
+    // transform (exactly like the main path). Both axes share one pxPerMm, so the
+    // ellipse is a circle: rxPx === ryPx === radius · pxPerMm · zoom.
+    const m = projectStripNozzle(nozzle({ angle: 90, pos: 300, size: 120 }), APP_OD);
+    const cx = stripToCanvasX(m.cx, view);
+    const rxPx = Math.abs(stripToCanvasX(m.cx + m.radius, view) - cx);
+    const cyBase = stripToCanvasY(m.cy, view);
+    const ryPx = Math.abs(stripToCanvasY(m.cy + m.radius, view) - cyBase);
+    const expected = m.radius * view.pxPerMm * view.zoom;
+    expect(rxPx).toBeCloseTo(expected, 9);
+    expect(ryPx).toBeCloseTo(expected, 9);
+    expect(rxPx).toBeCloseTo(ryPx, 9);
   });
 
   it('keeps the strip axis PHYSICAL — X increases with pos (never mirrored)', () => {

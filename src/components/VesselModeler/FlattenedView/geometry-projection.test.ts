@@ -17,6 +17,7 @@ import {
   projectLiftingLug,
   projectStripLongWeld,
   projectStripLiftingLug,
+  projectStripNozzle,
   getCircumference,
   wrapCircumCenters,
   getAxialOrientation,
@@ -398,6 +399,65 @@ describe('appendage strip weld/lug projection (datum convention)', () => {
     expect(cw.x2).toBe(333); // vertical
     expect(cw.y1).toBe(0);
     expect(cw.y2).toBeCloseTo(APP_CIRC, 6); // spans the full appendage circumference
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Appendage strip nozzle projection — datum convention (0 = datum meridian)
+// ---------------------------------------------------------------------------
+// A nozzle tagged with an appendage bodyId lives on that appendage's developed
+// strip. Its angle is the appendage DATUM convention (0 = datum meridian at the
+// strip top) — the SAME angle vessel-geometry.ts feeds straight into
+// bodyFrame.surfacePoint(posMm, n.angle) for the 3D appendage nozzle (no ±90;
+// vessel-geometry.ts:469). So projectStripNozzle maps angle through datumToCircumMm
+// (appendage 0 = datum), NOT angleToCircumMm (vessel 90 = TDC). The bore radius is
+// derived exactly as the main-surface projectNozzle (size / 2).
+// ---------------------------------------------------------------------------
+describe('appendage strip nozzle projection (datum convention)', () => {
+  const APP_OD = 400;
+
+  function nozzle(p: Partial<NozzleConfig>): NozzleConfig {
+    return { name: 'N', pos: 200, proj: 100, angle: 0, size: 80, ...p } as NozzleConfig;
+  }
+
+  it('places a datum-0 nozzle at the strip top (cy = 0) at its axial pos', () => {
+    const c = projectStripNozzle(nozzle({ bodyId: 'a', angle: 0, pos: 250 }), APP_OD);
+    expect(c.cy).toBeCloseTo(0, 6);
+    expect(c.cx).toBe(250);
+  });
+
+  it('maps the nozzle angle through datumToCircumMm, NOT angleToCircumMm', () => {
+    for (const angle of [0, 30, 90, 210]) {
+      expect(projectStripNozzle(nozzle({ bodyId: 'a', angle }), APP_OD).cy).toBeCloseTo(
+        datumToCircumMm(angle, APP_OD),
+        6,
+      );
+    }
+    // A datum-90 nozzle is a quarter-turn from the datum, NOT at the strip top.
+    expect(projectStripNozzle(nozzle({ bodyId: 'a', angle: 90 }), APP_OD).cy).not.toBeCloseTo(0, 3);
+    expect(angleToCircumMm(90, APP_OD)).toBeCloseTo(0, 6); // guard: the vessel helper WOULD say top
+  });
+
+  it('derives the bore radius exactly as the main-surface projectNozzle (size / 2)', () => {
+    for (const size of [40, 80, 305]) {
+      const strip = projectStripNozzle(nozzle({ bodyId: 'a', size }), APP_OD);
+      const main = projectNozzle(nozzle({ size }), OD);
+      expect(strip.radius).toBe(size / 2);
+      expect(strip.radius).toBe(main.radius); // same size ⇒ same bore radius on either surface
+    }
+  });
+
+  it('aligns a strip nozzle with a strip lug/weld at the same datum angle (share cy)', () => {
+    // A datum-θ feature lands at datumToCircumMm(θ) regardless of feature type, so a
+    // nozzle lines up with the body scan and its neighbours on the strip.
+    for (const angle of [0, 60, 200]) {
+      const ny = projectStripNozzle(nozzle({ bodyId: 'a', angle }), APP_OD).cy;
+      const ly = projectStripLiftingLug(
+        { name: 'L', pos: 200, angle, style: 'padEye', swl: '1t' } as LiftingLugConfig,
+        APP_OD,
+      ).cy;
+      expect(ny).toBeCloseTo(ly, 9);
+    }
   });
 });
 

@@ -314,15 +314,17 @@ export function projectLiftingLug(lug: LiftingLugConfig, vesselOD: number): Flat
 // ---------------------------------------------------------------------------
 // Appendage strip variants (developed onto an appendage's own developed strip)
 // ---------------------------------------------------------------------------
-// A weld/lug tagged with an appendage `bodyId` lives on that appendage's strip,
-// not the main shell. On a strip `pos` is mm along the appendage axis (0 = the
-// shell junction, the strip's LEFT — the PHYSICAL axis, never the mirrored scan
+// A weld/lug/nozzle tagged with an appendage `bodyId` lives on that appendage's
+// strip, not the main shell. On a strip `pos` is mm along the appendage axis (0 =
+// the shell junction, the strip's LEFT — the PHYSICAL axis, never the mirrored scan
 // index) and `angle` is the appendage DATUM convention (0 = datum meridian at the
 // strip top). That is the SAME convention the strip's scan overlay (datumToCircumMm)
 // and coverage rects use, and the SAME angle engine/body-frame.ts feeds to the
 // 3D `surfacePoint` (verified: weld-geometry.ts + vessel-geometry.ts pass `.angle`
-// straight to the frame) — so a strip weld/lug lines up with the body's scan and
-// its 3D placement. These mirror projectLongWeld / projectLiftingLug but swap
+// straight to the frame — the appendage nozzle branch does
+// `bodyFrame.surfacePoint(posMm, n.angle)` with NO ±90, vessel-geometry.ts:469) —
+// so a strip weld/lug/nozzle lines up with the body's scan and its 3D placement.
+// These mirror projectLongWeld / projectLiftingLug / projectNozzle but swap
 // angleToCircumMm (vessel 90 = TDC) for datumToCircumMm (appendage 0 = datum);
 // never re-introduce a manual ±90 (Decision Log 2026-06-22 / 06-23). A circumferential
 // weld is angle-free (a full ring), so it reuses projectCircWeld with the appendage OD.
@@ -353,6 +355,25 @@ export function projectStripLiftingLug(lug: LiftingLugConfig, appendageOD: numbe
     label: lug.name,
     cx: lug.pos,
     cy: datumToCircumMm(lug.angle, appendageOD),
+  };
+}
+
+/**
+ * Project a nozzle onto an appendage developed strip as a circle at
+ * (appendage-axial pos, appendage-datum angle → strip circumferential mm). The
+ * bore radius is derived identically to the main-surface {@link projectNozzle}
+ * (size / 2). `angle` is the appendage DATUM convention — the SAME value
+ * vessel-geometry.ts feeds straight into `bodyFrame.surfacePoint(posMm, n.angle)`
+ * for the 3D appendage nozzle (vessel-geometry.ts:469, no ±90) — so the strip
+ * marker sits under the 3D nozzle. `NozzleConfig.angle` is required, so (unlike the
+ * weld/lug builders) there is no default.
+ */
+export function projectStripNozzle(nozzle: NozzleConfig, appendageOD: number): FlatCircle {
+  return {
+    label: nozzle.name,
+    cx: nozzle.pos,
+    cy: datumToCircumMm(nozzle.angle, appendageOD),
+    radius: nozzle.size / 2,
   };
 }
 

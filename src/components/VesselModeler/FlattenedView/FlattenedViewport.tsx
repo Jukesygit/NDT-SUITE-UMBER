@@ -20,6 +20,7 @@ import {
   projectLiftingLug,
   projectStripLongWeld,
   projectStripLiftingLug,
+  projectStripNozzle,
   wrapCircumCenters,
   getAxialOrientation,
   axialToIndexMm,
@@ -313,7 +314,15 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
     ctx.restore(); // un-clip
 
     // 3b-ii. Appendage developed panels, stacked below the main plot.
-    renderStripPanels(ctx, vesselState, layout, surfaceView, selectedWeldIndex, selectedLugIndex);
+    renderStripPanels(
+      ctx,
+      vesselState,
+      layout,
+      surfaceView,
+      selectedWeldIndex,
+      selectedLugIndex,
+      selectedNozzleIndex
+    );
 
     // 3c. Selection glow — drawn OUTSIDE clip so it radiates freely.
     //     Uses concentric strokes with decreasing opacity for a soft halo
@@ -339,8 +348,13 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
       ctx.restore();
     }
 
-    // Nozzle glow — match the marker: per-axis radius + seam wrap.
-    if (selectedNozzleIndex >= 0 && selectedNozzleIndex < vesselState.nozzles.length) {
+    // Nozzle glow — main-shell nozzles only; an appendage nozzle glows in its own
+    // strip. Match the marker: per-axis radius + seam wrap.
+    if (
+      selectedNozzleIndex >= 0 &&
+      selectedNozzleIndex < vesselState.nozzles.length &&
+      vesselState.nozzles[selectedNozzleIndex].bodyId === undefined
+    ) {
       const circle = projectNozzle(vesselState.nozzles[selectedNozzleIndex], od);
       const cx = toCanvasX(circle.cx);
       const rxPx = Math.abs(toCanvasX(circle.cx + circle.radius) - cx) || 4;
@@ -558,7 +572,8 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
         offsetY: number;
       },
       selWeldIndex: number,
-      selLugIndex: number
+      selLugIndex: number,
+      selNozzleIndex: number
     ) => {
       if (layout.pxPerMm <= 0 || layout.panels.length === 0) return;
       const { pxPerMm, marginX, marginY, zoom, offsetX, offsetY } = view;
@@ -752,6 +767,65 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
           }
         }
 
+        // Appendage nozzles — the same ellipse + cross-hair marker as the main
+        // surface, at (axial pos, datum angle) on the strip. Per-axis pixel radii
+        // (rxPx from the strip X scale, ryPx from the strip Y scale — equal under the
+        // shared 1:1 pxPerMm, but taken per-axis exactly like the main path) and
+        // seam-wrapped by the bore radius so a nozzle on the datum cut shows on both
+        // strip edges. A selected nozzle gets the shared concentric ellipse glow
+        // (clipped to the panel), matching the main-surface nozzle selection.
+        for (let ni = 0; ni < state.nozzles.length; ni++) {
+          const nozzle = state.nozzles[ni];
+          if (nozzle.bodyId !== panel.id) continue;
+          const circle = projectStripNozzle(nozzle, appendageOD);
+          const cx = stripToCanvasX(circle.cx, stripView);
+          const rxPx = Math.abs(stripToCanvasX(circle.cx + circle.radius, stripView) - cx) || 4;
+          const cyBase = stripToCanvasY(circle.cy, stripView);
+          const ryPx =
+            Math.abs(stripToCanvasY(circle.cy + circle.radius, stripView) - cyBase) || rxPx;
+          const centers = wrapCircumCenters(circle.cy, circle.radius, appCirc);
+
+          if (ni === selNozzleIndex) {
+            ctx.save();
+            for (const cyMm of centers) {
+              const cy = stripToCanvasY(cyMm, stripView);
+              for (const layer of GLOW_LAYERS) {
+                ctx.globalAlpha = layer.alpha;
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = layer.width;
+                ctx.beginPath();
+                ctx.ellipse(cx, cy, rxPx, ryPx, 0, 0, Math.PI * 2);
+                ctx.stroke();
+              }
+            }
+            ctx.globalAlpha = 1;
+            ctx.restore();
+          }
+
+          for (const cyMm of centers) {
+            const cy = stripToCanvasY(cyMm, stripView);
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, rxPx, ryPx, 0, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Cross-hair
+            ctx.beginPath();
+            ctx.moveTo(cx - rxPx, cy);
+            ctx.lineTo(cx + rxPx, cy);
+            ctx.moveTo(cx, cy - ryPx);
+            ctx.lineTo(cx, cy + ryPx);
+            ctx.stroke();
+
+            ctx.fillStyle = '#333';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(circle.label, cx, cy - ryPx - 3);
+          }
+        }
+
         ctx.restore();
       }
     },
@@ -879,6 +953,10 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
       // in half at the top/bottom boundary.
       const circumference = getCircumference(state);
       for (const nozzle of state.nozzles) {
+        // Appendage nozzles render on their own strip (renderStripPanels), never on
+        // the main surface. Skipping them here keeps the main plot byte-identical for
+        // any model whose nozzles are all main-shell (bodyId undefined).
+        if (nozzle.bodyId !== undefined) continue;
         const circle = projectNozzle(nozzle, od);
         const cx = toCanvasX(circle.cx);
         const rxPx = Math.abs(toCanvasX(circle.cx + circle.radius) - cx) || 4;
