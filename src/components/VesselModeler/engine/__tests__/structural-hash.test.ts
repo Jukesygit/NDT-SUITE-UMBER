@@ -16,6 +16,7 @@ import {
   type AnnotationShapeConfig,
   type AppendageConfig,
   type DomeScanConfig,
+  type ScanCompositeConfig,
   type VesselState,
 } from '../../types';
 import { structuralHash } from '../structural-hash';
@@ -124,6 +125,107 @@ describe('structuralHash — dome scan bodyId', () => {
       domeScanComposites: [dome(base.id)],
     };
     expect(structuralHash(onMain)).not.toBe(structuralHash(onBody));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Scan / dome composite heatmap visual params are COSMETIC (T2-B / review §4.4).
+// opacity / colorScale / rangeMin / rangeMax only repaint the baked texture, so
+// they must NOT change the hash (they are swapped in place by ThreeViewport).
+// Structural placement fields (pos, datum, grid, direction) MUST still change it.
+// ---------------------------------------------------------------------------
+
+describe('structuralHash — scan composite visual params are cosmetic', () => {
+  function scan(overrides: Partial<ScanCompositeConfig> = {}): ScanCompositeConfig {
+    return {
+      id: 'sc1',
+      name: 'sc1',
+      data: [[10, 11]],
+      xAxis: [0, 5],
+      yAxis: [0, 5],
+      stats: { min: 0, max: 0, mean: 0, median: 0, stdDev: 0 },
+      indexStartMm: 100,
+      datumAngleDeg: 0,
+      scanDirection: 'cw',
+      indexDirection: 'forward',
+      orientationConfirmed: true,
+      colorScale: 'Jet',
+      rangeMin: null,
+      rangeMax: null,
+      opacity: 1,
+      ...overrides,
+    };
+  }
+  const state = (sc: ScanCompositeConfig): VesselState => ({
+    ...DEFAULT_VESSEL_STATE,
+    scanComposites: [sc],
+  });
+  const scanBase = structuralHash(state(scan()));
+
+  it('is unchanged when opacity changes', () => {
+    expect(structuralHash(state(scan({ opacity: 0.3 })))).toBe(scanBase);
+  });
+  it('is unchanged when colorScale changes', () => {
+    expect(structuralHash(state(scan({ colorScale: 'Viridis' })))).toBe(scanBase);
+  });
+  it('is unchanged when rangeMin / rangeMax change', () => {
+    expect(structuralHash(state(scan({ rangeMin: 2 })))).toBe(scanBase);
+    expect(structuralHash(state(scan({ rangeMax: 20 })))).toBe(scanBase);
+  });
+
+  it('changes when the longitudinal position (indexStartMm) changes', () => {
+    expect(structuralHash(state(scan({ indexStartMm: 250 })))).not.toBe(scanBase);
+  });
+  it('changes when the datum angle changes', () => {
+    expect(structuralHash(state(scan({ datumAngleDeg: 45 })))).not.toBe(scanBase);
+  });
+  it('changes when the scan direction changes', () => {
+    expect(structuralHash(state(scan({ scanDirection: 'ccw' })))).not.toBe(scanBase);
+  });
+  it('changes when the data grid presence changes', () => {
+    expect(structuralHash(state(scan({ data: [] })))).not.toBe(scanBase);
+  });
+});
+
+describe('structuralHash — dome scan visual params are cosmetic', () => {
+  function dome(overrides: Partial<DomeScanConfig> = {}): DomeScanConfig {
+    return {
+      id: 'd1',
+      name: 'd1',
+      head: 'right',
+      centerPhi: 30,
+      centerTheta: 0,
+      scanDirection: 'cw',
+      indexDirection: 'outward',
+      orientationConfirmed: true,
+      data: [[1]],
+      xAxis: [0, 1],
+      yAxis: [0, 1],
+      stats: { min: 0, max: 0, mean: 0, median: 0, stdDev: 0 },
+      colorScale: 'Jet',
+      rangeMin: null,
+      rangeMax: null,
+      opacity: 1,
+      ...overrides,
+    };
+  }
+  const state = (ds: DomeScanConfig): VesselState => ({
+    ...DEFAULT_VESSEL_STATE,
+    domeScanComposites: [ds],
+  });
+  const domeBase = structuralHash(state(dome()));
+
+  it('is unchanged when opacity / colorScale / range change', () => {
+    expect(structuralHash(state(dome({ opacity: 0.4 })))).toBe(domeBase);
+    expect(structuralHash(state(dome({ colorScale: 'Hot' })))).toBe(domeBase);
+    expect(structuralHash(state(dome({ rangeMin: 1, rangeMax: 9 })))).toBe(domeBase);
+  });
+
+  it('changes when centerPhi changes', () => {
+    expect(structuralHash(state(dome({ centerPhi: 60 })))).not.toBe(domeBase);
+  });
+  it('changes when the head changes', () => {
+    expect(structuralHash(state(dome({ head: 'left' })))).not.toBe(domeBase);
   });
 });
 

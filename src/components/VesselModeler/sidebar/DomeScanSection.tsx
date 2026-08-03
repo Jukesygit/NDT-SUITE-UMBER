@@ -16,7 +16,7 @@ export interface DomeScanSectionProps {
     vesselState: VesselState;
     selectedDomeScanId: string;
     onSelectDomeScan: (id: string) => void;
-    onImportDomeComposite: (compositeId: string, head: 'left' | 'right') => void;
+    onImportDomeComposite: (compositeId: string, head: 'left' | 'right', bodyId?: string) => void;
     onUpdateDomeScan: (id: string, updates: Partial<DomeScanConfig>) => void;
     onRemoveDomeScan: (id: string) => void;
     cloudDomeComposites: DomeScanCloudItem[] | undefined;
@@ -45,15 +45,32 @@ export function DomeScanSection({
     const dishedAppendages = vesselState.appendages.filter(a => a.endClosure === 'dished');
     const appendageName = (bodyId?: string) =>
         vesselState.appendages.find(a => a.id === bodyId)?.name;
+    // Cloud composites tag their origin in section_type: 'dome_left'/'dome_right'
+    // for main-vessel heads, or 'appendage:<id>' for an appendage end closure (4C).
+    // Show the appendage's name for the latter instead of a misleading "Right head".
+    const sectionLabel = (sectionType: string): string => {
+        if (sectionType.startsWith('appendage:')) {
+            return `${appendageName(sectionType.slice('appendage:'.length)) ?? 'Appendage'} end`;
+        }
+        return sectionType === 'dome_left' ? 'Left head' : 'Right head';
+    };
     const [showImport, setShowImport] = useState(false);
     const [importingId, setImportingId] = useState<string | null>(null);
     const [importHead, setImportHead] = useState<'left' | 'right'>('left');
+    // '' = main vessel head; otherwise a dished appendage id (import onto its closure).
+    const [importBodyId, setImportBodyId] = useState<string>('');
+
+    // A chosen appendage may have been removed while the modal is open; fall back
+    // to the main vessel so we never import onto a stale closure.
+    const importAppendageValid = importBodyId === '' || dishedAppendages.some(a => a.id === importBodyId);
+    const effectiveImportBodyId = importAppendageValid ? importBodyId : '';
 
     const handleImport = () => {
         if (!importingId) return;
-        onImportDomeComposite(importingId, importHead);
+        onImportDomeComposite(importingId, importHead, effectiveImportBodyId || undefined);
         setShowImport(false);
         setImportingId(null);
+        setImportBodyId('');
     };
 
     return (
@@ -118,7 +135,7 @@ export function DomeScanSection({
                     <div className="vm-modal">
                         <div className="vm-modal-header">
                             <h3 style={{ margin: 0, fontSize: '0.9rem', color: 'white' }}>Import Dome Scan Composite</h3>
-                            <button className="vm-btn-icon" onClick={() => { setShowImport(false); setImportingId(null); }}>
+                            <button className="vm-btn-icon" onClick={() => { setShowImport(false); setImportingId(null); setImportBodyId(''); }}>
                                 &times;
                             </button>
                         </div>
@@ -145,8 +162,13 @@ export function DomeScanSection({
                                         className={`vm-list-item texture ${importingId === c.id ? 'selected' : ''}`}
                                         onClick={() => {
                                             setImportingId(c.id);
-                                            if (c.section_type === 'dome_left') setImportHead('left');
-                                            else if (c.section_type === 'dome_right') setImportHead('right');
+                                            if (c.section_type === 'dome_left') { setImportHead('left'); setImportBodyId(''); }
+                                            else if (c.section_type === 'dome_right') { setImportHead('right'); setImportBodyId(''); }
+                                            else if (c.section_type?.startsWith('appendage:')) {
+                                                // Pre-select the origin appendage when it still exists and is dished.
+                                                const id = c.section_type.slice('appendage:'.length);
+                                                setImportBodyId(dishedAppendages.some(a => a.id === id) ? id : '');
+                                            }
                                         }}
                                         style={{ cursor: 'pointer' }}
                                     >
@@ -154,14 +176,30 @@ export function DomeScanSection({
                                             <strong>{c.name}</strong>
                                             <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
                                                 {c.width} &times; {c.height}
-                                                {c.section_type && <> &middot; {c.section_type === 'dome_left' ? 'Left head' : 'Right head'}</>}
+                                                {c.section_type && <> &middot; {sectionLabel(c.section_type)}</>}
                                                 {' '}&middot; {new Date(c.created_at).toLocaleDateString()}
                                             </div>
                                         </div>
                                     </div>
                                 ))
                             )}
-                            {importingId && (
+                            {importingId && dishedAppendages.length > 0 && (
+                                <div className="vm-control-group" style={{ marginTop: 10 }}>
+                                    <div className="vm-label"><span>Mount on</span></div>
+                                    <select
+                                        className="vm-select"
+                                        value={effectiveImportBodyId}
+                                        onChange={e => setImportBodyId(e.target.value)}
+                                        title="Import onto a main-vessel head or a dished appendage's end closure. Appendage imports drape on that closure (head is fixed)."
+                                    >
+                                        <option value="">Main vessel</option>
+                                        {dishedAppendages.map(a => (
+                                            <option key={a.id} value={a.id}>{a.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+                            {importingId && effectiveImportBodyId === '' && (
                                 <div className="vm-control-group" style={{ marginTop: 10 }}>
                                     <div className="vm-label"><span>Head</span></div>
                                     <div className="vm-toggle-group">
@@ -178,7 +216,7 @@ export function DomeScanSection({
                             )}
                         </div>
                         <div className="vm-modal-footer">
-                            <button className="vm-btn" onClick={() => { setShowImport(false); setImportingId(null); }}>Cancel</button>
+                            <button className="vm-btn" onClick={() => { setShowImport(false); setImportingId(null); setImportBodyId(''); }}>Cancel</button>
                             {importingId && (
                                 <button className="vm-btn vm-btn-primary" onClick={handleImport}>Import</button>
                             )}

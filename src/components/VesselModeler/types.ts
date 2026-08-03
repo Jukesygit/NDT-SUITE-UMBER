@@ -1223,14 +1223,16 @@ export interface VesselCallbacks {
     pos: number,
     angle: number,
     width: number,
-    height: number
+    height: number,
+    bodyId?: string
   ) => void;
   onAnnotationPreview?: (
     type: AnnotationShapeType,
     pos: number,
     angle: number,
     width: number,
-    height: number
+    height: number,
+    bodyId?: string
   ) => void;
   onRulerCreated?: (startPos: number, startAngle: number, endPos: number, endAngle: number) => void;
   onRulerPreview?: (startPos: number, startAngle: number, endPos: number, endAngle: number) => void;

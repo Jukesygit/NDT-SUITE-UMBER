@@ -23,6 +23,7 @@ import { SCALE } from './materials';
 import { resolveBodyFrame, type SurfaceFrame } from './body-frame';
 import { domePhiThetaFromPoint } from './dome-scan-geometry';
 import { buildMeridianProfile, arcFromAxial, axialFromArc, displayRadiusAtArc } from './dome-arc';
+import { normAngle, vesselToDatumAngle } from './vessel-coords';
 
 /**
  * Resolve the appendage body id a raycast hit belongs to. Main-shell meshes
@@ -74,14 +75,16 @@ export interface InteractionCallbacks {
     pos: number,
     angle: number,
     width: number,
-    height: number
+    height: number,
+    bodyId?: string
   ) => void;
   onAnnotationPreview: (
     type: AnnotationShapeType,
     pos: number,
     angle: number,
     width: number,
-    height: number
+    height: number,
+    bodyId?: string
   ) => void;
   onRulerCreated: (startPos: number, startAngle: number, endPos: number, endAngle: number) => void;
   onRulerPreview: (startPos: number, startAngle: number, endPos: number, endAngle: number) => void;
@@ -178,9 +181,17 @@ export class InteractionManager {
   drawMode: AnnotationShapeType | null = null;
   coverageDrawMode = false;
   rulerDrawMode = false;
+  /**
+   * Body a newly-drawn ANNOTATION belongs to (undefined = main shell). Set by the
+   * React layer from the active selection (see VesselModeler `activeDrawBodyId`);
+   * only annotation draws honour it — coverage/ruler draws stay on the main shell.
+   */
+  activeDrawBodyId: string | undefined = undefined;
   /** @deprecated per-item locked now on CoverageRectConfig */
   private drawStartPos = 0;
   private drawStartAngle = 0;
+  /** Body resolved at draw-start; held for the whole gesture (move/up). */
+  private drawBodyId: string | undefined = undefined;
   private isDrawing = false;
   private isDrawingCoverage = false;
   private isDrawingRuler = false;
@@ -304,18 +315,21 @@ export class InteractionManager {
 
     // ----- Draw mode: start drawing annotation, coverage rect, or ruler ----- //
     if (this.drawMode || this.coverageDrawMode || this.rulerDrawMode) {
-      const shellMeshes = this.getShellMeshes();
-      if (shellMeshes.length === 0) return;
-      const hits = this.raycaster.intersectObjects(shellMeshes, true);
-      if (hits.length === 0) return;
-
-      const point = hits[0].point;
-      const state = this.vesselState;
+      // Annotation draws are scoped to the active body (its cylinder + closure)
+      // when one is selected; coverage/ruler draws — and all draws with no active
+      // body — stay on the main shell, byte-identical to the legacy path.
+      const bodyId = this.resolveActiveDrawBody();
+      const { frame, meshes } = this.drawSurface(bodyId);
+      if (meshes.length === 0) return;
+      const hits = this.raycaster.intersectObjects(meshes, true);
+      const hit = bodyId === undefined ? hits[0] : hits.find((h) => hitBodyId(h.object) === bodyId);
+      if (!hit) return;
 
       // Single frame inverse: world point -> (pos mm, angle deg).
-      const start = resolveBodyFrame(state).toLocal(point);
+      const start = frame.toLocal(hit.point);
       this.drawStartPos = start.pos;
       this.drawStartAngle = start.angle;
+      this.drawBodyId = bodyId;
 
       this.isDrawing = !!this.drawMode;
       this.isDrawingCoverage = this.coverageDrawMode;
@@ -565,16 +579,20 @@ export class InteractionManager {
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
       this.raycaster.setFromCamera(this.mouse, this.camera);
 
-      const shellMeshes = this.getShellMeshes();
-      if (shellMeshes.length === 0) return;
-      const hits = this.raycaster.intersectObjects(shellMeshes, true);
-      if (hits.length === 0) return;
+      // Held body (from draw-start): main shell for coverage/ruler and unscoped
+      // annotation draws (byte-identical); the active appendage otherwise.
+      const { frame, meshes } = this.drawSurface(this.drawBodyId);
+      if (meshes.length === 0) return;
+      const hits = this.raycaster.intersectObjects(meshes, true);
+      const hit =
+        this.drawBodyId === undefined ? hits[0] : hits.find((h) => hitBodyId(h.object) === this.drawBodyId);
+      if (!hit) return;
 
-      const point = hits[0].point;
+      const point = hit.point;
       const state = this.vesselState;
 
       // Single frame inverse: world point -> (pos mm, angle deg).
-      const { pos: currentPos, angle: currentAngle } = resolveBodyFrame(state).toLocal(point);
+      const { pos: currentPos, angle: currentAngle } = frame.toLocal(point);
 
       const circumference = Math.PI * state.id;
       const axialDelta = Math.abs(currentPos - this.drawStartPos);
@@ -598,19 +616,24 @@ export class InteractionManager {
         this.callbacks.onCoverageRectPreview(centerPos, centerAngle, width, height);
       } else {
         // Annotations size in meridian-arc space so the preview matches the
-        // committed footprint on dome ends (see onPointerUp create path).
+        // committed footprint on dome ends (see onPointerUp create path). On an
+        // appendage the footprint uses the body's own R/D/L via the frame.
         const fp = this.annotationFootprint(
           this.drawStartPos,
           this.drawStartAngle,
           currentPos,
-          currentAngle
+          currentAngle,
+          this.drawBodyId === undefined
+            ? undefined
+            : { R: frame.radius, D: frame.headDepth, L: frame.axialLength }
         );
         this.callbacks.onAnnotationPreview(
           this.drawMode!,
           fp.centerPos,
           fp.centerAngle,
           fp.width,
-          fp.height
+          fp.height,
+          this.drawBodyId
         );
       }
       return;
@@ -803,10 +826,9 @@ export class InteractionManager {
       // Clamp to the body's axial span (tan-tan for main, cylinder length for appendage).
       const newPos = Math.max(0, Math.min(gizmoFrame.axialLength, local.pos));
 
-      // Convert internal angle (0°=3-o'clock) to user-facing (0°=TDC) by subtracting 90°
-      let deg = local.angle - 90;
-      deg = ((deg % 360) + 360) % 360;
-      deg = Math.round(deg);
+      // Convert internal angle (0°=3-o'clock) to user-facing (0°=TDC): the
+      // vessel→datum `- 90` and normalize live in vessel-coords (single source).
+      const deg = Math.round(normAngle(vesselToDatumAngle(local.angle)));
 
       this.callbacks.onScanGizmoDatumMoved(this.selectedGizmoCompositeId, deg, newPos);
       return;
@@ -836,7 +858,7 @@ export class InteractionManager {
           1,
           Math.min(89, Math.round((Math.acos(Math.min(1, sx / D)) * 180) / Math.PI))
         );
-        const thetaDeg = ((Math.round(local.angle) % 360) + 360) % 360;
+        const thetaDeg = normAngle(Math.round(local.angle));
         this.callbacks.onDomeGizmoDatumMoved(this.selectedGizmoCompositeId, phiDeg, thetaDeg);
         return;
       }
@@ -1042,14 +1064,18 @@ export class InteractionManager {
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
       this.raycaster.setFromCamera(this.mouse, this.camera);
 
-      const shellMeshes = this.getShellMeshes();
-      const hits = this.raycaster.intersectObjects(shellMeshes, true);
-      if (hits.length > 0) {
-        const point = hits[0].point;
+      // Held body (from draw-start): main shell for coverage/ruler and unscoped
+      // annotation draws (byte-identical); the active appendage otherwise.
+      const { frame, meshes } = this.drawSurface(this.drawBodyId);
+      const hits = this.raycaster.intersectObjects(meshes, true);
+      const hit =
+        this.drawBodyId === undefined ? hits[0] : hits.find((h) => hitBodyId(h.object) === this.drawBodyId);
+      if (hit) {
+        const point = hit.point;
         const state = this.vesselState;
 
         // Single frame inverse: world point -> (pos mm, angle deg).
-        const { pos: endPos, angle: endAngle } = resolveBodyFrame(state).toLocal(point);
+        const { pos: endPos, angle: endAngle } = frame.toLocal(point);
 
         const circumference = Math.PI * state.id;
         const axialDelta = Math.abs(endPos - this.drawStartPos);
@@ -1072,11 +1098,15 @@ export class InteractionManager {
           // across shell + dome; height = circumferential mm at the local dome
           // radius; centre = arc-midpoint mapped back to axial. Reduces to the
           // legacy axial/equatorial math on the cylinder. minSize floor kept.
+          // On an appendage the footprint uses the body's own R/D/L via the frame.
           const fp = this.annotationFootprint(
             this.drawStartPos,
             this.drawStartAngle,
             endPos,
-            endAngle
+            endAngle,
+            this.drawBodyId === undefined
+              ? undefined
+              : { R: frame.radius, D: frame.headDepth, L: frame.axialLength }
           );
           const width = Math.max(fp.width, minSize);
           const height = Math.max(fp.height, minSize);
@@ -1085,7 +1115,8 @@ export class InteractionManager {
             fp.centerPos,
             fp.centerAngle,
             width,
-            height
+            height,
+            this.drawBodyId
           );
         }
       }
@@ -1235,12 +1266,16 @@ export class InteractionManager {
     startPos: number,
     startAngle: number,
     endPos: number,
-    endAngle: number
+    endAngle: number,
+    dims?: { R: number; D: number; L: number }
   ): { width: number; height: number; centerPos: number; centerAngle: number } {
+    // dims override lets an appendage annotation size against the body's own
+    // radius / closure depth / cylinder length (via the frame). Absent = main
+    // shell, byte-identical to the legacy path.
     const state = this.vesselState;
-    const R = state.id / 2;
-    const D = state.id / (2 * state.headRatio);
-    const L = state.length;
+    const R = dims?.R ?? state.id / 2;
+    const D = dims?.D ?? state.id / (2 * state.headRatio);
+    const L = dims?.L ?? state.length;
     const profile = buildMeridianProfile(R, D);
 
     const sStart = arcFromAxial(profile, L, startPos);
@@ -1342,5 +1377,34 @@ export class InteractionManager {
       }
     });
     return out;
+  }
+
+  /**
+   * Body a draw gesture starts on. Only ANNOTATION draws (this.drawMode set) are
+   * body-scoped, and only to an active body that still exists; everything else —
+   * coverage/ruler draws, or no active body — resolves to undefined (main shell),
+   * keeping the legacy path byte-identical.
+   */
+  private resolveActiveDrawBody(): string | undefined {
+    if (!this.drawMode || this.activeDrawBodyId === undefined) return undefined;
+    const exists = (this.vesselState.appendages ?? []).some(
+      (a) => a.id === this.activeDrawBodyId
+    );
+    return exists ? this.activeDrawBodyId : undefined;
+  }
+
+  /**
+   * Draw frame + raycast targets for a body. undefined = main shell (frame + all
+   * shell meshes, byte-identical); a body id = its frame + its surface meshes
+   * (cylinder + closure) so an annotation can be drawn on the appendage end too.
+   */
+  private drawSurface(bodyId: string | undefined): {
+    frame: SurfaceFrame;
+    meshes: THREE.Object3D[];
+  } {
+    const state = this.vesselState;
+    return bodyId === undefined
+      ? { frame: resolveBodyFrame(state), meshes: this.getShellMeshes() }
+      : { frame: resolveBodyFrame(state, bodyId), meshes: this.getBodySurfaceMeshes(bodyId) };
   }
 }

@@ -53,6 +53,8 @@ import {
   SCALE,
 } from './engine/materials';
 import { buildPipelineGroup, computeNozzleTipY } from './engine/pipeline-geometry';
+import { createScanCompositePlane } from './engine/texture-manager';
+import { createDomeScanPlane } from './engine/dome-scan-geometry';
 import * as THREE from 'three';
 
 // Structural hash lives in a pure, side-effect-free module so it can be
@@ -60,6 +62,53 @@ import * as THREE from 'three';
 // for callers that import it from the viewport.
 import { structuralHash } from './engine/structural-hash';
 export { structuralHash } from './engine/structural-hash';
+
+// =============================================================================
+// Heatmap visual-param in-place swap (Tier 2, review §4.4)
+// =============================================================================
+// The scan/dome composite meshes are MeshBasicMaterials whose `map` is a baked
+// heatmap CanvasTexture. All four visual params bake INTO that texture:
+// colorScale/rangeMin/rangeMax set the RGB (heatmap-texture.ts interpolateColor)
+// and `opacity` sets the per-texel alpha byte (heatmap-texture.ts:71/90) — the
+// material's own `.opacity` is unused. So a visual-param change needs a texture
+// swap, NOT a material.opacity tweak. Both plane factories cache textures keyed
+// by exactly these params (texture-manager `heatmapCacheKey`, dome-scan-geometry
+// `domeCacheKey`), so re-invoking the factory returns the cached repaint; we lift
+// its `.map` onto the live mesh and discard the throwaway geometry/material. This
+// avoids the full scene rebuild that folding these params into structuralHash
+// forced on every slider tick.
+
+/** Palette/opacity signature that decides when a repaint is needed. */
+function heatmapVisualSignature(c: {
+  colorScale: string;
+  rangeMin: number | null;
+  rangeMax: number | null;
+  opacity: number;
+}): string {
+  return `${c.colorScale}|${c.rangeMin}|${c.rangeMax}|${c.opacity}`;
+}
+
+/**
+ * Pull the cached heatmap texture out of a throwaway plane and free the rest.
+ * Disposing a material does not dispose its `.map` in three.js, but we null it
+ * first to make the intent explicit — the texture is owned by the factory cache
+ * and is now shared with the live mesh.
+ */
+function extractHeatmapTexture(throwaway: THREE.Mesh | null): THREE.Texture | null {
+  if (!throwaway) return null;
+  const material = throwaway.material as THREE.MeshBasicMaterial;
+  const texture = material.map;
+  material.map = null;
+  material.dispose();
+  throwaway.geometry.dispose();
+  throwaway.children.forEach((child) => {
+    if (child instanceof THREE.Mesh) {
+      child.geometry.dispose();
+      (child.material as THREE.Material).dispose();
+    }
+  });
+  return texture;
+}
 
 export interface ThreeViewportHandle {
   resetCamera: () => void;
@@ -93,6 +142,9 @@ interface ThreeViewportProps {
   selectedInspectionImageId: number;
   onInspectionImageThumbnailClick: (id: number) => void;
   drawMode: AnnotationShapeType | null;
+  /** Body a newly-drawn annotation belongs to (undefined = main shell). Derived
+   *  from the active selection by VesselModeler; only annotation draws honour it. */
+  activeDrawBodyId?: string;
   coverageDrawMode: boolean;
   previewAnnotation: AnnotationShapeConfig | null;
   previewCoverageRect: CoverageRectConfig | null;
@@ -127,6 +179,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
     selectedInspectionImageId,
     onInspectionImageThumbnailClick,
     drawMode,
+    activeDrawBodyId,
     coverageDrawMode,
     previewAnnotation,
     previewCoverageRect,
@@ -167,6 +220,12 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
   const weldMeshesRef = useRef<THREE.Object3D[]>([]);
   const weldGlowRef = useRef<THREE.Object3D | null>(null);
   const weldLabelsRef = useRef<{ label: CSS2DObject; weld: import('./types').WeldConfig }[]>([]);
+
+  // --- Tier 2: last-applied heatmap visual signature per composite id ---
+  // Keyed 'scan:<id>' / 'dome:<id>' → `${colorScale}|${rangeMin}|${rangeMax}|${opacity}`.
+  // Seeded after every full rebuild so the in-place visual effect only repaints a
+  // composite whose palette/opacity actually changed (review §4.4 slider fix).
+  const compositeVisualSigRef = useRef<Map<string, string>>(new Map());
 
   // --- Tier 1: track textureObjects identity for forced rebuild ---
   const textureObjectsRef = useRef<Record<number, THREE.Texture>>(textureObjects);
@@ -257,10 +316,10 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         onAnnotationSelected: (id) => callbacksRef.current.onAnnotationSelected?.(id),
         onAnnotationMoved: (id, pos, angle) =>
           callbacksRef.current.onAnnotationMoved?.(id, pos, angle),
-        onAnnotationCreated: (type, pos, angle, w, h) =>
-          callbacksRef.current.onAnnotationCreated?.(type, pos, angle, w, h),
-        onAnnotationPreview: (type, pos, angle, w, h) =>
-          callbacksRef.current.onAnnotationPreview?.(type, pos, angle, w, h),
+        onAnnotationCreated: (type, pos, angle, w, h, bodyId) =>
+          callbacksRef.current.onAnnotationCreated?.(type, pos, angle, w, h, bodyId),
+        onAnnotationPreview: (type, pos, angle, w, h, bodyId) =>
+          callbacksRef.current.onAnnotationPreview?.(type, pos, angle, w, h, bodyId),
         onRulerCreated: (sp, sa, ep, ea) => callbacksRef.current.onRulerCreated?.(sp, sa, ep, ea),
         onRulerPreview: (sp, sa, ep, ea) => callbacksRef.current.onRulerPreview?.(sp, sa, ep, ea),
         onCoverageRectCreated: (pos, angle, w, h) =>
@@ -1036,6 +1095,16 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
     buildResultRef.current = result;
     weldMeshesRef.current = weldMeshes;
 
+    // Seed heatmap visual signatures: the meshes just built already carry the
+    // current palette/opacity, so the in-place visual effect stays a no-op until
+    // one of these params actually changes (review §4.4).
+    const sigs = compositeVisualSigRef.current;
+    sigs.clear();
+    state.scanComposites.forEach((sc) => sigs.set(`scan:${sc.id}`, heatmapVisualSignature(sc)));
+    (state.domeScanComposites ?? []).forEach((ds) =>
+      sigs.set(`dome:${ds.id}`, heatmapVisualSignature(ds))
+    );
+
     // Update interaction manager mesh references
     if (interactionRef.current) {
       interactionRef.current.nozzleMeshes = result.nozzleMeshes;
@@ -1227,6 +1296,52 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
   ]);
 
   // =========================================================================
+  // Tier 2 — Heatmap visual repaint (in-place texture swap, no geometry rebuild)
+  // =========================================================================
+  // Runs when scan/dome composite state changes. For each composite whose
+  // palette/opacity signature changed since the last build, re-invoke the plane
+  // factory (which returns the cache-keyed repaint) and lift its texture onto the
+  // existing mesh. Structural composite edits are handled by the Tier-1 rebuild,
+  // which reseeds the signatures — so this stays a no-op for those.
+  const refreshHeatmapVisuals = useCallback(() => {
+    const result = buildResultRef.current;
+    if (!result) return;
+    const state = vesselStateRef.current;
+    const sigs = compositeVisualSigRef.current;
+
+    const swap = (mesh: THREE.Mesh, texture: THREE.Texture | null) => {
+      if (!texture) return;
+      const material = mesh.material as THREE.MeshBasicMaterial;
+      if (material.map !== texture) {
+        material.map = texture;
+        material.needsUpdate = true;
+      }
+    };
+
+    state.scanComposites.forEach((sc) => {
+      const key = `scan:${sc.id}`;
+      const sig = heatmapVisualSignature(sc);
+      if (sigs.get(key) === sig) return;
+      const mesh = result.scanCompositeMeshes.find((m) => m.userData?.id === sc.id);
+      if (mesh) {
+        swap(mesh, extractHeatmapTexture(createScanCompositePlane(sc, state, sc.id)));
+      }
+      sigs.set(key, sig);
+    });
+
+    (state.domeScanComposites ?? []).forEach((ds) => {
+      const key = `dome:${ds.id}`;
+      const sig = heatmapVisualSignature(ds);
+      if (sigs.get(key) === sig) return;
+      const mesh = result.domeScanMeshes?.find((m) => m.userData?.id === ds.id);
+      if (mesh) {
+        swap(mesh, extractHeatmapTexture(createDomeScanPlane(ds, state, ds.id)));
+      }
+      sigs.set(key, sig);
+    });
+  }, []);
+
+  // =========================================================================
   // Tier 3 — Preview overlay update (only touches preview group, never main vessel)
   // =========================================================================
   const updatePreviews = useCallback(() => {
@@ -1297,6 +1412,14 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
   }, [vesselState, textureObjects, rebuildScene, updatePreviews]);
 
   // =========================================================================
+  // Tier 2 effect — heatmap visual repaint (declared AFTER the structural effect
+  // so a rebuild reseeds signatures before this runs, keeping it a no-op then)
+  // =========================================================================
+  useEffect(() => {
+    refreshHeatmapVisuals();
+  }, [vesselState.scanComposites, vesselState.domeScanComposites, refreshHeatmapVisuals]);
+
+  // =========================================================================
   // Inspection mode — rebuild to hide/show leader line dot
   // =========================================================================
   const prevInspectingIdRef = useRef(inspectingAnnotationId);
@@ -1352,6 +1475,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
       interactionRef.current.angleSnapEnabled = angleSnapEnabled;
       interactionRef.current.angleSnapDeg = angleSnapDeg;
       interactionRef.current.drawMode = drawMode;
+      interactionRef.current.activeDrawBodyId = activeDrawBodyId;
       interactionRef.current.coverageDrawMode = coverageDrawMode;
       interactionRef.current.rulerDrawMode = rulerDrawMode;
     }
@@ -1365,6 +1489,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
     angleSnapEnabled,
     angleSnapDeg,
     drawMode,
+    activeDrawBodyId,
     coverageDrawMode,
     rulerDrawMode,
   ]);

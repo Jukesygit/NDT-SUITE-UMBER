@@ -160,7 +160,7 @@ export interface SidebarPanelProps {
   // Dome scan props
   selectedDomeScanId: string;
   onSelectDomeScan: (id: string) => void;
-  onImportDomeComposite: (compositeId: string, head: 'left' | 'right') => void;
+  onImportDomeComposite: (compositeId: string, head: 'left' | 'right', bodyId?: string) => void;
   onUpdateDomeScan: (id: string, updates: Partial<DomeScanConfig>) => void;
   onRemoveDomeScan: (id: string) => void;
   cloudDomeComposites:

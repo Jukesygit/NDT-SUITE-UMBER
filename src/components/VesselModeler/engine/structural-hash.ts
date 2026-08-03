@@ -10,6 +10,13 @@
 // mountAngle, diameter, length, endClosure, headRatio, flangeJoint.show — never
 // name/visible/locked/nominalThickness, which are cosmetic and would cause
 // rebuild storms.
+//
+// Scan/dome composites likewise contribute STRUCTURAL fields only. The heatmap
+// visual params (opacity, colorScale, rangeMin, rangeMax) are DELIBERATELY
+// excluded (T2-B / review §4.4): they only change the baked heatmap texture, not
+// the mesh geometry, so ThreeViewport repaints them via an in-place Tier-2
+// texture swap. Folding them into this hash disposed and rebuilt every mesh on
+// each opacity-slider tick (the "slider rebuild storm").
 // =============================================================================
 
 import type { VesselState } from '../types';
@@ -54,10 +61,7 @@ export function structuralHash(s: VesselState): string {
       scanDirection: sc.scanDirection,
       indexDirection: sc.indexDirection,
       orientationConfirmed: sc.orientationConfirmed,
-      colorScale: sc.colorScale,
-      rangeMin: sc.rangeMin,
-      rangeMax: sc.rangeMax,
-      opacity: sc.opacity,
+      // colorScale / rangeMin / rangeMax / opacity are cosmetic — see header note.
     })),
     domeScanComposites: (s.domeScanComposites ?? []).map((ds) => ({
       id: ds.id,
@@ -71,10 +75,7 @@ export function structuralHash(s: VesselState): string {
       scanDirection: ds.scanDirection,
       indexDirection: ds.indexDirection,
       orientationConfirmed: ds.orientationConfirmed,
-      colorScale: ds.colorScale,
-      rangeMin: ds.rangeMin,
-      rangeMax: ds.rangeMax,
-      opacity: ds.opacity,
+      // colorScale / rangeMin / rangeMax / opacity are cosmetic — see header note.
     })),
     appendages: (s.appendages ?? []).map((a) => ({
       id: a.id,

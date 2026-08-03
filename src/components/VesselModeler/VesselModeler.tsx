@@ -4,6 +4,7 @@ import {
   useRef,
   useCallback,
   useEffect,
+  useMemo,
   lazy,
   Suspense,
   type ChangeEvent,
@@ -66,7 +67,7 @@ import {
 } from './types';
 import type { ExtractionResult } from './engine/drawing-parser';
 import { loadTextureFromData, clearHeatmapCache } from './engine/texture-manager';
-import { clearDomeHeatmapCache } from './engine/dome-scan-geometry';
+import { clearDomeHeatmapCache, normalizeDomeScanComposite } from './engine/dome-scan-geometry';
 import { serializeVesselState, deserializeVesselState } from './engine/vessel-serialization';
 import {
   createEmptyHistory,
@@ -1920,7 +1921,7 @@ export default function VesselModeler() {
   );
 
   const handleImportDomeComposite = useCallback(
-    async (compositeId: string, head: 'left' | 'right') => {
+    async (compositeId: string, head: 'left' | 'right', bodyId?: string) => {
       try {
         let name: string;
         let cloudId: string;
@@ -1959,10 +1960,15 @@ export default function VesselModeler() {
           sourceFiles = composite.source_files ?? undefined;
         }
 
-        const newConfig: DomeScanConfig = {
+        // Importing onto a dished appendage closure (4C): pass bodyId and let
+        // normalizeDomeScanComposite enforce the end⟺bodyId invariant (it forces
+        // head='end' when bodyId is set) — never hand-set the pair. Main-vessel
+        // imports pass bodyId undefined and keep their left/right head.
+        const newConfig: DomeScanConfig = normalizeDomeScanComposite({
           id: `ds_${Date.now()}`,
           name,
           cloudId,
+          bodyId,
           head,
           centerPhi: 45,
           centerTheta: 0,
@@ -1978,7 +1984,7 @@ export default function VesselModeler() {
           rangeMax: null,
           opacity: 1,
           sourceFiles,
-        };
+        });
         updateVessel((prev) => ({
           ...prev,
           domeScanComposites: [...prev.domeScanComposites, newConfig],
@@ -1993,6 +1999,29 @@ export default function VesselModeler() {
 
   // Dome scan hover tooltip state
   const [domeScanHoverInfo, setDomeScanHoverInfo] = useState<DomeScanHoverInfo | null>(null);
+
+  // Active body for a newly-drawn annotation (4B). The rule is deliberately
+  // simple and predictable: the active body is the body of whatever entity is
+  // currently selected — a selected appendage IS that body; a selected
+  // attachable (nozzle / lug / weld / scan / dome scan / annotation / coverage
+  // rect) contributes its own `bodyId`. When nothing body-scoped is selected the
+  // active body is the main shell (undefined), so the legacy path is unchanged.
+  const activeBodyId = useMemo<string | undefined>(() => {
+    const s = selection;
+    if (s.appendageIndex >= 0) return vesselState.appendages[s.appendageIndex]?.id;
+    if (s.nozzleIndex >= 0) return vesselState.nozzles[s.nozzleIndex]?.bodyId;
+    if (s.lugIndex >= 0) return vesselState.liftingLugs[s.lugIndex]?.bodyId;
+    if (s.weldIndex >= 0) return vesselState.welds[s.weldIndex]?.bodyId;
+    if (s.scanCompositeId)
+      return vesselState.scanComposites.find((c) => c.id === s.scanCompositeId)?.bodyId;
+    if (s.domeScanId)
+      return vesselState.domeScanComposites.find((d) => d.id === s.domeScanId)?.bodyId;
+    if (s.annotationId >= 0)
+      return vesselState.annotations.find((a) => a.id === s.annotationId)?.bodyId;
+    if (s.coverageRectId >= 0)
+      return vesselState.coverageRects.find((r) => r.id === s.coverageRectId)?.bodyId;
+    return undefined;
+  }, [selection, vesselState]);
 
   // --- Interaction callbacks (from Three.js viewport) ---
   const vesselCallbacks: VesselCallbacks = {
@@ -2014,7 +2043,12 @@ export default function VesselModeler() {
     onAnnotationLabelOffsetChanged: (id, offset) => {
       updateAnnotation(id, { labelOffset: offset });
     },
-    onAnnotationCreated: (type, pos, angle, width, height) => {
+    // The active body (bodyId) is decided by the interaction layer from the
+    // current selection — active body = the selected entity's body, main shell
+    // (undefined) when nothing body-scoped is selected. See `activeDrawBodyId`.
+    // A draw-created annotation is a plain add (no history key), so undo treats
+    // it exactly like every other new annotation.
+    onAnnotationCreated: (type, pos, angle, width, height, bodyId) => {
       const id = getNextAnnotationId();
       const isRestriction = type === 'restriction';
       const prefix = isRestriction ? 'R' : 'A';
@@ -2030,12 +2064,13 @@ export default function VesselModeler() {
         color: isRestriction ? '#facc15' : '#ff3333',
         lineWidth: 2,
         showLabel: true,
+        bodyId,
       });
       dispatch({ type: 'SELECT_ANNOTATION', id });
       dispatch({ type: 'SET_PREVIEW_ANNOTATION', preview: null });
       dispatch({ type: 'SET_DRAW_MODE_ANNOTATION', mode: null });
     },
-    onAnnotationPreview: (type, pos, angle, width, height) => {
+    onAnnotationPreview: (type, pos, angle, width, height, bodyId) => {
       dispatch({
         type: 'SET_PREVIEW_ANNOTATION',
         preview: {
@@ -2049,6 +2084,7 @@ export default function VesselModeler() {
           color: type === 'restriction' ? '#facc15' : '#ff3333',
           lineWidth: 2,
           showLabel: false,
+          bodyId,
         },
       });
     },
@@ -3417,6 +3453,7 @@ export default function VesselModeler() {
                   dispatch({ type: 'SET_VIEWING_INSPECTION_IMAGE', id })
                 }
                 drawMode={drawModeState.annotation}
+                activeDrawBodyId={activeBodyId}
                 coverageDrawMode={drawModeState.coverage}
                 previewAnnotation={previews.annotation}
                 previewCoverageRect={previews.coverageRect}
