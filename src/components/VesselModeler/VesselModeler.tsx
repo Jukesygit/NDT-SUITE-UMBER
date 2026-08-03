@@ -79,6 +79,7 @@ import {
 } from './engine/vessel-history';
 import { cascadeRemoveAppendage } from './engine/appendage-cascade';
 import { remapNozzleRefs } from './engine/nozzle-ref-remap';
+import { placeExtractedNozzle } from './engine/head-nozzle-placement';
 import { useTextureRehydration } from './useTextureRehydration';
 import { exportVesselGLB } from './engine/gltf-export';
 import { recomputeAllAnnotationStats } from './engine/annotation-stats';
@@ -2697,12 +2698,17 @@ export default function VesselModeler() {
   // --- Drawing import apply handler ---
   const handleDrawingApply = useCallback(
     (result: ExtractionResult) => {
+      // Resolve each extracted nozzle to engine placement: head-mounted nozzles
+      // (dished-end manways) become axial dome-end nozzles; shell nozzles pass
+      // through unchanged. Vessel scalars come from the same result.
+      const placementVessel = {
+        id: result.id,
+        length: result.length,
+        headRatio: result.headRatio,
+      };
       const newNozzles = result.nozzles.map((n) => ({
         name: n.name,
-        pos: n.pos,
-        proj: n.proj,
-        angle: n.angle,
-        size: n.size,
+        ...placeExtractedNozzle(n, placementVessel),
       }));
 
       // The drawing replaces nozzles wholesale, so re-anchor existing pipelines

@@ -88,6 +88,10 @@ export function verifyExtraction(
     proj: cloneValue(n.proj),
     angle: cloneValue(n.angle),
     size: cloneValue(n.size),
+    mount: cloneValue(n.mount),
+    radialOffset: cloneValue(n.radialOffset),
+    nozzleOrientation: cloneValue(n.nozzleOrientation),
+    elevation: cloneValue(n.elevation),
   }));
   const saddles = review.saddles.map((s) => ({ pos: cloneValue(s.pos) }));
 
@@ -118,15 +122,36 @@ export function verifyExtraction(
   }
 
   for (const n of nozzles) {
+    const isHead =
+      n.mount.value === 'head-left' || n.mount.value === 'head-right';
     if (n.size.value !== null && !isStandardBore(n.size.value)) {
       flag(n.size, 'non-standard-size');
     }
+    // Head mounts are placed from radialOffset, not pos; a head nozzle that also
+    // carries a shell pos is not an error (see design doc), so skip the envelope
+    // check for them and range-check the offset instead.
     if (
+      !isHead &&
       n.pos.value !== null &&
       length.value !== null &&
       (n.pos.value < -headDepth || n.pos.value > length.value + headDepth)
     ) {
       flag(n.pos, 'out-of-range');
+    }
+    if (isHead && n.radialOffset.value !== null) {
+      const belowZero = n.radialOffset.value < 0;
+      const overRadius =
+        id.value !== null && n.radialOffset.value >= id.value / 2;
+      if (belowZero || overRadius) flag(n.radialOffset, 'out-of-range');
+    }
+    // A horizontal nozzle's |elevation| must lie within the shell radius (id/2).
+    if (
+      n.nozzleOrientation.value === 'horizontal' &&
+      n.elevation.value !== null &&
+      id.value !== null &&
+      Math.abs(n.elevation.value) > id.value / 2
+    ) {
+      flag(n.elevation, 'out-of-range');
     }
     if (
       n.proj.value !== null &&
@@ -166,13 +191,32 @@ export function toExtractionResult(review: ExtractionReview): ExtractionResult {
   const length = need('length', review.length);
   const headRatio = need('headRatio', review.headRatio);
   const orientation = need('orientation', review.orientation);
-  const nozzles = review.nozzles.map((n, i) => ({
-    name: need(`nozzles[${i}].name`, n.name),
-    pos: need(`nozzles[${i}].pos`, n.pos),
-    proj: need(`nozzles[${i}].proj`, n.proj),
-    angle: need(`nozzles[${i}].angle`, n.angle),
-    size: need(`nozzles[${i}].size`, n.size),
-  }));
+  const nozzles = review.nozzles.map((n, i) => {
+    const mount = need(`nozzles[${i}].mount`, n.mount);
+    const isHead = mount === 'head-left' || mount === 'head-right';
+    // radialOffset is required only for a head mount; a shell mount carries no
+    // offset (its non-applicable sentinel is never gated).
+    const radialOffset = isHead
+      ? need(`nozzles[${i}].radialOffset`, n.radialOffset)
+      : undefined;
+    // nozzleOrientation always required (no default); elevation only for horizontal.
+    const nozzleOrientation = need(`nozzles[${i}].nozzleOrientation`, n.nozzleOrientation);
+    const isHorizontal = nozzleOrientation === 'horizontal';
+    const elevation = isHorizontal
+      ? need(`nozzles[${i}].elevation`, n.elevation)
+      : undefined;
+    return {
+      name: need(`nozzles[${i}].name`, n.name),
+      pos: need(`nozzles[${i}].pos`, n.pos),
+      proj: need(`nozzles[${i}].proj`, n.proj),
+      angle: need(`nozzles[${i}].angle`, n.angle),
+      size: need(`nozzles[${i}].size`, n.size),
+      mount,
+      radialOffset,
+      nozzleOrientation,
+      elevation,
+    };
+  });
   const saddles = review.saddles.map((s, i) => ({
     pos: need(`saddles[${i}].pos`, s.pos),
   }));
@@ -219,16 +263,30 @@ export function reviewToLenientResult(
       n.pos.value === null ||
       n.proj.value === null ||
       n.angle.value === null ||
-      n.size.value === null
+      n.size.value === null ||
+      n.mount.value === null ||
+      n.nozzleOrientation.value === null
     ) {
       continue; // dropped from legacy result; still editable in the review
     }
+    const isHead =
+      n.mount.value === 'head-left' || n.mount.value === 'head-right';
+    // A head mount without a read offset can't be placed — drop it (editable in
+    // the review); a shell mount carries no offset.
+    if (isHead && n.radialOffset.value === null) continue;
+    const isHorizontal = n.nozzleOrientation.value === 'horizontal';
+    // A horizontal nozzle without a read elevation can't be placed — drop it.
+    if (isHorizontal && n.elevation.value === null) continue;
     nozzles.push({
       name: n.name.value,
       pos: n.pos.value,
       proj: n.proj.value,
       angle: n.angle.value,
       size: n.size.value,
+      mount: n.mount.value,
+      radialOffset: isHead ? n.radialOffset.value! : undefined,
+      nozzleOrientation: n.nozzleOrientation.value,
+      elevation: isHorizontal ? n.elevation.value! : undefined,
     });
   }
 

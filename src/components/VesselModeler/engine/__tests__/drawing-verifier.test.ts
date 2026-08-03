@@ -1,14 +1,11 @@
 import { describe, it, expect } from 'vitest';
 
-import {
-  verifyExtraction,
-  toExtractionResult,
-  reviewToLenientResult,
-  STANDARD_BORES_MM,
-} from '../drawing-verifier';
+import { verifyExtraction, STANDARD_BORES_MM } from '../drawing-verifier';
 import type {
   ExtractedValue,
   ExtractionReview,
+  NozzleMount,
+  NozzleOrientation,
   ReviewNozzle,
 } from '../drawing-extraction-voting';
 
@@ -30,6 +27,35 @@ function nozzle(over: Partial<Record<keyof ReviewNozzle, number | string>> = {})
     proj: ev((over.proj as number) ?? 200),
     angle: ev((over.angle as number) ?? 90),
     size: ev((over.size as number) ?? 150),
+    mount: ev<NozzleMount>((over.mount as NozzleMount) ?? 'shell'),
+    // Shell nozzles carry the non-applicable sentinel (never gated).
+    radialOffset: { value: null, confidence: 'high', flags: [] },
+    nozzleOrientation: ev<NozzleOrientation>((over.nozzleOrientation as NozzleOrientation) ?? 'radial'),
+    // Radial nozzles carry the non-applicable elevation sentinel unless the test
+    // supplies an explicit elevation (used for the horizontal range checks).
+    elevation:
+      over.elevation !== undefined
+        ? ev(over.elevation as number)
+        : { value: null, confidence: 'high', flags: [] },
+  };
+}
+
+/** A head-mounted review nozzle with an explicit radial offset. A head nozzle
+ *  may also carry a shell `pos` (models often emit both); placement ignores it. */
+function headNozzle(mount: NozzleMount, radialOffset: number | null): ReviewNozzle {
+  return {
+    name: ev('M1'),
+    pos: ev(0),
+    proj: ev(200),
+    angle: ev(0),
+    size: ev(600),
+    mount: ev<NozzleMount>(mount),
+    radialOffset:
+      radialOffset === null
+        ? { value: null, confidence: 'missing', flags: [] }
+        : ev(radialOffset),
+    nozzleOrientation: ev<NozzleOrientation>('radial'),
+    elevation: { value: null, confidence: 'high', flags: [] },
   };
 }
 
@@ -142,6 +168,74 @@ describe('verifyExtraction — nozzle ranges', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Head-mounted nozzle radial offset
+// ---------------------------------------------------------------------------
+
+describe('verifyExtraction — head radial offset', () => {
+  it('accepts an offset in [0, id/2)', () => {
+    // id 2000 → id/2 = 1000
+    const out = verifyExtraction(review({ nozzles: [headNozzle('head-left', 400)] }), false);
+    expect(out.nozzles[0].radialOffset.flags).toEqual([]);
+  });
+
+  it('flags a negative offset', () => {
+    const out = verifyExtraction(review({ nozzles: [headNozzle('head-right', -50)] }), false);
+    expect(out.nozzles[0].radialOffset.flags).toContain('out-of-range');
+    expect(out.nozzles[0].radialOffset.value).toBe(-50); // never clamped
+  });
+
+  it('flags an offset at/over id/2', () => {
+    const out = verifyExtraction(review({ nozzles: [headNozzle('head-left', 1000)] }), false);
+    expect(out.nozzles[0].radialOffset.flags).toContain('out-of-range');
+  });
+
+  it('does not flag a head nozzle that also carries an out-of-envelope shell pos', () => {
+    const n = headNozzle('head-right', 200);
+    n.pos = ev(99999); // a stray shell pos on a head nozzle is not an error
+    const out = verifyExtraction(review({ nozzles: [n] }), false);
+    expect(out.nozzles[0].pos.flags).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Horizontal nozzle elevation range
+// ---------------------------------------------------------------------------
+
+describe('verifyExtraction — horizontal elevation', () => {
+  // id 2000 → id/2 = 1000 (the shell radius the elevation must lie within).
+  it('accepts an elevation within [-id/2, id/2]', () => {
+    const out = verifyExtraction(
+      review({ nozzles: [nozzle({ nozzleOrientation: 'horizontal', elevation: 800 })] }),
+      false,
+    );
+    expect(out.nozzles[0].elevation.flags).toEqual([]);
+  });
+
+  it('accepts a negative (below-centerline) elevation within range', () => {
+    const out = verifyExtraction(
+      review({ nozzles: [nozzle({ nozzleOrientation: 'horizontal', elevation: -900 })] }),
+      false,
+    );
+    expect(out.nozzles[0].elevation.flags).toEqual([]);
+  });
+
+  it('flags an |elevation| beyond id/2 and demotes without clamping', () => {
+    const out = verifyExtraction(
+      review({ nozzles: [nozzle({ nozzleOrientation: 'horizontal', elevation: 1500 })] }),
+      false,
+    );
+    expect(out.nozzles[0].elevation.flags).toContain('out-of-range');
+    expect(out.nozzles[0].elevation.confidence).toBe('low');
+    expect(out.nozzles[0].elevation.value).toBe(1500); // never clamped
+  });
+
+  it('does not range-check elevation on a radial nozzle (sentinel is null)', () => {
+    const out = verifyExtraction(review({ nozzles: [nozzle()] }), false);
+    expect(out.nozzles[0].elevation.flags).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Duplicate tags
 // ---------------------------------------------------------------------------
 
@@ -188,6 +282,10 @@ describe('verifyExtraction — unmatched tags', () => {
             proj: { value: null, confidence: 'missing', flags: [] },
             angle: ev(90),
             size: { value: null, confidence: 'missing', flags: [] },
+            mount: ev<NozzleMount>('shell'),
+            radialOffset: { value: null, confidence: 'high', flags: [] },
+            nozzleOrientation: ev<NozzleOrientation>('radial'),
+            elevation: { value: null, confidence: 'high', flags: [] },
           },
         ],
       }),
@@ -206,6 +304,10 @@ describe('verifyExtraction — unmatched tags', () => {
             proj: { value: null, confidence: 'missing', flags: [] },
             angle: ev(90),
             size: { value: null, confidence: 'missing', flags: [] },
+            mount: ev<NozzleMount>('shell'),
+            radialOffset: { value: null, confidence: 'high', flags: [] },
+            nozzleOrientation: ev<NozzleOrientation>('radial'),
+            elevation: { value: null, confidence: 'high', flags: [] },
           },
         ],
       }),
@@ -228,46 +330,5 @@ describe('verifyExtraction — immutability', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// toExtractionResult (strict)
-// ---------------------------------------------------------------------------
-
-describe('toExtractionResult', () => {
-  it('returns a flat result when nothing is missing', () => {
-    const result = toExtractionResult(review());
-    expect(result.id).toBe(2000);
-    expect(result.nozzles[0].name).toBe('N1');
-    expect(result.saddles[0].pos).toBe(1500);
-  });
-
-  it('throws, naming the field, when any value is missing', () => {
-    const input = review({ length: { value: null, confidence: 'missing', flags: [] } });
-    expect(() => toExtractionResult(input)).toThrow(/length/);
-  });
-
-  it('throws when a nozzle sub-field is missing', () => {
-    const n = nozzle();
-    n.proj = { value: null, confidence: 'missing', flags: [] };
-    const input = review({ nozzles: [n] });
-    expect(() => toExtractionResult(input)).toThrow(/nozzles\[0\]\.proj/);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// reviewToLenientResult
-// ---------------------------------------------------------------------------
-
-describe('reviewToLenientResult', () => {
-  it('throws (substituting nothing) when a required vessel field is missing', () => {
-    const input = review({ id: { value: null, confidence: 'missing', flags: [] } });
-    expect(() => reviewToLenientResult(input)).toThrow(/required vessel fields/);
-  });
-
-  it('drops a nozzle with a missing sub-field but keeps the complete one', () => {
-    const incomplete = nozzle({ name: 'N2' });
-    incomplete.pos = { value: null, confidence: 'missing', flags: [] };
-    const input = review({ nozzles: [nozzle({ name: 'N1' }), incomplete] });
-    const result = reviewToLenientResult(input);
-    expect(result.nozzles.map((n) => n.name)).toEqual(['N1']);
-  });
-});
+// toExtractionResult / reviewToLenientResult conversions (incl. mount +
+// radialOffset carry-through) live in drawing-verifier-conversion.test.ts.

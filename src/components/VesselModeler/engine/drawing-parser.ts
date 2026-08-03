@@ -17,9 +17,12 @@ import {
   coerceRawExtraction,
   voteExtractions,
   type ExtractionReview,
+  type NozzleMount,
+  type NozzleOrientation,
   type RawExtraction,
 } from './drawing-extraction-voting';
-import { reviewToLenientResult, verifyExtraction } from './drawing-verifier';
+import { buildPrompt, EXTRACTION_SCHEMA } from './drawing-extraction-prompt';
+import { verifyExtraction } from './drawing-verifier';
 
 // --- Types -----------------------------------------------------------------
 
@@ -29,7 +32,9 @@ export interface DrawingRegions {
   table: { x: number; y: number; width: number; height: number } | null;
 }
 
-/** Legacy flat result consumed by the apply path (unchanged contract). */
+/** Legacy flat result consumed by the apply path. Extended additively for
+ *  head-mounted nozzles (`mount`/`radialOffset`); existing consumers that read
+ *  only pos/proj/angle/size are unaffected. */
 export interface ExtractionResult {
   id: number;
   length: number;
@@ -41,6 +46,14 @@ export interface ExtractionResult {
     proj: number;
     angle: number;
     size: number;
+    /** Mount location. Absent on legacy results ⇒ treated as 'shell'. */
+    mount?: NozzleMount;
+    /** mm from centerline; present only for a head-* mount. */
+    radialOffset?: number;
+    /** Radial vs. side-facing horizontal. Absent on legacy results ⇒ radial. */
+    nozzleOrientation?: NozzleOrientation;
+    /** Signed mm from centerline; present only for a horizontal nozzle. */
+    elevation?: number;
   }>;
   saddles: Array<{ pos: number; color?: string }>;
 }
@@ -119,7 +132,7 @@ export function cropRegion(
   });
 }
 
-// --- Gemini extraction: prompt + schema ------------------------------------
+// --- Gemini extraction: image encoding -------------------------------------
 
 /** Strip the data-URL prefix and return raw base64. */
 function dataUrlToBase64(dataUrl: string): string {
@@ -128,69 +141,6 @@ function dataUrlToBase64(dataUrl: string): string {
   if (idx === -1) throw new Error('Invalid data URL format');
   return dataUrl.substring(idx + marker.length);
 }
-
-/** Region labels for the prompt. Images arrive in order [side, end?, table?]. */
-function buildRegionDescriptions(hasEnd: boolean, hasTable: boolean): string[] {
-  const descs = [
-    'IMAGE 1: Side Elevation View (nozzle positions along vessel length)',
-  ];
-  let idx = 2;
-  if (hasEnd) {
-    descs.push(`IMAGE ${idx}: End View / Section A-A (angular nozzle positions)`);
-    idx++;
-  }
-  if (hasTable) {
-    descs.push(`IMAGE ${idx}: Nozzle Schedule Table (sizes, projections, ratings)`);
-  }
-  return descs;
-}
-
-function buildPrompt(hasEnd: boolean, hasTable: boolean): string {
-  return `You are analyzing HIGH-RESOLUTION CROPPED SECTIONS of a Pressure Vessel GA Drawing.
-
-**IMAGES PROVIDED:**
-${buildRegionDescriptions(hasEnd, hasTable).join('\n')}
-
-**EXTRACTION INSTRUCTIONS:**
-- Side Elevation: vessel Internal Diameter (ID, mm) and Tan-Tan length (mm). For each nozzle tag (N1, N2, ...), trace its leader line to its elevation/position and note saddle positions.
-- End View / Section A-A: nozzle angular positions using 90=Top, 0=Right, 270=Bottom, 180=Left.
-- Nozzle Schedule Table: exact sizes (convert NPS/DN to mm ID), projections (centerline to flange face). Match tags exactly (N2 vs N2A differ).
-- Positions are Distance from Left T/L (convert if given from Right T/L).
-
-**CRITICAL — DO NOT GUESS:**
-- Return a value ONLY if you can read it from the drawing.
-- If a value is illegible, absent, or uncertain, return null for that field. Never estimate, infer, or fill in a typical value.
-- Output must match the provided JSON schema exactly.`;
-}
-
-const NUM = { type: 'NUMBER', nullable: true } as const;
-/** Gemini v1beta responseSchema (OpenAPI subset). Every leaf is nullable. */
-const EXTRACTION_SCHEMA = {
-  type: 'OBJECT',
-  properties: {
-    id: NUM,
-    length: NUM,
-    headRatio: NUM,
-    orientation: { type: 'STRING', nullable: true, enum: ['horizontal', 'vertical'] },
-    nozzles: {
-      type: 'ARRAY',
-      items: {
-        type: 'OBJECT',
-        properties: {
-          name: { type: 'STRING', nullable: true },
-          pos: NUM,
-          proj: NUM,
-          angle: NUM,
-          size: NUM,
-        },
-      },
-    },
-    saddles: {
-      type: 'ARRAY',
-      items: { type: 'OBJECT', properties: { pos: NUM } },
-    },
-  },
-} as const;
 
 // --- Model resolution + ensemble -------------------------------------------
 
@@ -232,14 +182,16 @@ async function callWithModelFallback(
 
 /**
  * Extract vessel data from cropped drawing regions ([side, end?, table?]) via a
- * 3-sample Gemini ensemble. Returns the voted+verified review and a voted legacy
- * result built by substituting nothing (see reviewToLenientResult).
+ * 3-sample Gemini ensemble. Returns the voted+verified review — including any
+ * `missing` fields, which the review UI lets the user fill in. Never throws for
+ * unreadable fields; converting to a final ExtractionResult (and rejecting
+ * unresolved fields) happens at apply time via toExtractionResult.
  */
 export async function extractVesselFromDrawing(
   croppedImages: string[],
   hasEnd = croppedImages.length >= 2,
   hasTable = croppedImages.length >= 3,
-): Promise<{ review: ExtractionReview; result: ExtractionResult }> {
+): Promise<{ review: ExtractionReview }> {
   const imageParts: GeminiImagePart[] = croppedImages.map((dataUrl) => ({
     mimeType: 'image/png',
     data: dataUrlToBase64(dataUrl),
@@ -285,8 +237,7 @@ export async function extractVesselFromDrawing(
   }
 
   const review = verifyExtraction(voteExtractions(samples), hasTable);
-  const result = reviewToLenientResult(review);
-  return { review, result };
+  return { review };
 }
 
 // --- Re-exported extraction contract (definitions in voting/verifier) ------
@@ -298,4 +249,6 @@ export type {
   ExtractionReview,
   ReviewNozzle,
   RawExtraction,
+  NozzleMount,
+  NozzleOrientation,
 } from './drawing-extraction-voting';

@@ -128,6 +128,34 @@ The stacked per-field list is overwhelming on real drawings (20+ nozzles × 5-7 
 - Saddles: same dense treatment, one row each.
 - Apply gating unchanged (no missing fields, where `radialOffset` only counts for head mounts).
 
+### Phase F — Deterministic angle convention (field test 2: uniform 90° rotation)
+
+Field test showed every feature applied rotated 90° around the vessel: the prompt asked the model to *convert* end-view angles (drawing convention: 0° = TDC, increasing clockwise as labelled) into the engine convention (90° = top, 0° = right) and the model fails that conversion systematically. Same failure class as the flattened-view TDC regressions — the standing rule applies: one canonical conversion, in code.
+
+- Prompt/schema: nozzle `angle` is now **drawing-native** — "degrees exactly as labelled in the end view: 0 = top (12 o'clock), increasing clockwise". The model must transcribe, never convert.
+- The drawing-native angle flows unchanged through voting, verifier (0–360 normalization only), and the review UI — the user can check cells directly against the drawing. Review column header says "Angle (° from top, CW)".
+- Single conversion site: `drawingClockToVesselAngle(deg) = (90 − deg) mod 360`, applied inside `placeExtractedNozzle` (the one mapper every applied nozzle already passes through — shell and head mounts alike; head-mount azimuth sign resolution uses the *converted* angle). Unit-tested at the cardinal points.
+- Review escape hatch: a compact "Rotate all" control in the nozzle-table header (+90° / −90° / 180° / mirror) that bulk-adjusts every nozzle's angle cell (marks them edited), for drawings whose end view is taken from the opposite end or uses a non-standard zero.
+
+### Phase F postscript — detection regression + recovery (field test 3)
+
+The Phase F prompt edit ("exactly as labelled / transcribe" + a verbose per-leaf ANGLE schema description) coincided with total nozzle-detection loss on the same drawing that had just extracted well. Recovery, keeping angles drawing-native + the code-side conversion:
+
+- Prompt restored toward the proven-good shape: angle instruction asks for clock position measured clockwise from top, **explicitly permitting geometric estimation from the drawn position** (the "transcribe labels only" wording invited omission where no per-nozzle label exists); ANGLE schema leaf back to a plain nullable number (comment in the file warns against re-adding a description).
+- Naming pinned: `name` must be the nozzle TAG, never the schedule item number, consistent across views — inconsistent naming across ensemble passes defeats cross-sample matching.
+- Voting no longer silently discards singleton nozzles: present-in-1-of-3 nozzles are appended after voted ones with confidence `low` + flag `single-pass` (review-visible), so a naming-mismatch wipeout degrades to reviewable low-confidence rows instead of an empty list. ≥2-sample nozzles vote exactly as before.
+
+### Phase G — Horizontal nozzles with elevation (field test 4)
+
+GA convention (seen on BRT1-VA1 VIEW A-A): horizontally-oriented nozzles (level bridles, instrument connections, side manways) are drawn clustered at the 3/9 o'clock positions with **EL** labels (elevation from vessel centerline — the view declares "REF. EL +0.0"); they face that side and sit on the shell where a horizontal line at EL meets it. They carry no clock angle. Current extraction forces an angle → they pile up at 90°/270° mid-height.
+
+- Schema/prompt: nozzle gains `nozzleOrientation: 'radial' | 'horizontal'` (**required classification — the drawing shows it unambiguously; null → missing → gates apply**, per user decision 2026-07-30: no assumed-radial default) and `elevation` (signed mm from vessel centerline, horizontal nozzles only; null when the EL reference is unclear). Horizontal nozzles report `angle` as the side they face (90 or 270, drawing convention); prompt teaches the cluster convention explicitly.
+- Placement (single site, `placeExtractedNozzle`): horizontal → engine angle = asin(clamp(2·EL/id, −1, 1)) for facing-right (drawing 90), 180° − asin(...) for facing-left (drawing 270); `orientationMode: 'horizontal'`; facing sign falls out of the engine's cos(angle) convention; `pos` from side elevation unchanged. Radial → today's path. Field named `nozzleOrientation` in the extraction contract to avoid colliding with the vessel-level `orientation`.
+- Voting: enum vote (like mount); `elevation` numeric-median, gate-relevant only when the voted/edited nozzleOrientation is 'horizontal' (sentinel pattern identical to radialOffset/mount).
+- Verifier: horizontal with |EL| > id/2 → 'out-of-range'; horizontal missing elevation stays missing (gates).
+- Review grid: orientation select (Radial/Horizontal) per row; when Horizontal the angle cell is constrained/paired with an EL cell ("EL from CL"); rotate-all skips horizontal nozzles' facing sides only when mirroring is meaningless — Mirror swaps 90↔270 facing.
+- **Projection semantics (user clarification 2026-07-30):** a horizontal nozzle's projection/OUTSTAND is the horizontal distance from the vessel's vertical **center plane** to the flange face at elevation EL — not an axis distance (that would be √(proj²+EL²)) and not shell stick-out (that is proj − √(R²−EL²)). Placement must ensure the engine receives whatever value lands the flange at that horizontal distance (verify engine `orientationMode:'horizontal'` proj consumption in vessel-geometry; correct in `placeExtractedNozzle` if semantics differ). Radial nozzles keep axis-referenced proj. The same plane-referenced logic applies mirrored to vertical nozzles if those are ever modeled explicitly.
+
 ## Future (explicitly deferred)
 
 - Cross-model second opinion on low-agreement fields (Claude Opus 4.8 high-res vision or GPT-5.x).

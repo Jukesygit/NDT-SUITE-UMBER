@@ -117,18 +117,30 @@ describe('voteExtractions — nozzle matching', () => {
     proj: 200,
     angle: 90,
     size,
+    mount: 'shell',
+    radialOffset: null,
+    nozzleOrientation: 'radial',
+    elevation: null,
   });
 
-  it('keeps a nozzle present in 2 of 3 samples and drops one present in only 1', () => {
+  it('votes a nozzle present in 2 of 3 samples and appends a singleton after it', () => {
     const review = voteExtractions([
       sample({ nozzles: [noz('N1', 1000, 150), noz('N2', 2000, 100)] }),
       sample({ nozzles: [noz('N1', 1000, 150)] }),
       sample({ nozzles: [noz('N1', 1000, 150)] }),
     ]);
+    // Voted nozzle first (existing order/behavior), singleton appended after.
     const names = review.nozzles.map((n) => n.name.value);
-    expect(names).toEqual(['N1']);
+    expect(names).toEqual(['N1', 'N2']);
     expect(review.nozzles[0].pos.value).toBe(1000);
     expect(review.nozzles[0].pos.confidence).toBe('high');
+    // The appended singleton is carried at low confidence with a 'single-pass' flag.
+    const n2 = review.nozzles[1];
+    expect(n2.pos.value).toBe(2000);
+    expect(n2.pos.confidence).toBe('low');
+    expect(n2.pos.flags).toContain('single-pass');
+    expect(n2.name.confidence).toBe('low');
+    expect(n2.name.flags).toContain('single-pass');
   });
 
   it('matches tags case- and whitespace-insensitively', () => {
@@ -152,13 +164,281 @@ describe('voteExtractions — nozzle matching', () => {
 
   it('propagates missing to a nozzle sub-field the majority could not read', () => {
     const review = voteExtractions([
-      sample({ nozzles: [{ name: 'N1', pos: null, proj: 200, angle: 90, size: 150 }] }),
-      sample({ nozzles: [{ name: 'N1', pos: null, proj: 200, angle: 90, size: 150 }] }),
+      sample({
+        nozzles: [
+          { name: 'N1', pos: null, proj: 200, angle: 90, size: 150, mount: 'shell', radialOffset: null, nozzleOrientation: 'radial', elevation: null },
+        ],
+      }),
+      sample({
+        nozzles: [
+          { name: 'N1', pos: null, proj: 200, angle: 90, size: 150, mount: 'shell', radialOffset: null, nozzleOrientation: 'radial', elevation: null },
+        ],
+      }),
       sample({ nozzles: [noz('N1', 1000, 150)] }),
     ]);
     expect(review.nozzles[0].name.confidence).toBe('high');
     expect(review.nozzles[0].pos.confidence).toBe('missing');
     expect(review.nozzles[0].pos.value).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Singleton nozzle survival (no silent loss)
+// ---------------------------------------------------------------------------
+
+describe('voteExtractions — singleton nozzles survive', () => {
+  const noz = (name: string, pos: number, size: number): RawExtraction['nozzles'][number] => ({
+    name,
+    pos,
+    proj: 200,
+    angle: 90,
+    size,
+    mount: 'shell',
+    radialOffset: null,
+    nozzleOrientation: 'radial',
+    elevation: null,
+  });
+
+  it('keeps every nozzle as low/single-pass when each appears in only one sample', () => {
+    // The field-failure case: inconsistent tags across passes → all singletons.
+    // Previously the whole list vanished; now all survive.
+    const review = voteExtractions([
+      sample({ nozzles: [noz('N1', 1000, 150)] }),
+      sample({ nozzles: [noz('2101/02', 2000, 100)] }),
+      sample({ nozzles: [noz('N3', 3000, 50)] }),
+    ]);
+    expect(review.nozzles.map((n) => n.name.value)).toEqual(['N1', '2101/02', 'N3']);
+    for (const n of review.nozzles) {
+      expect(n.name.confidence).toBe('low');
+      expect(n.name.flags).toContain('single-pass');
+      expect(n.pos.confidence).toBe('low');
+      expect(n.pos.flags).toContain('single-pass');
+      expect(n.size.flags).toContain('single-pass');
+      // A shell singleton keeps the non-blocking offset sentinel, unflagged.
+      expect(n.radialOffset.confidence).toBe('high');
+      expect(n.radialOffset.value).toBeNull();
+      expect(n.radialOffset.flags).toEqual([]);
+    }
+  });
+
+  it('leaves an unread field of a singleton as missing, not single-pass', () => {
+    const review = voteExtractions([
+      sample({ nozzles: [noz('N1', 1000, 150)] }),
+      sample({
+        nozzles: [
+          { name: 'LONE', pos: null, proj: 200, angle: 90, size: 150, mount: 'shell', radialOffset: null, nozzleOrientation: 'radial', elevation: null },
+        ],
+      }),
+      sample({ nozzles: [noz('N1', 1000, 150)] }),
+    ]);
+    const lone = review.nozzles.find((n) => n.name.value === 'LONE')!;
+    expect(lone.name.confidence).toBe('low');
+    expect(lone.name.flags).toContain('single-pass');
+    // pos was null in its single sample → stays missing, no single-pass flag.
+    expect(lone.pos.confidence).toBe('missing');
+    expect(lone.pos.value).toBeNull();
+    expect(lone.pos.flags).toEqual([]);
+  });
+
+  it('carries a head singleton offset at low/single-pass but shell offset stays sentinel', () => {
+    const review = voteExtractions([
+      sample({ nozzles: [noz('N1', 1000, 150)] }),
+      sample({ nozzles: [noz('N1', 1000, 150)] }),
+      sample({
+        nozzles: [
+          { name: 'HEAD1', pos: null, proj: 200, angle: 0, size: 600, mount: 'head-left', radialOffset: 300, nozzleOrientation: 'radial', elevation: null },
+        ],
+      }),
+    ]);
+    const head = review.nozzles.find((n) => n.name.value === 'HEAD1')!;
+    expect(head.mount.value).toBe('head-left');
+    expect(head.mount.flags).toContain('single-pass');
+    expect(head.radialOffset.value).toBe(300);
+    expect(head.radialOffset.confidence).toBe('low');
+    expect(head.radialOffset.flags).toContain('single-pass');
+  });
+
+  it('does not duplicate a voted nozzle as a singleton (dedupe guard)', () => {
+    const review = voteExtractions([
+      sample({ nozzles: [noz('N1', 1000, 150), noz('N2', 2000, 100)] }),
+      sample({ nozzles: [noz('N1', 1000, 150)] }),
+      sample({ nozzles: [noz('N1', 1000, 150)] }),
+    ]);
+    const n1s = review.nozzles.filter((n) => n.name.value?.toLowerCase() === 'n1');
+    expect(n1s).toHaveLength(1);
+    expect(n1s[0].name.confidence).toBe('high'); // voted, never re-appended as low
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Nozzle mount + radialOffset voting
+// ---------------------------------------------------------------------------
+
+describe('voteExtractions — mount + radialOffset', () => {
+  const head = (
+    name: string,
+    mount: 'head-left' | 'head-right',
+    radialOffset: number | null,
+  ): RawExtraction['nozzles'][number] => ({
+    name,
+    pos: null,
+    proj: 200,
+    angle: 0,
+    size: 600,
+    mount,
+    radialOffset,
+    nozzleOrientation: 'radial',
+    elevation: null,
+  });
+
+  const shell = (name: string): RawExtraction['nozzles'][number] => ({
+    name,
+    pos: 1000,
+    proj: 200,
+    angle: 90,
+    size: 150,
+    mount: 'shell',
+    radialOffset: null,
+    nozzleOrientation: 'radial',
+    elevation: null,
+  });
+
+  it('votes the mount enum high when all three agree', () => {
+    const review = voteExtractions([
+      sample({ nozzles: [head('M1', 'head-left', 0)] }),
+      sample({ nozzles: [head('M1', 'head-left', 0)] }),
+      sample({ nozzles: [head('M1', 'head-left', 0)] }),
+    ]);
+    expect(review.nozzles[0].mount.value).toBe('head-left');
+    expect(review.nozzles[0].mount.confidence).toBe('high');
+  });
+
+  it('votes the mount enum by 2/3 majority (medium)', () => {
+    const review = voteExtractions([
+      sample({ nozzles: [head('M1', 'head-left', 100)] }),
+      sample({ nozzles: [head('M1', 'head-left', 100)] }),
+      sample({ nozzles: [head('M1', 'head-right', 100)] }),
+    ]);
+    expect(review.nozzles[0].mount.value).toBe('head-left');
+    expect(review.nozzles[0].mount.confidence).toBe('medium');
+  });
+
+  it('median-votes radialOffset only for a head mount', () => {
+    // median 300, tol = max(1, 3) = 3 → 301 and 299 both within → all agree
+    const review = voteExtractions([
+      sample({ nozzles: [head('M1', 'head-left', 300)] }),
+      sample({ nozzles: [head('M1', 'head-left', 301)] }),
+      sample({ nozzles: [head('M1', 'head-left', 299)] }),
+    ]);
+    expect(review.nozzles[0].radialOffset.value).toBe(300);
+    expect(review.nozzles[0].radialOffset.confidence).toBe('high');
+  });
+
+  it('gives a shell nozzle a non-blocking radialOffset (high, null) not "missing"', () => {
+    const review = voteExtractions([
+      sample({ nozzles: [shell('N1')] }),
+      sample({ nozzles: [shell('N1')] }),
+      sample({ nozzles: [shell('N1')] }),
+    ]);
+    expect(review.nozzles[0].mount.value).toBe('shell');
+    expect(review.nozzles[0].radialOffset.value).toBeNull();
+    expect(review.nozzles[0].radialOffset.confidence).toBe('high');
+  });
+
+  it('reports a head radialOffset the majority could not read as missing', () => {
+    const review = voteExtractions([
+      sample({ nozzles: [head('M1', 'head-left', null)] }),
+      sample({ nozzles: [head('M1', 'head-left', null)] }),
+      sample({ nozzles: [head('M1', 'head-left', 300)] }),
+    ]);
+    expect(review.nozzles[0].radialOffset.confidence).toBe('missing');
+    expect(review.nozzles[0].radialOffset.value).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Nozzle nozzleOrientation + elevation voting
+// ---------------------------------------------------------------------------
+
+describe('voteExtractions — nozzleOrientation + elevation', () => {
+  const horiz = (
+    name: string,
+    elevation: number | null,
+    angle = 90,
+  ): RawExtraction['nozzles'][number] => ({
+    name,
+    pos: 1000,
+    proj: 200,
+    angle,
+    size: 150,
+    mount: 'shell',
+    radialOffset: null,
+    nozzleOrientation: 'horizontal',
+    elevation,
+  });
+
+  const radial = (name: string): RawExtraction['nozzles'][number] => ({
+    name,
+    pos: 1000,
+    proj: 200,
+    angle: 90,
+    size: 150,
+    mount: 'shell',
+    radialOffset: null,
+    nozzleOrientation: 'radial',
+    elevation: null,
+  });
+
+  it('votes the nozzleOrientation enum high when all three agree', () => {
+    const review = voteExtractions([
+      sample({ nozzles: [horiz('N1', 300)] }),
+      sample({ nozzles: [horiz('N1', 300)] }),
+      sample({ nozzles: [horiz('N1', 300)] }),
+    ]);
+    expect(review.nozzles[0].nozzleOrientation.value).toBe('horizontal');
+    expect(review.nozzles[0].nozzleOrientation.confidence).toBe('high');
+  });
+
+  it('votes the nozzleOrientation enum by 2/3 majority (medium)', () => {
+    const review = voteExtractions([
+      sample({ nozzles: [horiz('N1', 300)] }),
+      sample({ nozzles: [horiz('N1', 300)] }),
+      sample({ nozzles: [radial('N1')] }),
+    ]);
+    expect(review.nozzles[0].nozzleOrientation.value).toBe('horizontal');
+    expect(review.nozzles[0].nozzleOrientation.confidence).toBe('medium');
+  });
+
+  it('median-votes elevation only for a horizontal nozzle', () => {
+    // median 300, tol = max(1, 3) = 3 → 301 and 299 both within → all agree
+    const review = voteExtractions([
+      sample({ nozzles: [horiz('N1', 300)] }),
+      sample({ nozzles: [horiz('N1', 301)] }),
+      sample({ nozzles: [horiz('N1', 299)] }),
+    ]);
+    expect(review.nozzles[0].elevation.value).toBe(300);
+    expect(review.nozzles[0].elevation.confidence).toBe('high');
+  });
+
+  it('gives a radial nozzle a non-blocking elevation sentinel (high, null) not "missing"', () => {
+    const review = voteExtractions([
+      sample({ nozzles: [radial('N1')] }),
+      sample({ nozzles: [radial('N1')] }),
+      sample({ nozzles: [radial('N1')] }),
+    ]);
+    expect(review.nozzles[0].nozzleOrientation.value).toBe('radial');
+    expect(review.nozzles[0].elevation.value).toBeNull();
+    expect(review.nozzles[0].elevation.confidence).toBe('high');
+  });
+
+  it('reports a horizontal elevation the majority could not read as missing', () => {
+    const review = voteExtractions([
+      sample({ nozzles: [horiz('N1', null)] }),
+      sample({ nozzles: [horiz('N1', null)] }),
+      sample({ nozzles: [horiz('N1', 300)] }),
+    ]);
+    expect(review.nozzles[0].elevation.confidence).toBe('missing');
+    expect(review.nozzles[0].elevation.value).toBeNull();
   });
 });
 
@@ -190,5 +470,31 @@ describe('coerceRawExtraction', () => {
     expect(raw.id).toBeNull();
     expect(raw.nozzles).toEqual([]);
     expect(raw.saddles).toEqual([]);
+  });
+
+  it('coerces the mount enum and radialOffset, rejecting an invalid mount', () => {
+    const raw = coerceRawExtraction({
+      nozzles: [
+        { name: 'M1', pos: null, proj: 200, angle: 0, size: 600, mount: 'head-left', radialOffset: 300 },
+        { name: 'N2', pos: 1000, proj: 200, angle: 90, size: 150, mount: 'sideways', radialOffset: 'x' },
+      ],
+    });
+    expect(raw.nozzles[0].mount).toBe('head-left');
+    expect(raw.nozzles[0].radialOffset).toBe(300);
+    expect(raw.nozzles[1].mount).toBeNull();
+    expect(raw.nozzles[1].radialOffset).toBeNull();
+  });
+
+  it('coerces nozzleOrientation + elevation, rejecting an invalid orientation', () => {
+    const raw = coerceRawExtraction({
+      nozzles: [
+        { name: 'H1', pos: 1000, proj: 200, angle: 90, size: 150, nozzleOrientation: 'horizontal', elevation: -250 },
+        { name: 'N2', pos: 1000, proj: 200, angle: 90, size: 150, nozzleOrientation: 'diagonal', elevation: 'x' },
+      ],
+    });
+    expect(raw.nozzles[0].nozzleOrientation).toBe('horizontal');
+    expect(raw.nozzles[0].elevation).toBe(-250);
+    expect(raw.nozzles[1].nozzleOrientation).toBeNull();
+    expect(raw.nozzles[1].elevation).toBeNull();
   });
 });

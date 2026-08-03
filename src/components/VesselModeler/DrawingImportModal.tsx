@@ -242,7 +242,7 @@ export default function DrawingImportModal({ isOpen, onClose, onApply }: Drawing
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
          onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
-      <div className="vm-drawing-modal flex flex-col bg-[rgba(20,25,35,0.97)] border border-white/10 rounded-lg w-[92%] max-w-[960px] h-[85%] max-h-[740px] overflow-hidden">
+      <div className={`vm-drawing-modal flex flex-col bg-[rgba(20,25,35,0.97)] border border-white/10 rounded-lg w-[92%] ${phase === 'result' ? 'max-w-[1120px]' : 'max-w-[960px]'} h-[85%] max-h-[740px] overflow-hidden`}>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.08]">
           <h3 className="text-[0.95rem] font-semibold text-white m-0">Import Engineering Drawing</h3>
