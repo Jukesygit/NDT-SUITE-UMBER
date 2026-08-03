@@ -28,6 +28,7 @@ import type {
 import { buildMeridianProfile, arcFromAxial } from './dome-arc';
 import { buildDrapeGrid, type DrapeCell } from './surface-drape';
 import { buildDomeTangentBasis, surfaceToTangentOffsets } from './dome-tangent';
+import { normAngle, datumToVesselAngle, scanArcDeg } from './vessel-coords';
 
 /** Sample spacing (mm) for the footprint grids — matches the legacy stats grid. */
 const STEP_MM = 2;
@@ -35,10 +36,10 @@ const STEP_MM = 2;
 const DRAPE_MIN_SEGMENTS = 8;
 const DRAPE_MAX_SEGMENTS = 96;
 
-/** Normalise an angle into the 0–360 range. */
-export function normAngle(deg: number): number {
-  return ((deg % 360) + 360) % 360;
-}
+// Re-export the shared angle normaliser so existing importers of `normAngle`
+// from this module (texture-manager, annotation-heatmap, tests) keep working —
+// there is now exactly ONE definition, in vessel-coords.ts.
+export { normAngle };
 
 /**
  * Look up a thickness value in a cylindrical composite's data grid for a given
@@ -74,13 +75,8 @@ export function sampleComposite(
   const scanEndMm = xAxis[xAxis.length - 1];
   const scanRangeMm = scanEndMm - scanStartMm;
 
-  const datumInAnnConvention = normAngle(datumAngleDeg + 90);
-  let scanOffsetDeg: number;
-  if (scanDirection === 'cw') {
-    scanOffsetDeg = ((datumInAnnConvention - angleDeg) % 360 + 360) % 360;
-  } else {
-    scanOffsetDeg = ((angleDeg - datumInAnnConvention) % 360 + 360) % 360;
-  }
+  const datumInAnnConvention = normAngle(datumToVesselAngle(datumAngleDeg));
+  const scanOffsetDeg = scanArcDeg(datumInAnnConvention, angleDeg, scanDirection);
   const scanOffsetMm = (scanOffsetDeg / 360) * circumference;
   if (scanOffsetMm < scanStartMm || scanOffsetMm > scanEndMm) return undefined;
 

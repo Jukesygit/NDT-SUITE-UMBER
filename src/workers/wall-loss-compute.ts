@@ -27,6 +27,12 @@
  */
 
 import { buildJunctionFootprint } from '../components/VesselModeler/engine/junction-footprint';
+import {
+  normAngle,
+  datumToVesselAngle,
+  scanArcDeg,
+  scanAngleFromArcDeg,
+} from '../components/VesselModeler/engine/vessel-coords';
 
 // ---------------------------------------------------------------------------
 // Message types
@@ -177,10 +183,9 @@ export interface WallLossResponse {
 // ---------------------------------------------------------------------------
 // Pure math (inlined from scan-sampling.ts & wall-loss-distribution.ts)
 // ---------------------------------------------------------------------------
-
-function normAngle(deg: number): number {
-  return ((deg % 360) + 360) % 360;
-}
+// Angle conventions (normAngle / datum→vessel / cw-ccw scan offset) come from
+// the shared engine/vessel-coords.ts — the single source, imported above — so
+// the worker's cell mapping can never drift from the 3D / flattened paths.
 
 function sampleComposite(
   composite: CompositeSlim,
@@ -207,13 +212,8 @@ function sampleComposite(
   const scanEndMm = xAxis[xAxis.length - 1];
   const scanRangeMm = scanEndMm - scanStartMm;
 
-  const datumInAnnConvention = normAngle(datumAngleDeg + 90);
-  let scanOffsetDeg: number;
-  if (scanDirection === 'cw') {
-    scanOffsetDeg = (((datumInAnnConvention - angleDeg) % 360) + 360) % 360;
-  } else {
-    scanOffsetDeg = (((angleDeg - datumInAnnConvention) % 360) + 360) % 360;
-  }
+  const datumInAnnConvention = normAngle(datumToVesselAngle(datumAngleDeg));
+  const scanOffsetDeg = scanArcDeg(datumInAnnConvention, angleDeg, scanDirection);
   const scanOffsetMm = (scanOffsetDeg / 360) * circumference;
   if (scanOffsetMm < scanStartMm || scanOffsetMm > scanEndMm) return undefined;
 
@@ -318,13 +318,8 @@ function cellToVessel(
   const angularSpan = (scanMax - scanMin) * degPerMm;
 
   const scanMidMm = (scanMin + scanMax) / 2;
-  const datumConv = normAngle(datumAngleDeg + 90);
-  let angleMid: number;
-  if (scanDirection === 'cw') {
-    angleMid = normAngle(datumConv - scanMidMm * degPerMm);
-  } else {
-    angleMid = normAngle(datumConv + scanMidMm * degPerMm);
-  }
+  const datumConv = normAngle(datumToVesselAngle(datumAngleDeg));
+  const angleMid = normAngle(scanAngleFromArcDeg(datumConv, scanMidMm * degPerMm, scanDirection));
 
   return { posMin, posMax, angularSpan, posMid: (posMin + posMax) / 2, angleMid };
 }

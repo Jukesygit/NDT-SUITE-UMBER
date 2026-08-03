@@ -12,6 +12,7 @@ import { useCompanionApp } from '../../../hooks/queries/useCompanionApp';
 import { useCompanionFiles } from '../../../hooks/queries/useCompanionFiles';
 import type { AnnotationShapeConfig, ScanCompositeConfig, VesselState } from '../types';
 import { createAnnotationHeatmapCanvas } from '../engine/annotation-heatmap';
+import { normAngle, datumToVesselAngle, scanArcDeg } from '../engine/vessel-coords';
 
 interface CompanionScanSectionProps {
   annotation: AnnotationShapeConfig;
@@ -40,15 +41,10 @@ function annotationToNdeCoords(
   circumference: number,
 ): { scanStartMm: number; scanEndMm: number; indexStartMm: number; indexEndMm: number } {
   // datumAngleDeg uses 0=TDC; annotation.angle uses 90=TDC — convert datum
-  const datumConv = ((composite.datumAngleDeg + 90) % 360 + 360) % 360;
+  const datumConv = normAngle(datumToVesselAngle(composite.datumAngleDeg));
 
   // Directed angular distance from datum to annotation center (always positive)
-  let scanCenterDeg: number;
-  if (composite.scanDirection === 'cw') {
-    scanCenterDeg = ((datumConv - annotation.angle) % 360 + 360) % 360;
-  } else {
-    scanCenterDeg = ((annotation.angle - datumConv) % 360 + 360) % 360;
-  }
+  const scanCenterDeg = scanArcDeg(datumConv, annotation.angle, composite.scanDirection);
   const scanCenterMm = (scanCenterDeg / 360) * circumference;
 
   // annotation.height = circumferential extent (scan direction)

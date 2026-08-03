@@ -9,6 +9,7 @@ import type { VesselOverviewImage, CompanionScanImageSet } from './report-genera
 import { createAnnotationHeatmapCanvas } from './annotation-heatmap';
 import { SCALE } from './materials';
 import { createAnnotationLabelSprite, createRulerLabelSprite } from './text-sprite';
+import { normAngle, datumToVesselAngle, scanArcDeg } from './vessel-coords';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -278,15 +279,10 @@ export async function fetchCompanionScanImages(
   const indexDir = composite.indexDirection === 'forward' ? 1 : -1;
 
   // datumAngleDeg uses 0=TDC; annotation.angle uses 90=TDC — convert datum
-  const datumConv = ((composite.datumAngleDeg + 90) % 360 + 360) % 360;
+  const datumConv = normAngle(datumToVesselAngle(composite.datumAngleDeg));
 
   // Directed angular distance from datum to annotation center
-  let scanCenterDeg: number;
-  if (composite.scanDirection === 'cw') {
-    scanCenterDeg = ((datumConv - annotation.angle) % 360 + 360) % 360;
-  } else {
-    scanCenterDeg = ((annotation.angle - datumConv) % 360 + 360) % 360;
-  }
+  const scanCenterDeg = scanArcDeg(datumConv, annotation.angle, composite.scanDirection);
   const scanCenterMm = (scanCenterDeg / 360) * circumference;
 
   // annotation.height = circumferential extent (scan), annotation.width = axial extent (index)
@@ -301,12 +297,7 @@ export async function fetchCompanionScanImages(
   const indexEndMm = indexCenterMm + indexHalfMm;
 
   // Crosshair at min point — same directed-angle logic
-  let minScanDeg: number;
-  if (composite.scanDirection === 'cw') {
-    minScanDeg = ((datumConv - stats.minPoint.angle) % 360 + 360) % 360;
-  } else {
-    minScanDeg = ((stats.minPoint.angle - datumConv) % 360 + 360) % 360;
-  }
+  const minScanDeg = scanArcDeg(datumConv, stats.minPoint.angle, composite.scanDirection);
   const scanLineMm = (minScanDeg / 360) * circumference;
   const indexLineMm = composite.yAxis[0] + (stats.minPoint.pos - composite.indexStartMm) * indexDir;
 

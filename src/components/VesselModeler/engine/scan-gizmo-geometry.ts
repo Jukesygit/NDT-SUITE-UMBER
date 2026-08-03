@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import type { ScanCompositeConfig, VesselState } from '../types';
 import { resolveBodyFrame, type SurfaceFrame } from './body-frame';
+import { datumToVesselAngle, scanAngleFromArcDeg } from './vessel-coords';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -158,15 +159,13 @@ function buildCircumferentialArrow(
   vesselState: VesselState
 ): THREE.Group {
   const frame = resolveBodyFrame(vesselState, composite.bodyId);
+  // datumToVesselAngle: user 0°=TDC → vessel 90°=TDC (internal 0°=3-o'clock).
+  const datumDeg = datumToVesselAngle(composite.datumAngleDeg);
   const points: THREE.Vector3[] = [];
   for (let i = 0; i <= CIRC_SEGMENTS; i++) {
     const t = i / CIRC_SEGMENTS;
     const offsetDeg = t * CIRC_ARC_DEG;
-    // +90 converts user-facing 0°=TDC to internal 0°=3-o'clock
-    const angleDeg =
-      composite.scanDirection === 'cw'
-        ? composite.datumAngleDeg + 90 - offsetDeg
-        : composite.datumAngleDeg + 90 + offsetDeg;
+    const angleDeg = scanAngleFromArcDeg(datumDeg, offsetDeg, composite.scanDirection);
     points.push(frame.surfacePoint(composite.indexStartMm, angleDeg, SURFACE_OFFSET));
   }
 
@@ -191,7 +190,7 @@ function buildLongitudinalArrow(
   vesselState: VesselState
 ): THREE.Group {
   const frame = resolveBodyFrame(vesselState, composite.bodyId);
-  const datumDeg = composite.datumAngleDeg + 90;
+  const datumDeg = datumToVesselAngle(composite.datumAngleDeg);
   const arrowLengthMm = Math.min(3000, frame.axialLength * 0.4);
 
   const points: THREE.Vector3[] = [];
@@ -226,7 +225,7 @@ export function buildScanOrientationGizmo(
 ): { group: THREE.Group; originMesh: THREE.Mesh } {
   const group = new THREE.Group();
   const frame = resolveBodyFrame(vesselState, composite.bodyId);
-  const datumDeg = composite.datumAngleDeg + 90;
+  const datumDeg = datumToVesselAngle(composite.datumAngleDeg);
 
   // --- Origin sphere (draggable handle) ---
   const originPos = frame.surfacePoint(composite.indexStartMm, datumDeg, SURFACE_OFFSET);

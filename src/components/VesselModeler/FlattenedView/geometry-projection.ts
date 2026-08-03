@@ -25,6 +25,7 @@ import type {
   ScanCompositeConfig,
   VesselState,
 } from '../types';
+import { datumToVesselAngle, vesselAngleToCircumMm } from '../engine/vessel-coords';
 
 // ---------------------------------------------------------------------------
 // Output shapes
@@ -75,26 +76,27 @@ export function getCircumference(vesselState: VesselState): number {
  * measured from TDC (y = 0).
  *
  * Mapping:  circumMm = ((90 - angleDeg) / 360) × circumference
- * The result is wrapped into [0, circumference).
+ * The result is wrapped into [0, circumference). Delegates the arc-length math
+ * to the shared engine/vessel-coords.ts (`vesselAngleToCircumMm`) so the 2D and
+ * 3D paths share one convention; the exported signature/behaviour is unchanged.
  */
 export function angleToCircumMm(angleDeg: number, outerDiameter: number): number {
-  const circumference = Math.PI * outerDiameter;
-  const raw = ((90 - angleDeg) / 360) * circumference;
-  return ((raw % circumference) + circumference) % circumference;
+  return vesselAngleToCircumMm(angleDeg, Math.PI * outerDiameter);
 }
 
 /**
  * Convert a scan composite's datum angle (USER convention, 0° = TDC) to
  * circumferential mm from TDC (y = 0).
  *
- * The +90° converts the user datum to the vessel angle convention (90° = TDC)
- * that angleToCircumMm expects — the same conversion the 3D path applies
- * (texture-manager, scan-gizmo, scan-sampling, wall-loss all use datumAngleDeg + 90).
- * Keeping this in one place guarantees the developed scan overlay stays aligned
- * with the geometry overlays and with the 3D view.
+ * The +90° (via the shared `datumToVesselAngle`) converts the user datum to the
+ * vessel angle convention (90° = TDC) that angleToCircumMm expects — the same
+ * conversion the 3D path applies (texture-manager, scan-gizmo, scan-sampling,
+ * wall-loss all route through vessel-coords now). Keeping this in one place
+ * guarantees the developed scan overlay stays aligned with the geometry overlays
+ * and with the 3D view.
  */
 export function datumToCircumMm(datumAngleDeg: number, outerDiameter: number): number {
-  return angleToCircumMm(datumAngleDeg + 90, outerDiameter);
+  return angleToCircumMm(datumToVesselAngle(datumAngleDeg), outerDiameter);
 }
 
 // ---------------------------------------------------------------------------

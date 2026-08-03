@@ -15,7 +15,7 @@ import type { AppendageConfig, TextureConfig, ScanCompositeConfig, VesselState }
 import { createHeatmapTexture, type HeatmapTextureResult } from './heatmap-texture';
 import { resolveBodyFrame, type SurfaceFrame } from './body-frame';
 import { buildAllFootprints, type JunctionFootprint } from './junction-footprint';
-import { normAngle } from './scan-sampling';
+import { normAngle, datumToVesselAngle, scanAngleFromArcDeg } from './vessel-coords';
 
 // ---------------------------------------------------------------------------
 // UV Transform Helper
@@ -312,7 +312,7 @@ export function buildFootprintExcludeMask(
 
   const circumference = Math.PI * vesselState.id; // 2πR of the main shell
   const degPerMm = 360 / circumference;
-  const datumConv = normAngle(datumAngleDeg + 90);
+  const datumConv = normAngle(datumToVesselAngle(datumAngleDeg));
   const y0 = yAxis[0];
 
   return (row: number, col: number): boolean => {
@@ -320,10 +320,7 @@ export function buildFootprintExcludeMask(
     const pos =
       indexDirection === 'forward' ? indexStartMm + indexOffset : indexStartMm - indexOffset;
     const scanMm = xAxis[col];
-    const angle =
-      scanDirection === 'cw'
-        ? normAngle(datumConv - scanMm * degPerMm)
-        : normAngle(datumConv + scanMm * degPerMm);
+    const angle = normAngle(scanAngleFromArcDeg(datumConv, scanMm * degPerMm, scanDirection));
     return footprints.some((fp) => fp.containsCell(pos, angle));
   };
 }
@@ -492,7 +489,7 @@ export function createScanCompositePlane(
   // xAxis[0] is the circumferential distance (mm) from the datum where the scan starts.
   // The vertex loop maps v=1 → col 0 (xAxis[0]) at centerAngle + scanHalf,
   // so centerAngle = startAngle - scanHalf to place col 0 at the correct position.
-  const datumRad = ((composite.datumAngleDeg + 90) * Math.PI) / 180;
+  const datumRad = (datumToVesselAngle(composite.datumAngleDeg) * Math.PI) / 180;
   const scanStartMm = composite.xAxis[0];
   const scanStartRad = (scanStartMm / circumference) * 2 * Math.PI;
   const scanHalf = angularSpan / 2;

@@ -17,12 +17,12 @@
 import type { AnnotationShapeConfig, ScanCompositeConfig, VesselState } from '../types';
 import { interpolateColor, COLOR_SCALES } from '../../../utils/colorscales';
 import {
-  normAngle,
   sampleComposite,
   sampleAnnotationDrapeGrid,
   rectIsPureCylinder,
   resolveBodyDims,
 } from './scan-sampling';
+import { normAngle, datumToVesselAngle, scanArcDeg, scanAngleFromArcDeg } from './vessel-coords';
 
 // ---------------------------------------------------------------------------
 // Composite overlap detection
@@ -89,14 +89,9 @@ function compositeOverlapsAnnotation(
 
   // datumAngleDeg uses 0=TDC, annotation angles use 90=TDC — convert.
   // Use directed angular distance (not shortest path) in scan direction.
-  const datumConv = normAngle(datumAngleDeg + 90);
+  const datumConv = normAngle(datumToVesselAngle(datumAngleDeg));
   for (const testAngle of [annAngleMin, annAngleMax, ann.angle]) {
-    let scanOffsetDeg: number;
-    if (scanDirection === 'cw') {
-      scanOffsetDeg = (((datumConv - testAngle) % 360) + 360) % 360;
-    } else {
-      scanOffsetDeg = (((testAngle - datumConv) % 360) + 360) % 360;
-    }
+    const scanOffsetDeg = scanArcDeg(datumConv, testAngle, scanDirection);
     const scanOffsetMm = (scanOffsetDeg / 360) * circumference;
     if (scanOffsetMm >= scanStartMm && scanOffsetMm <= scanEndMm) return true;
   }
@@ -105,12 +100,7 @@ function compositeOverlapsAnnotation(
   // Check if composite start or end angle falls within the annotation
   for (const edgeMm of [scanStartMm, scanEndMm]) {
     const edgeDeg = (edgeMm / circumference) * 360;
-    let edgeAngle: number;
-    if (scanDirection === 'cw') {
-      edgeAngle = normAngle(datumConv - edgeDeg);
-    } else {
-      edgeAngle = normAngle(datumConv + edgeDeg);
-    }
+    const edgeAngle = normAngle(scanAngleFromArcDeg(datumConv, edgeDeg, scanDirection));
     const delta = angularDelta(ann.angle, edgeAngle);
     if (Math.abs(delta) <= halfHeightDeg) return true;
   }
