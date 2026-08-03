@@ -312,6 +312,51 @@ export function projectLiftingLug(lug: LiftingLugConfig, vesselOD: number): Flat
 }
 
 // ---------------------------------------------------------------------------
+// Appendage strip variants (developed onto an appendage's own developed strip)
+// ---------------------------------------------------------------------------
+// A weld/lug tagged with an appendage `bodyId` lives on that appendage's strip,
+// not the main shell. On a strip `pos` is mm along the appendage axis (0 = the
+// shell junction, the strip's LEFT — the PHYSICAL axis, never the mirrored scan
+// index) and `angle` is the appendage DATUM convention (0 = datum meridian at the
+// strip top). That is the SAME convention the strip's scan overlay (datumToCircumMm)
+// and coverage rects use, and the SAME angle engine/body-frame.ts feeds to the
+// 3D `surfacePoint` (verified: weld-geometry.ts + vessel-geometry.ts pass `.angle`
+// straight to the frame) — so a strip weld/lug lines up with the body's scan and
+// its 3D placement. These mirror projectLongWeld / projectLiftingLug but swap
+// angleToCircumMm (vessel 90 = TDC) for datumToCircumMm (appendage 0 = datum);
+// never re-introduce a manual ±90 (Decision Log 2026-06-22 / 06-23). A circumferential
+// weld is angle-free (a full ring), so it reuses projectCircWeld with the appendage OD.
+
+/**
+ * Project a longitudinal weld onto an appendage developed strip: a horizontal line
+ * at the weld's appendage-datum angle, running from `pos` to `endPos` along the
+ * appendage axis. The angle default (90) matches the appendage weld builder in
+ * engine/weld-geometry.ts so the strip agrees with the 3D scene.
+ */
+export function projectStripLongWeld(weld: WeldConfig, appendageOD: number): FlatLine {
+  const y = datumToCircumMm(weld.angle ?? 90, appendageOD);
+  return {
+    label: weld.name,
+    x1: weld.pos,
+    y1: y,
+    x2: weld.endPos ?? weld.pos,
+    y2: y,
+  };
+}
+
+/**
+ * Project a lifting lug onto an appendage developed strip as a point marker at
+ * (appendage-axial pos, appendage-datum angle → strip circumferential mm).
+ */
+export function projectStripLiftingLug(lug: LiftingLugConfig, appendageOD: number): FlatMarker {
+  return {
+    label: lug.name,
+    cx: lug.pos,
+    cy: datumToCircumMm(lug.angle, appendageOD),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Appendage junction footprints (developed onto the MAIN shell surface)
 // ---------------------------------------------------------------------------
 // A JunctionFootprint (engine/junction-footprint.ts) is the exact cylinder-on-

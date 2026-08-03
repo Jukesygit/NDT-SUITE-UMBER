@@ -1,7 +1,19 @@
 import { describe, it, expect } from 'vitest';
 
-import type { VesselState, ScanCompositeConfig, AppendageConfig } from '../types';
-import { fitScale } from './geometry-projection';
+import type {
+  VesselState,
+  ScanCompositeConfig,
+  AppendageConfig,
+  WeldConfig,
+  LiftingLugConfig,
+} from '../types';
+import {
+  fitScale,
+  projectCircWeld,
+  projectStripLongWeld,
+  projectStripLiftingLug,
+  wrapCircumCenters,
+} from './geometry-projection';
 import {
   computeStackLayout,
   buildStripSpecs,
@@ -175,5 +187,90 @@ describe('strip canvas projection', () => {
     const bad = { ...view, pxPerMm: 0 };
     expect(stripFromCanvasX(123, bad)).toBe(0);
     expect(stripFromCanvasY(123, bad)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Strip weld & lug placement — projection + strip canvas transform, seam wrap
+// ---------------------------------------------------------------------------
+// The strip renders welds/lugs with the SAME visual language as the main surface,
+// mapped onto the appendage strip: circ weld = a vertical line at its axial X, long
+// weld = a horizontal segment at its datum angle, lug = a fixed marker at (pos, datum
+// angle). All seam-wrap inside the strip circumference. The strip axis is PHYSICAL
+// (0 = junction on the left), never mirrored with the main scan index — asserted here.
+// ---------------------------------------------------------------------------
+describe('strip weld & lug placement', () => {
+  const APP_OD = 400;
+  const APP_CIRC = Math.PI * APP_OD;
+  const view: StripCanvasView = {
+    pxPerMm: 0.7,
+    marginX: 12,
+    marginY: 40,
+    zoom: 1.3,
+    offsetX: 25,
+    offsetY: -18,
+    paddingLeft: 70,
+    paddingTop: 80,
+    topBasePx: 534,
+  };
+  const panelTop = view.paddingTop + view.marginY + view.topBasePx * view.zoom + view.offsetY;
+
+  function weld(p: Partial<WeldConfig>): WeldConfig {
+    return { name: 'W', type: 'longitudinal', pos: 200, color: '#fff', ...p } as WeldConfig;
+  }
+  function lug(p: Partial<LiftingLugConfig>): LiftingLugConfig {
+    return { name: 'L', pos: 200, angle: 0, style: 'padEye', swl: '1t', ...p } as LiftingLugConfig;
+  }
+
+  it('lands a circ weld at the strip X of its axial pos', () => {
+    const p = 333;
+    const cw = projectCircWeld(weld({ type: 'circumferential', pos: p }), APP_OD);
+    // The vertical line is drawn at this X, top→bottom of the panel.
+    expect(stripToCanvasX(cw.x1, view)).toBeCloseTo(stripToCanvasX(p, view), 9);
+    // Round-trips back to the physical axial pos (no mirror).
+    expect(stripFromCanvasX(stripToCanvasX(cw.x1, view), view)).toBeCloseTo(p, 6);
+  });
+
+  it('lands a datum-0 long weld at the strip top (Y = 0) and wraps at the seam', () => {
+    const lw = projectStripLongWeld(weld({ angle: 0, pos: 100, endPos: 500 }), APP_OD);
+    expect(stripToCanvasY(lw.y1, view)).toBeCloseTo(panelTop, 9);
+    // A weld on the datum cut (bead half-width > 0) is drawn on BOTH strip edges.
+    const capHalf = 4; // default capWidth 8 / 2
+    const centers = wrapCircumCenters(lw.y1, capHalf, APP_CIRC);
+    expect(centers).toHaveLength(2);
+    expect(centers).toContain(0);
+    expect(centers).toContain(APP_CIRC);
+  });
+
+  it('does not wrap a long weld comfortably inside the strip band', () => {
+    // datum 180° → half-way down the strip, far from either seam.
+    const lw = projectStripLongWeld(weld({ angle: 180 }), APP_OD);
+    expect(wrapCircumCenters(lw.y1, 4, APP_CIRC)).toHaveLength(1);
+    expect(lw.y1).toBeCloseTo(APP_CIRC / 2, 6);
+  });
+
+  it('places a datum-0 lug at the strip top and wraps its fixed marker at the seam', () => {
+    const m = projectStripLiftingLug(lug({ angle: 0, pos: 250 }), APP_OD);
+    expect(stripToCanvasY(m.cy, view)).toBeCloseTo(panelTop, 9);
+    expect(stripToCanvasX(m.cx, view)).toBeCloseTo(stripToCanvasX(250, view), 9);
+    // The 6px triangle's mm half-height wraps the datum-0 marker to both edges.
+    const lugRadiusMm = 6 / (view.pxPerMm * view.zoom);
+    const centers = wrapCircumCenters(m.cy, lugRadiusMm, APP_CIRC);
+    expect(centers).toHaveLength(2);
+    expect(centers).toContain(0);
+    expect(centers).toContain(APP_CIRC);
+  });
+
+  it('keeps the strip axis PHYSICAL — X increases with pos (never mirrored)', () => {
+    // Two welds at increasing axial pos map to strictly increasing X: the strip is
+    // read junction-on-the-left, independent of any main-shell scan reversal.
+    const near = stripToCanvasX(projectCircWeld(weld({ type: 'circumferential', pos: 100 }), APP_OD).x1, view);
+    const far = stripToCanvasX(projectCircWeld(weld({ type: 'circumferential', pos: 900 }), APP_OD).x1, view);
+    expect(far).toBeGreaterThan(near);
+    // pos 0 sits at the panel's left content origin.
+    expect(stripToCanvasX(0, view)).toBeCloseTo(
+      view.paddingLeft + view.marginX + view.offsetX,
+      9,
+    );
   });
 });

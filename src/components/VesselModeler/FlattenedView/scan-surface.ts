@@ -23,20 +23,34 @@ import { datumToCircumMm, circumDisplayMm, axialFrac } from './geometry-projecti
 // ---------------------------------------------------------------------------
 
 /**
- * Select the composites that belong on one body's developed surface.
+ * Select the items (scan composites, welds, lugs, coverage rects…) that belong on
+ * one body's developed surface.
  *
- * `bodyId === undefined` → main-shell composites (those with no `bodyId`), the
- * legacy path. A defined `bodyId` → only that appendage's composites. This is the
- * single routing rule: a `bodyId` composite is therefore NEVER visible on the
- * main surface (it is routed to its appendage panel), and the main-surface pixel
- * output for a mixed model is byte-identical to the same model with the appendage
- * composites removed. Dome scans live in a separate array and never appear here.
+ * `bodyId === undefined` → main-shell items (those with no `bodyId`), the legacy
+ * path. A defined `bodyId` → only that appendage's items. This is the single
+ * routing rule shared by the heatmap, weld, lug and coverage-rect strip paths: a
+ * `bodyId` item is therefore NEVER visible on the main surface (it is routed to
+ * its appendage panel) and a main-shell item never appears on a strip — the two
+ * sets are a disjoint partition. Dome scans live in a separate array.
+ */
+export function attachablesForBody<T extends { bodyId?: string }>(
+  items: T[],
+  bodyId?: string,
+): T[] {
+  return items.filter((it) => (it.bodyId ?? undefined) === bodyId);
+}
+
+/**
+ * {@link attachablesForBody} specialised to scan composites (the main heatmap
+ * path). A `bodyId` composite is never visible on the main surface, so the
+ * main-surface pixel output for a mixed model is byte-identical to the same model
+ * with the appendage composites removed.
  */
 export function compositesForBody(
   composites: ScanCompositeConfig[],
   bodyId?: string,
 ): ScanCompositeConfig[] {
-  return composites.filter((c) => (c.bodyId ?? undefined) === bodyId);
+  return attachablesForBody(composites, bodyId);
 }
 
 // ---------------------------------------------------------------------------

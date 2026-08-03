@@ -18,6 +18,8 @@ import {
   projectLongWeld,
   projectSaddle,
   projectLiftingLug,
+  projectStripLongWeld,
+  projectStripLiftingLug,
   wrapCircumCenters,
   getAxialOrientation,
   axialToIndexMm,
@@ -88,6 +90,16 @@ const MAX_ZOOM = 20;
 // the shared to-scale pxPerMm uniformly rather than distorting either axis.
 const PANEL_TITLE_PX = 18;
 const PANEL_GAP_PX = 16;
+
+// Selection halo — concentric strokes/arcs with decreasing opacity. Shared by the
+// main-surface glow and the appendage-strip glow so a selected feature looks the
+// same on either developed surface.
+const GLOW_LAYERS = [
+  { width: 20, alpha: 0.07 },
+  { width: 14, alpha: 0.12 },
+  { width: 8, alpha: 0.2 },
+  { width: 4, alpha: 0.35 },
+];
 
 // ---------------------------------------------------------------------------
 // Internal view state (mutable ref to avoid re-renders on every pan/zoom)
@@ -301,17 +313,11 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
     ctx.restore(); // un-clip
 
     // 3b-ii. Appendage developed panels, stacked below the main plot.
-    renderStripPanels(ctx, vesselState, layout, surfaceView);
+    renderStripPanels(ctx, vesselState, layout, surfaceView, selectedWeldIndex, selectedLugIndex);
 
     // 3c. Selection glow — drawn OUTSIDE clip so it radiates freely.
-    //     Uses concentric strokes with decreasing opacity for a soft halo.
-    const GLOW_LAYERS = [
-      { width: 20, alpha: 0.07 },
-      { width: 14, alpha: 0.12 },
-      { width: 8, alpha: 0.2 },
-      { width: 4, alpha: 0.35 },
-    ];
-
+    //     Uses concentric strokes with decreasing opacity for a soft halo
+    //     (GLOW_LAYERS, shared with the appendage-strip glow).
     const od = vesselState.id;
 
     // Saddle glow
@@ -355,8 +361,12 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
       ctx.restore();
     }
 
-    // Lug glow
-    if (selectedLugIndex >= 0 && selectedLugIndex < vesselState.liftingLugs.length) {
+    // Lug glow — main-shell lugs only; an appendage lug glows in its own strip.
+    if (
+      selectedLugIndex >= 0 &&
+      selectedLugIndex < vesselState.liftingLugs.length &&
+      vesselState.liftingLugs[selectedLugIndex].bodyId === undefined
+    ) {
       const marker = projectLiftingLug(vesselState.liftingLugs[selectedLugIndex], od);
       const cx = toCanvasX(marker.cx);
       const cy = toCanvasY(marker.cy);
@@ -376,6 +386,10 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
     ctx.save();
     for (let wi = 0; wi < vesselState.welds.length; wi++) {
       const weld = vesselState.welds[wi];
+      // Appendage welds render on their own strip (renderStripPanels), never on the
+      // main surface. Skipping them here keeps the main plot byte-identical for any
+      // model whose welds are all main-shell (bodyId undefined).
+      if (weld.bodyId !== undefined) continue;
       const isSelected = wi === selectedWeldIndex;
       const projected =
         weld.type === 'circumferential' ? projectCircWeld(weld, od) : projectLongWeld(weld, od);
@@ -542,7 +556,9 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
         zoom: number;
         offsetX: number;
         offsetY: number;
-      }
+      },
+      selWeldIndex: number,
+      selLugIndex: number
     ) => {
       if (layout.pxPerMm <= 0 || layout.panels.length === 0) return;
       const { pxPerMm, marginX, marginY, zoom, offsetX, offsetY } = view;
@@ -627,6 +643,112 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
             ctx.strokeStyle = rect.color;
             ctx.lineWidth = 1.2;
             ctx.strokeRect(cxL, yTop, cxR - cxL, yBot - yTop);
+          }
+        }
+
+        // Appendage welds — same visual language as the main-surface welds, placed
+        // on THIS strip: a circumferential weld is a vertical line across the strip
+        // at its axial pos; a longitudinal weld is a horizontal segment at its datum
+        // angle, seam-wrapped inside the strip circumference (a weld on the datum cut
+        // shows on both edges). Clipped to the panel so nothing bleeds into the
+        // stacked neighbours; body-scoped so a main-shell weld never lands here.
+        ctx.save();
+        for (let wi = 0; wi < state.welds.length; wi++) {
+          const weld = state.welds[wi];
+          if (weld.bodyId !== panel.id) continue;
+          const isSelected = wi === selWeldIndex;
+          ctx.strokeStyle = isSelected ? '#4ade80' : '#22c55e';
+          ctx.lineWidth = isSelected ? 2.5 : 1;
+          ctx.setLineDash(isSelected ? [8, 4] : [6, 4]);
+          ctx.globalAlpha = isSelected ? 1 : 0.7;
+
+          if (weld.type === 'circumferential') {
+            const cw = projectCircWeld(weld, appendageOD);
+            const px = stripToCanvasX(cw.x1, stripView);
+            ctx.beginPath();
+            ctx.moveTo(px, top);
+            ctx.lineTo(px, bottom);
+            ctx.stroke();
+            // Label at the top edge, inside the panel.
+            ctx.globalAlpha = 1;
+            ctx.setLineDash([]);
+            ctx.fillStyle = isSelected ? '#16a34a' : '#333';
+            ctx.font = isSelected ? 'bold 11px sans-serif' : '10px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillText(cw.label, px, top + 2);
+          } else {
+            const lw = projectStripLongWeld(weld, appendageOD);
+            const xA = stripToCanvasX(lw.x1, stripView);
+            const xB = stripToCanvasX(lw.x2, stripView);
+            const capHalf = (weld.capWidth ?? 8) / 2;
+            for (const cyMm of wrapCircumCenters(lw.y1, capHalf, appCirc)) {
+              const y = stripToCanvasY(cyMm, stripView);
+              ctx.beginPath();
+              ctx.moveTo(xA, y);
+              ctx.lineTo(xB, y);
+              ctx.stroke();
+            }
+            // Label to the right of the segment end.
+            ctx.globalAlpha = 1;
+            ctx.setLineDash([]);
+            ctx.fillStyle = isSelected ? '#16a34a' : '#333';
+            ctx.font = isSelected ? 'bold 11px sans-serif' : '10px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(lw.label, xB + 6, stripToCanvasY(lw.y1, stripView));
+          }
+        }
+        ctx.globalAlpha = 1;
+        ctx.setLineDash([]);
+        ctx.restore();
+
+        // Appendage lifting lugs — the same fixed triangle marker as the main
+        // surface, at (axial pos, datum angle) on the strip and seam-wrapped so a lug
+        // on the datum cut shows on both edges. A selected lug gets the shared
+        // concentric glow (clipped to the panel — cheap selection parity).
+        for (let li = 0; li < state.liftingLugs.length; li++) {
+          const lug = state.liftingLugs[li];
+          if (lug.bodyId !== panel.id) continue;
+          const marker = projectStripLiftingLug(lug, appendageOD);
+          const cx = stripToCanvasX(marker.cx, stripView);
+          const size = 6;
+          // Wrap the fixed-pixel marker using its on-screen half-height in mm, so a
+          // lug straddling the datum seam is drawn on both strip edges.
+          const lugRadiusMm = pxPerMm * zoom > 0 ? size / (pxPerMm * zoom) : 0;
+          const centers = wrapCircumCenters(marker.cy, lugRadiusMm, appCirc);
+
+          if (li === selLugIndex) {
+            ctx.save();
+            for (const cyMm of centers) {
+              const cy = stripToCanvasY(cyMm, stripView);
+              for (const layer of GLOW_LAYERS) {
+                ctx.globalAlpha = layer.alpha;
+                ctx.fillStyle = '#22c55e';
+                ctx.beginPath();
+                ctx.arc(cx, cy, layer.width, 0, Math.PI * 2);
+                ctx.fill();
+              }
+            }
+            ctx.globalAlpha = 1;
+            ctx.restore();
+          }
+
+          for (const cyMm of centers) {
+            const cy = stripToCanvasY(cyMm, stripView);
+            ctx.fillStyle = '#2ecc71';
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - size);
+            ctx.lineTo(cx + size, cy + size);
+            ctx.lineTo(cx - size, cy + size);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.fillStyle = '#333';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(marker.label, cx, cy - size - 3);
           }
         }
 
@@ -787,8 +909,9 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
         }
       }
 
-      // Lifting lugs
+      // Lifting lugs — main-shell only; appendage lugs render on their strip.
       for (const lug of state.liftingLugs) {
+        if (lug.bodyId !== undefined) continue;
         const marker = projectLiftingLug(lug, od);
         const cx = toCanvasX(marker.cx);
         const cy = toCanvasY(marker.cy);

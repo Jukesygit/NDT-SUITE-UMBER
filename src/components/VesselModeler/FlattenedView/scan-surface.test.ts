@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 
-import type { ScanCompositeConfig } from '../types';
+import type { ScanCompositeConfig, WeldConfig, LiftingLugConfig } from '../types';
 import {
+  attachablesForBody,
   compositesForBody,
   forEachCompositeCell,
   mainSurfaceProjector,
@@ -158,5 +159,58 @@ describe('findThicknessAt (body-scoped)', () => {
     const main = composite({ id: 'main', bodyId: undefined, data: [[3.3]], xAxis: [0], yAxis: [0] });
     expect(findThicknessAt([main], 'app-1', 100, 0, appCirc, appOD)).toBeNull();
     expect(findThicknessAt([main], undefined, 100, 0, Math.PI * OD, OD)).toBeCloseTo(3.3, 6);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// attachablesForBody — the ONE routing rule shared by welds, lugs and rects
+// ---------------------------------------------------------------------------
+// The flattened view partitions every bodyId-tagged attachable the same way it
+// partitions composites: main surface = bodyId undefined; a strip = its own id.
+// A main weld/lug is NEVER drawn on a strip, and an appendage weld/lug is NEVER
+// drawn on the main surface (the render loops apply the same predicate per index).
+// ---------------------------------------------------------------------------
+describe('attachablesForBody (weld/lug/rect routing)', () => {
+  const mainWeld = { name: 'W0', type: 'circumferential', pos: 100, color: '#fff' } as WeldConfig;
+  const appWeld1 = { name: 'W1', type: 'longitudinal', pos: 50, angle: 0, color: '#fff', bodyId: 'app-1' } as WeldConfig;
+  const appWeld2 = { name: 'W2', type: 'longitudinal', pos: 80, angle: 0, color: '#fff', bodyId: 'app-2' } as WeldConfig;
+  const welds = [mainWeld, appWeld1, appWeld2];
+
+  const mainLug = { name: 'L0', pos: 100, angle: 90, style: 'padEye', swl: '1t' } as LiftingLugConfig;
+  const appLug = { name: 'L1', pos: 60, angle: 0, style: 'padEye', swl: '1t', bodyId: 'app-1' } as LiftingLugConfig;
+  const lugs = [mainLug, appLug];
+
+  it('routes only main-shell welds to the main surface (a strip weld never on main)', () => {
+    expect(attachablesForBody(welds, undefined).map((w) => w.name)).toEqual(['W0']);
+  });
+
+  it('routes only its own welds to a strip (a main weld never in a strip)', () => {
+    expect(attachablesForBody(welds, 'app-1').map((w) => w.name)).toEqual(['W1']);
+    expect(attachablesForBody(welds, 'app-2').map((w) => w.name)).toEqual(['W2']);
+  });
+
+  it('partitions welds disjointly across the main surface and every strip', () => {
+    const partitioned = [
+      ...attachablesForBody(welds, undefined),
+      ...attachablesForBody(welds, 'app-1'),
+      ...attachablesForBody(welds, 'app-2'),
+    ];
+    expect(partitioned).toHaveLength(welds.length);
+    expect(new Set(partitioned.map((w) => w.name)).size).toBe(welds.length);
+  });
+
+  it('applies the same routing to lugs (generic over any bodyId-tagged item)', () => {
+    expect(attachablesForBody(lugs, undefined).map((l) => l.name)).toEqual(['L0']);
+    expect(attachablesForBody(lugs, 'app-1').map((l) => l.name)).toEqual(['L1']);
+  });
+
+  it('main-surface set is byte-identical with vs without the appendage attachables (golden)', () => {
+    const withAppendages = attachablesForBody(welds, undefined);
+    const withoutAppendages = attachablesForBody(
+      welds.filter((w) => !w.bodyId),
+      undefined,
+    );
+    expect(withAppendages).toEqual(withoutAppendages);
+    expect(withAppendages.length).toBeGreaterThan(0);
   });
 });

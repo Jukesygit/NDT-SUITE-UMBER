@@ -11,9 +11,12 @@ import {
   angleToCircumMm,
   datumToCircumMm,
   projectNozzle,
+  projectCircWeld,
   projectLongWeld,
   projectSaddle,
   projectLiftingLug,
+  projectStripLongWeld,
+  projectStripLiftingLug,
   getCircumference,
   wrapCircumCenters,
   getAxialOrientation,
@@ -313,6 +316,88 @@ describe('developFootprintBoundary (footprint → developed coords)', () => {
     const dev = developFootprintBoundary(fp.boundary, 0, OD);
     expect(dev.centerMm).toBeCloseTo(CIRC / 4, 6);
     expect(wrapCircumCenters(dev.centerMm, dev.halfExtentMm, CIRC)).toEqual([dev.centerMm]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Appendage strip weld/lug projection — datum convention (0 = datum meridian)
+// ---------------------------------------------------------------------------
+// A weld/lug tagged with an appendage bodyId lives on that appendage's developed
+// strip. Its angle is the appendage DATUM convention (0 = datum meridian at the
+// strip top) — the SAME convention the strip scan overlay + coverage rects use, and
+// the same angle engine/body-frame.ts feeds to the 3D surfacePoint. So the strip
+// projectors map angle through datumToCircumMm (appendage 0 = datum), NOT
+// angleToCircumMm (vessel 90 = TDC). A circumferential weld is angle-free (a full
+// ring), so it reuses projectCircWeld with the appendage OD.
+// ---------------------------------------------------------------------------
+describe('appendage strip weld/lug projection (datum convention)', () => {
+  const APP_OD = 400;
+  const APP_CIRC = Math.PI * APP_OD;
+
+  function weld(p: Partial<WeldConfig>): WeldConfig {
+    return { name: 'W', type: 'longitudinal', pos: 200, color: '#fff', ...p } as WeldConfig;
+  }
+  function lug(p: Partial<LiftingLugConfig>): LiftingLugConfig {
+    return { name: 'L', pos: 200, angle: 0, style: 'padEye', swl: '1t', ...p } as LiftingLugConfig;
+  }
+
+  it('places a datum-0 longitudinal weld at the strip top (y = 0)', () => {
+    expect(projectStripLongWeld(weld({ bodyId: 'a', angle: 0 }), APP_OD).y1).toBeCloseTo(0, 6);
+  });
+
+  it('maps the long-weld angle through datumToCircumMm, NOT angleToCircumMm', () => {
+    for (const angle of [0, 30, 90, 210]) {
+      const y = projectStripLongWeld(weld({ bodyId: 'a', angle }), APP_OD).y1;
+      expect(y).toBeCloseTo(datumToCircumMm(angle, APP_OD), 6);
+    }
+    // A datum-90 weld is a quarter-turn from the datum, NOT at the strip top.
+    expect(projectStripLongWeld(weld({ bodyId: 'a', angle: 90 }), APP_OD).y1).not.toBeCloseTo(0, 3);
+    expect(angleToCircumMm(90, APP_OD)).toBeCloseTo(0, 6); // guard: the vessel helper WOULD say top
+  });
+
+  it('runs the long weld from pos to endPos along the appendage axis (physical, unmirrored)', () => {
+    const lw = projectStripLongWeld(weld({ bodyId: 'a', angle: 45, pos: 120, endPos: 700 }), APP_OD);
+    expect(lw.x1).toBe(120);
+    expect(lw.x2).toBe(700);
+    expect(lw.y1).toBeCloseTo(lw.y2, 9); // horizontal
+  });
+
+  it('defaults an undefined long-weld angle to 90, matching the 3D appendage builder', () => {
+    const lw = projectStripLongWeld(weld({ bodyId: 'a', angle: undefined }), APP_OD);
+    expect(lw.y1).toBeCloseTo(datumToCircumMm(90, APP_OD), 6);
+  });
+
+  it('places a datum-0 lug at the strip top (cy = 0) at its axial pos', () => {
+    const m = projectStripLiftingLug(lug({ bodyId: 'a', angle: 0, pos: 250 }), APP_OD);
+    expect(m.cy).toBeCloseTo(0, 6);
+    expect(m.cx).toBe(250);
+  });
+
+  it('maps the lug angle through datumToCircumMm (appendage datum), not the vessel convention', () => {
+    for (const angle of [0, 45, 180, 270]) {
+      expect(projectStripLiftingLug(lug({ bodyId: 'a', angle }), APP_OD).cy).toBeCloseTo(
+        datumToCircumMm(angle, APP_OD),
+        6,
+      );
+    }
+  });
+
+  it('aligns a strip weld and a strip lug at the same datum angle (share cy)', () => {
+    // Same as the scan overlay: a datum-θ feature lands at datumToCircumMm(θ),
+    // so welds/lugs line up with the body scan on the strip.
+    for (const angle of [0, 60, 200]) {
+      const wy = projectStripLongWeld(weld({ bodyId: 'a', angle }), APP_OD).y1;
+      const ly = projectStripLiftingLug(lug({ bodyId: 'a', angle }), APP_OD).cy;
+      expect(wy).toBeCloseTo(ly, 9);
+    }
+  });
+
+  it('reuses projectCircWeld for a strip circ weld: vertical full-height line at pos', () => {
+    const cw = projectCircWeld(weld({ bodyId: 'a', type: 'circumferential', pos: 333 }), APP_OD);
+    expect(cw.x1).toBe(333);
+    expect(cw.x2).toBe(333); // vertical
+    expect(cw.y1).toBe(0);
+    expect(cw.y2).toBeCloseTo(APP_CIRC, 6); // spans the full appendage circumference
   });
 });
 
