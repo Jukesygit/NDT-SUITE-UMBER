@@ -37,14 +37,12 @@ import SidebarPanel, { type ModelMode } from './SidebarPanel';
 import StatusBar from './StatusBar';
 import {
   type VesselState,
-  type NozzleConfig,
   type MeasurementConfig,
   type DomeScanHoverInfo,
   type ThicknessThresholds,
   type WallLossGroupConfig,
   type CoverageTargets,
 } from './types';
-import type { ExtractionResult } from './engine/drawing-parser';
 import {
   vesselReducer,
   INITIAL_STATE,
@@ -61,15 +59,10 @@ import { useScanActions } from './hooks/useScanActions';
 import { useVesselPersistence } from './hooks/useVesselPersistence';
 import { useViewportCallbacks } from './hooks/useViewportCallbacks';
 import { useViewportDnD } from './hooks/useViewportDnD';
-import { remapNozzleRefs } from './engine/nozzle-ref-remap';
-import { backfillNozzleIds } from './engine/nozzle-id';
-import { placeExtractedNozzle } from './engine/head-nozzle-placement';
+import { useInspectionMode } from './hooks/useInspectionMode';
+import { useReportGeneration } from './hooks/useReportGeneration';
+import { useDrawingApply } from './hooks/useDrawingApply';
 import { useTextureRehydration } from './useTextureRehydration';
-import {
-  computeInspectionCameraTarget,
-  animateCamera,
-  cancelCameraAnimation,
-} from './engine/camera-animation';
 import { useScanCompositeList } from '../../hooks/queries/useScanComposites';
 import { useLinkScanCompositeToProject } from '../../hooks/mutations/useScanCompositeMutations';
 import { getAnnotationImageUrl } from '../../services/annotation-attachment-service';
@@ -94,17 +87,6 @@ import InspectionPanel from './sidebar/InspectionPanel';
 import StatLeaderOverlay from './StatLeaderOverlay';
 import { PipePartPopup } from './sidebar/PipePartPopup';
 
-import {
-  generateReport,
-  downloadReport,
-  type ReportConfig,
-  type CompanionScanImageSet,
-} from './engine/report-generator';
-import {
-  captureVesselOverviews,
-  captureAnnotationContext,
-  captureAnnotationHeatmap,
-} from './engine/report-image-capture';
 import { downloadScreenshot } from './engine/screenshot-renderer';
 import { captureViewportScreenshot } from './engine/viewport-screenshot';
 
@@ -228,106 +210,23 @@ export default function VesselModeler() {
     y: number;
   } | null>(null);
 
-  // Inspection panel: which stat row is hovered (highlights min/max point on vessel)
-  const [visibleStatLines, setVisibleStatLines] = useState<{ min: boolean; max: boolean }>({
-    min: false,
-    max: false,
+  // --- Report generation (T2-D / D4) ---
+  // handleGenerateReport + the shared captureReportAssets now live in
+  // useReportGeneration. captureReportAssets must be defined before
+  // useVesselPersistence (which threads it in) so the hook is called here; the
+  // save flows keep attaching reportAssets exactly as before.
+  const { captureReportAssets, handleGenerateReport } = useReportGeneration({
+    vesselState,
+    viewportRef,
+    flattenedViewportRef,
   });
 
-  /** Capture 3D + 2D images for PDF report generation */
-  const captureReportAssets = useCallback(async () => {
-    const assets: Record<string, unknown> = {};
-
-    // 1. Capture 3D viewport overviews
-    const viewport = viewportRef.current;
-    if (viewport) {
-      const renderer = viewport.getRenderer();
-      const scene = viewport.getScene();
-      const camera = viewport.getCamera();
-      const controls = viewport.getControls();
-      const sceneManager = viewport.getSceneManager();
-      if (renderer && scene && camera && controls && sceneManager) {
-        try {
-          const overviews = await captureVesselOverviews({
-            renderer,
-            scene,
-            camera,
-            controls,
-            vesselState,
-            vesselGroup: sceneManager.getVesselGroup() ?? undefined,
-          });
-          assets.overviewRenders = overviews;
-        } catch (err) {
-          console.warn('Failed to capture vessel overviews:', err);
-        }
-      }
-    }
-
-    // 2. Capture 2D flattened projection
-    const flatRef = flattenedViewportRef.current;
-    if (flatRef) {
-      try {
-        const flatImage = flatRef.exportImage();
-        if (flatImage) assets.flattenedView = flatImage;
-      } catch (err) {
-        console.warn('Failed to capture flattened view:', err);
-      }
-    }
-
-    // 3. Capture per-annotation heatmaps
-    const annotationHeatmaps: Record<number, string> = {};
-    for (const ann of vesselState.annotations) {
-      if (!ann.includeInReport && ann.type !== 'scan') continue;
-      const heatmap = captureAnnotationHeatmap(ann, vesselState);
-      if (heatmap) annotationHeatmaps[ann.id] = heatmap;
-    }
-    if (Object.keys(annotationHeatmaps).length > 0) {
-      assets.annotationHeatmaps = annotationHeatmaps;
-    }
-
-    // 4. Capture per-annotation 3D context images
-    if (viewport) {
-      const renderer = viewport.getRenderer();
-      const scene = viewport.getScene();
-      const camera = viewport.getCamera();
-      const controls = viewport.getControls();
-      const sceneManager = viewport.getSceneManager();
-      if (renderer && scene && camera && controls && sceneManager) {
-        const contextImages: Record<number, string> = {};
-        for (const ann of vesselState.annotations) {
-          if (!ann.includeInReport && ann.type !== 'scan') continue;
-          try {
-            const ctx = captureAnnotationContext(
-              {
-                renderer,
-                scene,
-                camera,
-                controls,
-                vesselState,
-                vesselGroup: sceneManager.getVesselGroup() ?? undefined,
-              },
-              ann
-            );
-            contextImages[ann.id] = ctx;
-          } catch (err) {
-            console.warn(`Failed to capture context for annotation ${ann.id}:`, err);
-          }
-        }
-        if (Object.keys(contextImages).length > 0) {
-          assets.annotationContextImages = contextImages;
-        }
-      }
-    }
-
-    return assets;
-  }, [vesselState]);
-
   // --- Persistence (T2-D / D2): local/cloud save + load, project picker, GLB
-  // export, and the linked-model bootstrap. captureReportAssets is report-coupled
-  // (report-image capture; destined for D4's useReportGeneration) so it stays in
-  // the component and is threaded in; the save flows keep attaching reportAssets
-  // exactly as before. vesselModelIdRef lives in the hook and is returned so the
-  // component can still derive vesselModelId and gate the toolbar Save button.
+  // export, and the linked-model bootstrap. captureReportAssets is threaded in
+  // (report-coupled, owned by useReportGeneration); the save flows keep attaching
+  // reportAssets exactly as before. vesselModelIdRef lives in the hook and is
+  // returned so the component can still derive vesselModelId and gate the toolbar
+  // Save button.
   const {
     saveStatus,
     pickerMode,
@@ -388,10 +287,6 @@ export default function VesselModeler() {
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const toggleStatLine = useCallback((stat: 'min' | 'max') => {
-    setVisibleStatLines((prev) => ({ ...prev, [stat]: !prev[stat] }));
   }, []);
 
   // --- Helper: dispatch vessel update via functional updater ---
@@ -643,213 +538,36 @@ export default function VesselModeler() {
     setPipePartPopup,
   });
 
-  // --- Drawing import apply handler ---
-  const handleDrawingApply = useCallback(
-    (result: ExtractionResult) => {
-      // Resolve each extracted nozzle to engine placement: head-mounted nozzles
-      // (dished-end manways) become axial dome-end nozzles; shell nozzles pass
-      // through unchanged. Vessel scalars come from the same result.
-      const placementVessel = {
-        id: result.id,
-        length: result.length,
-        headRatio: result.headRatio,
-      };
-      // The drawing replaces nozzles wholesale — mint fresh stable ids for them
-      // so pipelines can be re-anchored to the new nozzles by id via remapNozzleRefs.
-      const newNozzles = backfillNozzleIds(
-        result.nozzles.map((n) => ({
-          name: n.name,
-          ...placeExtractedNozzle(n, placementVessel),
-        })) as NozzleConfig[]
-      );
+  // --- Drawing import apply handler (T2-D / D4) ---
+  // Body moved verbatim into useDrawingApply; validateVesselState is threaded in
+  // (it stays in the component for the persistence load path). Dep array and the
+  // window.confirm pipeline-drop guard are preserved.
+  const { handleDrawingApply } = useDrawingApply({
+    updateVessel,
+    dispatch,
+    vesselState,
+    validateVesselState,
+  });
 
-      // The drawing replaces nozzles wholesale, so re-anchor existing pipelines
-      // by nozzle name (their old nozzleId is about to go stale).
-      // Pipelines whose anchor is gone are dropped — but never silently.
-      const { pipelines: remappedPipelines, removed } = remapNozzleRefs(
-        vesselState.nozzles,
-        newNozzles,
-        vesselState.pipelines
-      );
-      if (removed.length > 0) {
-        const removedNames = removed.map((r) => r.oldNozzleName || '(unnamed)').join(', ');
-        const proceed = window.confirm(
-          `Applying this drawing will remove ${removed.length} pipeline(s) whose anchor ` +
-            `nozzle is no longer present in the drawing: ${removedNames}.\n\nApply anyway?`
-        );
-        if (!proceed) return;
-      }
-
-      updateVessel((prev) =>
-        validateVesselState({
-          ...prev,
-          id: result.id,
-          length: result.length,
-          headRatio: result.headRatio,
-          orientation: result.orientation,
-          nozzles: newNozzles,
-          saddles: result.saddles.map((s) => ({
-            pos: s.pos,
-            color: s.color || '#2244ff',
-          })),
-          pipelines: remappedPipelines,
-          hasModel: true,
-        })
-      );
-      dispatch({ type: 'DESELECT_ALL' });
-    },
-    [updateVessel, vesselState.nozzles, vesselState.pipelines]
-  );
-
-  // --- Inspection mode handlers ---
-  const enterInspectionMode = useCallback(
-    (annotationId: number) => {
-      const camera = viewportRef.current?.getCamera();
-      const controls = viewportRef.current?.getControls();
-      if (!camera || !controls) return;
-
-      const ann = vesselState.annotations.find((a) => a.id === annotationId);
-      if (!ann) return;
-
-      // Save current camera state before animating
-      const savedCameraState: {
-        position: [number, number, number];
-        target: [number, number, number];
-      } = {
-        position: camera.position.toArray() as [number, number, number],
-        target: (controls.target as THREE.Vector3).toArray() as [number, number, number],
-      };
-
-      const { position: targetPos, target: targetLookAt } = computeInspectionCameraTarget(
-        ann,
-        vesselState,
-        camera
-      );
-
-      setVisibleStatLines({ min: false, max: false });
-      animateCamera(camera, controls, targetPos, targetLookAt, 500, () => {
-        controls.enabled = false;
-        setVisibleStatLines({ min: true, max: true });
-      });
-
-      dispatch({ type: 'ENTER_INSPECTION_MODE', annotationId, cameraState: savedCameraState });
-    },
-    [vesselState]
-  );
-
-  const exitInspectionMode = useCallback(() => {
-    const camera = viewportRef.current?.getCamera();
-    const controls = viewportRef.current?.getControls();
-    if (!camera || !controls) return;
-
-    const saved = ui.savedCameraState;
-    if (!saved) {
-      dispatch({ type: 'EXIT_INSPECTION_MODE' });
-      return;
-    }
-
-    // Re-enable controls before animating back
-    controls.enabled = true;
-    cancelCameraAnimation();
-
-    const targetPos = new THREE.Vector3(...saved.position);
-    const targetLookAt = new THREE.Vector3(...saved.target);
-
-    animateCamera(camera, controls, targetPos, targetLookAt, 500);
-    dispatch({ type: 'EXIT_INSPECTION_MODE' });
-  }, [ui.savedCameraState]);
-
-  const cycleInspection = useCallback(
-    (annotationId: number) => {
-      const camera = viewportRef.current?.getCamera();
-      const controls = viewportRef.current?.getControls();
-      if (!camera || !controls) return;
-
-      const ann = vesselState.annotations.find((a) => a.id === annotationId);
-      if (!ann) return;
-
-      const { position: targetPos, target: targetLookAt } = computeInspectionCameraTarget(
-        ann,
-        vesselState,
-        camera
-      );
-
-      // Temporarily re-enable controls for the animation
-      controls.enabled = true;
-      setVisibleStatLines({ min: false, max: false });
-      animateCamera(camera, controls, targetPos, targetLookAt, 500, () => {
-        controls.enabled = false;
-        setVisibleStatLines({ min: true, max: true });
-      });
-
-      dispatch({ type: 'CYCLE_INSPECTION', annotationId });
-    },
-    [vesselState]
-  );
-
-  // Sidebar annotation click: enter/cycle inspection mode (scan annotations only)
-  const handleSidebarAnnotationSelect = useCallback(
-    (id: number) => {
-      const ann = vesselState.annotations.find((a) => a.id === id);
-      // Restriction annotations don't have an enhanced inspection view
-      if (ann?.type === 'restriction') {
-        dispatch({ type: 'SELECT_ANNOTATION', id });
-        return;
-      }
-      if (ui.inspectingAnnotationId !== null && ui.inspectingAnnotationId !== id) {
-        cycleInspection(id);
-      } else if (ui.inspectingAnnotationId === null) {
-        enterInspectionMode(id);
-      }
-    },
-    [ui.inspectingAnnotationId, enterInspectionMode, cycleInspection, vesselState.annotations]
-  );
-
-  // --- Report generation handler ---
-  const handleGenerateReport = useCallback(async () => {
-    const viewportHandle = viewportRef.current;
-    if (!viewportHandle) return;
-
-    const renderer = viewportHandle.getRenderer();
-    const scene = viewportHandle.getScene();
-    const camera = viewportHandle.getCamera();
-    const controls = viewportHandle.getControls();
-    if (!renderer || !scene || !camera || !controls) return;
-
-    const vesselGroup = viewportHandle.getSceneManager()?.getVesselGroup() ?? undefined;
-    const captureCtx = { renderer, scene, camera, controls, vesselState, vesselGroup };
-
-    // 1. Capture vessel overview images
-    const vesselOverviews = await captureVesselOverviews(captureCtx);
-
-    // 2. Capture per-annotation context images and heatmaps
-    const reportAnnotations = vesselState.annotations.filter(
-      (a) => a.includeInReport && a.type === 'scan'
-    );
-    const annotationContextImages = new Map<number, string>();
-    const heatmapImages = new Map<number, string>();
-    const companionScanImages = new Map<number, CompanionScanImageSet>();
-
-    for (const ann of reportAnnotations) {
-      annotationContextImages.set(ann.id, captureAnnotationContext(captureCtx, ann));
-      const heatmap = captureAnnotationHeatmap(ann, vesselState);
-      if (heatmap) heatmapImages.set(ann.id, heatmap);
-    }
-
-    // 3. Build report config
-    const config: ReportConfig = {
-      annotationIds: reportAnnotations.map((a) => a.id),
-      companionAvailable: false,
-      vesselOverviews,
-      annotationContextImages,
-      companionScanImages,
-      heatmapImages,
-    };
-
-    // 4. Generate and download
-    const blob = await generateReport(vesselState, config);
-    downloadReport(blob, vesselState);
-  }, [vesselState]);
+  // --- Inspection mode navigation (T2-D / D4) ---
+  // enter/exit/cycle + the sidebar annotation click and the min/max stat-line
+  // overlay state all live in useInspectionMode. The two ui-derived values are
+  // threaded in by identical name so the moved callbacks keep their exact
+  // dependency arrays and camera choreography verbatim. enterInspectionMode is
+  // consumed only inside the hook (by the sidebar click) so it is not returned.
+  const {
+    visibleStatLines,
+    toggleStatLine,
+    exitInspectionMode,
+    cycleInspection,
+    handleSidebarAnnotationSelect,
+  } = useInspectionMode({
+    vesselState,
+    dispatch,
+    viewportRef,
+    inspectingAnnotationId: ui.inspectingAnnotationId,
+    uiSavedCameraState: ui.savedCameraState,
+  });
 
   // --- Keyboard: Escape cancels draw/inspection; Ctrl/Cmd+Z / +Y undo-redo ---
   // Note: VesselModeler does not render <ScreenshotMode> (that component owns its
