@@ -39,14 +39,10 @@ import {
   type VesselState,
   type NozzleConfig,
   type MeasurementConfig,
-  type VesselCallbacks,
   type DomeScanHoverInfo,
   type ThicknessThresholds,
   type WallLossGroupConfig,
   type CoverageTargets,
-  type Pipeline,
-  type PipeSegmentType,
-  PIPE_SIZES,
 } from './types';
 import type { ExtractionResult } from './engine/drawing-parser';
 import {
@@ -63,8 +59,10 @@ import { useOverlayActions } from './hooks/useOverlayActions';
 import { useAnnotationActions } from './hooks/useAnnotationActions';
 import { useScanActions } from './hooks/useScanActions';
 import { useVesselPersistence } from './hooks/useVesselPersistence';
+import { useViewportCallbacks } from './hooks/useViewportCallbacks';
+import { useViewportDnD } from './hooks/useViewportDnD';
 import { remapNozzleRefs } from './engine/nozzle-ref-remap';
-import { nextNozzleId, backfillNozzleIds } from './engine/nozzle-id';
+import { backfillNozzleIds } from './engine/nozzle-id';
 import { placeExtractedNozzle } from './engine/head-nozzle-placement';
 import { useTextureRehydration } from './useTextureRehydration';
 import {
@@ -615,272 +613,35 @@ export default function VesselModeler() {
     return undefined;
   }, [selection, vesselState]);
 
-  // --- Interaction callbacks (from Three.js viewport) ---
-  const vesselCallbacks: VesselCallbacks = {
-    onNozzleSelected: (idx) => dispatch({ type: 'SELECT_NOZZLE', index: idx }),
-    onAppendageSelected: (idx) => dispatch({ type: 'SELECT_APPENDAGE', index: idx }),
-    onAppendageMoved: (idx, mountPos, mountAngle) => {
-      updateAppendage(idx, {
-        mountPos: Math.round(mountPos),
-        mountAngle: Math.round(mountAngle),
-      });
-    },
-    onSaddleSelected: (idx) => dispatch({ type: 'SELECT_SADDLE', index: idx }),
-    onTextureSelected: (id) => dispatch({ type: 'SELECT_TEXTURE', id }),
-    onLugSelected: (idx) => dispatch({ type: 'SELECT_LUG', index: idx }),
-    onAnnotationSelected: (id) => dispatch({ type: 'SELECT_ANNOTATION', id }),
-    onAnnotationMoved: (id, pos, angle) => {
-      updateAnnotation(id, { pos: Math.round(pos), angle: Math.round(angle) });
-    },
-    onAnnotationLabelOffsetChanged: (id, offset) => {
-      updateAnnotation(id, { labelOffset: offset });
-    },
-    // The active body (bodyId) is decided by the interaction layer from the
-    // current selection — active body = the selected entity's body, main shell
-    // (undefined) when nothing body-scoped is selected. See `activeDrawBodyId`.
-    // A draw-created annotation is a plain add (no history key), so undo treats
-    // it exactly like every other new annotation.
-    onAnnotationCreated: (type, pos, angle, width, height, bodyId) => {
-      const id = getNextAnnotationId();
-      const isRestriction = type === 'restriction';
-      const prefix = isRestriction ? 'R' : 'A';
-      const count = vesselState.annotations.filter((a) => a.type === type).length + 1;
-      addAnnotation({
-        id,
-        name: `${prefix}${count}`,
-        type,
-        pos: Math.round(pos),
-        angle: Math.round(angle),
-        width: Math.round(width),
-        height: Math.round(height),
-        color: isRestriction ? '#facc15' : '#ff3333',
-        lineWidth: 2,
-        showLabel: true,
-        bodyId,
-      });
-      dispatch({ type: 'SELECT_ANNOTATION', id });
-      dispatch({ type: 'SET_PREVIEW_ANNOTATION', preview: null });
-      dispatch({ type: 'SET_DRAW_MODE_ANNOTATION', mode: null });
-    },
-    onAnnotationPreview: (type, pos, angle, width, height, bodyId) => {
-      dispatch({
-        type: 'SET_PREVIEW_ANNOTATION',
-        preview: {
-          id: -1,
-          name: 'Preview',
-          type,
-          pos: Math.round(pos),
-          angle: Math.round(angle),
-          width: Math.round(width),
-          height: Math.round(height),
-          color: type === 'restriction' ? '#facc15' : '#ff3333',
-          lineWidth: 2,
-          showLabel: false,
-          bodyId,
-        },
-      });
-    },
-    onRulerCreated: (startPos, startAngle, endPos, endAngle) => {
-      const id = getNextRulerId();
-      const num = vesselState.rulers.length + 1;
-      addRuler({
-        id,
-        name: `R${num}`,
-        startPos: Math.round(startPos),
-        startAngle: Math.round(startAngle),
-        endPos: Math.round(endPos),
-        endAngle: Math.round(endAngle),
-        color: '#ffaa00',
-        showLabel: true,
-      });
-      dispatch({ type: 'SET_PREVIEW_RULER', preview: null });
-      dispatch({ type: 'SET_DRAW_MODE_RULER', active: false });
-    },
-    onRulerPreview: (startPos, startAngle, endPos, endAngle) => {
-      dispatch({
-        type: 'SET_PREVIEW_RULER',
-        preview: {
-          id: -1,
-          name: 'Preview',
-          startPos: Math.round(startPos),
-          startAngle: Math.round(startAngle),
-          endPos: Math.round(endPos),
-          endAngle: Math.round(endAngle),
-          color: '#ffaa00',
-          showLabel: true,
-        },
-      });
-    },
-    onCoverageRectCreated: (pos, angle, width, height) => {
-      const id = getNextCoverageRectId();
-      const num = vesselState.coverageRects.length + 1;
-      addCoverageRect({
-        id,
-        name: `C${num}`,
-        pos: Math.round(pos),
-        angle: Math.round(angle),
-        width: Math.round(width),
-        height: Math.round(height),
-        color: '#00cc66',
-        lineWidth: 2,
-        filled: true,
-        fillOpacity: 0.2,
-      });
-      dispatch({ type: 'SELECT_COVERAGE_RECT', id });
-      dispatch({ type: 'SET_PREVIEW_COVERAGE_RECT', preview: null });
-      dispatch({ type: 'SET_DRAW_MODE_COVERAGE', active: false });
-    },
-    onCoverageRectPreview: (pos, angle, width, height) => {
-      dispatch({
-        type: 'SET_PREVIEW_COVERAGE_RECT',
-        preview: {
-          id: -1,
-          name: 'Preview',
-          pos: Math.round(pos),
-          angle: Math.round(angle),
-          width: Math.round(width),
-          height: Math.round(height),
-          color: '#00cc66',
-          lineWidth: 2,
-          filled: false,
-          fillOpacity: 0.2,
-        },
-      });
-    },
-    onCoverageRectSelected: (id) => dispatch({ type: 'SELECT_COVERAGE_RECT', id }),
-    onCoverageRectMoved: (id, pos, angle) => {
-      updateCoverageRect(id, { pos: Math.round(pos), angle: Math.round(angle) });
-    },
-    onInspectionImageSelected: (id) => dispatch({ type: 'SELECT_INSPECTION_IMAGE', id }),
-    onInspectionImageMoved: (id, pos, angle) => {
-      updateInspectionImage(id, { pos: Math.round(pos), angle: Math.round(angle) });
-    },
-    onInspectionImageLabelOffsetChanged: (id, offset) => {
-      updateInspectionImage(id, { labelOffset: offset });
-    },
-    onWeldSelected: (idx) => dispatch({ type: 'SELECT_WELD', index: idx }),
-    onWeldMoved: (idx, pos, angle) => {
-      const weld = vesselState.welds[idx];
-      if (weld?.type === 'circumferential') {
-        updateWeld(idx, { pos: Math.round(pos) });
-      } else {
-        const delta = Math.round(pos) - weld.pos;
-        updateWeld(idx, {
-          pos: Math.round(pos),
-          endPos: (weld.endPos ?? vesselState.length) + delta,
-          angle: Math.round(angle),
-        });
-      }
-    },
-    onScanCompositeHover: (id, thickness, rawScanMm, rawIndexMm, screenX, screenY) => {
-      const sc = vesselState.scanComposites.find((c) => c.id === id);
-      let displayScan: number;
-      let displayIndex: number;
-      if (sc?.useGlobalOrigin) {
-        // Convert scan-space coords to vessel-space, then subtract global origin
-        const globalOrigin = vesselState.coordinateOrigin ?? { indexMm: 0, scanMm: 0 };
-        const indexDir = sc.indexDirection === 'forward' ? 1 : -1;
-        const vesselIndex = sc.indexStartMm + (rawIndexMm - (sc.yAxis[0] ?? 0)) * indexDir;
-        displayIndex = vesselIndex - globalOrigin.indexMm;
-        displayScan = rawScanMm - globalOrigin.scanMm;
-      } else {
-        // Per-scan: relative to this scan's own axis start
-        displayScan = rawScanMm - (sc?.xAxis[0] ?? 0);
-        displayIndex = rawIndexMm - (sc?.yAxis[0] ?? 0);
-      }
-      dispatch({
-        type: 'SET_HOVER_DATA',
-        data: thickness !== null ? { thickness, scanMm: displayScan, indexMm: displayIndex } : null,
-      });
-      // Update cursor-follow tooltip position via ref (avoids re-render lag)
-      if (cursorTooltipRef.current) {
-        if (thickness !== null) {
-          cursorTooltipRef.current.style.left = `${screenX + 16}px`;
-          cursorTooltipRef.current.style.top = `${screenY - 12}px`;
-        }
-      }
-    },
-    onDomeScanHover: (info) => {
-      setDomeScanHoverInfo(info);
-    },
-    onScanGizmoDatumMoved: (compositeId, angleDeg, posMm) => {
-      handleUpdateScanComposite(compositeId, {
-        datumAngleDeg: angleDeg,
-        indexStartMm: Math.round(posMm),
-      });
-    },
-    onScanGizmoDirectionToggle: (compositeId, field) => {
-      const sc = vesselState.scanComposites.find((c) => c.id === compositeId);
-      if (!sc) return;
-      if (field === 'scanDirection') {
-        handleUpdateScanComposite(compositeId, {
-          scanDirection: sc.scanDirection === 'cw' ? 'ccw' : 'cw',
-        });
-      } else {
-        handleUpdateScanComposite(compositeId, {
-          indexDirection: sc.indexDirection === 'forward' ? 'reverse' : 'forward',
-        });
-      }
-    },
-    onDomeGizmoDatumMoved: (compositeId, phiDeg, thetaDeg) => {
-      handleUpdateDomeScan(compositeId, { centerPhi: phiDeg, centerTheta: thetaDeg });
-    },
-    onDomeGizmoDirectionToggle: (compositeId, field) => {
-      const ds = vesselState.domeScanComposites?.find((d) => d.id === compositeId);
-      if (!ds) return;
-      if (field === 'scanDirection') {
-        handleUpdateDomeScan(compositeId, {
-          scanDirection: ds.scanDirection === 'cw' ? 'ccw' : 'cw',
-        });
-      } else {
-        handleUpdateDomeScan(compositeId, {
-          indexDirection: ds.indexDirection === 'outward' ? 'inward' : 'outward',
-        });
-      }
-    },
-    onDomeGizmoClicked: (compositeId) => {
-      dispatch({ type: 'SELECT_DOME_SCAN', id: compositeId });
-    },
-    onPipeSegmentSelected: (pipelineId, segmentIndex) => {
-      dispatch({ type: 'SELECT_PIPE_SEGMENT', pipelineId, segmentIndex });
-    },
-    onPipeConnectionPointClicked: (pipelineId) => {
-      // Show the pipe part popup — handled via state
-      setPipePartPopup((prev) => (prev ? null : { pipelineId, x: 0, y: 0 }));
-    },
-    onDeselect: () => dispatch({ type: 'DESELECT_ALL' }),
-    onNozzleMoved: (idx, pos, angle) => {
-      updateNozzle(idx, { pos: Math.round(pos), angle: Math.round(angle) });
-    },
-    onSaddleMoved: (idx, pos) => {
-      updateSaddle(idx, { pos: Math.round(pos) });
-    },
-    onTextureMoved: (id, pos, angle) => {
-      updateTexture(id, { pos: Math.round(pos), angle: Math.round(angle) });
-    },
-    onLugMoved: (idx, pos, angle) => {
-      updateLug(idx, { pos: Math.round(pos), angle: Math.round(angle) });
-    },
-    onDragEnd: () => {
-      // Gesture boundary: end the coalescing group so the next drag of the same
-      // object is a separate undo step. Per-move state is already committed.
-      dispatch({ type: 'HISTORY_BREAK' });
-    },
-    onAnnotationTableMoved: (position) => {
-      dispatch({
-        type: 'UPDATE_VESSEL_FN',
-        updater: (v) => ({ ...v, annotationTablePosition: position }),
-        history: { key: 'annotationTable:move', at: Date.now() },
-      });
-    },
-    onAnnotationTableResized: (size) => {
-      dispatch({
-        type: 'UPDATE_VESSEL_FN',
-        updater: (v) => ({ ...v, annotationTableSize: size }),
-        history: { key: 'annotationTable:resize', at: Date.now() },
-      });
-    },
-  };
+  // --- Interaction callbacks (from Three.js viewport) — T2-D / D3 ---
+  // Assembly moved verbatim into useViewportCallbacks; it composes the D1 entity
+  // callbacks + dispatch/setters threaded below. The hook returns a FRESH object
+  // per render (no memo) exactly as the inline literal did, so ThreeViewport's
+  // `callbacks` prop identity churns identically — re-render cadence is unchanged.
+  const vesselCallbacks = useViewportCallbacks({
+    vesselState,
+    dispatch,
+    updateAppendage,
+    addAnnotation,
+    updateAnnotation,
+    getNextAnnotationId,
+    addRuler,
+    getNextRulerId,
+    addCoverageRect,
+    updateCoverageRect,
+    getNextCoverageRectId,
+    updateInspectionImage,
+    updateWeld,
+    updateNozzle,
+    updateSaddle,
+    updateLug,
+    updateTexture,
+    handleUpdateScanComposite,
+    handleUpdateDomeScan,
+    cursorTooltipRef,
+    setDomeScanHoverInfo,
+    setPipePartPopup,
+  });
 
   // --- Drawing import apply handler ---
   const handleDrawingApply = useCallback(
@@ -1129,374 +890,20 @@ export default function VesselModeler() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [drawModeState, ui.inspectingAnnotationId, exitInspectionMode]);
 
-  // --- Nozzle library drag-and-drop onto 3D canvas ---
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    if (
-      e.dataTransfer.types.includes('application/x-nozzle-pipe') ||
-      e.dataTransfer.types.includes('application/x-lifting-lug') ||
-      e.dataTransfer.types.includes('application/x-weld') ||
-      e.dataTransfer.types.includes('application/x-pipe-part')
-    ) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
-    }
-  }, []);
-
-  const SCALE = 0.001; // Matches vessel-geometry scale
-
-  const handleNozzleDrop = useCallback(
-    (e: React.DragEvent) => {
-      const data = e.dataTransfer.getData('application/x-nozzle-pipe');
-      if (!data) return;
-      e.preventDefault();
-
-      const pipe = JSON.parse(data);
-      const cam = viewportRef.current?.getCamera();
-      const rendererEl = viewportRef.current?.getRenderer()?.domElement;
-      const sceneManager = viewportRef.current?.getSceneManager();
-      if (!cam || !rendererEl || !sceneManager) return;
-
-      const vesselGroup = sceneManager.getVesselGroup();
-      if (!vesselGroup) return;
-
-      // Raycast from drop position
-      const rect = rendererEl.getBoundingClientRect();
-      const mouse = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, cam);
-
-      // Find shell meshes to intersect
-      const shells: THREE.Object3D[] = [];
-      vesselGroup.traverse((child: THREE.Object3D) => {
-        if (child.userData.isShell) shells.push(child);
-      });
-      const intersects = raycaster.intersectObjects(shells);
-
-      if (intersects.length > 0) {
-        const point = intersects[0].point;
-        const isVertical = vesselState.orientation === 'vertical';
-
-        // Calculate position from intersection point
-        let newPos = isVertical
-          ? point.y / SCALE + vesselState.length / 2
-          : point.x / SCALE + vesselState.length / 2;
-        const headDepth = vesselState.id / (2 * vesselState.headRatio);
-        newPos = Math.max(-headDepth, Math.min(vesselState.length + headDepth, newPos));
-
-        // Calculate angle from intersection
-        const rad = isVertical ? Math.atan2(point.z, point.x) : Math.atan2(point.y, point.z);
-        let deg = (rad * 180) / Math.PI;
-        if (deg < 0) deg += 360;
-
-        // Find a unique name
-        const namePrefix = pipe.style === 'plain-pipe' ? 'P' : 'N';
-        let nozzleNum = vesselState.nozzles.length + 1;
-        let name = namePrefix + nozzleNum;
-        while (vesselState.nozzles.some((n) => n.name === name)) {
-          nozzleNum++;
-          name = namePrefix + nozzleNum;
-        }
-
-        const defaultProj = vesselState.id / 2 + 200;
-
-        addNozzle({
-          name,
-          pos: Math.round(newPos),
-          proj: defaultProj,
-          angle: Math.round(deg),
-          size: pipe.id,
-          flangeOD: pipe.flangeOD,
-          flangeThk: pipe.flangeThk,
-          pipeOD: pipe.od,
-          ...(pipe.style ? { style: pipe.style } : {}),
-        });
-      } else {
-        // Dropped on canvas but missed the vessel - add at center
-        const namePrefix = pipe.style === 'plain-pipe' ? 'P' : 'N';
-        let nozzleNum = vesselState.nozzles.length + 1;
-        let name = namePrefix + nozzleNum;
-        while (vesselState.nozzles.some((n) => n.name === name)) {
-          nozzleNum++;
-          name = namePrefix + nozzleNum;
-        }
-        addNozzle({
-          name,
-          pos: vesselState.length / 2,
-          proj: pipe.od * 2,
-          angle: 90,
-          size: pipe.id,
-          flangeOD: pipe.flangeOD,
-          flangeThk: pipe.flangeThk,
-          pipeOD: pipe.od,
-          ...(pipe.style ? { style: pipe.style } : {}),
-        });
-      }
-    },
-    [vesselState, addNozzle]
-  );
-
-  // --- Lifting lug drag-and-drop onto 3D canvas ---
-  const handleLugDrop = useCallback(
-    (e: React.DragEvent) => {
-      const data = e.dataTransfer.getData('application/x-lifting-lug');
-      if (!data) return;
-      e.preventDefault();
-
-      const lugData = JSON.parse(data);
-      const cam = viewportRef.current?.getCamera();
-      const rendererEl = viewportRef.current?.getRenderer()?.domElement;
-      const sceneManager = viewportRef.current?.getSceneManager();
-      if (!cam || !rendererEl || !sceneManager) return;
-
-      const vesselGroup = sceneManager.getVesselGroup();
-      if (!vesselGroup) return;
-
-      const rect = rendererEl.getBoundingClientRect();
-      const mouse = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, cam);
-
-      const shells: THREE.Object3D[] = [];
-      vesselGroup.traverse((child: THREE.Object3D) => {
-        if (child.userData.isShell) shells.push(child);
-      });
-      const intersects = raycaster.intersectObjects(shells);
-
-      let newPos: number;
-      let deg: number;
-
-      if (intersects.length > 0) {
-        const point = intersects[0].point;
-        const isVertical = vesselState.orientation === 'vertical';
-        newPos = isVertical
-          ? point.y / SCALE + vesselState.length / 2
-          : point.x / SCALE + vesselState.length / 2;
-        const headDepth = vesselState.id / (2 * vesselState.headRatio);
-        newPos = Math.max(-headDepth, Math.min(vesselState.length + headDepth, newPos));
-
-        const rad = isVertical ? Math.atan2(point.z, point.x) : Math.atan2(point.y, point.z);
-        deg = (rad * 180) / Math.PI;
-        if (deg < 0) deg += 360;
-      } else {
-        newPos = vesselState.length / 2;
-        deg = 90;
-      }
-
-      let lugNum = vesselState.liftingLugs.length + 1;
-      let name = 'L' + lugNum;
-      while (vesselState.liftingLugs.some((l) => l.name === name)) {
-        lugNum++;
-        name = 'L' + lugNum;
-      }
-
-      addLug({
-        name,
-        pos: Math.round(newPos),
-        angle: Math.round(deg),
-        style: lugData.style || 'padEye',
-        swl: lugData.label,
-      });
-    },
-    [vesselState, addLug]
-  );
-
-  // --- Weld drag-and-drop onto 3D canvas ---
-  const handleWeldDrop = useCallback(
-    (e: React.DragEvent) => {
-      const data = e.dataTransfer.getData('application/x-weld');
-      if (!data) return;
-      e.preventDefault();
-
-      const { type: wType } = JSON.parse(data) as { type: 'circumferential' | 'longitudinal' };
-      const cam = viewportRef.current?.getCamera();
-      const rendererEl = viewportRef.current?.getRenderer()?.domElement;
-      const sceneManager = viewportRef.current?.getSceneManager();
-      if (!cam || !rendererEl || !sceneManager) return;
-
-      const vesselGroup = sceneManager.getVesselGroup();
-      if (!vesselGroup) return;
-
-      const rect = rendererEl.getBoundingClientRect();
-      const mouse = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, cam);
-
-      const shells: THREE.Object3D[] = [];
-      vesselGroup.traverse((child: THREE.Object3D) => {
-        if (child.userData.isShell) shells.push(child);
-      });
-      const intersects = raycaster.intersectObjects(shells);
-
-      let newPos: number;
-      let deg: number;
-
-      if (intersects.length > 0) {
-        const point = intersects[0].point;
-        const isVertical = vesselState.orientation === 'vertical';
-        newPos = isVertical
-          ? point.y / SCALE + vesselState.length / 2
-          : point.x / SCALE + vesselState.length / 2;
-        const headDepth = vesselState.id / (2 * vesselState.headRatio);
-        newPos = Math.max(-headDepth, Math.min(vesselState.length + headDepth, newPos));
-
-        const rad = isVertical ? Math.atan2(point.z, point.x) : Math.atan2(point.y, point.z);
-        deg = (rad * 180) / Math.PI;
-        if (deg < 0) deg += 360;
-      } else {
-        newPos = vesselState.length / 2;
-        deg = 90;
-      }
-
-      let weldNum = vesselState.welds.length + 1;
-      let name = 'W' + weldNum;
-      while (vesselState.welds.some((w) => w.name === name)) {
-        weldNum++;
-        name = 'W' + weldNum;
-      }
-
-      if (wType === 'circumferential') {
-        addWeld({
-          name,
-          type: 'circumferential',
-          pos: Math.round(newPos),
-          color: '#888888',
-        });
-      } else {
-        const halfLen = vesselState.length * 0.25;
-        addWeld({
-          name,
-          type: 'longitudinal',
-          pos: Math.round(newPos - halfLen),
-          endPos: Math.round(newPos + halfLen),
-          angle: Math.round(deg),
-          color: '#888888',
-        });
-      }
-    },
-    [vesselState, addWeld]
-  );
-
-  // --- Pipe part drag-and-drop ---
-  const handlePipePartDrop = useCallback(
-    (e: React.DragEvent) => {
-      const data = e.dataTransfer.getData('application/x-pipe-part');
-      if (!data) return;
-      e.preventDefault();
-
-      const { type: segmentType } = JSON.parse(data) as { type: PipeSegmentType };
-
-      // Raycast the shell — same pattern as nozzle drop
-      const cam = viewportRef.current?.getCamera();
-      const rendererEl = viewportRef.current?.getRenderer()?.domElement;
-      const sceneManager = viewportRef.current?.getSceneManager();
-      if (!cam || !rendererEl || !sceneManager) return;
-
-      const vesselGroup = sceneManager.getVesselGroup();
-      if (!vesselGroup) return;
-
-      const rect = rendererEl.getBoundingClientRect();
-      const mouse = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, cam);
-
-      const shells: THREE.Object3D[] = [];
-      vesselGroup.traverse((child: THREE.Object3D) => {
-        if (child.userData.isShell) shells.push(child);
-      });
-      const intersects = raycaster.intersectObjects(shells);
-
-      // Compute pos/angle from hit point (mirrors nozzle drop logic)
-      const isVertical = vesselState.orientation === 'vertical';
-      const headDepth = vesselState.id / (2 * vesselState.headRatio);
-      let newPos: number;
-      let deg: number;
-
-      if (intersects.length > 0) {
-        const point = intersects[0].point;
-        newPos = isVertical
-          ? point.y / SCALE + vesselState.length / 2
-          : point.x / SCALE + vesselState.length / 2;
-        newPos = Math.max(-headDepth, Math.min(vesselState.length + headDepth, newPos));
-
-        const rad = isVertical ? Math.atan2(point.z, point.x) : Math.atan2(point.y, point.z);
-        deg = (rad * 180) / Math.PI;
-        if (deg < 0) deg += 360;
-      } else {
-        // Missed the vessel — place at center top
-        newPos = vesselState.length / 2;
-        deg = 90;
-      }
-
-      // Default pipe size for the stub nozzle
-      const defaultPipeSize = PIPE_SIZES[2]; // 4" NPS
-      const defaultProj = vesselState.id / 2 + 150;
-
-      // Find unique nozzle name
-      let nozzleNum = vesselState.nozzles.length + 1;
-      let name = 'P' + nozzleNum;
-      while (vesselState.nozzles.some((n) => n.name === name)) {
-        nozzleNum++;
-        name = 'P' + nozzleNum;
-      }
-
-      // Create plain-pipe nozzle + pipeline with first segment in one atomic update.
-      // Mint the nozzle id up front so the pipeline can anchor to it by id.
-      const nozzleId = nextNozzleId(vesselState.nozzles);
-      const nozzle: NozzleConfig = {
-        id: nozzleId,
-        name,
-        pos: Math.round(newPos),
-        proj: defaultProj,
-        angle: Math.round(deg),
-        size: defaultPipeSize.id,
-        pipeOD: defaultPipeSize.od,
-        style: 'plain-pipe',
-      };
-
-      const newPipeline: Pipeline = {
-        id: crypto.randomUUID(),
-        nozzleId,
-        pipeDiameter: defaultPipeSize.od,
-        segments: [createDefaultSegment(segmentType, defaultPipeSize.od)],
-      };
-
-      updateVessel((prev) => ({
-        ...prev,
-        nozzles: [...prev.nozzles, nozzle],
-        pipelines: [...prev.pipelines, newPipeline],
-        hasModel: true,
-      }));
-    },
-    [vesselState, updateVessel, createDefaultSegment]
-  );
-
-  // --- Combined drop handler ---
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      if (e.dataTransfer.types.includes('application/x-nozzle-pipe')) {
-        handleNozzleDrop(e);
-      } else if (e.dataTransfer.types.includes('application/x-lifting-lug')) {
-        handleLugDrop(e);
-      } else if (e.dataTransfer.types.includes('application/x-weld')) {
-        handleWeldDrop(e);
-      } else if (e.dataTransfer.types.includes('application/x-pipe-part')) {
-        handlePipePartDrop(e);
-      }
-    },
-    [handleNozzleDrop, handleLugDrop, handleWeldDrop, handlePipePartDrop]
-  );
+  // --- Viewport drag-and-drop (T2-D / D3) ---
+  // Nozzle-library / lug / weld / pipe-part drops moved verbatim into
+  // useViewportDnD; handlers keep their original useCallback dep arrays so
+  // identities churn identically. createDefaultSegment (usePipingActions) and
+  // viewportRef are threaded in for the pipe-part atomic add + raycasts.
+  const { handleDragOver, handleDrop } = useViewportDnD({
+    vesselState,
+    addNozzle,
+    addLug,
+    addWeld,
+    updateVessel,
+    createDefaultSegment,
+    viewportRef,
+  });
 
   // --- Hint text ---
   const getHintText = () => {
