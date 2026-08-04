@@ -37,68 +37,54 @@ import type { ThreeViewportHandle } from './ThreeViewport';
 import SidebarPanel, { type ModelMode } from './SidebarPanel';
 import StatusBar from './StatusBar';
 import {
-  DEFAULT_VESSEL_STATE,
   type VesselState,
   type NozzleConfig,
-  type AppendageConfig,
-  type SaddleConfig,
   type TextureConfig,
-  type LiftingLugConfig,
   type AnnotationShapeConfig,
-  type AnnotationShapeType,
   type CoverageRectConfig,
   type RulerConfig,
   type InspectionImageConfig,
   type MeasurementConfig,
   type VesselCallbacks,
-  type WeldConfig,
-  type ScanCompositeConfig,
-  type DomeScanConfig,
   type DomeScanHoverInfo,
   type ThicknessThresholds,
   type WallLossGroupConfig,
   type CoverageTargets,
-  type FreeOrigin,
   type Pipeline,
-  type PipeSegment,
   type PipeSegmentType,
-  findClosestPipeSize,
   PIPE_SIZES,
 } from './types';
 import type { ExtractionResult } from './engine/drawing-parser';
 import { loadTextureFromData, clearHeatmapCache } from './engine/texture-manager';
-import { clearDomeHeatmapCache, normalizeDomeScanComposite } from './engine/dome-scan-geometry';
+import { clearDomeHeatmapCache } from './engine/dome-scan-geometry';
 import { serializeVesselState, deserializeVesselState } from './engine/vessel-serialization';
 import {
-  createEmptyHistory,
-  recordCheckpoint,
-  undoStep,
-  redoStep,
-  breakGroup,
-  type VesselHistoryState,
-  type HistoryMeta,
-} from './engine/vessel-history';
-import { cascadeRemoveAppendage } from './engine/appendage-cascade';
+  vesselReducer,
+  INITIAL_STATE,
+  historyFor,
+  type HistoryControl,
+} from './engine/vessel-reducer';
+import { useNozzleActions } from './hooks/useNozzleActions';
+import { useAppendageActions } from './hooks/useAppendageActions';
+import { usePipingActions } from './hooks/usePipingActions';
+import { useAttachableActions } from './hooks/useAttachableActions';
+import { useOverlayActions } from './hooks/useOverlayActions';
+import { useAnnotationActions } from './hooks/useAnnotationActions';
+import { useScanActions } from './hooks/useScanActions';
 import { remapNozzleRefs } from './engine/nozzle-ref-remap';
-import { nextNozzleId, removeNozzleById, backfillNozzleIds } from './engine/nozzle-id';
+import { nextNozzleId, backfillNozzleIds } from './engine/nozzle-id';
 import { placeExtractedNozzle } from './engine/head-nozzle-placement';
 import { useTextureRehydration } from './useTextureRehydration';
 import { exportVesselGLB } from './engine/gltf-export';
-import { recomputeAllAnnotationStats } from './engine/annotation-stats';
 import {
   computeInspectionCameraTarget,
   animateCamera,
   cancelCameraAnimation,
 } from './engine/camera-animation';
 import { useScanCompositeList } from '../../hooks/queries/useScanComposites';
-import { getScanComposite, getScanCompositeData } from '../../services/scan-composite-service';
-import { toConfigStats } from './engine/composite-stats';
+import { getScanComposite } from '../../services/scan-composite-service';
 import { useLinkScanCompositeToProject } from '../../hooks/mutations/useScanCompositeMutations';
-import {
-  uploadAnnotationImage,
-  deleteAnnotationImage,
-  getAnnotationImageUrl,
-} from '../../services/annotation-attachment-service';
+import { getAnnotationImageUrl } from '../../services/annotation-attachment-service';
 import { useAuth } from '../../contexts/AuthContext';
 import { useVesselModel, useVesselModelByProjectVessel } from '../../hooks/queries/useVesselModels';
 import {
@@ -139,16 +125,6 @@ const DrawingImportModal = lazy(() => import('./DrawingImportModal'));
 const InspectionImageViewer = lazy(() => import('./InspectionImageViewer'));
 const FlattenedViewport = lazy(() => import('./FlattenedView/FlattenedViewport'));
 
-/** Guess the NDE source filename from a composite/CSV name.
- *  Strips common suffixes like _extracted, _cscan, .csv and adds *.nde wildcard pattern. */
-function guessNdeFilename(name: string): string | undefined {
-  if (!name) return undefined;
-  // Remove file extension and common suffixes
-  const cleaned = name.replace(/\.(csv|txt)$/i, '').replace(/[_-](extracted|cscan|export)$/i, '');
-  // Replace underscores with spaces for NDE filename matching
-  return cleaned.replace(/_/g, ' ').trim() || undefined;
-}
-
 /** Clamp vessel dimensions and nozzle positions to safe ranges to prevent division-by-zero and NaN geometry. */
 function validateVesselState(state: VesselState): VesselState {
   const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -174,422 +150,6 @@ function validateVesselState(state: VesselState): VesselState {
       pos: clamp(s.pos, 0, length),
     })),
   };
-}
-
-// ---------------------------------------------------------------------------
-// Consolidated state & reducer
-// ---------------------------------------------------------------------------
-
-interface SelectionState {
-  nozzleIndex: number;
-  appendageIndex: number;
-  saddleIndex: number;
-  textureId: number;
-  lugIndex: number;
-  annotationId: number;
-  rulerId: number;
-  weldIndex: number;
-  coverageRectId: number;
-  inspectionImageId: number;
-  scanCompositeId: string;
-  domeScanId: string;
-  pipelineId: string;
-  pipeSegmentIdx: number;
-}
-
-interface LocksState {
-  nozzles: boolean;
-  saddles: boolean;
-  textures: boolean;
-  lugs: boolean;
-  welds: boolean;
-  pipelines: boolean;
-}
-
-interface DrawModeState {
-  annotation: AnnotationShapeType | null;
-  coverage: boolean;
-  ruler: boolean;
-}
-
-interface PreviewsState {
-  annotation: AnnotationShapeConfig | null;
-  coverageRect: CoverageRectConfig | null;
-  ruler: RulerConfig | null;
-}
-
-interface UIState {
-  sidebarOpen: boolean;
-  showDrawingImport: boolean;
-  viewingInspectionImageId: number;
-  viewMode: '3d' | 'flattened';
-  labelsTidied: boolean;
-  showStatsCoverage: boolean;
-  showStatsWallLoss: boolean;
-  showStatsScanCoverage: boolean;
-  hoverData: { thickness: number | null; scanMm: number; indexMm: number } | null;
-  scanTooltipFollow: boolean;
-  /** Whether drag angle-snapping is enabled (nozzles + lifting lugs) */
-  snapEnabled: boolean;
-  /** Angle-snap increment in degrees */
-  snapDeg: number;
-  /** ID of annotation being inspected (null = not in inspection mode) */
-  inspectingAnnotationId: number | null;
-  /** Camera state saved before entering inspection mode */
-  savedCameraState: {
-    position: [number, number, number];
-    target: [number, number, number];
-  } | null;
-}
-
-interface VesselModelerState {
-  vessel: VesselState;
-  selection: SelectionState;
-  locks: LocksState;
-  drawMode: DrawModeState;
-  previews: PreviewsState;
-  ui: UIState;
-  /** Snapshot undo/redo over the document (vessel) slice; never serialized. */
-  history: VesselHistoryState;
-}
-
-const DESELECTED: SelectionState = {
-  nozzleIndex: -1,
-  appendageIndex: -1,
-  saddleIndex: -1,
-  textureId: -1,
-  lugIndex: -1,
-  annotationId: -1,
-  rulerId: -1,
-  weldIndex: -1,
-  coverageRectId: -1,
-  inspectionImageId: -1,
-  scanCompositeId: '',
-  domeScanId: '',
-  pipelineId: '',
-  pipeSegmentIdx: -1,
-};
-
-const INITIAL_STATE: VesselModelerState = {
-  vessel: { ...DEFAULT_VESSEL_STATE },
-  selection: { ...DESELECTED },
-  locks: {
-    nozzles: false,
-    saddles: false,
-    textures: false,
-    lugs: false,
-    welds: false,
-    pipelines: false,
-  },
-  drawMode: { annotation: null, coverage: false, ruler: false },
-  previews: { annotation: null, coverageRect: null, ruler: null },
-  ui: {
-    sidebarOpen: true,
-    showDrawingImport: false,
-    viewingInspectionImageId: -1,
-    hoverData: null,
-    scanTooltipFollow: false,
-    snapEnabled: false,
-    snapDeg: 5,
-    inspectingAnnotationId: null,
-    savedCameraState: null,
-    viewMode: '3d',
-    labelsTidied: false,
-    showStatsCoverage: false,
-    showStatsWallLoss: false,
-    showStatsScanCoverage: false,
-  },
-  history: createEmptyHistory(),
-};
-
-/** Optional per-action history control shared by the vessel-mutating actions. */
-type HistoryControl = HistoryMeta & { skip?: boolean };
-
-/**
- * Derive a coalescing history key from a domain wrapper's arguments so drag
- * storms and per-keystroke sidebar edits collapse into a single undo entry.
- * Shape: `<entity>:<id-or-index>:<sorted-changed-field-names>` (e.g.
- * `nozzle:3:angle,pos`). Date.now() is read here on the DISPATCHER side — never
- * in the reducer — keeping the reducer pure/StrictMode-safe.
- */
-function historyFor(entity: string, id: string | number, updates: object): HistoryMeta {
-  const fields = Object.keys(updates).sort().join(',');
-  return { key: `${entity}:${id}:${fields}`, at: Date.now() };
-}
-
-type VesselAction =
-  | { type: 'SET_VESSEL'; vessel: VesselState; history?: HistoryControl }
-  | {
-      type: 'UPDATE_VESSEL_FN';
-      updater: (prev: VesselState) => VesselState;
-      history?: HistoryControl;
-    }
-  | { type: 'SELECT_NOZZLE'; index: number }
-  | { type: 'SELECT_APPENDAGE'; index: number }
-  | { type: 'SELECT_SADDLE'; index: number }
-  | { type: 'SELECT_TEXTURE'; id: number }
-  | { type: 'SELECT_LUG'; index: number }
-  | { type: 'SELECT_ANNOTATION'; id: number }
-  | { type: 'SELECT_RULER'; id: number }
-  | { type: 'SELECT_WELD'; index: number }
-  | { type: 'SELECT_COVERAGE_RECT'; id: number }
-  | { type: 'SELECT_INSPECTION_IMAGE'; id: number }
-  | { type: 'SELECT_SCAN_COMPOSITE'; id: string }
-  | { type: 'SELECT_DOME_SCAN'; id: string }
-  | { type: 'SELECT_PIPE_SEGMENT'; pipelineId: string; segmentIndex: number }
-  | { type: 'DESELECT_ALL' }
-  | { type: 'TOGGLE_LOCK'; key: keyof LocksState }
-  | { type: 'SET_DRAW_MODE_ANNOTATION'; mode: AnnotationShapeType | null }
-  | { type: 'SET_DRAW_MODE_COVERAGE'; active: boolean }
-  | { type: 'SET_DRAW_MODE_RULER'; active: boolean }
-  | { type: 'SET_PREVIEW_ANNOTATION'; preview: AnnotationShapeConfig | null }
-  | { type: 'SET_PREVIEW_COVERAGE_RECT'; preview: CoverageRectConfig | null }
-  | { type: 'SET_PREVIEW_RULER'; preview: RulerConfig | null }
-  | { type: 'SET_SIDEBAR_OPEN'; open: boolean }
-  | { type: 'TOGGLE_SIDEBAR' }
-  | { type: 'SET_SHOW_DRAWING_IMPORT'; show: boolean }
-  | { type: 'SET_VIEWING_INSPECTION_IMAGE'; id: number }
-  | { type: 'SET_HOVER_DATA'; data: UIState['hoverData'] }
-  | { type: 'TOGGLE_SCAN_TOOLTIP_FOLLOW' }
-  | { type: 'TOGGLE_SNAP' }
-  | { type: 'SET_SNAP_DEG'; deg: number }
-  | { type: 'CANCEL_ALL_DRAW_MODES' }
-  | {
-      type: 'UPDATE_THICKNESS_THRESHOLDS';
-      thresholds: VesselState['thicknessThresholds'];
-      history?: HistoryControl;
-    }
-  | {
-      type: 'ENTER_INSPECTION_MODE';
-      annotationId: number;
-      cameraState: { position: [number, number, number]; target: [number, number, number] };
-    }
-  | { type: 'CYCLE_INSPECTION'; annotationId: number }
-  | { type: 'EXIT_INSPECTION_MODE' }
-  | { type: 'SET_VIEW_MODE'; mode: '3d' | 'flattened' }
-  | { type: 'TOGGLE_LABELS_TIDIED'; history?: HistoryControl }
-  | { type: 'TOGGLE_STATS_COVERAGE' }
-  | { type: 'TOGGLE_STATS_WALL_LOSS' }
-  | { type: 'TOGGLE_STATS_SCAN_COVERAGE' }
-  | { type: 'UNDO' }
-  | { type: 'REDO' }
-  | { type: 'HISTORY_BREAK' };
-
-/**
- * Apply an undo/redo restore: swap in the restored vessel + history, then reset
- * the transient slices that could dangle against a differently-shaped document —
- * selection (stale indices/ids), draw modes and previews (in-progress gestures),
- * and the inspection/hover/image UI. Locks, sidebar, snap, view mode and stats
- * toggles are intentionally preserved (they are not part of the document).
- */
-function withRestoredVessel(
-  state: VesselModelerState,
-  result: { history: VesselHistoryState; vessel: VesselState }
-): VesselModelerState {
-  return {
-    ...state,
-    vessel: result.vessel,
-    history: result.history,
-    selection: { ...DESELECTED },
-    drawMode: { annotation: null, coverage: false, ruler: false },
-    previews: { annotation: null, coverageRect: null, ruler: null },
-    ui: {
-      ...state.ui,
-      labelsTidied: result.vessel.labelsTidied ?? false,
-      inspectingAnnotationId: null,
-      savedCameraState: null,
-      viewingInspectionImageId: -1,
-      hoverData: null,
-    },
-  };
-}
-
-function vesselReducer(state: VesselModelerState, action: VesselAction): VesselModelerState {
-  switch (action.type) {
-    case 'SET_VESSEL':
-      // A load/import is a document boundary — undo never crosses it (v1).
-      return {
-        ...state,
-        vessel: action.vessel,
-        history: createEmptyHistory(),
-        ui: { ...state.ui, labelsTidied: action.vessel.labelsTidied ?? false },
-      };
-    case 'UPDATE_VESSEL_FN':
-      return {
-        ...state,
-        vessel: action.updater(state.vessel),
-        history: action.history?.skip
-          ? state.history
-          : recordCheckpoint(state.history, state.vessel, action.history),
-      };
-    case 'SELECT_NOZZLE':
-      return { ...state, selection: { ...DESELECTED, nozzleIndex: action.index } };
-    case 'SELECT_APPENDAGE':
-      return { ...state, selection: { ...DESELECTED, appendageIndex: action.index } };
-    case 'SELECT_SADDLE':
-      return { ...state, selection: { ...DESELECTED, saddleIndex: action.index } };
-    case 'SELECT_TEXTURE':
-      return { ...state, selection: { ...DESELECTED, textureId: action.id } };
-    case 'SELECT_LUG':
-      return { ...state, selection: { ...DESELECTED, lugIndex: action.index } };
-    case 'SELECT_ANNOTATION':
-      return { ...state, selection: { ...DESELECTED, annotationId: action.id } };
-    case 'SELECT_RULER':
-      return { ...state, selection: { ...DESELECTED, rulerId: action.id } };
-    case 'SELECT_WELD':
-      return { ...state, selection: { ...DESELECTED, weldIndex: action.index } };
-    case 'SELECT_COVERAGE_RECT':
-      return { ...state, selection: { ...DESELECTED, coverageRectId: action.id } };
-    case 'SELECT_INSPECTION_IMAGE':
-      return { ...state, selection: { ...DESELECTED, inspectionImageId: action.id } };
-    case 'SELECT_SCAN_COMPOSITE':
-      return { ...state, selection: { ...state.selection, scanCompositeId: action.id } };
-    case 'SELECT_DOME_SCAN':
-      return { ...state, selection: { ...state.selection, domeScanId: action.id } };
-    case 'SELECT_PIPE_SEGMENT':
-      return {
-        ...state,
-        selection: {
-          ...DESELECTED,
-          pipelineId: action.pipelineId,
-          pipeSegmentIdx: action.segmentIndex,
-        },
-      };
-    case 'DESELECT_ALL':
-      return { ...state, selection: { ...DESELECTED } };
-    case 'TOGGLE_LOCK':
-      return { ...state, locks: { ...state.locks, [action.key]: !state.locks[action.key] } };
-    case 'SET_DRAW_MODE_ANNOTATION':
-      return {
-        ...state,
-        drawMode: {
-          annotation: action.mode,
-          coverage: action.mode ? false : state.drawMode.coverage,
-          ruler: action.mode ? false : state.drawMode.ruler,
-        },
-      };
-    case 'SET_DRAW_MODE_COVERAGE':
-      return {
-        ...state,
-        drawMode: {
-          annotation: action.active ? null : state.drawMode.annotation,
-          coverage: action.active,
-          ruler: action.active ? false : state.drawMode.ruler,
-        },
-      };
-    case 'SET_DRAW_MODE_RULER':
-      return {
-        ...state,
-        drawMode: {
-          annotation: action.active ? null : state.drawMode.annotation,
-          coverage: action.active ? false : state.drawMode.coverage,
-          ruler: action.active,
-        },
-      };
-    case 'SET_PREVIEW_ANNOTATION':
-      return { ...state, previews: { ...state.previews, annotation: action.preview } };
-    case 'SET_PREVIEW_COVERAGE_RECT':
-      return { ...state, previews: { ...state.previews, coverageRect: action.preview } };
-    case 'SET_PREVIEW_RULER':
-      return { ...state, previews: { ...state.previews, ruler: action.preview } };
-    case 'SET_SIDEBAR_OPEN':
-      return { ...state, ui: { ...state.ui, sidebarOpen: action.open } };
-    case 'TOGGLE_SIDEBAR':
-      return { ...state, ui: { ...state.ui, sidebarOpen: !state.ui.sidebarOpen } };
-    case 'SET_SHOW_DRAWING_IMPORT':
-      return { ...state, ui: { ...state.ui, showDrawingImport: action.show } };
-    case 'SET_VIEWING_INSPECTION_IMAGE':
-      return { ...state, ui: { ...state.ui, viewingInspectionImageId: action.id } };
-    case 'SET_HOVER_DATA':
-      return { ...state, ui: { ...state.ui, hoverData: action.data } };
-    case 'TOGGLE_SCAN_TOOLTIP_FOLLOW':
-      return { ...state, ui: { ...state.ui, scanTooltipFollow: !state.ui.scanTooltipFollow } };
-    case 'TOGGLE_SNAP':
-      return { ...state, ui: { ...state.ui, snapEnabled: !state.ui.snapEnabled } };
-    case 'SET_SNAP_DEG':
-      return { ...state, ui: { ...state.ui, snapDeg: action.deg } };
-    case 'CANCEL_ALL_DRAW_MODES':
-      return {
-        ...state,
-        drawMode: { annotation: null, coverage: false, ruler: false },
-        previews: { annotation: null, coverageRect: null, ruler: null },
-      };
-    case 'UPDATE_THICKNESS_THRESHOLDS':
-      return {
-        ...state,
-        vessel: { ...state.vessel, thicknessThresholds: action.thresholds },
-        history: action.history?.skip
-          ? state.history
-          : recordCheckpoint(state.history, state.vessel, action.history),
-      };
-    case 'ENTER_INSPECTION_MODE':
-      return {
-        ...state,
-        selection: { ...state.selection, annotationId: action.annotationId },
-        ui: {
-          ...state.ui,
-          inspectingAnnotationId: action.annotationId,
-          savedCameraState: action.cameraState,
-        },
-      };
-    case 'CYCLE_INSPECTION':
-      return {
-        ...state,
-        selection: { ...state.selection, annotationId: action.annotationId },
-        ui: { ...state.ui, inspectingAnnotationId: action.annotationId },
-      };
-    case 'EXIT_INSPECTION_MODE':
-      return {
-        ...state,
-        ui: {
-          ...state.ui,
-          inspectingAnnotationId: null,
-          savedCameraState: null,
-        },
-      };
-    case 'SET_VIEW_MODE':
-      return { ...state, ui: { ...state.ui, viewMode: action.mode } };
-    case 'TOGGLE_LABELS_TIDIED': {
-      const newTidied = !state.ui.labelsTidied;
-      const newMode = newTidied ? ('table' as const) : ('flyout' as const);
-      return {
-        ...state,
-        vessel: {
-          ...state.vessel,
-          annotations: state.vessel.annotations.map((a) => ({ ...a, labelMode: newMode })),
-          labelsTidied: newTidied,
-        },
-        history: action.history?.skip
-          ? state.history
-          : recordCheckpoint(state.history, state.vessel, action.history),
-        ui: { ...state.ui, labelsTidied: newTidied },
-      };
-    }
-    case 'TOGGLE_STATS_COVERAGE':
-      return { ...state, ui: { ...state.ui, showStatsCoverage: !state.ui.showStatsCoverage } };
-    case 'TOGGLE_STATS_WALL_LOSS':
-      return { ...state, ui: { ...state.ui, showStatsWallLoss: !state.ui.showStatsWallLoss } };
-    case 'TOGGLE_STATS_SCAN_COVERAGE':
-      return {
-        ...state,
-        ui: { ...state.ui, showStatsScanCoverage: !state.ui.showStatsScanCoverage },
-      };
-    case 'UNDO': {
-      const result = undoStep(state.history, state.vessel);
-      return result ? withRestoredVessel(state, result) : state;
-    }
-    case 'REDO': {
-      const result = redoStep(state.history, state.vessel);
-      return result ? withRestoredVessel(state, result) : state;
-    }
-    case 'HISTORY_BREAK': {
-      // Gesture boundary (Phase 2 wires this to onDragEnd). No-op if already broken.
-      const history = breakGroup(state.history);
-      return history === state.history ? state : { ...state, history };
-    }
-    default:
-      return state;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -952,615 +512,114 @@ export default function VesselModeler() {
     [updateVessel]
   );
 
-  // --- Nozzle handlers ---
-  // The store owns nozzle ids: every UI-added nozzle is minted a stable, collision-
-  // free id here so no call site can invent (or forget) one.
-  const addNozzle = useCallback(
-    (nozzle: Omit<NozzleConfig, 'id'>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        nozzles: [...prev.nozzles, { ...nozzle, id: nextNozzleId(prev.nozzles) }],
-        hasModel: true,
-      }));
-    },
-    [updateVessel]
-  );
+  // --- Entity CRUD action hooks (T2-D / D1) ---
+  // Each hook owns the verbatim per-entity callbacks that previously lived inline
+  // here; they share `updateVessel`/`dispatch` and the id-counter / texture refs,
+  // threaded in explicitly (no context). Callback identities are preserved.
+  const { addNozzle, updateNozzle, removeNozzle } = useNozzleActions({ updateVessel, dispatch });
 
-  const updateNozzle = useCallback(
-    (index: number, updates: Partial<NozzleConfig>) => {
-      updateVessel(
-        (prev) => ({
-          ...prev,
-          nozzles: prev.nozzles.map((n, i) => (i === index ? { ...n, ...updates } : n)),
-        }),
-        historyFor('nozzle', index, updates)
-      );
-    },
-    [updateVessel]
-  );
+  const { addAppendage, updateAppendage, removeAppendage } = useAppendageActions({
+    updateVessel,
+    dispatch,
+  });
 
-  const removeNozzle = useCallback(
-    (index: number) => {
-      // Atomic, id-correct cascade: drop the nozzle + the pipelines anchored to it.
-      // Every OTHER pipeline keeps its stable nozzleId, so it stays attached to the
-      // SAME physical nozzle — no index-shifting (see engine/nozzle-id.ts).
-      updateVessel((prev) => {
-        const target = prev.nozzles[index];
-        if (!target) return prev;
-        return { ...prev, ...removeNozzleById(prev.nozzles, prev.pipelines, target.id) };
-      });
-      dispatch({ type: 'SELECT_NOZZLE', index: -1 });
-    },
-    [updateVessel]
-  );
+  const {
+    createDefaultSegment,
+    addPipeline,
+    addFreePipeline,
+    updateFreePipelineOrigin,
+    addSegment,
+    updateSegment,
+    removeSegment,
+    removePipeline,
+    selectPipeSegment,
+  } = usePipingActions({ updateVessel, dispatch, nozzles: vesselState.nozzles });
 
-  // --- Appendage handlers ---
-  const addAppendage = useCallback(
-    (appendage: AppendageConfig) => {
-      updateVessel((prev) => ({
-        ...prev,
-        appendages: [...prev.appendages, appendage],
-        hasModel: true,
-      }));
-    },
-    [updateVessel]
-  );
+  const {
+    addSaddle,
+    updateSaddle,
+    updateAllSaddleHeights,
+    updateAllSaddleDepths,
+    updateAllSaddleWearPlate,
+    removeSaddle,
+    addLug,
+    updateLug,
+    removeLug,
+    addWeld,
+    updateWeld,
+    removeWeld,
+  } = useAttachableActions({ updateVessel, dispatch });
 
-  const updateAppendage = useCallback(
-    (index: number, updates: Partial<AppendageConfig>) => {
-      updateVessel(
-        (prev) => ({
-          ...prev,
-          appendages: prev.appendages.map((a, i) => (i === index ? { ...a, ...updates } : a)),
-        }),
-        historyFor('appendage', index, updates)
-      );
-    },
-    [updateVessel]
-  );
+  const {
+    addTexture,
+    updateTexture,
+    removeTexture,
+    getNextTextureId,
+    addCoverageRect,
+    updateCoverageRect,
+    removeCoverageRect,
+    getNextCoverageRectId,
+    addRuler,
+    removeRuler,
+    updateRuler,
+    getNextRulerId,
+    addInspectionImage,
+    updateInspectionImage,
+    removeInspectionImage,
+    toggleInspectionImageVisible,
+    toggleInspectionImageLocked,
+    getNextInspectionImageId,
+  } = useOverlayActions({
+    updateVessel,
+    dispatch,
+    textureObjectsRef,
+    setTextureObjectsVersion,
+    nextTextureIdRef,
+    nextCoverageRectIdRef,
+    nextRulerIdRef,
+    nextInspectionImageIdRef,
+    viewingInspectionImageId: ui.viewingInspectionImageId,
+  });
 
-  const removeAppendage = useCallback(
-    (index: number) => {
-      // Cascade: deleting an appendage removes its own nozzles (bodyId match) and
-      // their pipelines via the shared removeNozzle index-shift semantics. Main-
-      // shell nozzles/pipelines are left untouched. (See engine/appendage-cascade.)
-      updateVessel((prev) => ({ ...prev, ...cascadeRemoveAppendage(prev, index) }));
-      dispatch({ type: 'SELECT_APPENDAGE', index: -1 });
-    },
-    [updateVessel]
-  );
+  const {
+    addAnnotation,
+    updateAnnotation,
+    removeAnnotation,
+    captureViewport,
+    uploadImage,
+    deleteAttachment,
+    saveScanImages,
+    clearScanImages,
+    getNextAnnotationId,
+    toggleAnnotationVisible,
+    toggleAnnotationLocked,
+  } = useAnnotationActions({
+    updateVessel,
+    dispatch,
+    vesselState,
+    organizationId,
+    vesselModelId,
+    viewportRef,
+    inspectingAnnotationId: ui.inspectingAnnotationId,
+    nextAnnotationIdRef,
+  });
 
-  // --- Pipeline handlers ---
-  const createDefaultSegment = useCallback(
-    (type: PipeSegmentType, pipeDiameter: number): PipeSegment => {
-      const base: PipeSegment = { id: crypto.randomUUID(), type, rotation: 0 };
-      switch (type) {
-        case 'straight':
-          return { ...base, length: pipeDiameter * 3 };
-        case 'elbow':
-          return { ...base, angle: 90, bendRadius: pipeDiameter * 1.5 };
-        case 'reducer':
-          return { ...base, length: pipeDiameter * 2, endDiameter: pipeDiameter * 0.75 };
-        case 'flange':
-          return { ...base, length: 25 };
-        case 'cap':
-          return { ...base, style: 'flat' };
-        default:
-          return { ...base, length: pipeDiameter * 3 };
-      }
-    },
-    []
-  );
-
-  const addPipeline = useCallback(
-    // `nozzleIndex` is the array index of the clicked nozzle in the sidebar list;
-    // it is resolved to the nozzle's stable id at this boundary and never stored.
-    (nozzleIndex: number, segmentType: PipeSegmentType) => {
-      const nozzle = vesselState.nozzles[nozzleIndex];
-      if (!nozzle) return;
-      const pipe = findClosestPipeSize(nozzle.size);
-      const diameter = pipe.od;
-      const newPipeline: Pipeline = {
-        id: crypto.randomUUID(),
-        nozzleId: nozzle.id,
-        pipeDiameter: diameter,
-        segments: [createDefaultSegment(segmentType, diameter)],
-      };
-      updateVessel((prev) => ({ ...prev, pipelines: [...prev.pipelines, newPipeline] }));
-    },
-    [vesselState.nozzles, updateVessel, createDefaultSegment]
-  );
-
-  const addFreePipeline = useCallback(
-    (pipeDiameter: number, segmentType: PipeSegmentType) => {
-      const newPipeline: Pipeline = {
-        id: crypto.randomUUID(),
-        pipeDiameter,
-        segments: [createDefaultSegment(segmentType, pipeDiameter)],
-        freeOrigin: { position: [0, 0, 0], direction: [0, 1, 0] },
-      };
-      updateVessel((prev) => ({ ...prev, pipelines: [...prev.pipelines, newPipeline] }));
-    },
-    [updateVessel, createDefaultSegment]
-  );
-
-  const updateFreePipelineOrigin = useCallback(
-    (pipelineId: string, updates: Partial<FreeOrigin>) => {
-      updateVessel(
-        (prev) => ({
-          ...prev,
-          pipelines: prev.pipelines.map((p) => {
-            if (p.id !== pipelineId || p.nozzleId) return p;
-            const current = p.freeOrigin ?? {
-              position: [0, 0, 0] as [number, number, number],
-              direction: [0, 1, 0] as [number, number, number],
-            };
-            return { ...p, freeOrigin: { ...current, ...updates } };
-          }),
-        }),
-        historyFor('freePipelineOrigin', pipelineId, updates)
-      );
-    },
-    [updateVessel]
-  );
-
-  const addSegment = useCallback(
-    (pipelineId: string, segmentType: PipeSegmentType) => {
-      updateVessel((prev) => ({
-        ...prev,
-        pipelines: prev.pipelines.map((p) => {
-          if (p.id !== pipelineId) return p;
-          // Compute effective diameter (may have changed via reducer segments)
-          let currentDiameter = p.pipeDiameter;
-          for (const seg of p.segments) {
-            if (seg.type === 'reducer' && seg.endDiameter) {
-              currentDiameter = seg.endDiameter;
-            }
-          }
-          return {
-            ...p,
-            segments: [...p.segments, createDefaultSegment(segmentType, currentDiameter)],
-          };
-        }),
-      }));
-    },
-    [updateVessel, createDefaultSegment]
-  );
-
-  const updateSegment = useCallback(
-    (pipelineId: string, segmentId: string, updates: Partial<PipeSegment>) => {
-      updateVessel(
-        (prev) => ({
-          ...prev,
-          pipelines: prev.pipelines.map((p) =>
-            p.id === pipelineId
-              ? {
-                  ...p,
-                  segments: p.segments.map((s) => (s.id === segmentId ? { ...s, ...updates } : s)),
-                }
-              : p
-          ),
-        }),
-        historyFor('pipeSegment', `${pipelineId}:${segmentId}`, updates)
-      );
-    },
-    [updateVessel]
-  );
-
-  const removeSegment = useCallback(
-    (pipelineId: string, segmentIndex: number) => {
-      updateVessel((prev) => {
-        const updated = prev.pipelines
-          .map((p) => {
-            if (p.id !== pipelineId) return p;
-            return { ...p, segments: p.segments.slice(0, segmentIndex) };
-          })
-          .filter((p) => p.segments.length > 0);
-        return { ...prev, pipelines: updated };
-      });
-      dispatch({ type: 'SELECT_PIPE_SEGMENT', pipelineId: '', segmentIndex: -1 });
-    },
-    [updateVessel]
-  );
-
-  const removePipeline = useCallback(
-    (pipelineId: string) => {
-      updateVessel((prev) => ({
-        ...prev,
-        pipelines: prev.pipelines.filter((p) => p.id !== pipelineId),
-      }));
-      dispatch({ type: 'SELECT_PIPE_SEGMENT', pipelineId: '', segmentIndex: -1 });
-    },
-    [updateVessel]
-  );
-
-  const selectPipeSegment = useCallback((pipelineId: string, segmentIndex: number) => {
-    dispatch({ type: 'SELECT_PIPE_SEGMENT', pipelineId, segmentIndex });
-  }, []);
-
-  // --- Saddle handlers ---
-  const addSaddle = useCallback(
-    (saddle: SaddleConfig) => {
-      updateVessel((prev) => ({ ...prev, saddles: [...prev.saddles, saddle] }));
-    },
-    [updateVessel]
-  );
-
-  const updateSaddle = useCallback(
-    (index: number, updates: Partial<SaddleConfig>) => {
-      updateVessel(
-        (prev) => ({
-          ...prev,
-          saddles: prev.saddles.map((s, i) => (i === index ? { ...s, ...updates } : s)),
-        }),
-        historyFor('saddle', index, updates)
-      );
-    },
-    [updateVessel]
-  );
-
-  const updateAllSaddleHeights = useCallback(
-    (height: number) => {
-      updateVessel(
-        (prev) => ({ ...prev, saddles: prev.saddles.map((s) => ({ ...s, height })) }),
-        historyFor('allSaddle', '', { height })
-      );
-    },
-    [updateVessel]
-  );
-
-  const updateAllSaddleDepths = useCallback(
-    (depth: number) => {
-      updateVessel(
-        (prev) => ({ ...prev, saddles: prev.saddles.map((s) => ({ ...s, depth })) }),
-        historyFor('allSaddle', '', { depth })
-      );
-    },
-    [updateVessel]
-  );
-
-  // Wear plate is configured universally across all supports, not per-saddle.
-  const updateAllSaddleWearPlate = useCallback(
-    (updates: Partial<SaddleConfig>) => {
-      updateVessel(
-        (prev) => ({
-          ...prev,
-          saddles: prev.saddles.map((s) => ({ ...s, ...updates })),
-        }),
-        historyFor('allSaddleWearPlate', '', updates)
-      );
-    },
-    [updateVessel]
-  );
-
-  const removeSaddle = useCallback(
-    (index: number) => {
-      updateVessel((prev) => ({ ...prev, saddles: prev.saddles.filter((_, i) => i !== index) }));
-      dispatch({ type: 'SELECT_SADDLE', index: -1 });
-    },
-    [updateVessel]
-  );
-
-  // --- Lifting lug handlers ---
-  const addLug = useCallback(
-    (lug: LiftingLugConfig) => {
-      updateVessel((prev) => ({
-        ...prev,
-        liftingLugs: [...prev.liftingLugs, lug],
-        hasModel: true,
-      }));
-    },
-    [updateVessel]
-  );
-
-  const updateLug = useCallback(
-    (index: number, updates: Partial<LiftingLugConfig>) => {
-      updateVessel(
-        (prev) => ({
-          ...prev,
-          liftingLugs: prev.liftingLugs.map((l, i) => (i === index ? { ...l, ...updates } : l)),
-        }),
-        historyFor('lug', index, updates)
-      );
-    },
-    [updateVessel]
-  );
-
-  const removeLug = useCallback(
-    (index: number) => {
-      updateVessel((prev) => ({
-        ...prev,
-        liftingLugs: prev.liftingLugs.filter((_, i) => i !== index),
-      }));
-      dispatch({ type: 'SELECT_LUG', index: -1 });
-    },
-    [updateVessel]
-  );
-
-  // --- Weld handlers ---
-  const addWeld = useCallback(
-    (weld: WeldConfig) => {
-      updateVessel((prev) => ({ ...prev, welds: [...prev.welds, weld], hasModel: true }));
-    },
-    [updateVessel]
-  );
-
-  const updateWeld = useCallback(
-    (index: number, updates: Partial<WeldConfig>) => {
-      updateVessel(
-        (prev) => ({
-          ...prev,
-          welds: prev.welds.map((w, i) => (i === index ? { ...w, ...updates } : w)),
-        }),
-        historyFor('weld', index, updates)
-      );
-    },
-    [updateVessel]
-  );
-
-  const removeWeld = useCallback(
-    (index: number) => {
-      updateVessel((prev) => ({ ...prev, welds: prev.welds.filter((_, i) => i !== index) }));
-      dispatch({ type: 'SELECT_WELD', index: -1 });
-    },
-    [updateVessel]
-  );
-
-  // --- Texture handlers ---
-  const addTexture = useCallback(
-    (texture: TextureConfig, threeTexture: THREE.Texture) => {
-      textureObjectsRef.current[Number(texture.id)] = threeTexture;
-      setTextureObjectsVersion((v) => v + 1);
-      updateVessel((prev) => ({ ...prev, textures: [...prev.textures, texture] }));
-    },
-    [updateVessel]
-  );
-
-  const updateTexture = useCallback(
-    (id: number, updates: Partial<TextureConfig>) => {
-      updateVessel(
-        (prev) => ({
-          ...prev,
-          textures: prev.textures.map((t) => (Number(t.id) === id ? { ...t, ...updates } : t)),
-        }),
-        historyFor('texture', id, updates)
-      );
-    },
-    [updateVessel]
-  );
-
-  const removeTexture = useCallback(
-    (id: number) => {
-      const tex = textureObjectsRef.current[id];
-      if (tex) {
-        tex.dispose();
-        delete textureObjectsRef.current[id];
-        setTextureObjectsVersion((v) => v + 1);
-      }
-      updateVessel((prev) => ({
-        ...prev,
-        textures: prev.textures.filter((t) => Number(t.id) !== id),
-      }));
-      dispatch({ type: 'SELECT_TEXTURE', id: -1 });
-    },
-    [updateVessel]
-  );
-
-  const getNextTextureId = useCallback(() => {
-    return nextTextureIdRef.current++;
-  }, []);
-
-  // --- Annotation handlers ---
-  const addAnnotation = useCallback(
-    (annotation: AnnotationShapeConfig) => {
-      updateVessel((prev) => ({ ...prev, annotations: [...prev.annotations, annotation] }));
-    },
-    [updateVessel]
-  );
-
-  const updateAnnotation = useCallback(
-    (id: number, updates: Partial<AnnotationShapeConfig>) => {
-      updateVessel(
-        (prev) => ({
-          ...prev,
-          annotations: prev.annotations.map((a) => (a.id === id ? { ...a, ...updates } : a)),
-        }),
-        historyFor('annotation', id, updates)
-      );
-    },
-    [updateVessel]
-  );
-
-  const removeAnnotation = useCallback(
-    async (id: number) => {
-      // Clean up any Supabase Storage attachments before removing the annotation
-      const ann = vesselState.annotations.find((a) => a.id === id);
-      if (ann?.attachments?.length) {
-        for (const att of ann.attachments) {
-          await deleteAnnotationImage(att.storagePath).catch(() => {});
-        }
-      }
-      updateVessel((prev) => ({
-        ...prev,
-        annotations: prev.annotations.filter((a) => a.id !== id),
-      }));
-      dispatch({ type: 'SELECT_ANNOTATION', id: -1 });
-    },
-    [updateVessel, vesselState]
-  );
-
-  // --- Annotation attachment handlers ---
-  const captureViewport = useCallback(async () => {
-    const renderer = viewportRef.current?.getRenderer();
-    const canvas = renderer?.domElement;
-    if (!canvas || ui.inspectingAnnotationId == null) return;
-
-    // Force a render so the canvas has current content
-    const scene = viewportRef.current?.getScene();
-    const camera = viewportRef.current?.getCamera();
-    if (scene && camera) renderer!.render(scene, camera);
-
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-    if (!blob) return;
-
-    const { storagePath, id } = await uploadAnnotationImage(
-      organizationId,
-      vesselModelId,
-      ui.inspectingAnnotationId,
-      blob,
-      'viewport-capture'
-    );
-    const attachment = {
-      id,
-      type: 'viewport-capture' as const,
-      storagePath,
-      capturedAt: new Date().toISOString(),
-    };
-    const ann = vesselState.annotations.find((a) => a.id === ui.inspectingAnnotationId);
-    updateAnnotation(ui.inspectingAnnotationId, {
-      attachments: [...(ann?.attachments ?? []), attachment],
-    });
-  }, [ui.inspectingAnnotationId, vesselState, organizationId, vesselModelId, updateAnnotation]);
-
-  const uploadImage = useCallback(
-    async (file: File) => {
-      if (ui.inspectingAnnotationId == null) return;
-      const { storagePath, id } = await uploadAnnotationImage(
-        organizationId,
-        vesselModelId,
-        ui.inspectingAnnotationId,
-        file,
-        'upload'
-      );
-      const attachment = {
-        id,
-        type: 'upload' as const,
-        storagePath,
-        capturedAt: new Date().toISOString(),
-      };
-      const ann = vesselState.annotations.find((a) => a.id === ui.inspectingAnnotationId);
-      updateAnnotation(ui.inspectingAnnotationId, {
-        attachments: [...(ann?.attachments ?? []), attachment],
-      });
-    },
-    [ui.inspectingAnnotationId, vesselState, organizationId, vesselModelId, updateAnnotation]
-  );
-
-  const deleteAttachment = useCallback(
-    async (attachmentId: string) => {
-      if (ui.inspectingAnnotationId == null) return;
-      const ann = vesselState.annotations.find((a) => a.id === ui.inspectingAnnotationId);
-      const attachment = ann?.attachments?.find((a) => a.id === attachmentId);
-      if (attachment) await deleteAnnotationImage(attachment.storagePath);
-      updateAnnotation(ui.inspectingAnnotationId, {
-        attachments: (ann?.attachments ?? []).filter((a) => a.id !== attachmentId),
-      });
-    },
-    [ui.inspectingAnnotationId, vesselState, updateAnnotation]
-  );
-
-  /** Save companion B/D/A-scan data-URL images as scan-capture attachments */
-  const saveScanImages = useCallback(
-    async (images: { cscan?: string; bscan?: string; dscan?: string; ascan?: string }) => {
-      if (ui.inspectingAnnotationId == null) return;
-      const ann = vesselState.annotations.find((a) => a.id === ui.inspectingAnnotationId);
-      if (!ann) return;
-
-      // Remove previous scan-capture attachments (replace with new set)
-      const oldScans = (ann.attachments ?? []).filter((a) => a.type === 'scan-capture');
-      for (const old of oldScans) {
-        await deleteAnnotationImage(old.storagePath).catch(() => {});
-      }
-
-      const keptAttachments = (ann.attachments ?? []).filter((a) => a.type !== 'scan-capture');
-      const newAttachments = [...keptAttachments];
-
-      for (const [scanType, dataUrl] of Object.entries(images) as [string, string | undefined][]) {
-        if (!dataUrl) continue;
-        // Convert data URL to Blob without fetch() to avoid CSP connect-src restrictions
-        const [header, b64] = dataUrl.split(',');
-        const mime = header.match(/:(.*?);/)?.[1] ?? 'image/png';
-        const binary = atob(b64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        const blob = new Blob([bytes], { type: mime });
-        const { storagePath, id } = await uploadAnnotationImage(
-          organizationId,
-          vesselModelId,
-          ui.inspectingAnnotationId,
-          blob,
-          'scan-capture'
-        );
-        newAttachments.push({
-          id,
-          type: 'scan-capture' as const,
-          storagePath,
-          capturedAt: new Date().toISOString(),
-          scanType: scanType as 'cscan' | 'bscan' | 'dscan' | 'ascan',
-        });
-      }
-
-      updateAnnotation(ui.inspectingAnnotationId, { attachments: newAttachments });
-    },
-    [ui.inspectingAnnotationId, vesselState, organizationId, vesselModelId, updateAnnotation]
-  );
-
-  /** Clear all scan-capture attachments from the current annotation */
-  const clearScanImages = useCallback(async () => {
-    if (ui.inspectingAnnotationId == null) return;
-    const ann = vesselState.annotations.find((a) => a.id === ui.inspectingAnnotationId);
-    if (!ann) return;
-
-    const scanAttachments = (ann.attachments ?? []).filter((a) => a.type === 'scan-capture');
-    for (const att of scanAttachments) {
-      await deleteAnnotationImage(att.storagePath).catch(() => {});
-    }
-
-    updateAnnotation(ui.inspectingAnnotationId, {
-      attachments: (ann.attachments ?? []).filter((a) => a.type !== 'scan-capture'),
-    });
-  }, [ui.inspectingAnnotationId, vesselState, updateAnnotation]);
-
-  // --- Annotation stats recomputation ---
-  const recomputeAnnotationStats = useCallback(() => {
-    const updatedAnnotations = recomputeAllAnnotationStats(vesselState);
-    const changed = updatedAnnotations.some((ann, i) => {
-      const old = vesselState.annotations[i];
-      return ann.thicknessStats !== old.thicknessStats || ann.severityLevel !== old.severityLevel;
-    });
-    if (changed) {
-      updateVessel((prev) => ({ ...prev, annotations: updatedAnnotations }));
-    }
-  }, [vesselState, updateVessel]);
-
-  // Recompute stats when annotation geometry, composite orientation, or thresholds change.
-  // Serialize only geometry-affecting fields to avoid infinite loops (since recompute updates annotations).
-  const annotationsJson = JSON.stringify(
-    vesselState.annotations.map((a) => ({
-      id: a.id,
-      pos: a.pos,
-      angle: a.angle,
-      width: a.width,
-      height: a.height,
-      type: a.type,
-    }))
-  );
-  const compositesJson = JSON.stringify(
-    vesselState.scanComposites.map((c) => ({
-      id: c.id,
-      orientationConfirmed: c.orientationConfirmed,
-      indexStartMm: c.indexStartMm,
-      datumAngleDeg: c.datumAngleDeg,
-      scanDirection: c.scanDirection,
-      indexDirection: c.indexDirection,
-    }))
-  );
-  const thresholdsJson = JSON.stringify(vesselState.thicknessThresholds);
-
-  useEffect(() => {
-    recomputeAnnotationStats();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [annotationsJson, compositesJson, thresholdsJson]);
+  const {
+    handleImportComposite,
+    handleRemoveScanComposite,
+    handleUpdateScanComposite,
+    handleSelectDomeScan,
+    handleUpdateDomeScan,
+    handleRemoveDomeScan,
+    handleImportDomeComposite,
+  } = useScanActions({
+    updateVessel,
+    dispatch,
+    scanCompositeId: selection.scanCompositeId,
+    domeScanId: selection.domeScanId,
+    effectiveProjectVesselId,
+    linkCompositeToProject,
+  });
 
   const updateMeasurementConfig = useCallback(
     (updates: Partial<MeasurementConfig>) => {
@@ -1603,407 +662,6 @@ export default function VesselModeler() {
     [updateVessel]
   );
 
-  const getNextAnnotationId = useCallback(() => {
-    return nextAnnotationIdRef.current++;
-  }, []);
-
-  // --- Coverage rect handlers ---
-  const addCoverageRect = useCallback(
-    (rect: CoverageRectConfig) => {
-      updateVessel((prev) => ({ ...prev, coverageRects: [...prev.coverageRects, rect] }));
-    },
-    [updateVessel]
-  );
-
-  const updateCoverageRect = useCallback(
-    (id: number, updates: Partial<CoverageRectConfig>) => {
-      updateVessel(
-        (prev) => ({
-          ...prev,
-          coverageRects: prev.coverageRects.map((r) => (r.id === id ? { ...r, ...updates } : r)),
-        }),
-        historyFor('coverageRect', id, updates)
-      );
-    },
-    [updateVessel]
-  );
-
-  const removeCoverageRect = useCallback(
-    (id: number) => {
-      updateVessel((prev) => ({
-        ...prev,
-        coverageRects: prev.coverageRects.filter((r) => r.id !== id),
-      }));
-      dispatch({ type: 'SELECT_COVERAGE_RECT', id: -1 });
-    },
-    [updateVessel]
-  );
-
-  const getNextCoverageRectId = useCallback(() => {
-    return nextCoverageRectIdRef.current++;
-  }, []);
-
-  // --- Ruler handlers ---
-  const addRuler = useCallback(
-    (ruler: RulerConfig) => {
-      updateVessel((prev) => ({ ...prev, rulers: [...prev.rulers, ruler] }));
-    },
-    [updateVessel]
-  );
-
-  const removeRuler = useCallback(
-    (id: number) => {
-      updateVessel((prev) => ({ ...prev, rulers: prev.rulers.filter((r) => r.id !== id) }));
-      // Only deselect if this ruler was selected
-      dispatch({ type: 'SELECT_RULER', id: -1 });
-    },
-    [updateVessel]
-  );
-
-  const updateRuler = useCallback(
-    (id: number, updates: Partial<RulerConfig>) => {
-      updateVessel(
-        (prev) => ({
-          ...prev,
-          rulers: prev.rulers.map((r) => (r.id === id ? { ...r, ...updates } : r)),
-        }),
-        historyFor('ruler', id, updates)
-      );
-    },
-    [updateVessel]
-  );
-
-  const getNextRulerId = useCallback(() => {
-    return nextRulerIdRef.current++;
-  }, []);
-
-  // --- Inspection image handlers ---
-  const addInspectionImage = useCallback(
-    (img: InspectionImageConfig) => {
-      updateVessel((prev) => ({ ...prev, inspectionImages: [...prev.inspectionImages, img] }));
-    },
-    [updateVessel]
-  );
-
-  const updateInspectionImage = useCallback(
-    (id: number, updates: Partial<InspectionImageConfig>) => {
-      updateVessel(
-        (prev) => ({
-          ...prev,
-          inspectionImages: prev.inspectionImages.map((i) =>
-            i.id === id ? { ...i, ...updates } : i
-          ),
-        }),
-        historyFor('inspectionImage', id, updates)
-      );
-    },
-    [updateVessel]
-  );
-
-  const removeInspectionImage = useCallback(
-    (id: number) => {
-      updateVessel((prev) => ({
-        ...prev,
-        inspectionImages: prev.inspectionImages.filter((i) => i.id !== id),
-      }));
-      dispatch({ type: 'SELECT_INSPECTION_IMAGE', id: -1 });
-      if (ui.viewingInspectionImageId === id)
-        dispatch({ type: 'SET_VIEWING_INSPECTION_IMAGE', id: -1 });
-    },
-    [updateVessel, ui.viewingInspectionImageId]
-  );
-
-  const toggleInspectionImageVisible = useCallback(
-    (id: number) => {
-      updateVessel((prev) => ({
-        ...prev,
-        inspectionImages: prev.inspectionImages.map((i) =>
-          i.id === id ? { ...i, visible: i.visible === false ? true : false } : i
-        ),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const toggleInspectionImageLocked = useCallback(
-    (id: number) => {
-      updateVessel((prev) => ({
-        ...prev,
-        inspectionImages: prev.inspectionImages.map((i) =>
-          i.id === id ? { ...i, locked: !i.locked } : i
-        ),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const toggleAnnotationVisible = useCallback(
-    (id: number) => {
-      updateVessel((prev) => ({
-        ...prev,
-        annotations: prev.annotations.map((a) =>
-          a.id === id ? { ...a, visible: a.visible === false ? true : false } : a
-        ),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const toggleAnnotationLocked = useCallback(
-    (id: number) => {
-      updateVessel((prev) => ({
-        ...prev,
-        annotations: prev.annotations.map((a) => (a.id === id ? { ...a, locked: !a.locked } : a)),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const getNextInspectionImageId = useCallback(() => {
-    return nextInspectionImageIdRef.current++;
-  }, []);
-
-  // --- Scan composite handlers ---
-  const handleImportComposite = useCallback(
-    async (
-      compositeId: string,
-      placement: { scanDirection: 'cw' | 'ccw'; indexDirection: 'forward' | 'reverse' }
-    ) => {
-      try {
-        // Use binary-returning function for new companion-generated composites.
-        // Falls back to legacy format for older composites.
-        let name: string;
-        let cloudId: string;
-        let data: (number | null)[][];
-        let xAxis: number[];
-        let yAxis: number[];
-        let stats: ScanCompositeConfig['stats'];
-        let sourceFiles: ScanCompositeConfig['sourceFiles'];
-
-        try {
-          const cd = await getScanCompositeData(compositeId);
-          cloudId = compositeId;
-          name = `Composite ${compositeId.slice(0, 8)}`;
-          // Convert Float32Array → (number | null)[][] for modeller compatibility
-          xAxis = Array.from(cd.xAxis);
-          yAxis = Array.from(cd.yAxis);
-          data = [];
-          for (let row = 0; row < cd.height; row++) {
-            const rowData: (number | null)[] = [];
-            for (let col = 0; col < cd.width; col++) {
-              const val = cd.matrix[row * cd.width + col];
-              rowData.push(isNaN(val) ? null : val);
-            }
-            data.push(rowData);
-          }
-          // Preserve validArea/totalArea (mm²) — the Scan Coverage
-          // "Achieved" column is computed from stats.validArea.
-          stats = toConfigStats(cd.stats);
-          sourceFiles = cd.sourceFiles;
-        } catch {
-          // Fallback to legacy format
-          const composite = await getScanComposite(compositeId);
-          cloudId = composite.id;
-          name = composite.name;
-          data = composite.thickness_data;
-          xAxis = composite.x_axis;
-          yAxis = composite.y_axis;
-          stats = composite.stats || { min: 0, max: 0, mean: 0, median: 0, stdDev: 0 };
-          sourceFiles = composite.source_files ?? undefined;
-        }
-
-        const newConfig: ScanCompositeConfig = {
-          id: `sc_${Date.now()}`,
-          name,
-          cloudId,
-          data,
-          xAxis,
-          yAxis,
-          stats,
-          indexStartMm: yAxis[0] ?? 0,
-          datumAngleDeg: 0,
-          scanDirection: placement.scanDirection,
-          indexDirection: placement.indexDirection,
-          orientationConfirmed: false,
-          colorScale: 'Jet',
-          rangeMin: null,
-          rangeMax: null,
-          opacity: 1,
-          sourceNdeFile: guessNdeFilename(name),
-          sourceFiles,
-        };
-        updateVessel((prev) => ({
-          ...prev,
-          scanComposites: [...prev.scanComposites, newConfig],
-          // Auto-populate global coordinate origin from the first loaded scan
-          ...(prev.scanComposites.length === 0
-            ? {
-                coordinateOrigin: { indexMm: yAxis[0] ?? 0, scanMm: xAxis[0] ?? 0 },
-                originSourceScanId: newConfig.id,
-              }
-            : {}),
-        }));
-
-        // Link composite to project vessel if in project context
-        if (effectiveProjectVesselId) {
-          linkCompositeToProject.mutate({
-            compositeId: cloudId,
-            projectVesselId: effectiveProjectVesselId,
-          });
-        }
-      } catch (err) {
-        console.error('Failed to import composite:', err);
-      }
-    },
-    [updateVessel, effectiveProjectVesselId, linkCompositeToProject]
-  );
-
-  const handleRemoveScanComposite = useCallback(
-    (id: string) => {
-      clearHeatmapCache(id);
-      updateVessel((prev) => ({
-        ...prev,
-        scanComposites: prev.scanComposites.filter((sc) => sc.id !== id),
-      }));
-      if (selection.scanCompositeId === id) dispatch({ type: 'SELECT_SCAN_COMPOSITE', id: '' });
-    },
-    [updateVessel, selection.scanCompositeId]
-  );
-
-  const handleUpdateScanComposite = useCallback(
-    (id: string, updates: Partial<ScanCompositeConfig>) => {
-      updateVessel((prev) => {
-        const updated = {
-          ...prev,
-          scanComposites: prev.scanComposites.map((sc) =>
-            sc.id === id ? { ...sc, ...updates } : sc
-          ),
-        };
-        // Keep global origin in sync when the source scan's position changes
-        if (
-          id === prev.originSourceScanId &&
-          (updates.indexStartMm !== undefined || updates.datumAngleDeg !== undefined)
-        ) {
-          const sc = updated.scanComposites.find((c) => c.id === id)!;
-          updated.coordinateOrigin = {
-            indexMm: sc.indexStartMm,
-            scanMm: sc.xAxis[0] ?? 0,
-          };
-        }
-        return updated;
-      }, historyFor('scanComposite', id, updates));
-    },
-    [updateVessel]
-  );
-
-  // --- Dome scan handlers ---
-  const handleSelectDomeScan = useCallback((id: string) => {
-    dispatch({ type: 'SELECT_DOME_SCAN', id });
-  }, []);
-
-  const handleUpdateDomeScan = useCallback(
-    (id: string, updates: Partial<DomeScanConfig>) => {
-      updateVessel(
-        (prev) => ({
-          ...prev,
-          domeScanComposites: prev.domeScanComposites.map((ds) =>
-            ds.id === id ? { ...ds, ...updates } : ds
-          ),
-        }),
-        historyFor('domeScan', id, updates)
-      );
-    },
-    [updateVessel]
-  );
-
-  const handleRemoveDomeScan = useCallback(
-    (id: string) => {
-      clearDomeHeatmapCache(id);
-      updateVessel((prev) => ({
-        ...prev,
-        domeScanComposites: prev.domeScanComposites.filter((ds) => ds.id !== id),
-      }));
-      if (selection.domeScanId === id) dispatch({ type: 'SELECT_DOME_SCAN', id: '' });
-    },
-    [updateVessel, selection.domeScanId]
-  );
-
-  const handleImportDomeComposite = useCallback(
-    async (compositeId: string, head: 'left' | 'right', bodyId?: string) => {
-      try {
-        let name: string;
-        let cloudId: string;
-        let data: (number | null)[][];
-        let xAxis: number[];
-        let yAxis: number[];
-        let stats: DomeScanConfig['stats'];
-        let sourceFiles: DomeScanConfig['sourceFiles'];
-
-        try {
-          const cd = await getScanCompositeData(compositeId);
-          cloudId = compositeId;
-          name = `Dome ${head} ${compositeId.slice(0, 8)}`;
-          xAxis = Array.from(cd.xAxis);
-          yAxis = Array.from(cd.yAxis);
-          data = [];
-          for (let row = 0; row < cd.height; row++) {
-            const rowData: (number | null)[] = [];
-            for (let col = 0; col < cd.width; col++) {
-              const val = cd.matrix[row * cd.width + col];
-              rowData.push(isNaN(val) ? null : val);
-            }
-            data.push(rowData);
-          }
-          // Preserve validArea/totalArea (mm²) so dome achieved coverage works.
-          stats = toConfigStats(cd.stats);
-          sourceFiles = cd.sourceFiles;
-        } catch {
-          const composite = await getScanComposite(compositeId);
-          cloudId = composite.id;
-          name = composite.name;
-          data = composite.thickness_data;
-          xAxis = composite.x_axis;
-          yAxis = composite.y_axis;
-          stats = composite.stats || { min: 0, max: 0, mean: 0, median: 0, stdDev: 0 };
-          sourceFiles = composite.source_files ?? undefined;
-        }
-
-        // Importing onto a dished appendage closure (4C): pass bodyId and let
-        // normalizeDomeScanComposite enforce the end⟺bodyId invariant (it forces
-        // head='end' when bodyId is set) — never hand-set the pair. Main-vessel
-        // imports pass bodyId undefined and keep their left/right head.
-        const newConfig: DomeScanConfig = normalizeDomeScanComposite({
-          id: `ds_${Date.now()}`,
-          name,
-          cloudId,
-          bodyId,
-          head,
-          centerPhi: 45,
-          centerTheta: 0,
-          scanDirection: 'cw',
-          indexDirection: 'outward',
-          orientationConfirmed: false,
-          data,
-          xAxis,
-          yAxis,
-          stats,
-          colorScale: 'Jet',
-          rangeMin: null,
-          rangeMax: null,
-          opacity: 1,
-          sourceFiles,
-        });
-        updateVessel((prev) => ({
-          ...prev,
-          domeScanComposites: [...prev.domeScanComposites, newConfig],
-        }));
-        dispatch({ type: 'SELECT_DOME_SCAN', id: newConfig.id });
-      } catch (err) {
-        console.error('Failed to import dome composite:', err);
-      }
-    },
-    [updateVessel]
-  );
 
   // Dome scan hover tooltip state
   const [domeScanHoverInfo, setDomeScanHoverInfo] = useState<DomeScanHoverInfo | null>(null);
