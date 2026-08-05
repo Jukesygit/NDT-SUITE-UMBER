@@ -166,3 +166,110 @@ export function buildAllFootprints(state: VesselState): JunctionFootprint[] {
   const shellRadiusMm = state.id / 2;
   return state.appendages.map((appendage) => buildJunctionFootprint(shellRadiusMm, appendage));
 }
+
+// =============================================================================
+// Non-radial (ellipse) footprint — projected-bore approximation (design R1)
+// =============================================================================
+// A perpendicular (radial) opening cuts the exact cylinder-on-cylinder curve
+// above. A NON-radial opening (a tilted nozzle) cuts an elongated hole; its
+// footprint is approximated here as an axis-aligned ellipse in developed
+// coordinates, whose axial (aPosMm) and circumferential (aCircMm) semi-axes are
+// resolved from the tilt on the main thread (see nozzle-footprint.ts). The
+// excluded area is the flat developed ellipse area (π·aPos·aCirc) — a small
+// over/under-count versus the true curved-surface hole, accepted for v1.
+// =============================================================================
+
+/** Developed-coordinate semi-axes of a projected (non-radial) opening ellipse. */
+export interface EllipseFootprintAxes {
+  /** Axial semi-axis in mm (along the body length). */
+  aPosMm: number;
+  /** Circumferential semi-axis in developed mm (arc length on the shell surface). */
+  aCircMm: number;
+}
+
+/**
+ * Footprint of a non-radial opening approximated as its projected bore ellipse,
+ * expressed in the same developed coordinates and returning the same
+ * {@link JunctionFootprint} interface as {@link buildJunctionFootprint}, so every
+ * consumer keeps ONE `containsCell` predicate for stats and visuals (design §9.4).
+ */
+export function buildEllipseFootprint(
+  shellRadiusMm: number,
+  spec: { id: string; mountPos: number; mountAngle: number } & EllipseFootprintAxes
+): JunctionFootprint {
+  const R = shellRadiusMm;
+  const { id, mountPos, mountAngle, aPosMm, aCircMm } = spec;
+  const degenerate = !(R > 0) || !(aPosMm > 0) || !(aCircMm > 0);
+
+  const areaMm2 = degenerate ? 0 : Math.PI * aPosMm * aCircMm;
+
+  const boundary: Array<{ pos: number; angle: number }> = [];
+  if (!degenerate) {
+    for (let i = 0; i < BOUNDARY_SEGMENTS; i++) {
+      const t = (i / BOUNDARY_SEGMENTS) * 2 * Math.PI;
+      const circMm = aCircMm * Math.sin(t);
+      boundary.push({
+        pos: mountPos + aPosMm * Math.cos(t),
+        angle: normalizeDeg(mountAngle + (circMm / R) * RAD2DEG),
+      });
+    }
+    boundary.push({ ...boundary[0] });
+  }
+
+  function containsCell(posMm: number, angleDeg: number): boolean {
+    if (degenerate) return false;
+    const du = posMm - mountPos;
+    if (Math.abs(du) > aPosMm) return false; // outside the axial extent
+    // Circumferential offset as developed arc length (wrap-safe shortest distance).
+    const circMm = (angularDistanceDeg(angleDeg, mountAngle) / RAD2DEG) * R;
+    const nx = du / aPosMm;
+    const ny = circMm / aCircMm;
+    return nx * nx + ny * ny <= 1;
+  }
+
+  return { appendageId: id, containsCell, areaMm2, boundary };
+}
+
+/**
+ * Serialisable footprint spec: either a radial circle (via `diameter`) or a
+ * non-radial ellipse (via `ellipse`, which takes precedence). `diameter` is
+ * always carried (appendage/opening diameter) so the circle path and cache keys
+ * stay populated even for ellipse specs.
+ */
+export interface FootprintParams {
+  id: string;
+  mountPos: number;
+  mountAngle: number;
+  /** Circle-path opening/appendage diameter in mm. */
+  diameter: number;
+  /** Non-radial projected-ellipse semi-axes; when present, overrides `diameter`. */
+  ellipse?: EllipseFootprintAxes;
+}
+
+/**
+ * Rebuild a {@link JunctionFootprint} from serialisable params — the single
+ * dispatch used across the worker boundary and by the direct (coverage/heatmap)
+ * consumers. Radial specs reuse the EXACT cylinder-on-cylinder integral; ellipse
+ * specs use the projected-bore approximation. With no `ellipse` this is
+ * byte-identical to calling {@link buildJunctionFootprint} directly.
+ */
+export function buildFootprintFromParams(
+  shellRadiusMm: number,
+  p: FootprintParams
+): JunctionFootprint {
+  if (p.ellipse) {
+    return buildEllipseFootprint(shellRadiusMm, {
+      id: p.id,
+      mountPos: p.mountPos,
+      mountAngle: p.mountAngle,
+      aPosMm: p.ellipse.aPosMm,
+      aCircMm: p.ellipse.aCircMm,
+    });
+  }
+  return buildJunctionFootprint(shellRadiusMm, {
+    id: p.id,
+    mountPos: p.mountPos,
+    mountAngle: p.mountAngle,
+    diameter: p.diameter,
+  });
+}

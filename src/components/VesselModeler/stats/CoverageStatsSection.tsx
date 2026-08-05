@@ -29,6 +29,9 @@ export default function CoverageStatsSection({ vesselState }: CoverageStatsSecti
       vesselState.length,
       vesselState.headRatio,
       vesselState.appendages,
+      // Nozzle bores subtract from the shell total and drop covered cells (R1),
+      // so region coverage must recompute when nozzles are added/moved/resized.
+      vesselState.nozzles,
     ],
   );
 
@@ -37,7 +40,13 @@ export default function CoverageStatsSection({ vesselState }: CoverageStatsSecti
   // real coverage on the appendage's lateral cylinder.
   const appendageTotals = useMemo(
     () => computeAppendageCoverageTotals(vesselState),
-    [vesselState.appendages, vesselState.scanComposites, vesselState.coverageRects],
+    // Boot nozzles subtract from that boot's lateral total and covered sweep (R1).
+    [
+      vesselState.appendages,
+      vesselState.scanComposites,
+      vesselState.coverageRects,
+      vesselState.nozzles,
+    ],
   );
 
   if (vesselState.coverageRects.length === 0) return null;

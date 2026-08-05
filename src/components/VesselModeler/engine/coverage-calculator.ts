@@ -8,16 +8,26 @@
 
 import type { CoverageRectConfig, VesselState } from '../types';
 import { buildAllFootprints, type JunctionFootprint } from './junction-footprint';
+import {
+  buildAppendageNozzleFootprints,
+  buildMainShellNozzleFootprints,
+} from './nozzle-footprint';
 
 /**
- * Junction footprints for every appendage, or [] when the vessel has none.
- * Guards the undefined/empty case so no-appendage vessels never build a
- * footprint and stay byte-identical (design §9.4 shared predicate).
+ * Main-shell cutout footprints: appendage junctions PLUS unmappable nozzle bores
+ * (design R1), or [] when the vessel has neither. Guards the undefined/empty case
+ * so vessels with no appendages and no shell nozzles never build a footprint and
+ * stay byte-identical (design §9.4 shared predicate). Both consumers below —
+ * region totals and the coverage sweep — use this one array so stats and visuals
+ * always agree.
  */
 function footprintsFor(vesselState: VesselState): JunctionFootprint[] {
-  return vesselState.appendages && vesselState.appendages.length > 0
-    ? buildAllFootprints(vesselState)
-    : [];
+  const appendageFps =
+    vesselState.appendages && vesselState.appendages.length > 0
+      ? buildAllFootprints(vesselState)
+      : [];
+  const nozzleFps = buildMainShellNozzleFootprints(vesselState);
+  return nozzleFps.length > 0 ? [...appendageFps, ...nozzleFps] : appendageFps;
 }
 
 // ---------------------------------------------------------------------------
@@ -228,6 +238,7 @@ export function computeAppendageCoveredArea(
   rects: CoverageRectConfig[],
   radius: number,
   length: number,
+  footprints: JunctionFootprint[] = [],
 ): number {
   if (rects.length === 0 || radius <= 0 || length <= 0) return 0;
 
@@ -264,6 +275,15 @@ export function computeAppendageCoveredArea(
       );
       if (!isCovered) continue;
 
+      // Skip cells inside a boot nozzle bore — unmappable opening, no surface
+      // there (design R1). Same wrap-safe containsCell predicate as the boot
+      // lateral-total subtraction below and the wall-loss worker.
+      if (footprints.length > 0) {
+        const midPos = (pMin + pMax) / 2;
+        const midAngle = (aMin + aMax) / 2;
+        if (footprints.some((fp) => fp.containsCell(midPos, midAngle))) continue;
+      }
+
       covered += cylinderCellArea(pMin, pMax, aMin, aMax, radius);
     }
   }
@@ -284,7 +304,13 @@ export function computeAppendageCoverageTotals(vesselState: VesselState): Append
   const appendages = vesselState.appendages ?? [];
   return appendages.map((a) => {
     const radius = a.diameter / 2;
-    const totalMm2 = 2 * Math.PI * radius * a.length;
+    // Boot nozzle bores are unmappable openings on THIS boot's cylinder: subtract
+    // their footprint area from the boot lateral total AND exclude those cells from
+    // the covered sweep (design R1 — one predicate for stats + visuals). Empty for
+    // boots with no nozzles → totalMm2 unchanged (byte-identical).
+    const nozzleFps = buildAppendageNozzleFootprints(vesselState, a);
+    const cutoutMm2 = nozzleFps.reduce((sum, fp) => sum + fp.areaMm2, 0);
+    const totalMm2 = Math.max(0, 2 * Math.PI * radius * a.length - cutoutMm2);
     let achievedMm2 = 0;
     for (const sc of vesselState.scanComposites) {
       if (sc.bodyId !== a.id) continue;
@@ -294,7 +320,7 @@ export function computeAppendageCoverageTotals(vesselState: VesselState): Append
     // on the appendage's lateral cylinder; main-shell rects (bodyId undefined)
     // never contribute here, and these rects never contribute to the main shell.
     const bodyRects = vesselState.coverageRects.filter((r) => r.bodyId === a.id);
-    const coveredMm2 = computeAppendageCoveredArea(bodyRects, radius, a.length);
+    const coveredMm2 = computeAppendageCoveredArea(bodyRects, radius, a.length, nozzleFps);
     return { appendageId: a.id, name: a.name, totalMm2, achievedMm2, coveredMm2 };
   });
 }

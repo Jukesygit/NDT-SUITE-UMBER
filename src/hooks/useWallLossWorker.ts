@@ -14,6 +14,10 @@ import type {
   WallLossRequest,
   WallLossResponse,
 } from '../workers/wall-loss-compute';
+import {
+  appendageNozzleFootprintParams,
+  mainShellNozzleFootprintParams,
+} from '../components/VesselModeler/engine/nozzle-footprint';
 
 const DEBOUNCE_MS = 300;
 
@@ -145,21 +149,29 @@ export function useWallLossWorker(
         })
       );
 
-      // Appendage junction footprints (design §9.4): main-shell cells inside a
-      // footprint are the shell cutout and drop out of the MAIN body's distribution.
-      const footprints: FootprintParamsSlim[] = (vesselState.appendages ?? []).map((a) => ({
-        id: a.id,
-        mountPos: a.mountPos,
-        mountAngle: a.mountAngle,
-        diameter: a.diameter,
-      }));
+      // Main-shell cutouts (design §9.4 / R1): appendage junctions PLUS unmappable
+      // nozzle bores. Cells inside a footprint drop out of the MAIN body's
+      // distribution. Nozzle params (radial circle / non-radial ellipse) and the
+      // head-mounted skip come from the shared engine helper so the worker cutout
+      // matches coverage + heatmap exactly.
+      const footprints: FootprintParamsSlim[] = [
+        ...(vesselState.appendages ?? []).map((a) => ({
+          id: a.id,
+          mountPos: a.mountPos,
+          mountAngle: a.mountAngle,
+          diameter: a.diameter,
+        })),
+        ...mainShellNozzleFootprintParams(vesselState),
+      ];
 
-      // One appendage body per appendage config, carrying only its own scans and
-      // its own cylinder geometry (design §9.3). NWT defaults to the shell NWT.
+      // One appendage body per appendage config, carrying only its own scans, its
+      // own cylinder geometry (design §9.3), and its own nozzle-bore cutouts
+      // (design R1). NWT defaults to the shell NWT.
       const bodies: WallLossBodyInput[] = (vesselState.appendages ?? []).map((a) => ({
         bodyId: a.id,
         name: a.name,
         composites: vesselState.scanComposites.filter((c) => c.bodyId === a.id).map(toSlim),
+        footprints: appendageNozzleFootprintParams(vesselState, a.id),
         vesselId: a.diameter,
         vesselLength: a.length,
         headRatio: a.headRatio ?? DEFAULT_APPENDAGE_HEAD_RATIO,
@@ -196,6 +208,7 @@ export function useWallLossWorker(
     vesselState.scanComposites,
     vesselState.domeScanComposites,
     vesselState.appendages,
+    vesselState.nozzles,
     vesselState.id,
     vesselState.length,
     vesselState.headRatio,

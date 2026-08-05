@@ -26,7 +26,11 @@
  * math module (types-only imports, no THREE/DOM), safe for the worker bundle.
  */
 
-import { buildJunctionFootprint } from '../components/VesselModeler/engine/junction-footprint';
+import {
+  buildFootprintFromParams,
+  type FootprintParams,
+  type JunctionFootprint,
+} from '../components/VesselModeler/engine/junction-footprint';
 import {
   normAngle,
   datumToVesselAngle,
@@ -66,26 +70,23 @@ export interface DomeCompositeSlim {
 export type BinMode = 'equal' | 'ca-based' | 'custom';
 
 /**
- * Serialisable junction-footprint parameters. Functions cannot cross the worker
- * boundary, so the shell-side geometry of each appendage is passed as data and
- * the `containsCell` predicate is rebuilt inside `compute` via
- * `buildJunctionFootprint`. Structurally a subset of `AppendageConfig`.
+ * Serialisable footprint parameters. Functions cannot cross the worker boundary,
+ * so the shell-side geometry of each cutout is passed as data and the
+ * `containsCell` predicate is rebuilt inside `compute` via
+ * `buildFootprintFromParams`. Covers appendage junctions and nozzle bores
+ * (radial → `diameter`; non-radial nozzles → `ellipse`; design R1).
  */
-export interface FootprintParamsSlim {
-  id: string;
-  mountPos: number;
-  mountAngle: number;
-  diameter: number;
-}
+export type FootprintParamsSlim = FootprintParams;
 
 /**
  * One appendage body for the per-body distribution (design §9.3, §16). The MAIN
  * shell stays described by the flat `WallLossRequest` fields (byte-identical to
  * the pre-appendage path); each appendage cylinder is its own body here, carrying
- * only its own scans + geometry. Appendages have no dome scans and no footprints
- * in v1 (design §9.2). Its scans are pre-grouped by bodyId, so the occlusion
- * sweep — which only ever looks within the body's own composite list — can never
- * let a main-shell scan occlude an appendage cell (or vice versa).
+ * only its own scans + geometry. Appendages have no dome scans and no junction
+ * footprints in v1 (design §9.2), but they DO carry their own nozzle-bore cutouts
+ * (design R1). Its scans are pre-grouped by bodyId, so the occlusion sweep — which
+ * only ever looks within the body's own composite list — can never let a
+ * main-shell scan occlude an appendage cell (or vice versa).
  */
 export interface WallLossBodyInput {
   /** Appendage id (mirrors AppendageConfig.id). */
@@ -94,6 +95,11 @@ export interface WallLossBodyInput {
   name: string;
   /** Scans mounted on this appendage (bodyId === this.bodyId). */
   composites: CompositeSlim[];
+  /**
+   * Nozzle-bore cutouts on THIS boot's cylinder (design R1). Cells inside a bore
+   * contribute zero area to this body's distribution. Absent/empty → no cutout.
+   */
+  footprints?: FootprintParamsSlim[];
   /** Appendage inner diameter in mm. */
   vesselId: number;
   /** Appendage cylinder length in mm (tan-tan for the body). */
@@ -110,9 +116,10 @@ export interface WallLossRequest {
   /** Confirmed dome scans to fold into the same distribution. */
   domeComposites?: DomeCompositeSlim[];
   /**
-   * Appendage junction footprints on the main shell. Main-shell cells inside a
-   * footprint are the shell cutout and contribute zero area (design §9.4).
-   * Absent/empty → no cutout → byte-identical to the pre-appendage behaviour.
+   * Main-shell cutout footprints: appendage junctions PLUS nozzle bores (design
+   * §9.4 / R1). Main-shell cells inside a footprint are unmappable openings and
+   * contribute zero area. Absent/empty → no cutout → byte-identical to the
+   * pre-appendage behaviour.
    */
   footprints?: FootprintParamsSlim[];
   /**
@@ -463,7 +470,7 @@ interface BodyComputeInput {
   name?: string;
   shellComposites: CompositeSlim[];
   domeComposites: DomeCompositeSlim[];
-  footprints: ReturnType<typeof buildJunctionFootprint>[];
+  footprints: JunctionFootprint[];
   radius: number;
   headDepth: number;
   tanTan: number;
@@ -661,7 +668,7 @@ export function compute(req: WallLossRequest): WallLossResponse {
       name: undefined,
       shellComposites: mainConfirmed,
       domeComposites: domeConfirmed,
-      footprints: (footprintParams ?? []).map((f) => buildJunctionFootprint(mainRadius, f)),
+      footprints: (footprintParams ?? []).map((f) => buildFootprintFromParams(mainRadius, f)),
       radius: mainRadius,
       headDepth: vesselId / (2 * headRatio),
       tanTan: vesselLength,
@@ -675,17 +682,19 @@ export function compute(req: WallLossRequest): WallLossResponse {
     })
   );
 
-  // --- Appendage bodies: own cylinder geometry, own scans, no dome/footprints
-  //     (design §9.2). Each body's own scan list scopes occlusion. ---
+  // --- Appendage bodies: own cylinder geometry, own scans, no dome/junction
+  //     footprints (design §9.2), but their own nozzle-bore cutouts (design R1).
+  //     Each body's own scan list scopes occlusion. ---
   for (const b of appBodies) {
+    const bodyRadius = b.vesselId / 2;
     bodyResults.push(
       computeBodyDistribution({
         bodyId: b.bodyId,
         name: b.name,
         shellComposites: b.confirmed,
         domeComposites: [],
-        footprints: [],
-        radius: b.vesselId / 2,
+        footprints: (b.footprints ?? []).map((f) => buildFootprintFromParams(bodyRadius, f)),
+        radius: bodyRadius,
         headDepth: b.vesselId / (2 * b.headRatio),
         tanTan: b.vesselLength,
         circumference: Math.PI * b.vesselId,

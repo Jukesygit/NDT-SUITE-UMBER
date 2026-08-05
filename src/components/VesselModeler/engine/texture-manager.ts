@@ -11,10 +11,11 @@
 // =============================================================================
 
 import * as THREE from 'three';
-import type { AppendageConfig, TextureConfig, ScanCompositeConfig, VesselState } from '../types';
+import type { TextureConfig, ScanCompositeConfig, VesselState } from '../types';
 import { createHeatmapTexture, type HeatmapTextureResult } from './heatmap-texture';
 import { resolveBodyFrame, type SurfaceFrame } from './body-frame';
 import { buildAllFootprints, type JunctionFootprint } from './junction-footprint';
+import { buildMainShellNozzleFootprints, isHeadMountedNozzle } from './nozzle-footprint';
 import { normAngle, datumToVesselAngle, scanAngleFromArcDeg } from './vessel-coords';
 
 // ---------------------------------------------------------------------------
@@ -335,13 +336,30 @@ export function buildFootprintExcludeMask(
  */
 function footprintCacheSuffix(
   composite: ScanCompositeConfig,
-  appendages: AppendageConfig[]
+  vesselState: VesselState
 ): string {
-  if (composite.bodyId || appendages.length === 0) return '';
+  // Only main-shell composites carry a cutout mask (design §9.4 / R1); boot
+  // composites keep the legacy no-mask path (their nozzle holes are a v1 visual
+  // deferral), so their suffix stays empty.
+  if (composite.bodyId) return '';
+  const appendages = vesselState.appendages ?? [];
+  const shellNozzles = (vesselState.nozzles ?? []).filter(
+    (n) => n.bodyId === undefined && !isHeadMountedNozzle(n.pos, vesselState.length)
+  );
+  if (appendages.length === 0 && shellNozzles.length === 0) return '';
   const apps = appendages
     .map((a) => `${a.id}:${a.mountPos}:${a.mountAngle}:${a.diameter}`)
     .join('|');
-  return `_fp[${apps}#${composite.indexStartMm}:${composite.datumAngleDeg}:${composite.scanDirection}:${composite.indexDirection}]`;
+  const noz = shellNozzles
+    .map(
+      (n) =>
+        `${n.id}:${n.pos}:${n.angle}:${n.size}:${n.pipeOD ?? ''}:${n.orientationMode ?? 'radial'}`
+    )
+    .join('|');
+  // Legacy appendage-only key is preserved EXACTLY when there are no shell
+  // nozzles (nozzle segment omitted), keeping existing models byte-identical.
+  const nozSeg = noz ? `@noz[${noz}]` : '';
+  return `_fp[${apps}${nozSeg}#${composite.indexStartMm}:${composite.datumAngleDeg}:${composite.scanDirection}:${composite.indexDirection}]`;
 }
 
 // ---------------------------------------------------------------------------
@@ -435,18 +453,24 @@ export function createScanCompositePlane(
     return null;
   }
 
-  // --- Appendage cutout mask (main-shell composites only) ---
-  // Build the junction footprints from state and derive the per-pixel exclusion
-  // predicate; both are empty/undefined for appendage-free shells and appendage
-  // composites, keeping the legacy path byte-identical. The same footprints feed
-  // the coverage sweep and the wall-loss worker (design §9.4).
+  // --- Cutout mask (main-shell composites only) ---
+  // Main-shell composites punch holes for appendage junctions AND unmappable
+  // nozzle bores (design §9.4 / R1); the SAME footprints feed the coverage sweep
+  // and the wall-loss worker. Boot composites keep the legacy no-mask path — their
+  // nozzle-bore holes are a v1 visual deferral (buildFootprintExcludeMask and its
+  // tests are unchanged; stats still exclude boot bores). Empty footprints ⇒
+  // excludeMask undefined ⇒ byte-identical legacy texture.
   const appendages = vesselState.appendages ?? [];
-  const footprints =
-    !composite.bodyId && appendages.length > 0 ? buildAllFootprints(vesselState) : [];
+  const footprints: JunctionFootprint[] = !composite.bodyId
+    ? [
+        ...(appendages.length > 0 ? buildAllFootprints(vesselState) : []),
+        ...buildMainShellNozzleFootprints(vesselState),
+      ]
+    : [];
   const excludeMask = buildFootprintExcludeMask(composite, vesselState, footprints);
 
   // --- Get or create cached heatmap texture (keyed by visual params + cutout) ---
-  const cacheKey = heatmapCacheKey(composite) + footprintCacheSuffix(composite, appendages);
+  const cacheKey = heatmapCacheKey(composite) + footprintCacheSuffix(composite, vesselState);
   let heatmapResult = heatmapCache.get(cacheKey);
   if (!heatmapResult) {
     heatmapResult = createHeatmapTexture(composite.data, composite.stats, {

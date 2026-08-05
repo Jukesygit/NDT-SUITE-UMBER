@@ -135,14 +135,22 @@ export default function ScanCoverageStatsSection({
   // subtraction depends on the appendage set), not just on vessel dimensions.
   const regionAreas = useMemo(
     () => computeRegionTotalAreas(vesselState),
-    [vesselState.id, vesselState.length, vesselState.headRatio, vesselState.appendages]
+    // Nozzle bores subtract from the shell total (R1) → recompute on nozzle edits.
+    [
+      vesselState.id,
+      vesselState.length,
+      vesselState.headRatio,
+      vesselState.appendages,
+      vesselState.nozzles,
+    ]
   );
 
   // Per-appendage coverable + achieved areas (design §9). Recompute when the
-  // appendage set or any scan changes so rows appear/update live.
+  // appendage set, any scan, or the nozzles (boot bores subtract from the boot
+  // lateral total, R1) change so rows appear/update live.
   const appendageTotals = useMemo(
     () => computeAppendageCoverageTotals(vesselState),
-    [vesselState.appendages, vesselState.scanComposites]
+    [vesselState.appendages, vesselState.scanComposites, vesselState.nozzles]
   );
 
   const achievedMm2 = useMemo(() => {
