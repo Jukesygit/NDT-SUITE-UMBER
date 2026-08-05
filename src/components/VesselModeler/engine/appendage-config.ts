@@ -45,7 +45,7 @@ function num(raw: unknown, fallback: number): number {
 export function normalizeAppendage(raw: Record<string, unknown>): AppendageConfig {
   return {
     id: typeof raw.id === 'string' && raw.id ? raw.id : `app-${Date.now()}`,
-    name: typeof raw.name === 'string' && raw.name ? raw.name : 'Appendage',
+    name: typeof raw.name === 'string' && raw.name ? raw.name : 'Boot',
     mountPos: num(raw.mountPos, 0),
     mountAngle: num(raw.mountAngle, 270),
     diameter: num(raw.diameter, 1000),
@@ -72,7 +72,7 @@ export function createAppendage(existing: AppendageConfig[]): AppendageConfig {
   }
   return {
     id: `app-${n}`,
-    name: `Appendage ${n}`,
+    name: `Boot ${n}`,
     mountPos: 0,
     mountAngle: 270,
     diameter: 1000,

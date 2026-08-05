@@ -150,7 +150,7 @@ export function ScanCompositeSection({
                           orientationConfirmed: false,
                         })
                       }
-                      title="Mount this scan on the main vessel or an appendage body. Index start and datum angle are reinterpreted in the chosen body's frame — set the orientation after switching."
+                      title="Mount this scan on the main vessel or a boot body. Index start and datum angle are reinterpreted in the chosen body's frame — set the orientation after switching."
                     >
                       <option value="">Main vessel</option>
                       {vesselState.appendages.map((a) => (

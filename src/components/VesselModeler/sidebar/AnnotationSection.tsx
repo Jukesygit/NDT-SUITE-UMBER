@@ -290,7 +290,7 @@ export function AnnotationSection({
                                         className="vm-select"
                                         value={sel.bodyId ?? ''}
                                         onChange={e => onUpdateAnnotation(sel.id, { bodyId: e.target.value === '' ? undefined : e.target.value })}
-                                        title="Place this annotation on the main vessel or an appendage body. Position/angle are reinterpreted in the chosen body's frame — adjust them after switching."
+                                        title="Place this annotation on the main vessel or a boot body. Position/angle are reinterpreted in the chosen body's frame — adjust them after switching."
                                     >
                                         <option value="">Main vessel</option>
                                         {vesselState.appendages.map(a => (

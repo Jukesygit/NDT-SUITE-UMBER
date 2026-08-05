@@ -50,7 +50,7 @@ export function DomeScanSection({
     // Show the appendage's name for the latter instead of a misleading "Right head".
     const sectionLabel = (sectionType: string): string => {
         if (sectionType.startsWith('appendage:')) {
-            return `${appendageName(sectionType.slice('appendage:'.length)) ?? 'Appendage'} end`;
+            return `${appendageName(sectionType.slice('appendage:'.length)) ?? 'Boot'} end`;
         }
         return sectionType === 'dome_left' ? 'Left head' : 'Right head';
     };
@@ -101,7 +101,7 @@ export function DomeScanSection({
                                 <strong>{ds.name}</strong>
                                 <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
                                     {ds.bodyId
-                                        ? `${appendageName(ds.bodyId) ?? 'Appendage'} end`
+                                        ? `${appendageName(ds.bodyId) ?? 'Boot'} end`
                                         : `${ds.head === 'left' ? 'Left' : 'Right'} head`}
                                     {!ds.orientationConfirmed && (
                                         <span style={{
@@ -190,7 +190,7 @@ export function DomeScanSection({
                                         className="vm-select"
                                         value={effectiveImportBodyId}
                                         onChange={e => setImportBodyId(e.target.value)}
-                                        title="Import onto a main-vessel head or a dished appendage's end closure. Appendage imports drape on that closure (head is fixed)."
+                                        title="Import onto a main-vessel head or a dished boot's end closure. Boot imports drape on that closure (head is fixed)."
                                     >
                                         <option value="">Main vessel</option>
                                         {dishedAppendages.map(a => (
@@ -286,7 +286,7 @@ function DomeScanEditPanel({
                             if (v === '') onUpdate({ bodyId: undefined, head: ds.head === 'end' ? 'right' : ds.head });
                             else onUpdate({ bodyId: v, head: 'end' });
                         }}
-                        title="Drape this dome scan on a main-vessel head or an appendage's dished end closure. Center φ/θ are reinterpreted on the chosen closure — adjust after switching."
+                        title="Drape this dome scan on a main-vessel head or a boot's dished end closure. Center φ/θ are reinterpreted on the chosen closure — adjust after switching."
                     >
                         <option value="">Main vessel</option>
                         {dishedAppendages.map(a => (

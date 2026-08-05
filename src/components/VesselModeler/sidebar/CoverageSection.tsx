@@ -129,7 +129,7 @@ export function CoverageSection({
                                             className="vm-select"
                                             value={sel.bodyId ?? ''}
                                             onChange={e => onUpdateCoverageRect(sel.id, { bodyId: e.target.value === '' ? undefined : e.target.value })}
-                                            title="Track this rect on the main vessel or an appendage body. Position/angle are reinterpreted in the chosen body's frame — adjust them after switching."
+                                            title="Track this rect on the main vessel or a boot body. Position/angle are reinterpreted in the chosen body's frame — adjust them after switching."
                                         >
                                             <option value="">Main vessel</option>
                                             {vesselState.appendages.map(a => (

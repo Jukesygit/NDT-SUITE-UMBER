@@ -116,7 +116,7 @@ export function LiftingLugSection({
                                         className="vm-select"
                                         value={sel.bodyId ?? ''}
                                         onChange={e => onUpdateLug(selectedLugIndex, { bodyId: e.target.value === '' ? undefined : e.target.value })}
-                                        title="Mount this lug on the main vessel or an appendage body. Position/angle are reinterpreted in the chosen body's frame — adjust them after switching."
+                                        title="Mount this lug on the main vessel or a boot body. Position/angle are reinterpreted in the chosen body's frame — adjust them after switching."
                                     >
                                         <option value="">Main vessel</option>
                                         {vesselState.appendages.map(a => (

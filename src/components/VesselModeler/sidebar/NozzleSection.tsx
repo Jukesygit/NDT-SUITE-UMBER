@@ -126,7 +126,7 @@ export function NozzleSection({
                         bodyId: e.target.value === '' ? undefined : e.target.value,
                       })
                     }
-                    title="Mount this nozzle on the main vessel or an appendage body. Position and angle are reinterpreted in the chosen body's frame — adjust them after switching."
+                    title="Mount this nozzle on the main vessel or a boot body. Position and angle are reinterpreted in the chosen body's frame — adjust them after switching."
                   >
                     <option value="">Main vessel</option>
                     {vesselState.appendages.map((a) => (

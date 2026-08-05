@@ -35,7 +35,7 @@ export function AppendageSection({
   const sel = selectedAppendageIndex >= 0 ? appendages[selectedAppendageIndex] : null;
 
   return (
-    <SubSection title="Appendages" count={appendages.length} isOpen={isOpen} onToggle={onToggle}>
+    <SubSection title="Boots" count={appendages.length} isOpen={isOpen} onToggle={onToggle}>
       <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', margin: '0 0 8px 0' }}>
         Secondary bodies (sumps, boots, risers) mounted on the shell
       </p>
@@ -44,7 +44,7 @@ export function AppendageSection({
         onClick={() => onAddAppendage(createAppendage(appendages))}
         style={{ marginBottom: 10 }}
       >
-        <Plus size={14} /> Add Appendage
+        <Plus size={14} /> Add Boot
       </button>
 
       {appendages.map((a, i) => (
@@ -265,7 +265,7 @@ export function AppendageSection({
               <button
                 className="vm-btn-sm"
                 onClick={() => onRemoveAppendage(selectedAppendageIndex)}
-                title="Delete this appendage"
+                title="Delete this boot"
                 style={{
                   fontSize: '0.7rem',
                   padding: '3px 8px',
@@ -274,7 +274,7 @@ export function AppendageSection({
                   width: '100%',
                 }}
               >
-                Delete Appendage
+                Delete Boot
               </button>
             </div>
           )}
