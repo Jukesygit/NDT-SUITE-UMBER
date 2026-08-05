@@ -66,6 +66,35 @@ describe('vesselReducer', () => {
     expect(broken.history.past).toBe(edited.history.past);
   });
 
+  it('SET_VIEW_MODE switches the viewport mode as pure UI, leaving vessel and history untouched', () => {
+    // 2D
+    const flattened = vesselReducer(INITIAL_STATE, { type: 'SET_VIEW_MODE', mode: 'flattened' });
+    expect(flattened.ui.viewMode).toBe('flattened');
+    // Topo is a first-class mode alongside 3d/flattened.
+    const topo = vesselReducer(flattened, { type: 'SET_VIEW_MODE', mode: 'topo' });
+    expect(topo.ui.viewMode).toBe('topo');
+    // Back to 3D.
+    const three = vesselReducer(topo, { type: 'SET_VIEW_MODE', mode: '3d' });
+    expect(three.ui.viewMode).toBe('3d');
+    // View mode is transient UI — no undo entry, document + history untouched.
+    expect(topo.vessel).toBe(INITIAL_STATE.vessel);
+    expect(topo.history).toBe(INITIAL_STATE.history);
+  });
+
+  it('undo/redo preserves the current view mode (topo is not part of the document)', () => {
+    const edited = vesselReducer(INITIAL_STATE, {
+      type: 'UPDATE_VESSEL_FN',
+      updater: (v: VesselState) => ({ ...v, id: 777 }),
+      history: { key: 'dimensions::id', at: 1000 },
+    });
+    const inTopo = vesselReducer(edited, { type: 'SET_VIEW_MODE', mode: 'topo' });
+    const undone = vesselReducer(inTopo, { type: 'UNDO' });
+    // Restoring a vessel snapshot keeps the viewport mode the user is looking at.
+    expect(undone.ui.viewMode).toBe('topo');
+    const redone = vesselReducer(undone, { type: 'REDO' });
+    expect(redone.ui.viewMode).toBe('topo');
+  });
+
   it('SET_VESSEL clears history — undo never crosses a load boundary', () => {
     const edited = vesselReducer(INITIAL_STATE, {
       type: 'UPDATE_VESSEL_FN',

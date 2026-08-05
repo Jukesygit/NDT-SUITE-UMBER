@@ -68,7 +68,7 @@ export interface UIState {
   sidebarOpen: boolean;
   showDrawingImport: boolean;
   viewingInspectionImageId: number;
-  viewMode: '3d' | 'flattened';
+  viewMode: '3d' | 'flattened' | 'topo';
   labelsTidied: boolean;
   showStatsCoverage: boolean;
   showStatsWallLoss: boolean;
@@ -222,7 +222,7 @@ export type VesselAction =
     }
   | { type: 'CYCLE_INSPECTION'; annotationId: number }
   | { type: 'EXIT_INSPECTION_MODE' }
-  | { type: 'SET_VIEW_MODE'; mode: '3d' | 'flattened' }
+  | { type: 'SET_VIEW_MODE'; mode: '3d' | 'flattened' | 'topo' }
   | { type: 'TOGGLE_LABELS_TIDIED'; history?: HistoryControl }
   | { type: 'TOGGLE_STATS_COVERAGE' }
   | { type: 'TOGGLE_STATS_WALL_LOSS' }

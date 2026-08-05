@@ -89,10 +89,12 @@ import { PipePartPopup } from './sidebar/PipePartPopup';
 
 import { downloadScreenshot } from './engine/screenshot-renderer';
 import { captureViewportScreenshot } from './engine/viewport-screenshot';
+import { hasReliefGrid } from './engine/composite-relief-adapter';
 
 const DrawingImportModal = lazy(() => import('./DrawingImportModal'));
 const InspectionImageViewer = lazy(() => import('./InspectionImageViewer'));
 const FlattenedViewport = lazy(() => import('./FlattenedView/FlattenedViewport'));
+const ReliefViewportPane = lazy(() => import('./ReliefViewportPane'));
 
 /** Clamp vessel dimensions and nozzle positions to safe ranges to prevent division-by-zero and NaN geometry. */
 function validateVesselState(state: VesselState): VesselState {
@@ -508,6 +510,20 @@ export default function VesselModeler() {
     return undefined;
   }, [selection, vesselState]);
 
+  // --- Topo (relief) viewport: resolve the ACTIVE composite (R4) ---
+  // The selected composite if it carries a thickness grid, else the first
+  // confirmed composite with a grid, else any composite with a grid. Selecting a
+  // different composite in the sidebar switches the rendered surface live (the
+  // pane is keyed on the composite id). Null ⇒ nothing to show ⇒ Topo disabled.
+  const activeTopoComposite = useMemo(() => {
+    const composites = vesselState.scanComposites;
+    const selected = composites.find((c) => c.id === selection.scanCompositeId);
+    if (selected && hasReliefGrid(selected)) return selected;
+    const withGrid = composites.filter(hasReliefGrid);
+    return withGrid.find((c) => c.orientationConfirmed) ?? withGrid[0] ?? null;
+  }, [vesselState.scanComposites, selection.scanCompositeId]);
+  const topoEnabled = activeTopoComposite != null;
+
   // --- Interaction callbacks (from Three.js viewport) — T2-D / D3 ---
   // Assembly moved verbatim into useViewportCallbacks; it composes the D1 entity
   // callbacks + dispatch/setters threaded below. The hook returns a FRESH object
@@ -750,7 +766,7 @@ export default function VesselModeler() {
               />
             </ErrorBoundary>
           </>
-        ) : (
+        ) : ui.viewMode === 'flattened' ? (
           <Suspense
             fallback={
               <div className="absolute inset-0 flex items-center justify-center bg-white text-gray-500 text-sm">
@@ -766,6 +782,25 @@ export default function VesselModeler() {
               selectedSaddleIndex={selection.saddleIndex}
               selectedLugIndex={selection.lugIndex}
             />
+          </Suspense>
+        ) : (
+          <Suspense
+            fallback={
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-400 text-sm">
+                Loading Topo view...
+              </div>
+            }
+          >
+            {activeTopoComposite ? (
+              <ReliefViewportPane
+                key={activeTopoComposite.id}
+                composite={activeTopoComposite}
+              />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-400 text-sm">
+                No scan composite to show
+              </div>
+            )}
           </Suspense>
         )}
 
@@ -1059,17 +1094,29 @@ export default function VesselModeler() {
           >
             <Redo2 size={14} />
           </button>
-          {/* 3D/2D toggle */}
+          {/* 3D / 2D / Topo toggle */}
           <div className="vm-toolbar-segmented">
-            {(['3d', 'flattened'] as const).map((mode) => (
-              <button
-                key={mode}
-                className={`vm-toolbar-segmented__btn ${ui.viewMode === mode ? 'active' : ''}`}
-                onClick={() => dispatch({ type: 'SET_VIEW_MODE', mode })}
-              >
-                {mode === '3d' ? '3D' : '2D'}
-              </button>
-            ))}
+            {(['3d', 'flattened', 'topo'] as const).map((mode) => {
+              const label = mode === '3d' ? '3D' : mode === 'flattened' ? '2D' : 'Topo';
+              const disabled = mode === 'topo' && !topoEnabled;
+              return (
+                <button
+                  key={mode}
+                  className={`vm-toolbar-segmented__btn ${ui.viewMode === mode ? 'active' : ''}`}
+                  onClick={() => dispatch({ type: 'SET_VIEW_MODE', mode })}
+                  disabled={disabled}
+                  title={
+                    disabled
+                      ? 'No confirmed scan composite with a thickness grid to show'
+                      : mode === 'topo'
+                        ? 'Topo — 3D relief surface of the active scan composite'
+                        : undefined
+                  }
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
           {/* Tidy labels toggle */}
           <button
