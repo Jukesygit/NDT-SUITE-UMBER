@@ -17,7 +17,7 @@
 // Pure module: no canvas/DOM.
 // =============================================================================
 
-import type { VesselState } from '../types';
+import type { VesselState, Orientation } from '../types';
 
 // ---------------------------------------------------------------------------
 // Strip specs — which appendages get a panel, and their to-scale dimensions
@@ -120,33 +120,47 @@ export function computeStackLayout(
   mainCircumferenceMm: number,
   strips: StripSpec[],
   opts: StackOptions,
+  orientation: Orientation = 'horizontal',
 ): StackLayout {
   const { titlePx, gapPx } = opts;
   const overheadPx = strips.length * (titlePx + gapPx);
+  const vertical = orientation === 'vertical';
 
-  let contentWidthMm = mainLengthMm;
-  for (const s of strips) contentWidthMm = Math.max(contentWidthMm, s.lengthMm);
+  // The developed page has two content extents: the AXIAL extent (shared, all
+  // surfaces left-aligned at the junction/tangent) and the CIRC-STACK extent
+  // (main circumference plus every strip's, the axis the panels stack along).
+  let axialContentMm = mainLengthMm;
+  for (const s of strips) axialContentMm = Math.max(axialContentMm, s.lengthMm);
 
-  let contentHeightMm = mainCircumferenceMm;
-  for (const s of strips) contentHeightMm += s.circumferenceMm;
+  let circStackContentMm = mainCircumferenceMm;
+  for (const s of strips) circStackContentMm += s.circumferenceMm;
 
-  const availHeight = drawHeight - overheadPx;
+  // For a vertical vessel the view is presented portrait: axial → screen-Y, circ
+  // (and the panel stack) → screen-X. The fixed per-strip title/gap overhead is
+  // always along the STACK (circ) screen axis. Horizontal keeps axial → screen-X.
+  const screenXContentMm = vertical ? circStackContentMm : axialContentMm;
+  const screenYContentMm = vertical ? axialContentMm : circStackContentMm;
+  const availWidth = drawWidth - (vertical ? overheadPx : 0);
+  const availHeight = drawHeight - (vertical ? 0 : overheadPx);
 
   const degenerate =
     drawWidth <= 0 ||
     drawHeight <= 0 ||
-    contentWidthMm <= 0 ||
-    contentHeightMm <= 0 ||
+    screenXContentMm <= 0 ||
+    screenYContentMm <= 0 ||
+    availWidth <= 0 ||
     availHeight <= 0;
 
   if (degenerate) {
     return { pxPerMm: 0, marginX: 0, marginY: 0, panels: [], titlePx, gapPx };
   }
 
-  const pxPerMm = Math.min(drawWidth / contentWidthMm, availHeight / contentHeightMm);
-  const totalStackPx = contentHeightMm * pxPerMm + overheadPx;
-  const marginX = (drawWidth - contentWidthMm * pxPerMm) / 2;
-  const marginY = (drawHeight - totalStackPx) / 2;
+  const pxPerMm = Math.min(availWidth / screenXContentMm, availHeight / screenYContentMm);
+  const stackAlongCircPx = circStackContentMm * pxPerMm + overheadPx;
+  const totalXpx = vertical ? stackAlongCircPx : axialContentMm * pxPerMm;
+  const totalYpx = vertical ? axialContentMm * pxPerMm : stackAlongCircPx;
+  const marginX = (drawWidth - totalXpx) / 2;
+  const marginY = (drawHeight - totalYpx) / 2;
 
   // Walk the stack: main surface first, then each strip (gap, title, heatmap).
   const panels: AppendagePanel[] = [];
@@ -204,4 +218,69 @@ export function stripFromCanvasX(px: number, v: StripCanvasView): number {
 export function stripFromCanvasY(py: number, v: StripCanvasView): number {
   if (v.pxPerMm <= 0 || v.zoom <= 0) return 0;
   return ((py - v.paddingTop - v.marginY - v.offsetY) / v.zoom - v.topBasePx) / v.pxPerMm;
+}
+
+// ---------------------------------------------------------------------------
+// Orientation-aware strip projection (portrait transpose for vertical vessels)
+// ---------------------------------------------------------------------------
+// A strip is a self-contained developed surface (physical axial axis, datum-cut
+// circumference). It transposes with the parent vessel exactly like the main
+// surface: horizontal → axial on screen-X / circ (with the stack offset) on
+// screen-Y; vertical → axial on screen-Y / circ on screen-X. The four functions
+// above are the horizontal building blocks; these compose them per orientation so
+// the whole page stays in ONE frame. Horizontal delegates to them verbatim, so the
+// strip goldens are unchanged.
+
+/** Screen pixel along the strip's AXIAL screen axis (X horizontal, Y vertical). */
+export function stripAxialScreen(posMm: number, v: StripCanvasView, orientation: Orientation): number {
+  const base =
+    orientation === 'vertical'
+      ? v.paddingTop + v.marginY + v.offsetY
+      : v.paddingLeft + v.marginX + v.offsetX;
+  return base + posMm * v.pxPerMm * v.zoom;
+}
+
+/** Screen pixel along the strip's CIRC screen axis (Y horizontal, X vertical), incl. the stack offset. */
+export function stripCircScreen(circMm: number, v: StripCanvasView, orientation: Orientation): number {
+  const base =
+    orientation === 'vertical'
+      ? v.paddingLeft + v.marginX + v.offsetX
+      : v.paddingTop + v.marginY + v.offsetY;
+  return base + (v.topBasePx + circMm * v.pxPerMm) * v.zoom;
+}
+
+/** Canvas X px of a strip point (appendage axial pos, circumferential mm). */
+export function stripPx(posMm: number, circMm: number, v: StripCanvasView, orientation: Orientation): number {
+  return orientation === 'vertical'
+    ? stripCircScreen(circMm, v, orientation)
+    : stripAxialScreen(posMm, v, orientation);
+}
+
+/** Canvas Y px of a strip point (appendage axial pos, circumferential mm). */
+export function stripPy(posMm: number, circMm: number, v: StripCanvasView, orientation: Orientation): number {
+  return orientation === 'vertical'
+    ? stripAxialScreen(posMm, v, orientation)
+    : stripCircScreen(circMm, v, orientation);
+}
+
+/** Inverse: canvas point → appendage axial mm. */
+export function stripPosAt(px: number, py: number, v: StripCanvasView, orientation: Orientation): number {
+  if (v.pxPerMm <= 0 || v.zoom <= 0) return 0;
+  const screen = orientation === 'vertical' ? py : px;
+  const base =
+    orientation === 'vertical'
+      ? v.paddingTop + v.marginY + v.offsetY
+      : v.paddingLeft + v.marginX + v.offsetX;
+  return (screen - base) / (v.pxPerMm * v.zoom);
+}
+
+/** Inverse: canvas point → appendage circumferential mm from the datum. */
+export function stripCircAt(px: number, py: number, v: StripCanvasView, orientation: Orientation): number {
+  if (v.pxPerMm <= 0 || v.zoom <= 0) return 0;
+  const screen = orientation === 'vertical' ? px : py;
+  const base =
+    orientation === 'vertical'
+      ? v.paddingLeft + v.marginX + v.offsetX
+      : v.paddingTop + v.marginY + v.offsetY;
+  return ((screen - base) / v.zoom - v.topBasePx) / v.pxPerMm;
 }

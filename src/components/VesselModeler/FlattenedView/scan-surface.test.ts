@@ -163,6 +163,78 @@ describe('findThicknessAt (body-scoped)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Vertical orientation — strips render along the axis they were scanned
+// ---------------------------------------------------------------------------
+// The reported bug: a vertical vessel's longitudinal scan strips read as
+// circumferential rings. The invariant: a strip whose index (axial) spans many
+// rows and whose scan (circumferential) is narrow must render as a band running
+// along the AXIAL screen axis — X for a horizontal vessel, Y for a vertical one.
+// ---------------------------------------------------------------------------
+describe('forEachCompositeCell (vertical portrait transpose)', () => {
+  // Longitudinal strip: 4 index rows (axial), 1 scan col (circumferential).
+  const longi = composite({
+    data: [[5], [6], [7], [8]],
+    xAxis: [0],
+    yAxis: [0, 10, 20, 30],
+    indexStartMm: 0,
+    datumAngleDeg: 0,
+  });
+
+  function span(cells: HeatCell[]) {
+    return {
+      x: Math.max(...cells.map((c) => c.x1)) - Math.min(...cells.map((c) => c.x0)),
+      y: Math.max(...cells.map((c) => c.y1)) - Math.min(...cells.map((c) => c.y0)),
+    };
+  }
+
+  function collect(orientation: 'horizontal' | 'vertical'): HeatCell[] {
+    const out: HeatCell[] = [];
+    forEachCompositeCell(
+      longi,
+      mainSurfaceProjector(VIEW, 1000, OD, false, orientation),
+      4000,
+      4000,
+      (c) => out.push(c),
+    );
+    return out;
+  }
+
+  it('renders the longitudinal strip along X horizontally, along Y vertically', () => {
+    const h = span(collect('horizontal'));
+    const v = span(collect('vertical'));
+    expect(h.x).toBeGreaterThan(h.y); // horizontal: band runs along the axial X axis
+    expect(v.y).toBeGreaterThan(v.x); // vertical: band runs along the axial Y axis (the fix)
+  });
+
+  it('vertical cells are the exact transpose of the horizontal cells', () => {
+    const hCells = collect('horizontal');
+    const vCells = collect('vertical');
+    expect(hCells.length).toBeGreaterThan(0);
+    expect(vCells).toHaveLength(hCells.length);
+    for (let i = 0; i < hCells.length; i++) {
+      expect(vCells[i]).toEqual({
+        x0: hCells[i].y0,
+        y0: hCells[i].x0,
+        x1: hCells[i].y1,
+        y1: hCells[i].x1,
+        r: hCells[i].r,
+        g: hCells[i].g,
+        b: hCells[i].b,
+        a: hCells[i].a,
+      });
+    }
+  });
+
+  it('the orientation default keeps the legacy 4-arg call byte-identical (horizontal golden)', () => {
+    const legacy: HeatCell[] = [];
+    forEachCompositeCell(longi, mainSurfaceProjector(VIEW, 1000, OD, false), 4000, 4000, (c) =>
+      legacy.push(c),
+    );
+    expect(legacy).toEqual(collect('horizontal'));
+  });
+});
+
+// ---------------------------------------------------------------------------
 // attachablesForBody — the ONE routing rule shared by welds, lugs and rects
 // ---------------------------------------------------------------------------
 // The flattened view partitions every bodyId-tagged attachable the same way it

@@ -24,10 +24,10 @@ import {
   wrapCircumCenters,
   getAxialOrientation,
   axialToIndexMm,
-  axialFrac,
-  circumDisplayMm,
+  makeDevelopedFrame,
   developFootprintBoundary,
   displayFootprintPolyline,
+  type DevelopedFrame,
 } from './geometry-projection';
 import {
   compositesForBody,
@@ -40,10 +40,10 @@ import {
 import {
   computeStackLayout,
   buildStripSpecs,
-  stripToCanvasX,
-  stripToCanvasY,
-  stripFromCanvasX,
-  stripFromCanvasY,
+  stripPx,
+  stripPy,
+  stripPosAt,
+  stripCircAt,
   type StackLayout,
 } from './appendage-panels';
 import {
@@ -164,13 +164,15 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
     const vesselLength = vesselState.length;
     const circumference = getCircumference(vesselState);
     const strips = buildStripSpecs(vesselState);
+    const orientation = vesselState.orientation;
     const layout = computeStackLayout(
       drawWidth,
       drawHeight,
       vesselLength,
       circumference,
       strips,
-      { titlePx: PANEL_TITLE_PX, gapPx: PANEL_GAP_PX }
+      { titlePx: PANEL_TITLE_PX, gapPx: PANEL_GAP_PX },
+      orientation
     );
     const reversed = getAxialOrientation(vesselState.scanComposites)?.reversed ?? false;
     return {
@@ -180,57 +182,34 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
       vesselLength,
       circumference,
       reversed,
+      orientation,
       layout,
     };
   }, [vesselState, getDrawDimensions]);
 
-  const toCanvasX = useCallback(
-    (mm: number) => {
-      const { pxPerMm, marginX, vesselLength, reversed } = getPlotMetrics();
-      const { zoom, offsetX } = viewRef.current;
-      if (pxPerMm <= 0) return PADDING.left;
-      const pos = axialFrac(mm, vesselLength, reversed) * vesselLength; // reversed ? len-mm : mm
-      return PADDING.left + marginX + pos * pxPerMm * zoom + offsetX;
-    },
-    [getPlotMetrics]
-  );
-
-  const toCanvasY = useCallback(
-    (mm: number) => {
-      const { pxPerMm, marginY, circumference, reversed } = getPlotMetrics();
-      const { zoom, offsetY } = viewRef.current;
-      if (pxPerMm <= 0) return PADDING.top;
-      // Flip circumferential handedness when the axial axis is mirrored, so the
-      // developed view is a proper view-from-the-other-end (not a mirror).
-      const yMm = circumDisplayMm(mm, circumference, reversed);
-      return PADDING.top + marginY + yMm * pxPerMm * zoom + offsetY;
-    },
-    [getPlotMetrics]
-  );
-
-  /** Inverse: canvas pixel → vessel mm (for hover lookups) */
-  const fromCanvasX = useCallback(
-    (px: number) => {
-      const { pxPerMm, marginX, vesselLength, reversed } = getPlotMetrics();
-      const { zoom, offsetX } = viewRef.current;
-      if (pxPerMm <= 0 || zoom <= 0) return 0;
-      const pos = (px - PADDING.left - marginX - offsetX) / (pxPerMm * zoom);
-      return reversed ? vesselLength - pos : pos;
-    },
-    [getPlotMetrics]
-  );
-
-  const fromCanvasY = useCallback(
-    (py: number) => {
-      const { pxPerMm, marginY, circumference, reversed } = getPlotMetrics();
-      const { zoom, offsetY } = viewRef.current;
-      if (pxPerMm <= 0 || zoom <= 0) return 0;
-      const yMm = (py - PADDING.top - marginY - offsetY) / (pxPerMm * zoom);
-      // circumDisplayMm is its own inverse, so the same call undoes the flip.
-      return circumDisplayMm(yMm, circumference, reversed);
-    },
-    [getPlotMetrics]
-  );
+  // The ONE orientation-aware developed→canvas mapping (Decision Log 2026-06-22 /
+  // 06-23 conventions + the vertical-vessel portrait transpose). Geometry, heatmap
+  // and hover all read it, so they always agree in one frame. Horizontal reduces
+  // to the historical toCanvasX/toCanvasY/fromCanvasX/fromCanvasY arithmetic.
+  const getFrame = useCallback((): DevelopedFrame => {
+    const { pxPerMm, marginX, marginY, vesselLength, circumference, reversed, orientation } =
+      getPlotMetrics();
+    const { zoom, offsetX, offsetY } = viewRef.current;
+    return makeDevelopedFrame({
+      orientation,
+      pxPerMm,
+      marginX,
+      marginY,
+      zoom,
+      offsetX,
+      offsetY,
+      originX: PADDING.left,
+      originY: PADDING.top,
+      vesselLength,
+      circumference,
+      reversed,
+    });
+  }, [getPlotMetrics]);
 
   // -----------------------------------------------------------------------
   // Render pipeline
@@ -260,26 +239,43 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
       return;
     }
 
-    // 2. Vessel outline rectangle. The vertical edges use the LINEAR
-    //    circumferential extent (top = 0, bottom = circumference). They cannot
-    //    use toCanvasY(circumference): under the handedness flip that wraps the
-    //    seam back to the top (circumference ≡ TDC), collapsing the rect — and
-    //    its clip — to zero height, which hides the heatmap.
-    const x0 = toCanvasX(0);
-    const x1 = toCanvasX(vesselLength);
     const {
       pxPerMm: vPx,
       marginX: vMarginX,
       marginY: vMarginY,
       reversed: vReversed,
+      orientation,
       layout,
     } = getPlotMetrics();
     const { zoom: vZoom, offsetX: vOffsetX, offsetY: vOffsetY } = viewRef.current;
-    const y0 = PADDING.top + vMarginY + vOffsetY;
-    const y1 = PADDING.top + vMarginY + circumference * vPx * vZoom + vOffsetY;
+    const vertical = orientation === 'vertical';
+    const frame = getFrame();
+    const kZoom = vPx * vZoom;
+    const od = vesselState.id;
+
+    // 2. Vessel outline rectangle. The axial extent runs along its screen axis
+    //    (X horizontal / Y vertical); the circumferential extent is drawn LINEARLY
+    //    (0 → circumference) — NOT via the flipping circScreen, which under the
+    //    handedness flip wraps the seam back to the start (circumference ≡ TDC),
+    //    collapsing the rect and its clip and hiding the heatmap (Decision Log
+    //    2026-06-23). For a vertical vessel the developed plane is transposed:
+    //    axial is screen-vertical (top of vessel at top), circumference horizontal
+    //    (TDC = left seam edge), so longitudinal strips read as vertical bands.
+    const axialLo = frame.axialScreen(0);
+    const axialHi = frame.axialScreen(vesselLength);
+    const circBase = vertical
+      ? PADDING.left + vMarginX + vOffsetX
+      : PADDING.top + vMarginY + vOffsetY;
+    const circLinLo = circBase;
+    const circLinHi = circBase + circumference * kZoom;
+
+    const rectLeft = vertical ? Math.min(circLinLo, circLinHi) : Math.min(axialLo, axialHi);
+    const rectRight = vertical ? Math.max(circLinLo, circLinHi) : Math.max(axialLo, axialHi);
+    const rectTop = vertical ? Math.min(axialLo, axialHi) : Math.min(circLinLo, circLinHi);
+    const rectBottom = vertical ? Math.max(axialLo, axialHi) : Math.max(circLinLo, circLinHi);
     ctx.strokeStyle = '#999';
     ctx.lineWidth = 1;
-    ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+    ctx.strokeRect(rectLeft, rectTop, rectRight - rectLeft, rectBottom - rectTop);
 
     // Shared view/scale for every developed surface (main shell + strips).
     const surfaceView = {
@@ -294,13 +290,14 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
       surfaceView,
       vesselLength,
       vesselState.id,
-      vReversed
+      vReversed,
+      orientation
     );
 
     // 3. Clip to vessel rect for heatmap + overlays
     ctx.save();
     ctx.beginPath();
-    ctx.rect(x0, y0, x1 - x0, y1 - y0);
+    ctx.rect(rectLeft, rectTop, rectRight - rectLeft, rectBottom - rectTop);
     ctx.clip();
 
     // 3a. Heatmap from MAIN-SHELL scan composites. Appendage-body scans are
@@ -309,16 +306,17 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
     paintComposites(ctx, compositesForBody(vesselState.scanComposites, undefined), mainProjector);
 
     // 3b. Geometry overlays (incl. appendage junction footprints)
-    renderGeometry(ctx, vesselState);
+    renderGeometry(ctx, vesselState, frame);
 
     ctx.restore(); // un-clip
 
-    // 3b-ii. Appendage developed panels, stacked below the main plot.
+    // 3b-ii. Appendage developed panels, stacked alongside the main plot.
     renderStripPanels(
       ctx,
       vesselState,
       layout,
       surfaceView,
+      orientation,
       selectedWeldIndex,
       selectedLugIndex,
       selectedNozzleIndex
@@ -327,15 +325,18 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
     // 3c. Selection glow — drawn OUTSIDE clip so it radiates freely.
     //     Uses concentric strokes with decreasing opacity for a soft halo
     //     (GLOW_LAYERS, shared with the appendage-strip glow).
-    const od = vesselState.id;
 
     // Saddle glow
     if (selectedSaddleIndex >= 0 && selectedSaddleIndex < vesselState.saddles.length) {
       const rect = projectSaddle(vesselState.saddles[selectedSaddleIndex], od);
-      const rx = toCanvasX(rect.x);
-      const ry = toCanvasY(rect.y);
-      const rw = toCanvasX(rect.x + rect.width) - rx;
-      const rh = toCanvasY(rect.y + rect.height) - ry;
+      const c0x = frame.px(rect.x, rect.y);
+      const c0y = frame.py(rect.x, rect.y);
+      const c1x = frame.px(rect.x + rect.width, rect.y + rect.height);
+      const c1y = frame.py(rect.x + rect.width, rect.y + rect.height);
+      const rx = Math.min(c0x, c1x);
+      const ry = Math.min(c0y, c1y);
+      const rw = Math.abs(c1x - c0x);
+      const rh = Math.abs(c1y - c0y);
       ctx.save();
       ctx.setLineDash([]);
       for (const layer of GLOW_LAYERS) {
@@ -349,25 +350,27 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
     }
 
     // Nozzle glow — main-shell nozzles only; an appendage nozzle glows in its own
-    // strip. Match the marker: per-axis radius + seam wrap.
+    // strip. Match the marker: per-axis radius (swapped for a vertical view) + seam wrap.
     if (
       selectedNozzleIndex >= 0 &&
       selectedNozzleIndex < vesselState.nozzles.length &&
       vesselState.nozzles[selectedNozzleIndex].bodyId === undefined
     ) {
       const circle = projectNozzle(vesselState.nozzles[selectedNozzleIndex], od);
-      const cx = toCanvasX(circle.cx);
-      const rxPx = Math.abs(toCanvasX(circle.cx + circle.radius) - cx) || 4;
-      const ryPx = Math.abs(toCanvasY(circle.cy + circle.radius) - toCanvasY(circle.cy)) || rxPx;
+      const rAx = frame.axialDeltaPx(circle.radius) || 4;
+      const rCi = frame.circDeltaPx(circle.radius) || rAx;
+      const exRx = vertical ? rCi : rAx;
+      const exRy = vertical ? rAx : rCi;
       ctx.save();
       for (const cyMm of wrapCircumCenters(circle.cy, circle.radius, circumference)) {
-        const cy = toCanvasY(cyMm);
+        const cx = frame.px(circle.cx, cyMm);
+        const cy = frame.py(circle.cx, cyMm);
         for (const layer of GLOW_LAYERS) {
           ctx.globalAlpha = layer.alpha;
           ctx.strokeStyle = '#ef4444';
           ctx.lineWidth = layer.width;
           ctx.beginPath();
-          ctx.ellipse(cx, cy, rxPx, ryPx, 0, 0, Math.PI * 2);
+          ctx.ellipse(cx, cy, exRx, exRy, 0, 0, Math.PI * 2);
           ctx.stroke();
         }
       }
@@ -382,8 +385,8 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
       vesselState.liftingLugs[selectedLugIndex].bodyId === undefined
     ) {
       const marker = projectLiftingLug(vesselState.liftingLugs[selectedLugIndex], od);
-      const cx = toCanvasX(marker.cx);
-      const cy = toCanvasY(marker.cy);
+      const cx = frame.px(marker.cx, marker.cy);
+      const cy = frame.py(marker.cx, marker.cy);
       ctx.save();
       for (const layer of GLOW_LAYERS) {
         ctx.globalAlpha = layer.alpha;
@@ -396,7 +399,11 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
       ctx.restore();
     }
 
-    // 3d. Welds (drawn outside clip so they extend beyond vessel bounds)
+    // 3d. Welds (drawn outside clip so they extend beyond vessel bounds).
+    //     A circumferential weld is a full ring → a line spanning the whole
+    //     circumference at its axial position (a vertical line horizontally,
+    //     a horizontal line for a vertical vessel). A longitudinal weld is a
+    //     segment at its circ angle running along the axial axis.
     ctx.save();
     for (let wi = 0; wi < vesselState.welds.length; wi++) {
       const weld = vesselState.welds[wi];
@@ -408,8 +415,6 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
       const projected =
         weld.type === 'circumferential' ? projectCircWeld(weld, od) : projectLongWeld(weld, od);
 
-      const px = toCanvasX(projected.x1);
-
       // Base weld line
       ctx.strokeStyle = isSelected ? '#4ade80' : '#22c55e';
       ctx.lineWidth = isSelected ? 2.5 : 1;
@@ -417,53 +422,75 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
       ctx.globalAlpha = isSelected ? 1 : 0.7;
 
       if (weld.type === 'circumferential') {
+        const aScreen = frame.axialScreen(projected.x1);
         ctx.beginPath();
-        ctx.moveTo(px, y0 - 15);
-        ctx.lineTo(px, y1 + 15);
+        if (vertical) {
+          ctx.moveTo(circLinLo - 15, aScreen);
+          ctx.lineTo(circLinHi + 15, aScreen);
+        } else {
+          ctx.moveTo(aScreen, circLinLo - 15);
+          ctx.lineTo(aScreen, circLinHi + 15);
+        }
         ctx.stroke();
-      } else {
-        ctx.beginPath();
-        ctx.moveTo(toCanvasX(projected.x1), toCanvasY(projected.y1));
-        ctx.lineTo(toCanvasX(projected.x2), toCanvasY(projected.y2));
-        ctx.stroke();
-      }
 
-      // Label — CW above chart, LW to the right of the line
-      ctx.globalAlpha = 1;
-      ctx.setLineDash([]);
-      ctx.fillStyle = isSelected ? '#16a34a' : '#333';
-      ctx.font = isSelected ? 'bold 11px sans-serif' : '10px sans-serif';
-      if (weld.type === 'circumferential') {
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText(projected.label, px, y0 - 18);
+        // Label at the seam-start end of the line.
+        ctx.globalAlpha = 1;
+        ctx.setLineDash([]);
+        ctx.fillStyle = isSelected ? '#16a34a' : '#333';
+        ctx.font = isSelected ? 'bold 11px sans-serif' : '10px sans-serif';
+        if (vertical) {
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(projected.label, circLinLo, aScreen - 4);
+        } else {
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(projected.label, aScreen, circLinLo - 18);
+        }
       } else {
+        ctx.beginPath();
+        ctx.moveTo(frame.px(projected.x1, projected.y1), frame.py(projected.x1, projected.y1));
+        ctx.lineTo(frame.px(projected.x2, projected.y2), frame.py(projected.x2, projected.y2));
+        ctx.stroke();
+
+        ctx.globalAlpha = 1;
+        ctx.setLineDash([]);
+        ctx.fillStyle = isSelected ? '#16a34a' : '#333';
+        ctx.font = isSelected ? 'bold 11px sans-serif' : '10px sans-serif';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText(projected.label, toCanvasX(projected.x2) + 6, toCanvasY(projected.y2));
+        ctx.fillText(
+          projected.label,
+          frame.px(projected.x2, projected.y2) + 6,
+          frame.py(projected.x2, projected.y2)
+        );
       }
     }
     ctx.globalAlpha = 1;
     ctx.setLineDash([]);
     ctx.restore();
 
-    // 4. Dimension scales — axial axis labelled as scan-index distance from
-    //    the scan start (0 on the left), matching the mirrored orientation.
+    // 4. Dimension scales. The axial axis is labelled as scan-index distance from
+    //    the scan start; the circumferential axis as distance-from-TDC. For a
+    //    vertical vessel the two axes swap screen sides (axial down the left,
+    //    circumference along the bottom).
     const axialOri = getAxialOrientation(vesselState.scanComposites);
-    drawAxialScale(ctx, vesselLength, toCanvasX, y1 + 4, (mm) => axialToIndexMm(mm, axialOri));
-    // Circumferential scale: anchor to the actual left edge (toCanvasX(0) is
-    // the right edge when the axial axis is mirrored), and place ticks with a
-    // plain linear mapping — NOT the flipping toCanvasY, which would scramble
-    // the tick order. The labels are distance-from-TDC, which is the same in
-    // either handedness, so a linear 0→circumference placement stays correct.
-    const { pxPerMm: circPx, marginY: circMargin } = getPlotMetrics();
-    const { zoom: circZoom, offsetY: circOffsetY } = viewRef.current;
-    drawCircumScale(
-      ctx,
-      circumference,
-      (mm) => PADDING.top + circMargin + mm * circPx * circZoom + circOffsetY,
-      Math.min(x0, x1) - 4
-    );
+    const axialLabel = (mm: number) => axialToIndexMm(mm, axialOri);
+    const circLinear = (mm: number) => circBase + mm * kZoom;
+    if (vertical) {
+      // Axial scale down the left edge (ticks horizontal); circ scale along the bottom.
+      drawCircumScale(
+        ctx,
+        vesselLength,
+        (mm) => frame.axialScreen(mm),
+        rectLeft - 4,
+        axialLabel
+      );
+      drawAxialScale(ctx, circumference, circLinear, rectBottom + 4);
+    } else {
+      drawAxialScale(ctx, vesselLength, (mm) => frame.axialScreen(mm), circLinHi + 4, axialLabel);
+      drawCircumScale(ctx, circumference, circLinear, Math.min(axialLo, axialHi) - 4);
+    }
 
     // 5. Metadata header
     drawMetadataHeader(ctx, vesselState, PADDING.left, 10);
@@ -492,8 +519,7 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
     selectedNozzleIndex,
     selectedSaddleIndex,
     selectedLugIndex,
-    toCanvasX,
-    toCanvasY,
+    getFrame,
     getPlotMetrics,
   ]);
 
@@ -571,28 +597,43 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
         offsetX: number;
         offsetY: number;
       },
+      orientation: VesselState['orientation'],
       selWeldIndex: number,
       selLugIndex: number,
       selNozzleIndex: number
     ) => {
       if (layout.pxPerMm <= 0 || layout.panels.length === 0) return;
-      const { pxPerMm, marginX, marginY, zoom, offsetX, offsetY } = view;
+      const { pxPerMm, zoom } = view;
 
       for (const panel of layout.panels) {
         const appendage = state.appendages.find((a) => a.id === panel.id);
         if (!appendage) continue;
         const appendageOD = appendage.diameter;
+        const appCirc = Math.PI * appendageOD;
 
-        // Panel canvas rect — LINEAR vertical extents (top = datum 0°, bottom =
-        // circumference), never via a wrapping toCanvasY (Decision Log 2026-06-23).
-        const left = PADDING.left + marginX + offsetX;
-        const right = PADDING.left + marginX + panel.lengthMm * pxPerMm * zoom + offsetX;
-        const top = PADDING.top + marginY + panel.topBasePx * zoom + offsetY;
-        const bottom =
-          PADDING.top +
-          marginY +
-          (panel.topBasePx + panel.circumferenceMm * pxPerMm) * zoom +
-          offsetY;
+        const stripView = {
+          ...view,
+          paddingLeft: PADDING.left,
+          paddingTop: PADDING.top,
+          topBasePx: panel.topBasePx,
+        };
+        // Orientation-aware strip point → canvas (physical axial axis, datum-cut
+        // circumference). Horizontal: axial→X, circ→Y (+ stack offset). Vertical:
+        // the strip transposes with the parent vessel — axial→Y, circ→X — so it
+        // stays in ONE frame with the main surface (Decision Log 2026-06-23).
+        const spx = (pos: number, circ: number) => stripPx(pos, circ, stripView, orientation);
+        const spy = (pos: number, circ: number) => stripPy(pos, circ, stripView, orientation);
+
+        // Panel canvas rect from the developed corners (LINEAR extents; the datum
+        // cut is a seam edge, never routed through a wrapping transform).
+        const cAx = spx(0, 0);
+        const cAy = spy(0, 0);
+        const cBx = spx(panel.lengthMm, panel.circumferenceMm);
+        const cBy = spy(panel.lengthMm, panel.circumferenceMm);
+        const left = Math.min(cAx, cBx);
+        const right = Math.max(cAx, cBx);
+        const top = Math.min(cAy, cBy);
+        const bottom = Math.max(cAy, cBy);
 
         // Title
         ctx.fillStyle = '#333';
@@ -601,7 +642,7 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
         ctx.textBaseline = 'bottom';
         ctx.fillText(panel.name, left, top - 4);
 
-        // Border + datum (0°) reference line at the top edge
+        // Border + datum (0°) reference line along the datum-cut seam edge.
         ctx.strokeStyle = '#999';
         ctx.lineWidth = 1;
         ctx.strokeRect(left, top, right - left, bottom - top);
@@ -609,13 +650,13 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
         ctx.strokeStyle = '#22c55e';
         ctx.setLineDash([6, 4]);
         ctx.beginPath();
-        ctx.moveTo(left, top);
-        ctx.lineTo(right, top);
+        ctx.moveTo(spx(0, 0), spy(0, 0));
+        ctx.lineTo(spx(panel.lengthMm, 0), spy(panel.lengthMm, 0));
         ctx.stroke();
         ctx.restore();
 
         // Heatmap + coverage rects, clipped to the panel rect.
-        const projector = stripSurfaceProjector(view, panel.topBasePx, appendageOD);
+        const projector = stripSurfaceProjector(view, panel.topBasePx, appendageOD, orientation);
         ctx.save();
         ctx.beginPath();
         ctx.rect(left, top, right - left, bottom - top);
@@ -624,49 +665,40 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
         paintComposites(ctx, compositesForBody(state.scanComposites, panel.id), projector);
 
         // Body coverage rects. Appendage rect.angle is the appendage datum
-        // convention (0 = datum meridian); datumToCircumMm maps it to panel Y
-        // from the top, matching the scan datum mapping used above. Wrapped
-        // across the panel seam like circumferential markers.
-        const stripView = {
-          pxPerMm,
-          marginX,
-          marginY,
-          zoom,
-          offsetX,
-          offsetY,
-          paddingLeft: PADDING.left,
-          paddingTop: PADDING.top,
-          topBasePx: panel.topBasePx,
-        };
-        const appCirc = Math.PI * appendageOD;
+        // convention (0 = datum meridian); datumToCircumMm maps it to the panel
+        // circ axis, matching the scan datum mapping used above. Wrapped across the
+        // panel seam like circumferential markers.
         for (const rect of state.coverageRects) {
           if (rect.bodyId !== panel.id) continue;
           const centerMm = datumToCircumMm(rect.angle, appendageOD);
           const halfHmm = rect.height / 2;
-          const cxL = stripToCanvasX(rect.pos - rect.width / 2, stripView);
-          const cxR = stripToCanvasX(rect.pos + rect.width / 2, stripView);
           for (const cyMm of wrapCircumCenters(centerMm, halfHmm, appCirc)) {
-            const yTop = stripToCanvasY(cyMm - halfHmm, stripView);
-            const yBot = stripToCanvasY(cyMm + halfHmm, stripView);
+            const r0x = spx(rect.pos - rect.width / 2, cyMm - halfHmm);
+            const r0y = spy(rect.pos - rect.width / 2, cyMm - halfHmm);
+            const r1x = spx(rect.pos + rect.width / 2, cyMm + halfHmm);
+            const r1y = spy(rect.pos + rect.width / 2, cyMm + halfHmm);
+            const rx = Math.min(r0x, r1x);
+            const ry = Math.min(r0y, r1y);
+            const rw = Math.abs(r1x - r0x);
+            const rh = Math.abs(r1y - r0y);
             if (rect.filled) {
               ctx.save();
               ctx.globalAlpha = rect.fillOpacity ?? 0.2;
               ctx.fillStyle = rect.color;
-              ctx.fillRect(cxL, yTop, cxR - cxL, yBot - yTop);
+              ctx.fillRect(rx, ry, rw, rh);
               ctx.restore();
             }
             ctx.strokeStyle = rect.color;
             ctx.lineWidth = 1.2;
-            ctx.strokeRect(cxL, yTop, cxR - cxL, yBot - yTop);
+            ctx.strokeRect(rx, ry, rw, rh);
           }
         }
 
         // Appendage welds — same visual language as the main-surface welds, placed
-        // on THIS strip: a circumferential weld is a vertical line across the strip
-        // at its axial pos; a longitudinal weld is a horizontal segment at its datum
-        // angle, seam-wrapped inside the strip circumference (a weld on the datum cut
-        // shows on both edges). Clipped to the panel so nothing bleeds into the
-        // stacked neighbours; body-scoped so a main-shell weld never lands here.
+        // on THIS strip: a circumferential weld spans the full circumference at its
+        // axial pos; a longitudinal weld runs along the axial axis at its datum
+        // angle, seam-wrapped inside the strip circumference. Clipped to the panel;
+        // body-scoped so a main-shell weld never lands here.
         ctx.save();
         for (let wi = 0; wi < state.welds.length; wi++) {
           const weld = state.welds[wi];
@@ -679,39 +711,35 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
 
           if (weld.type === 'circumferential') {
             const cw = projectCircWeld(weld, appendageOD);
-            const px = stripToCanvasX(cw.x1, stripView);
             ctx.beginPath();
-            ctx.moveTo(px, top);
-            ctx.lineTo(px, bottom);
+            ctx.moveTo(spx(cw.x1, 0), spy(cw.x1, 0));
+            ctx.lineTo(spx(cw.x1, appCirc), spy(cw.x1, appCirc));
             ctx.stroke();
-            // Label at the top edge, inside the panel.
+            // Label at the datum-seam end of the line.
             ctx.globalAlpha = 1;
             ctx.setLineDash([]);
             ctx.fillStyle = isSelected ? '#16a34a' : '#333';
             ctx.font = isSelected ? 'bold 11px sans-serif' : '10px sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
-            ctx.fillText(cw.label, px, top + 2);
+            ctx.fillText(cw.label, spx(cw.x1, 0), spy(cw.x1, 0) + 2);
           } else {
             const lw = projectStripLongWeld(weld, appendageOD);
-            const xA = stripToCanvasX(lw.x1, stripView);
-            const xB = stripToCanvasX(lw.x2, stripView);
             const capHalf = (weld.capWidth ?? 8) / 2;
             for (const cyMm of wrapCircumCenters(lw.y1, capHalf, appCirc)) {
-              const y = stripToCanvasY(cyMm, stripView);
               ctx.beginPath();
-              ctx.moveTo(xA, y);
-              ctx.lineTo(xB, y);
+              ctx.moveTo(spx(lw.x1, cyMm), spy(lw.x1, cyMm));
+              ctx.lineTo(spx(lw.x2, cyMm), spy(lw.x2, cyMm));
               ctx.stroke();
             }
-            // Label to the right of the segment end.
+            // Label at the segment end.
             ctx.globalAlpha = 1;
             ctx.setLineDash([]);
             ctx.fillStyle = isSelected ? '#16a34a' : '#333';
             ctx.font = isSelected ? 'bold 11px sans-serif' : '10px sans-serif';
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
-            ctx.fillText(lw.label, xB + 6, stripToCanvasY(lw.y1, stripView));
+            ctx.fillText(lw.label, spx(lw.x2, lw.y1) + 6, spy(lw.x2, lw.y1));
           }
         }
         ctx.globalAlpha = 1;
@@ -726,7 +754,6 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
           const lug = state.liftingLugs[li];
           if (lug.bodyId !== panel.id) continue;
           const marker = projectStripLiftingLug(lug, appendageOD);
-          const cx = stripToCanvasX(marker.cx, stripView);
           const size = 6;
           // Wrap the fixed-pixel marker using its on-screen half-height in mm, so a
           // lug straddling the datum seam is drawn on both strip edges.
@@ -736,7 +763,8 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
           if (li === selLugIndex) {
             ctx.save();
             for (const cyMm of centers) {
-              const cy = stripToCanvasY(cyMm, stripView);
+              const cx = spx(marker.cx, cyMm);
+              const cy = spy(marker.cx, cyMm);
               for (const layer of GLOW_LAYERS) {
                 ctx.globalAlpha = layer.alpha;
                 ctx.fillStyle = '#22c55e';
@@ -750,7 +778,8 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
           }
 
           for (const cyMm of centers) {
-            const cy = stripToCanvasY(cyMm, stripView);
+            const cx = spx(marker.cx, cyMm);
+            const cy = spy(marker.cx, cyMm);
             ctx.fillStyle = '#2ecc71';
             ctx.beginPath();
             ctx.moveTo(cx, cy - size);
@@ -768,33 +797,28 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
         }
 
         // Appendage nozzles — the same ellipse + cross-hair marker as the main
-        // surface, at (axial pos, datum angle) on the strip. Per-axis pixel radii
-        // (rxPx from the strip X scale, ryPx from the strip Y scale — equal under the
-        // shared 1:1 pxPerMm, but taken per-axis exactly like the main path) and
-        // seam-wrapped by the bore radius so a nozzle on the datum cut shows on both
-        // strip edges. A selected nozzle gets the shared concentric ellipse glow
-        // (clipped to the panel), matching the main-surface nozzle selection.
+        // surface, at (axial pos, datum angle) on the strip. Per-axis pixel radii —
+        // equal under the shared 1:1 pxPerMm — seam-wrapped by the bore radius so a
+        // nozzle on the datum cut shows on both strip edges. A selected nozzle gets
+        // the shared concentric ellipse glow (clipped to the panel).
         for (let ni = 0; ni < state.nozzles.length; ni++) {
           const nozzle = state.nozzles[ni];
           if (nozzle.bodyId !== panel.id) continue;
           const circle = projectStripNozzle(nozzle, appendageOD);
-          const cx = stripToCanvasX(circle.cx, stripView);
-          const rxPx = Math.abs(stripToCanvasX(circle.cx + circle.radius, stripView) - cx) || 4;
-          const cyBase = stripToCanvasY(circle.cy, stripView);
-          const ryPx =
-            Math.abs(stripToCanvasY(circle.cy + circle.radius, stripView) - cyBase) || rxPx;
+          const rPx = (circle.radius * pxPerMm * zoom) || 4;
           const centers = wrapCircumCenters(circle.cy, circle.radius, appCirc);
 
           if (ni === selNozzleIndex) {
             ctx.save();
             for (const cyMm of centers) {
-              const cy = stripToCanvasY(cyMm, stripView);
+              const cx = spx(circle.cx, cyMm);
+              const cy = spy(circle.cx, cyMm);
               for (const layer of GLOW_LAYERS) {
                 ctx.globalAlpha = layer.alpha;
                 ctx.strokeStyle = '#ef4444';
                 ctx.lineWidth = layer.width;
                 ctx.beginPath();
-                ctx.ellipse(cx, cy, rxPx, ryPx, 0, 0, Math.PI * 2);
+                ctx.ellipse(cx, cy, rPx, rPx, 0, 0, Math.PI * 2);
                 ctx.stroke();
               }
             }
@@ -803,26 +827,27 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
           }
 
           for (const cyMm of centers) {
-            const cy = stripToCanvasY(cyMm, stripView);
+            const cx = spx(circle.cx, cyMm);
+            const cy = spy(circle.cx, cyMm);
             ctx.strokeStyle = '#e74c3c';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
-            ctx.ellipse(cx, cy, rxPx, ryPx, 0, 0, Math.PI * 2);
+            ctx.ellipse(cx, cy, rPx, rPx, 0, 0, Math.PI * 2);
             ctx.stroke();
 
             // Cross-hair
             ctx.beginPath();
-            ctx.moveTo(cx - rxPx, cy);
-            ctx.lineTo(cx + rxPx, cy);
-            ctx.moveTo(cx, cy - ryPx);
-            ctx.lineTo(cx, cy + ryPx);
+            ctx.moveTo(cx - rPx, cy);
+            ctx.lineTo(cx + rPx, cy);
+            ctx.moveTo(cx, cy - rPx);
+            ctx.lineTo(cx, cy + rPx);
             ctx.stroke();
 
             ctx.fillStyle = '#333';
             ctx.font = '10px sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'bottom';
-            ctx.fillText(circle.label, cx, cy - ryPx - 3);
+            ctx.fillText(circle.label, cx, cy - rPx - 3);
           }
         }
 
@@ -837,29 +862,57 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
   // -----------------------------------------------------------------------
 
   const renderGeometry = useCallback(
-    (ctx: CanvasRenderingContext2D, state: VesselState) => {
+    (ctx: CanvasRenderingContext2D, state: VesselState, frame: DevelopedFrame) => {
       const od = state.id; // geometry-projection functions accept vesselOD
 
-      // 12 o'clock reference line (vessel TDC = 90° → Y = 0, top of the view)
+      const {
+        pxPerMm: gPx,
+        marginX: gMx,
+        marginY: gMy,
+        circumference: gCirc,
+        reversed: gRev,
+        orientation,
+      } = getPlotMetrics();
+      const { zoom: gZoom, offsetX: gOx, offsetY: gOy } = viewRef.current;
+      const vertical = orientation === 'vertical';
+      const gK = gPx * gZoom;
+      // LINEAR circ-mm → screen coordinate along the circ axis (Y horizontal /
+      // X vertical). Used for the vessel-frame overlays whose handedness flip is
+      // already baked into their developed polyline (footprints); NOT the frame's
+      // flipping circScreen (Decision Log 2026-06-23).
+      const circLinearScalar = (mm: number) =>
+        (vertical ? PADDING.left + gMx + gOx : PADDING.top + gMy + gOy) + mm * gK;
+      const fpPointX = (axialMm: number, circMm: number) =>
+        vertical ? circLinearScalar(circMm) : frame.axialScreen(axialMm);
+      const fpPointY = (axialMm: number, circMm: number) =>
+        vertical ? frame.axialScreen(axialMm) : circLinearScalar(circMm);
+
+      // 12 o'clock reference line (vessel TDC = 90° → circ = 0). Horizontal → a
+      // horizontal line along the top; vertical → a vertical line down the left
+      // seam edge.
       const tdcMm = angleToCircumMm(90, od);
-      const tdcY = toCanvasY(tdcMm);
-      const x0 = toCanvasX(0);
-      const x1 = toCanvasX(state.length);
+      const t0x = frame.px(0, tdcMm);
+      const t0y = frame.py(0, tdcMm);
+      const t1x = frame.px(state.length, tdcMm);
+      const t1y = frame.py(state.length, tdcMm);
       ctx.save();
       ctx.strokeStyle = '#22c55e';
       ctx.lineWidth = 1;
       ctx.setLineDash([6, 4]);
       ctx.beginPath();
-      ctx.moveTo(x0, tdcY);
-      ctx.lineTo(x1, tdcY);
+      ctx.moveTo(t0x, t0y);
+      ctx.lineTo(t1x, t1y);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.fillStyle = '#22c55e';
       ctx.font = '10px sans-serif';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'bottom';
-      // Left edge — toCanvasX(0) is the right edge when the axis is mirrored.
-      ctx.fillText("12 o'clock (TDC)", Math.min(x0, x1) + 4, tdcY - 3);
+      ctx.fillText(
+        "12 o'clock (TDC)",
+        Math.min(t0x, t1x) + 4,
+        Math.min(t0y, t1y) - 3
+      );
       ctx.restore();
 
       // Appendage junction footprints — the exact cylinder-on-cylinder opening
@@ -869,30 +922,19 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
       // that helper is only for scan datums — Decision Log 2026-06-22). Drawn as a
       // base layer so nozzles/labels stay legible on top; each footprint is drawn
       // at every seam-wrapped centre (same treatment class as wrapCircumCenters).
-      const {
-        pxPerMm: fpPxPerMm,
-        marginY: fpMarginY,
-        circumference: fpCirc,
-        reversed: fpReversed,
-      } = getPlotMetrics();
-      const { zoom: fpZoom, offsetY: fpOffsetY } = viewRef.current;
-      // Linear circ mm → canvas Y (the handedness flip is already baked into the
-      // developed polyline, so this must NOT re-apply the wrapping toCanvasY).
-      const fpCircToY = (mm: number) =>
-        PADDING.top + fpMarginY + mm * fpPxPerMm * fpZoom + fpOffsetY;
       for (const appendage of state.appendages) {
         const fp = buildJunctionFootprint(od / 2, appendage);
         if (fp.boundary.length === 0) continue;
         const developed = developFootprintBoundary(fp.boundary, appendage.mountAngle, od);
-        const disp = displayFootprintPolyline(developed, fpCirc, fpReversed);
+        const disp = displayFootprintPolyline(developed, gCirc, gRev);
 
         ctx.save();
-        for (const copyCenter of wrapCircumCenters(disp.centerMm, disp.halfExtentMm, fpCirc)) {
+        for (const copyCenter of wrapCircumCenters(disp.centerMm, disp.halfExtentMm, gCirc)) {
           const shift = copyCenter - disp.centerMm;
           ctx.beginPath();
           disp.points.forEach((p, i) => {
-            const px = toCanvasX(p.x);
-            const py = fpCircToY(p.yMm + shift);
+            const px = fpPointX(p.x, p.yMm + shift);
+            const py = fpPointY(p.x, p.yMm + shift);
             if (i === 0) ctx.moveTo(px, py);
             else ctx.lineTo(px, py);
           });
@@ -915,7 +957,11 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
         ctx.font = '10px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(appendage.name, toCanvasX(appendage.mountPos), fpCircToY(disp.centerMm));
+        ctx.fillText(
+          appendage.name,
+          fpPointX(appendage.mountPos, disp.centerMm),
+          fpPointY(appendage.mountPos, disp.centerMm)
+        );
       }
 
       // Welds are rendered outside the clip region (see main draw fn)
@@ -923,10 +969,14 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
       // Saddles
       for (const saddle of state.saddles) {
         const rect = projectSaddle(saddle, od);
-        const rx = toCanvasX(rect.x);
-        const ry = toCanvasY(rect.y);
-        const rw = toCanvasX(rect.x + rect.width) - rx;
-        const rh = toCanvasY(rect.y + rect.height) - ry;
+        const c0x = frame.px(rect.x, rect.y);
+        const c0y = frame.py(rect.x, rect.y);
+        const c1x = frame.px(rect.x + rect.width, rect.y + rect.height);
+        const c1y = frame.py(rect.x + rect.width, rect.y + rect.height);
+        const rx = Math.min(c0x, c1x);
+        const ry = Math.min(c0y, c1y);
+        const rw = Math.abs(c1x - c0x);
+        const rh = Math.abs(c1y - c0y);
 
         ctx.strokeStyle = '#888';
         ctx.lineWidth = 1;
@@ -940,17 +990,16 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
         ctx.textBaseline = 'top';
         ctx.fillText(
           rect.label,
-          toCanvasX(rect.x + rect.width / 2),
-          toCanvasY(rect.y + rect.height) + 2
+          frame.px(rect.x + rect.width / 2, rect.y + rect.height),
+          frame.py(rect.x + rect.width / 2, rect.y + rect.height) + 2
         );
       }
 
-      // Nozzles — drawn as ellipses because the developed view scales the axial
-      // and circumferential axes independently, so a bore that is round on the
-      // shell must use a separate pixel radius per axis (a single radius makes
-      // it bulge/shrink circumferentially). Each nozzle is also drawn at every
-      // seam-wrapped centre so a feature straddling the TDC cut is not clipped
-      // in half at the top/bottom boundary.
+      // Nozzles — drawn as ellipses with a separate pixel radius per axis (axial
+      // vs circumferential). Under the shared 1:1 scale the two are equal (round
+      // bore); the per-axis form keeps the marker faithful and swaps cleanly for a
+      // vertical (transposed) view. Each nozzle is drawn at every seam-wrapped
+      // centre so a feature straddling the TDC cut is not clipped in half.
       const circumference = getCircumference(state);
       for (const nozzle of state.nozzles) {
         // Appendage nozzles render on their own strip (renderStripPanels), never on
@@ -958,32 +1007,34 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
         // any model whose nozzles are all main-shell (bodyId undefined).
         if (nozzle.bodyId !== undefined) continue;
         const circle = projectNozzle(nozzle, od);
-        const cx = toCanvasX(circle.cx);
-        const rxPx = Math.abs(toCanvasX(circle.cx + circle.radius) - cx) || 4;
-        const ryPx = Math.abs(toCanvasY(circle.cy + circle.radius) - toCanvasY(circle.cy)) || rxPx;
+        const rAx = frame.axialDeltaPx(circle.radius) || 4;
+        const rCi = frame.circDeltaPx(circle.radius) || rAx;
+        const exRx = vertical ? rCi : rAx;
+        const exRy = vertical ? rAx : rCi;
 
         for (const cyMm of wrapCircumCenters(circle.cy, circle.radius, circumference)) {
-          const cy = toCanvasY(cyMm);
+          const cx = frame.px(circle.cx, cyMm);
+          const cy = frame.py(circle.cx, cyMm);
 
           ctx.strokeStyle = '#e74c3c';
           ctx.lineWidth = 1.5;
           ctx.beginPath();
-          ctx.ellipse(cx, cy, rxPx, ryPx, 0, 0, Math.PI * 2);
+          ctx.ellipse(cx, cy, exRx, exRy, 0, 0, Math.PI * 2);
           ctx.stroke();
 
           // Cross-hair
           ctx.beginPath();
-          ctx.moveTo(cx - rxPx, cy);
-          ctx.lineTo(cx + rxPx, cy);
-          ctx.moveTo(cx, cy - ryPx);
-          ctx.lineTo(cx, cy + ryPx);
+          ctx.moveTo(cx - exRx, cy);
+          ctx.lineTo(cx + exRx, cy);
+          ctx.moveTo(cx, cy - exRy);
+          ctx.lineTo(cx, cy + exRy);
           ctx.stroke();
 
           ctx.fillStyle = '#333';
           ctx.font = '10px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'bottom';
-          ctx.fillText(circle.label, cx, cy - ryPx - 3);
+          ctx.fillText(circle.label, cx, cy - exRy - 3);
         }
       }
 
@@ -991,8 +1042,8 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
       for (const lug of state.liftingLugs) {
         if (lug.bodyId !== undefined) continue;
         const marker = projectLiftingLug(lug, od);
-        const cx = toCanvasX(marker.cx);
-        const cy = toCanvasY(marker.cy);
+        const cx = frame.px(marker.cx, marker.cy);
+        const cy = frame.py(marker.cx, marker.cy);
         const size = 6;
 
         ctx.fillStyle = '#2ecc71';
@@ -1010,7 +1061,7 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
         ctx.fillText(marker.label, cx, cy - size - 3);
       }
     },
-    [toCanvasX, toCanvasY, getPlotMetrics]
+    [getPlotMetrics]
   );
 
   // -----------------------------------------------------------------------
@@ -1111,8 +1162,10 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
       // scoped to that body: the main shell ignores appendage scans, and a strip
       // finds ONLY its own body's scans (body-scoped findThicknessAt).
       let hit: number | null = null;
-      const mainAxial = fromCanvasX(mx);
-      const mainCircum = fromCanvasY(my);
+      const frame = getFrame();
+      const orientation = vesselState.orientation;
+      const mainAxial = frame.axialMmAt(mx, my);
+      const mainCircum = frame.circMmAt(mx, my);
       if (
         mainAxial >= 0 &&
         mainAxial <= vesselLength &&
@@ -1144,8 +1197,8 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
             paddingTop: PADDING.top,
             topBasePx: panel.topBasePx,
           };
-          const posMm = stripFromCanvasX(mx, stripView);
-          const circMm = stripFromCanvasY(my, stripView);
+          const posMm = stripPosAt(mx, my, stripView, orientation);
+          const circMm = stripCircAt(mx, my, stripView, orientation);
           if (posMm < 0 || posMm > panel.lengthMm || circMm < 0 || circMm > panel.circumferenceMm) {
             continue;
           }
@@ -1171,7 +1224,7 @@ const FlattenedViewport = forwardRef<FlattenedViewportHandle, Props>(function Fl
         setTooltip(null);
       }
     },
-    [render, fromCanvasX, fromCanvasY, getPlotMetrics, vesselState]
+    [render, getFrame, getPlotMetrics, vesselState]
   );
 
   const handleMouseUp = useCallback(() => {

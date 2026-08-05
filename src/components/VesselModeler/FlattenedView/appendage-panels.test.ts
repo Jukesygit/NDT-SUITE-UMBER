@@ -23,6 +23,10 @@ import {
   stripToCanvasY,
   stripFromCanvasX,
   stripFromCanvasY,
+  stripPx,
+  stripPy,
+  stripPosAt,
+  stripCircAt,
   type StripSpec,
   type StripCanvasView,
 } from './appendage-panels';
@@ -85,6 +89,40 @@ describe('computeStackLayout', () => {
     // Overhead alone exceeds the canvas height ⇒ no room for any panel.
     const strips: StripSpec[] = [{ id: 'a', name: 'S', lengthMm: 100, circumferenceMm: 100 }];
     expect(computeStackLayout(1000, 20, 1000, 500, strips, OPTS).pxPerMm).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeStackLayout — vertical orientation (portrait transpose)
+// ---------------------------------------------------------------------------
+// A vertical vessel is presented portrait: axial → screen-Y, circumference (and
+// the panel stack) → screen-X. Horizontal remains the default and byte-identical.
+// ---------------------------------------------------------------------------
+describe('computeStackLayout (vertical orientation)', () => {
+  it('horizontal is the default — an explicit horizontal arg changes nothing', () => {
+    const def = computeStackLayout(1000, 500, 5000, 2500, [], OPTS);
+    const explicit = computeStackLayout(1000, 500, 5000, 2500, [], OPTS, 'horizontal');
+    expect(explicit).toEqual(def);
+  });
+
+  it('swaps content axes: axial fits the height, circumference fits the width', () => {
+    // draw 2000×1000; axial 5000, circ 1000. pxPerMm = min(2000/1000, 1000/5000) = 0.2.
+    const layout = computeStackLayout(2000, 1000, 5000, 1000, [], OPTS, 'vertical');
+    expect(layout.pxPerMm).toBeCloseTo(0.2, 9);
+    // marginX letterboxes circ: (2000 - 1000·0.2)/2 = 900; marginY letterboxes axial: (1000 - 5000·0.2)/2 = 0.
+    expect(layout.marginX).toBeCloseTo(900, 9);
+    expect(layout.marginY).toBeCloseTo(0, 9);
+  });
+
+  it('stacks strips along the circumferential (screen-X) axis with the title/gap overhead', () => {
+    const strips: StripSpec[] = [{ id: 'a', name: 'S', lengthMm: 1000, circumferenceMm: 500 }];
+    const layout = computeStackLayout(4000, 2000, 1000, 1000, strips, OPTS, 'vertical');
+    expect(layout.panels).toHaveLength(1);
+    // panel0 top offset = mainCirc·px + gap + title (same walk as horizontal, along the stack axis).
+    expect(layout.panels[0].topBasePx).toBeCloseTo(
+      1000 * layout.pxPerMm + OPTS.gapPx + OPTS.titlePx,
+      6,
+    );
   });
 });
 
@@ -189,6 +227,58 @@ describe('strip canvas projection', () => {
     const bad = { ...view, pxPerMm: 0 };
     expect(stripFromCanvasX(123, bad)).toBe(0);
     expect(stripFromCanvasY(123, bad)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Orientation-aware strip transforms (portrait transpose for a vertical vessel)
+// ---------------------------------------------------------------------------
+describe('orientation-aware strip transforms', () => {
+  const view: StripCanvasView = {
+    pxPerMm: 0.7,
+    marginX: 12,
+    marginY: 40,
+    zoom: 1.3,
+    offsetX: 25,
+    offsetY: -18,
+    paddingLeft: 70,
+    paddingTop: 80,
+    topBasePx: 534,
+  };
+
+  it('horizontal stripPx/stripPy equal the legacy stripToCanvasX/stripToCanvasY', () => {
+    for (const [pos, circ] of [
+      [0, 0],
+      [250, 90],
+      [900, 410],
+    ]) {
+      expect(stripPx(pos, circ, view, 'horizontal')).toBeCloseTo(stripToCanvasX(pos, view), 9);
+      expect(stripPy(pos, circ, view, 'horizontal')).toBeCloseTo(stripToCanvasY(circ, view), 9);
+    }
+  });
+
+  it('vertical: X tracks circumference (with the stack offset), Y tracks physical axial pos', () => {
+    // More circumference → further right; axial pos does not move X.
+    expect(stripPx(100, 250, view, 'vertical')).toBeGreaterThan(stripPx(100, 50, view, 'vertical'));
+    expect(stripPx(999, 50, view, 'vertical')).toBeCloseTo(stripPx(100, 50, view, 'vertical'), 9);
+    // More axial pos → further down; circumference does not move Y.
+    expect(stripPy(400, 50, view, 'vertical')).toBeGreaterThan(stripPy(100, 50, view, 'vertical'));
+    expect(stripPy(100, 999, view, 'vertical')).toBeCloseTo(stripPy(100, 50, view, 'vertical'), 9);
+  });
+
+  it('round-trips axial + circumferential coordinates in both orientations', () => {
+    for (const orientation of ['horizontal', 'vertical'] as const) {
+      for (const [pos, circ] of [
+        [0, 0],
+        [137.5, 55],
+        [900, 623.4],
+      ]) {
+        const x = stripPx(pos, circ, view, orientation);
+        const y = stripPy(pos, circ, view, orientation);
+        expect(stripPosAt(x, y, view, orientation)).toBeCloseTo(pos, 6);
+        expect(stripCircAt(x, y, view, orientation)).toBeCloseTo(circ, 6);
+      }
+    }
   });
 });
 

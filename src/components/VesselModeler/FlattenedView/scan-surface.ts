@@ -14,9 +14,9 @@
 // pixels, tests collect cells.
 // =============================================================================
 
-import type { ScanCompositeConfig } from '../types';
+import type { ScanCompositeConfig, Orientation } from '../types';
 import { interpolateColor, getColorscale } from '../../../utils/colorscales';
-import { datumToCircumMm, circumDisplayMm, axialFrac } from './geometry-projection';
+import { datumToCircumMm, makeDevelopedFrame } from './geometry-projection';
 
 // ---------------------------------------------------------------------------
 // Body routing — the single point that decides which surface a composite paints
@@ -64,14 +64,16 @@ export function compositesForBody(
  * and appendage strips stay to-scale on ONE shared pxPerMm.
  */
 export interface SurfaceProjector {
+  /** Presentation orientation — 'vertical' transposes the developed frame (portrait). */
+  orientation: Orientation;
   /** Inner circumference of this body (π × body OD), for wrap + seam-skip. */
   circumferenceMm: number;
   /** Zoomed circumferential span in px — the seam-skip threshold basis. */
   circSpanPx: number;
-  /** Axial mm on this body → buffer X px. */
-  axialToBufX(axialMm: number): number;
-  /** Circumferential mm (0…circ, from this body's datum) → buffer Y px. */
-  circumToBufY(circumMm: number): number;
+  /** Axial mm on this body → buffer pixel along axial's SCREEN axis (X horizontal, Y vertical). */
+  axialScreen(axialMm: number): number;
+  /** Circumferential mm (0…circ, from this body's datum) → buffer pixel along circ's SCREEN axis. */
+  circScreen(circumMm: number): number;
   /** Circumferential mm of a composite datum angle (user 0° convention). */
   datumCircMm(datumAngleDeg: number): number;
 }
@@ -96,20 +98,33 @@ export function mainSurfaceProjector(
   vesselLengthMm: number,
   vesselOD: number,
   reversed: boolean,
+  orientation: Orientation = 'horizontal',
 ): SurfaceProjector {
   const { pxPerMm, marginX, marginY, zoom, offsetX, offsetY } = view;
   const circumferenceMm = Math.PI * vesselOD;
+  // Reuse the ONE developed frame (buffer space: origin 0,0 — the buffer is
+  // blitted at PADDING). Its axialScreen/circScreen already fold in the reverse
+  // mirror + circumferential flip and transpose for a vertical vessel.
+  const frame = makeDevelopedFrame({
+    orientation,
+    pxPerMm,
+    marginX,
+    marginY,
+    zoom,
+    offsetX,
+    offsetY,
+    originX: 0,
+    originY: 0,
+    vesselLength: vesselLengthMm,
+    circumference: circumferenceMm,
+    reversed,
+  });
   return {
+    orientation,
     circumferenceMm,
     circSpanPx: circumferenceMm * pxPerMm * zoom,
-    axialToBufX(axialMm) {
-      const pos = axialFrac(axialMm, vesselLengthMm, reversed) * vesselLengthMm;
-      return marginX + pos * pxPerMm * zoom + offsetX;
-    },
-    circumToBufY(circumMm) {
-      const yMm = circumDisplayMm(circumMm, circumferenceMm, reversed);
-      return marginY + yMm * pxPerMm * zoom + offsetY;
-    },
+    axialScreen: frame.axialScreen,
+    circScreen: frame.circScreen,
     datumCircMm(datumAngleDeg) {
       return datumToCircumMm(datumAngleDeg, vesselOD);
     },
@@ -128,17 +143,24 @@ export function stripSurfaceProjector(
   view: SurfaceView,
   topBasePx: number,
   appendageOD: number,
+  orientation: Orientation = 'horizontal',
 ): SurfaceProjector {
   const { pxPerMm, marginX, marginY, zoom, offsetX, offsetY } = view;
   const circumferenceMm = Math.PI * appendageOD;
+  const vertical = orientation === 'vertical';
   return {
+    orientation,
     circumferenceMm,
     circSpanPx: circumferenceMm * pxPerMm * zoom,
-    axialToBufX(axialMm) {
-      return marginX + axialMm * pxPerMm * zoom + offsetX;
+    // Physical axial axis (never mirrored) along the strip's axial screen axis;
+    // the datum-cut circumference (with the stack offset) along its circ axis.
+    axialScreen(axialMm) {
+      const base = vertical ? marginY + offsetY : marginX + offsetX;
+      return base + axialMm * pxPerMm * zoom;
     },
-    circumToBufY(circumMm) {
-      return marginY + (topBasePx + circumMm * pxPerMm) * zoom + offsetY;
+    circScreen(circumMm) {
+      const base = vertical ? marginX + offsetX : marginY + offsetY;
+      return base + (topBasePx + circumMm * pxPerMm) * zoom;
     },
     datumCircMm(datumAngleDeg) {
       return datumToCircumMm(datumAngleDeg, appendageOD);
@@ -188,12 +210,13 @@ export function forEachCompositeCell(
   const range = rMax === rMin ? 1 : rMax - rMin;
   const alpha = Math.round(Math.max(0, Math.min(1, composite.opacity)) * 255);
 
-  const { circumferenceMm, circSpanPx } = projector;
+  const { circumferenceMm, circSpanPx, orientation } = projector;
+  const vertical = orientation === 'vertical';
   const datumCircMm = projector.datumCircMm(composite.datumAngleDeg);
 
-  // Axial (row) buffer pixels.
-  const rowPx: number[] = new Array(yAxis.length);
-  const rowPxNext: number[] = new Array(yAxis.length);
+  // Axial (row) screen pixels — along axial's screen axis (X horizontal, Y vertical).
+  const axialA: number[] = new Array(yAxis.length);
+  const axialANext: number[] = new Array(yAxis.length);
   for (let row = 0; row < yAxis.length; row++) {
     const axialMm =
       indexDirection === 'forward' ? indexStartMm + yAxis[row] : indexStartMm - yAxis[row];
@@ -203,13 +226,13 @@ export function forEachCompositeCell(
           ? indexStartMm + yAxis[row + 1]
           : indexStartMm - yAxis[row + 1]
         : axialMm + (row > 0 ? Math.abs(yAxis[row] - yAxis[row - 1]) : 1);
-    rowPx[row] = projector.axialToBufX(axialMm);
-    rowPxNext[row] = projector.axialToBufX(nextMm);
+    axialA[row] = projector.axialScreen(axialMm);
+    axialANext[row] = projector.axialScreen(nextMm);
   }
 
-  // Circumferential (col) buffer pixels.
-  const colPy: number[] = new Array(xAxis.length);
-  const colPyNext: number[] = new Array(xAxis.length);
+  // Circumferential (col) screen pixels — along circ's screen axis (Y horizontal, X vertical).
+  const circC: number[] = new Array(xAxis.length);
+  const circCNext: number[] = new Array(xAxis.length);
   for (let col = 0; col < xAxis.length; col++) {
     const circumOffset = scanDirection === 'cw' ? xAxis[col] : -xAxis[col];
     let circumMm = datumCircMm + circumOffset;
@@ -229,29 +252,36 @@ export function forEachCompositeCell(
     let circumMmNext = datumCircMm + nextOffset;
     circumMmNext = ((circumMmNext % circumferenceMm) + circumferenceMm) % circumferenceMm;
 
-    colPy[col] = projector.circumToBufY(circumMm);
-    colPyNext[col] = projector.circumToBufY(circumMmNext);
+    circC[col] = projector.circScreen(circumMm);
+    circCNext[col] = projector.circScreen(circumMmNext);
   }
 
   for (let row = 0; row < data.length; row++) {
     const rowData = data[row];
     if (!rowData) continue;
-    const px = rowPx[row];
-    const pxNext = rowPxNext[row];
-    const cellW = Math.abs(pxNext - px) || 1;
-    const cellX = Math.min(px, pxNext);
+    const a = axialA[row];
+    const aNext = axialANext[row];
+    const aLen = Math.abs(aNext - a) || 1;
+    const aMin = Math.min(a, aNext);
 
     for (let col = 0; col < rowData.length; col++) {
       const value = rowData[col];
       if (value == null) continue;
 
-      const py = colPy[col];
-      const pyNext = colPyNext[col];
+      const c = circC[col];
+      const cNext = circCNext[col];
       // Seam wrap: skip a cell whose adjacent circ pixels jumped > half a circ.
-      if (Math.abs(pyNext - py) > circSpanPx * 0.5) continue;
+      if (Math.abs(cNext - c) > circSpanPx * 0.5) continue;
 
-      const cellH = Math.abs(pyNext - py) || 1;
-      const cellY = Math.min(py, pyNext);
+      const cLen = Math.abs(cNext - c) || 1;
+      const cMin = Math.min(c, cNext);
+
+      // Assemble the buffer rect. Horizontal: axial→X, circ→Y (byte-identical to
+      // the legacy loop). Vertical: the developed plane transposes (axial→Y, circ→X).
+      const cellX = vertical ? cMin : aMin;
+      const cellW = vertical ? cLen : aLen;
+      const cellY = vertical ? aMin : cMin;
+      const cellH = vertical ? aLen : cLen;
 
       const t = Math.max(0, Math.min(1, (value - rMin) / range));
       const [r, g, b] = interpolateColor(t, scale, true);

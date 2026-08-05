@@ -24,6 +24,7 @@ import type {
   LiftingLugConfig,
   ScanCompositeConfig,
   VesselState,
+  Orientation,
 } from '../types';
 import { datumToVesselAngle, vesselAngleToCircumMm } from '../engine/vessel-coords';
 
@@ -203,6 +204,163 @@ export function fitScale(
   const marginX = (drawWidth - vesselLength * pxPerMm) / 2;
   const marginY = (drawHeight - circumference * pxPerMm) / 2;
   return { pxPerMm, marginX, marginY };
+}
+
+// ---------------------------------------------------------------------------
+// Developed frame — orientation-aware screen mapping (the single projection source)
+// ---------------------------------------------------------------------------
+// The developed surface has intrinsic coordinates (axialMm ∈ [0, vesselLength],
+// circumMm ∈ [0, circumference]). How those map to canvas pixels depends on the
+// vessel orientation:
+//
+//   horizontal → axial runs along screen-X (left→right), circumferential along
+//                screen-Y (top→bottom, cut at TDC). This is the historical layout
+//                and the frame reproduces it BYTE-FOR-BYTE.
+//   vertical   → the view is presented PORTRAIT so an inspector reads a standing
+//                vessel naturally: axial runs along screen-Y (top of vessel at the
+//                top), circumferential along screen-X. TDC (circ = 0) is the LEFT
+//                seam edge. Longitudinal scan strips therefore render as vertical
+//                bands, matching the axis they were physically scanned on.
+//
+// This is a pure transpose of the developed plane — NOT a bitmap rotation — so
+// labels/scales stay upright. Both the geometry overlays (FlattenedViewport) and
+// the heatmap projector (scan-surface.ts) compose the SAME axial/circumferential
+// content scalars through this frame, so they always agree in one frame. The
+// axial mirror (reverse scan) and the circumferential handedness flip
+// (circumDisplayMm) still apply, exactly as before, along whichever screen axis
+// each content occupies. NEVER re-introduce a manual ±90 (Decision Log 2026-06-22 /
+// 06-23).
+// ---------------------------------------------------------------------------
+
+/**
+ * Axial content position (mm) after the reverse-scan mirror — the distance along
+ * the developed axial axis, before it is placed on a screen axis. Reused by the
+ * geometry frame and the heatmap projector so both mirror identically.
+ */
+export function axialContentMm(
+  axialMm: number,
+  vesselLength: number,
+  reversed: boolean,
+): number {
+  return axialFrac(axialMm, vesselLength, reversed) * vesselLength;
+}
+
+export interface DevelopedFrameParams {
+  orientation: Orientation;
+  /** Shared pixels-per-mm (to-scale 1:1). */
+  pxPerMm: number;
+  /** Screen-X letterbox margin (px). */
+  marginX: number;
+  /** Screen-Y letterbox margin (px). */
+  marginY: number;
+  zoom: number;
+  offsetX: number;
+  offsetY: number;
+  /** Screen-X origin (canvas PADDING.left, or 0 for a padding-relative buffer). */
+  originX: number;
+  /** Screen-Y origin (canvas PADDING.top, or 0 for a padding-relative buffer). */
+  originY: number;
+  vesselLength: number;
+  circumference: number;
+  /** Reverse-scan axial mirror + coupled circumferential handedness flip. */
+  reversed: boolean;
+}
+
+/**
+ * The orientation-aware developed→canvas mapping. `px`/`py` place a developed
+ * point; `axialMmAt`/`circMmAt` invert a canvas point (hover). `axialScreen`/
+ * `circScreen` expose the per-content screen scalar (used by the heatmap cell
+ * builder, which assembles rects from the two scalars and swaps them for a
+ * vertical view). `axialDeltaPx`/`circDeltaPx` give the on-screen pixel span of a
+ * developed-mm delta (marker radii). For `orientation === 'horizontal'` every
+ * method reduces to the historical toCanvasX/toCanvasY/fromCanvasX/fromCanvasY
+ * arithmetic.
+ */
+export interface DevelopedFrame {
+  orientation: Orientation;
+  px(axialMm: number, circMm: number): number;
+  py(axialMm: number, circMm: number): number;
+  axialMmAt(canvasX: number, canvasY: number): number;
+  circMmAt(canvasX: number, canvasY: number): number;
+  /** Screen pixel along axial's screen axis (X for horizontal, Y for vertical). */
+  axialScreen(axialMm: number): number;
+  /** Screen pixel along circ's screen axis (Y for horizontal, X for vertical). */
+  circScreen(circMm: number): number;
+  /** |Δpx| for a Δmm along the axial axis. */
+  axialDeltaPx(mm: number): number;
+  /** |Δpx| for a Δmm along the circumferential axis. */
+  circDeltaPx(mm: number): number;
+}
+
+/**
+ * Build a {@link DevelopedFrame}. Pure — no canvas/DOM. Degenerate scale
+ * (pxPerMm ≤ 0) makes `px`/`py` collapse to the plot origin and the inverses to
+ * 0, matching the historical guards in FlattenedViewport.
+ */
+export function makeDevelopedFrame(p: DevelopedFrameParams): DevelopedFrame {
+  const {
+    orientation,
+    pxPerMm,
+    marginX,
+    marginY,
+    zoom,
+    offsetX,
+    offsetY,
+    originX,
+    originY,
+    vesselLength,
+    circumference,
+    reversed,
+  } = p;
+  const vertical = orientation === 'vertical';
+  const k = pxPerMm * zoom;
+
+  // Screen origins for each content axis (fold in margin + pan once).
+  const xBase = originX + marginX + offsetX;
+  const yBase = originY + marginY + offsetY;
+
+  const axialScreen = (axialMm: number): number => {
+    const content = axialContentMm(axialMm, vesselLength, reversed);
+    return (vertical ? yBase : xBase) + content * k;
+  };
+  const circScreen = (circMm: number): number => {
+    const content = circumDisplayMm(circMm, circumference, reversed);
+    return (vertical ? xBase : yBase) + content * k;
+  };
+
+  return {
+    orientation,
+    axialScreen,
+    circScreen,
+    px(axialMm, circMm) {
+      if (pxPerMm <= 0) return originX;
+      return vertical ? circScreen(circMm) : axialScreen(axialMm);
+    },
+    py(axialMm, circMm) {
+      if (pxPerMm <= 0) return originY;
+      return vertical ? axialScreen(axialMm) : circScreen(circMm);
+    },
+    axialMmAt(canvasX, canvasY) {
+      if (pxPerMm <= 0 || zoom <= 0) return 0;
+      const screen = vertical ? canvasY : canvasX;
+      const base = vertical ? yBase : xBase;
+      const content = (screen - base) / k;
+      return reversed ? vesselLength - content : content;
+    },
+    circMmAt(canvasX, canvasY) {
+      if (pxPerMm <= 0 || zoom <= 0) return 0;
+      const screen = vertical ? canvasX : canvasY;
+      const base = vertical ? xBase : yBase;
+      const content = (screen - base) / k;
+      return circumDisplayMm(content, circumference, reversed);
+    },
+    axialDeltaPx(mm) {
+      return Math.abs(mm) * k;
+    },
+    circDeltaPx(mm) {
+      return Math.abs(mm) * k;
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

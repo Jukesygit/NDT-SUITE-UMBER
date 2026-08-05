@@ -27,6 +27,9 @@ import {
   circumDisplayMm,
   developFootprintBoundary,
   displayFootprintPolyline,
+  makeDevelopedFrame,
+  axialContentMm,
+  type DevelopedFrameParams,
 } from './geometry-projection';
 import { buildJunctionFootprint } from '../engine/junction-footprint';
 
@@ -458,6 +461,104 @@ describe('appendage strip nozzle projection (datum convention)', () => {
       ).cy;
       expect(ny).toBeCloseTo(ly, 9);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// makeDevelopedFrame — orientation-aware developed→canvas mapping
+// ---------------------------------------------------------------------------
+// Horizontal reduces BYTE-FOR-BYTE to the historical toCanvasX/toCanvasY (axial→X,
+// circumferential→Y). Vertical presents the developed plane PORTRAIT: axial runs
+// down screen-Y (top of vessel at top), circumference along screen-X (TDC = the
+// LEFT seam edge) — a pure transpose so longitudinal scan strips read as vertical
+// bands. The reverse-scan mirror + circumferential handedness flip still apply.
+// ---------------------------------------------------------------------------
+describe('makeDevelopedFrame (orientation-aware screen mapping)', () => {
+  const P: DevelopedFrameParams = {
+    orientation: 'horizontal',
+    pxPerMm: 2,
+    marginX: 5,
+    marginY: 7,
+    zoom: 1,
+    offsetX: 0,
+    offsetY: 0,
+    originX: 70,
+    originY: 80,
+    vesselLength: 1000,
+    circumference: 800,
+    reversed: false,
+  };
+
+  it('horizontal reduces to the historical toCanvasX/toCanvasY arithmetic', () => {
+    const f = makeDevelopedFrame(P);
+    // px = originX + marginX + axialContent·k ; py = originY + marginY + circDisp·k
+    expect(f.px(100, 200)).toBeCloseTo(70 + 5 + 100 * 2, 6);
+    expect(f.py(100, 200)).toBeCloseTo(80 + 7 + 200 * 2, 6);
+    // A 12-o'clock feature (circ 0) sits at the TOP (py = origin), any axial X.
+    expect(f.py(300, 0)).toBeCloseTo(80 + 7, 6);
+  });
+
+  it('vertical transposes: axial → screen-Y (down), circumference → screen-X', () => {
+    const f = makeDevelopedFrame({ ...P, orientation: 'vertical' });
+    // px now driven by circumference, py by axial (the transpose).
+    expect(f.px(100, 200)).toBeCloseTo(70 + 5 + 200 * 2, 6);
+    expect(f.py(100, 200)).toBeCloseTo(80 + 7 + 100 * 2, 6);
+  });
+
+  it('vertical puts TDC (circ 0) on the LEFT seam edge and axial increasing downward', () => {
+    const f = makeDevelopedFrame({ ...P, orientation: 'vertical' });
+    const leftEdge = 70 + 5; // originX + marginX
+    // A TDC feature (circ 0) at two axial positions: same X (left), Y grows with pos.
+    expect(f.px(200, 0)).toBeCloseTo(leftEdge, 6);
+    expect(f.px(600, 0)).toBeCloseTo(leftEdge, 6);
+    expect(f.py(600, 0)).toBeGreaterThan(f.py(200, 0)); // top of vessel at top
+  });
+
+  it('a nozzle at angle 90 (TDC) / pos P lands consistently in each orientation', () => {
+    const pos = 300;
+    const noz = projectNozzle(nozzle(90), P.circumference / Math.PI); // OD so π·OD = circumference
+    expect(noz.cy).toBeCloseTo(0, 6); // TDC → circ 0
+    const h = makeDevelopedFrame(P);
+    const v = makeDevelopedFrame({ ...P, orientation: 'vertical' });
+    // Horizontal: axial along X, TDC at top (py = origin+margin).
+    expect(h.px(pos, noz.cy)).toBeCloseTo(70 + 5 + pos * 2, 6);
+    expect(h.py(pos, noz.cy)).toBeCloseTo(80 + 7, 6);
+    // Vertical: TDC on the left edge, axial down.
+    expect(v.px(pos, noz.cy)).toBeCloseTo(70 + 5, 6);
+    expect(v.py(pos, noz.cy)).toBeCloseTo(80 + 7 + pos * 2, 6);
+  });
+
+  it('hover round-trips (axialMmAt / circMmAt invert px / py) in both orientations', () => {
+    for (const orientation of ['horizontal', 'vertical'] as const) {
+      for (const reversed of [false, true]) {
+        const f = makeDevelopedFrame({ ...P, orientation, reversed, zoom: 1.3, offsetX: 11, offsetY: -9 });
+        // Interior circ values only (circ = circumference is the seam ≡ 0).
+        for (const [a, c] of [[0, 0], [250, 333], [1000, 799], [640, 120]]) {
+          const x = f.px(a, c);
+          const y = f.py(a, c);
+          expect(f.axialMmAt(x, y)).toBeCloseTo(a, 4);
+          expect(f.circMmAt(x, y)).toBeCloseTo(c, 4);
+        }
+      }
+    }
+  });
+
+  it('applies the reverse-scan axial mirror along whichever screen axis axial occupies', () => {
+    const h = makeDevelopedFrame({ ...P, reversed: true });
+    const v = makeDevelopedFrame({ ...P, orientation: 'vertical', reversed: true });
+    // axialContent mirrors: pos 0 → far end (length), length → 0.
+    expect(axialContentMm(0, P.vesselLength, true)).toBeCloseTo(P.vesselLength, 6);
+    // Horizontal mirror shows on X; vertical mirror shows on Y.
+    expect(h.px(0, 0)).toBeGreaterThan(h.px(P.vesselLength, 0));
+    expect(v.py(0, 0)).toBeGreaterThan(v.py(P.vesselLength, 0));
+  });
+
+  it('collapses px/py to the plot origin and inverses to 0 for a degenerate scale', () => {
+    const f = makeDevelopedFrame({ ...P, pxPerMm: 0 });
+    expect(f.px(500, 400)).toBe(P.originX);
+    expect(f.py(500, 400)).toBe(P.originY);
+    expect(f.axialMmAt(123, 456)).toBe(0);
+    expect(f.circMmAt(123, 456)).toBe(0);
   });
 });
 

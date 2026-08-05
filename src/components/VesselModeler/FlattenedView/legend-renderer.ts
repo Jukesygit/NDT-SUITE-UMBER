@@ -177,17 +177,22 @@ export function drawAxialScale(
 }
 
 /**
- * Draw a circumferential (vertical) scale along the left side of the vessel.
+ * Draw a scale of horizontal ticks along a vertical axis on the left side.
  *
- * Labels are right-aligned to the left of the tick marks.
+ * Used for the circumferential axis on a horizontal vessel and — with `labelFor`
+ * mapping vessel position to scan-index distance — for the AXIAL axis when a
+ * vertical vessel is presented portrait. `toCanvasY` handles tick placement
+ * (including any mirroring); `range` is the axis length to iterate. Labels are
+ * right-aligned to the left of the ticks. `labelFor` defaults to identity.
  */
 export function drawCircumScale(
   ctx: CanvasRenderingContext2D,
-  circumference: number,
+  range: number,
   toCanvasY: (mm: number) => number,
   x: number,
+  labelFor: (mm: number) => number = (mm) => mm,
 ): void {
-  const interval = niceInterval(circumference);
+  const interval = niceInterval(range);
 
   ctx.strokeStyle = '#333';
   ctx.fillStyle = '#333';
@@ -196,7 +201,7 @@ export function drawCircumScale(
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
 
-  for (let mm = 0; mm <= circumference; mm += interval) {
+  for (let mm = 0; mm <= range; mm += interval) {
     const cy = toCanvasY(mm);
 
     // Tick mark
@@ -206,6 +211,6 @@ export function drawCircumScale(
     ctx.stroke();
 
     // Label (right-aligned to the left of tick)
-    ctx.fillText(`${Math.round(mm)}`, x - 8, cy);
+    ctx.fillText(`${Math.round(labelFor(mm))}`, x - 8, cy);
   }
 }
