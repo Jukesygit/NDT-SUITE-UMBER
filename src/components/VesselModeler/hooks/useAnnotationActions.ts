@@ -39,7 +39,10 @@ export function useAnnotationActions({
   // --- Annotation handlers ---
   const addAnnotation = useCallback(
     (annotation: AnnotationShapeConfig) => {
-      updateVessel((prev) => ({ ...prev, annotations: [...prev.annotations, annotation] }));
+      updateVessel((prev) => ({ ...prev, annotations: [...prev.annotations, annotation] }), {
+        label: 'Add annotation',
+        at: Date.now(),
+      });
     },
     [updateVessel]
   );
@@ -66,10 +69,13 @@ export function useAnnotationActions({
           await deleteAnnotationImage(att.storagePath).catch(() => {});
         }
       }
-      updateVessel((prev) => ({
-        ...prev,
-        annotations: prev.annotations.filter((a) => a.id !== id),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          annotations: prev.annotations.filter((a) => a.id !== id),
+        }),
+        { label: 'Delete annotation', at: Date.now() }
+      );
       dispatch({ type: 'SELECT_ANNOTATION', id: -1 });
     },
     [updateVessel, vesselState, dispatch]

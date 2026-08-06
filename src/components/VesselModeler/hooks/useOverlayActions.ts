@@ -49,7 +49,10 @@ export function useOverlayActions({
     (texture: TextureConfig, threeTexture: THREE.Texture) => {
       textureObjectsRef.current[Number(texture.id)] = threeTexture;
       setTextureObjectsVersion((v) => v + 1);
-      updateVessel((prev) => ({ ...prev, textures: [...prev.textures, texture] }));
+      updateVessel((prev) => ({ ...prev, textures: [...prev.textures, texture] }), {
+        label: 'Add texture',
+        at: Date.now(),
+      });
     },
     [updateVessel, textureObjectsRef, setTextureObjectsVersion]
   );
@@ -75,10 +78,13 @@ export function useOverlayActions({
         delete textureObjectsRef.current[id];
         setTextureObjectsVersion((v) => v + 1);
       }
-      updateVessel((prev) => ({
-        ...prev,
-        textures: prev.textures.filter((t) => Number(t.id) !== id),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          textures: prev.textures.filter((t) => Number(t.id) !== id),
+        }),
+        { label: 'Delete texture', at: Date.now() }
+      );
       dispatch({ type: 'SELECT_TEXTURE', id: -1 });
     },
     [updateVessel, dispatch, textureObjectsRef, setTextureObjectsVersion]
@@ -91,7 +97,10 @@ export function useOverlayActions({
   // --- Coverage rect handlers ---
   const addCoverageRect = useCallback(
     (rect: CoverageRectConfig) => {
-      updateVessel((prev) => ({ ...prev, coverageRects: [...prev.coverageRects, rect] }));
+      updateVessel((prev) => ({ ...prev, coverageRects: [...prev.coverageRects, rect] }), {
+        label: 'Add coverage rect',
+        at: Date.now(),
+      });
     },
     [updateVessel]
   );
@@ -111,10 +120,13 @@ export function useOverlayActions({
 
   const removeCoverageRect = useCallback(
     (id: number) => {
-      updateVessel((prev) => ({
-        ...prev,
-        coverageRects: prev.coverageRects.filter((r) => r.id !== id),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          coverageRects: prev.coverageRects.filter((r) => r.id !== id),
+        }),
+        { label: 'Delete coverage rect', at: Date.now() }
+      );
       dispatch({ type: 'SELECT_COVERAGE_RECT', id: -1 });
     },
     [updateVessel, dispatch]
@@ -127,14 +139,20 @@ export function useOverlayActions({
   // --- Ruler handlers ---
   const addRuler = useCallback(
     (ruler: RulerConfig) => {
-      updateVessel((prev) => ({ ...prev, rulers: [...prev.rulers, ruler] }));
+      updateVessel((prev) => ({ ...prev, rulers: [...prev.rulers, ruler] }), {
+        label: 'Add ruler',
+        at: Date.now(),
+      });
     },
     [updateVessel]
   );
 
   const removeRuler = useCallback(
     (id: number) => {
-      updateVessel((prev) => ({ ...prev, rulers: prev.rulers.filter((r) => r.id !== id) }));
+      updateVessel((prev) => ({ ...prev, rulers: prev.rulers.filter((r) => r.id !== id) }), {
+        label: 'Delete ruler',
+        at: Date.now(),
+      });
       // Only deselect if this ruler was selected
       dispatch({ type: 'SELECT_RULER', id: -1 });
     },
@@ -161,7 +179,10 @@ export function useOverlayActions({
   // --- Inspection image handlers ---
   const addInspectionImage = useCallback(
     (img: InspectionImageConfig) => {
-      updateVessel((prev) => ({ ...prev, inspectionImages: [...prev.inspectionImages, img] }));
+      updateVessel((prev) => ({ ...prev, inspectionImages: [...prev.inspectionImages, img] }), {
+        label: 'Add inspection image',
+        at: Date.now(),
+      });
     },
     [updateVessel]
   );
@@ -183,10 +204,13 @@ export function useOverlayActions({
 
   const removeInspectionImage = useCallback(
     (id: number) => {
-      updateVessel((prev) => ({
-        ...prev,
-        inspectionImages: prev.inspectionImages.filter((i) => i.id !== id),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          inspectionImages: prev.inspectionImages.filter((i) => i.id !== id),
+        }),
+        { label: 'Delete inspection image', at: Date.now() }
+      );
       dispatch({ type: 'SELECT_INSPECTION_IMAGE', id: -1 });
       if (viewingInspectionImageId === id)
         dispatch({ type: 'SET_VIEWING_INSPECTION_IMAGE', id: -1 });

@@ -111,17 +111,20 @@ export function useScanActions({
           sourceNdeFile: guessNdeFilename(name),
           sourceFiles,
         };
-        updateVessel((prev) => ({
-          ...prev,
-          scanComposites: [...prev.scanComposites, newConfig],
-          // Auto-populate global coordinate origin from the first loaded scan
-          ...(prev.scanComposites.length === 0
-            ? {
-                coordinateOrigin: { indexMm: yAxis[0] ?? 0, scanMm: xAxis[0] ?? 0 },
-                originSourceScanId: newConfig.id,
-              }
-            : {}),
-        }));
+        updateVessel(
+          (prev) => ({
+            ...prev,
+            scanComposites: [...prev.scanComposites, newConfig],
+            // Auto-populate global coordinate origin from the first loaded scan
+            ...(prev.scanComposites.length === 0
+              ? {
+                  coordinateOrigin: { indexMm: yAxis[0] ?? 0, scanMm: xAxis[0] ?? 0 },
+                  originSourceScanId: newConfig.id,
+                }
+              : {}),
+          }),
+          { label: 'Import scan composite', at: Date.now() }
+        );
 
         // Link composite to project vessel if in project context
         if (effectiveProjectVesselId) {
@@ -140,10 +143,13 @@ export function useScanActions({
   const handleRemoveScanComposite = useCallback(
     (id: string) => {
       clearHeatmapCache(id);
-      updateVessel((prev) => ({
-        ...prev,
-        scanComposites: prev.scanComposites.filter((sc) => sc.id !== id),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          scanComposites: prev.scanComposites.filter((sc) => sc.id !== id),
+        }),
+        { label: 'Delete scan composite', at: Date.now() }
+      );
       if (scanCompositeId === id) dispatch({ type: 'SELECT_SCAN_COMPOSITE', id: '' });
     },
     [updateVessel, scanCompositeId, dispatch]
@@ -201,10 +207,13 @@ export function useScanActions({
   const handleRemoveDomeScan = useCallback(
     (id: string) => {
       clearDomeHeatmapCache(id);
-      updateVessel((prev) => ({
-        ...prev,
-        domeScanComposites: prev.domeScanComposites.filter((ds) => ds.id !== id),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          domeScanComposites: prev.domeScanComposites.filter((ds) => ds.id !== id),
+        }),
+        { label: 'Delete dome scan', at: Date.now() }
+      );
       if (domeScanId === id) dispatch({ type: 'SELECT_DOME_SCAN', id: '' });
     },
     [updateVessel, domeScanId, dispatch]
@@ -275,10 +284,13 @@ export function useScanActions({
           opacity: 1,
           sourceFiles,
         });
-        updateVessel((prev) => ({
-          ...prev,
-          domeScanComposites: [...prev.domeScanComposites, newConfig],
-        }));
+        updateVessel(
+          (prev) => ({
+            ...prev,
+            domeScanComposites: [...prev.domeScanComposites, newConfig],
+          }),
+          { label: 'Import dome scan', at: Date.now() }
+        );
         dispatch({ type: 'SELECT_DOME_SCAN', id: newConfig.id });
       } catch (err) {
         console.error('Failed to import dome composite:', err);

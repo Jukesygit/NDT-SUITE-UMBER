@@ -81,6 +81,7 @@ import './vessel-modeler.css';
 import * as THREE from 'three';
 
 import StatsDropdown from './StatsDropdown';
+import HistoryDropdown from './HistoryDropdown';
 import UnifiedStatsPanel from './UnifiedStatsPanel';
 import SnapControl from './SnapControl';
 import InspectionPanel from './sidebar/InspectionPanel';
@@ -1077,12 +1078,16 @@ export default function VesselModeler() {
           ref={actionsMenuRef}
           style={{ display: 'flex', alignItems: 'center', gap: 6 }}
         >
-          {/* Undo / redo */}
+          {/* Undo / redo — titles name the next change on each stack */}
           <button
             className="vm-popout-trigger"
             onClick={() => dispatch({ type: 'UNDO' })}
             disabled={state.history.past.length === 0}
-            title="Undo (Ctrl+Z)"
+            title={
+              state.history.past.length
+                ? `Undo: ${state.history.past[state.history.past.length - 1].label}`
+                : 'Undo (Ctrl+Z)'
+            }
           >
             <Undo2 size={14} />
           </button>
@@ -1090,10 +1095,20 @@ export default function VesselModeler() {
             className="vm-popout-trigger"
             onClick={() => dispatch({ type: 'REDO' })}
             disabled={state.history.future.length === 0}
-            title="Redo (Ctrl+Y)"
+            title={
+              state.history.future.length
+                ? `Redo: ${state.history.future[state.history.future.length - 1].label}`
+                : 'Redo (Ctrl+Y)'
+            }
           >
             <Redo2 size={14} />
           </button>
+          <HistoryDropdown
+            past={state.history.past}
+            future={state.history.future}
+            onUndoTo={(index) => dispatch({ type: 'UNDO_TO', index })}
+            onRedoTo={(index) => dispatch({ type: 'REDO_TO', index })}
+          />
           {/* 3D / 2D / Topo toggle */}
           <div className="vm-toolbar-segmented">
             {(['3d', 'flattened', 'topo'] as const).map((mode) => {

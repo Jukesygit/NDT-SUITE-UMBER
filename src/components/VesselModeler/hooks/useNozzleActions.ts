@@ -17,11 +17,14 @@ export function useNozzleActions({ updateVessel, dispatch }: UseNozzleActionsPar
   // free id here so no call site can invent (or forget) one.
   const addNozzle = useCallback(
     (nozzle: Omit<NozzleConfig, 'id'>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        nozzles: [...prev.nozzles, { ...nozzle, id: nextNozzleId(prev.nozzles) }],
-        hasModel: true,
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          nozzles: [...prev.nozzles, { ...nozzle, id: nextNozzleId(prev.nozzles) }],
+          hasModel: true,
+        }),
+        { label: 'Add nozzle', at: Date.now() }
+      );
     },
     [updateVessel]
   );
@@ -44,11 +47,14 @@ export function useNozzleActions({ updateVessel, dispatch }: UseNozzleActionsPar
       // Atomic, id-correct cascade: drop the nozzle + the pipelines anchored to it.
       // Every OTHER pipeline keeps its stable nozzleId, so it stays attached to the
       // SAME physical nozzle — no index-shifting (see engine/nozzle-id.ts).
-      updateVessel((prev) => {
-        const target = prev.nozzles[index];
-        if (!target) return prev;
-        return { ...prev, ...removeNozzleById(prev.nozzles, prev.pipelines, target.id) };
-      });
+      updateVessel(
+        (prev) => {
+          const target = prev.nozzles[index];
+          if (!target) return prev;
+          return { ...prev, ...removeNozzleById(prev.nozzles, prev.pipelines, target.id) };
+        },
+        { label: 'Delete nozzle', at: Date.now() }
+      );
       dispatch({ type: 'SELECT_NOZZLE', index: -1 });
     },
     [updateVessel, dispatch]

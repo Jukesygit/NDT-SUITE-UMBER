@@ -21,6 +21,8 @@ import {
   recordCheckpoint,
   undoStep,
   redoStep,
+  undoTo,
+  redoTo,
   breakGroup,
   type VesselHistoryState,
   type HistoryMeta,
@@ -162,15 +164,35 @@ export type UpdateVessel = (
 ) => void;
 
 /**
- * Derive a coalescing history key from a domain wrapper's arguments so drag
- * storms and per-keystroke sidebar edits collapse into a single undo entry.
- * Shape: `<entity>:<id-or-index>:<sorted-changed-field-names>` (e.g.
- * `nozzle:3:angle,pos`). Date.now() is read here on the DISPATCHER side — never
- * in the reducer — keeping the reducer pure/StrictMode-safe.
+ * Positional fields that mean a spatial move rather than a property edit. Any of
+ * these among the changed keys makes the verb "Move"; otherwise "Edit".
  */
-export function historyFor(entity: string, id: string | number, updates: object): HistoryMeta {
-  const fields = Object.keys(updates).sort().join(',');
-  return { key: `${entity}:${id}:${fields}`, at: Date.now() };
+const MOVE_FIELDS = new Set(['pos', 'angle', 'mountPos', 'mountAngle', 'endPos']);
+
+/**
+ * Derive a coalescing history key AND a human label from a domain wrapper's
+ * arguments so drag storms and per-keystroke sidebar edits collapse into a single
+ * undo entry, and the dropdown/undo tooltip can name the change.
+ *
+ * Key shape (UNCHANGED — never alter, undo coalescing depends on it):
+ * `<entity>:<id-or-index>:<sorted-changed-field-names>` (e.g. `nozzle:3:angle,pos`).
+ * Label: verb from MOVE_FIELDS ("Move"/"Edit") + entity + `displayName ?? id`,
+ * e.g. "Move nozzle 3" or "Edit weld Longitudinal seam". Date.now() is read here
+ * on the DISPATCHER side — never in the reducer — keeping it pure/StrictMode-safe.
+ */
+export function historyFor(
+  entity: string,
+  id: string | number,
+  updates: object,
+  displayName?: string
+): HistoryMeta {
+  const keys = Object.keys(updates);
+  const fields = keys.slice().sort().join(',');
+  const verb = keys.some((k) => MOVE_FIELDS.has(k)) ? 'Move' : 'Edit';
+  // User-facing word only (R3 terminology) — the coalesce key keeps `entity` raw.
+  const entityWord = entity === 'appendage' ? 'Boot' : entity;
+  const label = `${verb} ${entityWord} ${displayName ?? id}`;
+  return { key: `${entity}:${id}:${fields}`, at: Date.now(), label };
 }
 
 export type VesselAction =
@@ -229,6 +251,8 @@ export type VesselAction =
   | { type: 'TOGGLE_STATS_SCAN_COVERAGE' }
   | { type: 'UNDO' }
   | { type: 'REDO' }
+  | { type: 'UNDO_TO'; index: number }
+  | { type: 'REDO_TO'; index: number }
   | { type: 'HISTORY_BREAK' };
 
 /**
@@ -439,6 +463,16 @@ export function vesselReducer(
     }
     case 'REDO': {
       const result = redoStep(state.history, state.vessel);
+      return result ? withRestoredVessel(state, result) : state;
+    }
+    case 'UNDO_TO': {
+      // Dropdown jump: fold N undo steps into one restore (transient-slice reset
+      // is identical to UNDO — same withRestoredVessel).
+      const result = undoTo(state.history, state.vessel, action.index);
+      return result ? withRestoredVessel(state, result) : state;
+    }
+    case 'REDO_TO': {
+      const result = redoTo(state.history, state.vessel, action.index);
       return result ? withRestoredVessel(state, result) : state;
     }
     case 'HISTORY_BREAK': {

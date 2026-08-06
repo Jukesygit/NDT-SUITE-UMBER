@@ -15,7 +15,10 @@ export function useAttachableActions({ updateVessel, dispatch }: UseAttachableAc
   // --- Saddle handlers ---
   const addSaddle = useCallback(
     (saddle: SaddleConfig) => {
-      updateVessel((prev) => ({ ...prev, saddles: [...prev.saddles, saddle] }));
+      updateVessel((prev) => ({ ...prev, saddles: [...prev.saddles, saddle] }), {
+        label: 'Add saddle',
+        at: Date.now(),
+      });
     },
     [updateVessel]
   );
@@ -69,7 +72,10 @@ export function useAttachableActions({ updateVessel, dispatch }: UseAttachableAc
 
   const removeSaddle = useCallback(
     (index: number) => {
-      updateVessel((prev) => ({ ...prev, saddles: prev.saddles.filter((_, i) => i !== index) }));
+      updateVessel((prev) => ({ ...prev, saddles: prev.saddles.filter((_, i) => i !== index) }), {
+        label: 'Delete saddle',
+        at: Date.now(),
+      });
       dispatch({ type: 'SELECT_SADDLE', index: -1 });
     },
     [updateVessel, dispatch]
@@ -78,11 +84,14 @@ export function useAttachableActions({ updateVessel, dispatch }: UseAttachableAc
   // --- Lifting lug handlers ---
   const addLug = useCallback(
     (lug: LiftingLugConfig) => {
-      updateVessel((prev) => ({
-        ...prev,
-        liftingLugs: [...prev.liftingLugs, lug],
-        hasModel: true,
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          liftingLugs: [...prev.liftingLugs, lug],
+          hasModel: true,
+        }),
+        { label: 'Add lifting lug', at: Date.now() }
+      );
     },
     [updateVessel]
   );
@@ -102,10 +111,13 @@ export function useAttachableActions({ updateVessel, dispatch }: UseAttachableAc
 
   const removeLug = useCallback(
     (index: number) => {
-      updateVessel((prev) => ({
-        ...prev,
-        liftingLugs: prev.liftingLugs.filter((_, i) => i !== index),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          liftingLugs: prev.liftingLugs.filter((_, i) => i !== index),
+        }),
+        { label: 'Delete lifting lug', at: Date.now() }
+      );
       dispatch({ type: 'SELECT_LUG', index: -1 });
     },
     [updateVessel, dispatch]
@@ -114,7 +126,10 @@ export function useAttachableActions({ updateVessel, dispatch }: UseAttachableAc
   // --- Weld handlers ---
   const addWeld = useCallback(
     (weld: WeldConfig) => {
-      updateVessel((prev) => ({ ...prev, welds: [...prev.welds, weld], hasModel: true }));
+      updateVessel((prev) => ({ ...prev, welds: [...prev.welds, weld], hasModel: true }), {
+        label: 'Add weld',
+        at: Date.now(),
+      });
     },
     [updateVessel]
   );
@@ -134,7 +149,10 @@ export function useAttachableActions({ updateVessel, dispatch }: UseAttachableAc
 
   const removeWeld = useCallback(
     (index: number) => {
-      updateVessel((prev) => ({ ...prev, welds: prev.welds.filter((_, i) => i !== index) }));
+      updateVessel((prev) => ({ ...prev, welds: prev.welds.filter((_, i) => i !== index) }), {
+        label: 'Delete weld',
+        at: Date.now(),
+      });
       dispatch({ type: 'SELECT_WELD', index: -1 });
     },
     [updateVessel, dispatch]

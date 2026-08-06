@@ -57,7 +57,10 @@ export function usePipingActions({ updateVessel, dispatch, nozzles }: UsePipingA
         pipeDiameter: diameter,
         segments: [createDefaultSegment(segmentType, diameter)],
       };
-      updateVessel((prev) => ({ ...prev, pipelines: [...prev.pipelines, newPipeline] }));
+      updateVessel((prev) => ({ ...prev, pipelines: [...prev.pipelines, newPipeline] }), {
+        label: 'Add pipeline',
+        at: Date.now(),
+      });
     },
     [nozzles, updateVessel, createDefaultSegment]
   );
@@ -70,7 +73,10 @@ export function usePipingActions({ updateVessel, dispatch, nozzles }: UsePipingA
         segments: [createDefaultSegment(segmentType, pipeDiameter)],
         freeOrigin: { position: [0, 0, 0], direction: [0, 1, 0] },
       };
-      updateVessel((prev) => ({ ...prev, pipelines: [...prev.pipelines, newPipeline] }));
+      updateVessel((prev) => ({ ...prev, pipelines: [...prev.pipelines, newPipeline] }), {
+        label: 'Add pipeline',
+        at: Date.now(),
+      });
     },
     [updateVessel, createDefaultSegment]
   );
@@ -97,23 +103,26 @@ export function usePipingActions({ updateVessel, dispatch, nozzles }: UsePipingA
 
   const addSegment = useCallback(
     (pipelineId: string, segmentType: PipeSegmentType) => {
-      updateVessel((prev) => ({
-        ...prev,
-        pipelines: prev.pipelines.map((p) => {
-          if (p.id !== pipelineId) return p;
-          // Compute effective diameter (may have changed via reducer segments)
-          let currentDiameter = p.pipeDiameter;
-          for (const seg of p.segments) {
-            if (seg.type === 'reducer' && seg.endDiameter) {
-              currentDiameter = seg.endDiameter;
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          pipelines: prev.pipelines.map((p) => {
+            if (p.id !== pipelineId) return p;
+            // Compute effective diameter (may have changed via reducer segments)
+            let currentDiameter = p.pipeDiameter;
+            for (const seg of p.segments) {
+              if (seg.type === 'reducer' && seg.endDiameter) {
+                currentDiameter = seg.endDiameter;
+              }
             }
-          }
-          return {
-            ...p,
-            segments: [...p.segments, createDefaultSegment(segmentType, currentDiameter)],
-          };
+            return {
+              ...p,
+              segments: [...p.segments, createDefaultSegment(segmentType, currentDiameter)],
+            };
+          }),
         }),
-      }));
+        { label: 'Add pipe segment', at: Date.now() }
+      );
     },
     [updateVessel, createDefaultSegment]
   );
@@ -140,15 +149,18 @@ export function usePipingActions({ updateVessel, dispatch, nozzles }: UsePipingA
 
   const removeSegment = useCallback(
     (pipelineId: string, segmentIndex: number) => {
-      updateVessel((prev) => {
-        const updated = prev.pipelines
-          .map((p) => {
-            if (p.id !== pipelineId) return p;
-            return { ...p, segments: p.segments.slice(0, segmentIndex) };
-          })
-          .filter((p) => p.segments.length > 0);
-        return { ...prev, pipelines: updated };
-      });
+      updateVessel(
+        (prev) => {
+          const updated = prev.pipelines
+            .map((p) => {
+              if (p.id !== pipelineId) return p;
+              return { ...p, segments: p.segments.slice(0, segmentIndex) };
+            })
+            .filter((p) => p.segments.length > 0);
+          return { ...prev, pipelines: updated };
+        },
+        { label: 'Delete pipe segment', at: Date.now() }
+      );
       dispatch({ type: 'SELECT_PIPE_SEGMENT', pipelineId: '', segmentIndex: -1 });
     },
     [updateVessel, dispatch]
@@ -156,10 +168,13 @@ export function usePipingActions({ updateVessel, dispatch, nozzles }: UsePipingA
 
   const removePipeline = useCallback(
     (pipelineId: string) => {
-      updateVessel((prev) => ({
-        ...prev,
-        pipelines: prev.pipelines.filter((p) => p.id !== pipelineId),
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          pipelines: prev.pipelines.filter((p) => p.id !== pipelineId),
+        }),
+        { label: 'Delete pipeline', at: Date.now() }
+      );
       dispatch({ type: 'SELECT_PIPE_SEGMENT', pipelineId: '', segmentIndex: -1 });
     },
     [updateVessel, dispatch]

@@ -15,11 +15,14 @@ interface UseAppendageActionsParams {
 export function useAppendageActions({ updateVessel, dispatch }: UseAppendageActionsParams) {
   const addAppendage = useCallback(
     (appendage: AppendageConfig) => {
-      updateVessel((prev) => ({
-        ...prev,
-        appendages: [...prev.appendages, appendage],
-        hasModel: true,
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          appendages: [...prev.appendages, appendage],
+          hasModel: true,
+        }),
+        { label: 'Add Boot', at: Date.now() }
+      );
     },
     [updateVessel]
   );
@@ -42,7 +45,10 @@ export function useAppendageActions({ updateVessel, dispatch }: UseAppendageActi
       // Cascade: deleting an appendage removes its own nozzles (bodyId match) and
       // their pipelines via the shared removeNozzle index-shift semantics. Main-
       // shell nozzles/pipelines are left untouched. (See engine/appendage-cascade.)
-      updateVessel((prev) => ({ ...prev, ...cascadeRemoveAppendage(prev, index) }));
+      updateVessel((prev) => ({ ...prev, ...cascadeRemoveAppendage(prev, index) }), {
+        label: 'Delete Boot',
+        at: Date.now(),
+      });
       dispatch({ type: 'SELECT_APPENDAGE', index: -1 });
     },
     [updateVessel, dispatch]

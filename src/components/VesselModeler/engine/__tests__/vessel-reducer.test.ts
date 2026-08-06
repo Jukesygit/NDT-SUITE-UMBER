@@ -17,7 +17,7 @@ describe('vesselReducer', () => {
     expect(next.vessel.id).toBe(4321);
     // The pre-change vessel is pushed onto the undo stack; future is cleared.
     expect(next.history.past).toHaveLength(1);
-    expect(next.history.past[0]).toBe(INITIAL_STATE.vessel);
+    expect(next.history.past[0].vessel).toBe(INITIAL_STATE.vessel);
     expect(next.history.future).toHaveLength(0);
     expect(next.history.lastKey).toBe('dimensions::id');
     expect(next.history.lastAt).toBe(1000);
@@ -93,6 +93,41 @@ describe('vesselReducer', () => {
     expect(undone.ui.viewMode).toBe('topo');
     const redone = vesselReducer(undone, { type: 'REDO' });
     expect(redone.ui.viewMode).toBe('topo');
+  });
+
+  it('UNDO_TO resets the transient slices exactly like UNDO', () => {
+    const edited = vesselReducer(INITIAL_STATE, {
+      type: 'UPDATE_VESSEL_FN',
+      updater: (v: VesselState) => ({ ...v, id: 4242 }),
+      history: { key: 'k', at: 1000, label: 'Edit vessel k' },
+    });
+    // Dirty every transient slice that a restore is meant to clear.
+    const dirty = {
+      ...edited,
+      selection: { ...edited.selection, nozzleIndex: 5, weldIndex: 2 },
+      drawMode: { annotation: null, coverage: true, ruler: true },
+      ui: {
+        ...edited.ui,
+        inspectingAnnotationId: 7,
+        viewingInspectionImageId: 3,
+        hoverData: { thickness: 1, scanMm: 2, indexMm: 3 },
+      },
+    };
+
+    const viaUndo = vesselReducer(dirty, { type: 'UNDO' });
+    // For a single-entry stack, UNDO_TO index 0 folds exactly one step.
+    const viaUndoTo = vesselReducer(dirty, { type: 'UNDO_TO', index: 0 });
+
+    // Byte-for-byte identical result: same document restore + same transient reset.
+    expect(viaUndoTo).toEqual(viaUndo);
+    expect(viaUndoTo.vessel).toBe(INITIAL_STATE.vessel);
+    expect(viaUndoTo.selection.nozzleIndex).toBe(-1);
+    expect(viaUndoTo.selection.weldIndex).toBe(-1);
+    expect(viaUndoTo.drawMode.coverage).toBe(false);
+    expect(viaUndoTo.drawMode.ruler).toBe(false);
+    expect(viaUndoTo.ui.inspectingAnnotationId).toBeNull();
+    expect(viaUndoTo.ui.viewingInspectionImageId).toBe(-1);
+    expect(viaUndoTo.ui.hoverData).toBeNull();
   });
 
   it('SET_VESSEL clears history — undo never crosses a load boundary', () => {
