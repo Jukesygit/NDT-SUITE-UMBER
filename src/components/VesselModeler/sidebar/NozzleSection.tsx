@@ -3,6 +3,7 @@ import { Trash2, RotateCw } from 'lucide-react';
 import type { VesselState, NozzleConfig, NozzleOrientationMode } from '../types';
 import { PIPE_SIZES, findClosestPipeSize } from '../types';
 import { SubSection } from './SliderRow';
+import { MountedOnChip } from './MountedOnChip';
 
 export interface NozzleSectionProps {
   vesselState: VesselState;
@@ -113,30 +114,7 @@ export function NozzleSection({
                   onChange={(e) => onUpdateNozzle(selectedNozzleIndex, { name: e.target.value })}
                 />
               </div>
-              {vesselState.appendages.length > 0 && (
-                <div className="vm-control-group">
-                  <div className="vm-label">
-                    <span>Mount on</span>
-                  </div>
-                  <select
-                    className="vm-select"
-                    value={sel.bodyId ?? ''}
-                    onChange={(e) =>
-                      onUpdateNozzle(selectedNozzleIndex, {
-                        bodyId: e.target.value === '' ? undefined : e.target.value,
-                      })
-                    }
-                    title="Mount this nozzle on the main vessel or a boot body. Position and angle are reinterpreted in the chosen body's frame — adjust them after switching."
-                  >
-                    <option value="">Main vessel</option>
-                    {vesselState.appendages.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <MountedOnChip appendages={vesselState.appendages} bodyId={sel.bodyId} />
               <div className="vm-form-row">
                 <div className="vm-control-group">
                   <div className="vm-label">

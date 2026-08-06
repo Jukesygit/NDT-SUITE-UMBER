@@ -1218,16 +1218,20 @@ export const DEFAULT_VESSEL_STATE: VesselState = {
 // ---------------------------------------------------------------------------
 
 export interface VesselCallbacks {
-  onNozzleMoved?: (index: number, newPos: number, newAngle: number) => void;
+  // Surface-mounted attachables take a trailing `bodyId` (undefined = main shell)
+  // so a cross-body drag can live-reassign the mount within one coalesced gesture
+  // (R2). The callback only writes bodyId into state when the model has boots, so
+  // single-body models keep the exact legacy `{ pos, angle }` update + history key.
+  onNozzleMoved?: (index: number, newPos: number, newAngle: number, bodyId?: string) => void;
   onSaddleMoved?: (index: number, newPos: number) => void;
   onTextureMoved?: (id: number, newPos: number, newAngle: number) => void;
   onNozzleSelected?: (index: number) => void;
   onSaddleSelected?: (index: number) => void;
   onTextureSelected?: (id: number) => void;
   onLugSelected?: (index: number) => void;
-  onLugMoved?: (index: number, newPos: number, newAngle: number) => void;
+  onLugMoved?: (index: number, newPos: number, newAngle: number, bodyId?: string) => void;
   onAnnotationSelected?: (id: number) => void;
-  onAnnotationMoved?: (id: number, newPos: number, newAngle: number) => void;
+  onAnnotationMoved?: (id: number, newPos: number, newAngle: number, bodyId?: string) => void;
   onAnnotationLabelOffsetChanged?: (id: number, offset: [number, number, number]) => void;
   onAnnotationCreated?: (
     type: AnnotationShapeType,
@@ -1247,15 +1251,27 @@ export interface VesselCallbacks {
   ) => void;
   onRulerCreated?: (startPos: number, startAngle: number, endPos: number, endAngle: number) => void;
   onRulerPreview?: (startPos: number, startAngle: number, endPos: number, endAngle: number) => void;
-  onCoverageRectCreated?: (pos: number, angle: number, width: number, height: number) => void;
-  onCoverageRectPreview?: (pos: number, angle: number, width: number, height: number) => void;
+  onCoverageRectCreated?: (
+    pos: number,
+    angle: number,
+    width: number,
+    height: number,
+    bodyId?: string
+  ) => void;
+  onCoverageRectPreview?: (
+    pos: number,
+    angle: number,
+    width: number,
+    height: number,
+    bodyId?: string
+  ) => void;
   onCoverageRectSelected?: (id: number) => void;
-  onCoverageRectMoved?: (id: number, newPos: number, newAngle: number) => void;
+  onCoverageRectMoved?: (id: number, newPos: number, newAngle: number, bodyId?: string) => void;
   onInspectionImageSelected?: (id: number) => void;
   onInspectionImageMoved?: (id: number, newPos: number, newAngle: number) => void;
   onInspectionImageLabelOffsetChanged?: (id: number, offset: [number, number, number]) => void;
   onWeldSelected?: (index: number) => void;
-  onWeldMoved?: (index: number, newPos: number, newAngle: number) => void;
+  onWeldMoved?: (index: number, newPos: number, newAngle: number, bodyId?: string) => void;
   onScanCompositeSelected?: (id: string) => void;
   onScanCompositeHover?: (
     id: string,
@@ -1266,7 +1282,12 @@ export interface VesselCallbacks {
     screenY: number
   ) => void;
   onDomeScanHover?: (info: DomeScanHoverInfo | null) => void;
-  onScanGizmoDatumMoved?: (compositeId: string, angleDeg: number, posMm: number) => void;
+  onScanGizmoDatumMoved?: (
+    compositeId: string,
+    angleDeg: number,
+    posMm: number,
+    bodyId?: string
+  ) => void;
   onScanGizmoDirectionToggle?: (
     compositeId: string,
     field: 'scanDirection' | 'indexDirection'

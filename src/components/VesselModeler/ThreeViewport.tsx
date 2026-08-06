@@ -309,31 +309,34 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         onSaddleSelected: (idx) => callbacksRef.current.onSaddleSelected?.(idx),
         onTextureSelected: (id) => callbacksRef.current.onTextureSelected?.(id),
         onDeselect: () => callbacksRef.current.onDeselect?.(),
-        onNozzleMoved: (idx, pos, angle) => callbacksRef.current.onNozzleMoved?.(idx, pos, angle),
-        onLugMoved: (idx, pos, angle) => callbacksRef.current.onLugMoved?.(idx, pos, angle),
+        onNozzleMoved: (idx, pos, angle, bodyId) =>
+          callbacksRef.current.onNozzleMoved?.(idx, pos, angle, bodyId),
+        onLugMoved: (idx, pos, angle, bodyId) =>
+          callbacksRef.current.onLugMoved?.(idx, pos, angle, bodyId),
         onSaddleMoved: (idx, pos) => callbacksRef.current.onSaddleMoved?.(idx, pos),
         onTextureMoved: (id, pos, angle) => callbacksRef.current.onTextureMoved?.(id, pos, angle),
         onAnnotationSelected: (id) => callbacksRef.current.onAnnotationSelected?.(id),
-        onAnnotationMoved: (id, pos, angle) =>
-          callbacksRef.current.onAnnotationMoved?.(id, pos, angle),
+        onAnnotationMoved: (id, pos, angle, bodyId) =>
+          callbacksRef.current.onAnnotationMoved?.(id, pos, angle, bodyId),
         onAnnotationCreated: (type, pos, angle, w, h, bodyId) =>
           callbacksRef.current.onAnnotationCreated?.(type, pos, angle, w, h, bodyId),
         onAnnotationPreview: (type, pos, angle, w, h, bodyId) =>
           callbacksRef.current.onAnnotationPreview?.(type, pos, angle, w, h, bodyId),
         onRulerCreated: (sp, sa, ep, ea) => callbacksRef.current.onRulerCreated?.(sp, sa, ep, ea),
         onRulerPreview: (sp, sa, ep, ea) => callbacksRef.current.onRulerPreview?.(sp, sa, ep, ea),
-        onCoverageRectCreated: (pos, angle, w, h) =>
-          callbacksRef.current.onCoverageRectCreated?.(pos, angle, w, h),
-        onCoverageRectPreview: (pos, angle, w, h) =>
-          callbacksRef.current.onCoverageRectPreview?.(pos, angle, w, h),
+        onCoverageRectCreated: (pos, angle, w, h, bodyId) =>
+          callbacksRef.current.onCoverageRectCreated?.(pos, angle, w, h, bodyId),
+        onCoverageRectPreview: (pos, angle, w, h, bodyId) =>
+          callbacksRef.current.onCoverageRectPreview?.(pos, angle, w, h, bodyId),
         onCoverageRectSelected: (id) => callbacksRef.current.onCoverageRectSelected?.(id),
-        onCoverageRectMoved: (id, pos, angle) =>
-          callbacksRef.current.onCoverageRectMoved?.(id, pos, angle),
+        onCoverageRectMoved: (id, pos, angle, bodyId) =>
+          callbacksRef.current.onCoverageRectMoved?.(id, pos, angle, bodyId),
         onInspectionImageSelected: (id) => callbacksRef.current.onInspectionImageSelected?.(id),
         onInspectionImageMoved: (id, pos, angle) =>
           callbacksRef.current.onInspectionImageMoved?.(id, pos, angle),
         onWeldSelected: (idx) => callbacksRef.current.onWeldSelected?.(idx),
-        onWeldMoved: (idx, pos, angle) => callbacksRef.current.onWeldMoved?.(idx, pos, angle),
+        onWeldMoved: (idx, pos, angle, bodyId) =>
+          callbacksRef.current.onWeldMoved?.(idx, pos, angle, bodyId),
         onScanCompositeHover: (id, thickness, scanMm, indexMm, screenX, screenY) =>
           callbacksRef.current.onScanCompositeHover?.(
             id,
@@ -344,8 +347,8 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
             screenY
           ),
         onDomeScanHover: (info) => callbacksRef.current.onDomeScanHover?.(info),
-        onScanGizmoDatumMoved: (compositeId, angleDeg, posMm) =>
-          callbacksRef.current.onScanGizmoDatumMoved?.(compositeId, angleDeg, posMm),
+        onScanGizmoDatumMoved: (compositeId, angleDeg, posMm, bodyId) =>
+          callbacksRef.current.onScanGizmoDatumMoved?.(compositeId, angleDeg, posMm, bodyId),
         onScanGizmoDirectionToggle: (compositeId, field) =>
           callbacksRef.current.onScanGizmoDirectionToggle?.(compositeId, field),
         onDomeGizmoDatumMoved: (compositeId, phiDeg, thetaDeg) =>

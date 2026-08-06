@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Trash2, Plus } from 'lucide-react';
 import type { VesselState, WeldConfig, WeldType } from '../types';
 import { SliderRow, SubSection } from './SliderRow';
+import { MountedOnChip } from './MountedOnChip';
 
 export interface WeldSectionProps {
     vesselState: VesselState;
@@ -113,22 +114,7 @@ export function WeldSection({
                                     onChange={e => onUpdateWeld(selectedWeldIndex, { name: e.target.value })}
                                 />
                             </div>
-                            {vesselState.appendages.length > 0 && (
-                                <div className="vm-control-group">
-                                    <div className="vm-label"><span>Mount on</span></div>
-                                    <select
-                                        className="vm-select"
-                                        value={sel.bodyId ?? ''}
-                                        onChange={e => onUpdateWeld(selectedWeldIndex, { bodyId: e.target.value === '' ? undefined : e.target.value })}
-                                        title="Mount this weld on the main vessel or a boot body. Position/angle are reinterpreted in the chosen body's frame — adjust them after switching."
-                                    >
-                                        <option value="">Main vessel</option>
-                                        {vesselState.appendages.map(a => (
-                                            <option key={a.id} value={a.id}>{a.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
+                            <MountedOnChip appendages={vesselState.appendages} bodyId={sel.bodyId} />
                             <div className="vm-control-group">
                                 <div className="vm-label"><span>Type</span></div>
                                 <div className="vm-toggle-group">

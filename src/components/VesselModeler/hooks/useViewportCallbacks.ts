@@ -95,8 +95,14 @@ export function useViewportCallbacks({
     onTextureSelected: (id) => dispatch({ type: 'SELECT_TEXTURE', id }),
     onLugSelected: (idx) => dispatch({ type: 'SELECT_LUG', index: idx }),
     onAnnotationSelected: (id) => dispatch({ type: 'SELECT_ANNOTATION', id }),
-    onAnnotationMoved: (id, pos, angle) => {
-      updateAnnotation(id, { pos: Math.round(pos), angle: Math.round(angle) });
+    // Cross-body drag (R2): when the model has boots the mount is included every
+    // frame so the coalesce key is stable across the drag AND a crossing rides the
+    // same coalesced entry (one undo reverses position AND body). With no boots the
+    // bodyId is always undefined, so we omit it — byte-identical `{ pos, angle }`
+    // update and history key (`annotation:id:angle,pos`), zero single-body change.
+    onAnnotationMoved: (id, pos, angle, bodyId) => {
+      const base = { pos: Math.round(pos), angle: Math.round(angle) };
+      updateAnnotation(id, vesselState.appendages.length > 0 ? { ...base, bodyId } : base);
     },
     onAnnotationLabelOffsetChanged: (id, offset) => {
       updateAnnotation(id, { labelOffset: offset });
@@ -177,7 +183,7 @@ export function useViewportCallbacks({
         },
       });
     },
-    onCoverageRectCreated: (pos, angle, width, height) => {
+    onCoverageRectCreated: (pos, angle, width, height, bodyId) => {
       const id = getNextCoverageRectId();
       const num = vesselState.coverageRects.length + 1;
       addCoverageRect({
@@ -191,12 +197,13 @@ export function useViewportCallbacks({
         lineWidth: 2,
         filled: true,
         fillOpacity: 0.2,
+        bodyId,
       });
       dispatch({ type: 'SELECT_COVERAGE_RECT', id });
       dispatch({ type: 'SET_PREVIEW_COVERAGE_RECT', preview: null });
       dispatch({ type: 'SET_DRAW_MODE_COVERAGE', active: false });
     },
-    onCoverageRectPreview: (pos, angle, width, height) => {
+    onCoverageRectPreview: (pos, angle, width, height, bodyId) => {
       dispatch({
         type: 'SET_PREVIEW_COVERAGE_RECT',
         preview: {
@@ -210,12 +217,14 @@ export function useViewportCallbacks({
           lineWidth: 2,
           filled: false,
           fillOpacity: 0.2,
+          bodyId,
         },
       });
     },
     onCoverageRectSelected: (id) => dispatch({ type: 'SELECT_COVERAGE_RECT', id }),
-    onCoverageRectMoved: (id, pos, angle) => {
-      updateCoverageRect(id, { pos: Math.round(pos), angle: Math.round(angle) });
+    onCoverageRectMoved: (id, pos, angle, bodyId) => {
+      const base = { pos: Math.round(pos), angle: Math.round(angle) };
+      updateCoverageRect(id, vesselState.appendages.length > 0 ? { ...base, bodyId } : base);
     },
     onInspectionImageSelected: (id) => dispatch({ type: 'SELECT_INSPECTION_IMAGE', id }),
     onInspectionImageMoved: (id, pos, angle) => {
@@ -225,17 +234,20 @@ export function useViewportCallbacks({
       updateInspectionImage(id, { labelOffset: offset });
     },
     onWeldSelected: (idx) => dispatch({ type: 'SELECT_WELD', index: idx }),
-    onWeldMoved: (idx, pos, angle) => {
+    onWeldMoved: (idx, pos, angle, bodyId) => {
       const weld = vesselState.welds[idx];
+      const hasBoots = vesselState.appendages.length > 0;
       if (weld?.type === 'circumferential') {
-        updateWeld(idx, { pos: Math.round(pos) });
+        const base = { pos: Math.round(pos) };
+        updateWeld(idx, hasBoots ? { ...base, bodyId } : base);
       } else {
         const delta = Math.round(pos) - weld.pos;
-        updateWeld(idx, {
+        const base = {
           pos: Math.round(pos),
           endPos: (weld.endPos ?? vesselState.length) + delta,
           angle: Math.round(angle),
-        });
+        };
+        updateWeld(idx, hasBoots ? { ...base, bodyId } : base);
       }
     },
     onScanCompositeHover: (id, thickness, rawScanMm, rawIndexMm, screenX, screenY) => {
@@ -269,11 +281,12 @@ export function useViewportCallbacks({
     onDomeScanHover: (info) => {
       setDomeScanHoverInfo(info);
     },
-    onScanGizmoDatumMoved: (compositeId, angleDeg, posMm) => {
-      handleUpdateScanComposite(compositeId, {
-        datumAngleDeg: angleDeg,
-        indexStartMm: Math.round(posMm),
-      });
+    onScanGizmoDatumMoved: (compositeId, angleDeg, posMm, bodyId) => {
+      const base = { datumAngleDeg: angleDeg, indexStartMm: Math.round(posMm) };
+      handleUpdateScanComposite(
+        compositeId,
+        vesselState.appendages.length > 0 ? { ...base, bodyId } : base
+      );
     },
     onScanGizmoDirectionToggle: (compositeId, field) => {
       const sc = vesselState.scanComposites.find((c) => c.id === compositeId);
@@ -315,8 +328,9 @@ export function useViewportCallbacks({
       setPipePartPopup((prev) => (prev ? null : { pipelineId, x: 0, y: 0 }));
     },
     onDeselect: () => dispatch({ type: 'DESELECT_ALL' }),
-    onNozzleMoved: (idx, pos, angle) => {
-      updateNozzle(idx, { pos: Math.round(pos), angle: Math.round(angle) });
+    onNozzleMoved: (idx, pos, angle, bodyId) => {
+      const base = { pos: Math.round(pos), angle: Math.round(angle) };
+      updateNozzle(idx, vesselState.appendages.length > 0 ? { ...base, bodyId } : base);
     },
     onSaddleMoved: (idx, pos) => {
       updateSaddle(idx, { pos: Math.round(pos) });
@@ -324,8 +338,9 @@ export function useViewportCallbacks({
     onTextureMoved: (id, pos, angle) => {
       updateTexture(id, { pos: Math.round(pos), angle: Math.round(angle) });
     },
-    onLugMoved: (idx, pos, angle) => {
-      updateLug(idx, { pos: Math.round(pos), angle: Math.round(angle) });
+    onLugMoved: (idx, pos, angle, bodyId) => {
+      const base = { pos: Math.round(pos), angle: Math.round(angle) };
+      updateLug(idx, vesselState.appendages.length > 0 ? { ...base, bodyId } : base);
     },
     onDragEnd: () => {
       // Gesture boundary: end the coalescing group so the next drag of the same

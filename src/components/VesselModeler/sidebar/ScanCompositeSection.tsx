@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Trash2, Cloud } from 'lucide-react';
 import type { VesselState, ScanCompositeConfig } from '../types';
 import { SliderRow, SubSection } from './SliderRow';
+import { MountedOnChip } from './MountedOnChip';
 
 export interface ScanCompositeSectionProps {
   vesselState: VesselState;
@@ -122,32 +123,7 @@ export function ScanCompositeSection({
                     Set scan orientation using the 3D gizmo or controls below, then confirm.
                   </p>
                 )}
-                {!sc.orientationConfirmed && vesselState.appendages.length > 0 && (
-                  <div className="vm-control-group" style={{ marginBottom: 6 }}>
-                    <div className="vm-label">
-                      <span>Mount on</span>
-                    </div>
-                    <select
-                      className="vm-select"
-                      value={sc.bodyId ?? ''}
-                      onChange={(e) =>
-                        onUpdateScanComposite(sc.id, {
-                          bodyId: e.target.value === '' ? undefined : e.target.value,
-                          // Reinterpreted in the chosen body's frame — re-confirm orientation.
-                          orientationConfirmed: false,
-                        })
-                      }
-                      title="Mount this scan on the main vessel or a boot body. Index start and datum angle are reinterpreted in the chosen body's frame — set the orientation after switching."
-                    >
-                      <option value="">Main vessel</option>
-                      {vesselState.appendages.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                <MountedOnChip appendages={vesselState.appendages} bodyId={sc.bodyId} />
                 <div className="vm-form-row">
                   <div className="vm-control-group">
                     <div className="vm-label">

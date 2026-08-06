@@ -12,7 +12,44 @@ import {
 } from '../types';
 import type { ThreeViewportHandle } from '../ThreeViewport';
 import { nextNozzleId } from '../engine/nozzle-id';
+import { resolveBodyFrame } from '../engine/body-frame';
 import type { UpdateVessel } from '../engine/vessel-reducer';
+
+/** Walk up from a hit mesh to the appendage body it belongs to (undefined = main shell). */
+function hitBodyId(object: THREE.Object3D): string | undefined {
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    const id = current.userData?.bodyId;
+    if (id !== undefined) return id as string;
+    current = current.parent;
+  }
+  return undefined;
+}
+
+/**
+ * Cursor-first drop placement (R2): resolve the (pos, angle, bodyId) for a palette
+ * drop from the nearest shell hit. The hit's body wins — main shell OR a boot — and
+ * the point is inverted through THAT body's frame, so a drop on a boot lands on the
+ * boot (previously it computed a garbage main-frame position and stayed on the main
+ * shell). For a main-shell hit the frame inverse reproduces the legacy inline math
+ * exactly, so single-body models are byte-identical.
+ */
+function resolveDropPlacement(
+  state: VesselState,
+  hit: THREE.Intersection
+): { pos: number; angle: number; bodyId: string | undefined } {
+  const bodyId = hitBodyId(hit.object);
+  const frame = resolveBodyFrame(state, bodyId);
+  const local = frame.toLocal(hit.point);
+  const pos =
+    bodyId === undefined
+      ? Math.max(
+          -(state.id / (2 * state.headRatio)),
+          Math.min(state.length + state.id / (2 * state.headRatio), local.pos)
+        )
+      : Math.max(0, Math.min(frame.axialLength, local.pos));
+  return { pos, angle: local.angle, bodyId };
+}
 
 interface UseViewportDnDParams {
   vesselState: VesselState;
@@ -87,20 +124,8 @@ export function useViewportDnD({
       const intersects = raycaster.intersectObjects(shells);
 
       if (intersects.length > 0) {
-        const point = intersects[0].point;
-        const isVertical = vesselState.orientation === 'vertical';
-
-        // Calculate position from intersection point
-        let newPos = isVertical
-          ? point.y / SCALE + vesselState.length / 2
-          : point.x / SCALE + vesselState.length / 2;
-        const headDepth = vesselState.id / (2 * vesselState.headRatio);
-        newPos = Math.max(-headDepth, Math.min(vesselState.length + headDepth, newPos));
-
-        // Calculate angle from intersection
-        const rad = isVertical ? Math.atan2(point.z, point.x) : Math.atan2(point.y, point.z);
-        let deg = (rad * 180) / Math.PI;
-        if (deg < 0) deg += 360;
+        // Cursor-first: the nozzle mounts on whatever body surface is under the drop.
+        const { pos: newPos, angle: deg, bodyId } = resolveDropPlacement(vesselState, intersects[0]);
 
         // Find a unique name
         const namePrefix = pipe.style === 'plain-pipe' ? 'P' : 'N';
@@ -123,6 +148,7 @@ export function useViewportDnD({
           flangeThk: pipe.flangeThk,
           pipeOD: pipe.od,
           ...(pipe.style ? { style: pipe.style } : {}),
+          ...(bodyId !== undefined ? { bodyId } : {}),
         });
       } else {
         // Dropped on canvas but missed the vessel - add at center
@@ -181,22 +207,15 @@ export function useViewportDnD({
 
       let newPos: number;
       let deg: number;
+      let bodyId: string | undefined;
 
       if (intersects.length > 0) {
-        const point = intersects[0].point;
-        const isVertical = vesselState.orientation === 'vertical';
-        newPos = isVertical
-          ? point.y / SCALE + vesselState.length / 2
-          : point.x / SCALE + vesselState.length / 2;
-        const headDepth = vesselState.id / (2 * vesselState.headRatio);
-        newPos = Math.max(-headDepth, Math.min(vesselState.length + headDepth, newPos));
-
-        const rad = isVertical ? Math.atan2(point.z, point.x) : Math.atan2(point.y, point.z);
-        deg = (rad * 180) / Math.PI;
-        if (deg < 0) deg += 360;
+        // Cursor-first: the lug mounts on whatever body surface is under the drop.
+        ({ pos: newPos, angle: deg, bodyId } = resolveDropPlacement(vesselState, intersects[0]));
       } else {
         newPos = vesselState.length / 2;
         deg = 90;
+        bodyId = undefined;
       }
 
       let lugNum = vesselState.liftingLugs.length + 1;
@@ -212,6 +231,7 @@ export function useViewportDnD({
         angle: Math.round(deg),
         style: lugData.style || 'padEye',
         swl: lugData.label,
+        ...(bodyId !== undefined ? { bodyId } : {}),
       });
     },
     [vesselState, addLug]
@@ -249,22 +269,15 @@ export function useViewportDnD({
 
       let newPos: number;
       let deg: number;
+      let bodyId: string | undefined;
 
       if (intersects.length > 0) {
-        const point = intersects[0].point;
-        const isVertical = vesselState.orientation === 'vertical';
-        newPos = isVertical
-          ? point.y / SCALE + vesselState.length / 2
-          : point.x / SCALE + vesselState.length / 2;
-        const headDepth = vesselState.id / (2 * vesselState.headRatio);
-        newPos = Math.max(-headDepth, Math.min(vesselState.length + headDepth, newPos));
-
-        const rad = isVertical ? Math.atan2(point.z, point.x) : Math.atan2(point.y, point.z);
-        deg = (rad * 180) / Math.PI;
-        if (deg < 0) deg += 360;
+        // Cursor-first: the weld mounts on whatever body surface is under the drop.
+        ({ pos: newPos, angle: deg, bodyId } = resolveDropPlacement(vesselState, intersects[0]));
       } else {
         newPos = vesselState.length / 2;
         deg = 90;
+        bodyId = undefined;
       }
 
       let weldNum = vesselState.welds.length + 1;
@@ -273,6 +286,7 @@ export function useViewportDnD({
         weldNum++;
         name = 'W' + weldNum;
       }
+      const bodyField = bodyId !== undefined ? { bodyId } : {};
 
       if (wType === 'circumferential') {
         addWeld({
@@ -280,9 +294,13 @@ export function useViewportDnD({
           type: 'circumferential',
           pos: Math.round(newPos),
           color: '#888888',
+          ...bodyField,
         });
       } else {
-        const halfLen = vesselState.length * 0.25;
+        // Longitudinal welds run along the axis; clamp the extent to the body's span
+        // when dropped on a boot (its cylinder is short) rather than the main length.
+        const bodyLength = bodyId === undefined ? vesselState.length : resolveBodyFrame(vesselState, bodyId).axialLength;
+        const halfLen = bodyLength * 0.25;
         addWeld({
           name,
           type: 'longitudinal',
@@ -290,6 +308,7 @@ export function useViewportDnD({
           endPos: Math.round(newPos + halfLen),
           angle: Math.round(deg),
           color: '#888888',
+          ...bodyField,
         });
       }
     },

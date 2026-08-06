@@ -21,6 +21,7 @@ import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { VesselState, AnnotationShapeType } from '../types';
 import { SCALE } from './materials';
 import { resolveBodyFrame, type SurfaceFrame } from './body-frame';
+import { resolveCrossingHit, SEAM_HYSTERESIS_WORLD } from './body-crossing';
 import { domePhiThetaFromPoint } from './dome-scan-geometry';
 import { buildMeridianProfile, arcFromAxial, axialFromArc, displayRadiusAtArc } from './dome-arc';
 import { normAngle, vesselToDatumAngle } from './vessel-coords';
@@ -64,12 +65,15 @@ export interface InteractionCallbacks {
   onTextureSelected: (id: number) => void;
   onLugSelected: (index: number) => void;
   onDeselect: () => void;
-  onNozzleMoved: (index: number, pos: number, angle: number) => void;
+  // Surface-mounted attachables carry the resolved body under the cursor as a
+  // trailing `bodyId` (undefined = main shell) so a cross-body drag can live-
+  // reassign the mount in the same coalesced gesture (R2).
+  onNozzleMoved: (index: number, pos: number, angle: number, bodyId?: string) => void;
   onSaddleMoved: (index: number, pos: number) => void;
   onTextureMoved: (id: number, pos: number, angle: number) => void;
-  onLugMoved: (index: number, pos: number, angle: number) => void;
+  onLugMoved: (index: number, pos: number, angle: number, bodyId?: string) => void;
   onAnnotationSelected: (id: number) => void;
-  onAnnotationMoved: (id: number, pos: number, angle: number) => void;
+  onAnnotationMoved: (id: number, pos: number, angle: number, bodyId?: string) => void;
   onAnnotationCreated: (
     type: AnnotationShapeType,
     pos: number,
@@ -88,14 +92,26 @@ export interface InteractionCallbacks {
   ) => void;
   onRulerCreated: (startPos: number, startAngle: number, endPos: number, endAngle: number) => void;
   onRulerPreview: (startPos: number, startAngle: number, endPos: number, endAngle: number) => void;
-  onCoverageRectCreated: (pos: number, angle: number, width: number, height: number) => void;
-  onCoverageRectPreview: (pos: number, angle: number, width: number, height: number) => void;
+  onCoverageRectCreated: (
+    pos: number,
+    angle: number,
+    width: number,
+    height: number,
+    bodyId?: string
+  ) => void;
+  onCoverageRectPreview: (
+    pos: number,
+    angle: number,
+    width: number,
+    height: number,
+    bodyId?: string
+  ) => void;
   onCoverageRectSelected: (id: number) => void;
-  onCoverageRectMoved: (id: number, pos: number, angle: number) => void;
+  onCoverageRectMoved: (id: number, pos: number, angle: number, bodyId?: string) => void;
   onInspectionImageSelected: (id: number) => void;
   onInspectionImageMoved: (id: number, pos: number, angle: number) => void;
   onWeldSelected: (index: number) => void;
-  onWeldMoved: (index: number, pos: number, angle: number) => void;
+  onWeldMoved: (index: number, pos: number, angle: number, bodyId?: string) => void;
   onScanCompositeHover: (
     id: string,
     thickness: number | null,
@@ -116,7 +132,12 @@ export interface InteractionCallbacks {
       screenY: number;
     } | null
   ) => void;
-  onScanGizmoDatumMoved: (compositeId: string, angleDeg: number, posMm: number) => void;
+  onScanGizmoDatumMoved: (
+    compositeId: string,
+    angleDeg: number,
+    posMm: number,
+    bodyId?: string
+  ) => void;
   onScanGizmoDirectionToggle: (
     compositeId: string,
     field: 'scanDirection' | 'indexDirection'
@@ -177,14 +198,25 @@ export class InteractionManager {
   private selectedGizmoCompositeId = '';
   private isDown = false;
 
+  /**
+   * Body the ACTIVE surface drag is currently on (undefined = main shell). Seeded
+   * at drag-start from the dragged item's `bodyId` and updated whenever a
+   * cross-body drag switches bodies. It is the incumbent for the seam-hysteresis
+   * decision (`resolveCrossingHit`) and is kept off React state so a burst of
+   * pointer moves can't flap the mount while a re-render is still in flight.
+   */
+  private dragBodyId: string | undefined = undefined;
+
   // Draw mode state
   drawMode: AnnotationShapeType | null = null;
   coverageDrawMode = false;
   rulerDrawMode = false;
   /**
-   * Body a newly-drawn ANNOTATION belongs to (undefined = main shell). Set by the
-   * React layer from the active selection (see VesselModeler `activeDrawBodyId`);
-   * only annotation draws honour it — coverage/ruler draws stay on the main shell.
+   * @deprecated Superseded by cursor-first draw targeting (R2): a new item now
+   * mounts on the body surface under the cursor (`resolveDrawTarget`), not on a
+   * selection-derived active body. The React layer still assigns this field, but
+   * no code reads it. Retained to avoid churning the ThreeViewport prop wiring;
+   * safe to remove end-to-end in a follow-up.
    */
   activeDrawBodyId: string | undefined = undefined;
   /** @deprecated per-item locked now on CoverageRectConfig */
@@ -315,21 +347,18 @@ export class InteractionManager {
 
     // ----- Draw mode: start drawing annotation, coverage rect, or ruler ----- //
     if (this.drawMode || this.coverageDrawMode || this.rulerDrawMode) {
-      // Annotation draws are scoped to the active body (its cylinder + closure)
-      // when one is selected; coverage/ruler draws — and all draws with no active
-      // body — stay on the main shell, byte-identical to the legacy path.
-      const bodyId = this.resolveActiveDrawBody();
-      const { frame, meshes } = this.drawSurface(bodyId);
-      if (meshes.length === 0) return;
-      const hits = this.raycaster.intersectObjects(meshes, true);
-      const hit = bodyId === undefined ? hits[0] : hits.find((h) => hitBodyId(h.object) === bodyId);
-      if (!hit) return;
+      // Cursor-first (R2): the new item mounts on whatever body surface is under
+      // the cursor — main shell OR a boot — instead of a selection-derived active
+      // body. Rulers carry no body, so a ruler draw is forced to the main shell.
+      const kind = this.drawMode ? 'annotation' : this.coverageDrawMode ? 'coverage' : 'ruler';
+      const target = this.resolveDrawTarget(kind);
+      if (!target) return;
 
       // Single frame inverse: world point -> (pos mm, angle deg).
-      const start = frame.toLocal(hit.point);
+      const start = target.frame.toLocal(target.hit.point);
       this.drawStartPos = start.pos;
       this.drawStartAngle = start.angle;
-      this.drawBodyId = bodyId;
+      this.drawBodyId = target.bodyId;
 
       this.isDrawing = !!this.drawMode;
       this.isDrawingCoverage = this.coverageDrawMode;
@@ -349,6 +378,9 @@ export class InteractionManager {
         if (ud.type === 'scanGizmo') {
           // Origin sphere: start drag
           this.selectedGizmoCompositeId = ud.compositeId as string;
+          this.dragBodyId = this.vesselState.scanComposites.find(
+            (c) => c.id === ud.compositeId
+          )?.bodyId;
           this.isDown = true;
           this.isDragging = true;
           this.dragType = 'scanGizmo';
@@ -455,6 +487,7 @@ export class InteractionManager {
         const annId = entityData.annotationId as number;
         const ann = this.vesselState.annotations.find((a) => a.id === annId);
         if (!ann?.locked) {
+          this.dragBodyId = ann?.bodyId;
           this.startDrag('annotation', -1, -1, -1, -1, annId);
         }
         this.callbacks.onAnnotationSelected(annId);
@@ -470,6 +503,7 @@ export class InteractionManager {
           return;
         }
         this.selectedCoverageRectId = covId;
+        this.dragBodyId = rect?.bodyId;
         this.isDown = true;
         this.isDragging = true;
         this.dragType = 'coverageRect';
@@ -497,6 +531,7 @@ export class InteractionManager {
       if (entityData.nozzleIdx !== undefined) {
         if (this.nozzlesLocked) continue;
         const nozzleIdx = entityData.nozzleIdx as number;
+        this.dragBodyId = this.vesselState.nozzles[nozzleIdx]?.bodyId;
         this.startDrag('nozzle', nozzleIdx, -1, -1);
         this.callbacks.onNozzleSelected(nozzleIdx);
         return;
@@ -506,6 +541,7 @@ export class InteractionManager {
       if (entityData.lugIdx !== undefined) {
         if (this.lugsLocked) continue;
         const lugIdx = entityData.lugIdx as number;
+        this.dragBodyId = this.vesselState.liftingLugs[lugIdx]?.bodyId;
         this.startDrag('liftingLug', -1, -1, -1, lugIdx);
         this.callbacks.onLugSelected(lugIdx);
         return;
@@ -516,6 +552,7 @@ export class InteractionManager {
         if (this.weldsLocked) continue;
         const weldIdx = entityData.weldIdx as number;
         this.selectedWeldIdx = weldIdx;
+        this.dragBodyId = this.vesselState.welds[weldIdx]?.bodyId;
         this.isDown = true;
         this.isDragging = true;
         this.dragType = 'weld';
@@ -589,12 +626,12 @@ export class InteractionManager {
       if (!hit) return;
 
       const point = hit.point;
-      const state = this.vesselState;
 
       // Single frame inverse: world point -> (pos mm, angle deg).
       const { pos: currentPos, angle: currentAngle } = frame.toLocal(point);
 
-      const circumference = Math.PI * state.id;
+      // Circumference of the body being drawn on (main radius reduces to state.id).
+      const circumference = Math.PI * 2 * frame.radius;
       const axialDelta = Math.abs(currentPos - this.drawStartPos);
       let angleDelta = Math.abs(currentAngle - this.drawStartAngle);
       if (angleDelta > 180) angleDelta = 360 - angleDelta;
@@ -613,7 +650,7 @@ export class InteractionManager {
       } else if (this.isDrawingCoverage) {
         const width = Math.max(axialDelta, 20);
         const height = Math.max(circumDelta, 20);
-        this.callbacks.onCoverageRectPreview(centerPos, centerAngle, width, height);
+        this.callbacks.onCoverageRectPreview(centerPos, centerAngle, width, height, this.drawBodyId);
       } else {
         // Annotations size in meridian-arc space so the preview matches the
         // committed footprint on dome ends (see onPointerUp create path). On an
@@ -719,42 +756,44 @@ export class InteractionManager {
     const frame = resolveBodyFrame(state);
 
     if (this.dragType === 'coverageRect') {
-      const shellMeshes = this.getShellMeshes();
-      if (shellMeshes.length === 0) return;
-      const hits = this.raycaster.intersectObjects(shellMeshes, true);
-      if (hits.length === 0) return;
-
+      // Cross-body (R2): raycast every body surface, nearest wins with seam
+      // hysteresis, live-reassign bodyId. On a boot the rect is a pure cylinder
+      // rect (plain clamp); on the main shell it uses the dome-stable drape.
+      const res = this.resolveSurfaceDrag(this.getAllSurfaceMeshes(false));
+      if (!res) return;
       const rect = state.coverageRects.find((r) => r.id === this.selectedCoverageRectId);
-      const rectBodyId = rect?.bodyId;
-      if (rectBodyId !== undefined) {
-        // Appendage-mounted rect: scope to that body's surface and invert through
-        // its frame (pure cylinder, no dome drape). Clamp to the cylinder span.
-        const bodyHit = hits.find((h) => hitBodyId(h.object) === rectBodyId);
-        if (!bodyHit) return;
-        const bodyFrame = resolveBodyFrame(state, rectBodyId);
-        const local = bodyFrame.toLocal(bodyHit.point);
-        const clampedPos = Math.max(0, Math.min(bodyFrame.axialLength, local.pos));
-        this.callbacks.onCoverageRectMoved(this.selectedCoverageRectId, clampedPos, local.angle);
+
+      if (res.bodyId !== undefined) {
+        const clampedPos = Math.max(0, Math.min(res.frame.axialLength, res.pos));
+        this.callbacks.onCoverageRectMoved(
+          this.selectedCoverageRectId,
+          clampedPos,
+          res.angle,
+          res.bodyId
+        );
         return;
       }
 
-      // Main-shell rect: only accept a main-shell hit so it can't snap onto an
-      // appendage. Coverage rects render through the same drape geometry, so the
-      // drag uses the shared dome-stable resolver (holds/flips the angle near the
-      // pole). With no appendages present the first hit is the only hit — legacy.
-      const mainHit = hits.find((h) => hitBodyId(h.object) === undefined);
-      if (!mainHit) return;
-      const point = mainHit.point;
-      const { pos: posH, angle: thetaH } = frame.toLocal(point);
+      // Main-shell rect: dome-stable drag (holds/flips the angle near the pole).
+      // After a crossing the stored (pos, angle) live in the old frame, so the
+      // fresh local coord seeds the drape reference (crossings sit on cylinders,
+      // where the reference is ignored anyway).
+      const refPos = res.crossed ? res.pos : (rect?.pos ?? res.pos);
+      const refAngle = res.crossed ? res.angle : (rect?.angle ?? res.angle);
       const drag = this.resolveDrapeDrag(
-        posH,
-        thetaH,
-        this.radialAxisDistanceMm(point, state),
-        rect?.pos ?? posH,
-        rect?.angle ?? thetaH,
+        res.pos,
+        res.angle,
+        this.radialAxisDistanceMm(res.point, state),
+        refPos,
+        refAngle,
         state
       );
-      this.callbacks.onCoverageRectMoved(this.selectedCoverageRectId, drag.pos, drag.angle);
+      this.callbacks.onCoverageRectMoved(
+        this.selectedCoverageRectId,
+        drag.pos,
+        drag.angle,
+        res.bodyId
+      );
       return;
     }
 
@@ -774,63 +813,34 @@ export class InteractionManager {
     }
 
     if (this.dragType === 'weld') {
-      const shellMeshes = this.getShellMeshes();
-      if (shellMeshes.length === 0) return;
-      const hits = this.raycaster.intersectObjects(shellMeshes, true);
-      if (hits.length === 0) return;
-
-      const weldBodyId = state.welds[this.selectedWeldIdx]?.bodyId;
-      if (weldBodyId !== undefined) {
-        // Appendage-mounted weld: scope to that body's surface, invert through its
-        // frame, clamp to the cylinder span (mirrors the nozzle-drag scoping).
-        const bodyHit = hits.find((h) => hitBodyId(h.object) === weldBodyId);
-        if (!bodyHit) return;
-        const bodyFrame = resolveBodyFrame(state, weldBodyId);
-        const local = bodyFrame.toLocal(bodyHit.point);
-        const clampedPos = Math.max(0, Math.min(bodyFrame.axialLength, local.pos));
-        this.callbacks.onWeldMoved(this.selectedWeldIdx, clampedPos, local.angle);
-        return;
-      }
-
-      // Main-shell weld: only accept a main-shell hit (no bodyId tag). With no
-      // appendages present the first hit is the only hit — identical to legacy.
-      const mainHit = hits.find((h) => hitBodyId(h.object) === undefined);
-      if (!mainHit) return;
-      const { pos, angle: deg } = frame.toLocal(mainHit.point);
-      const headDepth = state.id / (2 * state.headRatio);
-      const newPos = Math.max(-headDepth, Math.min(state.length + headDepth, pos));
-
-      this.callbacks.onWeldMoved(this.selectedWeldIdx, newPos, deg);
+      // Cross-body (R2): nearest body surface wins with seam hysteresis. Main
+      // allows head overhang; a boot clamps to its cylinder span [0, L].
+      const res = this.resolveSurfaceDrag(this.getAllSurfaceMeshes(false));
+      if (!res) return;
+      const newPos =
+        res.bodyId === undefined
+          ? this.clampMainAxial(res.pos, state)
+          : Math.max(0, Math.min(res.frame.axialLength, res.pos));
+      this.callbacks.onWeldMoved(this.selectedWeldIdx, newPos, res.angle, res.bodyId);
       return;
     }
 
     if (this.dragType === 'scanGizmo') {
-      const shellMeshes = this.getShellMeshes();
-      if (shellMeshes.length === 0) return;
-      const hits = this.raycaster.intersectObjects(shellMeshes, true);
-      if (hits.length === 0) return;
-
-      // A scan composite can live on an appendage body: scope the datum drag to
-      // that body's surface and invert through the body frame (mirroring the
-      // nozzle-drag scoping). Main-shell composites stay on the main frame; with
-      // no appendages present the first hit is the only hit, identical to legacy.
-      const gizmoComposite = state.scanComposites.find(
-        (c) => c.id === this.selectedGizmoCompositeId
-      );
-      const gizmoBodyId = gizmoComposite?.bodyId;
-      const gizmoFrame = gizmoBodyId !== undefined ? resolveBodyFrame(state, gizmoBodyId) : frame;
-      const hit = hits.find((h) => hitBodyId(h.object) === gizmoBodyId);
-      if (!hit) return;
-
-      const local = gizmoFrame.toLocal(hit.point);
-      // Clamp to the body's axial span (tan-tan for main, cylinder length for appendage).
-      const newPos = Math.max(0, Math.min(gizmoFrame.axialLength, local.pos));
+      // Cross-body (R2): the scan datum follows the cursor across bodies. The
+      // datum (angle, pos) is a plain surface coordinate that converts cleanly
+      // through frames; the thickness grid renders relative to it, so a shell scan
+      // composite is NOT head-specific and may cross (dome scans, which ARE head-
+      // specific, stay on the domeGizmo path below and never cross). Both frames
+      // clamp pos to [0, axialLength].
+      const res = this.resolveSurfaceDrag(this.getAllSurfaceMeshes(false));
+      if (!res) return;
+      const newPos = Math.max(0, Math.min(res.frame.axialLength, res.pos));
 
       // Convert internal angle (0°=3-o'clock) to user-facing (0°=TDC): the
       // vessel→datum `- 90` and normalize live in vessel-coords (single source).
-      const deg = Math.round(normAngle(vesselToDatumAngle(local.angle)));
+      const deg = Math.round(normAngle(vesselToDatumAngle(res.angle)));
 
-      this.callbacks.onScanGizmoDatumMoved(this.selectedGizmoCompositeId, deg, newPos);
+      this.callbacks.onScanGizmoDatumMoved(this.selectedGizmoCompositeId, deg, newPos, res.bodyId);
       return;
     }
 
@@ -892,140 +902,81 @@ export class InteractionManager {
       return;
     }
 
-    if (
-      this.dragType === 'nozzle' ||
-      this.dragType === 'texture' ||
-      this.dragType === 'liftingLug' ||
-      this.dragType === 'annotation'
-    ) {
-      // Raycast against the vessel shell to find the surface point
+    if (this.dragType === 'nozzle') {
+      // Cross-body (R2): raycast every body surface, nearest wins with seam
+      // hysteresis, live-reassign bodyId. Main allows head overhang; a boot clamps
+      // to its cylinder span [0, L]. Angle snaps when snapping is enabled.
+      const res = this.resolveSurfaceDrag(this.getAllSurfaceMeshes(false));
+      if (!res) return;
+      const newPos =
+        res.bodyId === undefined
+          ? this.clampMainAxial(res.pos, state)
+          : Math.max(0, Math.min(res.frame.axialLength, res.pos));
+      this.callbacks.onNozzleMoved(
+        this.selectedNozzleIdx,
+        newPos,
+        this.snapAngle(res.angle),
+        res.bodyId
+      );
+      return;
+    }
+
+    if (this.dragType === 'liftingLug') {
+      // Cross-body, same clamp/snap treatment as nozzles.
+      const res = this.resolveSurfaceDrag(this.getAllSurfaceMeshes(false));
+      if (!res) return;
+      const newPos =
+        res.bodyId === undefined
+          ? this.clampMainAxial(res.pos, state)
+          : Math.max(0, Math.min(res.frame.axialLength, res.pos));
+      this.callbacks.onLugMoved(this.selectedLugIdx, newPos, this.snapAngle(res.angle), res.bodyId);
+      return;
+    }
+
+    if (this.dragType === 'annotation') {
+      // Cross-body incl. boot end closures (so an annotation can be dragged onto /
+      // through a boot's dished end). The dome-stable drape uses the winning body's
+      // dims; a boot has no left head, so minPos is 0.
+      const res = this.resolveSurfaceDrag(this.getAllSurfaceMeshes(true));
+      if (!res) return;
+      const ann = state.annotations.find((a) => a.id === this.selectedAnnotationIdx);
+      // After a crossing the stored (pos, angle) live in the OLD frame; seed the
+      // drape reference with the fresh local coord (crossings sit on cylinders,
+      // where the reference is ignored anyway).
+      const refPos = res.crossed ? res.pos : (ann?.pos ?? res.pos);
+      const refAngle = res.crossed ? res.angle : (ann?.angle ?? res.angle);
+      const dims =
+        res.bodyId === undefined
+          ? undefined
+          : {
+              R: res.frame.radius,
+              L: res.frame.axialLength,
+              headDepth: res.frame.headDepth,
+              minPos: 0,
+            };
+      const rHit =
+        res.bodyId === undefined
+          ? this.radialAxisDistanceMm(res.point, state)
+          : this.radialAxisDistanceFromFrame(res.point, res.frame);
+      const drag = this.resolveDrapeDrag(res.pos, res.angle, rHit, refPos, refAngle, state, dims);
+      this.callbacks.onAnnotationMoved(this.selectedAnnotationIdx, drag.pos, drag.angle, res.bodyId);
+      return;
+    }
+
+    if (this.dragType === 'texture') {
+      // Textures (image overlays) carry no body — main-shell only, legacy path
+      // (first hit against all shells, main-frame inverse), byte-identical.
       const shellMeshes = this.getShellMeshes();
       if (shellMeshes.length === 0) return;
-
       const hits = this.raycaster.intersectObjects(shellMeshes, true);
       if (hits.length === 0) return;
+      const { pos, angle: deg } = frame.toLocal(hits[0].point);
+      const newPos = this.clampMainAxial(pos, state);
+      this.callbacks.onTextureMoved(this.selectedTextureIdx, newPos, deg);
+      return;
+    }
 
-      // A nozzle can mount on an appendage body: scope its drag to that body's
-      // surface and convert through the body frame. Main-shell nozzles (and every
-      // texture / lug / annotation drag) stay on the exact legacy main-shell path.
-      if (this.dragType === 'nozzle') {
-        const nozzleBodyId = state.nozzles[this.selectedNozzleIdx]?.bodyId;
-        if (nozzleBodyId !== undefined) {
-          const bodyHit = hits.find((h) => hitBodyId(h.object) === nozzleBodyId);
-          if (!bodyHit) return;
-          const bodyFrame = resolveBodyFrame(state, nozzleBodyId);
-          const local = bodyFrame.toLocal(bodyHit.point);
-          const clampedPos = Math.max(0, Math.min(bodyFrame.axialLength, local.pos));
-          this.callbacks.onNozzleMoved(
-            this.selectedNozzleIdx,
-            clampedPos,
-            this.snapAngle(local.angle)
-          );
-          return;
-        }
-        // Main-shell nozzle: only accept a main-shell hit (no bodyId tag), so the
-        // nozzle can't snap onto an appendage surface. With no appendages present
-        // this is the first hit, identical to the legacy path.
-        const mainHit = hits.find((h) => hitBodyId(h.object) === undefined);
-        if (!mainHit) return;
-        const { pos, angle: deg } = frame.toLocal(mainHit.point);
-        const headDepth = state.id / (2 * state.headRatio);
-        const newPos = Math.max(-headDepth, Math.min(state.length + headDepth, pos));
-        // Nozzles snap to the chosen angular increment when snapping is enabled.
-        this.callbacks.onNozzleMoved(this.selectedNozzleIdx, newPos, this.snapAngle(deg));
-        return;
-      }
-
-      // A lifting lug can mount on an appendage body: scope its drag to that body's
-      // surface exactly like the nozzle path. The angle-snap treatment (shared with
-      // nozzles) extends to appendage-mounted lugs.
-      if (this.dragType === 'liftingLug') {
-        const lugBodyId = state.liftingLugs[this.selectedLugIdx]?.bodyId;
-        if (lugBodyId !== undefined) {
-          const bodyHit = hits.find((h) => hitBodyId(h.object) === lugBodyId);
-          if (!bodyHit) return;
-          const bodyFrame = resolveBodyFrame(state, lugBodyId);
-          const local = bodyFrame.toLocal(bodyHit.point);
-          const clampedPos = Math.max(0, Math.min(bodyFrame.axialLength, local.pos));
-          this.callbacks.onLugMoved(this.selectedLugIdx, clampedPos, this.snapAngle(local.angle));
-          return;
-        }
-        const mainHit = hits.find((h) => hitBodyId(h.object) === undefined);
-        if (!mainHit) return;
-        const { pos, angle: deg } = frame.toLocal(mainHit.point);
-        const headDepth = state.id / (2 * state.headRatio);
-        const newPos = Math.max(-headDepth, Math.min(state.length + headDepth, pos));
-        this.callbacks.onLugMoved(this.selectedLugIdx, newPos, this.snapAngle(deg));
-        return;
-      }
-
-      // An annotation can mount on an appendage body: scope its drag to that body's
-      // surface INCLUDING the dished closure (getBodySurfaceMeshes, so it can be
-      // dragged onto / through the end), invert through the body frame, and reuse
-      // the dome-stable hysteresis with the body's dims (junction floor minPos 0 —
-      // no left head). Main-shell annotations fall through to the legacy path below.
-      if (this.dragType === 'annotation') {
-        const ann = state.annotations.find((a) => a.id === this.selectedAnnotationIdx);
-        const annBodyId = ann?.bodyId;
-        if (annBodyId !== undefined) {
-          const bodyMeshes = this.getBodySurfaceMeshes(annBodyId);
-          const bodyHits =
-            bodyMeshes.length > 0 ? this.raycaster.intersectObjects(bodyMeshes, true) : [];
-          const bodyHit = bodyHits.find((h) => hitBodyId(h.object) === annBodyId);
-          if (!bodyHit) return;
-          const bodyFrame = resolveBodyFrame(state, annBodyId);
-          const local = bodyFrame.toLocal(bodyHit.point);
-          const drag = this.resolveDrapeDrag(
-            local.pos,
-            local.angle,
-            this.radialAxisDistanceFromFrame(bodyHit.point, bodyFrame),
-            ann?.pos ?? local.pos,
-            ann?.angle ?? local.angle,
-            state,
-            {
-              R: bodyFrame.radius,
-              L: bodyFrame.axialLength,
-              headDepth: bodyFrame.headDepth,
-              minPos: 0,
-            }
-          );
-          this.callbacks.onAnnotationMoved(this.selectedAnnotationIdx, drag.pos, drag.angle);
-          return;
-        }
-      }
-
-      const point = hits[0].point;
-
-      // Position (mm) and angle (deg) via the single frame inverse.
-      const { pos, angle: deg } = frame.toLocal(point);
-
-      // Clamp to vessel extent (including head depth)
-      const headDepth = state.id / (2 * state.headRatio);
-      const newPos = Math.max(-headDepth, Math.min(state.length + headDepth, pos));
-
-      if (this.dragType === 'annotation') {
-        // Main-shell annotation: only accept a main-shell hit so it can't snap onto
-        // an appendage surface (mirrors the nozzle / lug / weld main-shell scoping).
-        // Dome-stable drag: hold/flip the angle reference near the pole so a rect can
-        // be dragged onto and through the dome centre without spinning. With no
-        // appendages present the first hit is the only hit — identical to legacy.
-        const ann = state.annotations.find((a) => a.id === this.selectedAnnotationIdx);
-        const mainHit = hits.find((h) => hitBodyId(h.object) === undefined);
-        if (!mainHit) return;
-        const { pos: mPos, angle: mDeg } = frame.toLocal(mainHit.point);
-        const drag = this.resolveDrapeDrag(
-          mPos,
-          mDeg,
-          this.radialAxisDistanceMm(mainHit.point, state),
-          ann?.pos ?? mPos,
-          ann?.angle ?? mDeg,
-          state
-        );
-        this.callbacks.onAnnotationMoved(this.selectedAnnotationIdx, drag.pos, drag.angle);
-      } else {
-        this.callbacks.onTextureMoved(this.selectedTextureIdx, newPos, deg);
-      }
-    } else if (this.dragType === 'saddle') {
+    if (this.dragType === 'saddle') {
       // Intersect a horizontal plane at the saddle Y level
       const RADIUS = state.id / 2;
       const saddleY = -RADIUS * 1.2 * SCALE;
@@ -1072,12 +1023,12 @@ export class InteractionManager {
         this.drawBodyId === undefined ? hits[0] : hits.find((h) => hitBodyId(h.object) === this.drawBodyId);
       if (hit) {
         const point = hit.point;
-        const state = this.vesselState;
 
         // Single frame inverse: world point -> (pos mm, angle deg).
         const { pos: endPos, angle: endAngle } = frame.toLocal(point);
 
-        const circumference = Math.PI * state.id;
+        // Circumference of the body being drawn on (main radius reduces to state.id).
+        const circumference = Math.PI * 2 * frame.radius;
         const axialDelta = Math.abs(endPos - this.drawStartPos);
         let angleDelta = Math.abs(endAngle - this.drawStartAngle);
         if (angleDelta > 180) angleDelta = 360 - angleDelta;
@@ -1092,7 +1043,13 @@ export class InteractionManager {
         } else if (wasCoverage) {
           const width = Math.max(axialDelta, minSize);
           const height = Math.max(circumDelta, minSize);
-          this.callbacks.onCoverageRectCreated(centerPos, centerAngle, width, height);
+          this.callbacks.onCoverageRectCreated(
+            centerPos,
+            centerAngle,
+            width,
+            height,
+            this.drawBodyId
+          );
         } else {
           // Annotations size in meridian-arc space: width = true surface arc
           // across shell + dome; height = circumferential mm at the local dome
@@ -1128,6 +1085,7 @@ export class InteractionManager {
     if (this.isDragging) {
       this.isDragging = false;
       this.dragType = null;
+      this.dragBodyId = undefined;
 
       // Re-enable orbit controls now that the drag is finished
       this.controls.enabled = true;
@@ -1380,17 +1338,93 @@ export class InteractionManager {
   }
 
   /**
-   * Body a draw gesture starts on. Only ANNOTATION draws (this.drawMode set) are
-   * body-scoped, and only to an active body that still exists; everything else —
-   * coverage/ruler draws, or no active body — resolves to undefined (main shell),
-   * keeping the legacy path byte-identical.
+   * Every body surface eligible for a cross-body drag: the main shell + heads and
+   * every boot cylinder (all flagged `isShell`), plus boot end closures when
+   * `includeClosures` is set (annotations can drape onto a boot's dished end). One
+   * raycast set so the nearest hit across ALL bodies can win (R2).
    */
-  private resolveActiveDrawBody(): string | undefined {
-    if (!this.drawMode || this.activeDrawBodyId === undefined) return undefined;
-    const exists = (this.vesselState.appendages ?? []).some(
-      (a) => a.id === this.activeDrawBodyId
-    );
-    return exists ? this.activeDrawBodyId : undefined;
+  private getAllSurfaceMeshes(includeClosures: boolean): THREE.Object3D[] {
+    if (!this.vesselGroup) return [];
+    const out: THREE.Object3D[] = [];
+    this.vesselGroup.traverse((child) => {
+      const ud = child.userData;
+      if (ud.isShell) out.push(child);
+      else if (includeClosures && ud.bodyId !== undefined && ud.part === 'closure') out.push(child);
+    });
+    return out;
+  }
+
+  /** Clamp an axial pos to the main shell extent, including both head overhangs. */
+  private clampMainAxial(pos: number, state: VesselState): number {
+    const headDepth = state.id / (2 * state.headRatio);
+    return Math.max(-headDepth, Math.min(state.length + headDepth, pos));
+  }
+
+  /**
+   * Cross-body drag resolution shared by every surface-mounted attachable (R2).
+   * Raycast the supplied all-body surface set, choose the winning body via the
+   * seam hysteresis (`resolveCrossingHit`, incumbent = `this.dragBodyId`), and
+   * return the winning body's frame + the local (pos, angle) under the cursor.
+   * Updates `this.dragBodyId` to the winner so the next move's hysteresis uses it,
+   * and reports whether this move crossed bodies. Returns null on a miss.
+   */
+  private resolveSurfaceDrag(meshes: THREE.Object3D[]): {
+    bodyId: string | undefined;
+    frame: SurfaceFrame;
+    pos: number;
+    angle: number;
+    point: THREE.Vector3;
+    crossed: boolean;
+  } | null {
+    if (meshes.length === 0) return null;
+    const hits = this.raycaster.intersectObjects(meshes, true);
+    if (hits.length === 0) return null;
+    const bodyHits = hits.map((h) => ({
+      bodyId: hitBodyId(h.object),
+      distance: h.distance,
+      hit: h,
+    }));
+    const winner = resolveCrossingHit(bodyHits, this.dragBodyId, {
+      marginWorld: SEAM_HYSTERESIS_WORLD,
+    });
+    if (!winner) return null;
+    const crossed = winner.bodyId !== this.dragBodyId;
+    this.dragBodyId = winner.bodyId;
+    const frame = resolveBodyFrame(this.vesselState, winner.bodyId);
+    const local = frame.toLocal(winner.hit.point);
+    return {
+      bodyId: winner.bodyId,
+      frame,
+      pos: local.pos,
+      angle: local.angle,
+      point: winner.hit.point,
+      crossed,
+    };
+  }
+
+  /**
+   * Body + frame under the cursor for a new DRAW gesture (R2 cursor-first). The
+   * item mounts on whatever body surface is under the cursor. Annotations may
+   * start on a boot end closure (includeClosures); coverage rects use the cylinder
+   * shells only; rulers carry no body, so a ruler draw is forced to the nearest
+   * main-shell hit. Returns null on a miss.
+   */
+  private resolveDrawTarget(kind: 'annotation' | 'coverage' | 'ruler'): {
+    bodyId: string | undefined;
+    frame: SurfaceFrame;
+    hit: THREE.Intersection;
+  } | null {
+    if (kind === 'ruler') {
+      const meshes = this.getShellMeshes();
+      const hits = meshes.length ? this.raycaster.intersectObjects(meshes, true) : [];
+      const hit = hits.find((h) => hitBodyId(h.object) === undefined);
+      return hit ? { bodyId: undefined, frame: resolveBodyFrame(this.vesselState), hit } : null;
+    }
+    const meshes = this.getAllSurfaceMeshes(kind === 'annotation');
+    const hits = meshes.length ? this.raycaster.intersectObjects(meshes, true) : [];
+    if (hits.length === 0) return null;
+    const bodyId = hitBodyId(hits[0].object);
+    return { bodyId, frame: resolveBodyFrame(this.vesselState, bodyId), hit: hits[0] };
   }
 
   /**

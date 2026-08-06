@@ -2,6 +2,7 @@ import React from 'react';
 import { Trash2, Square, Plus, Lock, Unlock, Copy } from 'lucide-react';
 import type { VesselState, CoverageRectConfig } from '../types';
 import { SubSection } from './SliderRow';
+import { MountedOnChip } from './MountedOnChip';
 
 export interface CoverageSectionProps {
     vesselState: VesselState;
@@ -122,22 +123,7 @@ export function CoverageSection({
                                         onChange={e => onUpdateCoverageRect(sel.id, { name: e.target.value })}
                                     />
                                 </div>
-                                {vesselState.appendages.length > 0 && (
-                                    <div className="vm-control-group">
-                                        <div className="vm-label"><span>Mount on</span></div>
-                                        <select
-                                            className="vm-select"
-                                            value={sel.bodyId ?? ''}
-                                            onChange={e => onUpdateCoverageRect(sel.id, { bodyId: e.target.value === '' ? undefined : e.target.value })}
-                                            title="Track this rect on the main vessel or a boot body. Position/angle are reinterpreted in the chosen body's frame — adjust them after switching."
-                                        >
-                                            <option value="">Main vessel</option>
-                                            {vesselState.appendages.map(a => (
-                                                <option key={a.id} value={a.id}>{a.name}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                )}
+                                <MountedOnChip appendages={vesselState.appendages} bodyId={sel.bodyId} />
                                 <div className="vm-control-group">
                                     <div className="vm-label"><span>Position (mm)</span></div>
                                     <input
