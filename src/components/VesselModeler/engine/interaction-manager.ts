@@ -207,6 +207,22 @@ export class InteractionManager {
    */
   private dragBodyId: string | undefined = undefined;
 
+  /**
+   * Per-move cache of the all-body surface mesh lists, keyed on the current
+   * `vesselGroup` identity. `getAllSurfaceMeshes` is called on every pointermove
+   * of a cross-body drag and otherwise re-traverses the entire vessel graph each
+   * time. Caching keyed on the group means a full-graph walk happens at most once
+   * per group: a scene rebuild swaps in a new group and invalidates the cache
+   * automatically, so this NEVER returns meshes from a stale (disposed) group and
+   * raycasts always hit live geometry. Both include/exclude-closure variants are
+   * built in the single traverse.
+   */
+  private surfaceMeshCache: {
+    group: THREE.Group;
+    withClosures: THREE.Object3D[];
+    withoutClosures: THREE.Object3D[];
+  } | null = null;
+
   // Draw mode state
   drawMode: AnnotationShapeType | null = null;
   coverageDrawMode = false;
@@ -1344,14 +1360,29 @@ export class InteractionManager {
    * raycast set so the nearest hit across ALL bodies can win (R2).
    */
   private getAllSurfaceMeshes(includeClosures: boolean): THREE.Object3D[] {
-    if (!this.vesselGroup) return [];
-    const out: THREE.Object3D[] = [];
-    this.vesselGroup.traverse((child) => {
+    const group = this.vesselGroup;
+    if (!group) return [];
+
+    // Reuse the traverse result while the group is unchanged (invalidated for
+    // free when a rebuild swaps in a new group — see surfaceMeshCache).
+    const cache = this.surfaceMeshCache;
+    if (cache && cache.group === group) {
+      return includeClosures ? cache.withClosures : cache.withoutClosures;
+    }
+
+    const withoutClosures: THREE.Object3D[] = [];
+    const withClosures: THREE.Object3D[] = [];
+    group.traverse((child) => {
       const ud = child.userData;
-      if (ud.isShell) out.push(child);
-      else if (includeClosures && ud.bodyId !== undefined && ud.part === 'closure') out.push(child);
+      if (ud.isShell) {
+        withoutClosures.push(child);
+        withClosures.push(child);
+      } else if (ud.bodyId !== undefined && ud.part === 'closure') {
+        withClosures.push(child);
+      }
     });
-    return out;
+    this.surfaceMeshCache = { group, withClosures, withoutClosures };
+    return includeClosures ? withClosures : withoutClosures;
   }
 
   /** Clamp an axial pos to the main shell extent, including both head overhangs. */

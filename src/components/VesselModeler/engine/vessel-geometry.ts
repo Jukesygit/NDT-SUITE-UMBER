@@ -341,7 +341,11 @@ export function buildVesselScene(
   selectedSaddleIndex: number,
   selectedTextureId: number,
   selectedScanCompositeId: string = '',
-  selectedDomeScanId: string = ''
+  selectedDomeScanId: string = '',
+  // Settled snapshot used ONLY for scan-composite footprint cutouts (nozzle bores
+  // + junctions), so a per-frame nozzle drag can't thrash the heatmap cache (R1
+  // perf). Defaults to `state`, keeping every caller byte-identical.
+  footprintState: VesselState = state
 ): BuildSceneResult {
   const vesselGroup = new THREE.Group();
   const nozzleMeshes: THREE.Object3D[] = [];
@@ -712,7 +716,7 @@ export function buildVesselScene(
   // -- Scan Composite Overlays (only render if orientation is confirmed) ------
   for (const composite of state.scanComposites) {
     if (!composite.orientationConfirmed) continue;
-    const mesh = createScanCompositePlane(composite, state, selectedScanCompositeId);
+    const mesh = createScanCompositePlane(composite, state, selectedScanCompositeId, footprintState);
     if (mesh) {
       vesselGroup.add(mesh);
       scanCompositeMeshes.push(mesh);

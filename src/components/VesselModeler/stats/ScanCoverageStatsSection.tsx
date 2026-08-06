@@ -6,6 +6,12 @@ import {
   computeAppendageCoverageTotals,
 } from '../engine/coverage-calculator';
 import { cardinalForHead } from '../engine/cardinal-directions';
+import { useSettledValue } from '../../../hooks/useSettledValue';
+
+// Area sweeps are heavy; settle the state they read so a nozzle drag / slider
+// scrub recomputes once on release, not per frame (R1 perf). Target-percentage
+// editing stays on live state so typed values apply immediately.
+const STATS_SETTLE_MS = 250;
 
 interface ScanCoverageStatsSectionProps {
   vesselState: VesselState;
@@ -131,37 +137,29 @@ export default function ScanCoverageStatsSection({
   const isPipe = vesselState.vesselShape === 'pipe';
   const isVertical = vesselState.orientation === 'vertical';
 
-  // Cutout-adjusted region areas — recompute when appendages change (the footprint
-  // subtraction depends on the appendage set), not just on vessel dimensions.
-  const regionAreas = useMemo(
-    () => computeRegionTotalAreas(vesselState),
-    // Nozzle bores subtract from the shell total (R1) → recompute on nozzle edits.
-    [
-      vesselState.id,
-      vesselState.length,
-      vesselState.headRatio,
-      vesselState.appendages,
-      vesselState.nozzles,
-    ]
-  );
+  // Settled snapshot for the heavy area sweeps only (R1 perf); targets / shape /
+  // orientation above stay on live state so editing stays responsive.
+  const s = useSettledValue(vesselState, STATS_SETTLE_MS);
+
+  // Cutout-adjusted region areas — recompute when appendages / nozzles change
+  // (footprint subtraction depends on both). Settled so a nozzle drag recomputes
+  // once on release, not per frame.
+  const regionAreas = useMemo(() => computeRegionTotalAreas(s), [s]);
 
   // Per-appendage coverable + achieved areas (design §9). Recompute when the
   // appendage set, any scan, or the nozzles (boot bores subtract from the boot
-  // lateral total, R1) change so rows appear/update live.
-  const appendageTotals = useMemo(
-    () => computeAppendageCoverageTotals(vesselState),
-    [vesselState.appendages, vesselState.scanComposites, vesselState.nozzles]
-  );
+  // lateral total, R1) change so rows appear/update on release.
+  const appendageTotals = useMemo(() => computeAppendageCoverageTotals(s), [s]);
 
   const achievedMm2 = useMemo(() => {
     const result = { leftHead: 0, cylinder: 0, rightHead: 0 };
-    for (const sc of vesselState.scanComposites) {
+    for (const sc of s.scanComposites) {
       // Appendage scans are surfaced in the per-appendage rows below (via
       // appendageTotals), not folded into the main shell.
       if (sc.bodyId) continue;
       result.cylinder += compositeValidArea(sc);
     }
-    for (const ds of vesselState.domeScanComposites ?? []) {
+    for (const ds of s.domeScanComposites ?? []) {
       // Appendage end-closure dome scans belong to their body, not the main
       // heads — they surface in the per-appendage rows (later phase), so keep
       // them out of the main leftHead / rightHead totals.
@@ -171,7 +169,7 @@ export default function ScanCoverageStatsSection({
       else result.rightHead += area;
     }
     return result;
-  }, [vesselState.scanComposites, vesselState.domeScanComposites]);
+  }, [s]);
 
   const handleUpdate = useCallback(
     (section: SectionKey, field: TargetField, value: number) => {

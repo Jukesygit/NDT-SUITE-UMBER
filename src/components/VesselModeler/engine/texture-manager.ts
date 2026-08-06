@@ -334,6 +334,15 @@ export function buildFootprintExcludeMask(
  * re-datuming the scan invalidates the cached texture through the existing
  * structural-hash rebuild (no new invalidation path invented).
  */
+// Quantize footprint params so near-equivalent placements share one cache
+// entry and cannot thrash the LRU: 1 mm on lengths, 0.5° on angles. A hole that
+// shifts by less than the quantum reuses the prior baked texture. The rounding
+// lives ONLY in this key string — the painted texture and the per-pixel
+// excludeMask still use the exact footprint geometry, so the visual tolerance is
+// bounded by the quantum (≤1 mm / ≤0.5°).
+const qMm = (v: number): number => Math.round(v);
+const qDeg = (v: number): number => Math.round(v * 2) / 2;
+
 function footprintCacheSuffix(
   composite: ScanCompositeConfig,
   vesselState: VesselState
@@ -348,12 +357,14 @@ function footprintCacheSuffix(
   );
   if (appendages.length === 0 && shellNozzles.length === 0) return '';
   const apps = appendages
-    .map((a) => `${a.id}:${a.mountPos}:${a.mountAngle}:${a.diameter}`)
+    .map((a) => `${a.id}:${qMm(a.mountPos)}:${qDeg(a.mountAngle)}:${qMm(a.diameter)}`)
     .join('|');
   const noz = shellNozzles
     .map(
       (n) =>
-        `${n.id}:${n.pos}:${n.angle}:${n.size}:${n.pipeOD ?? ''}:${n.orientationMode ?? 'radial'}`
+        `${n.id}:${qMm(n.pos)}:${qDeg(n.angle)}:${qMm(n.size)}:${
+          n.pipeOD != null ? qMm(n.pipeOD) : ''
+        }:${n.orientationMode ?? 'radial'}`
     )
     .join('|');
   // Legacy appendage-only key is preserved EXACTLY when there are no shell
@@ -442,7 +453,14 @@ export function clearHeatmapCache(compositeId?: string): void {
 export function createScanCompositePlane(
   composite: ScanCompositeConfig,
   vesselState: VesselState,
-  selectedId: string
+  selectedId: string,
+  // Footprint inputs (nozzle bores + junction cutouts) are read from
+  // `footprintState`, which the viewport feeds as a SETTLED snapshot so a nozzle
+  // drag can't invalidate the baked heatmap cache every frame (R1 perf). Defaults
+  // to `vesselState`, so every existing caller and test is byte-identical. Only
+  // the cutout mask + cache suffix use it; all mesh geometry stays on the live
+  // `vesselState`, keeping the plane conformant to the current shell.
+  footprintState: VesselState = vesselState
 ): THREE.Mesh | null {
   if (
     composite.data.length === 0 ||
@@ -460,17 +478,17 @@ export function createScanCompositePlane(
   // nozzle-bore holes are a v1 visual deferral (buildFootprintExcludeMask and its
   // tests are unchanged; stats still exclude boot bores). Empty footprints ⇒
   // excludeMask undefined ⇒ byte-identical legacy texture.
-  const appendages = vesselState.appendages ?? [];
+  const appendages = footprintState.appendages ?? [];
   const footprints: JunctionFootprint[] = !composite.bodyId
     ? [
-        ...(appendages.length > 0 ? buildAllFootprints(vesselState) : []),
-        ...buildMainShellNozzleFootprints(vesselState),
+        ...(appendages.length > 0 ? buildAllFootprints(footprintState) : []),
+        ...buildMainShellNozzleFootprints(footprintState),
       ]
     : [];
-  const excludeMask = buildFootprintExcludeMask(composite, vesselState, footprints);
+  const excludeMask = buildFootprintExcludeMask(composite, footprintState, footprints);
 
   // --- Get or create cached heatmap texture (keyed by visual params + cutout) ---
-  const cacheKey = heatmapCacheKey(composite) + footprintCacheSuffix(composite, vesselState);
+  const cacheKey = heatmapCacheKey(composite) + footprintCacheSuffix(composite, footprintState);
   let heatmapResult = heatmapCache.get(cacheKey);
   if (!heatmapResult) {
     heatmapResult = createHeatmapTexture(composite.data, composite.stats, {

@@ -5,6 +5,13 @@ import {
   computeAppendageCoverageTotals,
   type CoverageResult,
 } from '../engine/coverage-calculator';
+import { useSettledValue } from '../../../hooks/useSettledValue';
+
+// Coverage/footprint sweeps are heavy; settle the state they read so a nozzle
+// drag (or slider scrub) that streams updates every frame recomputes ONCE on
+// release instead of per frame (R1 perf). A single edit still lands after one
+// debounce tick.
+const STATS_SETTLE_MS = 250;
 
 interface CoverageStatsSectionProps {
   vesselState: VesselState;
@@ -19,37 +26,26 @@ function formatPct(pct: number): string {
 }
 
 export default function CoverageStatsSection({ vesselState }: CoverageStatsSectionProps) {
-  // Cutout-adjusted region coverage — recompute when appendages change (the
-  // footprint exclusion depends on the appendage set), not just on dimensions.
+  // Settled snapshot: heavy sweeps recompute on release, not per drag frame (R1).
+  const s = useSettledValue(vesselState, STATS_SETTLE_MS);
+
+  // Cutout-adjusted region coverage — recompute when appendages / nozzles change
+  // (footprint exclusion depends on both), not just on dimensions. Reading the
+  // settled snapshot collapses a drag's per-frame updates into one recompute.
   const result: CoverageResult = useMemo(
-    () => computeCoverage(vesselState.coverageRects, vesselState),
-    [
-      vesselState.coverageRects,
-      vesselState.id,
-      vesselState.length,
-      vesselState.headRatio,
-      vesselState.appendages,
-      // Nozzle bores subtract from the shell total and drop covered cells (R1),
-      // so region coverage must recompute when nozzles are added/moved/resized.
-      vesselState.nozzles,
-    ],
+    () => computeCoverage(s.coverageRects, s),
+    [s],
   );
 
   // Per-appendage coverable + covered area (design §9 / Phase 4 §4). Coverage
   // rects with a matching bodyId now feed the covered column, so the row reports
   // real coverage on the appendage's lateral cylinder.
   const appendageTotals = useMemo(
-    () => computeAppendageCoverageTotals(vesselState),
-    // Boot nozzles subtract from that boot's lateral total and covered sweep (R1).
-    [
-      vesselState.appendages,
-      vesselState.scanComposites,
-      vesselState.coverageRects,
-      vesselState.nozzles,
-    ],
+    () => computeAppendageCoverageTotals(s),
+    [s],
   );
 
-  if (vesselState.coverageRects.length === 0) return null;
+  if (s.coverageRects.length === 0) return null;
 
   const rows = [
     { label: 'Left Head', data: result.leftHead },

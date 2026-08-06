@@ -55,7 +55,14 @@ import {
 import { buildPipelineGroup, computeNozzleTipY } from './engine/pipeline-geometry';
 import { createScanCompositePlane } from './engine/texture-manager';
 import { createDomeScanPlane } from './engine/dome-scan-geometry';
+import { useSettledValue } from '../../hooks/useSettledValue';
 import * as THREE from 'three';
+
+// Footprint cutouts (nozzle bores + junctions) baked into scan-composite heatmap
+// textures settle this long after a drag/scrub stops streaming, so a per-frame
+// nozzle move can't invalidate the heatmap cache every frame (R1 perf fix). The
+// mesh geometry keeps tracking live state; only the texture cutout waits.
+const FOOTPRINT_SETTLE_MS = 250;
 
 // Structural hash lives in a pure, side-effect-free module so it can be
 // unit-tested without dragging renderer setup into the test. Re-exported here
@@ -238,6 +245,15 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
   const callbacksRef = useRef(callbacks);
   vesselStateRef.current = vesselState;
   callbacksRef.current = callbacks;
+
+  // Settled snapshot for scan-composite footprint cutouts only (R1 perf). During
+  // a nozzle drag the live vesselState streams every frame; feeding the heatmap
+  // cutout this settled copy keeps the texture cache key stable across the drag
+  // (cache hit → no per-frame repaint) while geometry still uses live state. It
+  // advances once ≈FOOTPRINT_SETTLE_MS after the gesture ends.
+  const settledFootprintState = useSettledValue(vesselState, FOOTPRINT_SETTLE_MS);
+  const settledFootprintStateRef = useRef(settledFootprintState);
+  settledFootprintStateRef.current = settledFootprintState;
 
   // Expose imperative methods
   useImperativeHandle(
@@ -506,7 +522,9 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
       selectedSaddleIndex,
       selectedTextureId,
       selectedScanCompositeId,
-      selectedDomeScanId
+      selectedDomeScanId,
+      // Settled footprint snapshot — nozzle-bore/junction cutouts only (R1 perf).
+      settledFootprintStateRef.current
     );
 
     // -- Annotation shapes (outlines + hit meshes) --
@@ -1415,6 +1433,25 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
       updatePreviews();
     }
   }, [vesselState, textureObjects, rebuildScene, updatePreviews]);
+
+  // =========================================================================
+  // Footprint settle — trailing repaint once the drag/scrub stops streaming
+  // =========================================================================
+  // The heatmap cutout reads the SETTLED footprint snapshot, so it is stale by up
+  // to one debounce window at the moment a gesture ends. When the snapshot
+  // advances (≈FOOTPRINT_SETTLE_MS after the last move) the structural effect will
+  // NOT fire — the live hash stopped changing when the gesture ended — so rebuild
+  // once here to bake the final nozzle-bore/junction hole. Skipped on first mount
+  // (init + structural effects already built the scene).
+  const footprintSettleMountedRef = useRef(false);
+  useEffect(() => {
+    if (!footprintSettleMountedRef.current) {
+      footprintSettleMountedRef.current = true;
+      return;
+    }
+    rebuildScene();
+    updatePreviews();
+  }, [settledFootprintState, rebuildScene, updatePreviews]);
 
   // =========================================================================
   // Tier 2 effect — heatmap visual repaint (declared AFTER the structural effect
