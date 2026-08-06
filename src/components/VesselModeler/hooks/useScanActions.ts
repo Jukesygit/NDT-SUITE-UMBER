@@ -23,6 +23,9 @@ interface UseScanActionsParams {
   scanCompositeId: string;
   /** selection.domeScanId — remove clears the selection if it matches. */
   domeScanId: string;
+  /** Live arrays — the visibility toggles read them for their discrete history labels. */
+  scanComposites: ScanCompositeConfig[];
+  domeScanComposites: DomeScanConfig[];
   effectiveProjectVesselId: string | null;
   linkCompositeToProject: {
     mutate: (vars: { compositeId: string; projectVesselId: string }) => void;
@@ -39,6 +42,8 @@ export function useScanActions({
   dispatch,
   scanCompositeId,
   domeScanId,
+  scanComposites,
+  domeScanComposites,
   effectiveProjectVesselId,
   linkCompositeToProject,
 }: UseScanActionsParams) {
@@ -299,6 +304,46 @@ export function useScanActions({
     [updateVessel, dispatch]
   );
 
+  // --- Visual-only visibility toggles (C13b) ---
+  // `visible` is NOT part of the scan/dome heatmap hash; toggles apply in-place via
+  // ThreeViewport's tier-2 effect (mesh group hidden, texture stays baked). Discrete
+  // history entries named for the undo dropdown.
+  const toggleScanCompositeVisible = useCallback(
+    (id: string) => {
+      const target = scanComposites.find((s) => s.id === id);
+      if (!target) return;
+      const show = target.visible === false;
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          scanComposites: prev.scanComposites.map((s) =>
+            s.id === id ? { ...s, visible: show } : s
+          ),
+        }),
+        { label: `${show ? 'Show' : 'Hide'} scan ${target.name || id}`, at: Date.now() }
+      );
+    },
+    [updateVessel, scanComposites]
+  );
+
+  const toggleDomeScanVisible = useCallback(
+    (id: string) => {
+      const target = domeScanComposites.find((s) => s.id === id);
+      if (!target) return;
+      const show = target.visible === false;
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          domeScanComposites: prev.domeScanComposites.map((s) =>
+            s.id === id ? { ...s, visible: show } : s
+          ),
+        }),
+        { label: `${show ? 'Show' : 'Hide'} dome scan ${target.name || id}`, at: Date.now() }
+      );
+    },
+    [updateVessel, domeScanComposites]
+  );
+
   return {
     handleImportComposite,
     handleRemoveScanComposite,
@@ -307,5 +352,7 @@ export function useScanActions({
     handleUpdateDomeScan,
     handleRemoveDomeScan,
     handleImportDomeComposite,
+    toggleScanCompositeVisible,
+    toggleDomeScanVisible,
   };
 }

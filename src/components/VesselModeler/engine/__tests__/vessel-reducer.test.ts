@@ -146,4 +146,18 @@ describe('vesselReducer', () => {
     expect(loaded.history.future).toHaveLength(0);
     expect(loaded.history.lastKey).toBeNull();
   });
+
+  it('TOGGLE_OUTLINER flips ui.outlinerOpen transiently, recording no history', () => {
+    expect(INITIAL_STATE.ui.outlinerOpen).toBe(false);
+
+    const opened = vesselReducer(INITIAL_STATE, { type: 'TOGGLE_OUTLINER' });
+    expect(opened.ui.outlinerOpen).toBe(true);
+    // Transient UI only: document + history slices untouched (shared by reference).
+    expect(opened.vessel).toBe(INITIAL_STATE.vessel);
+    expect(opened.history).toBe(INITIAL_STATE.history);
+
+    const closed = vesselReducer(opened, { type: 'TOGGLE_OUTLINER' });
+    expect(closed.ui.outlinerOpen).toBe(false);
+    expect(closed.history).toBe(INITIAL_STATE.history);
+  });
 });

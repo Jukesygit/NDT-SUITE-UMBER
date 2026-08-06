@@ -27,6 +27,7 @@ import {
   Settings2,
   FolderOpen,
   AlignVerticalDistributeCenter,
+  ListTree,
   Undo2,
   Redo2,
 } from 'lucide-react';
@@ -85,6 +86,8 @@ import StatsDropdown from './StatsDropdown';
 import HistoryDropdown from './HistoryDropdown';
 import BookmarksDropdown from './BookmarksDropdown';
 import ViewCube from './ViewCube';
+import OutlinerPanel from './OutlinerPanel';
+import type { OutlinerToggleRef } from './outliner-tree';
 import UnifiedStatsPanel from './UnifiedStatsPanel';
 import SnapControl from './SnapControl';
 import InspectionPanel from './sidebar/InspectionPanel';
@@ -408,12 +411,18 @@ export default function VesselModeler() {
   // Each hook owns the verbatim per-entity callbacks that previously lived inline
   // here; they share `updateVessel`/`dispatch` and the id-counter / texture refs,
   // threaded in explicitly (no context). Callback identities are preserved.
-  const { addNozzle, updateNozzle, removeNozzle } = useNozzleActions({ updateVessel, dispatch });
-
-  const { addAppendage, updateAppendage, removeAppendage } = useAppendageActions({
+  const { addNozzle, updateNozzle, removeNozzle, toggleNozzleVisible } = useNozzleActions({
     updateVessel,
     dispatch,
+    nozzles: vesselState.nozzles,
   });
+
+  const { addAppendage, updateAppendage, removeAppendage, toggleAppendageVisible } =
+    useAppendageActions({
+      updateVessel,
+      dispatch,
+      appendages: vesselState.appendages,
+    });
 
   const {
     createDefaultSegment,
@@ -425,7 +434,13 @@ export default function VesselModeler() {
     removeSegment,
     removePipeline,
     selectPipeSegment,
-  } = usePipingActions({ updateVessel, dispatch, nozzles: vesselState.nozzles });
+    togglePipelineVisible,
+  } = usePipingActions({
+    updateVessel,
+    dispatch,
+    nozzles: vesselState.nozzles,
+    pipelines: vesselState.pipelines,
+  });
 
   const {
     addSaddle,
@@ -440,7 +455,16 @@ export default function VesselModeler() {
     addWeld,
     updateWeld,
     removeWeld,
-  } = useAttachableActions({ updateVessel, dispatch });
+    toggleSaddleVisible,
+    toggleLugVisible,
+    toggleWeldVisible,
+  } = useAttachableActions({
+    updateVessel,
+    dispatch,
+    saddles: vesselState.saddles,
+    liftingLugs: vesselState.liftingLugs,
+    welds: vesselState.welds,
+  });
 
   const {
     addTexture,
@@ -461,6 +485,9 @@ export default function VesselModeler() {
     toggleInspectionImageVisible,
     toggleInspectionImageLocked,
     getNextInspectionImageId,
+    toggleTextureVisible,
+    toggleCoverageRectVisible,
+    toggleRulerVisible,
   } = useOverlayActions({
     updateVessel,
     dispatch,
@@ -471,6 +498,9 @@ export default function VesselModeler() {
     nextRulerIdRef,
     nextInspectionImageIdRef,
     viewingInspectionImageId: ui.viewingInspectionImageId,
+    textures: vesselState.textures,
+    coverageRects: vesselState.coverageRects,
+    rulers: vesselState.rulers,
   });
 
   const {
@@ -504,14 +534,81 @@ export default function VesselModeler() {
     handleUpdateDomeScan,
     handleRemoveDomeScan,
     handleImportDomeComposite,
+    toggleScanCompositeVisible,
+    toggleDomeScanVisible,
   } = useScanActions({
     updateVessel,
     dispatch,
     scanCompositeId: selection.scanCompositeId,
     domeScanId: selection.domeScanId,
+    scanComposites: vesselState.scanComposites,
+    domeScanComposites: vesselState.domeScanComposites,
     effectiveProjectVesselId,
     linkCompositeToProject,
   });
+
+  // Outliner Eye toggles route here — one descriptor → its owning D1 toggle
+  // callback. Visual only; stats/coverage/wall-loss never read `visible`.
+  const handleOutlinerToggleVisible = useCallback(
+    (ref: OutlinerToggleRef) => {
+      switch (ref.kind) {
+        case 'nozzle':
+          toggleNozzleVisible(ref.index);
+          break;
+        case 'weld':
+          toggleWeldVisible(ref.index);
+          break;
+        case 'lug':
+          toggleLugVisible(ref.index);
+          break;
+        case 'saddle':
+          toggleSaddleVisible(ref.index);
+          break;
+        case 'appendage':
+          toggleAppendageVisible(ref.index);
+          break;
+        case 'texture':
+          toggleTextureVisible(ref.id);
+          break;
+        case 'ruler':
+          toggleRulerVisible(ref.id);
+          break;
+        case 'coverageRect':
+          toggleCoverageRectVisible(ref.id);
+          break;
+        case 'inspectionImage':
+          toggleInspectionImageVisible(ref.id);
+          break;
+        case 'annotation':
+          toggleAnnotationVisible(ref.id);
+          break;
+        case 'scanComposite':
+          toggleScanCompositeVisible(ref.id);
+          break;
+        case 'domeScan':
+          toggleDomeScanVisible(ref.id);
+          break;
+        case 'pipeline':
+          togglePipelineVisible(ref.id);
+          break;
+      }
+    },
+    [
+      toggleNozzleVisible,
+      toggleWeldVisible,
+      toggleLugVisible,
+      toggleSaddleVisible,
+      toggleAppendageVisible,
+      toggleTextureVisible,
+      toggleRulerVisible,
+      toggleCoverageRectVisible,
+      toggleInspectionImageVisible,
+      toggleAnnotationVisible,
+      toggleScanCompositeVisible,
+      toggleDomeScanVisible,
+      togglePipelineVisible,
+    ]
+  );
 
   const updateMeasurementConfig = useCallback(
     (updates: Partial<MeasurementConfig>) => {
@@ -838,6 +935,16 @@ export default function VesselModeler() {
             </ErrorBoundary>
             {/* View cube — orientation indicator + canonical-view launcher (3D only) */}
             <ViewCube viewportRef={viewportRef} vesselState={vesselState} />
+            {/* Entity outliner (C13b) — left-edge tree, 3D only, toolbar-toggled */}
+            {ui.outlinerOpen && (
+              <OutlinerPanel
+                vesselState={vesselState}
+                selection={selection}
+                onClose={() => dispatch({ type: 'TOGGLE_OUTLINER' })}
+                onSelect={(action) => dispatch(action)}
+                onToggleVisible={handleOutlinerToggleVisible}
+              />
+            )}
           </>
         ) : ui.viewMode === 'flattened' ? (
           <Suspense
@@ -1224,6 +1331,15 @@ export default function VesselModeler() {
           >
             <AlignVerticalDistributeCenter size={14} />
             Tidy
+          </button>
+          {/* Entity outliner toggle (C13b) */}
+          <button
+            className={`vm-popout-trigger ${ui.outlinerOpen ? 'vm-popout-trigger--active' : ''}`}
+            onClick={() => dispatch({ type: 'TOGGLE_OUTLINER' })}
+            title="Outliner"
+          >
+            <ListTree size={14} />
+            Outliner
           </button>
           <StatsDropdown
             showCoverage={ui.showStatsCoverage}

@@ -6,13 +6,19 @@ import { historyFor, type UpdateVessel, type VesselAction } from '../engine/vess
 interface UseAppendageActionsParams {
   updateVessel: UpdateVessel;
   dispatch: Dispatch<VesselAction>;
+  /** Live appendage array — toggleAppendageVisible reads it for the history label. */
+  appendages: AppendageConfig[];
 }
 
 /**
  * Appendage (secondary body) entity CRUD. Bodies extracted verbatim from
  * VesselModeler.tsx (D1) — same history key, same delete cascade.
  */
-export function useAppendageActions({ updateVessel, dispatch }: UseAppendageActionsParams) {
+export function useAppendageActions({
+  updateVessel,
+  dispatch,
+  appendages,
+}: UseAppendageActionsParams) {
   const addAppendage = useCallback(
     (appendage: AppendageConfig) => {
       updateVessel(
@@ -54,5 +60,24 @@ export function useAppendageActions({ updateVessel, dispatch }: UseAppendageActi
     [updateVessel, dispatch]
   );
 
-  return { addAppendage, updateAppendage, removeAppendage };
+  // Visual-only visibility toggle (C13b). Appendage `visible` is excluded from the
+  // structural hash and applied by ThreeViewport's appendage tier-2 effect. Discrete
+  // history entry; user-facing word is "Boot" (R3 terminology).
+  const toggleAppendageVisible = useCallback(
+    (index: number) => {
+      const target = appendages[index];
+      if (!target) return;
+      const show = target.visible === false;
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          appendages: prev.appendages.map((a, i) => (i === index ? { ...a, visible: show } : a)),
+        }),
+        { label: `${show ? 'Show' : 'Hide'} Boot ${target.name}`, at: Date.now() }
+      );
+    },
+    [updateVessel, appendages]
+  );
+
+  return { addAppendage, updateAppendage, removeAppendage, toggleAppendageVisible };
 }

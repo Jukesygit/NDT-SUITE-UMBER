@@ -25,6 +25,10 @@ interface UseOverlayActionsParams {
   nextInspectionImageIdRef: MutableRefObject<number>;
   /** Current ui.viewingInspectionImageId — removeInspectionImage clears the viewer if it matches. */
   viewingInspectionImageId: number;
+  /** Live arrays — the visibility toggles read them for their discrete history labels. */
+  textures: TextureConfig[];
+  coverageRects: CoverageRectConfig[];
+  rulers: RulerConfig[];
 }
 
 /**
@@ -43,6 +47,9 @@ export function useOverlayActions({
   nextRulerIdRef,
   nextInspectionImageIdRef,
   viewingInspectionImageId,
+  textures,
+  coverageRects,
+  rulers,
 }: UseOverlayActionsParams) {
   // --- Texture handlers ---
   const addTexture = useCallback(
@@ -246,6 +253,62 @@ export function useOverlayActions({
     return nextInspectionImageIdRef.current++;
   }, [nextInspectionImageIdRef]);
 
+  // --- Visual-only visibility toggles (C13b) ---
+  // `visible` is excluded from the structural hash for these types; toggles apply
+  // in-place via ThreeViewport's tier-2 effect. Discrete history entries named for
+  // the undo dropdown. (Inspection images already have toggleInspectionImageVisible.)
+  const toggleTextureVisible = useCallback(
+    (id: number) => {
+      const target = textures.find((t) => Number(t.id) === id);
+      if (!target) return;
+      const show = target.visible === false;
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          textures: prev.textures.map((t) =>
+            Number(t.id) === id ? { ...t, visible: show } : t
+          ),
+        }),
+        { label: `${show ? 'Show' : 'Hide'} texture ${target.name || `Texture ${id}`}`, at: Date.now() }
+      );
+    },
+    [updateVessel, textures]
+  );
+
+  const toggleCoverageRectVisible = useCallback(
+    (id: number) => {
+      const target = coverageRects.find((r) => r.id === id);
+      if (!target) return;
+      const show = target.visible === false;
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          coverageRects: prev.coverageRects.map((r) =>
+            r.id === id ? { ...r, visible: show } : r
+          ),
+        }),
+        { label: `${show ? 'Show' : 'Hide'} coverage ${target.name || `Coverage ${id}`}`, at: Date.now() }
+      );
+    },
+    [updateVessel, coverageRects]
+  );
+
+  const toggleRulerVisible = useCallback(
+    (id: number) => {
+      const target = rulers.find((r) => r.id === id);
+      if (!target) return;
+      const show = target.visible === false;
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          rulers: prev.rulers.map((r) => (r.id === id ? { ...r, visible: show } : r)),
+        }),
+        { label: `${show ? 'Show' : 'Hide'} ruler ${target.name || `Ruler ${id}`}`, at: Date.now() }
+      );
+    },
+    [updateVessel, rulers]
+  );
+
   return {
     addTexture,
     updateTexture,
@@ -265,5 +328,8 @@ export function useOverlayActions({
     toggleInspectionImageVisible,
     toggleInspectionImageLocked,
     getNextInspectionImageId,
+    toggleTextureVisible,
+    toggleCoverageRectVisible,
+    toggleRulerVisible,
   };
 }

@@ -81,6 +81,8 @@ export interface UIState {
   snapEnabled: boolean;
   /** Angle-snap increment in degrees */
   snapDeg: number;
+  /** Whether the entity outliner panel is open (transient — never serialized). */
+  outlinerOpen: boolean;
   /** ID of annotation being inspected (null = not in inspection mode) */
   inspectingAnnotationId: number | null;
   /** Camera state saved before entering inspection mode */
@@ -139,6 +141,7 @@ export const INITIAL_STATE: VesselModelerState = {
     scanTooltipFollow: false,
     snapEnabled: false,
     snapDeg: 5,
+    outlinerOpen: false,
     inspectingAnnotationId: null,
     savedCameraState: null,
     viewMode: '3d',
@@ -229,6 +232,7 @@ export type VesselAction =
   | { type: 'SET_VIEWING_INSPECTION_IMAGE'; id: number }
   | { type: 'SET_HOVER_DATA'; data: UIState['hoverData'] }
   | { type: 'TOGGLE_SCAN_TOOLTIP_FOLLOW' }
+  | { type: 'TOGGLE_OUTLINER' }
   | { type: 'TOGGLE_SNAP' }
   | { type: 'SET_SNAP_DEG'; deg: number }
   | { type: 'CANCEL_ALL_DRAW_MODES' }
@@ -387,6 +391,9 @@ export function vesselReducer(
       return { ...state, ui: { ...state.ui, hoverData: action.data } };
     case 'TOGGLE_SCAN_TOOLTIP_FOLLOW':
       return { ...state, ui: { ...state.ui, scanTooltipFollow: !state.ui.scanTooltipFollow } };
+    case 'TOGGLE_OUTLINER':
+      // Transient UI only — never serialized, records no history entry.
+      return { ...state, ui: { ...state.ui, outlinerOpen: !state.ui.outlinerOpen } };
     case 'TOGGLE_SNAP':
       return { ...state, ui: { ...state.ui, snapEnabled: !state.ui.snapEnabled } };
     case 'SET_SNAP_DEG':

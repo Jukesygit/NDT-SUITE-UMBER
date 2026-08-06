@@ -5,13 +5,23 @@ import { historyFor, type UpdateVessel, type VesselAction } from '../engine/vess
 interface UseAttachableActionsParams {
   updateVessel: UpdateVessel;
   dispatch: Dispatch<VesselAction>;
+  /** Live arrays — the visibility toggles read them for their discrete history labels. */
+  saddles: SaddleConfig[];
+  liftingLugs: LiftingLugConfig[];
+  welds: WeldConfig[];
 }
 
 /**
  * Attachable entity CRUD — saddles, lifting lugs and welds. Bodies extracted
  * verbatim from VesselModeler.tsx (D1); same history keys and select-clear dispatches.
  */
-export function useAttachableActions({ updateVessel, dispatch }: UseAttachableActionsParams) {
+export function useAttachableActions({
+  updateVessel,
+  dispatch,
+  saddles,
+  liftingLugs,
+  welds,
+}: UseAttachableActionsParams) {
   // --- Saddle handlers ---
   const addSaddle = useCallback(
     (saddle: SaddleConfig) => {
@@ -158,6 +168,58 @@ export function useAttachableActions({ updateVessel, dispatch }: UseAttachableAc
     [updateVessel, dispatch]
   );
 
+  // --- Visual-only visibility toggles (C13b) ---
+  // `visible` is excluded from the structural hash for these types; toggles apply
+  // in-place via ThreeViewport's tier-2 effect. Discrete history entries (no
+  // coalesce key), named for the undo dropdown.
+  const toggleSaddleVisible = useCallback(
+    (index: number) => {
+      const target = saddles[index];
+      if (!target) return;
+      const show = target.visible === false;
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          saddles: prev.saddles.map((s, i) => (i === index ? { ...s, visible: show } : s)),
+        }),
+        { label: `${show ? 'Show' : 'Hide'} saddle Saddle ${index + 1}`, at: Date.now() }
+      );
+    },
+    [updateVessel, saddles]
+  );
+
+  const toggleLugVisible = useCallback(
+    (index: number) => {
+      const target = liftingLugs[index];
+      if (!target) return;
+      const show = target.visible === false;
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          liftingLugs: prev.liftingLugs.map((l, i) => (i === index ? { ...l, visible: show } : l)),
+        }),
+        { label: `${show ? 'Show' : 'Hide'} lug ${target.name || `Lifting lug ${index + 1}`}`, at: Date.now() }
+      );
+    },
+    [updateVessel, liftingLugs]
+  );
+
+  const toggleWeldVisible = useCallback(
+    (index: number) => {
+      const target = welds[index];
+      if (!target) return;
+      const show = target.visible === false;
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          welds: prev.welds.map((w, i) => (i === index ? { ...w, visible: show } : w)),
+        }),
+        { label: `${show ? 'Show' : 'Hide'} weld ${target.name || `Weld ${index + 1}`}`, at: Date.now() }
+      );
+    },
+    [updateVessel, welds]
+  );
+
   return {
     addSaddle,
     updateSaddle,
@@ -171,5 +233,8 @@ export function useAttachableActions({ updateVessel, dispatch }: UseAttachableAc
     addWeld,
     updateWeld,
     removeWeld,
+    toggleSaddleVisible,
+    toggleLugVisible,
+    toggleWeldVisible,
   };
 }

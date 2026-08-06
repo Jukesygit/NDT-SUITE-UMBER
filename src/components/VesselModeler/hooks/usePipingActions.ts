@@ -14,6 +14,8 @@ interface UsePipingActionsParams {
   dispatch: Dispatch<VesselAction>;
   /** Live nozzle array (addPipeline resolves array index → stable nozzle id). */
   nozzles: NozzleConfig[];
+  /** Live pipeline array — togglePipelineVisible reads it for the history label. */
+  pipelines: Pipeline[];
 }
 
 /**
@@ -21,7 +23,12 @@ interface UsePipingActionsParams {
  * VesselModeler.tsx (D1). `createDefaultSegment` is returned so the (still-inline)
  * nozzle-pipe drop handler can reuse the same stable factory it did before.
  */
-export function usePipingActions({ updateVessel, dispatch, nozzles }: UsePipingActionsParams) {
+export function usePipingActions({
+  updateVessel,
+  dispatch,
+  nozzles,
+  pipelines,
+}: UsePipingActionsParams) {
   const createDefaultSegment = useCallback(
     (type: PipeSegmentType, pipeDiameter: number): PipeSegment => {
       const base: PipeSegment = { id: crypto.randomUUID(), type, rotation: 0 };
@@ -187,6 +194,27 @@ export function usePipingActions({ updateVessel, dispatch, nozzles }: UsePipingA
     [dispatch]
   );
 
+  // Visual-only visibility toggle (C13b). Pipelines hash wholesale, so a flip
+  // rebuilds the scene and pipeline-geometry applies group.visible. Discrete
+  // history entry named for the undo dropdown (pipelines carry no name).
+  const togglePipelineVisible = useCallback(
+    (pipelineId: string) => {
+      const index = pipelines.findIndex((p) => p.id === pipelineId);
+      if (index === -1) return;
+      const show = pipelines[index].visible === false;
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          pipelines: prev.pipelines.map((p) =>
+            p.id === pipelineId ? { ...p, visible: show } : p
+          ),
+        }),
+        { label: `${show ? 'Show' : 'Hide'} pipeline Pipeline ${index + 1}`, at: Date.now() }
+      );
+    },
+    [updateVessel, pipelines]
+  );
+
   return {
     createDefaultSegment,
     addPipeline,
@@ -197,5 +225,6 @@ export function usePipingActions({ updateVessel, dispatch, nozzles }: UsePipingA
     removeSegment,
     removePipeline,
     selectPipeSegment,
+    togglePipelineVisible,
   };
 }

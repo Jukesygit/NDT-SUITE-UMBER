@@ -6,13 +6,15 @@ import { historyFor, type UpdateVessel, type VesselAction } from '../engine/vess
 interface UseNozzleActionsParams {
   updateVessel: UpdateVessel;
   dispatch: Dispatch<VesselAction>;
+  /** Live nozzle array — toggleNozzleVisible reads it for the discrete history label. */
+  nozzles: NozzleConfig[];
 }
 
 /**
  * Nozzle entity CRUD. Bodies extracted verbatim from VesselModeler.tsx (D1) —
  * same history keys, same store-side id minting, same delete cascade.
  */
-export function useNozzleActions({ updateVessel, dispatch }: UseNozzleActionsParams) {
+export function useNozzleActions({ updateVessel, dispatch, nozzles }: UseNozzleActionsParams) {
   // The store owns nozzle ids: every UI-added nozzle is minted a stable, collision-
   // free id here so no call site can invent (or forget) one.
   const addNozzle = useCallback(
@@ -60,5 +62,24 @@ export function useNozzleActions({ updateVessel, dispatch }: UseNozzleActionsPar
     [updateVessel, dispatch]
   );
 
-  return { addNozzle, updateNozzle, removeNozzle };
+  // Visual-only visibility toggle (C13b). `visible` is excluded from the
+  // structural hash, so this applies in-place via ThreeViewport's tier-2 effect.
+  // Discrete history entry (no coalesce key) named for the undo dropdown.
+  const toggleNozzleVisible = useCallback(
+    (index: number) => {
+      const target = nozzles[index];
+      if (!target) return;
+      const show = target.visible === false;
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          nozzles: prev.nozzles.map((n, i) => (i === index ? { ...n, visible: show } : n)),
+        }),
+        { label: `${show ? 'Show' : 'Hide'} nozzle ${target.name || `Nozzle ${index + 1}`}`, at: Date.now() }
+      );
+    },
+    [updateVessel, nozzles]
+  );
+
+  return { addNozzle, updateNozzle, removeNozzle, toggleNozzleVisible };
 }
