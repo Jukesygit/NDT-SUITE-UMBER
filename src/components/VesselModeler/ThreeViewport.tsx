@@ -53,7 +53,7 @@ import {
   SCALE,
 } from './engine/materials';
 import { buildPipelineGroup, computeNozzleTipY } from './engine/pipeline-geometry';
-import { createScanCompositePlane } from './engine/texture-manager';
+import { createScanCompositePlane, footprintFingerprint } from './engine/texture-manager';
 import { createDomeScanPlane } from './engine/dome-scan-geometry';
 import { useSettledValue } from '../../hooks/useSettledValue';
 import * as THREE from 'three';
@@ -1441,17 +1441,43 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
   // to one debounce window at the moment a gesture ends. When the snapshot
   // advances (≈FOOTPRINT_SETTLE_MS after the last move) the structural effect will
   // NOT fire — the live hash stopped changing when the gesture ended — so rebuild
-  // once here to bake the final nozzle-bore/junction hole. Skipped on first mount
-  // (init + structural effects already built the scene).
-  const footprintSettleMountedRef = useRef(false);
+  // once here to bake the final nozzle-bore/junction hole.
+  //
+  // Two guards keep this from becoming a per-frame rebuild loop (regression fixed
+  // 2026-08-06):
+  //   1. Unlike the structural effect, this one is NOT structural-hash-guarded, so
+  //      it must fire ONLY on a genuine change of the settled snapshot. rebuildScene
+  //      / updatePreviews are recreated on nearly every render (e.g. ThreeViewport
+  //      receives `onInspectionImageThumbnailClick` as an inline arrow, so
+  //      rebuildScene's useCallback identity churns each render); listing them as
+  //      deps would rebuild the whole scene on every re-render — including one per
+  //      pointer-move while orbiting a vessel with scans (scan-hover dispatches
+  //      SET_HOVER_DATA each move → a VesselModeler re-render). They are read
+  //      through refs so the sole dependency is `settledFootprintState`.
+  //   2. Even on a real settled change, rebuild only when the footprint FINGERPRINT
+  //      (bore/junction inputs) actually moved — a settled change to any other
+  //      field (welds, visuals, scan datum, etc.) leaves the baked cutout correct,
+  //      so we no-op. This is the "no-op when the footprint suffix is unchanged"
+  //      contract, shared byte-for-byte with the texture cache suffix.
+  const rebuildSceneRef = useRef(rebuildScene);
+  rebuildSceneRef.current = rebuildScene;
+  const updatePreviewsRef = useRef(updatePreviews);
+  updatePreviewsRef.current = updatePreviews;
+  // Footprint fingerprint currently baked into the scan-composite heatmaps. null
+  // until the first settle after mount, whose baseline the init + structural build
+  // already baked (so that first pass records and skips).
+  const bakedFootprintFingerprintRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!footprintSettleMountedRef.current) {
-      footprintSettleMountedRef.current = true;
+    const fingerprint = footprintFingerprint(settledFootprintState);
+    if (bakedFootprintFingerprintRef.current === null) {
+      bakedFootprintFingerprintRef.current = fingerprint;
       return;
     }
-    rebuildScene();
-    updatePreviews();
-  }, [settledFootprintState, rebuildScene, updatePreviews]);
+    if (fingerprint === bakedFootprintFingerprintRef.current) return;
+    bakedFootprintFingerprintRef.current = fingerprint;
+    rebuildSceneRef.current();
+    updatePreviewsRef.current();
+  }, [settledFootprintState]);
 
   // =========================================================================
   // Tier 2 effect — heatmap visual repaint (declared AFTER the structural effect

@@ -343,14 +343,18 @@ export function buildFootprintExcludeMask(
 const qMm = (v: number): number => Math.round(v);
 const qDeg = (v: number): number => Math.round(v * 2) / 2;
 
-function footprintCacheSuffix(
-  composite: ScanCompositeConfig,
-  vesselState: VesselState
-): string {
-  // Only main-shell composites carry a cutout mask (design §9.4 / R1); boot
-  // composites keep the legacy no-mask path (their nozzle holes are a v1 visual
-  // deferral), so their suffix stays empty.
-  if (composite.bodyId) return '';
+/**
+ * Quantized fingerprint of the footprint INPUTS — main-shell nozzle bores +
+ * appendage junctions — that decide every scan-composite cutout mask. Pure and
+ * composite-independent: two vessel states with the same fingerprint bake
+ * identical holes, so nothing keyed on it needs to change. `footprintCacheSuffix`
+ * builds its per-composite texture cache key from this exact string, and
+ * ThreeViewport's trailing settle rebuild guards on it — so the texture cache and
+ * the "does a settle need a rebuild?" decision can never disagree. Returns '' when
+ * there are no shell nozzles and no appendages, matching the legacy no-suffix path
+ * byte-for-byte (so appendage-free models keep identical cache keys).
+ */
+export function footprintFingerprint(vesselState: VesselState): string {
   const appendages = vesselState.appendages ?? [];
   const shellNozzles = (vesselState.nozzles ?? []).filter(
     (n) => n.bodyId === undefined && !isHeadMountedNozzle(n.pos, vesselState.length)
@@ -370,7 +374,20 @@ function footprintCacheSuffix(
   // Legacy appendage-only key is preserved EXACTLY when there are no shell
   // nozzles (nozzle segment omitted), keeping existing models byte-identical.
   const nozSeg = noz ? `@noz[${noz}]` : '';
-  return `_fp[${apps}${nozSeg}#${composite.indexStartMm}:${composite.datumAngleDeg}:${composite.scanDirection}:${composite.indexDirection}]`;
+  return `${apps}${nozSeg}`;
+}
+
+function footprintCacheSuffix(
+  composite: ScanCompositeConfig,
+  vesselState: VesselState
+): string {
+  // Only main-shell composites carry a cutout mask (design §9.4 / R1); boot
+  // composites keep the legacy no-mask path (their nozzle holes are a v1 visual
+  // deferral), so their suffix stays empty.
+  if (composite.bodyId) return '';
+  const fingerprint = footprintFingerprint(vesselState);
+  if (fingerprint === '') return '';
+  return `_fp[${fingerprint}#${composite.indexStartMm}:${composite.datumAngleDeg}:${composite.scanDirection}:${composite.indexDirection}]`;
 }
 
 // ---------------------------------------------------------------------------

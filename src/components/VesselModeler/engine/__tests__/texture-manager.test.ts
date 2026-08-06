@@ -12,10 +12,16 @@ import * as THREE from 'three';
 import {
   DEFAULT_VESSEL_STATE,
   type AppendageConfig,
+  type NozzleConfig,
   type ScanCompositeConfig,
   type VesselState,
+  type WeldConfig,
 } from '../../types';
-import { buildFootprintExcludeMask, createScanCompositePlane } from '../texture-manager';
+import {
+  buildFootprintExcludeMask,
+  createScanCompositePlane,
+  footprintFingerprint,
+} from '../texture-manager';
 import { resolveBodyFrame, type SurfaceFrame } from '../body-frame';
 import { buildAllFootprints } from '../junction-footprint';
 
@@ -165,5 +171,80 @@ describe('buildFootprintExcludeMask — main-shell pixel exclusion', () => {
 
   it('returns undefined when the vessel has no footprints (legacy path)', () => {
     expect(buildFootprintExcludeMask(maskComposite, maskState, [])).toBeUndefined();
+  });
+});
+
+// ===========================================================================
+// footprintFingerprint — the guard ThreeViewport's trailing settle-rebuild uses
+// to stay a no-op unless a bore/junction actually moved (perf regression fix
+// 2026-08-06). A rebuild is warranted iff this string changes; a settled change
+// to any non-footprint field (welds, visuals, scan datum, camera) must leave it
+// identical so the settle effect does NOT rebuild the whole scene.
+// ===========================================================================
+describe('footprintFingerprint — settle-rebuild guard', () => {
+  const nozzle: NozzleConfig = {
+    id: 'noz-1',
+    name: 'N1',
+    pos: 1500,
+    proj: 200,
+    angle: 90,
+    size: 200,
+  };
+  const fpState: VesselState = {
+    ...DEFAULT_VESSEL_STATE,
+    id: 2000,
+    length: 6000,
+    nozzles: [nozzle],
+  };
+
+  it('is empty for a vessel with no shell nozzles and no appendages (legacy no-suffix)', () => {
+    expect(footprintFingerprint({ ...DEFAULT_VESSEL_STATE, nozzles: [], appendages: [] })).toBe('');
+  });
+
+  it('is deterministic for identical footprint inputs', () => {
+    expect(footprintFingerprint(fpState)).toBe(footprintFingerprint({ ...fpState }));
+    expect(footprintFingerprint(fpState)).not.toBe('');
+  });
+
+  it('is UNCHANGED by a sub-quantum nozzle move (<1 mm / <0.5°) → settle no-op', () => {
+    const nudged: VesselState = {
+      ...fpState,
+      nozzles: [{ ...nozzle, pos: nozzle.pos + 0.4, angle: nozzle.angle + 0.2 }],
+    };
+    expect(footprintFingerprint(nudged)).toBe(footprintFingerprint(fpState));
+  });
+
+  it('CHANGES when a nozzle moves past the quantum → settle rebuilds', () => {
+    const moved: VesselState = { ...fpState, nozzles: [{ ...nozzle, pos: nozzle.pos + 2 }] };
+    expect(footprintFingerprint(moved)).not.toBe(footprintFingerprint(fpState));
+  });
+
+  it('is UNCHANGED by a non-footprint edit (adding a weld) → settle no-op (regression guard)', () => {
+    const weld: WeldConfig = { name: 'W1', type: 'circumferential', pos: 3000, color: '#fff' };
+    const withWeld: VesselState = { ...fpState, welds: [...fpState.welds, weld] };
+    expect(footprintFingerprint(withWeld)).toBe(footprintFingerprint(fpState));
+  });
+
+  it('ignores boot-mounted nozzles for the main-shell fingerprint', () => {
+    const bootNozzle: NozzleConfig = { ...nozzle, id: 'noz-2', bodyId: 'app-1' };
+    const withBootNozzle: VesselState = { ...fpState, nozzles: [nozzle, bootNozzle] };
+    expect(footprintFingerprint(withBootNozzle)).toBe(footprintFingerprint(fpState));
+  });
+
+  it('CHANGES when an appendage junction moves past the quantum', () => {
+    const base: VesselState = {
+      ...DEFAULT_VESSEL_STATE,
+      id: 2000,
+      length: 6000,
+      appendages: [
+        { id: 'app-1', name: 'Boot 1', mountPos: 2000, mountAngle: 90, diameter: 800, length: 1000, endClosure: 'flat' },
+      ],
+    };
+    const moved: VesselState = {
+      ...base,
+      appendages: [{ ...base.appendages[0], mountAngle: 120 }],
+    };
+    expect(footprintFingerprint(moved)).not.toBe(footprintFingerprint(base));
+    expect(footprintFingerprint(base)).not.toBe('');
   });
 });
