@@ -764,6 +764,53 @@ describe('coverageTargets round-trip (incl. appendage targets)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// cameraBookmarks — top-level field (C12), both paths + absent-field byte-identity
+// ---------------------------------------------------------------------------
+
+describe('cameraBookmarks round-trip', () => {
+  function makeBookmarkFixture(): VesselState {
+    const fixture = makeFixture();
+    fixture.cameraBookmarks = [
+      { id: 'bm-1', name: 'View 1', position: [1, 2, 3], target: [0, 0, 0] },
+      { id: 'bm-2', name: 'Boot detail', position: [-4, 5, 6.5], target: [1, 1, 1] },
+    ];
+    return fixture;
+  }
+
+  for (const path of ['local', 'cloud'] as const) {
+    it(`round-trips cameraBookmarks on the ${path} path`, () => {
+      const fixture = makeBookmarkFixture();
+      const restored = roundTrip(fixture, path);
+      expect(restored.cameraBookmarks).toEqual(fixture.cameraBookmarks);
+    });
+
+    it(`serializes cameraBookmarks on the ${path} path`, () => {
+      const out = serializeVesselState(makeBookmarkFixture(), { path, modelType: 'blank' }) as {
+        cameraBookmarks?: unknown;
+      };
+      expect(out.cameraBookmarks).toBeDefined();
+    });
+  }
+
+  it('a model without cameraBookmarks omits the key from the serialized JSON (byte-identical shape)', () => {
+    const fixture = makeFixture(); // no cameraBookmarks set
+    for (const path of ['local', 'cloud'] as const) {
+      const json = JSON.parse(JSON.stringify(serializeVesselState(fixture, { path, modelType: 'blank' })));
+      expect(json).not.toHaveProperty('cameraBookmarks');
+    }
+  });
+
+  it('loads a legacy payload with no cameraBookmarks key as undefined (both paths)', () => {
+    const legacy = {
+      version: 1,
+      vessel: { id: 3000, length: 8000, headRatio: 2.0, orientation: 'horizontal' },
+    };
+    expect(deserializeVesselState(legacy, { path: 'local', textures: [] }).cameraBookmarks).toBeUndefined();
+    expect(deserializeVesselState(legacy, { path: 'cloud', textures: [] }).cameraBookmarks).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Legacy payloads — no domeScanComposites key must load as [] (not undefined).
 // ---------------------------------------------------------------------------
 

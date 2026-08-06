@@ -675,6 +675,16 @@ export interface AppendageConfig {
   locked?: boolean;
 }
 
+/** A saved camera pose the user can recall from the Views dropdown / report. */
+export interface CameraBookmark {
+  id: string;
+  name: string;
+  /** Camera position in world units [x, y, z]. */
+  position: [number, number, number];
+  /** OrbitControls look-at target in world units [x, y, z]. */
+  target: [number, number, number];
+}
+
 export interface VesselState {
   /** Inner diameter in mm */
   id: number;
@@ -731,6 +741,8 @@ export interface VesselState {
   annotationTablePosition?: [number, number, number];
   /** Saved size of the annotation summary table in px [width, height] */
   annotationTableSize?: [number, number];
+  /** Saved camera poses (view cube / bookmarks). Undefined ⇒ none (legacy shape). */
+  cameraBookmarks?: CameraBookmark[];
   visuals: VisualSettings;
 }
 

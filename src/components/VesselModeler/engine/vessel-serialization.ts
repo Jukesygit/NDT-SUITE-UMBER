@@ -205,6 +205,9 @@ export function serializeVesselState(
     labelsTidied: state.labelsTidied,
     annotationTablePosition: state.annotationTablePosition,
     annotationTableSize: state.annotationTableSize,
+    // Top-level field (annotationTablePosition precedent). Undefined ⇒ dropped by
+    // JSON, so a model with no bookmarks serializes byte-identically to before.
+    cameraBookmarks: state.cameraBookmarks,
     wallLossGroups: state.wallLossGroups,
     // Coverage targets round-trip as an opaque object on both paths (plain data,
     // no functions). The nested `appendages` map therefore survives automatically.
@@ -300,6 +303,9 @@ export function deserializeVesselState(
       ...DEFAULT_VESSEL_STATE.visuals,
       ...((raw.visuals ?? {}) as Partial<VesselState['visuals']>),
     },
+    // Top-level field, restored on both paths (a new field has no cloud-only
+    // legacy quirk to preserve). Undefined for legacy models ⇒ shape unchanged.
+    cameraBookmarks: raw.cameraBookmarks as VesselState['cameraBookmarks'],
     wallLossGroups: raw.wallLossGroups as VesselState['wallLossGroups'],
     // Coverage targets restore as an opaque object (undefined for legacy models;
     // the consumer defaults via `?? DEFAULT_TARGETS`). The nested `appendages`

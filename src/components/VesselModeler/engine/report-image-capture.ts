@@ -4,12 +4,13 @@
 
 import * as THREE from 'three';
 import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import type { VesselState, AnnotationShapeConfig } from '../types';
+import type { VesselState, AnnotationShapeConfig, CameraBookmark } from '../types';
 import type { VesselOverviewImage, CompanionScanImageSet } from './report-generator';
 import { createAnnotationHeatmapCanvas } from './annotation-heatmap';
 import { SCALE } from './materials';
 import { createAnnotationLabelSprite, createRulerLabelSprite } from './text-sprite';
 import { normAngle, datumToVesselAngle, scanArcDeg } from './vessel-coords';
+import { fitDistance, CAPTURE_ASPECT } from './canonical-views';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -93,6 +94,33 @@ function getOverviewViews(cardinalRotationDeg: number): OverviewViewDef[] {
   ];
 }
 
+/**
+ * Bounding sphere (centre + radius) of the vessel geometry, excluding baked
+ * labels / leaders / helpers and fully-transparent meshes. The view cube reuses
+ * this so its canonical-view framing matches the report overview renders.
+ * Extracted verbatim from captureVesselOverviews — behaviour unchanged.
+ */
+export function computeVesselBounds(target: THREE.Object3D): {
+  center: THREE.Vector3;
+  radius: number;
+} {
+  const bbox = new THREE.Box3();
+  target.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    const ud = obj.userData?.type;
+    if (ud === 'annotation-label' || ud === 'ruler-label' || ud === 'inspection-image-label') return;
+    if (ud === 'annotation-fill') return;
+    if (ud === 'export-label') return; // exclude baked labels from bbox
+    if ((obj.material as THREE.MeshBasicMaterial)?.opacity === 0) return;
+    const objBbox = new THREE.Box3().setFromObject(obj);
+    if (!objBbox.isEmpty()) bbox.expandByObject(obj);
+  });
+  if (bbox.isEmpty()) bbox.setFromObject(target);
+  const center = bbox.getCenter(new THREE.Vector3());
+  const bsphere = bbox.getBoundingSphere(new THREE.Sphere());
+  return { center, radius: bsphere.radius };
+}
+
 /** Temporarily add baked label sprites to the scene for capture, returns cleanup function. */
 async function addBakedLabels(scene: THREE.Scene, vesselState: VesselState): Promise<() => void> {
   const tempObjects: THREE.Object3D[] = [];
@@ -124,8 +152,16 @@ async function addBakedLabels(scene: THREE.Scene, vesselState: VesselState): Pro
   };
 }
 
-/** Capture the vessel from multiple standard viewpoints. */
-export async function captureVesselOverviews(ctx: CaptureContext): Promise<VesselOverviewImage[]> {
+/**
+ * Capture the vessel from multiple standard viewpoints. When `bookmarks` are
+ * supplied, each saved pose is captured after the standard views through the
+ * same save/restore path, labelled by the bookmark name. No bookmarks ⇒ output
+ * byte-identical to before.
+ */
+export async function captureVesselOverviews(
+  ctx: CaptureContext,
+  bookmarks?: CameraBookmark[],
+): Promise<VesselOverviewImage[]> {
   const overviews: VesselOverviewImage[] = [];
   const { renderer, scene, camera, controls, vesselState } = ctx;
 
@@ -138,42 +174,38 @@ export async function captureVesselOverviews(ctx: CaptureContext): Promise<Vesse
   const removeBakedLabels = await addBakedLabels(scene, vesselState);
 
   // Compute bounding box from vessel geometry only (exclude labels, leaders, helpers)
-  const bbox = new THREE.Box3();
-  const target = ctx.vesselGroup ?? scene;
-  target.traverse((obj) => {
-    if (!(obj instanceof THREE.Mesh)) return;
-    const ud = obj.userData?.type;
-    if (ud === 'annotation-label' || ud === 'ruler-label' || ud === 'inspection-image-label') return;
-    if (ud === 'annotation-fill') return;
-    if (ud === 'export-label') return; // exclude baked labels from bbox
-    if ((obj.material as THREE.MeshBasicMaterial)?.opacity === 0) return;
-    const objBbox = new THREE.Box3().setFromObject(obj);
-    if (!objBbox.isEmpty()) bbox.expandByObject(obj);
-  });
-  if (bbox.isEmpty()) bbox.setFromObject(target);
-  const center = bbox.getCenter(new THREE.Vector3());
-  const bsphere = bbox.getBoundingSphere(new THREE.Sphere());
-  const radius = bsphere.radius;
+  const { center, radius } = computeVesselBounds(ctx.vesselGroup ?? scene);
 
   const views = getOverviewViews(vesselState.visuals.cardinalRotation ?? 0);
 
   for (const view of views) {
     const dir = view.direction.clone().normalize();
 
-    // Compute fit distance using both vertical and horizontal FOV
-    const aspect = 16 / 10;
-    const vFov = camera.fov * (Math.PI / 180);
-    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
-    const fitDistance = radius / Math.sin(Math.min(vFov, hFov) / 2) * 0.7;
+    // Compute fit distance using both vertical and horizontal FOV (shared helper)
+    const dist = fitDistance(radius, camera.fov, CAPTURE_ASPECT);
 
-    camera.position.copy(center).add(dir.multiplyScalar(fitDistance));
-    camera.aspect = aspect;
+    camera.position.copy(center).add(dir.multiplyScalar(dist));
+    camera.aspect = CAPTURE_ASPECT;
     camera.updateProjectionMatrix();
     controls.target.copy(center);
     controls.update();
 
     overviews.push({
       label: view.label,
+      dataUrl: renderToDataUrl(renderer, scene, camera, 1600, 1000),
+    });
+  }
+
+  // Bookmarked poses — same save/restore path, camera pose taken verbatim.
+  for (const bm of bookmarks ?? []) {
+    camera.position.set(bm.position[0], bm.position[1], bm.position[2]);
+    camera.aspect = CAPTURE_ASPECT;
+    camera.updateProjectionMatrix();
+    controls.target.set(bm.target[0], bm.target[1], bm.target[2]);
+    controls.update();
+
+    overviews.push({
+      label: bm.name,
       dataUrl: renderToDataUrl(renderer, scene, camera, 1600, 1000),
     });
   }

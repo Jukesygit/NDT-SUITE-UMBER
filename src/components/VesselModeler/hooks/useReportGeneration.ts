@@ -51,14 +51,17 @@ export function useReportGeneration({
       const sceneManager = viewport.getSceneManager();
       if (renderer && scene && camera && controls && sceneManager) {
         try {
-          const overviews = await captureVesselOverviews({
-            renderer,
-            scene,
-            camera,
-            controls,
-            vesselState,
-            vesselGroup: sceneManager.getVesselGroup() ?? undefined,
-          });
+          const overviews = await captureVesselOverviews(
+            {
+              renderer,
+              scene,
+              camera,
+              controls,
+              vesselState,
+              vesselGroup: sceneManager.getVesselGroup() ?? undefined,
+            },
+            vesselState.cameraBookmarks
+          );
           assets.overviewRenders = overviews;
         } catch (err) {
           console.warn('Failed to capture vessel overviews:', err);
@@ -139,8 +142,8 @@ export function useReportGeneration({
     const vesselGroup = viewportHandle.getSceneManager()?.getVesselGroup() ?? undefined;
     const captureCtx = { renderer, scene, camera, controls, vesselState, vesselGroup };
 
-    // 1. Capture vessel overview images
-    const vesselOverviews = await captureVesselOverviews(captureCtx);
+    // 1. Capture vessel overview images (+ any camera bookmarks)
+    const vesselOverviews = await captureVesselOverviews(captureCtx, vesselState.cameraBookmarks);
 
     // 2. Capture per-annotation context images and heatmaps
     const reportAnnotations = vesselState.annotations.filter(

@@ -42,6 +42,7 @@ import {
   type ThicknessThresholds,
   type WallLossGroupConfig,
   type CoverageTargets,
+  type CameraBookmark,
 } from './types';
 import {
   vesselReducer,
@@ -82,11 +83,15 @@ import * as THREE from 'three';
 
 import StatsDropdown from './StatsDropdown';
 import HistoryDropdown from './HistoryDropdown';
+import BookmarksDropdown from './BookmarksDropdown';
+import ViewCube from './ViewCube';
 import UnifiedStatsPanel from './UnifiedStatsPanel';
 import SnapControl from './SnapControl';
 import InspectionPanel from './sidebar/InspectionPanel';
 import StatLeaderOverlay from './StatLeaderOverlay';
 import { PipePartPopup } from './sidebar/PipePartPopup';
+import { animateCamera } from './engine/camera-animation';
+import { nextBookmarkId } from './engine/canonical-views';
 
 import { downloadScreenshot } from './engine/screenshot-renderer';
 import { captureViewportScreenshot } from './engine/viewport-screenshot';
@@ -300,6 +305,71 @@ export default function VesselModeler() {
       dispatch({ type: 'UPDATE_VESSEL_FN', updater, history });
     },
     []
+  );
+
+  // --- Camera bookmarks (C12) — config one-off handlers, inline by design.
+  // Camera state itself is never serialized; only the bookmark poses are, in the
+  // vessel slice, so add/rename/delete are undoable with discrete history labels.
+  const handleSaveBookmark = useCallback(() => {
+    const camera = viewportRef.current?.getCamera();
+    const controls = viewportRef.current?.getControls();
+    if (!camera || !controls) return;
+    const position = camera.position.toArray() as [number, number, number];
+    const target = (controls.target as THREE.Vector3).toArray() as [number, number, number];
+    updateVessel(
+      (prev) => {
+        const existing = prev.cameraBookmarks ?? [];
+        const bookmark: CameraBookmark = {
+          id: nextBookmarkId(existing),
+          name: `View ${existing.length + 1}`,
+          position,
+          target,
+        };
+        return { ...prev, cameraBookmarks: [...existing, bookmark] };
+      },
+      { at: Date.now(), label: 'Add bookmark' }
+    );
+  }, [updateVessel]);
+
+  const handleRecallBookmark = useCallback((bookmark: CameraBookmark) => {
+    const camera = viewportRef.current?.getCamera();
+    const controls = viewportRef.current?.getControls();
+    if (!camera || !controls) return;
+    animateCamera(
+      camera,
+      controls,
+      new THREE.Vector3(...bookmark.position),
+      new THREE.Vector3(...bookmark.target),
+      400
+    );
+  }, []);
+
+  const handleRenameBookmark = useCallback(
+    (id: string, name: string) => {
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          cameraBookmarks: (prev.cameraBookmarks ?? []).map((b) =>
+            b.id === id ? { ...b, name } : b
+          ),
+        }),
+        { at: Date.now(), label: 'Rename bookmark' }
+      );
+    },
+    [updateVessel]
+  );
+
+  const handleDeleteBookmark = useCallback(
+    (id: string) => {
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          cameraBookmarks: (prev.cameraBookmarks ?? []).filter((b) => b.id !== id),
+        }),
+        { at: Date.now(), label: 'Delete bookmark' }
+      );
+    },
+    [updateVessel]
   );
 
   // --- Model mode handler ---
@@ -766,6 +836,8 @@ export default function VesselModeler() {
                 inspectingAnnotationId={ui.inspectingAnnotationId}
               />
             </ErrorBoundary>
+            {/* View cube — orientation indicator + canonical-view launcher (3D only) */}
+            <ViewCube viewportRef={viewportRef} vesselState={vesselState} />
           </>
         ) : ui.viewMode === 'flattened' ? (
           <Suspense
@@ -1108,6 +1180,13 @@ export default function VesselModeler() {
             future={state.history.future}
             onUndoTo={(index) => dispatch({ type: 'UNDO_TO', index })}
             onRedoTo={(index) => dispatch({ type: 'REDO_TO', index })}
+          />
+          <BookmarksDropdown
+            bookmarks={vesselState.cameraBookmarks ?? []}
+            onSave={handleSaveBookmark}
+            onRecall={handleRecallBookmark}
+            onRename={handleRenameBookmark}
+            onDelete={handleDeleteBookmark}
           />
           {/* 3D / 2D / Topo toggle */}
           <div className="vm-toolbar-segmented">
