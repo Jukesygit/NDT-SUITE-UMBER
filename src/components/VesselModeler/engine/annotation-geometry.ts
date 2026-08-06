@@ -624,5 +624,7 @@ export function createRulerLine(config: RulerConfig, vesselState: VesselState): 
   }
 
   group.userData = { type: 'ruler', rulerId: config.id };
+  // C13: initial per-entity visibility; live toggles handled by ThreeViewport Tier-2.
+  group.visible = config.visible !== false;
   return group;
 }

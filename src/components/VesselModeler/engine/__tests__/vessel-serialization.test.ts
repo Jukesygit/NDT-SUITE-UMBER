@@ -811,6 +811,63 @@ describe('cameraBookmarks round-trip', () => {
 });
 
 // ---------------------------------------------------------------------------
+// C13 — per-entity `visible` round-trips through the specs on both paths, and an
+// ABSENT `visible` is omitted from the serialized JSON (byte-identical shape).
+// Annotations & inspection images already carried `visible`; the new coverage is
+// nozzles / lugs / saddles / welds / textures / rulers / coverageRects / scan /
+// dome composites.
+// ---------------------------------------------------------------------------
+
+describe('per-entity visible serialization (C13)', () => {
+  function makeHiddenFixture(): VesselState {
+    const fixture = makeFixture();
+    fixture.nozzles[0].visible = false;
+    fixture.liftingLugs[0].visible = false;
+    fixture.saddles[0].visible = false;
+    fixture.welds[0].visible = false;
+    fixture.textures[0].visible = false;
+    fixture.rulers[0].visible = false;
+    fixture.coverageRects[0].visible = false;
+    fixture.scanComposites[0].visible = false;
+    fixture.domeScanComposites[0].visible = false;
+    return fixture;
+  }
+
+  for (const path of ['local', 'cloud'] as const) {
+    it(`round-trips visible: false across the new types on the ${path} path`, () => {
+      const restored = roundTrip(makeHiddenFixture(), path);
+      expect(restored.nozzles[0].visible).toBe(false);
+      expect(restored.liftingLugs[0].visible).toBe(false);
+      expect(restored.saddles[0].visible).toBe(false);
+      expect(restored.welds[0].visible).toBe(false);
+      expect(restored.textures[0].visible).toBe(false);
+      expect(restored.rulers[0].visible).toBe(false);
+      expect(restored.coverageRects[0].visible).toBe(false);
+      expect(restored.scanComposites[0].visible).toBe(false);
+      expect(restored.domeScanComposites[0].visible).toBe(false);
+    });
+  }
+
+  it('omits an absent visible from the serialized JSON (byte-identical shape)', () => {
+    // makeFixture sets no `visible` on the new types → the key must not appear.
+    for (const path of ['local', 'cloud'] as const) {
+      const json = JSON.parse(JSON.stringify(serializeVesselState(makeFixture(), { path, modelType: 'blank' }))) as {
+        nozzles: Array<Record<string, unknown>>;
+        welds: Array<Record<string, unknown>>;
+        saddles: Array<Record<string, unknown>>;
+        rulers: Array<Record<string, unknown>>;
+        coverageRects: Array<Record<string, unknown>>;
+      };
+      expect(json.nozzles[0]).not.toHaveProperty('visible');
+      expect(json.welds[0]).not.toHaveProperty('visible');
+      expect(json.saddles[0]).not.toHaveProperty('visible');
+      expect(json.rulers[0]).not.toHaveProperty('visible');
+      expect(json.coverageRects[0]).not.toHaveProperty('visible');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Legacy payloads — no domeScanComposites key must load as [] (not undefined).
 // ---------------------------------------------------------------------------
 

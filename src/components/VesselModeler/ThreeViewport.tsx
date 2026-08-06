@@ -225,6 +225,11 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
   // --- Tier 2: cached mesh arrays from the last build result ---
   const buildResultRef = useRef<BuildSceneResult | null>(null);
   const weldMeshesRef = useRef<THREE.Object3D[]>([]);
+  // C13: entity groups without a build-result registry, cached for the Tier-2
+  // visibility fast-path (rulers have no raycast registry; coverage rects are
+  // assembled in this component, not in vessel-geometry).
+  const rulerMeshesRef = useRef<THREE.Object3D[]>([]);
+  const coverageMeshesRef = useRef<THREE.Object3D[]>([]);
   const weldGlowRef = useRef<THREE.Object3D | null>(null);
   const weldLabelsRef = useRef<{ label: CSS2DObject; weld: import('./types').WeldConfig }[]>([]);
 
@@ -579,9 +584,15 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
       covGroup.add(hitMesh);
 
       covGroup.userData = { type: 'coverageRect', coverageRectId: rect.id };
+      // C13: initial per-entity visibility; live toggles handled by the Tier-2 effect.
+      covGroup.visible = rect.visible !== false;
       result.vesselGroup.add(covGroup);
       coverageMeshes.push(covGroup);
     });
+
+    // Ruler groups collected for the Tier-2 visibility fast-path (C13). Declared
+    // at build-fn scope so the ruler loop below and the ref assignment both see it.
+    const rulerMeshes: THREE.Object3D[] = [];
 
     // -- Weld geometry --
     const weldMeshes: THREE.Object3D[] = [];
@@ -592,6 +603,8 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
       weldGroup.traverse((child) => {
         child.userData = { ...child.userData, type: 'weld', weldIdx: idx };
       });
+      // C13: initial per-entity visibility; live toggles handled by the Tier-2 effect.
+      weldGroup.visible = weld.visible !== false;
       result.vesselGroup.add(weldGroup);
       weldMeshes.push(weldGroup);
     });
@@ -1054,6 +1067,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
       state.rulers.forEach((ruler) => {
         const rulerGroup = createRulerLine(ruler, state);
         result.vesselGroup.add(rulerGroup);
+        rulerMeshes.push(rulerGroup);
         if (ruler.showLabel) {
           const label = createRulerLabel(ruler, state);
           result.vesselGroup.add(label);
@@ -1117,6 +1131,8 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
     // Cache build result for Tier 2 (selection highlight fast-path)
     buildResultRef.current = result;
     weldMeshesRef.current = weldMeshes;
+    rulerMeshesRef.current = rulerMeshes;
+    coverageMeshesRef.current = coverageMeshes;
 
     // Seed heatmap visual signatures: the meshes just built already carry the
     // current palette/opacity, so the in-place visual effect stays a no-op until
@@ -1518,6 +1534,61 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
       group.userData.locked = appendage.locked === true;
     });
   }, [vesselState.appendages]);
+
+  // C13 — uniform per-entity visibility fast-path. `visible` is excluded from the
+  // structural hash for these types, so a visibility toggle does NOT rebuild the
+  // scene: this in-place effect walks the cached entity registries and sets
+  // group.visible from each config. Dep'd ONLY on the entity arrays — never on
+  // rebuildScene/updatePreviews (orbit-stutter scar). Visual only: stats /
+  // coverage / wall-loss never read `visible`. Annotations & inspection images are
+  // intentionally NOT here — they stay on the rebuild path (their CSS2D leader
+  // labels/thumbnails are separate objects filtered at build time).
+  useEffect(() => {
+    const br = buildResultRef.current;
+    const applyByUserData = (
+      meshes: THREE.Object3D[] | undefined,
+      key: string,
+      lookup: (k: unknown) => { visible?: boolean } | undefined
+    ) => {
+      if (!meshes) return;
+      for (const m of meshes) {
+        const k = m.userData?.[key];
+        if (k === undefined) continue;
+        const cfg = lookup(k);
+        if (cfg) m.visible = cfg.visible !== false;
+      }
+    };
+
+    applyByUserData(br?.nozzleMeshes, 'nozzleIdx', (k) => vesselState.nozzles[k as number]);
+    applyByUserData(br?.lugMeshes, 'lugIdx', (k) => vesselState.liftingLugs[k as number]);
+    applyByUserData(br?.saddleMeshes, 'saddleIdx', (k) => vesselState.saddles[k as number]);
+    applyByUserData(weldMeshesRef.current, 'weldIdx', (k) => vesselState.welds[k as number]);
+    applyByUserData(coverageMeshesRef.current, 'coverageRectId', (k) =>
+      vesselState.coverageRects.find((c) => c.id === k)
+    );
+    applyByUserData(rulerMeshesRef.current, 'rulerId', (k) =>
+      vesselState.rulers.find((r) => r.id === k)
+    );
+    applyByUserData(br?.textureMeshes, 'textureIdx', (k) =>
+      vesselState.textures.find((t) => t.id === k)
+    );
+    applyByUserData(br?.scanCompositeMeshes, 'id', (k) =>
+      vesselState.scanComposites.find((s) => s.id === k)
+    );
+    applyByUserData(br?.domeScanMeshes, 'id', (k) =>
+      (vesselState.domeScanComposites ?? []).find((s) => s.id === k)
+    );
+  }, [
+    vesselState.nozzles,
+    vesselState.liftingLugs,
+    vesselState.saddles,
+    vesselState.welds,
+    vesselState.coverageRects,
+    vesselState.rulers,
+    vesselState.textures,
+    vesselState.scanComposites,
+    vesselState.domeScanComposites,
+  ]);
 
   // =========================================================================
   // Tier 3 effect — Preview overlay fast-path (only preview group changes)

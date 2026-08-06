@@ -84,6 +84,7 @@ export const NOZZLE_SPEC: FieldSpec[] = [
   { key: 'showWeldNeck' },
   { key: 'repadOD' },
   { key: 'repadThickness' },
+  { key: 'visible' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -100,6 +101,7 @@ export const LUG_SPEC: FieldSpec[] = [
   { key: 'height' },
   { key: 'thickness' },
   { key: 'holeDiameter' },
+  { key: 'visible' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -114,6 +116,7 @@ export const SADDLE_SPEC: FieldSpec[] = [
   { key: 'wearPlateThickness' },
   { key: 'wearPlateArcOverhang' },
   { key: 'wearPlateAxialOverhang' },
+  { key: 'visible' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -128,6 +131,7 @@ export const WELD_SPEC: FieldSpec[] = [
   { key: 'angle' },
   { key: 'capWidth', loadOn: 'cloud' },
   { key: 'color', load: { or: '#888888' } },
+  { key: 'visible' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -144,6 +148,7 @@ export const TEXTURE_SPEC: FieldSpec[] = [
   { key: 'rotation', save: { or: 0 } },
   { key: 'flipH', save: { or: false } },
   { key: 'flipV', save: { or: false } },
+  { key: 'visible' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -185,6 +190,7 @@ export const RULER_SPEC: FieldSpec[] = [
   { key: 'endAngle', load: { nullish: 90 } },
   { key: 'color', load: { or: '#ffaa00' } },
   { key: 'showLabel', load: { transform: (r) => r.showLabel !== false } },
+  { key: 'visible' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -203,6 +209,7 @@ export const COVERAGE_RECT_SPEC: FieldSpec[] = [
   { key: 'filled', load: { nullish: true } },
   { key: 'fillOpacity', load: { nullish: 0.2 } },
   { key: 'locked' },
+  { key: 'visible' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -252,6 +259,7 @@ export const SCAN_COMPOSITE_SPEC: FieldSpec[] = [
   { key: 'opacity', load: { nullish: 1 } },
   { key: 'sourceNdeFile' },
   { key: 'sourceFiles' },
+  { key: 'visible' },
   {
     key: 'sectionType',
     saveOn: 'cloud',
@@ -284,6 +292,7 @@ export const DOME_SCAN_SPEC: FieldSpec[] = [
   { key: 'rangeMax' },
   { key: 'opacity' },
   { key: 'sourceFiles' },
+  { key: 'visible' },
   // Cloud-only derived section_type: appendage end-closure scans follow the
   // Phase-2 `appendage:<id>` convention (bodyId branch); main-head scans keep
   // dome_left / dome_right.

@@ -112,6 +112,7 @@ export function deserializeSaddle(raw: any): SaddleConfig {
     wearPlateThickness: raw?.wearPlateThickness,
     wearPlateArcOverhang: raw?.wearPlateArcOverhang,
     wearPlateAxialOverhang: raw?.wearPlateAxialOverhang,
+    visible: raw?.visible,
   };
 }
 

@@ -268,6 +268,108 @@ describe('structuralHash — annotation bodyId', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// C13 — per-entity `visible` is COSMETIC on the wholesale-hashed collections
+// (nozzles / liftingLugs / saddles / welds / rulers / coverageRects). It is
+// stripped via `.map(x => ({ ...x, visible: undefined }))`, so:
+//   (a) a legacy (visible-less) state hashes BYTE-IDENTICALLY — the wrapper is a
+//       no-op through JSON.stringify (no OLD-impl golden needed; the equivalence
+//       is constructed inline against the raw arrays);
+//   (b) toggling `visible` on any of these types must NOT change the hash.
+// ---------------------------------------------------------------------------
+
+describe('structuralHash — per-entity visible is cosmetic (C13)', () => {
+  const populated: VesselState = {
+    ...DEFAULT_VESSEL_STATE,
+    nozzles: [{ id: 'noz-1', name: 'N1', pos: 100, proj: 200, angle: 90, size: 100 }],
+    liftingLugs: [{ name: 'L1', pos: 200, angle: 90, style: 'padEye', swl: '5t' }],
+    saddles: [{ pos: 300 }],
+    welds: [{ name: 'W1', type: 'circumferential', pos: 400, color: '#888888' }],
+    rulers: [
+      {
+        id: 1,
+        name: 'R1',
+        startPos: 0,
+        startAngle: 90,
+        endPos: 100,
+        endAngle: 90,
+        color: '#ffaa00',
+        showLabel: true,
+      },
+    ],
+    coverageRects: [
+      {
+        id: 1,
+        name: 'C1',
+        pos: 500,
+        angle: 90,
+        width: 100,
+        height: 100,
+        color: '#00cc66',
+        lineWidth: 2,
+        filled: true,
+        fillOpacity: 0.2,
+      },
+    ],
+  };
+  const baseHash = structuralHash(populated);
+
+  it('byte-identity: the mapped projection is a no-op on a visible-less state', () => {
+    // The ONLY change to these collections is `.map(x => ({ ...x, visible:
+    // undefined }))`. On a visible-less item that map is identity through
+    // JSON.stringify (undefined values are omitted, spread preserves key order),
+    // so the serialized array — and therefore the hash — is unchanged.
+    expect(JSON.stringify(populated.nozzles)).toBe(
+      JSON.stringify(populated.nozzles.map((n) => ({ ...n, visible: undefined })))
+    );
+    expect(JSON.stringify(populated.liftingLugs)).toBe(
+      JSON.stringify(populated.liftingLugs.map((l) => ({ ...l, visible: undefined })))
+    );
+    expect(JSON.stringify(populated.saddles)).toBe(
+      JSON.stringify(populated.saddles.map((s) => ({ ...s, visible: undefined })))
+    );
+    expect(JSON.stringify(populated.welds)).toBe(
+      JSON.stringify(populated.welds.map((w) => ({ ...w, visible: undefined })))
+    );
+    expect(JSON.stringify(populated.rulers)).toBe(
+      JSON.stringify(populated.rulers.map((r) => ({ ...r, visible: undefined })))
+    );
+    expect(JSON.stringify(populated.coverageRects)).toBe(
+      JSON.stringify(populated.coverageRects.map((c) => ({ ...c, visible: undefined })))
+    );
+  });
+
+  it('is unchanged when visible toggles on a nozzle', () => {
+    expect(structuralHash({ ...populated, nozzles: [{ ...populated.nozzles[0], visible: false }] })).toBe(baseHash);
+    expect(structuralHash({ ...populated, nozzles: [{ ...populated.nozzles[0], visible: true }] })).toBe(baseHash);
+  });
+  it('is unchanged when visible toggles on a lifting lug', () => {
+    expect(
+      structuralHash({ ...populated, liftingLugs: [{ ...populated.liftingLugs[0], visible: false }] })
+    ).toBe(baseHash);
+  });
+  it('is unchanged when visible toggles on a saddle', () => {
+    expect(structuralHash({ ...populated, saddles: [{ ...populated.saddles[0], visible: false }] })).toBe(
+      baseHash
+    );
+  });
+  it('is unchanged when visible toggles on a weld', () => {
+    expect(structuralHash({ ...populated, welds: [{ ...populated.welds[0], visible: false }] })).toBe(
+      baseHash
+    );
+  });
+  it('is unchanged when visible toggles on a ruler', () => {
+    expect(structuralHash({ ...populated, rulers: [{ ...populated.rulers[0], visible: false }] })).toBe(
+      baseHash
+    );
+  });
+  it('is unchanged when visible toggles on a coverage rect', () => {
+    expect(
+      structuralHash({ ...populated, coverageRects: [{ ...populated.coverageRects[0], visible: false }] })
+    ).toBe(baseHash);
+  });
+});
+
 describe('structuralHash regression — no appendages', () => {
   it('is deterministic for the default vessel', () => {
     expect(structuralHash(DEFAULT_VESSEL_STATE)).toBe(structuralHash(DEFAULT_VESSEL_STATE));

@@ -109,6 +109,8 @@ export interface NozzleConfig {
   repadOD?: number;
   /** Reinforcing pad thickness in mm. Defaults to 10. */
   repadThickness?: number;
+  /** Whether this nozzle is visible in the 3D scene */
+  visible?: boolean;
 }
 
 export type LiftingLugStyle = 'padEye' | 'trunnion';
@@ -135,6 +137,8 @@ export interface LiftingLugConfig {
   thickness?: number;
   /** Optional hole diameter override in mm */
   holeDiameter?: number;
+  /** Whether this lifting lug is visible in the 3D scene */
+  visible?: boolean;
 }
 
 export interface LiftingLugSize {
@@ -173,6 +177,8 @@ export interface SaddleConfig {
   wearPlateArcOverhang?: number;
   /** Wear plate axial overhang beyond the saddle depth, per side, in mm. Defaults to 50. */
   wearPlateAxialOverhang?: number;
+  /** Whether this saddle is visible in the 3D scene */
+  visible?: boolean;
 }
 
 export type WeldType = 'circumferential' | 'longitudinal';
@@ -196,6 +202,8 @@ export interface WeldConfig {
   capWidth?: number;
   /** Hex color string */
   color: string;
+  /** Whether this weld is visible in the 3D scene */
+  visible?: boolean;
 }
 
 export interface TextureConfig {
@@ -212,6 +220,8 @@ export interface TextureConfig {
   flipH: boolean;
   flipV: boolean;
   aspectRatio: number;
+  /** Whether this texture is visible in the 3D scene */
+  visible?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -271,6 +281,8 @@ export interface ScanCompositeConfig {
   sourceNdeFile?: string;
   /** Source NDE files that make up this composite, with spatial bounds */
   sourceFiles?: ScanCompositeSourceFile[];
+  /** Whether this scan composite is visible in the 3D scene */
+  visible?: boolean;
 }
 
 export interface ScanCompositeSourceFile {
@@ -350,6 +362,8 @@ export interface DomeScanConfig {
     minY: number;
     maxY: number;
   }>;
+  /** Whether this dome scan is visible in the 3D scene */
+  visible?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -468,6 +482,8 @@ export interface CoverageRectConfig {
   fillOpacity: number;
   /** Per-item lock – prevents dragging when true */
   locked?: boolean;
+  /** Whether this coverage rectangle is visible in the 3D scene */
+  visible?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -489,6 +505,8 @@ export interface RulerConfig {
   color: string;
   /** Whether to show the distance label */
   showLabel: boolean;
+  /** Whether this ruler is visible in the 3D scene */
+  visible?: boolean;
 }
 
 export interface MeasurementConfig {

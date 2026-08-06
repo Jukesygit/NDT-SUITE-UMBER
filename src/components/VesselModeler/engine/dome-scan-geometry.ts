@@ -434,6 +434,8 @@ export function createDomeScanPlane(
     centerPhi: config.centerPhi,
     centerTheta: config.centerTheta,
   };
+  // C13: initial per-entity visibility; live toggles handled by ThreeViewport Tier-2.
+  mesh.visible = config.visible !== false;
 
   // --- Selection highlight border ---
   {
@@ -674,6 +676,8 @@ function createAppendageDomeScanPlane(
     centerPhi: config.centerPhi,
     centerTheta: config.centerTheta,
   };
+  // C13: initial per-entity visibility; live toggles handled by ThreeViewport Tier-2.
+  mesh.visible = config.visible !== false;
 
   // --- Selection highlight border (same pattern as the main path) -----------
   {

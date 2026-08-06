@@ -631,6 +631,8 @@ export function createScanCompositePlane(
     scanDirection: composite.scanDirection,
     indexDirection: composite.indexDirection,
   };
+  // C13: initial per-entity visibility; live toggles handled by ThreeViewport Tier-2.
+  mesh.visible = composite.visible !== false;
 
   // --- Selection highlight border (always created, hidden when not selected) ---
   {

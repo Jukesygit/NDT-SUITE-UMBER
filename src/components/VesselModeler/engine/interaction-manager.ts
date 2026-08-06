@@ -482,8 +482,12 @@ export class InteractionManager {
       ...pipeSegmentMeshes,
     ];
 
-    const hits =
-      allInteractables.length > 0 ? this.raycaster.intersectObjects(allInteractables, true) : [];
+    // C13: hidden entities (config.visible === false → group.visible === false)
+    // must not be clickable. THREE's Raycaster ignores `.visible` entirely, so
+    // filter them out explicitly (walk up to the entity group). Visual only —
+    // stats/coverage sampling never consults this.
+    const pickable = allInteractables.filter((o) => this.isEntityVisible(o));
+    const hits = pickable.length > 0 ? this.raycaster.intersectObjects(pickable, true) : [];
 
     for (const hit of hits) {
       const entityData = this.findEntityData(hit.object);
@@ -1382,7 +1386,28 @@ export class InteractionManager {
       }
     });
     this.surfaceMeshCache = { group, withClosures, withoutClosures };
-    return includeClosures ? withClosures : withoutClosures;
+    // C13: filter on RETURN (not at cache time) so a body hidden after the last
+    // rebuild via the Tier-2 visibility effect is excluded from entity-drag
+    // targeting immediately. The cache still holds the full traverse; the main
+    // shell is never hidden, so only hidden-appendage surfaces drop out. This is
+    // interaction targeting only — scan/stat sampling uses separate paths.
+    const surfaces = includeClosures ? withClosures : withoutClosures;
+    return surfaces.filter((m) => this.isEntityVisible(m));
+  }
+
+  /**
+   * C13 visibility gate for interaction. Walks from `obj` up to (but not
+   * including) `vesselGroup`; returns false if any ancestor group is hidden
+   * (`.visible === false`). THREE's Raycaster does not skip invisible objects,
+   * so every candidate list is filtered through this before raycasting.
+   */
+  private isEntityVisible(obj: THREE.Object3D): boolean {
+    let node: THREE.Object3D | null = obj;
+    while (node && node !== this.vesselGroup) {
+      if (node.visible === false) return false;
+      node = node.parent;
+    }
+    return true;
   }
 
   /** Clamp an axial pos to the main shell extent, including both head overhangs. */

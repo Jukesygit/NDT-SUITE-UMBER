@@ -155,6 +155,7 @@ export function useVesselPersistence({
             flipH: texData.flipH || false,
             flipV: texData.flipV || false,
             aspectRatio: result.aspectRatio,
+            visible: texData.visible,
           });
         } catch {
           // Skip textures that fail to load
@@ -529,6 +530,7 @@ export function useVesselPersistence({
                 flipH: texData.flipH || false,
                 flipV: texData.flipV || false,
                 aspectRatio: result.aspectRatio,
+                visible: texData.visible,
               });
             } catch {
               // Skip textures that fail to load

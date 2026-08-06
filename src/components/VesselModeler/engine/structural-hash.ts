@@ -11,6 +11,19 @@
 // name/visible/locked/nominalThickness, which are cosmetic and would cause
 // rebuild storms.
 //
+// Per-entity `visible` (C13) is the same kind of cosmetic flag on the wholesale-
+// hashed collections (nozzles / liftingLugs / saddles / welds / rulers /
+// coverageRects). It is stripped from each via `.map(x => ({ ...x, visible:
+// undefined }))`: spread keeps key order and JSON.stringify drops the undefined
+// value, so a legacy (visible-less) state hashes BYTE-IDENTICALLY while a
+// visibility toggle no longer rebuilds — it is applied by ThreeViewport's Tier-2
+// in-place effect (mirroring the appendage precedent). scan/dome composites are
+// field-listed, so they simply omit `visible`. Annotations & inspection images
+// KEEP `visible` in this hash on purpose: their visibility drives separately
+// built, drag-enabled CSS2D leader labels/thumbnails (not children of the entity
+// group), so they stay on the rebuild path until the outliner unifies label
+// lifecycle with the toggle UX.
+//
 // Scan/dome composites likewise contribute STRUCTURAL fields only. The heatmap
 // visual params (opacity, colorScale, rangeMin, rangeMax) are DELIBERATELY
 // excluded (T2-B / review §4.4): they only change the baked heatmap texture, not
@@ -27,9 +40,15 @@ export function structuralHash(s: VesselState): string {
     length: s.length,
     headRatio: s.headRatio,
     orientation: s.orientation,
-    nozzles: s.nozzles,
-    liftingLugs: s.liftingLugs,
-    saddles: s.saddles,
+    // `visible` is a COSMETIC per-entity flag (C13) — hidden entities keep
+    // contributing to stats/coverage; only their render is toggled by a Tier-2
+    // in-place effect, never a rebuild. It must NOT enter this hash. These
+    // collections are hashed WHOLESALE, so strip `visible` via a mapped
+    // projection: spread preserves key order and JSON.stringify omits an
+    // `undefined` value, so a legacy (visible-less) state hashes byte-identically.
+    nozzles: s.nozzles.map((n) => ({ ...n, visible: undefined })),
+    liftingLugs: s.liftingLugs.map((l) => ({ ...l, visible: undefined })),
+    saddles: s.saddles.map((sd) => ({ ...sd, visible: undefined })),
     textures: s.textures.map((t) => ({
       id: t.id,
       pos: t.pos,
@@ -40,14 +59,14 @@ export function structuralHash(s: VesselState): string {
       flipH: t.flipH,
       flipV: t.flipV,
     })),
-    welds: s.welds,
+    welds: s.welds.map((w) => ({ ...w, visible: undefined })),
     annotations: s.annotations.map((a) => ({
       ...a,
       labelOffset: undefined,
       leaderLength: undefined,
     })),
-    rulers: s.rulers,
-    coverageRects: s.coverageRects,
+    rulers: s.rulers.map((r) => ({ ...r, visible: undefined })),
+    coverageRects: s.coverageRects.map((c) => ({ ...c, visible: undefined })),
     inspectionImages: s.inspectionImages.map((i) => ({
       ...i,
       labelOffset: undefined,

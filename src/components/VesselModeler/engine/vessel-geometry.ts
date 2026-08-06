@@ -305,6 +305,8 @@ function createTexturePlane(
   }
 
   mesh.userData = { type: 'texture', textureIdx: tex.id };
+  // C13: initial per-entity visibility; live toggles handled by ThreeViewport Tier-2.
+  mesh.visible = tex.visible !== false;
 
   return mesh;
 }
@@ -564,6 +566,7 @@ export function buildVesselScene(
     nozzleGroup.quaternion.copy(quaternion);
 
     nozzleGroup.userData = { type: 'nozzle', nozzleIdx: idx };
+    nozzleGroup.visible = n.visible !== false;
     vesselGroup.add(nozzleGroup);
     nozzleMeshes.push(nozzleGroup);
   });
@@ -584,6 +587,7 @@ export function buildVesselScene(
       const appNormal = bodyFrame.surfaceNormal(posMm, lug.angle);
       appLugGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), appNormal);
       appLugGroup.userData = { type: 'liftingLug', lugIdx: idx };
+      appLugGroup.visible = lug.visible !== false;
       vesselGroup.add(appLugGroup);
       lugMeshes.push(appLugGroup);
       return;
@@ -668,6 +672,7 @@ export function buildVesselScene(
     lugGroup.quaternion.copy(quaternion);
 
     lugGroup.userData = { type: 'liftingLug', lugIdx: idx };
+    lugGroup.visible = lug.visible !== false;
     vesselGroup.add(lugGroup);
     lugMeshes.push(lugGroup);
   });
@@ -687,6 +692,7 @@ export function buildVesselScene(
       saddleGroup.traverse((child) => {
         child.userData = { ...child.userData, type: 'saddle', saddleIdx: idx };
       });
+      saddleGroup.visible = saddle.visible !== false;
       vesselGroup.add(saddleGroup);
       saddleMeshes.push(saddleGroup);
     });

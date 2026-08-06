@@ -61,6 +61,7 @@ export function deserializeNozzle(raw: any): NozzleConfig {
     showWeldNeck: raw?.showWeldNeck ?? legacyWeldNeckVisible,
     repadOD: raw?.repadOD,
     repadThickness: raw?.repadThickness,
+    visible: raw?.visible,
   };
 }
 
