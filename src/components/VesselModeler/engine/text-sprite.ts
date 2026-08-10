@@ -7,12 +7,19 @@
 // =============================================================================
 
 import * as THREE from 'three';
-import type { AnnotationShapeConfig, NozzleConfig, RulerConfig, WeldConfig, VesselState } from '../types';
+import type {
+  AnnotationShapeConfig,
+  NozzleConfig,
+  RulerConfig,
+  WeldConfig,
+  VesselState,
+} from '../types';
 import { getAnnotationLeaderEndPosition } from './annotation-labels';
 import { computeRulerDistance, shellPoint } from './annotation-geometry';
 import { SCALE } from './materials';
 import { getSaddleBaseY } from './saddle-geometry';
 import { computeNozzleTipY } from './pipeline-geometry';
+import { computeWeldLabelAnchor } from './weld-label-anchor';
 
 // ---------------------------------------------------------------------------
 // Canvas Text Rendering
@@ -24,7 +31,7 @@ interface TextLine {
   color: string;
 }
 
-const CANVAS_SCALE = 2;          // render at 2x for crisp text
+const CANVAS_SCALE = 2; // render at 2x for crisp text
 const PADDING_X = 16 * CANVAS_SCALE;
 const PADDING_Y = 12 * CANVAS_SCALE;
 const LINE_HEIGHT = 36 * CANVAS_SCALE;
@@ -56,7 +63,7 @@ function createTextSprite(
   borderColor: string,
   worldScale: number,
   image?: HTMLImageElement,
-  pill?: boolean,
+  pill?: boolean
 ): THREE.Mesh {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
@@ -118,7 +125,7 @@ function createTextSprite(
       BORDER_WIDTH / 2,
       canvas.width - BORDER_WIDTH,
       canvas.height - BORDER_WIDTH,
-      Math.max(0, radius - BORDER_WIDTH / 2),
+      Math.max(0, radius - BORDER_WIDTH / 2)
     );
     ctx.strokeStyle = borderColor;
     ctx.lineWidth = BORDER_WIDTH;
@@ -130,11 +137,7 @@ function createTextSprite(
       ctx.font = line.font;
       ctx.fillStyle = line.color;
       ctx.textBaseline = 'top';
-      ctx.fillText(
-        line.text,
-        PADDING_X + BORDER_WIDTH,
-        PADDING_Y + BORDER_WIDTH + i * LINE_HEIGHT,
-      );
+      ctx.fillText(line.text, PADDING_X + BORDER_WIDTH, PADDING_Y + BORDER_WIDTH + i * LINE_HEIGHT);
     }
 
     // Draw image below text
@@ -158,7 +161,7 @@ function createTextSprite(
   const material = new THREE.MeshBasicMaterial({
     map: texture,
     transparent: true,
-    alphaTest: 0.01,  // discard fully transparent pixels outside rounded rect
+    alphaTest: 0.01, // discard fully transparent pixels outside rounded rect
   });
 
   // Build a single geometry with two faces (front + back) so text reads
@@ -174,30 +177,62 @@ function createTextSprite(
   // 8 vertices: 4 for front, 4 for back (same positions, different normals/UVs)
   const positions = new Float32Array([
     // Front face (faces +Z)
-    -hw, -hh, 0,   hw, -hh, 0,   hw, hh, 0,   -hw, hh, 0,
+    -hw,
+    -hh,
+    0,
+    hw,
+    -hh,
+    0,
+    hw,
+    hh,
+    0,
+    -hw,
+    hh,
+    0,
     // Back face  (faces -Z) — same positions
-    -hw, -hh, 0,   hw, -hh, 0,   hw, hh, 0,   -hw, hh, 0,
+    -hw,
+    -hh,
+    0,
+    hw,
+    -hh,
+    0,
+    hw,
+    hh,
+    0,
+    -hw,
+    hh,
+    0,
   ]);
 
   const normals = new Float32Array([
     // Front face normals
-    0, 0, 1,   0, 0, 1,   0, 0, 1,   0, 0, 1,
+    0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
     // Back face normals
-    0, 0, -1,  0, 0, -1,  0, 0, -1,  0, 0, -1,
+    0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1,
   ]);
 
   const uvs = new Float32Array([
     // Front face UVs (standard: left=0, right=1)
-    0, 0,   1, 0,   1, 1,   0, 1,
+    0, 0, 1, 0, 1, 1, 0, 1,
     // Back face UVs (mirrored X: left=1, right=0 so text reads correctly)
-    1, 0,   0, 0,   0, 1,   1, 1,
+    1, 0, 0, 0, 0, 1, 1, 1,
   ]);
 
   // Front: CCW winding (0-1-2, 0-2-3) — faces +Z
   // Back:  CW winding  (4-6-5, 4-7-6) — faces -Z
   const indices = [
-    0, 1, 2,   0, 2, 3,   // front
-    4, 6, 5,   4, 7, 6,   // back
+    0,
+    1,
+    2,
+    0,
+    2,
+    3, // front
+    4,
+    6,
+    5,
+    4,
+    7,
+    6, // back
   ];
 
   const geometry = new THREE.BufferGeometry();
@@ -221,48 +256,53 @@ function createTextSprite(
  */
 export async function createAnnotationLabelSprite(
   config: AnnotationShapeConfig,
-  vesselState: VesselState,
+  vesselState: VesselState
 ): Promise<THREE.Mesh> {
   const origin = vesselState.coordinateOrigin ?? { indexMm: 0, scanMm: 0 };
   const scanMm = Math.round((config.angle / 360) * Math.PI * vesselState.id - origin.scanMm);
   const indexMm = Math.round(config.pos - origin.indexMm);
   const areaSqM = (config.width * config.height) / 1_000_000;
 
-  const lines: TextLine[] = config.type === 'restriction'
-    ? [
-        {
-          text: `\u26A0 ${config.name}`,
-          font: `bold ${FONT_SIZE_NAME}px monospace`,
-          color: '#facc15',
-        },
-        ...(config.restrictionNotes ? [{
-          text: config.restrictionNotes,
-          font: `${FONT_SIZE_DETAIL}px monospace`,
-          color: 'rgba(250, 204, 21, 0.9)',
-        }] : []),
-        {
-          text: `Scan: ${scanMm}mm  Index: ${indexMm}mm`,
-          font: `${FONT_SIZE_DETAIL}px monospace`,
-          color: 'rgba(255, 255, 255, 0.65)',
-        },
-      ]
-    : [
-        {
-          text: config.name,
-          font: `bold ${FONT_SIZE_NAME}px monospace`,
-          color: '#ffffff',
-        },
-        {
-          text: `Scan: ${scanMm}mm  Index: ${indexMm}mm`,
-          font: `${FONT_SIZE_DETAIL}px monospace`,
-          color: 'rgba(255, 255, 255, 0.65)',
-        },
-        {
-          text: `${areaSqM.toFixed(2)} m\u00b2`,
-          font: `${FONT_SIZE_DETAIL}px monospace`,
-          color: 'rgba(77, 184, 255, 0.9)',
-        },
-      ];
+  const lines: TextLine[] =
+    config.type === 'restriction'
+      ? [
+          {
+            text: `\u26A0 ${config.name}`,
+            font: `bold ${FONT_SIZE_NAME}px monospace`,
+            color: '#facc15',
+          },
+          ...(config.restrictionNotes
+            ? [
+                {
+                  text: config.restrictionNotes,
+                  font: `${FONT_SIZE_DETAIL}px monospace`,
+                  color: 'rgba(250, 204, 21, 0.9)',
+                },
+              ]
+            : []),
+          {
+            text: `Scan: ${scanMm}mm  Index: ${indexMm}mm`,
+            font: `${FONT_SIZE_DETAIL}px monospace`,
+            color: 'rgba(255, 255, 255, 0.65)',
+          },
+        ]
+      : [
+          {
+            text: config.name,
+            font: `bold ${FONT_SIZE_NAME}px monospace`,
+            color: '#ffffff',
+          },
+          {
+            text: `Scan: ${scanMm}mm  Index: ${indexMm}mm`,
+            font: `${FONT_SIZE_DETAIL}px monospace`,
+            color: 'rgba(255, 255, 255, 0.65)',
+          },
+          {
+            text: `${areaSqM.toFixed(2)} m\u00b2`,
+            font: `${FONT_SIZE_DETAIL}px monospace`,
+            color: 'rgba(77, 184, 255, 0.9)',
+          },
+        ];
 
   // Load restriction image if present
   let image: HTMLImageElement | undefined;
@@ -282,7 +322,7 @@ export async function createAnnotationLabelSprite(
     'rgb(10, 14, 20)',
     'rgba(255, 255, 255, 0.15)',
     worldScale,
-    image,
+    image
   );
 
   const position = getAnnotationLeaderEndPosition(config, vesselState);
@@ -300,10 +340,7 @@ export async function createAnnotationLabelSprite(
  * Create a billboard sprite matching the ruler distance label.
  * Positioned at the ruler midpoint.
  */
-export function createRulerLabelSprite(
-  config: RulerConfig,
-  vesselState: VesselState,
-): THREE.Mesh {
+export function createRulerLabelSprite(config: RulerConfig, vesselState: VesselState): THREE.Mesh {
   const distMm = computeRulerDistance(config, vesselState);
 
   const lines: TextLine[] = [
@@ -320,7 +357,7 @@ export function createRulerLabelSprite(
     lines,
     'rgba(255, 170, 0, 0.9)',
     'rgba(200, 130, 0, 1)',
-    worldScale,
+    worldScale
   );
 
   // Position at ruler midpoint, offset radially so the label sits outside the
@@ -361,7 +398,7 @@ export function createRulerLabelSprite(
 export function createNozzleLabelSprite(
   config: NozzleConfig,
   nozzleGroup: THREE.Group,
-  vesselState: VesselState,
+  vesselState: VesselState
 ): THREE.Mesh {
   const lines: TextLine[] = [
     {
@@ -379,7 +416,7 @@ export function createNozzleLabelSprite(
     'rgba(100, 160, 255, 0.3)',
     worldScale,
     undefined,
-    true, // pill shape
+    true // pill shape
   );
 
   // Position at the flange end of the nozzle
@@ -418,10 +455,7 @@ export function createNozzleLabelSprite(
 /**
  * Create a label sprite for a weld, positioned above the weld bead.
  */
-export function createWeldLabelSprite(
-  config: WeldConfig,
-  vesselState: VesselState,
-): THREE.Mesh {
+export function createWeldLabelSprite(config: WeldConfig, vesselState: VesselState): THREE.Mesh {
   const lines: TextLine[] = [
     {
       text: ` ${config.name} `,
@@ -438,30 +472,38 @@ export function createWeldLabelSprite(
     'rgba(255, 200, 60, 0.4)',
     worldScale,
     undefined,
-    true,
+    true
   );
 
-  const radius = vesselState.id / 2;
-  const tanTan = vesselState.length;
-  const isVertical = vesselState.orientation === 'vertical';
-  const offset = (radius + 30) * SCALE;
-
-  if (config.type === 'circumferential') {
-    const axial = (config.pos - tanTan / 2) * SCALE;
-    if (isVertical) {
-      mesh.position.set(0, axial, offset);
-    } else {
-      mesh.position.set(axial, offset, 0);
-    }
+  if (config.bodyId !== undefined) {
+    // Appendage-mounted weld: anchor on the body's SurfaceFrame (circ labels at
+    // the top of the ring, matching the main-shell convention in the else branch)
+    // so the label follows the appendage instead of floating on the main shell.
+    mesh.position.copy(computeWeldLabelAnchor(config, vesselState));
   } else {
-    const midPos = (config.pos + (config.endPos ?? tanTan)) / 2;
-    const axial = (midPos - tanTan / 2) * SCALE;
-    const angleRad = ((config.angle ?? 90) * Math.PI) / 180;
-    const r = offset;
-    if (isVertical) {
-      mesh.position.set(r * Math.cos(angleRad), axial, r * Math.sin(angleRad));
+    // Legacy main-shell placement (byte-identical).
+    const radius = vesselState.id / 2;
+    const tanTan = vesselState.length;
+    const isVertical = vesselState.orientation === 'vertical';
+    const offset = (radius + 30) * SCALE;
+
+    if (config.type === 'circumferential') {
+      const axial = (config.pos - tanTan / 2) * SCALE;
+      if (isVertical) {
+        mesh.position.set(0, axial, offset);
+      } else {
+        mesh.position.set(axial, offset, 0);
+      }
     } else {
-      mesh.position.set(axial, r * Math.sin(angleRad), r * Math.cos(angleRad));
+      const midPos = (config.pos + (config.endPos ?? tanTan)) / 2;
+      const axial = (midPos - tanTan / 2) * SCALE;
+      const angleRad = ((config.angle ?? 90) * Math.PI) / 180;
+      const r = offset;
+      if (isVertical) {
+        mesh.position.set(r * Math.cos(angleRad), axial, r * Math.sin(angleRad));
+      } else {
+        mesh.position.set(axial, r * Math.sin(angleRad), r * Math.cos(angleRad));
+      }
     }
   }
 
@@ -481,9 +523,7 @@ export function createWeldLabelSprite(
  * (towards a viewer looking at the vessel centre).
  * Returns null if all fields are empty.
  */
-export function createNameplateSprites(
-  vesselState: VesselState,
-): THREE.Group | null {
+export function createNameplateSprites(vesselState: VesselState): THREE.Group | null {
   const rows: { label: string; value: string }[] = [];
   if (vesselState.location) rows.push({ label: 'LOCATION', value: vesselState.location });
   if (vesselState.vesselName) rows.push({ label: 'VESSEL', value: vesselState.vesselName });
@@ -491,9 +531,9 @@ export function createNameplateSprites(
 
   if (rows.length === 0) return null;
 
-  const maxLabelLen = Math.max(...rows.map(r => r.label.length));
+  const maxLabelLen = Math.max(...rows.map((r) => r.label.length));
 
-  const lines: TextLine[] = rows.map(row => ({
+  const lines: TextLine[] = rows.map((row) => ({
     text: `  ${row.label.padEnd(maxLabelLen + 2)}${row.value}  `,
     font: `bold ${FONT_SIZE_NAME}px monospace`,
     color: '#ffffff',
@@ -507,7 +547,10 @@ export function createNameplateSprites(
   const isVertical = vesselState.orientation === 'vertical';
   // Align with the ground plane — saddle base for horizontal, bottom head for vertical
   const floorY = isVertical
-    ? -(vesselState.length / 2 + (vesselState.headRatio > 0 ? vesselState.id / (2 * vesselState.headRatio) : 0)) * SCALE
+    ? -(
+        vesselState.length / 2 +
+        (vesselState.headRatio > 0 ? vesselState.id / (2 * vesselState.headRatio) : 0)
+      ) * SCALE
     : getSaddleBaseY(vesselState);
 
   const group = new THREE.Group();
@@ -515,26 +558,21 @@ export function createNameplateSprites(
 
   // Create two nameplates — one on each side of the vessel (front & back along Z)
   for (const side of [-1, 1] as const) {
-    const mesh = createTextSprite(
-      lines,
-      'rgb(10, 14, 20)',
-      'rgba(100, 160, 255, 0.3)',
-      worldScale,
-    );
+    const mesh = createTextSprite(lines, 'rgb(10, 14, 20)', 'rgba(100, 160, 255, 0.3)', worldScale);
 
     if (isVertical) {
       // Vertical vessel: nameplates on opposite sides (front & back along Z)
       mesh.position.set(
-        0,                          // centred on vessel axis
-        floorY,                     // level with vessel base
-        side * vesselRadius * 1.8,  // front (+Z) and back (-Z)
+        0, // centred on vessel axis
+        floorY, // level with vessel base
+        side * vesselRadius * 1.8 // front (+Z) and back (-Z)
       );
     } else {
       // Horizontal vessel: nameplates along Z axis (front and back)
       mesh.position.set(
-        vesselLength * 0.5,         // centred on vessel length
-        floorY,                     // level with saddle base
-        side * vesselRadius * 1.8,  // front (+Z) and back (-Z)
+        vesselLength * 0.5, // centred on vessel length
+        floorY, // level with saddle base
+        side * vesselRadius * 1.8 // front (+Z) and back (-Z)
       );
     }
 
@@ -560,9 +598,7 @@ export function createNameplateSprites(
  * Create baked N/S/E/W label meshes for glTF export.
  * Positions mirror scene-manager.ts `setCardinalDirectionsVisible`.
  */
-export function createCardinalDirectionSprites(
-  vesselState: VesselState,
-): THREE.Group {
+export function createCardinalDirectionSprites(vesselState: VesselState): THREE.Group {
   const group = new THREE.Group();
   group.userData = { type: 'export-cardinalDirections' };
 
@@ -579,17 +615,19 @@ export function createCardinalDirectionSprites(
   const worldScale = vesselState.id * SCALE * 0.005;
 
   for (const { text, x, z, primary } of labels) {
-    const lines: TextLine[] = [{
-      text: ` ${text} `,
-      font: `bold ${FONT_SIZE_NAME}px sans-serif`,
-      color: primary ? '#ffffff' : 'rgba(255,255,255,0.7)',
-    }];
+    const lines: TextLine[] = [
+      {
+        text: ` ${text} `,
+        font: `bold ${FONT_SIZE_NAME}px sans-serif`,
+        color: primary ? '#ffffff' : 'rgba(255,255,255,0.7)',
+      },
+    ];
 
     const mesh = createTextSprite(
       lines,
       primary ? 'rgba(10, 14, 20, 0.85)' : 'rgba(10, 14, 20, 0.6)',
       primary ? 'rgba(100, 160, 255, 0.4)' : 'rgba(100, 160, 255, 0.15)',
-      worldScale,
+      worldScale
     );
 
     mesh.position.set(x, 0.05, z);

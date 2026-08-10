@@ -11,9 +11,10 @@ export default defineConfig({
     pool: 'forks',
     maxWorkers: process.env.CI ? 1 : undefined,
     // useLayoutMode.test.ts OOMs the fork worker even without coverage (Vitest/jsdom issue)
+    // .claude/ holds local agent worktrees whose duplicated trees must not be swept up
     exclude: process.env.CI
-      ? ['**/node_modules/**', '**/dist/**', '**/useLayoutMode.test.ts']
-      : ['**/node_modules/**', '**/dist/**'],
+      ? ['**/node_modules/**', '**/dist/**', '**/.claude/**', '**/useLayoutMode.test.ts']
+      : ['**/node_modules/**', '**/dist/**', '**/.claude/**'],
     coverage: {
       provider: 'istanbul',
       reporter: ['text', 'json', 'html', 'cobertura'],

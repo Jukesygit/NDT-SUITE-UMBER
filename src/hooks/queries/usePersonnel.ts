@@ -10,174 +10,202 @@ import authManager from '../../auth-manager.js';
 
 // Types
 export interface Organization {
-    id: string;
-    name: string;
-    slug?: string;
+  id: string;
+  name: string;
+  slug?: string;
 }
 
+/**
+ * A single document/page attached to a certification. Rows live in the
+ * competency_documents child table; ordered by `position` (page order).
+ */
+export interface CompetencyDocument {
+  id: string;
+  employee_competency_id: string;
+  document_url: string; // storage path in the 'documents' bucket
+  document_name: string;
+  position: number;
+  created_at?: string;
+}
+
+/**
+ * Embedded author profile resolved from a competency's `created_by` FK.
+ * PostgREST returns a to-one embed as an object (or, defensively, a 1-element
+ * array); `null` when `created_by` is null or the profile is unavailable.
+ */
+export type CompetencyAuthorProfile =
+  | { username: string | null }
+  | { username: string | null }[]
+  | null;
+
 export interface PersonCompetency {
+  id: string;
+  competency_id: string;
+  user_id: string;
+  value?: string;
+  issuing_body?: string;
+  certification_id?: string;
+  expiry_date?: string;
+  created_at?: string;
+  notes?: string;
+  status?: 'active' | 'expired' | 'pending' | 'pending_approval';
+  witness_checked?: boolean;
+  witnessed_by?: string;
+  witnessed_at?: string;
+  witness_notes?: string;
+  document_url?: string;
+  document_name?: string;
+  documents?: CompetencyDocument[];
+  level?: string;
+  /** Author of the row (server-set trigger; null on legacy rows). */
+  created_by?: string | null;
+  /** Embedded author profile via the created_by FK (to-one PostgREST embed). */
+  created_by_profile?: CompetencyAuthorProfile;
+  competency?: {
     id: string;
-    competency_id: string;
-    user_id: string;
-    value?: string;
-    issuing_body?: string;
-    certification_id?: string;
-    expiry_date?: string;
-    created_at?: string;
-    notes?: string;
-    status?: 'active' | 'expired' | 'pending' | 'pending_approval';
-    witness_checked?: boolean;
-    witnessed_by?: string;
-    witnessed_at?: string;
-    witness_notes?: string;
-    document_url?: string;
-    document_name?: string;
-    level?: string;
-    competency?: {
-        id: string;
-        name: string;
-        category: string;
-        field_type?: 'text' | 'date' | 'expiry_date' | 'boolean' | 'file' | 'number';
-        is_certification?: boolean;
-    };
+    name: string;
+    category: string;
+    field_type?: 'text' | 'date' | 'expiry_date' | 'boolean' | 'file' | 'number';
+    is_certification?: boolean;
+  };
 }
 
 export interface Person {
-    id: string;
-    username: string;
-    email: string;
-    role: string;
-    organization_id?: string;
-    organizations?: Organization;
-    competencies?: PersonCompetency[];
-    avatar_url?: string;
-    // Personal details
-    mobile_number?: string;
-    home_address?: string;
-    nearest_uk_train_station?: string;
-    date_of_birth?: string;
-    next_of_kin?: string;
-    next_of_kin_emergency_contact_number?: string;
-    vantage_number?: string;
+  id: string;
+  username: string;
+  email: string;
+  role: string;
+  organization_id?: string;
+  organizations?: Organization;
+  competencies?: PersonCompetency[];
+  avatar_url?: string;
+  // Personal details
+  mobile_number?: string;
+  home_address?: string;
+  nearest_uk_train_station?: string;
+  date_of_birth?: string;
+  next_of_kin?: string;
+  next_of_kin_emergency_contact_number?: string;
+  vantage_number?: string;
 }
 
 export interface CompetencyStats {
-    total: number;
-    active: number;
-    expiring: number;
-    expired: number;
+  total: number;
+  active: number;
+  expiring: number;
+  expired: number;
 }
 
 export interface CompetencyMatrixEntry {
-    person_id: string;
-    person_name: string;
-    competencies: Record<string, boolean>;
+  person_id: string;
+  person_name: string;
+  competencies: Record<string, boolean>;
 }
 
 export interface CompetencyDefinition {
-    id: string;
-    name: string;
-    description?: string;
-    field_type?: string;
-    category_id?: string;
-    category?: { id: string; name: string; description?: string };
+  id: string;
+  name: string;
+  description?: string;
+  field_type?: string;
+  category_id?: string;
+  category?: { id: string; name: string; description?: string };
 }
 
 export interface CompetencyMatrix {
-    competencies: CompetencyDefinition[];
-    personnel: Array<{
-        id: string;
-        username: string;
-        email: string;
-        organization_id?: string;
-        role: string;
-        competencies: PersonCompetency[];
-    }>;
+  competencies: CompetencyDefinition[];
+  personnel: Array<{
+    id: string;
+    username: string;
+    email: string;
+    organization_id?: string;
+    role: string;
+    competencies: PersonCompetency[];
+  }>;
 }
 
 /**
  * Query keys for personnel data
  */
 export const personnelKeys = {
-    all: ['personnel'] as const,
-    list: () => [...personnelKeys.all, 'list'] as const,
-    detail: (id: string) => [...personnelKeys.all, 'detail', id] as const,
-    matrix: () => [...personnelKeys.all, 'matrix'] as const,
-    organizations: () => ['organizations'] as const,
+  all: ['personnel'] as const,
+  list: () => [...personnelKeys.all, 'list'] as const,
+  detail: (id: string) => [...personnelKeys.all, 'detail', id] as const,
+  matrix: () => [...personnelKeys.all, 'matrix'] as const,
+  organizations: () => ['organizations'] as const,
 };
 
 /**
  * Fetch all personnel with their competencies
  */
 export function usePersonnel() {
-    return useQuery({
-        queryKey: personnelKeys.list(),
-        queryFn: async (): Promise<Person[]> => {
-            const data = await personnelService.getAllPersonnelWithCompetencies();
-            // Supabase joins return organizations as array; normalize to single object
-            return (data || []).map((person: Record<string, unknown>) => ({
-                ...person,
-                organizations: Array.isArray(person.organizations)
-                    ? person.organizations[0]
-                    : person.organizations,
-            })) as Person[];
-        },
-        staleTime: 2 * 60 * 1000, // 2 minutes
-    });
+  return useQuery({
+    queryKey: personnelKeys.list(),
+    queryFn: async (): Promise<Person[]> => {
+      const data = await personnelService.getAllPersonnelWithCompetencies();
+      // Supabase joins return organizations as array; normalize to single object
+      return (data || []).map((person: Record<string, unknown>) => ({
+        ...person,
+        organizations: Array.isArray(person.organizations)
+          ? person.organizations[0]
+          : person.organizations,
+      })) as Person[];
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  });
 }
 
 /**
  * Fetch a single person's details
  */
 export function usePersonDetail(personId: string | undefined) {
-    return useQuery({
-        queryKey: personnelKeys.detail(personId || ''),
-        queryFn: async (): Promise<Person | null> => {
-            if (!personId) return null;
-            // Use compliance report to get single person with competencies
-            const report = await personnelService.getPersonnelComplianceReport(personId);
-            const person = report?.person;
-            if (!person) return null;
-            // Normalize organizations array from Supabase join
-            return {
-                ...person,
-                organizations: Array.isArray(person.organizations)
-                    ? person.organizations[0]
-                    : person.organizations,
-            } as Person;
-        },
-        enabled: !!personId,
-        staleTime: 1 * 60 * 1000, // 1 minute
-    });
+  return useQuery({
+    queryKey: personnelKeys.detail(personId || ''),
+    queryFn: async (): Promise<Person | null> => {
+      if (!personId) return null;
+      // Use compliance report to get single person with competencies
+      const report = await personnelService.getPersonnelComplianceReport(personId);
+      const person = report?.person;
+      if (!person) return null;
+      // Normalize organizations array from Supabase join
+      return {
+        ...person,
+        organizations: Array.isArray(person.organizations)
+          ? person.organizations[0]
+          : person.organizations,
+      } as Person;
+    },
+    enabled: !!personId,
+    staleTime: 1 * 60 * 1000, // 1 minute
+  });
 }
 
 /**
  * Fetch organizations (filtered to exclude SYSTEM)
  */
 export function useOrganizations() {
-    return useQuery({
-        queryKey: personnelKeys.organizations(),
-        queryFn: async (): Promise<Organization[]> => {
-            const orgs = await authManager.getOrganizations();
-            // Filter out SYSTEM organization
-            return (orgs || []).filter((org: Organization) => org.name !== 'SYSTEM');
-        },
-        staleTime: 5 * 60 * 1000, // 5 minutes - orgs change rarely
-    });
+  return useQuery({
+    queryKey: personnelKeys.organizations(),
+    queryFn: async (): Promise<Organization[]> => {
+      const orgs = await authManager.getOrganizations();
+      // Filter out SYSTEM organization
+      return (orgs || []).filter((org: Organization) => org.name !== 'SYSTEM');
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes - orgs change rarely
+  });
 }
 
 /**
  * Fetch competency matrix for all personnel
  */
 export function useCompetencyMatrix() {
-    return useQuery({
-        queryKey: personnelKeys.matrix(),
-        queryFn: async (): Promise<CompetencyMatrix> => {
-            const matrix = await personnelService.getCompetencyMatrix();
-            return matrix as CompetencyMatrix;
-        },
-        staleTime: 2 * 60 * 1000, // 2 minutes
-    });
+  return useQuery({
+    queryKey: personnelKeys.matrix(),
+    queryFn: async (): Promise<CompetencyMatrix> => {
+      const matrix = await personnelService.getCompetencyMatrix();
+      return matrix as CompetencyMatrix;
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  });
 }
 
 /**
@@ -185,20 +213,20 @@ export function useCompetencyMatrix() {
  * This is a pure function, not a hook - used for derived data
  */
 export function getCompetencyStats(competencies: PersonCompetency[]): CompetencyStats {
-    const total = competencies.length;
-    const active = competencies.filter(c => c.status === 'active').length;
-    const expiring = competencies.filter(c => {
-        if (!c.expiry_date) return false;
-        const daysUntilExpiry = Math.ceil(
-            (new Date(c.expiry_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
-        );
-        return daysUntilExpiry > 0 && daysUntilExpiry <= 30;
-    }).length;
-    const expired = competencies.filter(
-        c => c.status === 'expired' || (c.expiry_date && new Date(c.expiry_date) < new Date())
-    ).length;
+  const total = competencies.length;
+  const active = competencies.filter((c) => c.status === 'active').length;
+  const expiring = competencies.filter((c) => {
+    if (!c.expiry_date) return false;
+    const daysUntilExpiry = Math.ceil(
+      (new Date(c.expiry_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+    );
+    return daysUntilExpiry > 0 && daysUntilExpiry <= 30;
+  }).length;
+  const expired = competencies.filter(
+    (c) => c.status === 'expired' || (c.expiry_date && new Date(c.expiry_date) < new Date())
+  ).length;
 
-    return { total, active, expiring, expired };
+  return { total, active, expiring, expired };
 }
 
 /**
@@ -206,18 +234,16 @@ export function getCompetencyStats(competencies: PersonCompetency[]): Competency
  * This counts competencies with status='pending_approval' that have documents
  */
 export function getPendingApprovalCount(competencies: PersonCompetency[]): number {
-    return competencies.filter(
-        c => c.status === 'pending_approval' && c.document_url
-    ).length;
+  return competencies.filter((c) => c.status === 'pending_approval' && c.document_url).length;
 }
 
 /**
  * Get competencies that are pending approval for a person
  */
-export function getPendingApprovalCompetencies(competencies: PersonCompetency[]): PersonCompetency[] {
-    return competencies.filter(
-        c => c.status === 'pending_approval' && c.document_url
-    );
+export function getPendingApprovalCompetencies(
+  competencies: PersonCompetency[]
+): PersonCompetency[] {
+  return competencies.filter((c) => c.status === 'pending_approval' && c.document_url);
 }
 
 export default usePersonnel;

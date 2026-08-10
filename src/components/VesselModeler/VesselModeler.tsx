@@ -4,9 +4,9 @@ import {
   useRef,
   useCallback,
   useEffect,
+  useMemo,
   lazy,
   Suspense,
-  type ChangeEvent,
 } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -27,6 +27,9 @@ import {
   Settings2,
   FolderOpen,
   AlignVerticalDistributeCenter,
+  ListTree,
+  Undo2,
+  Redo2,
 } from 'lucide-react';
 import ThreeViewport from './ThreeViewport';
 import ErrorBoundary from '../ErrorBoundary';
@@ -34,54 +37,37 @@ import type { ThreeViewportHandle } from './ThreeViewport';
 import SidebarPanel, { type ModelMode } from './SidebarPanel';
 import StatusBar from './StatusBar';
 import {
-  DEFAULT_VESSEL_STATE,
   type VesselState,
-  type NozzleConfig,
-  type SaddleConfig,
-  type TextureConfig,
-  type LiftingLugConfig,
-  type AnnotationShapeConfig,
-  type AnnotationShapeType,
-  type CoverageRectConfig,
-  type RulerConfig,
-  type InspectionImageConfig,
   type MeasurementConfig,
-  type VesselCallbacks,
-  type WeldConfig,
-  type ScanCompositeConfig,
-  type DomeScanConfig,
   type DomeScanHoverInfo,
   type ThicknessThresholds,
   type WallLossGroupConfig,
   type CoverageTargets,
-  type FreeOrigin,
-  type Pipeline,
-  type PipeSegment,
-  type PipeSegmentType,
-  findClosestPipeSize,
-  PIPE_SIZES,
+  type CameraBookmark,
 } from './types';
-import type { ExtractionResult } from './engine/drawing-parser';
-import { loadTextureFromData, clearHeatmapCache } from './engine/texture-manager';
-import { clearDomeHeatmapCache, normalizeDomeScanComposite } from './engine/dome-scan-geometry';
-import { deserializeNozzle } from './engine/nozzle-geometry';
-import { deserializeSaddle } from './engine/saddle-geometry';
-import { exportVesselGLB } from './engine/gltf-export';
-import { recomputeAllAnnotationStats } from './engine/annotation-stats';
 import {
-  computeInspectionCameraTarget,
-  animateCamera,
-  cancelCameraAnimation,
-} from './engine/camera-animation';
+  vesselReducer,
+  INITIAL_STATE,
+  historyFor,
+  type HistoryControl,
+} from './engine/vessel-reducer';
+import { useNozzleActions } from './hooks/useNozzleActions';
+import { useAppendageActions } from './hooks/useAppendageActions';
+import { usePipingActions } from './hooks/usePipingActions';
+import { useAttachableActions } from './hooks/useAttachableActions';
+import { useOverlayActions } from './hooks/useOverlayActions';
+import { useAnnotationActions } from './hooks/useAnnotationActions';
+import { useScanActions } from './hooks/useScanActions';
+import { useVesselPersistence } from './hooks/useVesselPersistence';
+import { useViewportCallbacks } from './hooks/useViewportCallbacks';
+import { useViewportDnD } from './hooks/useViewportDnD';
+import { useInspectionMode } from './hooks/useInspectionMode';
+import { useReportGeneration } from './hooks/useReportGeneration';
+import { useDrawingApply } from './hooks/useDrawingApply';
+import { useTextureRehydration } from './useTextureRehydration';
 import { useScanCompositeList } from '../../hooks/queries/useScanComposites';
-import { getScanComposite, getScanCompositeData } from '../../services/scan-composite-service';
-import { toConfigStats } from './engine/composite-stats';
 import { useLinkScanCompositeToProject } from '../../hooks/mutations/useScanCompositeMutations';
-import {
-  uploadAnnotationImage,
-  deleteAnnotationImage,
-  getAnnotationImageUrl,
-} from '../../services/annotation-attachment-service';
+import { getAnnotationImageUrl } from '../../services/annotation-attachment-service';
 import { useAuth } from '../../contexts/AuthContext';
 import { useVesselModel, useVesselModelByProjectVessel } from '../../hooks/queries/useVesselModels';
 import {
@@ -93,44 +79,37 @@ import {
   useProjectVessels,
   useProjectImages,
 } from '../../hooks/queries/useInspectionProjects';
-import { getVesselModelByProjectVessel } from '../../services/vessel-model-service';
 import './vessel-modeler.css';
 import * as THREE from 'three';
 
 import StatsDropdown from './StatsDropdown';
+import HistoryDropdown from './HistoryDropdown';
+import BookmarksDropdown from './BookmarksDropdown';
+import ClipPlanesControl from './ClipPlanesControl';
+import ViewCube from './ViewCube';
+import OutlinerPanel from './OutlinerPanel';
+import CommandPalette from './CommandPalette';
+import type { OutlinerToggleRef } from './outliner-tree';
+import { buildPaletteItems, type PaletteAction } from './engine/palette-registry';
+import { frameEntityPose, type FrameEntityRef } from './engine/frame-entity';
+import { canonicalPose, type CanonicalViewId } from './engine/canonical-views';
+import { computeVesselBounds } from './engine/report-image-capture';
 import UnifiedStatsPanel from './UnifiedStatsPanel';
 import SnapControl from './SnapControl';
 import InspectionPanel from './sidebar/InspectionPanel';
 import StatLeaderOverlay from './StatLeaderOverlay';
 import { PipePartPopup } from './sidebar/PipePartPopup';
+import { animateCamera } from './engine/camera-animation';
+import { nextBookmarkId } from './engine/canonical-views';
 
-import {
-  generateReport,
-  downloadReport,
-  type ReportConfig,
-  type CompanionScanImageSet,
-} from './engine/report-generator';
-import {
-  captureVesselOverviews,
-  captureAnnotationContext,
-  captureAnnotationHeatmap,
-} from './engine/report-image-capture';
 import { downloadScreenshot } from './engine/screenshot-renderer';
 import { captureViewportScreenshot } from './engine/viewport-screenshot';
+import { hasReliefGrid } from './engine/composite-relief-adapter';
 
 const DrawingImportModal = lazy(() => import('./DrawingImportModal'));
 const InspectionImageViewer = lazy(() => import('./InspectionImageViewer'));
 const FlattenedViewport = lazy(() => import('./FlattenedView/FlattenedViewport'));
-
-/** Guess the NDE source filename from a composite/CSV name.
- *  Strips common suffixes like _extracted, _cscan, .csv and adds *.nde wildcard pattern. */
-function guessNdeFilename(name: string): string | undefined {
-  if (!name) return undefined;
-  // Remove file extension and common suffixes
-  const cleaned = name.replace(/\.(csv|txt)$/i, '').replace(/[_-](extracted|cscan|export)$/i, '');
-  // Replace underscores with spaces for NDE filename matching
-  return cleaned.replace(/_/g, ' ').trim() || undefined;
-}
+const ReliefViewportPane = lazy(() => import('./ReliefViewportPane'));
 
 /** Clamp vessel dimensions and nozzle positions to safe ranges to prevent division-by-zero and NaN geometry. */
 function validateVesselState(state: VesselState): VesselState {
@@ -149,334 +128,14 @@ function validateVesselState(state: VesselState): VesselState {
       ...n,
       pos: clamp(n.pos, -HEAD_DEPTH, length + HEAD_DEPTH),
       angle: ((n.angle % 360) + 360) % 360,
+      proj: clamp(n.proj, 0, 50000),
+      size: clamp(n.size, 10, 3000),
+    })),
+    saddles: state.saddles.map((s) => ({
+      ...s,
+      pos: clamp(s.pos, 0, length),
     })),
   };
-}
-
-// ---------------------------------------------------------------------------
-// Consolidated state & reducer
-// ---------------------------------------------------------------------------
-
-interface SelectionState {
-  nozzleIndex: number;
-  saddleIndex: number;
-  textureId: number;
-  lugIndex: number;
-  annotationId: number;
-  rulerId: number;
-  weldIndex: number;
-  coverageRectId: number;
-  inspectionImageId: number;
-  scanCompositeId: string;
-  domeScanId: string;
-  pipelineId: string;
-  pipeSegmentIdx: number;
-}
-
-interface LocksState {
-  nozzles: boolean;
-  saddles: boolean;
-  textures: boolean;
-  lugs: boolean;
-  welds: boolean;
-  pipelines: boolean;
-}
-
-interface DrawModeState {
-  annotation: AnnotationShapeType | null;
-  coverage: boolean;
-  ruler: boolean;
-}
-
-interface PreviewsState {
-  annotation: AnnotationShapeConfig | null;
-  coverageRect: CoverageRectConfig | null;
-  ruler: RulerConfig | null;
-}
-
-interface UIState {
-  sidebarOpen: boolean;
-  showDrawingImport: boolean;
-  viewingInspectionImageId: number;
-  viewMode: '3d' | 'flattened';
-  labelsTidied: boolean;
-  showStatsCoverage: boolean;
-  showStatsWallLoss: boolean;
-  showStatsScanCoverage: boolean;
-  hoverData: { thickness: number | null; scanMm: number; indexMm: number } | null;
-  scanTooltipFollow: boolean;
-  /** Whether drag angle-snapping is enabled (nozzles + lifting lugs) */
-  snapEnabled: boolean;
-  /** Angle-snap increment in degrees */
-  snapDeg: number;
-  /** ID of annotation being inspected (null = not in inspection mode) */
-  inspectingAnnotationId: number | null;
-  /** Camera state saved before entering inspection mode */
-  savedCameraState: {
-    position: [number, number, number];
-    target: [number, number, number];
-  } | null;
-}
-
-interface VesselModelerState {
-  vessel: VesselState;
-  selection: SelectionState;
-  locks: LocksState;
-  drawMode: DrawModeState;
-  previews: PreviewsState;
-  ui: UIState;
-}
-
-const DESELECTED: SelectionState = {
-  nozzleIndex: -1,
-  saddleIndex: -1,
-  textureId: -1,
-  lugIndex: -1,
-  annotationId: -1,
-  rulerId: -1,
-  weldIndex: -1,
-  coverageRectId: -1,
-  inspectionImageId: -1,
-  scanCompositeId: '',
-  domeScanId: '',
-  pipelineId: '',
-  pipeSegmentIdx: -1,
-};
-
-const INITIAL_STATE: VesselModelerState = {
-  vessel: { ...DEFAULT_VESSEL_STATE },
-  selection: { ...DESELECTED },
-  locks: {
-    nozzles: false,
-    saddles: false,
-    textures: false,
-    lugs: false,
-    welds: false,
-    pipelines: false,
-  },
-  drawMode: { annotation: null, coverage: false, ruler: false },
-  previews: { annotation: null, coverageRect: null, ruler: null },
-  ui: {
-    sidebarOpen: true,
-    showDrawingImport: false,
-    viewingInspectionImageId: -1,
-    hoverData: null,
-    scanTooltipFollow: false,
-    snapEnabled: false,
-    snapDeg: 5,
-    inspectingAnnotationId: null,
-    savedCameraState: null,
-    viewMode: '3d',
-    labelsTidied: false,
-    showStatsCoverage: false,
-    showStatsWallLoss: false,
-    showStatsScanCoverage: false,
-  },
-};
-
-type VesselAction =
-  | { type: 'SET_VESSEL'; vessel: VesselState }
-  | { type: 'UPDATE_VESSEL_FN'; updater: (prev: VesselState) => VesselState }
-  | { type: 'SELECT_NOZZLE'; index: number }
-  | { type: 'SELECT_SADDLE'; index: number }
-  | { type: 'SELECT_TEXTURE'; id: number }
-  | { type: 'SELECT_LUG'; index: number }
-  | { type: 'SELECT_ANNOTATION'; id: number }
-  | { type: 'SELECT_RULER'; id: number }
-  | { type: 'SELECT_WELD'; index: number }
-  | { type: 'SELECT_COVERAGE_RECT'; id: number }
-  | { type: 'SELECT_INSPECTION_IMAGE'; id: number }
-  | { type: 'SELECT_SCAN_COMPOSITE'; id: string }
-  | { type: 'SELECT_DOME_SCAN'; id: string }
-  | { type: 'SELECT_PIPE_SEGMENT'; pipelineId: string; segmentIndex: number }
-  | { type: 'DESELECT_ALL' }
-  | { type: 'TOGGLE_LOCK'; key: keyof LocksState }
-  | { type: 'SET_DRAW_MODE_ANNOTATION'; mode: AnnotationShapeType | null }
-  | { type: 'SET_DRAW_MODE_COVERAGE'; active: boolean }
-  | { type: 'SET_DRAW_MODE_RULER'; active: boolean }
-  | { type: 'SET_PREVIEW_ANNOTATION'; preview: AnnotationShapeConfig | null }
-  | { type: 'SET_PREVIEW_COVERAGE_RECT'; preview: CoverageRectConfig | null }
-  | { type: 'SET_PREVIEW_RULER'; preview: RulerConfig | null }
-  | { type: 'SET_SIDEBAR_OPEN'; open: boolean }
-  | { type: 'TOGGLE_SIDEBAR' }
-  | { type: 'SET_SHOW_DRAWING_IMPORT'; show: boolean }
-  | { type: 'SET_VIEWING_INSPECTION_IMAGE'; id: number }
-  | { type: 'SET_HOVER_DATA'; data: UIState['hoverData'] }
-  | { type: 'TOGGLE_SCAN_TOOLTIP_FOLLOW' }
-  | { type: 'TOGGLE_SNAP' }
-  | { type: 'SET_SNAP_DEG'; deg: number }
-  | { type: 'CANCEL_ALL_DRAW_MODES' }
-  | { type: 'UPDATE_THICKNESS_THRESHOLDS'; thresholds: VesselState['thicknessThresholds'] }
-  | {
-      type: 'ENTER_INSPECTION_MODE';
-      annotationId: number;
-      cameraState: { position: [number, number, number]; target: [number, number, number] };
-    }
-  | { type: 'CYCLE_INSPECTION'; annotationId: number }
-  | { type: 'EXIT_INSPECTION_MODE' }
-  | { type: 'SET_VIEW_MODE'; mode: '3d' | 'flattened' }
-  | { type: 'TOGGLE_LABELS_TIDIED' }
-  | { type: 'TOGGLE_STATS_COVERAGE' }
-  | { type: 'TOGGLE_STATS_WALL_LOSS' }
-  | { type: 'TOGGLE_STATS_SCAN_COVERAGE' };
-
-function vesselReducer(state: VesselModelerState, action: VesselAction): VesselModelerState {
-  switch (action.type) {
-    case 'SET_VESSEL':
-      return {
-        ...state,
-        vessel: action.vessel,
-        ui: { ...state.ui, labelsTidied: action.vessel.labelsTidied ?? false },
-      };
-    case 'UPDATE_VESSEL_FN':
-      return { ...state, vessel: action.updater(state.vessel) };
-    case 'SELECT_NOZZLE':
-      return { ...state, selection: { ...DESELECTED, nozzleIndex: action.index } };
-    case 'SELECT_SADDLE':
-      return { ...state, selection: { ...DESELECTED, saddleIndex: action.index } };
-    case 'SELECT_TEXTURE':
-      return { ...state, selection: { ...DESELECTED, textureId: action.id } };
-    case 'SELECT_LUG':
-      return { ...state, selection: { ...DESELECTED, lugIndex: action.index } };
-    case 'SELECT_ANNOTATION':
-      return { ...state, selection: { ...DESELECTED, annotationId: action.id } };
-    case 'SELECT_RULER':
-      return { ...state, selection: { ...DESELECTED, rulerId: action.id } };
-    case 'SELECT_WELD':
-      return { ...state, selection: { ...DESELECTED, weldIndex: action.index } };
-    case 'SELECT_COVERAGE_RECT':
-      return { ...state, selection: { ...DESELECTED, coverageRectId: action.id } };
-    case 'SELECT_INSPECTION_IMAGE':
-      return { ...state, selection: { ...DESELECTED, inspectionImageId: action.id } };
-    case 'SELECT_SCAN_COMPOSITE':
-      return { ...state, selection: { ...state.selection, scanCompositeId: action.id } };
-    case 'SELECT_DOME_SCAN':
-      return { ...state, selection: { ...state.selection, domeScanId: action.id } };
-    case 'SELECT_PIPE_SEGMENT':
-      return {
-        ...state,
-        selection: {
-          ...DESELECTED,
-          pipelineId: action.pipelineId,
-          pipeSegmentIdx: action.segmentIndex,
-        },
-      };
-    case 'DESELECT_ALL':
-      return { ...state, selection: { ...DESELECTED } };
-    case 'TOGGLE_LOCK':
-      return { ...state, locks: { ...state.locks, [action.key]: !state.locks[action.key] } };
-    case 'SET_DRAW_MODE_ANNOTATION':
-      return {
-        ...state,
-        drawMode: {
-          annotation: action.mode,
-          coverage: action.mode ? false : state.drawMode.coverage,
-          ruler: action.mode ? false : state.drawMode.ruler,
-        },
-      };
-    case 'SET_DRAW_MODE_COVERAGE':
-      return {
-        ...state,
-        drawMode: {
-          annotation: action.active ? null : state.drawMode.annotation,
-          coverage: action.active,
-          ruler: action.active ? false : state.drawMode.ruler,
-        },
-      };
-    case 'SET_DRAW_MODE_RULER':
-      return {
-        ...state,
-        drawMode: {
-          annotation: action.active ? null : state.drawMode.annotation,
-          coverage: action.active ? false : state.drawMode.coverage,
-          ruler: action.active,
-        },
-      };
-    case 'SET_PREVIEW_ANNOTATION':
-      return { ...state, previews: { ...state.previews, annotation: action.preview } };
-    case 'SET_PREVIEW_COVERAGE_RECT':
-      return { ...state, previews: { ...state.previews, coverageRect: action.preview } };
-    case 'SET_PREVIEW_RULER':
-      return { ...state, previews: { ...state.previews, ruler: action.preview } };
-    case 'SET_SIDEBAR_OPEN':
-      return { ...state, ui: { ...state.ui, sidebarOpen: action.open } };
-    case 'TOGGLE_SIDEBAR':
-      return { ...state, ui: { ...state.ui, sidebarOpen: !state.ui.sidebarOpen } };
-    case 'SET_SHOW_DRAWING_IMPORT':
-      return { ...state, ui: { ...state.ui, showDrawingImport: action.show } };
-    case 'SET_VIEWING_INSPECTION_IMAGE':
-      return { ...state, ui: { ...state.ui, viewingInspectionImageId: action.id } };
-    case 'SET_HOVER_DATA':
-      return { ...state, ui: { ...state.ui, hoverData: action.data } };
-    case 'TOGGLE_SCAN_TOOLTIP_FOLLOW':
-      return { ...state, ui: { ...state.ui, scanTooltipFollow: !state.ui.scanTooltipFollow } };
-    case 'TOGGLE_SNAP':
-      return { ...state, ui: { ...state.ui, snapEnabled: !state.ui.snapEnabled } };
-    case 'SET_SNAP_DEG':
-      return { ...state, ui: { ...state.ui, snapDeg: action.deg } };
-    case 'CANCEL_ALL_DRAW_MODES':
-      return {
-        ...state,
-        drawMode: { annotation: null, coverage: false, ruler: false },
-        previews: { annotation: null, coverageRect: null, ruler: null },
-      };
-    case 'UPDATE_THICKNESS_THRESHOLDS':
-      return {
-        ...state,
-        vessel: { ...state.vessel, thicknessThresholds: action.thresholds },
-      };
-    case 'ENTER_INSPECTION_MODE':
-      return {
-        ...state,
-        selection: { ...state.selection, annotationId: action.annotationId },
-        ui: {
-          ...state.ui,
-          inspectingAnnotationId: action.annotationId,
-          savedCameraState: action.cameraState,
-        },
-      };
-    case 'CYCLE_INSPECTION':
-      return {
-        ...state,
-        selection: { ...state.selection, annotationId: action.annotationId },
-        ui: { ...state.ui, inspectingAnnotationId: action.annotationId },
-      };
-    case 'EXIT_INSPECTION_MODE':
-      return {
-        ...state,
-        ui: {
-          ...state.ui,
-          inspectingAnnotationId: null,
-          savedCameraState: null,
-        },
-      };
-    case 'SET_VIEW_MODE':
-      return { ...state, ui: { ...state.ui, viewMode: action.mode } };
-    case 'TOGGLE_LABELS_TIDIED': {
-      const newTidied = !state.ui.labelsTidied;
-      const newMode = newTidied ? ('table' as const) : ('flyout' as const);
-      return {
-        ...state,
-        vessel: {
-          ...state.vessel,
-          annotations: state.vessel.annotations.map((a) => ({ ...a, labelMode: newMode })),
-          labelsTidied: newTidied,
-        },
-        ui: { ...state.ui, labelsTidied: newTidied },
-      };
-    }
-    case 'TOGGLE_STATS_COVERAGE':
-      return { ...state, ui: { ...state.ui, showStatsCoverage: !state.ui.showStatsCoverage } };
-    case 'TOGGLE_STATS_WALL_LOSS':
-      return { ...state, ui: { ...state.ui, showStatsWallLoss: !state.ui.showStatsWallLoss } };
-    case 'TOGGLE_STATS_SCAN_COVERAGE':
-      return {
-        ...state,
-        ui: { ...state.ui, showStatsScanCoverage: !state.ui.showStatsScanCoverage },
-      };
-    default:
-      return state;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -496,8 +155,6 @@ export default function VesselModeler() {
   // Auth context for attachment uploads
   const { user } = useAuth();
   const organizationId = user?.organizationId ?? 'local';
-  const vesselModelIdRef = useRef<string | null>(null);
-  const vesselModelId = vesselModelIdRef.current ?? `local-${crypto.randomUUID()}`;
 
   // Fetch specific model by ID, or fall back to latest model for the vessel
   const { data: specificModel, isLoading: specificModelLoading } = useVesselModel(
@@ -509,25 +166,10 @@ export default function VesselModeler() {
   const linkedModel = specificModel ?? latestModel;
   const linkedModelLoading = specificModelLoading || latestModelLoading;
 
-  // Save-to-project mutations
+  // Save-to-project mutations (threaded into useVesselPersistence)
   const saveModelMutation = useSaveVesselModel();
   const updateModelMutation = useUpdateVesselModel();
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-
-  // Project/vessel picker (used for both save and load)
-  const [pickerMode, setPickerMode] = useState<'save' | 'load' | null>(null);
-  const [pickerProjectId, setPickerProjectId] = useState<string | null>(null);
-  const [pickerVesselId, setPickerVesselId] = useState<string | null>(null);
-  const [saveModelType, setSaveModelType] = useState<string>('blank');
-  const [saveModelTypeCustom, setSaveModelTypeCustom] = useState<string>('');
   const { data: projectList } = useProjectList();
-  const { data: pickerVessels } = useProjectVessels(pickerProjectId ?? undefined);
-
-  // Effective project vessel ID: from URL params or from picker selection
-  const effectiveProjectVesselId = projectVesselId ?? pickerVesselId;
-
-  // Project image pool (images uploaded via inspection detail page)
-  const { data: projectImages } = useProjectImages(effectiveProjectVesselId ?? undefined);
 
   // Cloud composites query
   const {
@@ -542,6 +184,7 @@ export default function VesselModeler() {
   // Three.js texture objects (imperative, not React state)
   const textureObjectsRef = useRef<Record<number, THREE.Texture>>({});
   const [, setTextureObjectsVersion] = useState(0);
+  const bumpTextureObjectsVersion = useCallback(() => setTextureObjectsVersion((v) => v + 1), []);
   const nextTextureIdRef = useRef(1);
 
   // ID counter refs
@@ -555,6 +198,15 @@ export default function VesselModeler() {
   const flattenedViewportRef = useRef<{ exportImage: () => string | null }>(null);
   const viewportContainerRef = useRef<HTMLDivElement>(null);
   const cursorTooltipRef = useRef<HTMLDivElement>(null);
+
+  // Rebuild THREE.Texture objects for texture configs restored by undo/redo
+  // (the load path builds them up-front; undo restores only the config).
+  useTextureRehydration({
+    textures: vesselState.textures,
+    viewportRef,
+    textureObjectsRef,
+    bumpVersion: bumpTextureObjectsVersion,
+  });
 
   // Toolbar popout menus
   const [locksMenuOpen, setLocksMenuOpen] = useState(false);
@@ -572,341 +224,70 @@ export default function VesselModeler() {
     y: number;
   } | null>(null);
 
-  // Inspection panel: which stat row is hovered (highlights min/max point on vessel)
-  const [visibleStatLines, setVisibleStatLines] = useState<{ min: boolean; max: boolean }>({
-    min: false,
-    max: false,
+  // --- Report generation (T2-D / D4) ---
+  // handleGenerateReport + the shared captureReportAssets now live in
+  // useReportGeneration. captureReportAssets must be defined before
+  // useVesselPersistence (which threads it in) so the hook is called here; the
+  // save flows keep attaching reportAssets exactly as before.
+  const { captureReportAssets, handleGenerateReport } = useReportGeneration({
+    vesselState,
+    viewportRef,
+    flattenedViewportRef,
   });
 
-  // Shared helper: deserialize a model config into modeler state
-  const applyModelConfig = useCallback(async (config: Record<string, unknown>, modelId: string) => {
-    const projectData = config as any;
-    if (!projectData.vessel || !projectData.version) return;
+  // --- Persistence (T2-D / D2): local/cloud save + load, project picker, GLB
+  // export, and the linked-model bootstrap. captureReportAssets is threaded in
+  // (report-coupled, owned by useReportGeneration); the save flows keep attaching
+  // reportAssets exactly as before. vesselModelIdRef lives in the hook and is
+  // returned so the component can still derive vesselModelId and gate the toolbar
+  // Save button.
+  const {
+    saveStatus,
+    pickerMode,
+    setPickerMode,
+    pickerProjectId,
+    setPickerProjectId,
+    pickerVesselId,
+    setPickerVesselId,
+    saveModelType,
+    setSaveModelType,
+    saveModelTypeCustom,
+    setSaveModelTypeCustom,
+    effectiveProjectVesselId,
+    vesselModelIdRef,
+    saveProject,
+    saveToProject,
+    saveAsNewToProject,
+    exportGLB,
+    loadProject,
+    loadFromProject,
+  } = useVesselPersistence({
+    vesselState,
+    dispatch,
+    user,
+    projectVesselId,
+    linkedModel,
+    validateVesselState,
+    captureReportAssets,
+    viewportRef,
+    textureObjectsRef,
+    setTextureObjectsVersion,
+    nextTextureIdRef,
+    nextAnnotationIdRef,
+    nextCoverageRectIdRef,
+    nextRulerIdRef,
+    nextInspectionImageIdRef,
+    saveModelMutation,
+    updateModelMutation,
+  });
 
-    // Dispose existing textures
-    for (const key of Object.keys(textureObjectsRef.current)) {
-      textureObjectsRef.current[Number(key)].dispose();
-    }
-    textureObjectsRef.current = {};
+  // Effective model id used for annotation attachment paths (regenerated per
+  // render until a cloud model is loaded/saved — preserves prior behavior).
+  const vesselModelId = vesselModelIdRef.current ?? `local-${crypto.randomUUID()}`;
 
-    // Reconstruct Three.js textures
-    const renderer = viewportRef.current?.getRenderer();
-    const loadedTextures: TextureConfig[] = [];
-    const savedTextures = projectData.textures || [];
-
-    if (renderer && savedTextures.length > 0) {
-      for (const texData of savedTextures) {
-        if (!texData.imageData) continue;
-        try {
-          const result = await loadTextureFromData(texData.imageData, renderer);
-          textureObjectsRef.current[Number(texData.id)] = result.texture;
-          loadedTextures.push({
-            id: texData.id,
-            name: texData.name || 'Untitled',
-            imageData: texData.imageData,
-            pos: texData.pos ?? 0,
-            angle: texData.angle ?? 90,
-            scaleX: texData.scaleX ?? 1.0,
-            scaleY: texData.scaleY ?? 1.0,
-            rotation: texData.rotation || 0,
-            flipH: texData.flipH || false,
-            flipV: texData.flipV || false,
-            aspectRatio: result.aspectRatio,
-          });
-        } catch {
-          // Skip textures that fail to load
-        }
-      }
-    }
-
-    const newState: VesselState = {
-      id: projectData.vessel.id || 3000,
-      length: projectData.vessel.length || 8000,
-      headRatio: projectData.vessel.headRatio || 2.0,
-      orientation: projectData.vessel.orientation || 'horizontal',
-      vesselName: projectData.vessel.vesselName || '',
-      location: projectData.vessel.location || '',
-      inspectionDate: projectData.vessel.inspectionDate || '',
-      nozzles: (projectData.nozzles || []).map(deserializeNozzle),
-      liftingLugs: (projectData.liftingLugs || []).map((l: any) => ({
-        name: l.name || 'L',
-        pos: l.pos ?? 0,
-        angle: l.angle ?? 90,
-        style: l.style || 'padEye',
-        swl: l.swl || '5t',
-        width: l.width,
-        height: l.height,
-        thickness: l.thickness,
-        holeDiameter: l.holeDiameter,
-      })),
-      saddles: (projectData.saddles || []).map(deserializeSaddle),
-      welds: (projectData.welds || []).map((w: any) => ({
-        name: w.name || 'W',
-        type: w.type || 'circumferential',
-        pos: w.pos ?? 0,
-        endPos: w.endPos,
-        angle: w.angle,
-        capWidth: w.capWidth,
-        color: w.color || '#888888',
-      })),
-      textures: loadedTextures,
-      annotations: (projectData.annotations || []).map((a: any) => ({
-        id: a.id || 0,
-        name: a.name || 'A',
-        type: a.type === 'restriction' ? 'restriction' : 'scan',
-        pos: a.pos ?? 0,
-        angle: a.angle ?? 90,
-        width: a.width ?? 100,
-        height: a.height ?? 100,
-        color: a.color || '#ff3333',
-        lineWidth: a.lineWidth ?? 2,
-        showLabel: a.showLabel !== false,
-        leaderLength: a.leaderLength,
-        labelOffset: a.labelOffset,
-        visible: a.visible,
-        locked: a.locked,
-        restrictionNotes: a.restrictionNotes,
-        restrictionImage: a.restrictionImage,
-        restrictionImageName: a.restrictionImageName,
-        includeInReport: a.includeInReport,
-        attachments: a.attachments ?? [],
-      })),
-      rulers: (projectData.rulers || []).map((r: any) => ({
-        id: r.id || 0,
-        name: r.name || 'R',
-        startPos: r.startPos ?? 0,
-        startAngle: r.startAngle ?? 90,
-        endPos: r.endPos ?? 100,
-        endAngle: r.endAngle ?? 90,
-        color: r.color || '#ffaa00',
-        showLabel: r.showLabel !== false,
-      })),
-      coverageRects: (projectData.coverageRects || []).map((r: any) => ({
-        id: r.id || 0,
-        name: r.name || 'C',
-        pos: r.pos ?? 0,
-        angle: r.angle ?? 90,
-        width: r.width ?? 300,
-        height: r.height ?? 200,
-        color: r.color || '#00cc66',
-        lineWidth: r.lineWidth ?? 2,
-        filled: r.filled ?? true,
-        fillOpacity: r.fillOpacity ?? 0.2,
-        locked: r.locked,
-      })),
-      inspectionImages: (projectData.inspectionImages || []).map((i: any) => ({
-        id: i.id || 0,
-        name: i.name || 'IMG',
-        imageData: i.imageData || '',
-        pos: i.pos ?? 0,
-        angle: i.angle ?? 90,
-        description: i.description,
-        date: i.date,
-        inspector: i.inspector,
-        method: i.method,
-        result: i.result,
-        leaderLength: i.leaderLength,
-        labelOffset: i.labelOffset,
-        visible: i.visible,
-        locked: i.locked,
-      })),
-      scanComposites: (projectData.scanComposites || []).map((sc: any) => ({
-        id: sc.id || `sc_${Date.now()}`,
-        name: sc.name || 'Untitled',
-        cloudId: sc.cloudId,
-        data: sc.data || [],
-        xAxis: sc.xAxis || [],
-        yAxis: sc.yAxis || [],
-        stats: sc.stats || { min: 0, max: 0, mean: 0, median: 0, stdDev: 0 },
-        indexStartMm: sc.indexStartMm ?? 0,
-        datumAngleDeg: sc.datumAngleDeg ?? 0,
-        scanDirection: sc.scanDirection || 'cw',
-        indexDirection: sc.indexDirection || 'forward',
-        orientationConfirmed: sc.orientationConfirmed ?? true,
-        colorScale: sc.colorScale || 'Jet',
-        rangeMin: sc.rangeMin ?? null,
-        rangeMax: sc.rangeMax ?? null,
-        opacity: sc.opacity ?? 1,
-        sourceNdeFile: sc.sourceNdeFile,
-        sourceFiles: sc.sourceFiles,
-      })),
-      domeScanComposites: (projectData.domeScanComposites || []).map((ds: any) => ({
-        ...normalizeDomeScanComposite(ds),
-      })),
-      pipelines: (projectData.pipelines || []).map((p: any) => ({
-        id: p.id || crypto.randomUUID(),
-        nozzleIndex: p.nozzleIndex ?? 0,
-        pipeDiameter: p.pipeDiameter ?? 100,
-        color: p.color,
-        segments: (p.segments || []).map((s: any) => ({
-          id: s.id || crypto.randomUUID(),
-          type: s.type || 'straight',
-          rotation: s.rotation ?? 0,
-          length: s.length,
-          angle: s.angle,
-          bendRadius: s.bendRadius,
-          endDiameter: s.endDiameter,
-          branchDiameter: s.branchDiameter,
-          style: s.style,
-          headRatio: s.headRatio,
-        })),
-        locked: p.locked,
-        visible: p.visible,
-        ...(p.freeOrigin ? { freeOrigin: p.freeOrigin } : {}),
-      })),
-      referenceDrawings: (projectData.referenceDrawings || []).map((d: any) => ({
-        id: d.id || Date.now(),
-        title: d.title || '',
-        imageData: d.imageData || '',
-        fileName: d.fileName || '',
-      })),
-      measurementConfig: {
-        ...DEFAULT_VESSEL_STATE.measurementConfig,
-        ...(projectData.measurementConfig || {}),
-      },
-      hasModel: true,
-      visuals: { ...DEFAULT_VESSEL_STATE.visuals, ...(projectData.visuals || {}) },
-      coordinateOrigin: projectData.coordinateOrigin || { indexMm: 0, scanMm: 0 },
-      originSourceScanId: projectData.originSourceScanId,
-      labelsTidied: projectData.labelsTidied ?? false,
-      annotationTablePosition: projectData.annotationTablePosition,
-      annotationTableSize: projectData.annotationTableSize,
-      wallLossGroups: projectData.wallLossGroups,
-    };
-
-    clearHeatmapCache();
-
-    const maxId = loadedTextures.reduce(
-      (max: number, t: TextureConfig) => Math.max(max, Number(t.id) || 0),
-      0
-    );
-    nextTextureIdRef.current = maxId + 1;
-    const maxAnnId = newState.annotations.reduce(
-      (max: number, a: AnnotationShapeConfig) => Math.max(max, a.id || 0),
-      0
-    );
-    nextAnnotationIdRef.current = maxAnnId + 1;
-    const maxCovId = newState.coverageRects.reduce(
-      (max: number, r: CoverageRectConfig) => Math.max(max, r.id || 0),
-      0
-    );
-    nextCoverageRectIdRef.current = maxCovId + 1;
-    const maxRulerId = newState.rulers.reduce(
-      (max: number, r: RulerConfig) => Math.max(max, r.id || 0),
-      0
-    );
-    nextRulerIdRef.current = maxRulerId + 1;
-    const maxImgId = newState.inspectionImages.reduce(
-      (max: number, i: InspectionImageConfig) => Math.max(max, i.id || 0),
-      0
-    );
-    nextInspectionImageIdRef.current = maxImgId + 1;
-
-    vesselModelIdRef.current = modelId;
-    const validatedState = validateVesselState(newState);
-    dispatch({ type: 'SET_VESSEL', vessel: validatedState });
-    setTextureObjectsVersion((v) => v + 1);
-
-    // Re-fetch thickness data from cloud for composites saved without inline data
-    const compositesNeedingData = validatedState.scanComposites.filter(
-      (sc) => sc.cloudId && (!sc.data || sc.data.length === 0)
-    );
-    for (const sc of compositesNeedingData) {
-      getScanComposite(sc.cloudId!)
-        .then((cloud) => {
-          clearHeatmapCache(sc.id);
-          dispatch({
-            type: 'UPDATE_VESSEL_FN',
-            updater: (prev) => ({
-              ...prev,
-              scanComposites: prev.scanComposites.map((existing) =>
-                existing.id === sc.id
-                  ? {
-                      ...existing,
-                      data: cloud.thickness_data,
-                      xAxis: cloud.x_axis,
-                      yAxis: cloud.y_axis,
-                      stats: cloud.stats || existing.stats,
-                    }
-                  : existing
-              ),
-            }),
-          });
-        })
-        .catch((err) => {
-          console.error(`Failed to fetch scan composite ${sc.cloudId}:`, err);
-        });
-    }
-
-    // Re-fetch dome scan thickness data from cloud. Dome scans are stored in the
-    // same scan_composites table (by cloudId) and have their data stripped on save,
-    // exactly like flat composites — so they need the same re-hydration on load.
-    const domeCompositesNeedingData = validatedState.domeScanComposites.filter(
-      (ds) => ds.cloudId && (!ds.data || ds.data.length === 0)
-    );
-    for (const ds of domeCompositesNeedingData) {
-      getScanComposite(ds.cloudId!)
-        .then((cloud) => {
-          clearDomeHeatmapCache(ds.id);
-          dispatch({
-            type: 'UPDATE_VESSEL_FN',
-            updater: (prev) => ({
-              ...prev,
-              domeScanComposites: prev.domeScanComposites.map((existing) =>
-                existing.id === ds.id
-                  ? {
-                      ...existing,
-                      data: cloud.thickness_data,
-                      xAxis: cloud.x_axis,
-                      yAxis: cloud.y_axis,
-                      stats: cloud.stats || existing.stats,
-                    }
-                  : existing
-              ),
-            }),
-          });
-        })
-        .catch((err) => {
-          console.error(`Failed to fetch dome scan composite ${ds.cloudId}:`, err);
-        });
-    }
-
-    // Restore modelType from saved config
-    if (projectData.modelType) {
-      const knownTypes = ['blank', 'coverage', 'scan_overlayed', 'fully_annotated'];
-      if (knownTypes.includes(projectData.modelType)) {
-        setSaveModelType(projectData.modelType);
-        setSaveModelTypeCustom('');
-      } else {
-        setSaveModelType('other');
-        setSaveModelTypeCustom(projectData.modelType);
-      }
-    }
-  }, []);
-
-  // Auto-load linked model from database when opened from project context
-  const linkedModelLoadedRef = useRef(false);
-  useEffect(() => {
-    if (!linkedModel?.config || linkedModelLoadedRef.current) return;
-    linkedModelLoadedRef.current = true;
-    applyModelConfig(linkedModel.config, linkedModel.id);
-  }, [linkedModel, applyModelConfig]);
-
-  // Load a model from a project vessel (via picker)
-  const loadFromProject = useCallback(
-    async (vesselId: string) => {
-      const model = await getVesselModelByProjectVessel(vesselId);
-      if (!model) {
-        alert('No model found for this vessel.');
-        return;
-      }
-      await applyModelConfig(model.config, model.id);
-      setPickerMode(null);
-      setPickerProjectId(null);
-      setPickerVesselId(null);
-    },
-    [applyModelConfig]
-  );
+  // Picker-dependent project queries (depend on the hook-owned picker/effective ids)
+  const { data: pickerVessels } = useProjectVessels(pickerProjectId ?? undefined);
+  const { data: projectImages } = useProjectImages(effectiveProjectVesselId ?? undefined);
 
   // Close popout menus on outside click
   useEffect(() => {
@@ -922,980 +303,353 @@ export default function VesselModeler() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const toggleStatLine = useCallback((stat: 'min' | 'max') => {
-    setVisibleStatLines((prev) => ({ ...prev, [stat]: !prev[stat] }));
-  }, []);
-
   // --- Helper: dispatch vessel update via functional updater ---
-  const updateVessel = useCallback((updater: (prev: VesselState) => VesselState) => {
-    dispatch({ type: 'UPDATE_VESSEL_FN', updater });
-  }, []);
-
-  // --- Model mode handler ---
-  const handleSetModelMode = useCallback(
-    (mode: ModelMode) => {
-      setModelMode(mode);
-      updateVessel((prev) => ({
-        ...prev,
-        hasModel: true,
-        vesselShape: mode === 'pipe' ? 'pipe' : 'vessel',
-      }));
-    },
-    [updateVessel]
-  );
-
-  // --- Vessel dimension handlers ---
-  const updateDimensions = useCallback(
-    (updates: Partial<VesselState>) => {
-      updateVessel((prev) => ({ ...prev, ...updates, hasModel: true }));
-    },
-    [updateVessel]
-  );
-
-  // --- Nozzle handlers ---
-  const addNozzle = useCallback(
-    (nozzle: NozzleConfig) => {
-      updateVessel((prev) => ({ ...prev, nozzles: [...prev.nozzles, nozzle], hasModel: true }));
-    },
-    [updateVessel]
-  );
-
-  const updateNozzle = useCallback(
-    (index: number, updates: Partial<NozzleConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        nozzles: prev.nozzles.map((n, i) => (i === index ? { ...n, ...updates } : n)),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const removeNozzle = useCallback(
-    (index: number) => {
-      // Atomic cascade: remove nozzle + associated pipelines + decrement higher indices
-      updateVessel((prev) => ({
-        ...prev,
-        nozzles: prev.nozzles.filter((_, i) => i !== index),
-        pipelines: prev.pipelines
-          .filter((p) => p.nozzleIndex !== index)
-          .map((p) => (p.nozzleIndex > index ? { ...p, nozzleIndex: p.nozzleIndex - 1 } : p)),
-      }));
-      dispatch({ type: 'SELECT_NOZZLE', index: -1 });
-    },
-    [updateVessel]
-  );
-
-  // --- Pipeline handlers ---
-  const createDefaultSegment = useCallback(
-    (type: PipeSegmentType, pipeDiameter: number): PipeSegment => {
-      const base: PipeSegment = { id: crypto.randomUUID(), type, rotation: 0 };
-      switch (type) {
-        case 'straight':
-          return { ...base, length: pipeDiameter * 3 };
-        case 'elbow':
-          return { ...base, angle: 90, bendRadius: pipeDiameter * 1.5 };
-        case 'reducer':
-          return { ...base, length: pipeDiameter * 2, endDiameter: pipeDiameter * 0.75 };
-        case 'flange':
-          return { ...base, length: 25 };
-        case 'cap':
-          return { ...base, style: 'flat' };
-        case 'dome':
-          return { ...base, headRatio: 2.0 };
-        default:
-          return { ...base, length: pipeDiameter * 3 };
-      }
+  // Domain wrappers pass a derived history key (see historyFor) so continuous
+  // edits coalesce; opaque callers omit it and get a discrete undo entry.
+  const updateVessel = useCallback(
+    (updater: (prev: VesselState) => VesselState, history?: HistoryControl) => {
+      dispatch({ type: 'UPDATE_VESSEL_FN', updater, history });
     },
     []
   );
 
-  const addPipeline = useCallback(
-    (nozzleIndex: number, segmentType: PipeSegmentType) => {
-      const nozzle = vesselState.nozzles[nozzleIndex];
-      if (!nozzle) return;
-      const pipe = findClosestPipeSize(nozzle.size);
-      const diameter = pipe.od;
-      const newPipeline: Pipeline = {
-        id: crypto.randomUUID(),
-        nozzleIndex,
-        pipeDiameter: diameter,
-        segments: [createDefaultSegment(segmentType, diameter)],
-      };
-      updateVessel((prev) => ({ ...prev, pipelines: [...prev.pipelines, newPipeline] }));
-    },
-    [vesselState.nozzles, updateVessel, createDefaultSegment]
-  );
-
-  const addFreePipeline = useCallback(
-    (pipeDiameter: number, segmentType: PipeSegmentType) => {
-      const newPipeline: Pipeline = {
-        id: crypto.randomUUID(),
-        nozzleIndex: -1,
-        pipeDiameter,
-        segments: [createDefaultSegment(segmentType, pipeDiameter)],
-        freeOrigin: { position: [0, 0, 0], direction: [0, 1, 0] },
-      };
-      updateVessel((prev) => ({ ...prev, pipelines: [...prev.pipelines, newPipeline] }));
-    },
-    [updateVessel, createDefaultSegment]
-  );
-
-  const updateFreePipelineOrigin = useCallback(
-    (pipelineId: string, updates: Partial<FreeOrigin>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        pipelines: prev.pipelines.map((p) => {
-          if (p.id !== pipelineId || p.nozzleIndex !== -1) return p;
-          const current = p.freeOrigin ?? {
-            position: [0, 0, 0] as [number, number, number],
-            direction: [0, 1, 0] as [number, number, number],
-          };
-          return { ...p, freeOrigin: { ...current, ...updates } };
-        }),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const addSegment = useCallback(
-    (pipelineId: string, segmentType: PipeSegmentType) => {
-      updateVessel((prev) => ({
-        ...prev,
-        pipelines: prev.pipelines.map((p) => {
-          if (p.id !== pipelineId) return p;
-          // Compute effective diameter (may have changed via reducer segments)
-          let currentDiameter = p.pipeDiameter;
-          for (const seg of p.segments) {
-            if (seg.type === 'reducer' && seg.endDiameter) {
-              currentDiameter = seg.endDiameter;
-            }
-          }
-          return {
-            ...p,
-            segments: [...p.segments, createDefaultSegment(segmentType, currentDiameter)],
-          };
-        }),
-      }));
-    },
-    [updateVessel, createDefaultSegment]
-  );
-
-  const updateSegment = useCallback(
-    (pipelineId: string, segmentId: string, updates: Partial<PipeSegment>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        pipelines: prev.pipelines.map((p) =>
-          p.id === pipelineId
-            ? {
-                ...p,
-                segments: p.segments.map((s) => (s.id === segmentId ? { ...s, ...updates } : s)),
-              }
-            : p
-        ),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const removeSegment = useCallback(
-    (pipelineId: string, segmentIndex: number) => {
-      updateVessel((prev) => {
-        const updated = prev.pipelines
-          .map((p) => {
-            if (p.id !== pipelineId) return p;
-            return { ...p, segments: p.segments.slice(0, segmentIndex) };
-          })
-          .filter((p) => p.segments.length > 0);
-        return { ...prev, pipelines: updated };
-      });
-      dispatch({ type: 'SELECT_PIPE_SEGMENT', pipelineId: '', segmentIndex: -1 });
-    },
-    [updateVessel]
-  );
-
-  const removePipeline = useCallback(
-    (pipelineId: string) => {
-      updateVessel((prev) => ({
-        ...prev,
-        pipelines: prev.pipelines.filter((p) => p.id !== pipelineId),
-      }));
-      dispatch({ type: 'SELECT_PIPE_SEGMENT', pipelineId: '', segmentIndex: -1 });
-    },
-    [updateVessel]
-  );
-
-  const selectPipeSegment = useCallback((pipelineId: string, segmentIndex: number) => {
-    dispatch({ type: 'SELECT_PIPE_SEGMENT', pipelineId, segmentIndex });
-  }, []);
-
-  // --- Saddle handlers ---
-  const addSaddle = useCallback(
-    (saddle: SaddleConfig) => {
-      updateVessel((prev) => ({ ...prev, saddles: [...prev.saddles, saddle] }));
-    },
-    [updateVessel]
-  );
-
-  const updateSaddle = useCallback(
-    (index: number, updates: Partial<SaddleConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        saddles: prev.saddles.map((s, i) => (i === index ? { ...s, ...updates } : s)),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const updateAllSaddleHeights = useCallback(
-    (height: number) => {
-      updateVessel((prev) => ({ ...prev, saddles: prev.saddles.map((s) => ({ ...s, height })) }));
-    },
-    [updateVessel]
-  );
-
-  const updateAllSaddleDepths = useCallback(
-    (depth: number) => {
-      updateVessel((prev) => ({ ...prev, saddles: prev.saddles.map((s) => ({ ...s, depth })) }));
-    },
-    [updateVessel]
-  );
-
-  // Wear plate is configured universally across all supports, not per-saddle.
-  const updateAllSaddleWearPlate = useCallback(
-    (updates: Partial<SaddleConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        saddles: prev.saddles.map((s) => ({ ...s, ...updates })),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const removeSaddle = useCallback(
-    (index: number) => {
-      updateVessel((prev) => ({ ...prev, saddles: prev.saddles.filter((_, i) => i !== index) }));
-      dispatch({ type: 'SELECT_SADDLE', index: -1 });
-    },
-    [updateVessel]
-  );
-
-  // --- Lifting lug handlers ---
-  const addLug = useCallback(
-    (lug: LiftingLugConfig) => {
-      updateVessel((prev) => ({
-        ...prev,
-        liftingLugs: [...prev.liftingLugs, lug],
-        hasModel: true,
-      }));
-    },
-    [updateVessel]
-  );
-
-  const updateLug = useCallback(
-    (index: number, updates: Partial<LiftingLugConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        liftingLugs: prev.liftingLugs.map((l, i) => (i === index ? { ...l, ...updates } : l)),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const removeLug = useCallback(
-    (index: number) => {
-      updateVessel((prev) => ({
-        ...prev,
-        liftingLugs: prev.liftingLugs.filter((_, i) => i !== index),
-      }));
-      dispatch({ type: 'SELECT_LUG', index: -1 });
-    },
-    [updateVessel]
-  );
-
-  // --- Weld handlers ---
-  const addWeld = useCallback(
-    (weld: WeldConfig) => {
-      updateVessel((prev) => ({ ...prev, welds: [...prev.welds, weld], hasModel: true }));
-    },
-    [updateVessel]
-  );
-
-  const updateWeld = useCallback(
-    (index: number, updates: Partial<WeldConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        welds: prev.welds.map((w, i) => (i === index ? { ...w, ...updates } : w)),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const removeWeld = useCallback(
-    (index: number) => {
-      updateVessel((prev) => ({ ...prev, welds: prev.welds.filter((_, i) => i !== index) }));
-      dispatch({ type: 'SELECT_WELD', index: -1 });
-    },
-    [updateVessel]
-  );
-
-  // --- Texture handlers ---
-  const addTexture = useCallback(
-    (texture: TextureConfig, threeTexture: THREE.Texture) => {
-      textureObjectsRef.current[Number(texture.id)] = threeTexture;
-      setTextureObjectsVersion((v) => v + 1);
-      updateVessel((prev) => ({ ...prev, textures: [...prev.textures, texture] }));
-    },
-    [updateVessel]
-  );
-
-  const updateTexture = useCallback(
-    (id: number, updates: Partial<TextureConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        textures: prev.textures.map((t) => (Number(t.id) === id ? { ...t, ...updates } : t)),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const removeTexture = useCallback(
-    (id: number) => {
-      const tex = textureObjectsRef.current[id];
-      if (tex) {
-        tex.dispose();
-        delete textureObjectsRef.current[id];
-        setTextureObjectsVersion((v) => v + 1);
-      }
-      updateVessel((prev) => ({
-        ...prev,
-        textures: prev.textures.filter((t) => Number(t.id) !== id),
-      }));
-      dispatch({ type: 'SELECT_TEXTURE', id: -1 });
-    },
-    [updateVessel]
-  );
-
-  const getNextTextureId = useCallback(() => {
-    return nextTextureIdRef.current++;
-  }, []);
-
-  // --- Annotation handlers ---
-  const addAnnotation = useCallback(
-    (annotation: AnnotationShapeConfig) => {
-      updateVessel((prev) => ({ ...prev, annotations: [...prev.annotations, annotation] }));
-    },
-    [updateVessel]
-  );
-
-  const updateAnnotation = useCallback(
-    (id: number, updates: Partial<AnnotationShapeConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        annotations: prev.annotations.map((a) => (a.id === id ? { ...a, ...updates } : a)),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const removeAnnotation = useCallback(
-    async (id: number) => {
-      // Clean up any Supabase Storage attachments before removing the annotation
-      const ann = vesselState.annotations.find((a) => a.id === id);
-      if (ann?.attachments?.length) {
-        for (const att of ann.attachments) {
-          await deleteAnnotationImage(att.storagePath).catch(() => {});
-        }
-      }
-      updateVessel((prev) => ({
-        ...prev,
-        annotations: prev.annotations.filter((a) => a.id !== id),
-      }));
-      dispatch({ type: 'SELECT_ANNOTATION', id: -1 });
-    },
-    [updateVessel, vesselState]
-  );
-
-  // --- Annotation attachment handlers ---
-  const captureViewport = useCallback(async () => {
-    const renderer = viewportRef.current?.getRenderer();
-    const canvas = renderer?.domElement;
-    if (!canvas || ui.inspectingAnnotationId == null) return;
-
-    // Force a render so the canvas has current content
-    const scene = viewportRef.current?.getScene();
+  // --- Camera bookmarks (C12) — config one-off handlers, inline by design.
+  // Camera state itself is never serialized; only the bookmark poses are, in the
+  // vessel slice, so add/rename/delete are undoable with discrete history labels.
+  const handleSaveBookmark = useCallback(() => {
     const camera = viewportRef.current?.getCamera();
-    if (scene && camera) renderer!.render(scene, camera);
-
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-    if (!blob) return;
-
-    const { storagePath, id } = await uploadAnnotationImage(
-      organizationId,
-      vesselModelId,
-      ui.inspectingAnnotationId,
-      blob,
-      'viewport-capture'
+    const controls = viewportRef.current?.getControls();
+    if (!camera || !controls) return;
+    const position = camera.position.toArray() as [number, number, number];
+    const target = (controls.target as THREE.Vector3).toArray() as [number, number, number];
+    updateVessel(
+      (prev) => {
+        const existing = prev.cameraBookmarks ?? [];
+        const bookmark: CameraBookmark = {
+          id: nextBookmarkId(existing),
+          name: `View ${existing.length + 1}`,
+          position,
+          target,
+        };
+        return { ...prev, cameraBookmarks: [...existing, bookmark] };
+      },
+      { at: Date.now(), label: 'Add bookmark' }
     );
-    const attachment = {
-      id,
-      type: 'viewport-capture' as const,
-      storagePath,
-      capturedAt: new Date().toISOString(),
-    };
-    const ann = vesselState.annotations.find((a) => a.id === ui.inspectingAnnotationId);
-    updateAnnotation(ui.inspectingAnnotationId, {
-      attachments: [...(ann?.attachments ?? []), attachment],
-    });
-  }, [ui.inspectingAnnotationId, vesselState, organizationId, vesselModelId, updateAnnotation]);
+  }, [updateVessel]);
 
-  const uploadImage = useCallback(
-    async (file: File) => {
-      if (ui.inspectingAnnotationId == null) return;
-      const { storagePath, id } = await uploadAnnotationImage(
-        organizationId,
-        vesselModelId,
-        ui.inspectingAnnotationId,
-        file,
-        'upload'
+  const handleRecallBookmark = useCallback((bookmark: CameraBookmark) => {
+    const camera = viewportRef.current?.getCamera();
+    const controls = viewportRef.current?.getControls();
+    if (!camera || !controls) return;
+    animateCamera(
+      camera,
+      controls,
+      new THREE.Vector3(...bookmark.position),
+      new THREE.Vector3(...bookmark.target),
+      400
+    );
+  }, []);
+
+  const handleRenameBookmark = useCallback(
+    (id: string, name: string) => {
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          cameraBookmarks: (prev.cameraBookmarks ?? []).map((b) =>
+            b.id === id ? { ...b, name } : b
+          ),
+        }),
+        { at: Date.now(), label: 'Rename bookmark' }
       );
-      const attachment = {
-        id,
-        type: 'upload' as const,
-        storagePath,
-        capturedAt: new Date().toISOString(),
-      };
-      const ann = vesselState.annotations.find((a) => a.id === ui.inspectingAnnotationId);
-      updateAnnotation(ui.inspectingAnnotationId, {
-        attachments: [...(ann?.attachments ?? []), attachment],
-      });
     },
-    [ui.inspectingAnnotationId, vesselState, organizationId, vesselModelId, updateAnnotation]
+    [updateVessel]
   );
 
-  const deleteAttachment = useCallback(
-    async (attachmentId: string) => {
-      if (ui.inspectingAnnotationId == null) return;
-      const ann = vesselState.annotations.find((a) => a.id === ui.inspectingAnnotationId);
-      const attachment = ann?.attachments?.find((a) => a.id === attachmentId);
-      if (attachment) await deleteAnnotationImage(attachment.storagePath);
-      updateAnnotation(ui.inspectingAnnotationId, {
-        attachments: (ann?.attachments ?? []).filter((a) => a.id !== attachmentId),
-      });
+  const handleDeleteBookmark = useCallback(
+    (id: string) => {
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          cameraBookmarks: (prev.cameraBookmarks ?? []).filter((b) => b.id !== id),
+        }),
+        { at: Date.now(), label: 'Delete bookmark' }
+      );
     },
-    [ui.inspectingAnnotationId, vesselState, updateAnnotation]
+    [updateVessel]
   );
 
-  /** Save companion B/D/A-scan data-URL images as scan-capture attachments */
-  const saveScanImages = useCallback(
-    async (images: { cscan?: string; bscan?: string; dscan?: string; ascan?: string }) => {
-      if (ui.inspectingAnnotationId == null) return;
-      const ann = vesselState.annotations.find((a) => a.id === ui.inspectingAnnotationId);
-      if (!ann) return;
-
-      // Remove previous scan-capture attachments (replace with new set)
-      const oldScans = (ann.attachments ?? []).filter((a) => a.type === 'scan-capture');
-      for (const old of oldScans) {
-        await deleteAnnotationImage(old.storagePath).catch(() => {});
-      }
-
-      const keptAttachments = (ann.attachments ?? []).filter((a) => a.type !== 'scan-capture');
-      const newAttachments = [...keptAttachments];
-
-      for (const [scanType, dataUrl] of Object.entries(images) as [string, string | undefined][]) {
-        if (!dataUrl) continue;
-        // Convert data URL to Blob without fetch() to avoid CSP connect-src restrictions
-        const [header, b64] = dataUrl.split(',');
-        const mime = header.match(/:(.*?);/)?.[1] ?? 'image/png';
-        const binary = atob(b64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        const blob = new Blob([bytes], { type: mime });
-        const { storagePath, id } = await uploadAnnotationImage(
-          organizationId,
-          vesselModelId,
-          ui.inspectingAnnotationId,
-          blob,
-          'scan-capture'
-        );
-        newAttachments.push({
-          id,
-          type: 'scan-capture' as const,
-          storagePath,
-          capturedAt: new Date().toISOString(),
-          scanType: scanType as 'cscan' | 'bscan' | 'dscan' | 'ascan',
-        });
-      }
-
-      updateAnnotation(ui.inspectingAnnotationId, { attachments: newAttachments });
+  // --- Model mode handler ---
+  const handleSetModelMode = useCallback(
+    (mode: ModelMode) => {
+      const shape = mode === 'pipe' ? 'pipe' : 'vessel';
+      setModelMode(mode);
+      // Redundant clicks on the already-active mode must not dispatch — they
+      // would record a spurious undo entry for a no-op vessel change.
+      if (vesselState.hasModel && (vesselState.vesselShape ?? 'vessel') === shape) return;
+      updateVessel((prev) => ({ ...prev, hasModel: true, vesselShape: shape }));
     },
-    [ui.inspectingAnnotationId, vesselState, organizationId, vesselModelId, updateAnnotation]
+    [updateVessel, vesselState.hasModel, vesselState.vesselShape]
   );
 
-  /** Clear all scan-capture attachments from the current annotation */
-  const clearScanImages = useCallback(async () => {
-    if (ui.inspectingAnnotationId == null) return;
-    const ann = vesselState.annotations.find((a) => a.id === ui.inspectingAnnotationId);
-    if (!ann) return;
-
-    const scanAttachments = (ann.attachments ?? []).filter((a) => a.type === 'scan-capture');
-    for (const att of scanAttachments) {
-      await deleteAnnotationImage(att.storagePath).catch(() => {});
-    }
-
-    updateAnnotation(ui.inspectingAnnotationId, {
-      attachments: (ann.attachments ?? []).filter((a) => a.type !== 'scan-capture'),
-    });
-  }, [ui.inspectingAnnotationId, vesselState, updateAnnotation]);
-
-  // --- Annotation stats recomputation ---
-  const recomputeAnnotationStats = useCallback(() => {
-    const updatedAnnotations = recomputeAllAnnotationStats(vesselState);
-    const changed = updatedAnnotations.some((ann, i) => {
-      const old = vesselState.annotations[i];
-      return ann.thicknessStats !== old.thicknessStats || ann.severityLevel !== old.severityLevel;
-    });
-    if (changed) {
-      updateVessel((prev) => ({ ...prev, annotations: updatedAnnotations }));
-    }
-  }, [vesselState, updateVessel]);
-
-  // Recompute stats when annotation geometry, composite orientation, or thresholds change.
-  // Serialize only geometry-affecting fields to avoid infinite loops (since recompute updates annotations).
-  const annotationsJson = JSON.stringify(
-    vesselState.annotations.map((a) => ({
-      id: a.id,
-      pos: a.pos,
-      angle: a.angle,
-      width: a.width,
-      height: a.height,
-      type: a.type,
-    }))
-  );
-  const compositesJson = JSON.stringify(
-    vesselState.scanComposites.map((c) => ({
-      id: c.id,
-      orientationConfirmed: c.orientationConfirmed,
-      indexStartMm: c.indexStartMm,
-      datumAngleDeg: c.datumAngleDeg,
-      scanDirection: c.scanDirection,
-      indexDirection: c.indexDirection,
-    }))
-  );
-  const thresholdsJson = JSON.stringify(vesselState.thicknessThresholds);
-
+  // Keep the transient mode toggle in lockstep with the document state so
+  // undo/redo across a mode switch (or a project load) cannot desync them.
   useEffect(() => {
-    recomputeAnnotationStats();
-  }, [annotationsJson, compositesJson, thresholdsJson]);
+    if (!vesselState.hasModel) return;
+    const shapeMode: ModelMode = vesselState.vesselShape === 'pipe' ? 'pipe' : 'vessel';
+    setModelMode((m) => (m === shapeMode ? m : shapeMode));
+  }, [vesselState.hasModel, vesselState.vesselShape]);
+
+  // --- Vessel dimension handlers ---
+  const updateDimensions = useCallback(
+    (updates: Partial<VesselState>) => {
+      updateVessel(
+        (prev) => ({ ...prev, ...updates, hasModel: true }),
+        historyFor('dimensions', '', updates)
+      );
+    },
+    [updateVessel]
+  );
+
+  // --- Entity CRUD action hooks (T2-D / D1) ---
+  // Each hook owns the verbatim per-entity callbacks that previously lived inline
+  // here; they share `updateVessel`/`dispatch` and the id-counter / texture refs,
+  // threaded in explicitly (no context). Callback identities are preserved.
+  const { addNozzle, updateNozzle, removeNozzle, toggleNozzleVisible } = useNozzleActions({
+    updateVessel,
+    dispatch,
+    nozzles: vesselState.nozzles,
+  });
+
+  const { addAppendage, updateAppendage, removeAppendage, toggleAppendageVisible } =
+    useAppendageActions({
+      updateVessel,
+      dispatch,
+      appendages: vesselState.appendages,
+    });
+
+  const {
+    createDefaultSegment,
+    addPipeline,
+    addFreePipeline,
+    updateFreePipelineOrigin,
+    addSegment,
+    updateSegment,
+    removeSegment,
+    removePipeline,
+    selectPipeSegment,
+    togglePipelineVisible,
+  } = usePipingActions({
+    updateVessel,
+    dispatch,
+    nozzles: vesselState.nozzles,
+    pipelines: vesselState.pipelines,
+  });
+
+  const {
+    addSaddle,
+    updateSaddle,
+    updateAllSaddleHeights,
+    updateAllSaddleDepths,
+    updateAllSaddleWearPlate,
+    removeSaddle,
+    addLug,
+    updateLug,
+    removeLug,
+    addWeld,
+    updateWeld,
+    removeWeld,
+    toggleSaddleVisible,
+    toggleLugVisible,
+    toggleWeldVisible,
+  } = useAttachableActions({
+    updateVessel,
+    dispatch,
+    saddles: vesselState.saddles,
+    liftingLugs: vesselState.liftingLugs,
+    welds: vesselState.welds,
+  });
+
+  const {
+    addTexture,
+    updateTexture,
+    removeTexture,
+    getNextTextureId,
+    addCoverageRect,
+    updateCoverageRect,
+    removeCoverageRect,
+    getNextCoverageRectId,
+    addRuler,
+    removeRuler,
+    updateRuler,
+    getNextRulerId,
+    addInspectionImage,
+    updateInspectionImage,
+    removeInspectionImage,
+    toggleInspectionImageVisible,
+    toggleInspectionImageLocked,
+    getNextInspectionImageId,
+    toggleTextureVisible,
+    toggleCoverageRectVisible,
+    toggleRulerVisible,
+  } = useOverlayActions({
+    updateVessel,
+    dispatch,
+    textureObjectsRef,
+    setTextureObjectsVersion,
+    nextTextureIdRef,
+    nextCoverageRectIdRef,
+    nextRulerIdRef,
+    nextInspectionImageIdRef,
+    viewingInspectionImageId: ui.viewingInspectionImageId,
+    textures: vesselState.textures,
+    coverageRects: vesselState.coverageRects,
+    rulers: vesselState.rulers,
+  });
+
+  const {
+    addAnnotation,
+    updateAnnotation,
+    removeAnnotation,
+    captureViewport,
+    uploadImage,
+    deleteAttachment,
+    saveScanImages,
+    clearScanImages,
+    getNextAnnotationId,
+    toggleAnnotationVisible,
+    toggleAnnotationLocked,
+  } = useAnnotationActions({
+    updateVessel,
+    dispatch,
+    vesselState,
+    organizationId,
+    vesselModelId,
+    viewportRef,
+    inspectingAnnotationId: ui.inspectingAnnotationId,
+    nextAnnotationIdRef,
+  });
+
+  const {
+    handleImportComposite,
+    handleRemoveScanComposite,
+    handleUpdateScanComposite,
+    handleSelectDomeScan,
+    handleUpdateDomeScan,
+    handleRemoveDomeScan,
+    handleImportDomeComposite,
+    toggleScanCompositeVisible,
+    toggleDomeScanVisible,
+  } = useScanActions({
+    updateVessel,
+    dispatch,
+    scanCompositeId: selection.scanCompositeId,
+    domeScanId: selection.domeScanId,
+    scanComposites: vesselState.scanComposites,
+    domeScanComposites: vesselState.domeScanComposites,
+    effectiveProjectVesselId,
+    linkCompositeToProject,
+  });
+
+  // Outliner Eye toggles route here — one descriptor → its owning D1 toggle
+  // callback. Visual only; stats/coverage/wall-loss never read `visible`.
+  const handleOutlinerToggleVisible = useCallback(
+    (ref: OutlinerToggleRef) => {
+      switch (ref.kind) {
+        case 'nozzle':
+          toggleNozzleVisible(ref.index);
+          break;
+        case 'weld':
+          toggleWeldVisible(ref.index);
+          break;
+        case 'lug':
+          toggleLugVisible(ref.index);
+          break;
+        case 'saddle':
+          toggleSaddleVisible(ref.index);
+          break;
+        case 'appendage':
+          toggleAppendageVisible(ref.index);
+          break;
+        case 'texture':
+          toggleTextureVisible(ref.id);
+          break;
+        case 'ruler':
+          toggleRulerVisible(ref.id);
+          break;
+        case 'coverageRect':
+          toggleCoverageRectVisible(ref.id);
+          break;
+        case 'inspectionImage':
+          toggleInspectionImageVisible(ref.id);
+          break;
+        case 'annotation':
+          toggleAnnotationVisible(ref.id);
+          break;
+        case 'scanComposite':
+          toggleScanCompositeVisible(ref.id);
+          break;
+        case 'domeScan':
+          toggleDomeScanVisible(ref.id);
+          break;
+        case 'pipeline':
+          togglePipelineVisible(ref.id);
+          break;
+      }
+    },
+    [
+      toggleNozzleVisible,
+      toggleWeldVisible,
+      toggleLugVisible,
+      toggleSaddleVisible,
+      toggleAppendageVisible,
+      toggleTextureVisible,
+      toggleRulerVisible,
+      toggleCoverageRectVisible,
+      toggleInspectionImageVisible,
+      toggleAnnotationVisible,
+      toggleScanCompositeVisible,
+      toggleDomeScanVisible,
+      togglePipelineVisible,
+    ]
+  );
 
   const updateMeasurementConfig = useCallback(
     (updates: Partial<MeasurementConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        measurementConfig: { ...prev.measurementConfig, ...updates },
-      }));
+      updateVessel(
+        (prev) => ({
+          ...prev,
+          measurementConfig: { ...prev.measurementConfig, ...updates },
+        }),
+        historyFor('measurementConfig', '', updates)
+      );
     },
     [updateVessel]
   );
 
   const updateThicknessThresholds = useCallback((thresholds: ThicknessThresholds) => {
-    dispatch({ type: 'UPDATE_THICKNESS_THRESHOLDS', thresholds });
+    dispatch({
+      type: 'UPDATE_THICKNESS_THRESHOLDS',
+      thresholds,
+      history: historyFor('thicknessThresholds', '', thresholds),
+    });
   }, []);
 
   const handleUpdateWallLossGroups = useCallback(
     (config: WallLossGroupConfig) => {
-      updateVessel((prev) => ({ ...prev, wallLossGroups: config }));
+      updateVessel(
+        (prev) => ({ ...prev, wallLossGroups: config }),
+        historyFor('wallLossGroups', '', config)
+      );
     },
     [updateVessel]
   );
 
   const handleUpdateCoverageTargets = useCallback(
     (targets: CoverageTargets) => {
-      updateVessel((prev) => ({ ...prev, coverageTargets: targets }));
-    },
-    [updateVessel]
-  );
-
-  const getNextAnnotationId = useCallback(() => {
-    return nextAnnotationIdRef.current++;
-  }, []);
-
-  // --- Coverage rect handlers ---
-  const addCoverageRect = useCallback(
-    (rect: CoverageRectConfig) => {
-      updateVessel((prev) => ({ ...prev, coverageRects: [...prev.coverageRects, rect] }));
-    },
-    [updateVessel]
-  );
-
-  const updateCoverageRect = useCallback(
-    (id: number, updates: Partial<CoverageRectConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        coverageRects: prev.coverageRects.map((r) => (r.id === id ? { ...r, ...updates } : r)),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const removeCoverageRect = useCallback(
-    (id: number) => {
-      updateVessel((prev) => ({
-        ...prev,
-        coverageRects: prev.coverageRects.filter((r) => r.id !== id),
-      }));
-      dispatch({ type: 'SELECT_COVERAGE_RECT', id: -1 });
-    },
-    [updateVessel]
-  );
-
-  const getNextCoverageRectId = useCallback(() => {
-    return nextCoverageRectIdRef.current++;
-  }, []);
-
-  // --- Ruler handlers ---
-  const addRuler = useCallback(
-    (ruler: RulerConfig) => {
-      updateVessel((prev) => ({ ...prev, rulers: [...prev.rulers, ruler] }));
-    },
-    [updateVessel]
-  );
-
-  const removeRuler = useCallback(
-    (id: number) => {
-      updateVessel((prev) => ({ ...prev, rulers: prev.rulers.filter((r) => r.id !== id) }));
-      // Only deselect if this ruler was selected
-      dispatch({ type: 'SELECT_RULER', id: -1 });
-    },
-    [updateVessel]
-  );
-
-  const updateRuler = useCallback(
-    (id: number, updates: Partial<RulerConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        rulers: prev.rulers.map((r) => (r.id === id ? { ...r, ...updates } : r)),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const getNextRulerId = useCallback(() => {
-    return nextRulerIdRef.current++;
-  }, []);
-
-  // --- Inspection image handlers ---
-  const addInspectionImage = useCallback(
-    (img: InspectionImageConfig) => {
-      updateVessel((prev) => ({ ...prev, inspectionImages: [...prev.inspectionImages, img] }));
-    },
-    [updateVessel]
-  );
-
-  const updateInspectionImage = useCallback(
-    (id: number, updates: Partial<InspectionImageConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        inspectionImages: prev.inspectionImages.map((i) =>
-          i.id === id ? { ...i, ...updates } : i
-        ),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const removeInspectionImage = useCallback(
-    (id: number) => {
-      updateVessel((prev) => ({
-        ...prev,
-        inspectionImages: prev.inspectionImages.filter((i) => i.id !== id),
-      }));
-      dispatch({ type: 'SELECT_INSPECTION_IMAGE', id: -1 });
-      if (ui.viewingInspectionImageId === id)
-        dispatch({ type: 'SET_VIEWING_INSPECTION_IMAGE', id: -1 });
-    },
-    [updateVessel, ui.viewingInspectionImageId]
-  );
-
-  const toggleInspectionImageVisible = useCallback(
-    (id: number) => {
-      updateVessel((prev) => ({
-        ...prev,
-        inspectionImages: prev.inspectionImages.map((i) =>
-          i.id === id ? { ...i, visible: i.visible === false ? true : false } : i
-        ),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const toggleInspectionImageLocked = useCallback(
-    (id: number) => {
-      updateVessel((prev) => ({
-        ...prev,
-        inspectionImages: prev.inspectionImages.map((i) =>
-          i.id === id ? { ...i, locked: !i.locked } : i
-        ),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const toggleAnnotationVisible = useCallback(
-    (id: number) => {
-      updateVessel((prev) => ({
-        ...prev,
-        annotations: prev.annotations.map((a) =>
-          a.id === id ? { ...a, visible: a.visible === false ? true : false } : a
-        ),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const toggleAnnotationLocked = useCallback(
-    (id: number) => {
-      updateVessel((prev) => ({
-        ...prev,
-        annotations: prev.annotations.map((a) => (a.id === id ? { ...a, locked: !a.locked } : a)),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const getNextInspectionImageId = useCallback(() => {
-    return nextInspectionImageIdRef.current++;
-  }, []);
-
-  // --- Scan composite handlers ---
-  const handleImportComposite = useCallback(
-    async (
-      compositeId: string,
-      placement: { scanDirection: 'cw' | 'ccw'; indexDirection: 'forward' | 'reverse' }
-    ) => {
-      try {
-        // Use binary-returning function for new companion-generated composites.
-        // Falls back to legacy format for older composites.
-        let name: string;
-        let cloudId: string;
-        let data: (number | null)[][];
-        let xAxis: number[];
-        let yAxis: number[];
-        let stats: ScanCompositeConfig['stats'];
-        let sourceFiles: ScanCompositeConfig['sourceFiles'];
-
-        try {
-          const cd = await getScanCompositeData(compositeId);
-          cloudId = compositeId;
-          name = `Composite ${compositeId.slice(0, 8)}`;
-          // Convert Float32Array → (number | null)[][] for modeller compatibility
-          xAxis = Array.from(cd.xAxis);
-          yAxis = Array.from(cd.yAxis);
-          data = [];
-          for (let row = 0; row < cd.height; row++) {
-            const rowData: (number | null)[] = [];
-            for (let col = 0; col < cd.width; col++) {
-              const val = cd.matrix[row * cd.width + col];
-              rowData.push(isNaN(val) ? null : val);
-            }
-            data.push(rowData);
-          }
-          // Preserve validArea/totalArea (mm²) — the Scan Coverage
-          // "Achieved" column is computed from stats.validArea.
-          stats = toConfigStats(cd.stats);
-          sourceFiles = cd.sourceFiles;
-        } catch {
-          // Fallback to legacy format
-          const composite = await getScanComposite(compositeId);
-          cloudId = composite.id;
-          name = composite.name;
-          data = composite.thickness_data;
-          xAxis = composite.x_axis;
-          yAxis = composite.y_axis;
-          stats = composite.stats || { min: 0, max: 0, mean: 0, median: 0, stdDev: 0 };
-          sourceFiles = composite.source_files ?? undefined;
-        }
-
-        const newConfig: ScanCompositeConfig = {
-          id: `sc_${Date.now()}`,
-          name,
-          cloudId,
-          data,
-          xAxis,
-          yAxis,
-          stats,
-          indexStartMm: yAxis[0] ?? 0,
-          datumAngleDeg: 0,
-          scanDirection: placement.scanDirection,
-          indexDirection: placement.indexDirection,
-          orientationConfirmed: false,
-          colorScale: 'Jet',
-          rangeMin: null,
-          rangeMax: null,
-          opacity: 1,
-          sourceNdeFile: guessNdeFilename(name),
-          sourceFiles,
-        };
-        updateVessel((prev) => ({
-          ...prev,
-          scanComposites: [...prev.scanComposites, newConfig],
-          // Auto-populate global coordinate origin from the first loaded scan
-          ...(prev.scanComposites.length === 0
-            ? {
-                coordinateOrigin: { indexMm: yAxis[0] ?? 0, scanMm: xAxis[0] ?? 0 },
-                originSourceScanId: newConfig.id,
-              }
-            : {}),
-        }));
-
-        // Link composite to project vessel if in project context
-        if (effectiveProjectVesselId) {
-          linkCompositeToProject.mutate({
-            compositeId: cloudId,
-            projectVesselId: effectiveProjectVesselId,
-          });
-        }
-      } catch (err) {
-        console.error('Failed to import composite:', err);
-      }
-    },
-    [updateVessel, effectiveProjectVesselId, linkCompositeToProject]
-  );
-
-  const handleRemoveScanComposite = useCallback(
-    (id: string) => {
-      clearHeatmapCache(id);
-      updateVessel((prev) => ({
-        ...prev,
-        scanComposites: prev.scanComposites.filter((sc) => sc.id !== id),
-      }));
-      if (selection.scanCompositeId === id) dispatch({ type: 'SELECT_SCAN_COMPOSITE', id: '' });
-    },
-    [updateVessel, selection.scanCompositeId]
-  );
-
-  const handleUpdateScanComposite = useCallback(
-    (id: string, updates: Partial<ScanCompositeConfig>) => {
-      updateVessel((prev) => {
-        const updated = {
-          ...prev,
-          scanComposites: prev.scanComposites.map((sc) =>
-            sc.id === id ? { ...sc, ...updates } : sc
-          ),
-        };
-        // Keep global origin in sync when the source scan's position changes
-        if (
-          id === prev.originSourceScanId &&
-          (updates.indexStartMm !== undefined || updates.datumAngleDeg !== undefined)
-        ) {
-          const sc = updated.scanComposites.find((c) => c.id === id)!;
-          updated.coordinateOrigin = {
-            indexMm: sc.indexStartMm,
-            scanMm: sc.xAxis[0] ?? 0,
-          };
-        }
-        return updated;
-      });
-    },
-    [updateVessel]
-  );
-
-  // --- Dome scan handlers ---
-  const handleSelectDomeScan = useCallback((id: string) => {
-    dispatch({ type: 'SELECT_DOME_SCAN', id });
-  }, []);
-
-  const handleUpdateDomeScan = useCallback(
-    (id: string, updates: Partial<DomeScanConfig>) => {
-      updateVessel((prev) => ({
-        ...prev,
-        domeScanComposites: prev.domeScanComposites.map((ds) =>
-          ds.id === id ? { ...ds, ...updates } : ds
-        ),
-      }));
-    },
-    [updateVessel]
-  );
-
-  const handleRemoveDomeScan = useCallback(
-    (id: string) => {
-      clearDomeHeatmapCache(id);
-      updateVessel((prev) => ({
-        ...prev,
-        domeScanComposites: prev.domeScanComposites.filter((ds) => ds.id !== id),
-      }));
-      if (selection.domeScanId === id) dispatch({ type: 'SELECT_DOME_SCAN', id: '' });
-    },
-    [updateVessel, selection.domeScanId]
-  );
-
-  const handleImportDomeComposite = useCallback(
-    async (compositeId: string, head: 'left' | 'right') => {
-      try {
-        let name: string;
-        let cloudId: string;
-        let data: (number | null)[][];
-        let xAxis: number[];
-        let yAxis: number[];
-        let stats: DomeScanConfig['stats'];
-        let sourceFiles: DomeScanConfig['sourceFiles'];
-
-        try {
-          const cd = await getScanCompositeData(compositeId);
-          cloudId = compositeId;
-          name = `Dome ${head} ${compositeId.slice(0, 8)}`;
-          xAxis = Array.from(cd.xAxis);
-          yAxis = Array.from(cd.yAxis);
-          data = [];
-          for (let row = 0; row < cd.height; row++) {
-            const rowData: (number | null)[] = [];
-            for (let col = 0; col < cd.width; col++) {
-              const val = cd.matrix[row * cd.width + col];
-              rowData.push(isNaN(val) ? null : val);
-            }
-            data.push(rowData);
-          }
-          // Preserve validArea/totalArea (mm²) so dome achieved coverage works.
-          stats = toConfigStats(cd.stats);
-          sourceFiles = cd.sourceFiles;
-        } catch {
-          const composite = await getScanComposite(compositeId);
-          cloudId = composite.id;
-          name = composite.name;
-          data = composite.thickness_data;
-          xAxis = composite.x_axis;
-          yAxis = composite.y_axis;
-          stats = composite.stats || { min: 0, max: 0, mean: 0, median: 0, stdDev: 0 };
-          sourceFiles = composite.source_files ?? undefined;
-        }
-
-        const newConfig: DomeScanConfig = {
-          id: `ds_${Date.now()}`,
-          name,
-          cloudId,
-          head,
-          centerPhi: 45,
-          centerTheta: 0,
-          scanDirection: 'cw',
-          indexDirection: 'outward',
-          orientationConfirmed: false,
-          data,
-          xAxis,
-          yAxis,
-          stats,
-          colorScale: 'Jet',
-          rangeMin: null,
-          rangeMax: null,
-          opacity: 1,
-          sourceFiles,
-        };
-        updateVessel((prev) => ({
-          ...prev,
-          domeScanComposites: [...prev.domeScanComposites, newConfig],
-        }));
-        dispatch({ type: 'SELECT_DOME_SCAN', id: newConfig.id });
-      } catch (err) {
-        console.error('Failed to import dome composite:', err);
-      }
+      updateVessel(
+        (prev) => ({ ...prev, coverageTargets: targets }),
+        historyFor('coverageTargets', '', targets)
+      );
     },
     [updateVessel]
   );
@@ -1903,1349 +657,245 @@ export default function VesselModeler() {
   // Dome scan hover tooltip state
   const [domeScanHoverInfo, setDomeScanHoverInfo] = useState<DomeScanHoverInfo | null>(null);
 
-  // --- Interaction callbacks (from Three.js viewport) ---
-  const vesselCallbacks: VesselCallbacks = {
-    onNozzleSelected: (idx) => dispatch({ type: 'SELECT_NOZZLE', index: idx }),
-    onSaddleSelected: (idx) => dispatch({ type: 'SELECT_SADDLE', index: idx }),
-    onTextureSelected: (id) => dispatch({ type: 'SELECT_TEXTURE', id }),
-    onLugSelected: (idx) => dispatch({ type: 'SELECT_LUG', index: idx }),
-    onAnnotationSelected: (id) => dispatch({ type: 'SELECT_ANNOTATION', id }),
-    onAnnotationMoved: (id, pos, angle) => {
-      updateAnnotation(id, { pos: Math.round(pos), angle: Math.round(angle) });
-    },
-    onAnnotationLabelOffsetChanged: (id, offset) => {
-      updateAnnotation(id, { labelOffset: offset });
-    },
-    onAnnotationCreated: (type, pos, angle, width, height) => {
-      const id = getNextAnnotationId();
-      const isRestriction = type === 'restriction';
-      const prefix = isRestriction ? 'R' : 'A';
-      const count = vesselState.annotations.filter((a) => a.type === type).length + 1;
-      addAnnotation({
-        id,
-        name: `${prefix}${count}`,
-        type,
-        pos: Math.round(pos),
-        angle: Math.round(angle),
-        width: Math.round(width),
-        height: Math.round(height),
-        color: isRestriction ? '#facc15' : '#ff3333',
-        lineWidth: 2,
-        showLabel: true,
-      });
-      dispatch({ type: 'SELECT_ANNOTATION', id });
-      dispatch({ type: 'SET_PREVIEW_ANNOTATION', preview: null });
-      dispatch({ type: 'SET_DRAW_MODE_ANNOTATION', mode: null });
-    },
-    onAnnotationPreview: (type, pos, angle, width, height) => {
-      dispatch({
-        type: 'SET_PREVIEW_ANNOTATION',
-        preview: {
-          id: -1,
-          name: 'Preview',
-          type,
-          pos: Math.round(pos),
-          angle: Math.round(angle),
-          width: Math.round(width),
-          height: Math.round(height),
-          color: type === 'restriction' ? '#facc15' : '#ff3333',
-          lineWidth: 2,
-          showLabel: false,
-        },
-      });
-    },
-    onRulerCreated: (startPos, startAngle, endPos, endAngle) => {
-      const id = getNextRulerId();
-      const num = vesselState.rulers.length + 1;
-      addRuler({
-        id,
-        name: `R${num}`,
-        startPos: Math.round(startPos),
-        startAngle: Math.round(startAngle),
-        endPos: Math.round(endPos),
-        endAngle: Math.round(endAngle),
-        color: '#ffaa00',
-        showLabel: true,
-      });
-      dispatch({ type: 'SET_PREVIEW_RULER', preview: null });
-      dispatch({ type: 'SET_DRAW_MODE_RULER', active: false });
-    },
-    onRulerPreview: (startPos, startAngle, endPos, endAngle) => {
-      dispatch({
-        type: 'SET_PREVIEW_RULER',
-        preview: {
-          id: -1,
-          name: 'Preview',
-          startPos: Math.round(startPos),
-          startAngle: Math.round(startAngle),
-          endPos: Math.round(endPos),
-          endAngle: Math.round(endAngle),
-          color: '#ffaa00',
-          showLabel: true,
-        },
-      });
-    },
-    onCoverageRectCreated: (pos, angle, width, height) => {
-      const id = getNextCoverageRectId();
-      const num = vesselState.coverageRects.length + 1;
-      addCoverageRect({
-        id,
-        name: `C${num}`,
-        pos: Math.round(pos),
-        angle: Math.round(angle),
-        width: Math.round(width),
-        height: Math.round(height),
-        color: '#00cc66',
-        lineWidth: 2,
-        filled: true,
-        fillOpacity: 0.2,
-      });
-      dispatch({ type: 'SELECT_COVERAGE_RECT', id });
-      dispatch({ type: 'SET_PREVIEW_COVERAGE_RECT', preview: null });
-      dispatch({ type: 'SET_DRAW_MODE_COVERAGE', active: false });
-    },
-    onCoverageRectPreview: (pos, angle, width, height) => {
-      dispatch({
-        type: 'SET_PREVIEW_COVERAGE_RECT',
-        preview: {
-          id: -1,
-          name: 'Preview',
-          pos: Math.round(pos),
-          angle: Math.round(angle),
-          width: Math.round(width),
-          height: Math.round(height),
-          color: '#00cc66',
-          lineWidth: 2,
-          filled: false,
-          fillOpacity: 0.2,
-        },
-      });
-    },
-    onCoverageRectSelected: (id) => dispatch({ type: 'SELECT_COVERAGE_RECT', id }),
-    onCoverageRectMoved: (id, pos, angle) => {
-      updateCoverageRect(id, { pos: Math.round(pos), angle: Math.round(angle) });
-    },
-    onInspectionImageSelected: (id) => dispatch({ type: 'SELECT_INSPECTION_IMAGE', id }),
-    onInspectionImageMoved: (id, pos, angle) => {
-      updateInspectionImage(id, { pos: Math.round(pos), angle: Math.round(angle) });
-    },
-    onInspectionImageLabelOffsetChanged: (id, offset) => {
-      updateInspectionImage(id, { labelOffset: offset });
-    },
-    onWeldSelected: (idx) => dispatch({ type: 'SELECT_WELD', index: idx }),
-    onWeldMoved: (idx, pos, angle) => {
-      const weld = vesselState.welds[idx];
-      if (weld?.type === 'circumferential') {
-        updateWeld(idx, { pos: Math.round(pos) });
-      } else {
-        const delta = Math.round(pos) - weld.pos;
-        updateWeld(idx, {
-          pos: Math.round(pos),
-          endPos: (weld.endPos ?? vesselState.length) + delta,
-          angle: Math.round(angle),
-        });
-      }
-    },
-    onScanCompositeHover: (id, thickness, rawScanMm, rawIndexMm, screenX, screenY) => {
-      const sc = vesselState.scanComposites.find((c) => c.id === id);
-      let displayScan: number;
-      let displayIndex: number;
-      if (sc?.useGlobalOrigin) {
-        // Convert scan-space coords to vessel-space, then subtract global origin
-        const globalOrigin = vesselState.coordinateOrigin ?? { indexMm: 0, scanMm: 0 };
-        const indexDir = sc.indexDirection === 'forward' ? 1 : -1;
-        const vesselIndex = sc.indexStartMm + (rawIndexMm - (sc.yAxis[0] ?? 0)) * indexDir;
-        displayIndex = vesselIndex - globalOrigin.indexMm;
-        displayScan = rawScanMm - globalOrigin.scanMm;
-      } else {
-        // Per-scan: relative to this scan's own axis start
-        displayScan = rawScanMm - (sc?.xAxis[0] ?? 0);
-        displayIndex = rawIndexMm - (sc?.yAxis[0] ?? 0);
-      }
-      dispatch({
-        type: 'SET_HOVER_DATA',
-        data: thickness !== null ? { thickness, scanMm: displayScan, indexMm: displayIndex } : null,
-      });
-      // Update cursor-follow tooltip position via ref (avoids re-render lag)
-      if (cursorTooltipRef.current) {
-        if (thickness !== null) {
-          cursorTooltipRef.current.style.left = `${screenX + 16}px`;
-          cursorTooltipRef.current.style.top = `${screenY - 12}px`;
-        }
-      }
-    },
-    onDomeScanHover: (info) => {
-      setDomeScanHoverInfo(info);
-    },
-    onScanGizmoDatumMoved: (compositeId, angleDeg, posMm) => {
-      handleUpdateScanComposite(compositeId, {
-        datumAngleDeg: angleDeg,
-        indexStartMm: Math.round(posMm),
-      });
-    },
-    onScanGizmoDirectionToggle: (compositeId, field) => {
-      const sc = vesselState.scanComposites.find((c) => c.id === compositeId);
-      if (!sc) return;
-      if (field === 'scanDirection') {
-        handleUpdateScanComposite(compositeId, {
-          scanDirection: sc.scanDirection === 'cw' ? 'ccw' : 'cw',
-        });
-      } else {
-        handleUpdateScanComposite(compositeId, {
-          indexDirection: sc.indexDirection === 'forward' ? 'reverse' : 'forward',
-        });
-      }
-    },
-    onDomeGizmoDatumMoved: (compositeId, phiDeg, thetaDeg) => {
-      handleUpdateDomeScan(compositeId, { centerPhi: phiDeg, centerTheta: thetaDeg });
-    },
-    onDomeGizmoDirectionToggle: (compositeId, field) => {
-      const ds = vesselState.domeScanComposites?.find((d) => d.id === compositeId);
-      if (!ds) return;
-      if (field === 'scanDirection') {
-        handleUpdateDomeScan(compositeId, {
-          scanDirection: ds.scanDirection === 'cw' ? 'ccw' : 'cw',
-        });
-      } else {
-        handleUpdateDomeScan(compositeId, {
-          indexDirection: ds.indexDirection === 'outward' ? 'inward' : 'outward',
-        });
-      }
-    },
-    onDomeGizmoClicked: (compositeId) => {
-      dispatch({ type: 'SELECT_DOME_SCAN', id: compositeId });
-    },
-    onPipeSegmentSelected: (pipelineId, segmentIndex) => {
-      dispatch({ type: 'SELECT_PIPE_SEGMENT', pipelineId, segmentIndex });
-    },
-    onPipeConnectionPointClicked: (pipelineId) => {
-      // Show the pipe part popup — handled via state
-      setPipePartPopup((prev) => (prev ? null : { pipelineId, x: 0, y: 0 }));
-    },
-    onDeselect: () => dispatch({ type: 'DESELECT_ALL' }),
-    onNozzleMoved: (idx, pos, angle) => {
-      updateNozzle(idx, { pos: Math.round(pos), angle: Math.round(angle) });
-    },
-    onSaddleMoved: (idx, pos) => {
-      updateSaddle(idx, { pos: Math.round(pos) });
-    },
-    onTextureMoved: (id, pos, angle) => {
-      updateTexture(id, { pos: Math.round(pos), angle: Math.round(angle) });
-    },
-    onLugMoved: (idx, pos, angle) => {
-      updateLug(idx, { pos: Math.round(pos), angle: Math.round(angle) });
-    },
-    onDragEnd: () => {
-      // No-op, state is already updated per-move
-    },
-    onAnnotationTableMoved: (position) => {
-      dispatch({
-        type: 'UPDATE_VESSEL_FN',
-        updater: (v) => ({ ...v, annotationTablePosition: position }),
-      });
-    },
-    onAnnotationTableResized: (size) => {
-      dispatch({ type: 'UPDATE_VESSEL_FN', updater: (v) => ({ ...v, annotationTableSize: size }) });
-    },
-  };
+  // Active body for a newly-drawn annotation (4B). The rule is deliberately
+  // simple and predictable: the active body is the body of whatever entity is
+  // currently selected — a selected appendage IS that body; a selected
+  // attachable (nozzle / lug / weld / scan / dome scan / annotation / coverage
+  // rect) contributes its own `bodyId`. When nothing body-scoped is selected the
+  // active body is the main shell (undefined), so the legacy path is unchanged.
+  const activeBodyId = useMemo<string | undefined>(() => {
+    const s = selection;
+    if (s.appendageIndex >= 0) return vesselState.appendages[s.appendageIndex]?.id;
+    if (s.nozzleIndex >= 0) return vesselState.nozzles[s.nozzleIndex]?.bodyId;
+    if (s.lugIndex >= 0) return vesselState.liftingLugs[s.lugIndex]?.bodyId;
+    if (s.weldIndex >= 0) return vesselState.welds[s.weldIndex]?.bodyId;
+    if (s.scanCompositeId)
+      return vesselState.scanComposites.find((c) => c.id === s.scanCompositeId)?.bodyId;
+    if (s.domeScanId)
+      return vesselState.domeScanComposites.find((d) => d.id === s.domeScanId)?.bodyId;
+    if (s.annotationId >= 0)
+      return vesselState.annotations.find((a) => a.id === s.annotationId)?.bodyId;
+    if (s.coverageRectId >= 0)
+      return vesselState.coverageRects.find((r) => r.id === s.coverageRectId)?.bodyId;
+    return undefined;
+  }, [selection, vesselState]);
 
-  // --- Save/Load ---
-  const saveProject = useCallback(() => {
-    const projectData = {
-      version: 1,
-      timestamp: new Date().toISOString(),
-      vessel: {
-        id: vesselState.id,
-        length: vesselState.length,
-        headRatio: vesselState.headRatio,
-        orientation: vesselState.orientation,
-        vesselName: vesselState.vesselName,
-        location: vesselState.location,
-        inspectionDate: vesselState.inspectionDate,
-      },
-      nozzles: vesselState.nozzles.map((n) => ({
-        name: n.name,
-        pos: n.pos,
-        proj: n.proj,
-        angle: n.angle,
-        size: n.size,
-        orientationMode: n.orientationMode,
-        azimuthRotation: n.azimuthRotation,
-        flangeOD: n.flangeOD,
-        flangeThk: n.flangeThk,
-        pipeOD: n.pipeOD,
-        style: n.style,
-        hideRepad: n.hideRepad,
-        showRepad: n.showRepad,
-        showWeldNeck: n.showWeldNeck,
-        repadOD: n.repadOD,
-        repadThickness: n.repadThickness,
-      })),
-      liftingLugs: vesselState.liftingLugs.map((l) => ({
-        name: l.name,
-        pos: l.pos,
-        angle: l.angle,
-        style: l.style,
-        swl: l.swl,
-        width: l.width,
-        height: l.height,
-        thickness: l.thickness,
-        holeDiameter: l.holeDiameter,
-      })),
-      saddles: vesselState.saddles.map((s) => ({
-        pos: s.pos,
-        color: s.color || '#2244ff',
-        height: s.height,
-        depth: s.depth,
-        wearPlate: s.wearPlate,
-        wearPlateThickness: s.wearPlateThickness,
-        wearPlateArcOverhang: s.wearPlateArcOverhang,
-        wearPlateAxialOverhang: s.wearPlateAxialOverhang,
-      })),
-      welds: vesselState.welds.map((w) => ({
-        name: w.name,
-        type: w.type,
-        pos: w.pos,
-        endPos: w.endPos,
-        angle: w.angle,
-        capWidth: w.capWidth,
-        color: w.color,
-      })),
-      textures: vesselState.textures.map((t) => ({
-        id: t.id,
-        name: t.name,
-        imageData: t.imageData,
-        pos: t.pos,
-        angle: t.angle,
-        scaleX: t.scaleX || 1.0,
-        scaleY: t.scaleY || 1.0,
-        rotation: t.rotation || 0,
-        flipH: t.flipH || false,
-        flipV: t.flipV || false,
-      })),
-      annotations: vesselState.annotations.map((a) => ({
-        id: a.id,
-        name: a.name,
-        type: a.type,
-        pos: a.pos,
-        angle: a.angle,
-        width: a.width,
-        height: a.height,
-        color: a.color,
-        lineWidth: a.lineWidth,
-        showLabel: a.showLabel,
-        leaderLength: a.leaderLength,
-        labelOffset: a.labelOffset,
-        visible: a.visible,
-        locked: a.locked,
-        restrictionNotes: a.restrictionNotes,
-        restrictionImage: a.restrictionImage,
-        restrictionImageName: a.restrictionImageName,
-        includeInReport: a.includeInReport,
-        attachments: a.attachments,
-        labelMode: a.labelMode,
-      })),
-      rulers: vesselState.rulers.map((r) => ({
-        id: r.id,
-        name: r.name,
-        startPos: r.startPos,
-        startAngle: r.startAngle,
-        endPos: r.endPos,
-        endAngle: r.endAngle,
-        color: r.color,
-        showLabel: r.showLabel,
-      })),
-      coverageRects: vesselState.coverageRects.map((r) => ({
-        id: r.id,
-        name: r.name,
-        pos: r.pos,
-        angle: r.angle,
-        width: r.width,
-        height: r.height,
-        color: r.color,
-        lineWidth: r.lineWidth,
-        filled: r.filled,
-        fillOpacity: r.fillOpacity,
-        locked: r.locked,
-      })),
-      inspectionImages: vesselState.inspectionImages.map((i) => ({
-        id: i.id,
-        name: i.name,
-        imageData: i.imageData,
-        pos: i.pos,
-        angle: i.angle,
-        description: i.description,
-        date: i.date,
-        inspector: i.inspector,
-        method: i.method,
-        result: i.result,
-        leaderLength: i.leaderLength,
-        labelOffset: i.labelOffset,
-        visible: i.visible,
-        locked: i.locked,
-      })),
-      scanComposites: vesselState.scanComposites.map((sc) => ({
-        id: sc.id,
-        name: sc.name,
-        cloudId: sc.cloudId,
-        xAxis: sc.xAxis,
-        yAxis: sc.yAxis,
-        stats: sc.stats,
-        indexStartMm: sc.indexStartMm,
-        datumAngleDeg: sc.datumAngleDeg,
-        scanDirection: sc.scanDirection,
-        indexDirection: sc.indexDirection,
-        orientationConfirmed: sc.orientationConfirmed,
-        useGlobalOrigin: sc.useGlobalOrigin,
-        colorScale: sc.colorScale,
-        rangeMin: sc.rangeMin,
-        rangeMax: sc.rangeMax,
-        opacity: sc.opacity,
-        sourceNdeFile: sc.sourceNdeFile,
-        sourceFiles: sc.sourceFiles,
-      })),
-      pipelines: vesselState.pipelines,
-      referenceDrawings: vesselState.referenceDrawings ?? [],
-      measurementConfig: { ...vesselState.measurementConfig },
-      coordinateOrigin: { ...vesselState.coordinateOrigin },
-      originSourceScanId: vesselState.originSourceScanId,
-      labelsTidied: vesselState.labelsTidied,
-      annotationTablePosition: vesselState.annotationTablePosition,
-      annotationTableSize: vesselState.annotationTableSize,
-      wallLossGroups: vesselState.wallLossGroups,
-      visuals: { ...vesselState.visuals },
-    };
+  // --- Topo (relief) viewport: resolve the ACTIVE composite (R4) ---
+  // The selected composite if it carries a thickness grid, else the first
+  // confirmed composite with a grid, else any composite with a grid. Selecting a
+  // different composite in the sidebar switches the rendered surface live (the
+  // pane is keyed on the composite id). Null ⇒ nothing to show ⇒ Topo disabled.
+  const activeTopoComposite = useMemo(() => {
+    const composites = vesselState.scanComposites;
+    const selected = composites.find((c) => c.id === selection.scanCompositeId);
+    if (selected && hasReliefGrid(selected)) return selected;
+    const withGrid = composites.filter(hasReliefGrid);
+    return withGrid.find((c) => c.orientationConfirmed) ?? withGrid[0] ?? null;
+  }, [vesselState.scanComposites, selection.scanCompositeId]);
+  const topoEnabled = activeTopoComposite != null;
 
-    const defaultName = vesselState.vesselName
-      ? `${vesselState.vesselName.replace(/[^a-zA-Z0-9_-]/g, '_')}_${new Date().toISOString().slice(0, 10)}`
-      : `vessel_project_${new Date().toISOString().slice(0, 10)}`;
-    const filename = prompt('Enter filename:', defaultName);
-    if (!filename) return;
-
-    // Replace NaN/Infinity with null to avoid JSON.stringify issues
-    const json = JSON.stringify(
-      projectData,
-      (_key, value) => (typeof value === 'number' && !Number.isFinite(value) ? null : value),
-      2
-    );
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename.endsWith('.json') ? filename : `${filename}.json`;
-    document.body.appendChild(a);
-    a.click();
-    // Delay cleanup so the download can start
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
-  }, [vesselState]);
-
-  // Build the serialized config from current vessel state
-  const buildSaveConfig = useCallback(() => {
-    const effectiveModelType =
-      saveModelType === 'other' ? saveModelTypeCustom || 'other' : saveModelType;
-    const config = {
-      version: 1,
-      timestamp: new Date().toISOString(),
-      modelType: effectiveModelType,
-      vessel: {
-        id: vesselState.id,
-        length: vesselState.length,
-        headRatio: vesselState.headRatio,
-        orientation: vesselState.orientation,
-        vesselName: vesselState.vesselName,
-        location: vesselState.location,
-        inspectionDate: vesselState.inspectionDate,
-      },
-      nozzles: vesselState.nozzles.map((n) => ({
-        name: n.name,
-        pos: n.pos,
-        proj: n.proj,
-        angle: n.angle,
-        size: n.size,
-        orientationMode: n.orientationMode,
-        azimuthRotation: n.azimuthRotation,
-        flangeOD: n.flangeOD,
-        flangeThk: n.flangeThk,
-        pipeOD: n.pipeOD,
-        style: n.style,
-        hideRepad: n.hideRepad,
-        showRepad: n.showRepad,
-        showWeldNeck: n.showWeldNeck,
-        repadOD: n.repadOD,
-        repadThickness: n.repadThickness,
-      })),
-      liftingLugs: vesselState.liftingLugs.map((l) => ({
-        name: l.name,
-        pos: l.pos,
-        angle: l.angle,
-        style: l.style,
-        swl: l.swl,
-        width: l.width,
-        height: l.height,
-        thickness: l.thickness,
-        holeDiameter: l.holeDiameter,
-      })),
-      saddles: vesselState.saddles.map((s) => ({
-        pos: s.pos,
-        color: s.color || '#2244ff',
-        height: s.height,
-        depth: s.depth,
-        wearPlate: s.wearPlate,
-        wearPlateThickness: s.wearPlateThickness,
-        wearPlateArcOverhang: s.wearPlateArcOverhang,
-        wearPlateAxialOverhang: s.wearPlateAxialOverhang,
-      })),
-      welds: vesselState.welds.map((w) => ({
-        name: w.name,
-        type: w.type,
-        pos: w.pos,
-        endPos: w.endPos,
-        angle: w.angle,
-        capWidth: w.capWidth,
-        color: w.color,
-      })),
-      textures: vesselState.textures.map((t) => ({
-        id: t.id,
-        name: t.name,
-        imageData: t.imageData,
-        pos: t.pos,
-        angle: t.angle,
-        scaleX: t.scaleX || 1.0,
-        scaleY: t.scaleY || 1.0,
-        rotation: t.rotation || 0,
-        flipH: t.flipH || false,
-        flipV: t.flipV || false,
-      })),
-      annotations: vesselState.annotations.map((a) => ({
-        id: a.id,
-        name: a.name,
-        type: a.type,
-        pos: a.pos,
-        angle: a.angle,
-        width: a.width,
-        height: a.height,
-        color: a.color,
-        lineWidth: a.lineWidth,
-        showLabel: a.showLabel,
-        leaderLength: a.leaderLength,
-        labelOffset: a.labelOffset,
-        visible: a.visible,
-        locked: a.locked,
-        restrictionNotes: a.restrictionNotes,
-        restrictionImage: a.restrictionImage,
-        restrictionImageName: a.restrictionImageName,
-        includeInReport: a.includeInReport,
-        attachments: a.attachments,
-        labelMode: a.labelMode,
-      })),
-      rulers: vesselState.rulers.map((r) => ({
-        id: r.id,
-        name: r.name,
-        startPos: r.startPos,
-        startAngle: r.startAngle,
-        endPos: r.endPos,
-        endAngle: r.endAngle,
-        color: r.color,
-        showLabel: r.showLabel,
-      })),
-      coverageRects: vesselState.coverageRects.map((r) => ({
-        id: r.id,
-        name: r.name,
-        pos: r.pos,
-        angle: r.angle,
-        width: r.width,
-        height: r.height,
-        color: r.color,
-        lineWidth: r.lineWidth,
-        filled: r.filled,
-        fillOpacity: r.fillOpacity,
-        locked: r.locked,
-      })),
-      inspectionImages: vesselState.inspectionImages.map((i) => ({
-        id: i.id,
-        name: i.name,
-        imageData: i.imageData,
-        pos: i.pos,
-        angle: i.angle,
-        description: i.description,
-        date: i.date,
-        inspector: i.inspector,
-        method: i.method,
-        result: i.result,
-        leaderLength: i.leaderLength,
-        labelOffset: i.labelOffset,
-        visible: i.visible,
-        locked: i.locked,
-      })),
-      scanComposites: vesselState.scanComposites.map((sc) => ({
-        id: sc.id,
-        name: sc.name,
-        cloudId: sc.cloudId,
-        xAxis: sc.xAxis,
-        yAxis: sc.yAxis,
-        stats: sc.stats,
-        indexStartMm: sc.indexStartMm,
-        datumAngleDeg: sc.datumAngleDeg,
-        scanDirection: sc.scanDirection,
-        indexDirection: sc.indexDirection,
-        orientationConfirmed: sc.orientationConfirmed,
-        colorScale: sc.colorScale,
-        rangeMin: sc.rangeMin,
-        rangeMax: sc.rangeMax,
-        opacity: sc.opacity,
-        sourceNdeFile: sc.sourceNdeFile,
-        sourceFiles: sc.sourceFiles,
-      })),
-      domeScanComposites: vesselState.domeScanComposites.map((ds) => ({
-        id: ds.id,
-        name: ds.name,
-        cloudId: ds.cloudId,
-        head: ds.head,
-        centerPhi: ds.centerPhi,
-        centerTheta: ds.centerTheta,
-        scanDirection: ds.scanDirection,
-        indexDirection: ds.indexDirection,
-        orientationConfirmed: ds.orientationConfirmed,
-        xAxis: ds.xAxis,
-        yAxis: ds.yAxis,
-        stats: ds.stats,
-        colorScale: ds.colorScale,
-        rangeMin: ds.rangeMin,
-        rangeMax: ds.rangeMax,
-        opacity: ds.opacity,
-        sourceFiles: ds.sourceFiles,
-        sectionType: `dome_${ds.head}`,
-      })),
-      pipelines: vesselState.pipelines,
-      referenceDrawings: vesselState.referenceDrawings ?? [],
-      measurementConfig: { ...vesselState.measurementConfig },
-      labelsTidied: vesselState.labelsTidied,
-      annotationTablePosition: vesselState.annotationTablePosition,
-      annotationTableSize: vesselState.annotationTableSize,
-      wallLossGroups: vesselState.wallLossGroups,
-      visuals: { ...vesselState.visuals },
-    };
-
-    // Sanitize NaN/Infinity
-    return JSON.parse(
-      JSON.stringify(config, (_key, value) =>
-        typeof value === 'number' && !Number.isFinite(value) ? null : value
-      )
-    );
-  }, [vesselState, saveModelType, saveModelTypeCustom]);
-
-  /** Capture 3D + 2D images for PDF report generation */
-  const captureReportAssets = useCallback(async () => {
-    const assets: Record<string, unknown> = {};
-
-    // 1. Capture 3D viewport overviews
-    const viewport = viewportRef.current;
-    if (viewport) {
-      const renderer = viewport.getRenderer();
-      const scene = viewport.getScene();
-      const camera = viewport.getCamera();
-      const controls = viewport.getControls();
-      const sceneManager = viewport.getSceneManager();
-      if (renderer && scene && camera && controls && sceneManager) {
-        try {
-          const overviews = await captureVesselOverviews({
-            renderer,
-            scene,
-            camera,
-            controls,
-            vesselState,
-            vesselGroup: sceneManager.getVesselGroup() ?? undefined,
-          });
-          assets.overviewRenders = overviews;
-        } catch (err) {
-          console.warn('Failed to capture vessel overviews:', err);
-        }
-      }
-    }
-
-    // 2. Capture 2D flattened projection
-    const flatRef = flattenedViewportRef.current;
-    if (flatRef) {
-      try {
-        const flatImage = flatRef.exportImage();
-        if (flatImage) assets.flattenedView = flatImage;
-      } catch (err) {
-        console.warn('Failed to capture flattened view:', err);
-      }
-    }
-
-    // 3. Capture per-annotation heatmaps
-    const annotationHeatmaps: Record<number, string> = {};
-    for (const ann of vesselState.annotations) {
-      if (!ann.includeInReport && ann.type !== 'scan') continue;
-      const heatmap = captureAnnotationHeatmap(ann, vesselState);
-      if (heatmap) annotationHeatmaps[ann.id] = heatmap;
-    }
-    if (Object.keys(annotationHeatmaps).length > 0) {
-      assets.annotationHeatmaps = annotationHeatmaps;
-    }
-
-    // 4. Capture per-annotation 3D context images
-    if (viewport) {
-      const renderer = viewport.getRenderer();
-      const scene = viewport.getScene();
-      const camera = viewport.getCamera();
-      const controls = viewport.getControls();
-      const sceneManager = viewport.getSceneManager();
-      if (renderer && scene && camera && controls && sceneManager) {
-        const contextImages: Record<number, string> = {};
-        for (const ann of vesselState.annotations) {
-          if (!ann.includeInReport && ann.type !== 'scan') continue;
-          try {
-            const ctx = captureAnnotationContext(
-              {
-                renderer,
-                scene,
-                camera,
-                controls,
-                vesselState,
-                vesselGroup: sceneManager.getVesselGroup() ?? undefined,
-              },
-              ann
-            );
-            contextImages[ann.id] = ctx;
-          } catch (err) {
-            console.warn(`Failed to capture context for annotation ${ann.id}:`, err);
-          }
-        }
-        if (Object.keys(contextImages).length > 0) {
-          assets.annotationContextImages = contextImages;
-        }
-      }
-    }
-
-    return assets;
-  }, [vesselState]);
-
-  // Save (update existing model)
-  const saveToProject = useCallback(async () => {
-    if (!effectiveProjectVesselId) {
-      setPickerMode('save');
-      return;
-    }
-    if (!user) return;
-    if (!vesselModelIdRef.current) {
-      // No existing model — fall through to save-as-new flow
-      setPickerMode('save');
-      return;
-    }
-
-    setSaveStatus('saving');
-    try {
-      const sanitized = buildSaveConfig();
-      // Capture report images
-      const reportAssets = await captureReportAssets();
-      sanitized.reportAssets = reportAssets;
-
-      const modelName = vesselState.vesselName || 'Untitled Vessel';
-
-      await updateModelMutation.mutateAsync({
-        id: vesselModelIdRef.current,
-        config: sanitized,
-        name: modelName,
-      });
-
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2000);
-    } catch (err: any) {
-      console.error('Save to project failed:', err);
-      alert(`Save failed: ${err?.message || 'Unknown error'}`);
-      setSaveStatus('error');
-      setTimeout(() => setSaveStatus('idle'), 3000);
-    }
-  }, [
-    effectiveProjectVesselId,
-    user,
-    vesselState.vesselName,
-    buildSaveConfig,
-    captureReportAssets,
-    updateModelMutation,
-    saveModelType,
-    saveModelTypeCustom,
-  ]);
-
-  // Save as new model (always creates a new record)
-  const saveAsNewToProject = useCallback(async () => {
-    const targetVesselId = pickerVesselId || effectiveProjectVesselId;
-    if (!targetVesselId) {
-      setPickerMode('save');
-      return;
-    }
-    if (!user) {
-      alert('Not authenticated');
-      return;
-    }
-    if (!user.organizationId) {
-      alert('No organization set on your profile');
-      return;
-    }
-
-    setSaveStatus('saving');
-    try {
-      const sanitized = buildSaveConfig();
-      // Capture report images
-      const reportAssets = await captureReportAssets();
-      sanitized.reportAssets = reportAssets;
-
-      const modelName = vesselState.vesselName || 'Untitled Vessel';
-
-      const newId = await saveModelMutation.mutateAsync({
-        name: modelName,
-        organizationId: user.organizationId,
-        userId: user.id,
-        config: sanitized,
-        projectVesselId: targetVesselId,
-      });
-      vesselModelIdRef.current = newId;
-
-      setSaveStatus('saved');
-      setPickerMode(null);
-      setPickerProjectId(null);
-      setPickerVesselId(null);
-      setTimeout(() => setSaveStatus('idle'), 2000);
-    } catch (err: any) {
-      console.error('Save as new failed:', err);
-      alert(`Save failed: ${err?.message || JSON.stringify(err)}`);
-      setSaveStatus('error');
-      setTimeout(() => setSaveStatus('idle'), 3000);
-    }
-  }, [
-    pickerVesselId,
-    effectiveProjectVesselId,
-    user,
-    vesselState.vesselName,
-    buildSaveConfig,
-    captureReportAssets,
-    saveModelMutation,
-  ]);
-
-  const exportGLB = useCallback(async () => {
-    const hasProjectInfo =
-      vesselState.vesselName || vesselState.location || vesselState.inspectionDate;
-    if (!hasProjectInfo) {
-      const proceed = window.confirm(
-        'No project info has been added. The exported file will use a generic name.\n\n' +
-          'You can add a vessel name, location, and inspection date in the Project Info section of the sidebar.\n\n' +
-          'Export anyway?'
-      );
-      if (!proceed) return;
-    }
-
-    const sceneManager = viewportRef.current?.getSceneManager();
-    const vesselGroup = sceneManager?.getVesselGroup();
-    if (!vesselGroup) return;
-
-    try {
-      await exportVesselGLB(vesselGroup, vesselState);
-    } catch (err) {
-      console.error('GLB export failed:', err);
-    }
-  }, [vesselState]);
-
-  const loadProject = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const projectData = JSON.parse(e.target?.result as string);
-        if (!projectData.vessel || !projectData.version) {
-          throw new Error('Invalid project file format');
-        }
-
-        // Dispose existing textures before loading new ones
-        for (const key of Object.keys(textureObjectsRef.current)) {
-          textureObjectsRef.current[Number(key)].dispose();
-        }
-        textureObjectsRef.current = {};
-
-        // Reconstruct Three.js textures from saved base64 imageData
-        const renderer = viewportRef.current?.getRenderer();
-        const loadedTextures: TextureConfig[] = [];
-        const savedTextures = projectData.textures || [];
-
-        if (renderer && savedTextures.length > 0) {
-          for (const texData of savedTextures) {
-            if (!texData.imageData) continue;
-            try {
-              const result = await loadTextureFromData(texData.imageData, renderer);
-              textureObjectsRef.current[Number(texData.id)] = result.texture;
-              loadedTextures.push({
-                id: texData.id,
-                name: texData.name || 'Untitled',
-                imageData: texData.imageData,
-                pos: texData.pos ?? 0,
-                angle: texData.angle ?? 90,
-                scaleX: texData.scaleX ?? texData.scale ?? 1.0,
-                scaleY: texData.scaleY ?? texData.scale ?? 1.0,
-                rotation: texData.rotation || 0,
-                flipH: texData.flipH || false,
-                flipV: texData.flipV || false,
-                aspectRatio: result.aspectRatio,
-              });
-            } catch {
-              // Skip textures that fail to load
-            }
-          }
-        }
-
-        const newState: VesselState = {
-          id: projectData.vessel.id || 3000,
-          length: projectData.vessel.length || 8000,
-          headRatio: projectData.vessel.headRatio || 2.0,
-          orientation: projectData.vessel.orientation || 'horizontal',
-          vesselName: projectData.vessel.vesselName || '',
-          location: projectData.vessel.location || '',
-          inspectionDate: projectData.vessel.inspectionDate || '',
-          nozzles: (projectData.nozzles || []).map(deserializeNozzle),
-          liftingLugs: (projectData.liftingLugs || []).map((l: any) => ({
-            name: l.name || 'L',
-            pos: l.pos ?? 0,
-            angle: l.angle ?? 90,
-            style: l.style || 'padEye',
-            swl: l.swl || '5t',
-            width: l.width,
-            height: l.height,
-            thickness: l.thickness,
-            holeDiameter: l.holeDiameter,
-          })),
-          saddles: (projectData.saddles || []).map(deserializeSaddle),
-          welds: (projectData.welds || []).map((w: any) => ({
-            name: w.name || 'W',
-            type: w.type || 'circumferential',
-            pos: w.pos ?? 0,
-            endPos: w.endPos,
-            angle: w.angle,
-            color: w.color || '#888888',
-          })),
-          textures: loadedTextures,
-          annotations: (projectData.annotations || []).map((a: any) => ({
-            id: a.id || 0,
-            name: a.name || 'A',
-            type: a.type === 'restriction' ? 'restriction' : 'scan',
-            pos: a.pos ?? 0,
-            angle: a.angle ?? 90,
-            width: a.width ?? 100,
-            height: a.height ?? 100,
-            color: a.color || '#ff3333',
-            lineWidth: a.lineWidth ?? 2,
-            showLabel: a.showLabel !== false,
-            leaderLength: a.leaderLength,
-            labelOffset: a.labelOffset,
-            visible: a.visible,
-            locked: a.locked,
-            restrictionNotes: a.restrictionNotes,
-            restrictionImage: a.restrictionImage,
-            restrictionImageName: a.restrictionImageName,
-            includeInReport: a.includeInReport,
-            attachments: a.attachments ?? [],
-          })),
-          rulers: (projectData.rulers || []).map((r: any) => ({
-            id: r.id || 0,
-            name: r.name || 'R',
-            startPos: r.startPos ?? 0,
-            startAngle: r.startAngle ?? 90,
-            endPos: r.endPos ?? 100,
-            endAngle: r.endAngle ?? 90,
-            color: r.color || '#ffaa00',
-            showLabel: r.showLabel !== false,
-          })),
-          coverageRects: (projectData.coverageRects || []).map((r: any) => ({
-            id: r.id || 0,
-            name: r.name || 'C',
-            pos: r.pos ?? 0,
-            angle: r.angle ?? 90,
-            width: r.width ?? 300,
-            height: r.height ?? 200,
-            color: r.color || '#00cc66',
-            lineWidth: r.lineWidth ?? 2,
-            filled: r.filled ?? true,
-            fillOpacity: r.fillOpacity ?? 0.2,
-            locked: r.locked,
-          })),
-          inspectionImages: (projectData.inspectionImages || []).map((i: any) => ({
-            id: i.id || 0,
-            name: i.name || 'IMG',
-            imageData: i.imageData || '',
-            pos: i.pos ?? 0,
-            angle: i.angle ?? 90,
-            description: i.description,
-            date: i.date,
-            inspector: i.inspector,
-            method: i.method,
-            result: i.result,
-            leaderLength: i.leaderLength,
-            labelOffset: i.labelOffset,
-            visible: i.visible,
-            locked: i.locked,
-          })),
-          scanComposites: (projectData.scanComposites || []).map((sc: any) => ({
-            id: sc.id || `sc_${Date.now()}`,
-            name: sc.name || 'Untitled',
-            cloudId: sc.cloudId,
-            data: sc.data || [], // may be empty if saved without data (Issue 3.6)
-            xAxis: sc.xAxis || [],
-            yAxis: sc.yAxis || [],
-            stats: sc.stats || { min: 0, max: 0, mean: 0, median: 0, stdDev: 0 },
-            indexStartMm: sc.indexStartMm ?? 0,
-            datumAngleDeg: sc.datumAngleDeg ?? 0,
-            scanDirection: sc.scanDirection || 'cw',
-            indexDirection: sc.indexDirection || 'forward',
-            orientationConfirmed: sc.orientationConfirmed ?? true,
-            useGlobalOrigin: sc.useGlobalOrigin,
-            colorScale: sc.colorScale || 'Jet',
-            rangeMin: sc.rangeMin ?? null,
-            rangeMax: sc.rangeMax ?? null,
-            opacity: sc.opacity ?? 1,
-            sourceNdeFile: sc.sourceNdeFile,
-            sourceFiles: sc.sourceFiles,
-          })),
-          domeScanComposites: (projectData.domeScanComposites || []).map((ds: any) => ({
-            ...normalizeDomeScanComposite(ds),
-          })),
-          pipelines: (projectData.pipelines || []).map((p: any) => ({
-            id: p.id || crypto.randomUUID(),
-            nozzleIndex: p.nozzleIndex ?? 0,
-            pipeDiameter: p.pipeDiameter ?? 100,
-            color: p.color,
-            segments: (p.segments || []).map((s: any) => ({
-              id: s.id || crypto.randomUUID(),
-              type: s.type || 'straight',
-              rotation: s.rotation ?? 0,
-              length: s.length,
-              angle: s.angle,
-              bendRadius: s.bendRadius,
-              endDiameter: s.endDiameter,
-              branchDiameter: s.branchDiameter,
-              style: s.style,
-              headRatio: s.headRatio,
-            })),
-            locked: p.locked,
-            visible: p.visible,
-            ...(p.freeOrigin ? { freeOrigin: p.freeOrigin } : {}),
-          })),
-          referenceDrawings: (projectData.referenceDrawings || []).map((d: any) => ({
-            id: d.id || Date.now(),
-            title: d.title || '',
-            imageData: d.imageData || '',
-            fileName: d.fileName || '',
-          })),
-          measurementConfig: {
-            ...DEFAULT_VESSEL_STATE.measurementConfig,
-            ...(projectData.measurementConfig || {}),
-          },
-          coordinateOrigin: {
-            ...DEFAULT_VESSEL_STATE.coordinateOrigin,
-            ...(projectData.coordinateOrigin || {}),
-          },
-          originSourceScanId: projectData.originSourceScanId,
-          hasModel: true,
-          visuals: { ...DEFAULT_VESSEL_STATE.visuals, ...(projectData.visuals || {}) },
-          wallLossGroups: projectData.wallLossGroups,
-        };
-
-        // Clear heatmap cache to avoid stale scan composite textures
-        clearHeatmapCache();
-
-        // Update next texture ID to avoid conflicts
-        const maxId = loadedTextures.reduce(
-          (max: number, t: TextureConfig) => Math.max(max, Number(t.id) || 0),
-          0
-        );
-        nextTextureIdRef.current = maxId + 1;
-
-        // Update next annotation ID to avoid conflicts
-        const maxAnnId = newState.annotations.reduce(
-          (max: number, a: AnnotationShapeConfig) => Math.max(max, a.id || 0),
-          0
-        );
-        nextAnnotationIdRef.current = maxAnnId + 1;
-
-        // Update next coverage rect ID to avoid conflicts
-        const maxCovId = newState.coverageRects.reduce(
-          (max: number, r: CoverageRectConfig) => Math.max(max, r.id || 0),
-          0
-        );
-        nextCoverageRectIdRef.current = maxCovId + 1;
-
-        // Update next ruler ID to avoid conflicts
-        const maxRulerId = newState.rulers.reduce(
-          (max: number, r: RulerConfig) => Math.max(max, r.id || 0),
-          0
-        );
-        nextRulerIdRef.current = maxRulerId + 1;
-
-        // Update next inspection image ID to avoid conflicts
-        const maxImgId = newState.inspectionImages.reduce(
-          (max: number, i: InspectionImageConfig) => Math.max(max, i.id || 0),
-          0
-        );
-        nextInspectionImageIdRef.current = maxImgId + 1;
-
-        const validatedState = validateVesselState(newState);
-        dispatch({ type: 'SET_VESSEL', vessel: validatedState });
-        setTextureObjectsVersion((v) => v + 1);
-        dispatch({ type: 'DESELECT_ALL' });
-
-        // Re-fetch thickness data from cloud for composites saved without inline data
-        const compositesNeedingData = validatedState.scanComposites.filter(
-          (sc) => sc.cloudId && (!sc.data || sc.data.length === 0)
-        );
-        for (const sc of compositesNeedingData) {
-          getScanComposite(sc.cloudId!)
-            .then((cloud) => {
-              clearHeatmapCache(sc.id);
-              dispatch({
-                type: 'UPDATE_VESSEL_FN',
-                updater: (prev) => ({
-                  ...prev,
-                  scanComposites: prev.scanComposites.map((existing) =>
-                    existing.id === sc.id
-                      ? {
-                          ...existing,
-                          data: cloud.thickness_data,
-                          xAxis: cloud.x_axis,
-                          yAxis: cloud.y_axis,
-                          stats: cloud.stats || existing.stats,
-                        }
-                      : existing
-                  ),
-                }),
-              });
-            })
-            .catch((err) => {
-              console.error(`Failed to fetch scan composite ${sc.cloudId}:`, err);
-            });
-        }
-
-        // Re-fetch dome scan thickness data from cloud (same scan_composites
-        // table by cloudId; data stripped on save like flat composites).
-        const domeCompositesNeedingData = validatedState.domeScanComposites.filter(
-          (ds) => ds.cloudId && (!ds.data || ds.data.length === 0)
-        );
-        for (const ds of domeCompositesNeedingData) {
-          getScanComposite(ds.cloudId!)
-            .then((cloud) => {
-              clearDomeHeatmapCache(ds.id);
-              dispatch({
-                type: 'UPDATE_VESSEL_FN',
-                updater: (prev) => ({
-                  ...prev,
-                  domeScanComposites: prev.domeScanComposites.map((existing) =>
-                    existing.id === ds.id
-                      ? {
-                          ...existing,
-                          data: cloud.thickness_data,
-                          xAxis: cloud.x_axis,
-                          yAxis: cloud.y_axis,
-                          stats: cloud.stats || existing.stats,
-                        }
-                      : existing
-                  ),
-                }),
-              });
-            })
-            .catch((err) => {
-              console.error(`Failed to fetch dome scan composite ${ds.cloudId}:`, err);
-            });
-        }
-      } catch (error: any) {
-        alert('Error loading project: ' + error.message);
-      }
-    };
-    reader.readAsText(file);
-    event.target.value = '';
-  }, []);
-
-  // --- Drawing import apply handler ---
-  const handleDrawingApply = useCallback(
-    (result: ExtractionResult) => {
-      updateVessel((prev) =>
-        validateVesselState({
-          ...prev,
-          id: result.id,
-          length: result.length,
-          headRatio: result.headRatio,
-          orientation: result.orientation,
-          nozzles: result.nozzles.map((n) => ({
-            name: n.name,
-            pos: n.pos,
-            proj: n.proj,
-            angle: n.angle,
-            size: n.size,
-          })),
-          saddles: result.saddles.map((s) => ({
-            pos: s.pos,
-            color: s.color || '#2244ff',
-          })),
-          hasModel: true,
-        })
-      );
-      dispatch({ type: 'DESELECT_ALL' });
-    },
-    [updateVessel]
+  // --- Command palette (C14) ---
+  // Registry rebuilt only when the document or Topo availability changes (not on
+  // hover/orbit re-renders). Consumed solely by CommandPalette (no scene effect).
+  const paletteItems = useMemo(
+    () => buildPaletteItems(vesselState, { topoEnabled }),
+    [vesselState, topoEnabled]
   );
 
-  // --- Inspection mode handlers ---
-  const enterInspectionMode = useCallback(
-    (annotationId: number) => {
+  // A canonical-view / entity-frame flight that must wait for the 3D viewport to
+  // (re)mount when the palette was invoked from 2D/Topo. Held off React state.
+  const pendingFlightRef = useRef<{ view: CanonicalViewId } | { frame: FrameEntityRef } | null>(
+    null
+  );
+
+  const flyToPose = useCallback(
+    (pose: { position: THREE.Vector3; target: THREE.Vector3 } | null) => {
+      if (!pose) return;
       const camera = viewportRef.current?.getCamera();
       const controls = viewportRef.current?.getControls();
       if (!camera || !controls) return;
+      animateCamera(camera, controls, pose.position, pose.target, 400);
+    },
+    []
+  );
 
-      const ann = vesselState.annotations.find((a) => a.id === annotationId);
-      if (!ann) return;
-
-      // Save current camera state before animating
-      const savedCameraState: {
-        position: [number, number, number];
-        target: [number, number, number];
-      } = {
-        position: camera.position.toArray() as [number, number, number],
-        target: (controls.target as THREE.Vector3).toArray() as [number, number, number],
-      };
-
-      const { position: targetPos, target: targetLookAt } = computeInspectionCameraTarget(
-        ann,
-        vesselState,
-        camera
-      );
-
-      setVisibleStatLines({ min: false, max: false });
-      animateCamera(camera, controls, targetPos, targetLookAt, 500, () => {
-        controls.enabled = false;
-        setVisibleStatLines({ min: true, max: true });
-      });
-
-      dispatch({ type: 'ENTER_INSPECTION_MODE', annotationId, cameraState: savedCameraState });
+  // Canonical-view pose using the SAME bounds source ViewCube uses.
+  const resolveViewPose = useCallback(
+    (view: CanonicalViewId) => {
+      const handle = viewportRef.current;
+      const camera = handle?.getCamera();
+      if (!handle || !camera) return null;
+      const boundsTarget = handle.getSceneManager()?.getVesselGroup() ?? handle.getScene();
+      if (!boundsTarget) return null;
+      return canonicalPose(view, vesselState, computeVesselBounds(boundsTarget));
     },
     [vesselState]
   );
 
-  const exitInspectionMode = useCallback(() => {
-    const camera = viewportRef.current?.getCamera();
-    const controls = viewportRef.current?.getControls();
-    if (!camera || !controls) return;
-
-    const saved = ui.savedCameraState;
-    if (!saved) {
-      dispatch({ type: 'EXIT_INSPECTION_MODE' });
-      return;
-    }
-
-    // Re-enable controls before animating back
-    controls.enabled = true;
-    cancelCameraAnimation();
-
-    const targetPos = new THREE.Vector3(...saved.position);
-    const targetLookAt = new THREE.Vector3(...saved.target);
-
-    animateCamera(camera, controls, targetPos, targetLookAt, 500);
-    dispatch({ type: 'EXIT_INSPECTION_MODE' });
-  }, [ui.savedCameraState]);
-
-  const cycleInspection = useCallback(
-    (annotationId: number) => {
+  const resolveFramePose = useCallback(
+    (frame: FrameEntityRef) => {
       const camera = viewportRef.current?.getCamera();
-      const controls = viewportRef.current?.getControls();
-      if (!camera || !controls) return;
-
-      const ann = vesselState.annotations.find((a) => a.id === annotationId);
-      if (!ann) return;
-
-      const { position: targetPos, target: targetLookAt } = computeInspectionCameraTarget(
-        ann,
-        vesselState,
-        camera
-      );
-
-      // Temporarily re-enable controls for the animation
-      controls.enabled = true;
-      setVisibleStatLines({ min: false, max: false });
-      animateCamera(camera, controls, targetPos, targetLookAt, 500, () => {
-        controls.enabled = false;
-        setVisibleStatLines({ min: true, max: true });
-      });
-
-      dispatch({ type: 'CYCLE_INSPECTION', annotationId });
+      if (!camera) return null;
+      return frameEntityPose(frame, vesselState, camera);
     },
     [vesselState]
   );
 
-  // Sidebar annotation click: enter/cycle inspection mode (scan annotations only)
-  const handleSidebarAnnotationSelect = useCallback(
-    (id: number) => {
-      const ann = vesselState.annotations.find((a) => a.id === id);
-      // Restriction annotations don't have an enhanced inspection view
-      if (ann?.type === 'restriction') {
-        dispatch({ type: 'SELECT_ANNOTATION', id });
+  // Run a deferred flight once the viewport is back in 3D and mounted.
+  useEffect(() => {
+    if (ui.viewMode !== '3d') return;
+    const pending = pendingFlightRef.current;
+    if (!pending) return;
+    const raf = requestAnimationFrame(() => {
+      pendingFlightRef.current = null;
+      flyToPose(
+        'view' in pending ? resolveViewPose(pending.view) : resolveFramePose(pending.frame)
+      );
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [ui.viewMode, resolveViewPose, resolveFramePose, flyToPose]);
+
+  // Execute one palette descriptor: dispatch the state change and, where a camera
+  // move is implied, fly there (deferring past a 2D/Topo→3D switch if needed).
+  const handlePaletteAction = useCallback(
+    (action: PaletteAction) => {
+      dispatch({ type: 'SET_PALETTE_OPEN', open: false });
+
+      if ('select' in action) {
+        dispatch(action.select);
+        if (action.frame) {
+          if (ui.viewMode !== '3d') {
+            pendingFlightRef.current = { frame: action.frame };
+            dispatch({ type: 'SET_VIEW_MODE', mode: '3d' });
+          } else {
+            flyToPose(resolveFramePose(action.frame));
+          }
+        }
         return;
       }
-      if (ui.inspectingAnnotationId !== null && ui.inspectingAnnotationId !== id) {
-        cycleInspection(id);
-      } else if (ui.inspectingAnnotationId === null) {
-        enterInspectionMode(id);
+      if ('view' in action) {
+        if (ui.viewMode !== '3d') {
+          pendingFlightRef.current = { view: action.view };
+          dispatch({ type: 'SET_VIEW_MODE', mode: '3d' });
+        } else {
+          flyToPose(resolveViewPose(action.view));
+        }
+        return;
+      }
+      if ('bookmark' in action) {
+        const bm = (vesselState.cameraBookmarks ?? []).find((b) => b.id === action.bookmark);
+        if (!bm) return;
+        if (ui.viewMode !== '3d') {
+          dispatch({ type: 'SET_VIEW_MODE', mode: '3d' });
+          requestAnimationFrame(() => requestAnimationFrame(() => handleRecallBookmark(bm)));
+        } else {
+          handleRecallBookmark(bm);
+        }
+        return;
+      }
+      if ('toggle' in action) {
+        switch (action.toggle) {
+          case 'snap':
+            dispatch({ type: 'TOGGLE_SNAP' });
+            break;
+          case 'tidy':
+            dispatch({ type: 'TOGGLE_LABELS_TIDIED' });
+            break;
+          case 'outliner':
+            dispatch({ type: 'TOGGLE_OUTLINER' });
+            break;
+          case 'statsCoverage':
+            dispatch({ type: 'TOGGLE_STATS_COVERAGE' });
+            break;
+          case 'statsWallLoss':
+            dispatch({ type: 'TOGGLE_STATS_WALL_LOSS' });
+            break;
+          case 'statsScanCoverage':
+            dispatch({ type: 'TOGGLE_STATS_SCAN_COVERAGE' });
+            break;
+        }
+        return;
+      }
+      if ('viewMode' in action) {
+        dispatch({ type: 'SET_VIEW_MODE', mode: action.viewMode });
+        return;
+      }
+      if ('undo' in action) {
+        dispatch({ type: 'UNDO' });
+        return;
+      }
+      if ('redo' in action) {
+        dispatch({ type: 'REDO' });
       }
     },
-    [ui.inspectingAnnotationId, enterInspectionMode, cycleInspection, vesselState.annotations]
+    [ui.viewMode, vesselState, flyToPose, resolveFramePose, resolveViewPose, handleRecallBookmark]
   );
 
-  // --- Report generation handler ---
-  const handleGenerateReport = useCallback(async () => {
-    const viewportHandle = viewportRef.current;
-    if (!viewportHandle) return;
+  // --- Interaction callbacks (from Three.js viewport) — T2-D / D3 ---
+  // Assembly moved verbatim into useViewportCallbacks; it composes the D1 entity
+  // callbacks + dispatch/setters threaded below. The hook returns a FRESH object
+  // per render (no memo) exactly as the inline literal did, so ThreeViewport's
+  // `callbacks` prop identity churns identically — re-render cadence is unchanged.
+  const vesselCallbacks = useViewportCallbacks({
+    vesselState,
+    dispatch,
+    updateAppendage,
+    addAnnotation,
+    updateAnnotation,
+    getNextAnnotationId,
+    addRuler,
+    getNextRulerId,
+    addCoverageRect,
+    updateCoverageRect,
+    getNextCoverageRectId,
+    updateInspectionImage,
+    updateWeld,
+    updateNozzle,
+    updateSaddle,
+    updateLug,
+    updateTexture,
+    handleUpdateScanComposite,
+    handleUpdateDomeScan,
+    cursorTooltipRef,
+    setDomeScanHoverInfo,
+    setPipePartPopup,
+  });
 
-    const renderer = viewportHandle.getRenderer();
-    const scene = viewportHandle.getScene();
-    const camera = viewportHandle.getCamera();
-    const controls = viewportHandle.getControls();
-    if (!renderer || !scene || !camera || !controls) return;
+  // --- Drawing import apply handler (T2-D / D4) ---
+  // Body moved verbatim into useDrawingApply; validateVesselState is threaded in
+  // (it stays in the component for the persistence load path). Dep array and the
+  // window.confirm pipeline-drop guard are preserved.
+  const { handleDrawingApply } = useDrawingApply({
+    updateVessel,
+    dispatch,
+    vesselState,
+    validateVesselState,
+  });
 
-    const vesselGroup = viewportHandle.getSceneManager()?.getVesselGroup() ?? undefined;
-    const captureCtx = { renderer, scene, camera, controls, vesselState, vesselGroup };
+  // --- Inspection mode navigation (T2-D / D4) ---
+  // enter/exit/cycle + the sidebar annotation click and the min/max stat-line
+  // overlay state all live in useInspectionMode. The two ui-derived values are
+  // threaded in by identical name so the moved callbacks keep their exact
+  // dependency arrays and camera choreography verbatim. enterInspectionMode is
+  // consumed only inside the hook (by the sidebar click) so it is not returned.
+  const {
+    visibleStatLines,
+    toggleStatLine,
+    exitInspectionMode,
+    cycleInspection,
+    handleSidebarAnnotationSelect,
+  } = useInspectionMode({
+    vesselState,
+    dispatch,
+    viewportRef,
+    inspectingAnnotationId: ui.inspectingAnnotationId,
+    uiSavedCameraState: ui.savedCameraState,
+  });
 
-    // 1. Capture vessel overview images
-    const vesselOverviews = await captureVesselOverviews(captureCtx);
-
-    // 2. Capture per-annotation context images and heatmaps
-    const reportAnnotations = vesselState.annotations.filter(
-      (a) => a.includeInReport && a.type === 'scan'
-    );
-    const annotationContextImages = new Map<number, string>();
-    const heatmapImages = new Map<number, string>();
-    const companionScanImages = new Map<number, CompanionScanImageSet>();
-
-    for (const ann of reportAnnotations) {
-      annotationContextImages.set(ann.id, captureAnnotationContext(captureCtx, ann));
-      const heatmap = captureAnnotationHeatmap(ann, vesselState);
-      if (heatmap) heatmapImages.set(ann.id, heatmap);
-    }
-
-    // 3. Build report config
-    const config: ReportConfig = {
-      annotationIds: reportAnnotations.map((a) => a.id),
-      companionAvailable: false,
-      vesselOverviews,
-      annotationContextImages,
-      companionScanImages,
-      heatmapImages,
-    };
-
-    // 4. Generate and download
-    const blob = await generateReport(vesselState, config);
-    downloadReport(blob, vesselState);
-  }, [vesselState]);
-
-  // --- Escape key cancels draw mode or exits inspection mode ---
+  // --- Keyboard: Escape cancels draw/inspection; Ctrl/Cmd+Z / +Y undo-redo ---
+  // Note: VesselModeler does not render <ScreenshotMode> (that component owns its
+  // own key handler when mounted elsewhere), so there is no screenshot-mode
+  // visibility state here to guard against — only the text-field guard applies.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -3254,377 +904,54 @@ export default function VesselModeler() {
         } else if (drawModeState.annotation || drawModeState.coverage || drawModeState.ruler) {
           dispatch({ type: 'CANCEL_ALL_DRAW_MODES' });
         }
+        return;
+      }
+
+      // Undo/redo — let native text-editing undo win inside form fields.
+      const target = e.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+      // Command palette (Ctrl/Cmd+K, Ctrl/Cmd+P alias). preventDefault so the
+      // browser's own K/P bindings (e.g. print) don't steal it.
+      if ((e.ctrlKey || e.metaKey) && (key === 'k' || key === 'p')) {
+        e.preventDefault();
+        dispatch({ type: 'SET_PALETTE_OPEN', open: true });
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && key === 'z') {
+        e.preventDefault();
+        dispatch({ type: e.shiftKey ? 'REDO' : 'UNDO' });
+      } else if (e.ctrlKey && key === 'y') {
+        e.preventDefault();
+        dispatch({ type: 'REDO' });
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [drawModeState, ui.inspectingAnnotationId, exitInspectionMode]);
 
-  // --- Nozzle library drag-and-drop onto 3D canvas ---
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    if (
-      e.dataTransfer.types.includes('application/x-nozzle-pipe') ||
-      e.dataTransfer.types.includes('application/x-lifting-lug') ||
-      e.dataTransfer.types.includes('application/x-weld') ||
-      e.dataTransfer.types.includes('application/x-pipe-part')
-    ) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
-    }
-  }, []);
-
-  const SCALE = 0.001; // Matches vessel-geometry scale
-
-  const handleNozzleDrop = useCallback(
-    (e: React.DragEvent) => {
-      const data = e.dataTransfer.getData('application/x-nozzle-pipe');
-      if (!data) return;
-      e.preventDefault();
-
-      const pipe = JSON.parse(data);
-      const cam = viewportRef.current?.getCamera();
-      const rendererEl = viewportRef.current?.getRenderer()?.domElement;
-      const sceneManager = viewportRef.current?.getSceneManager();
-      if (!cam || !rendererEl || !sceneManager) return;
-
-      const vesselGroup = sceneManager.getVesselGroup();
-      if (!vesselGroup) return;
-
-      // Raycast from drop position
-      const rect = rendererEl.getBoundingClientRect();
-      const mouse = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, cam);
-
-      // Find shell meshes to intersect
-      const shells: THREE.Object3D[] = [];
-      vesselGroup.traverse((child: THREE.Object3D) => {
-        if (child.userData.isShell) shells.push(child);
-      });
-      const intersects = raycaster.intersectObjects(shells);
-
-      if (intersects.length > 0) {
-        const point = intersects[0].point;
-        const isVertical = vesselState.orientation === 'vertical';
-
-        // Calculate position from intersection point
-        let newPos = isVertical
-          ? point.y / SCALE + vesselState.length / 2
-          : point.x / SCALE + vesselState.length / 2;
-        const headDepth = vesselState.id / (2 * vesselState.headRatio);
-        newPos = Math.max(-headDepth, Math.min(vesselState.length + headDepth, newPos));
-
-        // Calculate angle from intersection
-        const rad = isVertical ? Math.atan2(point.z, point.x) : Math.atan2(point.y, point.z);
-        let deg = (rad * 180) / Math.PI;
-        if (deg < 0) deg += 360;
-
-        // Find a unique name
-        const namePrefix = pipe.style === 'plain-pipe' ? 'P' : 'N';
-        let nozzleNum = vesselState.nozzles.length + 1;
-        let name = namePrefix + nozzleNum;
-        while (vesselState.nozzles.some((n) => n.name === name)) {
-          nozzleNum++;
-          name = namePrefix + nozzleNum;
-        }
-
-        const defaultProj = vesselState.id / 2 + 200;
-
-        addNozzle({
-          name,
-          pos: Math.round(newPos),
-          proj: defaultProj,
-          angle: Math.round(deg),
-          size: pipe.id,
-          flangeOD: pipe.flangeOD,
-          flangeThk: pipe.flangeThk,
-          pipeOD: pipe.od,
-          ...(pipe.style ? { style: pipe.style } : {}),
-        });
-      } else {
-        // Dropped on canvas but missed the vessel - add at center
-        const namePrefix = pipe.style === 'plain-pipe' ? 'P' : 'N';
-        let nozzleNum = vesselState.nozzles.length + 1;
-        let name = namePrefix + nozzleNum;
-        while (vesselState.nozzles.some((n) => n.name === name)) {
-          nozzleNum++;
-          name = namePrefix + nozzleNum;
-        }
-        addNozzle({
-          name,
-          pos: vesselState.length / 2,
-          proj: pipe.od * 2,
-          angle: 90,
-          size: pipe.id,
-          flangeOD: pipe.flangeOD,
-          flangeThk: pipe.flangeThk,
-          pipeOD: pipe.od,
-          ...(pipe.style ? { style: pipe.style } : {}),
-        });
-      }
-    },
-    [vesselState, addNozzle]
-  );
-
-  // --- Lifting lug drag-and-drop onto 3D canvas ---
-  const handleLugDrop = useCallback(
-    (e: React.DragEvent) => {
-      const data = e.dataTransfer.getData('application/x-lifting-lug');
-      if (!data) return;
-      e.preventDefault();
-
-      const lugData = JSON.parse(data);
-      const cam = viewportRef.current?.getCamera();
-      const rendererEl = viewportRef.current?.getRenderer()?.domElement;
-      const sceneManager = viewportRef.current?.getSceneManager();
-      if (!cam || !rendererEl || !sceneManager) return;
-
-      const vesselGroup = sceneManager.getVesselGroup();
-      if (!vesselGroup) return;
-
-      const rect = rendererEl.getBoundingClientRect();
-      const mouse = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, cam);
-
-      const shells: THREE.Object3D[] = [];
-      vesselGroup.traverse((child: THREE.Object3D) => {
-        if (child.userData.isShell) shells.push(child);
-      });
-      const intersects = raycaster.intersectObjects(shells);
-
-      let newPos: number;
-      let deg: number;
-
-      if (intersects.length > 0) {
-        const point = intersects[0].point;
-        const isVertical = vesselState.orientation === 'vertical';
-        newPos = isVertical
-          ? point.y / SCALE + vesselState.length / 2
-          : point.x / SCALE + vesselState.length / 2;
-        const headDepth = vesselState.id / (2 * vesselState.headRatio);
-        newPos = Math.max(-headDepth, Math.min(vesselState.length + headDepth, newPos));
-
-        const rad = isVertical ? Math.atan2(point.z, point.x) : Math.atan2(point.y, point.z);
-        deg = (rad * 180) / Math.PI;
-        if (deg < 0) deg += 360;
-      } else {
-        newPos = vesselState.length / 2;
-        deg = 90;
-      }
-
-      let lugNum = vesselState.liftingLugs.length + 1;
-      let name = 'L' + lugNum;
-      while (vesselState.liftingLugs.some((l) => l.name === name)) {
-        lugNum++;
-        name = 'L' + lugNum;
-      }
-
-      addLug({
-        name,
-        pos: Math.round(newPos),
-        angle: Math.round(deg),
-        style: lugData.style || 'padEye',
-        swl: lugData.label,
-      });
-    },
-    [vesselState, addLug]
-  );
-
-  // --- Weld drag-and-drop onto 3D canvas ---
-  const handleWeldDrop = useCallback(
-    (e: React.DragEvent) => {
-      const data = e.dataTransfer.getData('application/x-weld');
-      if (!data) return;
-      e.preventDefault();
-
-      const { type: wType } = JSON.parse(data) as { type: 'circumferential' | 'longitudinal' };
-      const cam = viewportRef.current?.getCamera();
-      const rendererEl = viewportRef.current?.getRenderer()?.domElement;
-      const sceneManager = viewportRef.current?.getSceneManager();
-      if (!cam || !rendererEl || !sceneManager) return;
-
-      const vesselGroup = sceneManager.getVesselGroup();
-      if (!vesselGroup) return;
-
-      const rect = rendererEl.getBoundingClientRect();
-      const mouse = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, cam);
-
-      const shells: THREE.Object3D[] = [];
-      vesselGroup.traverse((child: THREE.Object3D) => {
-        if (child.userData.isShell) shells.push(child);
-      });
-      const intersects = raycaster.intersectObjects(shells);
-
-      let newPos: number;
-      let deg: number;
-
-      if (intersects.length > 0) {
-        const point = intersects[0].point;
-        const isVertical = vesselState.orientation === 'vertical';
-        newPos = isVertical
-          ? point.y / SCALE + vesselState.length / 2
-          : point.x / SCALE + vesselState.length / 2;
-        const headDepth = vesselState.id / (2 * vesselState.headRatio);
-        newPos = Math.max(-headDepth, Math.min(vesselState.length + headDepth, newPos));
-
-        const rad = isVertical ? Math.atan2(point.z, point.x) : Math.atan2(point.y, point.z);
-        deg = (rad * 180) / Math.PI;
-        if (deg < 0) deg += 360;
-      } else {
-        newPos = vesselState.length / 2;
-        deg = 90;
-      }
-
-      let weldNum = vesselState.welds.length + 1;
-      let name = 'W' + weldNum;
-      while (vesselState.welds.some((w) => w.name === name)) {
-        weldNum++;
-        name = 'W' + weldNum;
-      }
-
-      if (wType === 'circumferential') {
-        addWeld({
-          name,
-          type: 'circumferential',
-          pos: Math.round(newPos),
-          color: '#888888',
-        });
-      } else {
-        const halfLen = vesselState.length * 0.25;
-        addWeld({
-          name,
-          type: 'longitudinal',
-          pos: Math.round(newPos - halfLen),
-          endPos: Math.round(newPos + halfLen),
-          angle: Math.round(deg),
-          color: '#888888',
-        });
-      }
-    },
-    [vesselState, addWeld]
-  );
-
-  // --- Pipe part drag-and-drop ---
-  const handlePipePartDrop = useCallback(
-    (e: React.DragEvent) => {
-      const data = e.dataTransfer.getData('application/x-pipe-part');
-      if (!data) return;
-      e.preventDefault();
-
-      const { type: segmentType } = JSON.parse(data) as { type: PipeSegmentType };
-
-      // Raycast the shell — same pattern as nozzle drop
-      const cam = viewportRef.current?.getCamera();
-      const rendererEl = viewportRef.current?.getRenderer()?.domElement;
-      const sceneManager = viewportRef.current?.getSceneManager();
-      if (!cam || !rendererEl || !sceneManager) return;
-
-      const vesselGroup = sceneManager.getVesselGroup();
-      if (!vesselGroup) return;
-
-      const rect = rendererEl.getBoundingClientRect();
-      const mouse = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, cam);
-
-      const shells: THREE.Object3D[] = [];
-      vesselGroup.traverse((child: THREE.Object3D) => {
-        if (child.userData.isShell) shells.push(child);
-      });
-      const intersects = raycaster.intersectObjects(shells);
-
-      // Compute pos/angle from hit point (mirrors nozzle drop logic)
-      const isVertical = vesselState.orientation === 'vertical';
-      const headDepth = vesselState.id / (2 * vesselState.headRatio);
-      let newPos: number;
-      let deg: number;
-
-      if (intersects.length > 0) {
-        const point = intersects[0].point;
-        newPos = isVertical
-          ? point.y / SCALE + vesselState.length / 2
-          : point.x / SCALE + vesselState.length / 2;
-        newPos = Math.max(-headDepth, Math.min(vesselState.length + headDepth, newPos));
-
-        const rad = isVertical ? Math.atan2(point.z, point.x) : Math.atan2(point.y, point.z);
-        deg = (rad * 180) / Math.PI;
-        if (deg < 0) deg += 360;
-      } else {
-        // Missed the vessel — place at center top
-        newPos = vesselState.length / 2;
-        deg = 90;
-      }
-
-      // Default pipe size for the stub nozzle
-      const defaultPipeSize = PIPE_SIZES[2]; // 4" NPS
-      const defaultProj = vesselState.id / 2 + 150;
-
-      // Find unique nozzle name
-      let nozzleNum = vesselState.nozzles.length + 1;
-      let name = 'P' + nozzleNum;
-      while (vesselState.nozzles.some((n) => n.name === name)) {
-        nozzleNum++;
-        name = 'P' + nozzleNum;
-      }
-
-      // Create plain-pipe nozzle + pipeline with first segment in one atomic update
-      const nozzle: NozzleConfig = {
-        name,
-        pos: Math.round(newPos),
-        proj: defaultProj,
-        angle: Math.round(deg),
-        size: defaultPipeSize.id,
-        pipeOD: defaultPipeSize.od,
-        style: 'plain-pipe',
-      };
-
-      const newPipeline: Pipeline = {
-        id: crypto.randomUUID(),
-        nozzleIndex: vesselState.nozzles.length, // will be appended at end
-        pipeDiameter: defaultPipeSize.od,
-        segments: [createDefaultSegment(segmentType, defaultPipeSize.od)],
-      };
-
-      updateVessel((prev) => ({
-        ...prev,
-        nozzles: [...prev.nozzles, nozzle],
-        pipelines: [...prev.pipelines, newPipeline],
-        hasModel: true,
-      }));
-    },
-    [vesselState, updateVessel, createDefaultSegment]
-  );
-
-  // --- Combined drop handler ---
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      if (e.dataTransfer.types.includes('application/x-nozzle-pipe')) {
-        handleNozzleDrop(e);
-      } else if (e.dataTransfer.types.includes('application/x-lifting-lug')) {
-        handleLugDrop(e);
-      } else if (e.dataTransfer.types.includes('application/x-weld')) {
-        handleWeldDrop(e);
-      } else if (e.dataTransfer.types.includes('application/x-pipe-part')) {
-        handlePipePartDrop(e);
-      }
-    },
-    [handleNozzleDrop, handleLugDrop, handleWeldDrop, handlePipePartDrop]
-  );
+  // --- Viewport drag-and-drop (T2-D / D3) ---
+  // Nozzle-library / lug / weld / pipe-part drops moved verbatim into
+  // useViewportDnD; handlers keep their original useCallback dep arrays so
+  // identities churn identically. createDefaultSegment (usePipingActions) and
+  // viewportRef are threaded in for the pipe-part atomic add + raycasts.
+  const { handleDragOver, handleDrop } = useViewportDnD({
+    vesselState,
+    addNozzle,
+    addLug,
+    addWeld,
+    updateVessel,
+    createDefaultSegment,
+    viewportRef,
+  });
 
   // --- Hint text ---
   const getHintText = () => {
@@ -3739,6 +1066,7 @@ export default function VesselModeler() {
                   dispatch({ type: 'SET_VIEWING_INSPECTION_IMAGE', id })
                 }
                 drawMode={drawModeState.annotation}
+                activeDrawBodyId={activeBodyId}
                 coverageDrawMode={drawModeState.coverage}
                 previewAnnotation={previews.annotation}
                 previewCoverageRect={previews.coverageRect}
@@ -3749,10 +1077,24 @@ export default function VesselModeler() {
                 selectedPipelineId={selection.pipelineId}
                 selectedPipeSegmentIdx={selection.pipeSegmentIdx}
                 inspectingAnnotationId={ui.inspectingAnnotationId}
+                clipConfig={ui.clip}
               />
             </ErrorBoundary>
+            {/* View cube — orientation indicator + canonical-view launcher (3D only) */}
+            <ViewCube viewportRef={viewportRef} vesselState={vesselState} />
+            {/* Entity outliner (C13b) — left-edge tree, 3D only, toolbar-toggled */}
+            {ui.outlinerOpen && (
+              <OutlinerPanel
+                vesselState={vesselState}
+                selection={selection}
+                sidebarOpen={ui.sidebarOpen}
+                onClose={() => dispatch({ type: 'TOGGLE_OUTLINER' })}
+                onSelect={(action) => dispatch(action)}
+                onToggleVisible={handleOutlinerToggleVisible}
+              />
+            )}
           </>
-        ) : (
+        ) : ui.viewMode === 'flattened' ? (
           <Suspense
             fallback={
               <div className="absolute inset-0 flex items-center justify-center bg-white text-gray-500 text-sm">
@@ -3769,6 +1111,31 @@ export default function VesselModeler() {
               selectedLugIndex={selection.lugIndex}
             />
           </Suspense>
+        ) : (
+          <Suspense
+            fallback={
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-400 text-sm">
+                Loading Topo view...
+              </div>
+            }
+          >
+            {activeTopoComposite ? (
+              <ReliefViewportPane key={activeTopoComposite.id} composite={activeTopoComposite} />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-400 text-sm">
+                No scan composite to show
+              </div>
+            )}
+          </Suspense>
+        )}
+
+        {/* Command palette (C14) — available in every view mode (Ctrl/Cmd+K) */}
+        {ui.paletteOpen && (
+          <CommandPalette
+            items={paletteItems}
+            onExecute={handlePaletteAction}
+            onClose={() => dispatch({ type: 'SET_PALETTE_OPEN', open: false })}
+          />
         )}
 
         {/* Pipe part popup — shown when clicking a connection point */}
@@ -3868,6 +1235,11 @@ export default function VesselModeler() {
             onUpdateNozzle={updateNozzle}
             onRemoveNozzle={removeNozzle}
             onSelectNozzle={(index) => dispatch({ type: 'SELECT_NOZZLE', index })}
+            selectedAppendageIndex={selection.appendageIndex}
+            onAddAppendage={addAppendage}
+            onUpdateAppendage={updateAppendage}
+            onRemoveAppendage={removeAppendage}
+            onSelectAppendage={(index) => dispatch({ type: 'SELECT_APPENDAGE', index })}
             selectedLugIndex={selection.lugIndex}
             onAddLug={addLug}
             onUpdateLug={updateLug}
@@ -4039,17 +1411,77 @@ export default function VesselModeler() {
           ref={actionsMenuRef}
           style={{ display: 'flex', alignItems: 'center', gap: 6 }}
         >
-          {/* 3D/2D toggle */}
+          {/* Undo / redo — titles name the next change on each stack */}
+          <button
+            className="vm-popout-trigger"
+            onClick={() => dispatch({ type: 'UNDO' })}
+            disabled={state.history.past.length === 0}
+            title={
+              state.history.past.length
+                ? `Undo: ${state.history.past[state.history.past.length - 1].label}`
+                : 'Undo (Ctrl+Z)'
+            }
+          >
+            <Undo2 size={14} />
+          </button>
+          <button
+            className="vm-popout-trigger"
+            onClick={() => dispatch({ type: 'REDO' })}
+            disabled={state.history.future.length === 0}
+            title={
+              state.history.future.length
+                ? `Redo: ${state.history.future[state.history.future.length - 1].label}`
+                : 'Redo (Ctrl+Y)'
+            }
+          >
+            <Redo2 size={14} />
+          </button>
+          <HistoryDropdown
+            past={state.history.past}
+            future={state.history.future}
+            onUndoTo={(index) => dispatch({ type: 'UNDO_TO', index })}
+            onRedoTo={(index) => dispatch({ type: 'REDO_TO', index })}
+          />
+          <BookmarksDropdown
+            bookmarks={vesselState.cameraBookmarks ?? []}
+            onSave={handleSaveBookmark}
+            onRecall={handleRecallBookmark}
+            onRename={handleRenameBookmark}
+            onDelete={handleDeleteBookmark}
+          />
+          {/* Section clip planes (C15) — transient ui.clip, never serialized */}
+          <ClipPlanesControl
+            clip={ui.clip}
+            lengthMm={vesselState.length}
+            diameterMm={vesselState.id}
+            headDepthMm={
+              vesselState.headRatio > 0 ? vesselState.id / (2 * vesselState.headRatio) : 0
+            }
+            onChange={(clip) => dispatch({ type: 'SET_CLIP', clip })}
+          />
+          {/* 3D / 2D / Topo toggle */}
           <div className="vm-toolbar-segmented">
-            {(['3d', 'flattened'] as const).map((mode) => (
-              <button
-                key={mode}
-                className={`vm-toolbar-segmented__btn ${ui.viewMode === mode ? 'active' : ''}`}
-                onClick={() => dispatch({ type: 'SET_VIEW_MODE', mode })}
-              >
-                {mode === '3d' ? '3D' : '2D'}
-              </button>
-            ))}
+            {(['3d', 'flattened', 'topo'] as const).map((mode) => {
+              const label = mode === '3d' ? '3D' : mode === 'flattened' ? '2D' : 'Topo';
+              const disabled = mode === 'topo' && !topoEnabled;
+              return (
+                <button
+                  key={mode}
+                  className={`vm-toolbar-segmented__btn ${ui.viewMode === mode ? 'active' : ''}`}
+                  onClick={() => dispatch({ type: 'SET_VIEW_MODE', mode })}
+                  disabled={disabled}
+                  title={
+                    disabled
+                      ? 'No confirmed scan composite with a thickness grid to show'
+                      : mode === 'topo'
+                        ? 'Topo — 3D relief surface of the active scan composite'
+                        : undefined
+                  }
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
           {/* Tidy labels toggle */}
           <button
@@ -4063,6 +1495,15 @@ export default function VesselModeler() {
           >
             <AlignVerticalDistributeCenter size={14} />
             Tidy
+          </button>
+          {/* Entity outliner toggle (C13b) */}
+          <button
+            className={`vm-popout-trigger ${ui.outlinerOpen ? 'vm-popout-trigger--active' : ''}`}
+            onClick={() => dispatch({ type: 'TOGGLE_OUTLINER' })}
+            title="Outliner"
+          >
+            <ListTree size={14} />
+            Outliner
           </button>
           <StatsDropdown
             showCoverage={ui.showStatsCoverage}

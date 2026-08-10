@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import * as THREE from 'three';
 import { degToRad } from 'three/src/math/MathUtils.js';
 
-import type { DomeScanConfig, VesselState } from '../../types';
+import type { AppendageConfig, DomeScanConfig, VesselState } from '../../types';
 import {
   PHI_EPSILON,
   domeLocalFromPhiTheta,
@@ -11,6 +11,8 @@ import {
   clearDomeHeatmapCache,
   normalizeDomeScanComposite,
 } from '../dome-scan-geometry';
+import { resolveBodyFrame } from '../body-frame';
+import { buildDomeTangentBasis, tangentOffsetsToSurface } from '../dome-tangent';
 import { SCALE } from '../materials';
 
 // ---------------------------------------------------------------------------
@@ -30,7 +32,7 @@ function makeDomeScanConfig(overrides: Partial<DomeScanConfig> = {}): DomeScanCo
     indexDirection: 'outward',
     orientationConfirmed: true,
     data: Array.from({ length: rows }, () =>
-      Array.from({ length: cols }, () => 10 + Math.random() * 5),
+      Array.from({ length: cols }, () => 10 + Math.random() * 5)
     ),
     xAxis: Array.from({ length: cols }, (_, i) => i * 10),
     yAxis: Array.from({ length: rows }, (_, i) => i * 10),
@@ -131,8 +133,29 @@ describe('normalizeDomeScanComposite', () => {
   it('defaults orientationConfirmed to false when absent', () => {
     expect(normalizeDomeScanComposite({ head: 'left' }).orientationConfirmed).toBe(false);
     expect(
-      normalizeDomeScanComposite({ head: 'left', orientationConfirmed: true }).orientationConfirmed,
+      normalizeDomeScanComposite({ head: 'left', orientationConfirmed: true }).orientationConfirmed
     ).toBe(true);
+  });
+
+  it('carries bodyId through and forces head "end" for an appendage scan', () => {
+    const result = normalizeDomeScanComposite({ bodyId: 'app-1', head: 'left' });
+    expect(result.bodyId).toBe('app-1');
+    // An appendage has one closure — the head is always 'end' regardless of a
+    // stale persisted 'left'/'right'.
+    expect(result.head).toBe('end');
+  });
+
+  it('maps a bodyId-less "end" head back to the right head (guard)', () => {
+    // 'end' is meaningless without a body; the scan stays visible on the main
+    // shell rather than being dropped.
+    const result = normalizeDomeScanComposite({ head: 'end' });
+    expect(result.bodyId).toBeUndefined();
+    expect(result.head).toBe('right');
+  });
+
+  it('leaves a main-shell scan untouched (no bodyId, head preserved)', () => {
+    expect(normalizeDomeScanComposite({ head: 'left' }).head).toBe('left');
+    expect(normalizeDomeScanComposite({ head: 'right' }).bodyId).toBeUndefined();
   });
 });
 
@@ -227,7 +250,7 @@ describe('domePhiThetaFromPoint round-trip', () => {
       const worldPoint = new THREE.Vector3(
         axialGlobal,
         rScaled * Math.sin(local.thetaRad),
-        rScaled * Math.cos(local.thetaRad),
+        rScaled * Math.cos(local.thetaRad)
       );
 
       // Inverse: world point → dome coords
@@ -238,7 +261,7 @@ describe('domePhiThetaFromPoint round-trip', () => {
         HEAD_DEPTH,
         tangentLineWorld,
         headSign,
-        isVertical,
+        isVertical
       );
 
       expect(result).not.toBeNull();
@@ -264,7 +287,7 @@ describe('domePhiThetaFromPoint round-trip', () => {
     const shellPoint = new THREE.Vector3(
       0, // axial global = 0 → at vessel center
       RADIUS * SCALE * 0.5,
-      RADIUS * SCALE * 0.5,
+      RADIUS * SCALE * 0.5
     );
 
     const result = domePhiThetaFromPoint(
@@ -273,7 +296,7 @@ describe('domePhiThetaFromPoint round-trip', () => {
       HEAD_DEPTH,
       tangentLineWorld,
       headSign,
-      false,
+      false
     );
 
     expect(result).toBeNull();
@@ -406,7 +429,7 @@ describe('createDomeScanPlane', () => {
 
     if (meshSelected) {
       const border = meshSelected.children.find(
-        (c) => (c as THREE.Mesh).userData?.role === 'domeScan-border',
+        (c) => (c as THREE.Mesh).userData?.role === 'domeScan-border'
       );
       expect(border).toBeDefined();
       expect(border!.visible).toBe(true);
@@ -414,7 +437,7 @@ describe('createDomeScanPlane', () => {
 
     if (meshNotSelected) {
       const border = meshNotSelected.children.find(
-        (c) => (c as THREE.Mesh).userData?.role === 'domeScan-border',
+        (c) => (c as THREE.Mesh).userData?.role === 'domeScan-border'
       );
       expect(border).toBeDefined();
       expect(border!.visible).toBe(false);
@@ -429,7 +452,7 @@ describe('createDomeScanPlane', () => {
     expect(mesh).not.toBeNull();
     if (mesh) {
       const border = mesh.children.find(
-        (c) => (c as THREE.Mesh).userData?.role === 'domeScan-border',
+        (c) => (c as THREE.Mesh).userData?.role === 'domeScan-border'
       ) as THREE.Mesh | undefined;
       expect(border).toBeDefined();
       expect(border!.renderOrder).toBe(1);
@@ -447,9 +470,7 @@ describe('per-row angular span correction', () => {
     const cols = 20;
     const config = makeDomeScanConfig({
       centerPhi: 45,
-      data: Array.from({ length: rows }, () =>
-        Array.from({ length: cols }, () => 10),
-      ),
+      data: Array.from({ length: rows }, () => Array.from({ length: cols }, () => 10)),
       xAxis: Array.from({ length: cols }, (_, i) => i * 50),
       yAxis: Array.from({ length: rows }, (_, i) => i * 50),
     });
@@ -497,7 +518,7 @@ describe('vertical vessel round-trip', () => {
       const worldPoint = new THREE.Vector3(
         rScaled * Math.cos(local.thetaRad),
         axialGlobal,
-        rScaled * Math.sin(local.thetaRad),
+        rScaled * Math.sin(local.thetaRad)
       );
 
       const tangentLineWorld = (tangentLineMm - TAN_TAN / 2) * SCALE;
@@ -507,7 +528,7 @@ describe('vertical vessel round-trip', () => {
         HEAD_DEPTH,
         tangentLineWorld,
         headSign,
-        isVertical,
+        isVertical
       );
 
       expect(result).not.toBeNull();
@@ -585,5 +606,152 @@ describe('vertical vessel mesh creation', () => {
       expect(ratio).toBeGreaterThan(0.5);
       expect(ratio).toBeLessThan(2.0);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Appendage end-closure dome scans (Phase 4C)
+// ---------------------------------------------------------------------------
+// A dished appendage (diameter 800 -> R 400, headRatio 2 -> D 200, cylinder
+// length 1200) carries a dome scan on its closure. Placement resolves through
+// the body SurfaceFrame; the closure is the 'right'-head analog (apex outward).
+
+describe('createDomeScanPlane — appendage end closure', () => {
+  const R = 400;
+  const D = 200;
+  const L = 1200;
+
+  function appendage(over: Partial<AppendageConfig> = {}): AppendageConfig {
+    return {
+      id: 'app-1',
+      name: 'Sump',
+      mountPos: 4000,
+      mountAngle: 270,
+      diameter: 800,
+      length: 1200,
+      endClosure: 'dished',
+      headRatio: 2.0,
+      ...over,
+    };
+  }
+
+  function appendageVessel(over: Partial<AppendageConfig> = {}): VesselState {
+    return makeVesselState({ appendages: [appendage(over)] });
+  }
+
+  function appendageScan(over: Partial<DomeScanConfig> = {}): DomeScanConfig {
+    return makeDomeScanConfig({
+      bodyId: 'app-1',
+      head: 'end',
+      centerPhi: 30,
+      centerTheta: 60,
+      ...over,
+    });
+  }
+
+  beforeEach(() => clearDomeHeatmapCache());
+
+  it('returns a mesh tagged with bodyId + type domeScan', () => {
+    const mesh = createDomeScanPlane(appendageScan(), appendageVessel(), '');
+    expect(mesh).not.toBeNull();
+    expect(mesh!.userData.type).toBe('domeScan');
+    expect(mesh!.userData.bodyId).toBe('app-1');
+    expect(mesh!.userData.head).toBe('end');
+  });
+
+  it('returns null when the appendage closure is not dished', () => {
+    expect(
+      createDomeScanPlane(appendageScan(), appendageVessel({ endClosure: 'flat' }), '')
+    ).toBeNull();
+    expect(
+      createDomeScanPlane(appendageScan(), appendageVessel({ endClosure: 'open' }), '')
+    ).toBeNull();
+  });
+
+  it('produces no NaN vertices', () => {
+    const mesh = createDomeScanPlane(appendageScan({ centerPhi: 20 }), appendageVessel(), '');
+    expect(mesh).not.toBeNull();
+    const pos = mesh!.geometry.getAttribute('position');
+    for (let i = 0; i < pos.count; i++) {
+      expect(Number.isNaN(pos.getX(i))).toBe(false);
+      expect(Number.isNaN(pos.getY(i))).toBe(false);
+      expect(Number.isNaN(pos.getZ(i))).toBe(false);
+    }
+  });
+
+  it('apex vertex sits at the closure pole per resolveBodyFrame', () => {
+    const vessel = appendageVessel();
+    const mesh = createDomeScanPlane(
+      appendageScan({ centerPhi: PHI_EPSILON, centerTheta: 0 }),
+      vessel,
+      ''
+    );
+    expect(mesh).not.toBeNull();
+
+    const frame = resolveBodyFrame(vessel, 'app-1');
+    const origin = frame.surfacePoint(0, 0, -R);
+    const axis = frame.surfacePoint(1, 0, -R).sub(origin).normalize();
+    // Closure pole = origin + axis * (L + D), in world units.
+    const pole = origin.clone().addScaledVector(axis, (L + D) * SCALE);
+
+    const pos = mesh!.geometry.getAttribute('position');
+    let nearest = Infinity;
+    let maxPos = 0;
+    for (let i = 0; i < pos.count; i++) {
+      const v = new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i));
+      nearest = Math.min(nearest, v.distanceTo(pole));
+      maxPos = Math.max(maxPos, frame.toLocal(v).pos);
+    }
+    // A vertex lands on the pole within the 2 mm surface offset (world units).
+    expect(nearest).toBeLessThan(0.02);
+    // The maximal axial reach is the pole depth L + D (mm).
+    expect(maxPos).toBeCloseTo(L + D, 0);
+  });
+
+  it('theta = 0 maps to the appendage datum (scan centre on the datum meridian)', () => {
+    // centerTheta = 0 -> the tangent-plane scan centre projects onto the datum
+    // (local angle 0), which resolveBodyFrame defines as the main +axis projection.
+    const basis = buildDomeTangentBasis(R, D, 45, 0);
+    const centre = tangentOffsetsToSurface(basis, R, D, L, 'right', 0, 0);
+    expect(Math.cos((centre.angle * Math.PI) / 180)).toBeCloseTo(1, 6);
+  });
+
+  it('vertices invert through the body frame to the dome-tangent forward map', () => {
+    const vessel = appendageVessel();
+    const config = appendageScan({
+      centerPhi: 35,
+      centerTheta: 120,
+      xAxis: Array.from({ length: 10 }, (_, i) => i * 20), // range 180
+      yAxis: Array.from({ length: 10 }, (_, i) => i * 20),
+    });
+    const mesh = createDomeScanPlane(config, vessel, '');
+    expect(mesh).not.toBeNull();
+
+    const pos = mesh!.geometry.getAttribute('position');
+    const frame = resolveBodyFrame(vessel, 'app-1');
+    const basis = buildDomeTangentBasis(R, D, config.centerPhi, config.centerTheta);
+    const scanRange = Math.abs(config.xAxis[config.xAxis.length - 1] - config.xAxis[0]);
+    const indexRange = Math.abs(config.yAxis[config.yAxis.length - 1] - config.yAxis[0]);
+    const read = (i: number) => new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i));
+
+    // First corner (u=0, v=0): scanMm = -range/2, indexMm = -range/2.
+    const first = frame.toLocal(read(0));
+    const fwdFirst = tangentOffsetsToSurface(
+      basis,
+      R,
+      D,
+      L,
+      'right',
+      -scanRange / 2,
+      -indexRange / 2
+    );
+    expect(fwdFirst.pos).toBeCloseTo(first.pos, 3);
+    expect(Math.cos(((fwdFirst.angle - first.angle) * Math.PI) / 180)).toBeCloseTo(1, 4);
+
+    // Last corner (u=1, v=1): scanMm = +range/2, indexMm = +range/2.
+    const last = frame.toLocal(read(pos.count - 1));
+    const fwdLast = tangentOffsetsToSurface(basis, R, D, L, 'right', scanRange / 2, indexRange / 2);
+    expect(fwdLast.pos).toBeCloseTo(last.pos, 3);
+    expect(Math.cos(((fwdLast.angle - last.angle) * Math.PI) / 180)).toBeCloseTo(1, 4);
   });
 });

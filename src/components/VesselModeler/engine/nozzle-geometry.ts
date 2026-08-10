@@ -33,30 +33,36 @@ import { SCALE } from './materials';
  * non-string name falls back to `'N'`.
  */
 export function deserializeNozzle(raw: any): NozzleConfig {
-    // Migration: the pad and weld neck used to share the single `hideRepad`
-    // flag. New records carry independent `showRepad` / `showWeldNeck`.
-    // The reinforcing pad is an opt-in detail, so it defaults OFF unless the
-    // record explicitly enables it. The weld neck keeps its historical default
-    // (shown unless the legacy `hideRepad` hid it).
-    const legacyWeldNeckVisible = raw?.hideRepad !== true;
-    return {
-        name: typeof raw?.name === 'string' ? raw.name : 'N',
-        pos: raw?.pos ?? 0,
-        proj: raw?.proj ?? 200,
-        angle: raw?.angle ?? 90,
-        size: raw?.size ?? 100,
-        orientationMode: raw?.orientationMode,
-        azimuthRotation: raw?.azimuthRotation,
-        flangeOD: raw?.flangeOD,
-        flangeThk: raw?.flangeThk,
-        pipeOD: raw?.pipeOD,
-        style: raw?.style,
-        hideRepad: raw?.hideRepad,
-        showRepad: raw?.showRepad ?? false,
-        showWeldNeck: raw?.showWeldNeck ?? legacyWeldNeckVisible,
-        repadOD: raw?.repadOD,
-        repadThickness: raw?.repadThickness,
-    };
+  // Migration: the pad and weld neck used to share the single `hideRepad`
+  // flag. New records carry independent `showRepad` / `showWeldNeck`.
+  // The reinforcing pad is an opt-in detail, so it defaults OFF unless the
+  // record explicitly enables it. The weld neck keeps its historical default
+  // (shown unless the legacy `hideRepad` hid it).
+  const legacyWeldNeckVisible = raw?.hideRepad !== true;
+  return {
+    // Carry an existing id through verbatim; legacy records (no id) get a
+    // placeholder that backfillNozzleIds (engine/nozzle-id.ts) replaces with a
+    // stable, collision-free id at the array level in deserializeVesselState.
+    id: typeof raw?.id === 'string' && raw.id ? raw.id : '',
+    name: typeof raw?.name === 'string' ? raw.name : 'N',
+    bodyId: raw?.bodyId,
+    pos: raw?.pos ?? 0,
+    proj: raw?.proj ?? 200,
+    angle: raw?.angle ?? 90,
+    size: raw?.size ?? 100,
+    orientationMode: raw?.orientationMode,
+    azimuthRotation: raw?.azimuthRotation,
+    flangeOD: raw?.flangeOD,
+    flangeThk: raw?.flangeThk,
+    pipeOD: raw?.pipeOD,
+    style: raw?.style,
+    hideRepad: raw?.hideRepad,
+    showRepad: raw?.showRepad ?? false,
+    showWeldNeck: raw?.showWeldNeck ?? legacyWeldNeckVisible,
+    repadOD: raw?.repadOD,
+    repadThickness: raw?.repadThickness,
+    visible: raw?.visible,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +92,7 @@ function buildConformingRepad(
   repadRadius: number,
   repadThickness: number,
   bendRadius: number,
-  material: THREE.Material,
+  material: THREE.Material
 ): THREE.Mesh {
   const R = bendRadius;
   const geom = new THREE.CylinderGeometry(repadRadius, repadRadius, repadThickness, 48, 1);
@@ -128,7 +134,7 @@ function buildConformingRepad(
 export function createFlangedNozzle(
   nozzle: NozzleConfig,
   shellRadius: number,
-  material: THREE.Material,
+  material: THREE.Material
 ): THREE.Group {
   const group = new THREE.Group();
   const isPlainPipe = nozzle.style === 'plain-pipe';
@@ -136,7 +142,7 @@ export function createFlangedNozzle(
   // -- Pad / weld-neck visibility (independent; migrate from legacy hideRepad)
   // The pad is opt-in (defaults off); the weld neck keeps its historical default.
   const showRepad = nozzle.showRepad ?? false;
-  const showWeldNeck = nozzle.showWeldNeck ?? (nozzle.hideRepad !== true);
+  const showWeldNeck = nozzle.showWeldNeck ?? nozzle.hideRepad !== true;
 
   // -- Pipe dimensions from lookup table (with optional overrides) ----------
   const pipeID = nozzle.size;
@@ -159,12 +165,7 @@ export function createFlangedNozzle(
     const repadOD = nozzle.repadOD || pipeOD * DEFAULT_REPAD_OD_RATIO;
     const repadRadius = (repadOD / 2) * SCALE;
     const repadThickness = (nozzle.repadThickness ?? DEFAULT_REPAD_THICKNESS) * SCALE;
-    const repad = buildConformingRepad(
-      repadRadius,
-      repadThickness,
-      shellRadius * SCALE,
-      material,
-    );
+    const repad = buildConformingRepad(repadRadius, repadThickness, shellRadius * SCALE, material);
     group.add(repad);
   }
 
@@ -175,7 +176,7 @@ export function createFlangedNozzle(
     showWeldNeck ? pipeRadius * 1.1 : pipeRadius,
     showWeldNeck ? pipeRadius * 1.3 : pipeRadius,
     stubLength,
-    32,
+    32
   );
   const stub = new THREE.Mesh(stubGeom, material);
   stub.position.y = -stubLength / 2; // Extends below origin (into shell)
@@ -189,7 +190,7 @@ export function createFlangedNozzle(
       pipeRadius,
       pipeRadius * 1.15,
       weldNeckLength,
-      32,
+      32
     );
     const weldNeck = new THREE.Mesh(weldNeckGeom, material);
     weldNeck.position.y = weldNeckLength / 2;
@@ -199,12 +200,7 @@ export function createFlangedNozzle(
 
   // -- Main pipe body --------------------------------------------------------
   const pipeLength = Math.max(0.01, nozzleLength - weldNeckLength - flangeThickness);
-  const pipeGeom = new THREE.CylinderGeometry(
-    pipeRadius,
-    pipeRadius,
-    pipeLength,
-    32,
-  );
+  const pipeGeom = new THREE.CylinderGeometry(pipeRadius, pipeRadius, pipeLength, 32);
   const pipe = new THREE.Mesh(pipeGeom, material);
   pipe.position.y = weldNeckLength + pipeLength / 2;
   group.add(pipe);
@@ -212,24 +208,14 @@ export function createFlangedNozzle(
   if (!isPlainPipe) {
     // -- Flange hub (transition from pipe to flange) ---------------------------
     const hubLength = flangeThickness * 0.4;
-    const hubGeom = new THREE.CylinderGeometry(
-      flangeRadius * 0.7,
-      pipeRadius,
-      hubLength,
-      32,
-    );
+    const hubGeom = new THREE.CylinderGeometry(flangeRadius * 0.7, pipeRadius, hubLength, 32);
     const hub = new THREE.Mesh(hubGeom, material);
     hub.position.y = weldNeckLength + pipeLength + hubLength / 2;
     group.add(hub);
 
     // -- Flange face -----------------------------------------------------------
     const flangeBodyThk = flangeThickness * 0.5;
-    const flangeGeom = new THREE.CylinderGeometry(
-      flangeRadius,
-      flangeRadius,
-      flangeBodyThk,
-      32,
-    );
+    const flangeGeom = new THREE.CylinderGeometry(flangeRadius, flangeRadius, flangeBodyThk, 32);
     const flange = new THREE.Mesh(flangeGeom, material);
     flange.position.y = weldNeckLength + pipeLength + hubLength + flangeBodyThk / 2;
     group.add(flange);
@@ -237,12 +223,7 @@ export function createFlangedNozzle(
     // -- Raised face (the sealing surface) -------------------------------------
     const rfRadius = flangeRadius * 0.85;
     const rfThickness = flangeThickness * 0.1;
-    const rfGeom = new THREE.CylinderGeometry(
-      rfRadius,
-      rfRadius,
-      rfThickness,
-      32,
-    );
+    const rfGeom = new THREE.CylinderGeometry(rfRadius, rfRadius, rfThickness, 32);
     const raisedFace = new THREE.Mesh(rfGeom, material);
     raisedFace.position.y =
       weldNeckLength + pipeLength + hubLength + flangeBodyThk + rfThickness / 2;
@@ -251,11 +232,7 @@ export function createFlangedNozzle(
 
   // -- Connection point ring for plain-pipe nozzles --------------------------
   if (isPlainPipe) {
-    const ringGeom = new THREE.RingGeometry(
-      pipeRadius * 0.8,
-      pipeRadius * 1.2,
-      32,
-    );
+    const ringGeom = new THREE.RingGeometry(pipeRadius * 0.8, pipeRadius * 1.2, 32);
     const ringMat = new THREE.MeshStandardMaterial({
       color: 0x00ff88,
       emissive: 0x004422,
@@ -289,10 +266,7 @@ const WORLD_UP = new THREE.Vector3(0, 1, 0);
  * straight out of the end instead of sideways. A vertical (Y-parallel) normal
  * is unaffected because it is parallel to the rotation axis.
  */
-export function rotateNormalAboutVertical(
-  normal: THREE.Vector3,
-  deg: number,
-): THREE.Vector3 {
+export function rotateNormalAboutVertical(normal: THREE.Vector3, deg: number): THREE.Vector3 {
   const norm = ((deg % 360) + 360) % 360;
   if (norm !== 0) {
     normal.applyAxisAngle(WORLD_UP, (norm * Math.PI) / 180);

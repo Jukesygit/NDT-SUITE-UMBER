@@ -13,9 +13,11 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { type VesselState, type TextureConfig } from '../types';
 import { SCALE } from './materials';
+import { resolveBodyFrame } from './body-frame';
 import { createFlangedNozzle, rotateNormalAboutVertical } from './nozzle-geometry';
 import { createLiftingLug } from './lifting-lug-geometry';
 import { createSaddleGroup } from './saddle-geometry';
+import { buildAppendageGroup } from './appendage-geometry';
 import { createScanCompositePlane } from './texture-manager';
 import { createDomeScanPlane } from './dome-scan-geometry';
 import { buildScanOrientationGizmo } from './scan-gizmo-geometry';
@@ -30,6 +32,7 @@ export interface BuildSceneResult {
   nozzleMeshes: THREE.Object3D[];
   lugMeshes: THREE.Object3D[];
   saddleMeshes: THREE.Object3D[];
+  appendageMeshes: THREE.Object3D[];
   textureMeshes: THREE.Mesh[];
   scanCompositeMeshes: THREE.Mesh[];
   domeScanMeshes: THREE.Mesh[];
@@ -50,7 +53,7 @@ function createTexturePlane(
   shellRadius: number,
   state: VesselState,
   threeTexture: THREE.Texture,
-  selectedTextureId: number,
+  selectedTextureId: number
 ): THREE.Mesh | null {
   if (!threeTexture) return null;
 
@@ -283,10 +286,7 @@ function createTexturePlane(
     }
 
     const borderGeom = new THREE.BufferGeometry();
-    borderGeom.setAttribute(
-      'position',
-      new THREE.Float32BufferAttribute(borderVertices, 3),
-    );
+    borderGeom.setAttribute('position', new THREE.Float32BufferAttribute(borderVertices, 3));
     borderGeom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     borderGeom.setIndex(indices);
 
@@ -305,6 +305,8 @@ function createTexturePlane(
   }
 
   mesh.userData = { type: 'texture', textureIdx: tex.id };
+  // C13: initial per-entity visibility; live toggles handled by ThreeViewport Tier-2.
+  mesh.visible = tex.visible !== false;
 
   return mesh;
 }
@@ -342,11 +344,16 @@ export function buildVesselScene(
   selectedTextureId: number,
   selectedScanCompositeId: string = '',
   selectedDomeScanId: string = '',
+  // Settled snapshot used ONLY for scan-composite footprint cutouts (nozzle bores
+  // + junctions), so a per-frame nozzle drag can't thrash the heatmap cache (R1
+  // perf). Defaults to `state`, keeping every caller byte-identical.
+  footprintState: VesselState = state
 ): BuildSceneResult {
   const vesselGroup = new THREE.Group();
   const nozzleMeshes: THREE.Object3D[] = [];
   const lugMeshes: THREE.Object3D[] = [];
   const saddleMeshes: THREE.Object3D[] = [];
+  const appendageMeshes: THREE.Object3D[] = [];
   const textureMeshes: THREE.Mesh[] = [];
   const scanCompositeMeshes: THREE.Mesh[] = [];
   const domeScanMeshes: THREE.Mesh[] = [];
@@ -354,7 +361,17 @@ export function buildVesselScene(
 
   // -- Return empty group if no model data yet ------------------------------
   if (!state.hasModel) {
-    return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes, scanCompositeMeshes, domeScanMeshes, gizmoMeshes };
+    return {
+      vesselGroup,
+      nozzleMeshes,
+      lugMeshes,
+      saddleMeshes,
+      appendageMeshes,
+      textureMeshes,
+      scanCompositeMeshes,
+      domeScanMeshes,
+      gizmoMeshes,
+    };
   }
 
   // -- Vessel dimensions ----------------------------------------------------
@@ -362,6 +379,9 @@ export function buildVesselScene(
   const TAN_TAN = state.length;
   const HEAD_DEPTH = state.headRatio > 0 ? state.id / (2 * state.headRatio) : 0;
   const isVertical = state.orientation === 'vertical';
+
+  // Shared main-shell frame: single source for surface-mount normals (nozzles).
+  const mainFrame = resolveBodyFrame(state);
 
   // -- Shell cylinder -------------------------------------------------------
   const isPipeShape = state.vesselShape === 'pipe';
@@ -386,7 +406,12 @@ export function buildVesselScene(
     shellGeom = mergeGeometries([outer, inner, topRing, bottomRing]) ?? outer;
   } else {
     shellGeom = new THREE.CylinderGeometry(
-      RADIUS * SCALE, RADIUS * SCALE, TAN_TAN * SCALE, 64, 1, true,
+      RADIUS * SCALE,
+      RADIUS * SCALE,
+      TAN_TAN * SCALE,
+      64,
+      1,
+      true
     );
   }
 
@@ -433,103 +458,77 @@ export function buildVesselScene(
     const mat = idx === selectedNozzleIndex ? nozzleHighlightMaterial : nozzleMaterial;
     const nozzleGroup = createFlangedNozzle(n, RADIUS, mat);
 
-    // DYNAMIC RADIUS AND NORMAL CALCULATION
-    let r_local = RADIUS;
-    const normal = new THREE.Vector3();
+    // Angle in radians — shared by the placement branches below and the
+    // orientation-mode override that follows.
     const rad = (n.angle * Math.PI) / 180;
+    let normal: THREE.Vector3;
 
-    if (isVertical) {
-      // VERTICAL VESSEL - position along Y axis
-      const y_global = (n.pos - TAN_TAN / 2) * SCALE;
-
-      if (n.pos < 0) {
-        // BOTTOM HEAD (Ellipsoid)
-        const y_local = n.pos;
-        const ratio = Math.min(1, Math.abs(y_local / HEAD_DEPTH));
-        r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
-
-        const x_u = r_local * Math.cos(rad);
-        const z_u = r_local * Math.sin(rad);
-
-        normal
-          .set(
-            x_u / (RADIUS * RADIUS),
-            y_local / (HEAD_DEPTH * HEAD_DEPTH),
-            z_u / (RADIUS * RADIUS),
-          )
-          .normalize();
-      } else if (n.pos > TAN_TAN) {
-        // TOP HEAD
-        const y_local = n.pos - TAN_TAN;
-        const ratio = Math.min(1, Math.abs(y_local / HEAD_DEPTH));
-        r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
-
-        const x_u = r_local * Math.cos(rad);
-        const z_u = r_local * Math.sin(rad);
-
-        normal
-          .set(
-            x_u / (RADIUS * RADIUS),
-            y_local / (HEAD_DEPTH * HEAD_DEPTH),
-            z_u / (RADIUS * RADIUS),
-          )
-          .normalize();
-      } else {
-        // CYLINDER SHELL
-        r_local = RADIUS;
-        normal.set(Math.cos(rad), 0, Math.sin(rad)).normalize();
-      }
-
-      // Calculate final 3D position for vertical vessel
-      const x = r_local * SCALE * Math.cos(rad);
-      const z = r_local * SCALE * Math.sin(rad);
-      nozzleGroup.position.set(x, y_global, z);
+    if (n.bodyId !== undefined) {
+      // APPENDAGE-MOUNTED NOZZLE. `pos` is mm along the appendage axis from the
+      // junction, `angle` per the appendage datum (engine/body-frame.ts). Place
+      // on the cylinder surface via the body frame, clamping to the cylinder span
+      // [0, length] — no head-region branch for appendages in v1. The
+      // orientationMode / azimuthRotation / quaternion pipeline below then runs
+      // unchanged on this position + normal.
+      const bodyFrame = resolveBodyFrame(state, n.bodyId);
+      const posMm = Math.max(0, Math.min(bodyFrame.axialLength, n.pos));
+      nozzleGroup.position.copy(bodyFrame.surfacePoint(posMm, n.angle));
+      normal = bodyFrame.surfaceNormal(posMm, n.angle);
     } else {
-      // HORIZONTAL VESSEL - position along X axis
-      const x_global = (n.pos - TAN_TAN / 2) * SCALE;
+      // Surface normal (nozzle mount orientation) comes from the shared frame,
+      // which reproduces the legacy nozzle-mount normal math exactly.
+      normal = mainFrame.surfaceNormal(n.pos, n.angle);
 
-      if (n.pos < 0) {
-        // LEFT HEAD (Ellipsoid)
-        const x_local = n.pos;
-        const ratio = Math.min(1, Math.abs(x_local / HEAD_DEPTH));
-        r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
+      // DYNAMIC RADIUS + POSITION. Kept inline (not via frame.surfacePoint) because
+      // a head nozzle collapses to the axis using Math.min(1, …), whereas the
+      // frame's surfacePoint uses the shell/annotation cap Math.min(0.99, …); the
+      // two differ only near the head apex, so preserving exact placement means
+      // keeping this radius branching here.
+      let r_local = RADIUS;
 
-        const y_u = r_local * Math.sin(rad);
-        const z_u = r_local * Math.cos(rad);
+      if (isVertical) {
+        // VERTICAL VESSEL - position along Y axis
+        const y_global = (n.pos - TAN_TAN / 2) * SCALE;
 
-        normal
-          .set(
-            x_local / (HEAD_DEPTH * HEAD_DEPTH),
-            y_u / (RADIUS * RADIUS),
-            z_u / (RADIUS * RADIUS),
-          )
-          .normalize();
-      } else if (n.pos > TAN_TAN) {
-        // RIGHT HEAD
-        const x_local = n.pos - TAN_TAN;
-        const ratio = Math.min(1, Math.abs(x_local / HEAD_DEPTH));
-        r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
+        if (n.pos < 0) {
+          // BOTTOM HEAD (Ellipsoid)
+          const ratio = Math.min(1, Math.abs(n.pos / HEAD_DEPTH));
+          r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
+        } else if (n.pos > TAN_TAN) {
+          // TOP HEAD
+          const ratio = Math.min(1, Math.abs((n.pos - TAN_TAN) / HEAD_DEPTH));
+          r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
+        } else {
+          // CYLINDER SHELL
+          r_local = RADIUS;
+        }
 
-        const y_u = r_local * Math.sin(rad);
-        const z_u = r_local * Math.cos(rad);
-
-        normal
-          .set(
-            x_local / (HEAD_DEPTH * HEAD_DEPTH),
-            y_u / (RADIUS * RADIUS),
-            z_u / (RADIUS * RADIUS),
-          )
-          .normalize();
+        // Calculate final 3D position for vertical vessel
+        const x = r_local * SCALE * Math.cos(rad);
+        const z = r_local * SCALE * Math.sin(rad);
+        nozzleGroup.position.set(x, y_global, z);
       } else {
-        // CYLINDER SHELL
-        r_local = RADIUS;
-        normal.set(0, Math.sin(rad), Math.cos(rad)).normalize();
-      }
+        // HORIZONTAL VESSEL - position along X axis
+        const x_global = (n.pos - TAN_TAN / 2) * SCALE;
 
-      // Calculate final 3D position for horizontal vessel
-      const y = r_local * SCALE * Math.sin(rad);
-      const z = r_local * SCALE * Math.cos(rad);
-      nozzleGroup.position.set(x_global, y, z);
+        if (n.pos < 0) {
+          // LEFT HEAD (Ellipsoid)
+          const ratio = Math.min(1, Math.abs(n.pos / HEAD_DEPTH));
+          r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
+        } else if (n.pos > TAN_TAN) {
+          // RIGHT HEAD
+          const ratio = Math.min(1, Math.abs((n.pos - TAN_TAN) / HEAD_DEPTH));
+          r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
+        } else {
+          // CYLINDER SHELL
+          r_local = RADIUS;
+        }
+
+        // Calculate final 3D position for horizontal vessel
+        const y = r_local * SCALE * Math.sin(rad);
+        const z = r_local * SCALE * Math.cos(rad);
+        nozzleGroup.position.set(x_global, y, z);
+      }
     }
 
     // Override normal based on orientation mode (default is radial = no change)
@@ -567,6 +566,7 @@ export function buildVesselScene(
     nozzleGroup.quaternion.copy(quaternion);
 
     nozzleGroup.userData = { type: 'nozzle', nozzleIdx: idx };
+    nozzleGroup.visible = n.visible !== false;
     vesselGroup.add(nozzleGroup);
     nozzleMeshes.push(nozzleGroup);
   });
@@ -574,6 +574,25 @@ export function buildVesselScene(
   // -- Lifting Lugs -----------------------------------------------------------
   state.liftingLugs.forEach((lug, idx) => {
     const mat = idx === selectedLugIndex ? lugHighlightMaterial : lugMaterial;
+
+    if (lug.bodyId !== undefined) {
+      // APPENDAGE-MOUNTED LUG. `pos` is mm along the appendage axis from the
+      // junction, `angle` per the appendage datum (engine/body-frame.ts). The
+      // base plate curves to the appendage radius; placement/orientation come from
+      // the body frame, clamped to the cylinder span [0, length] (no head branch).
+      const bodyFrame = resolveBodyFrame(state, lug.bodyId);
+      const appLugGroup = createLiftingLug(lug, mat, bodyFrame.radius);
+      const posMm = Math.max(0, Math.min(bodyFrame.axialLength, lug.pos));
+      appLugGroup.position.copy(bodyFrame.surfacePoint(posMm, lug.angle));
+      const appNormal = bodyFrame.surfaceNormal(posMm, lug.angle);
+      appLugGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), appNormal);
+      appLugGroup.userData = { type: 'liftingLug', lugIdx: idx };
+      appLugGroup.visible = lug.visible !== false;
+      vesselGroup.add(appLugGroup);
+      lugMeshes.push(appLugGroup);
+      return;
+    }
+
     const lugGroup = createLiftingLug(lug, mat, RADIUS);
 
     // Same position/orientation logic as nozzles (pos/angle on shell surface)
@@ -590,9 +609,9 @@ export function buildVesselScene(
         r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
         normal
           .set(
-            r_local * Math.cos(rad) / (RADIUS * RADIUS),
+            (r_local * Math.cos(rad)) / (RADIUS * RADIUS),
             y_local / (HEAD_DEPTH * HEAD_DEPTH),
-            r_local * Math.sin(rad) / (RADIUS * RADIUS),
+            (r_local * Math.sin(rad)) / (RADIUS * RADIUS)
           )
           .normalize();
       } else if (lug.pos > TAN_TAN) {
@@ -601,9 +620,9 @@ export function buildVesselScene(
         r_local = RADIUS * Math.sqrt(1 - ratio * ratio);
         normal
           .set(
-            r_local * Math.cos(rad) / (RADIUS * RADIUS),
+            (r_local * Math.cos(rad)) / (RADIUS * RADIUS),
             y_local / (HEAD_DEPTH * HEAD_DEPTH),
-            r_local * Math.sin(rad) / (RADIUS * RADIUS),
+            (r_local * Math.sin(rad)) / (RADIUS * RADIUS)
           )
           .normalize();
       } else {
@@ -623,8 +642,8 @@ export function buildVesselScene(
         normal
           .set(
             x_local / (HEAD_DEPTH * HEAD_DEPTH),
-            r_local * Math.sin(rad) / (RADIUS * RADIUS),
-            r_local * Math.cos(rad) / (RADIUS * RADIUS),
+            (r_local * Math.sin(rad)) / (RADIUS * RADIUS),
+            (r_local * Math.cos(rad)) / (RADIUS * RADIUS)
           )
           .normalize();
       } else if (lug.pos > TAN_TAN) {
@@ -634,8 +653,8 @@ export function buildVesselScene(
         normal
           .set(
             x_local / (HEAD_DEPTH * HEAD_DEPTH),
-            r_local * Math.sin(rad) / (RADIUS * RADIUS),
-            r_local * Math.cos(rad) / (RADIUS * RADIUS),
+            (r_local * Math.sin(rad)) / (RADIUS * RADIUS),
+            (r_local * Math.cos(rad)) / (RADIUS * RADIUS)
           )
           .normalize();
       } else {
@@ -653,6 +672,7 @@ export function buildVesselScene(
     lugGroup.quaternion.copy(quaternion);
 
     lugGroup.userData = { type: 'liftingLug', lugIdx: idx };
+    lugGroup.visible = lug.visible !== false;
     vesselGroup.add(lugGroup);
     lugMeshes.push(lugGroup);
   });
@@ -666,15 +686,25 @@ export function buildVesselScene(
         state,
         idx === selectedSaddleIndex,
         saddleHighlightMaterial,
-        shellMaterial,
+        shellMaterial
       );
       // Tag all children for raycasting walk-up
       saddleGroup.traverse((child) => {
         child.userData = { ...child.userData, type: 'saddle', saddleIdx: idx };
       });
+      saddleGroup.visible = saddle.visible !== false;
       vesselGroup.add(saddleGroup);
       saddleMeshes.push(saddleGroup);
     });
+  }
+
+  // -- Appendage bodies (sumps / boots / risers) ----------------------------
+  // Each appendage is a self-contained group placed via its own SurfaceFrame
+  // (see appendage-geometry.ts). bodyId === undefined attachables are unaffected.
+  for (const appendage of state.appendages) {
+    const appendageGroup = buildAppendageGroup(appendage, state, shellMaterial);
+    vesselGroup.add(appendageGroup);
+    appendageMeshes.push(appendageGroup);
   }
 
   // -- Textures / Decals ----------------------------------------------------
@@ -692,7 +722,12 @@ export function buildVesselScene(
   // -- Scan Composite Overlays (only render if orientation is confirmed) ------
   for (const composite of state.scanComposites) {
     if (!composite.orientationConfirmed) continue;
-    const mesh = createScanCompositePlane(composite, state, selectedScanCompositeId);
+    const mesh = createScanCompositePlane(
+      composite,
+      state,
+      selectedScanCompositeId,
+      footprintState
+    );
     if (mesh) {
       vesselGroup.add(mesh);
       scanCompositeMeshes.push(mesh);
@@ -701,7 +736,7 @@ export function buildVesselScene(
 
   // -- Dome Scan Composites (only for vessel shapes with heads) --------------
   if (state.vesselShape !== 'pipe') {
-    for (const ds of (state.domeScanComposites ?? [])) {
+    for (const ds of state.domeScanComposites ?? []) {
       if (!ds.orientationConfirmed) continue;
       const mesh = createDomeScanPlane(ds, state, selectedDomeScanId);
       if (mesh) {
@@ -713,18 +748,13 @@ export function buildVesselScene(
 
   // -- Scan Orientation Gizmo (for selected composite only) -----------------
   if (selectedScanCompositeId) {
-    const selectedComposite = state.scanComposites.find(
-      sc => sc.id === selectedScanCompositeId,
-    );
+    const selectedComposite = state.scanComposites.find((sc) => sc.id === selectedScanCompositeId);
     if (selectedComposite && !selectedComposite.orientationConfirmed) {
-      const { group: gizmoGroup, originMesh } = buildScanOrientationGizmo(
-        selectedComposite,
-        state,
-      );
+      const { group: gizmoGroup, originMesh } = buildScanOrientationGizmo(selectedComposite, state);
       vesselGroup.add(gizmoGroup);
       gizmoMeshes.push(originMesh);
       // Also add arrow groups for click-to-toggle raycasting
-      gizmoGroup.children.forEach(child => {
+      gizmoGroup.children.forEach((child) => {
         if (child !== originMesh) gizmoMeshes.push(child);
       });
     }
@@ -732,21 +762,29 @@ export function buildVesselScene(
 
   // -- Dome Scan Orientation Gizmo (for selected dome scan, pre-confirmation) --
   if (selectedDomeScanId) {
-    const selectedDs = (state.domeScanComposites ?? []).find(
-      ds => ds.id === selectedDomeScanId,
-    );
+    const selectedDs = (state.domeScanComposites ?? []).find((ds) => ds.id === selectedDomeScanId);
     if (selectedDs && !selectedDs.orientationConfirmed) {
       const { group: domeGizmoGroup, originMesh: domeOrigin } = buildDomeScanGizmo(
         selectedDs,
-        state,
+        state
       );
       vesselGroup.add(domeGizmoGroup);
       gizmoMeshes.push(domeOrigin);
-      domeGizmoGroup.children.forEach(child => {
+      domeGizmoGroup.children.forEach((child) => {
         if (child !== domeOrigin) gizmoMeshes.push(child);
       });
     }
   }
 
-  return { vesselGroup, nozzleMeshes, lugMeshes, saddleMeshes, textureMeshes, scanCompositeMeshes, domeScanMeshes, gizmoMeshes };
+  return {
+    vesselGroup,
+    nozzleMeshes,
+    lugMeshes,
+    saddleMeshes,
+    appendageMeshes,
+    textureMeshes,
+    scanCompositeMeshes,
+    domeScanMeshes,
+    gizmoMeshes,
+  };
 }

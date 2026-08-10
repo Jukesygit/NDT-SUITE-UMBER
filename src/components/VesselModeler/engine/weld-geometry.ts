@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import type { WeldConfig, VesselState } from '../types';
 import { SCALE } from './materials';
+import { resolveBodyFrame, type SurfaceFrame } from './body-frame';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -35,7 +36,7 @@ function createCircumferentialWeld(
   tanTan: number,
   headRatio: number,
   isVertical: boolean,
-  material: THREE.MeshStandardMaterial,
+  material: THREE.MeshStandardMaterial
 ): THREE.Group {
   const group = new THREE.Group();
   const beadRadius = (weld.capWidth ?? DEFAULT_CAP_WIDTH_MM) / 2;
@@ -53,10 +54,10 @@ function createCircumferentialWeld(
   }
 
   const torusGeom = new THREE.TorusGeometry(
-    r_local * SCALE,       // ring radius (distance from center of torus to center of tube)
-    beadRadius * SCALE,     // tube radius (cross-section of the bead)
-    12,                     // radial segments (tube cross-section)
-    64,                     // tubular segments (around the ring)
+    r_local * SCALE, // ring radius (distance from center of torus to center of tube)
+    beadRadius * SCALE, // tube radius (cross-section of the bead)
+    12, // radial segments (tube cross-section)
+    64 // tubular segments (around the ring)
   );
 
   const torus = new THREE.Mesh(torusGeom, material);
@@ -92,7 +93,7 @@ function createLongitudinalWeld(
   vesselRadius: number,
   tanTan: number,
   isVertical: boolean,
-  material: THREE.MeshStandardMaterial,
+  material: THREE.MeshStandardMaterial
 ): THREE.Group {
   const group = new THREE.Group();
 
@@ -169,17 +170,143 @@ function createLongitudinalWeld(
 }
 
 // ---------------------------------------------------------------------------
+// Appendage Welds (frame-transformed placement on a secondary body)
+// ---------------------------------------------------------------------------
+// Appendage welds are built by sampling the body's SurfaceFrame directly so the
+// bead follows the appendage cylinder and long welds align with the appendage
+// datum (0° = main +axis projection). No head-region branch — an appendage is a
+// pure cylinder for weld placement in v1. `pos`/`endPos` are clamped to the
+// cylinder span [0, length]. See design Phase 4 §1.
+
+/**
+ * Circumferential (girth) weld ring on an appendage: a bead torus wrapping the
+ * appendage cylinder at axial position `pos`. The torus symmetry axis is aligned
+ * with the appendage axis (derived from the frame), so the ring is rotationally
+ * symmetric and needs no datum roll.
+ */
+function createAppendageCircWeld(
+  frame: SurfaceFrame,
+  weld: WeldConfig,
+  beadRadiusMm: number,
+  material: THREE.MeshStandardMaterial
+): THREE.Group {
+  const group = new THREE.Group();
+  const pos = Math.max(0, Math.min(frame.axialLength, weld.pos));
+
+  // Origin (junction centre) and unit axis, recovered from frame samples:
+  //   surfacePoint(0, 0, -radius) = origin + 0·axis + 0·radial = origin
+  //   surfacePoint(1, 0, -radius) = origin + 1·SCALE·axis
+  const origin = frame.surfacePoint(0, 0, -frame.radius);
+  const axis = frame.surfacePoint(1, 0, -frame.radius).sub(origin).normalize();
+  const center = origin.clone().addScaledVector(axis, pos * SCALE);
+
+  const torusGeom = new THREE.TorusGeometry(
+    frame.radius * SCALE, // ring radius = appendage radius
+    beadRadiusMm * SCALE, // tube (bead) cross-section
+    12,
+    64
+  );
+  const torus = new THREE.Mesh(torusGeom, material);
+  // TorusGeometry's hole axis is local Z; align it with the appendage axis.
+  group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis);
+  group.position.copy(center);
+  group.add(torus);
+  return group;
+}
+
+/**
+ * Longitudinal weld strip on an appendage: a raised semicircular bead running
+ * axially at the datum angle `angle`, from `pos` to `endPos`. Built by sampling
+ * `frame.surfacePoint` so the strip curves around the appendage cylinder and the
+ * angle is honoured in the appendage datum (no ±90 offset — the frame owns it).
+ */
+function createAppendageLongWeld(
+  frame: SurfaceFrame,
+  weld: WeldConfig,
+  beadRadiusMm: number,
+  material: THREE.MeshStandardMaterial
+): THREE.Group {
+  const group = new THREE.Group();
+  const startPos = Math.max(0, Math.min(frame.axialLength, weld.pos));
+  const endPos = Math.max(0, Math.min(frame.axialLength, weld.endPos ?? frame.axialLength));
+  const angle = weld.angle ?? 90;
+
+  const weldLength = Math.abs(endPos - startPos);
+  const segments = Math.max(2, Math.ceil(weldLength / 50));
+  const profilePoints = 6;
+  const radToDeg = 180 / Math.PI;
+
+  const vertices: number[] = [];
+  const indices: number[] = [];
+
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const axialPos = startPos + t * (endPos - startPos);
+    for (let j = 0; j <= profilePoints; j++) {
+      const u = j / profilePoints;
+      const profileAngle = u * Math.PI; // 0..PI semicircle
+      const localHeightMm = Math.sin(profileAngle) * beadRadiusMm; // outward radial mm
+      const localWidthMm = (u - 0.5) * 2 * beadRadiusMm; // circumferential mm offset
+      // Convert the circumferential offset (mm) to a datum-angle delta (deg).
+      const dAngleDeg = (localWidthMm / frame.radius) * radToDeg;
+      const p = frame.surfacePoint(axialPos, angle + dAngleDeg, localHeightMm);
+      vertices.push(p.x, p.y, p.z);
+    }
+  }
+
+  const stride = profilePoints + 1;
+  for (let i = 0; i < segments; i++) {
+    for (let j = 0; j < profilePoints; j++) {
+      const a = i * stride + j;
+      const b = (i + 1) * stride + j;
+      const c = (i + 1) * stride + j + 1;
+      const d = i * stride + j + 1;
+      indices.push(a, b, d);
+      indices.push(b, c, d);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+
+  group.add(new THREE.Mesh(geometry, material));
+  return group;
+}
+
+/** Build an appendage-mounted weld via the body frame (see functions above). */
+function createAppendageWeld(
+  weld: WeldConfig,
+  state: VesselState,
+  material: THREE.MeshStandardMaterial
+): THREE.Group {
+  const frame = resolveBodyFrame(state, weld.bodyId);
+  const beadRadiusMm = (weld.capWidth ?? DEFAULT_CAP_WIDTH_MM) / 2;
+  return weld.type === 'circumferential'
+    ? createAppendageCircWeld(frame, weld, beadRadiusMm, material)
+    : createAppendageLongWeld(frame, weld, beadRadiusMm, material);
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 /**
  * Create the 3D geometry for a single weld seam.
+ *
+ * `weld.bodyId === undefined` routes through the byte-identical legacy main-shell
+ * builders; a bodyId routes to the frame-based appendage builders.
  */
 export function createWeldGeometry(
   weld: WeldConfig,
   state: VesselState,
-  material: THREE.MeshStandardMaterial,
+  material: THREE.MeshStandardMaterial
 ): THREE.Group {
+  if (weld.bodyId !== undefined) {
+    return createAppendageWeld(weld, state, material);
+  }
+
   const RADIUS = state.id / 2;
   const TAN_TAN = state.length;
   const isVertical = state.orientation === 'vertical';

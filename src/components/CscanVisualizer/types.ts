@@ -80,21 +80,23 @@ export interface RangeSettings {
 }
 
 // Offset detection for bugged CSV correction
+export type OffsetSource = 'metadata' | 'filename' | 'datafile' | 'metadata-halved';
+
 export interface OffsetDetection {
   fileId: string;
   filename: string;
   // Index axis (Y)
-  expectedIndexStart: number | null;  // From metadata or filename
-  actualIndexStart: number;           // First value in data
-  indexOffset: number;                // Correction needed
+  expectedIndexStart: number | null; // From metadata, filename, Data File header, or halving
+  actualIndexStart: number; // First value in data
+  indexOffset: number; // Correction needed
   indexNeedsCorrection: boolean;
-  indexSource?: 'metadata' | 'filename' | null; // Which source supplied the expected value
+  indexSource?: OffsetSource | null; // Which source supplied the expected value
   // Scan axis (X)
-  expectedScanStart: number | null;   // From metadata or filename
-  actualScanStart: number;            // First value in data
-  scanOffset: number;                 // Correction needed
+  expectedScanStart: number | null; // From metadata, filename, Data File header, or halving
+  actualScanStart: number; // First value in data
+  scanOffset: number; // Correction needed
   scanNeedsCorrection: boolean;
-  scanSource?: 'metadata' | 'filename' | null;
+  scanSource?: OffsetSource | null;
 }
 
 export interface CsvRepairResult {

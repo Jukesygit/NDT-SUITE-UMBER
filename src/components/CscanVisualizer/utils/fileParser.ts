@@ -1,5 +1,12 @@
 import { CscanData, CscanStats, SourceRegion, OffsetDetection } from '../types';
-import { resolveExpectedStarts, OFFSET_TOLERANCE } from './offsetExpectations';
+import {
+  resolveExpectedStarts,
+  offsetFromExpected,
+  flagTruncatedRows,
+  OFFSET_TOLERANCE,
+} from './offsetExpectations';
+import { halvedAxesFromScans, HalvedAxes } from './metadataHalving';
+import { axisExtents } from './axisMath';
 
 // Generate unique ID for files
 const generateId = () => `cscan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -40,7 +47,7 @@ const calculateStats = (
       validArea: 0,
       ndPercent: 100,
       ndCount,
-      ndArea: 0
+      ndArea: 0,
     };
   }
 
@@ -69,12 +76,8 @@ const calculateStats = (
   const stdDev = Math.sqrt(varianceSum / validPoints);
 
   // Calculate area metrics using point spacing
-  const xSpacing = xCoords && xCoords.length > 1
-    ? Math.abs(xCoords[1] - xCoords[0])
-    : 1.0;
-  const ySpacing = yCoords && yCoords.length > 1
-    ? Math.abs(yCoords[1] - yCoords[0])
-    : 1.0;
+  const xSpacing = xCoords && xCoords.length > 1 ? Math.abs(xCoords[1] - xCoords[0]) : 1.0;
+  const ySpacing = yCoords && yCoords.length > 1 ? Math.abs(yCoords[1] - yCoords[0]) : 1.0;
   const pointArea = xSpacing * ySpacing; // Area per data point in mm²
 
   const totalArea = totalPoints * pointArea;
@@ -94,7 +97,7 @@ const calculateStats = (
     validArea,
     ndPercent,
     ndCount,
-    ndArea
+    ndArea,
   };
 };
 
@@ -120,10 +123,13 @@ export const parseCscanFile = async (file: File): Promise<CscanData> => {
       break;
     }
 
-    // Parse metadata as key=value pairs
-    const parts = line.split('=').map(p => p.trim());
+    // Parse metadata as key=value pairs. Coerce with Number, not parseFloat:
+    // mixed values like "Data File = 0-800MM ..." must stay strings (the
+    // datafile arbitration source reads them), not collapse to their leading
+    // digits.
+    const parts = line.split('=').map((p) => p.trim());
     if (parts.length === 2 && parts[0] && parts[1]) {
-      const value = parseFloat(parts[1]);
+      const value = Number(parts[1]);
       metadata[parts[0]] = isNaN(value) ? parts[1] : value;
     }
   }
@@ -140,10 +146,13 @@ export const parseCscanFile = async (file: File): Promise<CscanData> => {
   // Parse X coordinates from the data header line (first row after marker)
   const headerLine = lines[dataStartIndex];
   const headerParts = headerLine.split(/[\t,]/);
-  xAxis = headerParts.slice(1).map(v => {
-    const num = parseFloat(v.trim());
-    return isNaN(num) ? 0 : num;
-  }).filter((_, idx) => !isNaN(Number(headerParts[idx + 1])));
+  xAxis = headerParts
+    .slice(1)
+    .map((v) => {
+      const num = parseFloat(v.trim());
+      return isNaN(num) ? 0 : num;
+    })
+    .filter((_, idx) => !isNaN(Number(headerParts[idx + 1])));
 
   // Parse data rows
   for (let i = dataStartIndex + 1; i < lines.length; i++) {
@@ -158,7 +167,7 @@ export const parseCscanFile = async (file: File): Promise<CscanData> => {
     yAxis.push(yValue);
 
     // Parse thickness values, treating "ND" or empty as null
-    const rowData = rowValues.slice(1).map(val => {
+    const rowData = rowValues.slice(1).map((val) => {
       const trimmed = val.trim();
       if (trimmed === 'ND' || trimmed === '' || trimmed === '-') {
         return null;
@@ -175,6 +184,8 @@ export const parseCscanFile = async (file: File): Promise<CscanData> => {
     throw new Error('Failed to parse C-Scan data matrix');
   }
 
+  flagTruncatedRows(metadata, data.length);
+
   // Calculate statistics with coordinate info for area metrics
   const stats = calculateStats(data, xAxis, yAxis);
 
@@ -189,17 +200,14 @@ export const parseCscanFile = async (file: File): Promise<CscanData> => {
     stats,
     metadata,
     validPoints: stats.validPoints,
-    timestamp: new Date()
+    timestamp: new Date(),
   };
 };
 
 // Check if metadata indicates a PAUT instrument format
 // These files have key=value headers with scan/index resolution info but no "mm" marker
 const isPautInstrumentFormat = (metadata: Record<string, any>): boolean => {
-  return (
-    metadata['Scan Resol. (mm)'] !== undefined &&
-    metadata['Index Resol. (mm)'] !== undefined
-  );
+  return metadata['Scan Resol. (mm)'] !== undefined && metadata['Index Resol. (mm)'] !== undefined;
 };
 
 // Parse PAUT instrument format files (e.g. from Olympus/Evident scanners)
@@ -241,7 +249,7 @@ const parsePautInstrumentFormat = async (
     const line = lines[i];
     if (line.trim() === '') continue;
 
-    const rowData = line.split('\t').map(val => {
+    const rowData = line.split('\t').map((val) => {
       const trimmed = val.trim();
       if (trimmed === 'NaN' || trimmed === 'ND' || trimmed === '' || trimmed === '-') {
         return null;
@@ -258,15 +266,17 @@ const parsePautInstrumentFormat = async (
   }
 
   // Use actual row count for yAxis if it differs from metadata
-  const actualYAxis = data.length !== yAxis.length
-    ? Array.from({ length: data.length }, (_, i) => indexStart + i * indexResol)
-    : yAxis;
+  const actualYAxis =
+    data.length !== yAxis.length
+      ? Array.from({ length: data.length }, (_, i) => indexStart + i * indexResol)
+      : yAxis;
 
   // Use actual column count for xAxis if it differs from metadata
   const actualWidth = data[0]?.length ?? 0;
-  const actualXAxis = actualWidth !== xAxis.length
-    ? Array.from({ length: actualWidth }, (_, i) => scanStart + i * scanResol)
-    : xAxis;
+  const actualXAxis =
+    actualWidth !== xAxis.length
+      ? Array.from({ length: actualWidth }, (_, i) => scanStart + i * scanResol)
+      : xAxis;
 
   const stats = calculateStats(data, actualXAxis, actualYAxis);
 
@@ -281,7 +291,7 @@ const parsePautInstrumentFormat = async (
     stats,
     metadata,
     validPoints: stats.validPoints,
-    timestamp: new Date()
+    timestamp: new Date(),
   };
 };
 
@@ -298,7 +308,7 @@ const parseGenericFormat = async (
   const metadata: Record<string, any> = {};
 
   // Filter empty lines
-  const nonEmptyLines = lines.filter(line => line.trim());
+  const nonEmptyLines = lines.filter((line) => line.trim());
 
   if (nonEmptyLines.length === 0) {
     throw new Error('Empty file');
@@ -306,13 +316,10 @@ const parseGenericFormat = async (
 
   // Detect delimiter
   const firstLine = nonEmptyLines[0];
-  const delimiter = firstLine.includes('\t') ? '\t' :
-                    firstLine.includes(',') ? ',' : /\s+/;
+  const delimiter = firstLine.includes('\t') ? '\t' : firstLine.includes(',') ? ',' : /\s+/;
 
   // Check if first row contains axis labels
-  const firstRow = firstLine.split(delimiter).map(v =>
-    typeof v === 'string' ? v.trim() : v
-  );
+  const firstRow = firstLine.split(delimiter).map((v) => (typeof v === 'string' ? v.trim() : v));
   const firstCellEmpty = firstRow[0] === '' || firstRow[0] === 'mm';
   const hasAxisLabels = firstCellEmpty || isNaN(parseFloat(firstRow[0]));
 
@@ -320,7 +327,7 @@ const parseGenericFormat = async (
 
   if (hasAxisLabels) {
     // First row is X axis
-    xAxis = firstRow.slice(1).map(v => {
+    xAxis = firstRow.slice(1).map((v) => {
       const num = parseFloat(v);
       return isNaN(num) ? 0 : num;
     });
@@ -329,24 +336,28 @@ const parseGenericFormat = async (
 
   // Parse data rows
   for (let i = dataStartRow; i < nonEmptyLines.length; i++) {
-    const values = nonEmptyLines[i].split(delimiter).map(v =>
-      typeof v === 'string' ? v.trim() : v
-    );
+    const values = nonEmptyLines[i]
+      .split(delimiter)
+      .map((v) => (typeof v === 'string' ? v.trim() : v));
 
     if (hasAxisLabels && values.length > 0) {
       const yVal = parseFloat(values[0]);
       if (!isNaN(yVal)) {
         yAxis.push(yVal);
-        data.push(values.slice(1).map(v => {
-          const num = parseFloat(v);
-          return isNaN(num) ? null : num;
-        }));
+        data.push(
+          values.slice(1).map((v) => {
+            const num = parseFloat(v);
+            return isNaN(num) ? null : num;
+          })
+        );
       }
     } else if (!hasAxisLabels) {
-      data.push(values.map(v => {
-        const num = parseFloat(v);
-        return isNaN(num) ? null : num;
-      }));
+      data.push(
+        values.map((v) => {
+          const num = parseFloat(v);
+          return isNaN(num) ? null : num;
+        })
+      );
     }
   }
 
@@ -371,7 +382,7 @@ const parseGenericFormat = async (
     stats,
     metadata,
     validPoints: stats.validPoints,
-    timestamp: new Date()
+    timestamp: new Date(),
   };
 };
 
@@ -404,12 +415,14 @@ export const createComposite = (scans: CscanData[]): CscanData | null => {
   if (scans.length < 2) return null;
 
   // Step 1: Find global extent across all scans and track source regions
-  let gMinX = Infinity, gMaxX = -Infinity;
-  let gMinY = Infinity, gMaxY = -Infinity;
+  let gMinX = Infinity,
+    gMaxX = -Infinity;
+  let gMinY = Infinity,
+    gMaxY = -Infinity;
 
   const sourceRegions: SourceRegion[] = [];
 
-  scans.forEach(scan => {
+  scans.forEach((scan) => {
     const minX = Math.min(...scan.xAxis);
     const maxX = Math.max(...scan.xAxis);
     const minY = Math.min(...scan.yAxis);
@@ -423,7 +436,7 @@ export const createComposite = (scans: CscanData[]): CscanData | null => {
       minY,
       maxY,
       centerX: (minX + maxX) / 2,
-      centerY: (minY + maxY) / 2
+      centerY: (minY + maxY) / 2,
     });
 
     if (minX < gMinX) gMinX = minX;
@@ -434,7 +447,7 @@ export const createComposite = (scans: CscanData[]): CscanData | null => {
 
   // Step 2: Find minimum spacing (resolution) from all scans
   let minSpacing = Infinity;
-  scans.forEach(scan => {
+  scans.forEach((scan) => {
     if (scan.xAxis.length > 1) {
       const spacing = Math.abs(scan.xAxis[1] - scan.xAxis[0]);
       if (spacing > 0 && spacing < minSpacing) minSpacing = spacing;
@@ -456,7 +469,7 @@ export const createComposite = (scans: CscanData[]): CscanData | null => {
   const weightGrid = new Float32Array(gridHeight * gridWidth).fill(0);
 
   // Step 5: Accumulate values from all scans
-  scans.forEach(scan => {
+  scans.forEach((scan) => {
     for (let i = 0; i < scan.yAxis.length; i++) {
       for (let j = 0; j < scan.xAxis.length; j++) {
         const val = scan.data[i]?.[j];
@@ -508,14 +521,14 @@ export const createComposite = (scans: CscanData[]): CscanData | null => {
     metadata: {
       Type: 'Composite',
       'Source Files': scans.length,
-      sourceFileNames: scans.map(s => s.filename),
+      sourceFileNames: scans.map((s) => s.filename),
       compositeType: 'weighted_average',
-      gridResolution: resolution
+      gridResolution: resolution,
     },
     validPoints: stats.validPoints,
     timestamp: new Date(),
     isComposite: true,
-    sourceRegions
+    sourceRegions,
   };
 };
 
@@ -524,35 +537,58 @@ export const createComposite = (scans: CscanData[]): CscanData | null => {
 // =============================================================================
 
 /**
- * Detect if a scan file has incorrect axis offsets
- * Compares expected positions (filename ranges and metadata, arbitrated by
- * resolveExpectedStarts) against actual data values
+ * Batch-level doubled-metadata detection: when corrupted starts also match
+ * the matrix labels, per-file comparison sees agreement — but halving the
+ * starts closing the tiling holes across the batch exposes the corruption.
  */
-export const detectOffsets = (scan: CscanData, preferFilename = false): OffsetDetection => {
+export const halvedAxesForScans = (scans: CscanData[]): HalvedAxes => halvedAxesFromScans(scans);
+
+/**
+ * Detect if a scan file has incorrect axis offsets
+ * Compares expected positions (filename/Data File ranges and metadata,
+ * arbitrated by resolveExpectedStarts) against actual data values.
+ * `halvedAxes` carries the batch-level doubled-metadata detection; compute it
+ * once per batch via halvedAxesForScans.
+ */
+export const detectOffsets = (
+  scan: CscanData,
+  preferFilename = false,
+  halvedAxes?: HalvedAxes
+): OffsetDetection => {
   // Get actual values from parsed data
   // yAxis is Index (rows), xAxis is Scan (columns)
-  const actualIndexStart = scan.yAxis.length > 0 ? Math.min(...scan.yAxis) : 0;
-  const actualIndexEnd = scan.yAxis.length > 0 ? Math.max(...scan.yAxis) : 0;
-  const actualScanStart = scan.xAxis.length > 0 ? Math.min(...scan.xAxis) : 0;
-  const actualScanEnd = scan.xAxis.length > 0 ? Math.max(...scan.xAxis) : 0;
+  const indexExt = axisExtents(scan.yAxis);
+  const scanExt = axisExtents(scan.xAxis);
+  const actualIndexStart = indexExt?.min ?? 0;
+  const actualIndexEnd = indexExt?.max ?? 0;
+  const actualScanStart = scanExt?.min ?? 0;
+  const actualScanEnd = scanExt?.max ?? 0;
 
   const expected = resolveExpectedStarts(
     scan.filename,
     scan.metadata,
     actualScanEnd - actualScanStart,
     actualIndexEnd - actualIndexStart,
-    preferFilename
+    preferFilename,
+    {
+      halvedAxes,
+      extents: {
+        scanMin: actualScanStart,
+        scanMax: actualScanEnd,
+        indexMin: actualIndexStart,
+        indexMax: actualIndexEnd,
+      },
+    }
   );
   const expectedIndexStart = expected.indexStart;
   const expectedScanStart = expected.scanStart;
 
-  // Calculate offsets needed
-  const indexOffset = expectedIndexStart !== null
-    ? expectedIndexStart - actualIndexStart
-    : 0;
-  const scanOffset = expectedScanStart !== null
-    ? expectedScanStart - actualScanStart
-    : 0;
+  const indexOffset = offsetFromExpected(
+    expectedIndexStart,
+    expected.indexAnchor,
+    actualIndexStart
+  );
+  const scanOffset = offsetFromExpected(expectedScanStart, expected.scanAnchor, actualScanStart);
 
   // Determine if correction is needed (with tolerance)
   const indexNeedsCorrection = Math.abs(indexOffset) > OFFSET_TOLERANCE;
@@ -570,7 +606,7 @@ export const detectOffsets = (scan: CscanData, preferFilename = false): OffsetDe
     actualScanStart,
     scanOffset,
     scanNeedsCorrection,
-    scanSource: expected.scanSource
+    scanSource: expected.scanSource,
   };
 };
 
@@ -582,32 +618,47 @@ export const detectOffsetsForScans = (
   scans: CscanData[],
   preferFilename = false
 ): OffsetDetection[] => {
+  const halvedAxes = halvedAxesForScans(scans);
   return scans
-    .filter(scan => !scan.isComposite) // Skip composite scans
-    .map(scan => detectOffsets(scan, preferFilename))
-    .filter(detection => detection.indexNeedsCorrection || detection.scanNeedsCorrection);
+    .filter((scan) => !scan.isComposite) // Skip composite scans
+    .map((scan) => detectOffsets(scan, preferFilename, halvedAxes))
+    .filter((detection) => detection.indexNeedsCorrection || detection.scanNeedsCorrection);
 };
 
 /**
+ * The axis shift a detection implies under the current axis toggles.
+ * Shared by the repair path and the modal's overlap-check preview so the
+ * placement the cross-check scores is definitionally the one applied.
+ */
+export const detectionShift = (
+  detection: OffsetDetection,
+  correctIndex: boolean,
+  correctScan: boolean
+): { dx: number; dy: number } => ({
+  dx: correctScan && detection.scanNeedsCorrection ? detection.scanOffset : 0,
+  dy: correctIndex && detection.indexNeedsCorrection ? detection.indexOffset : 0,
+});
+
+/**
  * Apply offset correction to a single scan
- * Returns a new CscanData with corrected axis values
+ * Returns a new CscanData with corrected axis values.
+ * Pass `detection` when the caller already ran detectOffsets (the batch
+ * appliers do) to avoid re-running arbitration.
  */
 export const applyOffsetCorrection = (
   scan: CscanData,
   correctIndex: boolean,
   correctScan: boolean,
-  preferFilename = false
+  preferFilename = false,
+  halvedAxes?: HalvedAxes,
+  detection?: OffsetDetection
 ): CscanData => {
-  const detection = detectOffsets(scan, preferFilename);
+  const resolved = detection ?? detectOffsets(scan, preferFilename, halvedAxes);
+  const { dx, dy } = detectionShift(resolved, correctIndex, correctScan);
 
   // Create new axis arrays with corrections applied
-  const correctedYAxis = correctIndex && detection.indexNeedsCorrection
-    ? scan.yAxis.map(y => y + detection.indexOffset)
-    : [...scan.yAxis];
-
-  const correctedXAxis = correctScan && detection.scanNeedsCorrection
-    ? scan.xAxis.map(x => x + detection.scanOffset)
-    : [...scan.xAxis];
+  const correctedYAxis = dy !== 0 ? scan.yAxis.map((y) => y + dy) : [...scan.yAxis];
+  const correctedXAxis = dx !== 0 ? scan.xAxis.map((x) => x + dx) : [...scan.xAxis];
 
   // Recalculate stats with new coordinates (for area calculations)
   const stats = calculateStats(scan.data, correctedXAxis, correctedYAxis);
@@ -620,9 +671,9 @@ export const applyOffsetCorrection = (
     metadata: {
       ...scan.metadata,
       _correctionApplied: true,
-      _indexOffsetApplied: correctIndex ? detection.indexOffset : 0,
-      _scanOffsetApplied: correctScan ? detection.scanOffset : 0
-    }
+      _indexOffsetApplied: dy,
+      _scanOffsetApplied: dx,
+    },
   };
 };
 
@@ -635,17 +686,25 @@ export const applyOffsetCorrections = (
   correctScan: boolean,
   preferFilename = false
 ): CscanData[] => {
-  return scans.map(scan => {
+  const halvedAxes = halvedAxesForScans(scans);
+  return scans.map((scan) => {
     if (scan.isComposite) return scan; // Don't correct composites
 
-    const detection = detectOffsets(scan, preferFilename);
+    const detection = detectOffsets(scan, preferFilename, halvedAxes);
     const needsCorrection =
       (correctIndex && detection.indexNeedsCorrection) ||
       (correctScan && detection.scanNeedsCorrection);
 
     if (!needsCorrection) return scan;
 
-    return applyOffsetCorrection(scan, correctIndex, correctScan, preferFilename);
+    return applyOffsetCorrection(
+      scan,
+      correctIndex,
+      correctScan,
+      preferFilename,
+      halvedAxes,
+      detection
+    );
   });
 };
 
@@ -653,9 +712,10 @@ export const applyOffsetCorrections = (
  * Check if any scans in a collection need offset correction
  */
 export const hasOffsetsToCorrect = (scans: CscanData[]): boolean => {
-  return scans.some(scan => {
+  const halvedAxes = halvedAxesForScans(scans);
+  return scans.some((scan) => {
     if (scan.isComposite) return false;
-    const detection = detectOffsets(scan);
+    const detection = detectOffsets(scan, false, halvedAxes);
     return detection.indexNeedsCorrection || detection.scanNeedsCorrection;
   });
 };

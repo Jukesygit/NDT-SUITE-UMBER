@@ -12,70 +12,16 @@ import type {
   TopologyAnnotation,
 } from './types';
 import { TopologySceneManager } from './engine/topology-scene';
-import { buildTopologySurface, buildPlateBody, buildCylindricalShell, clampDisplayDisplacement } from './engine/topology-surface';
+import {
+  buildTopologySurface,
+  buildPlateBody,
+  buildCylindricalShell,
+  clampDisplayDisplacement,
+} from './engine/topology-surface';
 import { extractCrossSection } from './engine/topology-cross-section';
+import { findNearestIndex, toNDC, resolveGridFromHit } from './engine/topology-raycast';
 import { interpolateColor, getColorscale } from '../../utils/colorscales';
 import { RandomMatrixSpinner } from '../MatrixSpinners';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Find the index in `axis` whose value is nearest to `value`. */
-function findNearestIndex(axis: number[], value: number): number {
-  let best = 0;
-  let bestDist = Math.abs(axis[0] - value);
-  for (let i = 1; i < axis.length; i++) {
-    const d = Math.abs(axis[i] - value);
-    if (d < bestDist) {
-      bestDist = d;
-      best = i;
-    }
-  }
-  return best;
-}
-
-/** Normalize a pixel position relative to a canvas rect to [-1, 1] NDC. */
-function toNDC(clientX: number, clientY: number, rect: DOMRect): THREE.Vector2 {
-  return new THREE.Vector2(
-    ((clientX - rect.left) / rect.width) * 2 - 1,
-    -((clientY - rect.top) / rect.height) * 2 + 1,
-  );
-}
-
-/**
- * Resolve grid row/col from a raycast hit. Uses the face's vertex indices
- * when geometry userData is available (works in both flat and cylinder mode),
- * falling back to the flat-mode nearest-axis lookup.
- */
-function resolveGridFromHit(
-  hit: THREE.Intersection,
-  cs: CscanData,
-  flatCol: number,
-  flatRow: number,
-): { gridRow: number; gridCol: number } {
-  const geo = (hit.object as THREE.Mesh).geometry;
-  const ud = geo?.userData as {
-    cols?: number;
-    xAxis?: number[];
-    yAxis?: number[];
-  } | undefined;
-  const idx = geo?.getIndex();
-  if (hit.faceIndex != null && idx && ud?.cols && ud.xAxis && ud.yAxis) {
-    const cols = ud.cols;
-    const triBase = hit.faceIndex * 3;
-    const v0 = idx.getX(triBase);
-    const decimatedRow = Math.floor(v0 / cols);
-    const decimatedCol = v0 % cols;
-    const scanMm = ud.xAxis[decimatedCol];
-    const indexMm = ud.yAxis[decimatedRow];
-    return {
-      gridRow: findNearestIndex(cs.yAxis, indexMm),
-      gridCol: findNearestIndex(cs.xAxis, scanMm),
-    };
-  }
-  return { gridRow: flatRow, gridCol: flatCol };
-}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -212,7 +158,7 @@ export default function TopologyViewport({
       mat.side = prevSide;
       return hits.length > 0 ? hits[0] : null;
     },
-    [],
+    []
   );
 
   // ------------------------------------------------------------------
@@ -231,7 +177,6 @@ export default function TopologyViewport({
       manager.dispose();
       sceneManagerRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ------------------------------------------------------------------
@@ -262,7 +207,8 @@ export default function TopologyViewport({
           mgr.setPlateGeometry(shell);
 
           const surfaceMesh = mgr.getSurfaceMesh();
-          if (surfaceMesh) (surfaceMesh.material as THREE.MeshStandardMaterial).side = THREE.FrontSide;
+          if (surfaceMesh)
+            (surfaceMesh.material as THREE.MeshStandardMaterial).side = THREE.FrontSide;
         } else {
           const pos = geometry.getAttribute('position');
           let minY = 0;
@@ -359,7 +305,7 @@ export default function TopologyViewport({
         value ?? null,
         nominalThickness,
         surfaceOptions.exaggeration,
-        surfaceOptions.displacementClampUpper,
+        surfaceOptions.displacementClampUpper
       );
       const sphere = new THREE.Mesh(sphereGeo.clone(), sphereMat.clone());
       sphere.position.set(cs.xAxis[colIdx], y, cs.yAxis[rowIdx]);
@@ -430,7 +376,7 @@ export default function TopologyViewport({
           value ?? null,
           nominalThickness,
           surfaceOptions.exaggeration,
-          surfaceOptions.displacementClampUpper,
+          surfaceOptions.displacementClampUpper
         );
         surfacePos = new THREE.Vector3(ann.scanMm, y, ann.indexMm);
       }
@@ -440,7 +386,7 @@ export default function TopologyViewport({
       // Dot at surface
       const dot = new THREE.Mesh(
         new THREE.SphereGeometry(1.5, 12, 12),
-        new THREE.MeshBasicMaterial({ color: 0x00ccff }),
+        new THREE.MeshBasicMaterial({ color: 0x00ccff })
       );
       dot.position.copy(surfacePos);
       group.add(dot);
@@ -458,7 +404,7 @@ export default function TopologyViewport({
       // Leader line
       const leaderLine = new THREE.Line(
         new THREE.BufferGeometry().setFromPoints([surfacePos, labelPos]),
-        new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 }),
+        new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 })
       );
       group.add(leaderLine);
 
@@ -520,7 +466,7 @@ export default function TopologyViewport({
         const cam = mgr.getCamera();
         dragPlane.setFromNormalAndCoplanarPoint(
           cam.getWorldDirection(new THREE.Vector3()).negate(),
-          labelPos,
+          labelPos
         );
         labelStart.copy(labelPos);
 
@@ -668,7 +614,7 @@ export default function TopologyViewport({
         drag.startScanMm,
         drag.startIndexMm,
         endScanMm,
-        endIndexMm,
+        endIndexMm
       );
       onCrossSectionRef.current(csData);
 
@@ -748,20 +694,19 @@ export default function TopologyViewport({
   // ------------------------------------------------------------------
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <div
-        ref={containerRef}
-        style={{ position: 'relative', width: '100%', height: '100%' }}
-      />
+      <div ref={containerRef} style={{ position: 'relative', width: '100%', height: '100%' }} />
       {isRebuilding && (
-        <div style={{
-          position: 'absolute',
-          inset: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'rgba(0,0,0,0.3)',
-          pointerEvents: 'none',
-        }}>
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,0.3)',
+            pointerEvents: 'none',
+          }}
+        >
           <RandomMatrixSpinner size={120} />
         </div>
       )}

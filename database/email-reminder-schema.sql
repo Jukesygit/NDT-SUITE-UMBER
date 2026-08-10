@@ -47,11 +47,14 @@ CREATE TABLE IF NOT EXISTS email_reminder_log (
     error_message TEXT
 );
 
--- Unique index: one reminder per user per threshold per year
--- This allows reminders to be sent again if certification is renewed
--- Using expression index since PostgreSQL doesn't support computed columns in constraints
+-- Unique index: one SUCCESSFUL reminder per user per threshold per year.
+-- Partial on status='sent' so it matches get_users_for_expiration_reminder's
+-- exclusion exactly: failed sends may retry on later runs; only a successful
+-- send closes the slot. (A non-partial version of this index trapped users in
+-- a daily resend loop — see migration 20260728100000.)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_user_threshold_year
-    ON email_reminder_log(user_id, threshold_months, (EXTRACT(YEAR FROM sent_at AT TIME ZONE 'Europe/London')::INTEGER));
+    ON email_reminder_log(user_id, threshold_months, (EXTRACT(YEAR FROM sent_at AT TIME ZONE 'Europe/London')::INTEGER))
+    WHERE status = 'sent';
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_email_reminder_log_user ON email_reminder_log(user_id);

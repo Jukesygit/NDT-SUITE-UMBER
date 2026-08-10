@@ -18,6 +18,14 @@ export interface HeatmapTextureOptions {
   rangeMax?: number | null;
   reverseScale?: boolean;
   opacity?: number;
+  /**
+   * Optional per-cell exclusion for the appendage cutout (design §9.4). When it
+   * returns true for a (row, col) the pixel is stamped fully transparent
+   * (alpha = 0), matching the coverage/wall-loss exclusions so the visible hole
+   * agrees with the stats. Callers build it from the SAME junction-footprint
+   * `containsCell` predicate — never a re-derived one.
+   */
+  excludeMask?: (row: number, col: number) => boolean;
 }
 
 export interface HeatmapTextureResult {
@@ -29,11 +37,18 @@ export interface HeatmapTextureResult {
 // Core rendering
 // ---------------------------------------------------------------------------
 
-function renderToCanvas(
-  canvas: HTMLCanvasElement,
+/**
+ * Paint a thickness matrix into a flat RGBA pixel buffer (row-major, one texel
+ * per data cell, length = rows·cols·4). Pure and canvas-free so it is directly
+ * unit-testable — jsdom has no 2D context, so this is where the pixel behaviour
+ * (colour, null transparency, cutout alpha stamp) is verified. `renderToCanvas`
+ * is a thin wrapper that hands it `ctx.createImageData(...).data`.
+ */
+export function paintHeatmapPixels(
+  pixels: Uint8ClampedArray | number[],
   data: (number | null)[][],
   stats: { min: number; max: number },
-  options: HeatmapTextureOptions = {},
+  options: HeatmapTextureOptions = {}
 ): void {
   const {
     colorScale = 'Jet',
@@ -41,20 +56,12 @@ function renderToCanvas(
     rangeMax = null,
     reverseScale = false,
     opacity = 1,
+    excludeMask,
   } = options;
 
   const rows = data.length;
   const cols = rows > 0 ? data[0].length : 0;
   if (rows === 0 || cols === 0) return;
-
-  canvas.width = cols;
-  canvas.height = rows;
-
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-
-  const imageData = ctx.createImageData(cols, rows);
-  const pixels = imageData.data;
 
   const min = rangeMin != null ? rangeMin : stats.min;
   const max = rangeMax != null ? rangeMax : stats.max;
@@ -68,7 +75,8 @@ function renderToCanvas(
       const idx = (row * cols + col) * 4;
       const value = data[row][col];
 
-      if (value == null) {
+      // Appendage cutout: stamp footprint pixels fully transparent (design §9.4).
+      if (value == null || (excludeMask !== undefined && excludeMask(row, col))) {
         pixels[idx] = 0;
         pixels[idx + 1] = 0;
         pixels[idx + 2] = 0;
@@ -83,7 +91,26 @@ function renderToCanvas(
       }
     }
   }
+}
 
+function renderToCanvas(
+  canvas: HTMLCanvasElement,
+  data: (number | null)[][],
+  stats: { min: number; max: number },
+  options: HeatmapTextureOptions = {}
+): void {
+  const rows = data.length;
+  const cols = rows > 0 ? data[0].length : 0;
+  if (rows === 0 || cols === 0) return;
+
+  canvas.width = cols;
+  canvas.height = rows;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const imageData = ctx.createImageData(cols, rows);
+  paintHeatmapPixels(imageData.data, data, stats, options);
   ctx.putImageData(imageData, 0, 0);
 }
 
@@ -94,7 +121,7 @@ function renderToCanvas(
 export function createHeatmapTexture(
   data: (number | null)[][],
   stats: { min: number; max: number },
-  options?: HeatmapTextureOptions,
+  options?: HeatmapTextureOptions
 ): HeatmapTextureResult {
   const canvas = document.createElement('canvas');
 
@@ -114,7 +141,7 @@ export function updateHeatmapTexture(
   result: HeatmapTextureResult,
   data: (number | null)[][],
   stats: { min: number; max: number },
-  options?: HeatmapTextureOptions,
+  options?: HeatmapTextureOptions
 ): void {
   renderToCanvas(result.canvas, data, stats, options);
   result.texture.needsUpdate = true;

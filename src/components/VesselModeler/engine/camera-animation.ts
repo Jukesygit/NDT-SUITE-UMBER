@@ -16,16 +16,39 @@ import { SCALE } from './materials';
 // ---------------------------------------------------------------------------
 
 interface AnimationState {
-    startPosition: THREE.Vector3;
-    endPosition: THREE.Vector3;
-    startTarget: THREE.Vector3;
-    endTarget: THREE.Vector3;
-    startTime: number;
-    duration: number;
-    onComplete?: () => void;
+  startPosition: THREE.Vector3;
+  endPosition: THREE.Vector3;
+  startTarget: THREE.Vector3;
+  endTarget: THREE.Vector3;
+  startTime: number;
+  duration: number;
+  onComplete?: () => void;
 }
 
 let currentAnimation: AnimationState | null = null;
+
+// ---------------------------------------------------------------------------
+// Framing distance (shared with frame-entity.ts — keep byte-identical)
+// ---------------------------------------------------------------------------
+
+/**
+ * Distance along the surface normal that frames a `footprintWorld`-wide feature
+ * at ~70% of the viewport, using the LIVE camera's fov + aspect. This is the
+ * EXACT formula {@link computeInspectionCameraTarget} used inline, factored out
+ * so the command palette's entity framing (frame-entity.ts) and inspection mode
+ * cannot drift. Inspection-mode output stays byte-identical because the same
+ * camera is passed and the arithmetic is unchanged.
+ */
+export function framingDistanceForCamera(
+  footprintWorld: number,
+  camera: THREE.PerspectiveCamera
+): number {
+  const vFovRad = (camera.fov * Math.PI) / 180;
+  const hFovRad = 2 * Math.atan(Math.tan(vFovRad / 2) * camera.aspect);
+  // Use whichever FOV is narrower to ensure the footprint fits
+  const fov = Math.min(vFovRad, hFovRad);
+  return footprintWorld / 0.7 / (2 * Math.tan(fov / 2));
+}
 
 // ---------------------------------------------------------------------------
 // computeInspectionCameraTarget
@@ -39,39 +62,35 @@ let currentAnimation: AnimationState | null = null;
  * ~70% of the viewport with the annotation footprint.
  */
 export function computeInspectionCameraTarget(
-    ann: AnnotationShapeConfig,
-    vesselState: VesselState,
-    camera: THREE.PerspectiveCamera,
+  ann: AnnotationShapeConfig,
+  vesselState: VesselState,
+  camera: THREE.PerspectiveCamera
 ): { position: THREE.Vector3; target: THREE.Vector3 } {
-    // Convert annotation angle (degrees) to radians — same convention as annotation-geometry.ts
-    const angleRad = (ann.angle * Math.PI) / 180;
+  // Convert annotation angle (degrees) to radians — same convention as annotation-geometry.ts
+  const angleRad = (ann.angle * Math.PI) / 180;
 
-    // Get the surface point at the annotation center
-    const target = shellPoint(ann.pos, angleRad, vesselState, 0);
+  // Get the surface point at the annotation center
+  const target = shellPoint(ann.pos, angleRad, vesselState, 0);
 
-    // Compute surface normal (radially outward from vessel axis)
-    // Must match shellPoint's coordinate system: horizontal → y=sin, z=cos
-    const isVertical = vesselState.orientation === 'vertical';
-    let normal: THREE.Vector3;
-    if (isVertical) {
-        normal = new THREE.Vector3(Math.cos(angleRad), 0, Math.sin(angleRad));
-    } else {
-        normal = new THREE.Vector3(0, Math.sin(angleRad), Math.cos(angleRad));
-    }
-    normal.normalize();
+  // Compute surface normal (radially outward from vessel axis)
+  // Must match shellPoint's coordinate system: horizontal → y=sin, z=cos
+  const isVertical = vesselState.orientation === 'vertical';
+  let normal: THREE.Vector3;
+  if (isVertical) {
+    normal = new THREE.Vector3(Math.cos(angleRad), 0, Math.sin(angleRad));
+  } else {
+    normal = new THREE.Vector3(0, Math.sin(angleRad), Math.cos(angleRad));
+  }
+  normal.normalize();
 
-    // Calculate distance so the annotation footprint fills ~70% of viewport
-    const footprint = Math.max(ann.width, ann.height) * SCALE;
-    const vFovRad = (camera.fov * Math.PI) / 180;
-    const hFovRad = 2 * Math.atan(Math.tan(vFovRad / 2) * camera.aspect);
-    // Use whichever FOV is narrower to ensure the footprint fits
-    const fov = Math.min(vFovRad, hFovRad);
-    const distance = (footprint / 0.7) / (2 * Math.tan(fov / 2));
+  // Calculate distance so the annotation footprint fills ~70% of viewport
+  const footprint = Math.max(ann.width, ann.height) * SCALE;
+  const distance = framingDistanceForCamera(footprint, camera);
 
-    // Position camera along the normal at the computed distance
-    const position = target.clone().add(normal.multiplyScalar(distance));
+  // Position camera along the normal at the computed distance
+  const position = target.clone().add(normal.multiplyScalar(distance));
 
-    return { position, target: target.clone() };
+  return { position, target: target.clone() };
 }
 
 // ---------------------------------------------------------------------------
@@ -83,22 +102,22 @@ export function computeInspectionCameraTarget(
  * Any currently running animation is cancelled before starting.
  */
 export function animateCamera(
-    camera: THREE.PerspectiveCamera,
-    controls: OrbitControls,
-    targetPosition: THREE.Vector3,
-    targetLookAt: THREE.Vector3,
-    duration = 500,
-    onComplete?: () => void,
+  camera: THREE.PerspectiveCamera,
+  controls: OrbitControls,
+  targetPosition: THREE.Vector3,
+  targetLookAt: THREE.Vector3,
+  duration = 500,
+  onComplete?: () => void
 ): void {
-    currentAnimation = {
-        startPosition: camera.position.clone(),
-        endPosition: targetPosition.clone(),
-        startTarget: (controls.target as THREE.Vector3).clone(),
-        endTarget: targetLookAt.clone(),
-        startTime: performance.now(),
-        duration,
-        onComplete,
-    };
+  currentAnimation = {
+    startPosition: camera.position.clone(),
+    endPosition: targetPosition.clone(),
+    startTarget: (controls.target as THREE.Vector3).clone(),
+    endTarget: targetLookAt.clone(),
+    startTime: performance.now(),
+    duration,
+    onComplete,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -110,39 +129,33 @@ export function animateCamera(
  * Interpolates camera position and controls target using ease-in-out cubic.
  */
 export function updateCameraAnimation(
-    camera: THREE.PerspectiveCamera,
-    controls: OrbitControls,
+  camera: THREE.PerspectiveCamera,
+  controls: OrbitControls
 ): boolean {
-    if (!currentAnimation) return false;
+  if (!currentAnimation) return false;
 
-    const elapsed = performance.now() - currentAnimation.startTime;
-    let t = Math.min(elapsed / currentAnimation.duration, 1);
+  const elapsed = performance.now() - currentAnimation.startTime;
+  let t = Math.min(elapsed / currentAnimation.duration, 1);
 
-    // Ease-in-out cubic
-    t = t < 0.5
-        ? 4 * t * t * t
-        : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  // Ease-in-out cubic
+  t = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-    camera.position.lerpVectors(
-        currentAnimation.startPosition,
-        currentAnimation.endPosition,
-        t,
-    );
-    (controls.target as THREE.Vector3).lerpVectors(
-        currentAnimation.startTarget,
-        currentAnimation.endTarget,
-        t,
-    );
-    controls.update();
+  camera.position.lerpVectors(currentAnimation.startPosition, currentAnimation.endPosition, t);
+  (controls.target as THREE.Vector3).lerpVectors(
+    currentAnimation.startTarget,
+    currentAnimation.endTarget,
+    t
+  );
+  controls.update();
 
-    // Check if animation is complete
-    if (elapsed >= currentAnimation.duration) {
-        const onComplete = currentAnimation.onComplete;
-        currentAnimation = null;
-        onComplete?.();
-    }
+  // Check if animation is complete
+  if (elapsed >= currentAnimation.duration) {
+    const onComplete = currentAnimation.onComplete;
+    currentAnimation = null;
+    onComplete?.();
+  }
 
-    return true;
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -153,5 +166,5 @@ export function updateCameraAnimation(
  * Cancels any running camera animation immediately.
  */
 export function cancelCameraAnimation(): void {
-    currentAnimation = null;
+  currentAnimation = null;
 }

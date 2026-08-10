@@ -8,200 +8,221 @@
  */
 
 import supabase from '../supabase-client';
-import {
-    ROLES,
-    PERMISSIONS,
-    type AuthResult,
-    type CreateUserData,
-} from './auth-types';
+import { ROLES, PERMISSIONS, type AuthResult, type CreateUserData } from './auth-types';
 
 // Supabase is guaranteed initialized when auth services are called
 const sb = supabase!;
 
+/**
+ * Extract the server-provided error message from a Supabase Functions invoke error.
+ *
+ * supabase-js v2 wraps a non-2xx invoke in a FunctionsHttpError whose `.context`
+ * is the raw fetch `Response` — so the old `.context?.error` read was always
+ * undefined. The edge functions return `{ "error": "<message>" }` JSON bodies
+ * (see supabase/functions/_shared/cors.ts errorResponse), so read that body to
+ * surface the real message; fall back to `error.message` on anything else.
+ */
+async function extractInvokeError(error: unknown): Promise<string> {
+  const err = error as { message?: string; context?: { json?: () => Promise<unknown> } };
+
+  if (typeof err?.context?.json === 'function') {
+    try {
+      const body = (await err.context.json()) as { error?: unknown };
+      if (typeof body?.error === 'string' && body.error.length > 0) {
+        return body.error;
+      }
+    } catch {
+      // Body was not JSON or already consumed — fall through to error.message
+    }
+  }
+
+  return err?.message || 'User creation failed';
+}
+
 // ── User CRUD ──────────────────────────────────────────────────────────────
 
-export async function createUser(
-    this: any,
-    userData: CreateUserData,
-): Promise<AuthResult> {
-    const canManageUsers = this.hasPermission(PERMISSIONS.MANAGE_USERS);
+export async function createUser(this: any, userData: CreateUserData): Promise<AuthResult> {
+  const canManageUsers = this.hasPermission(PERMISSIONS.MANAGE_USERS);
 
-    if (!canManageUsers) {
-        return { success: false, error: 'Permission denied' };
-    }
+  if (!canManageUsers) {
+    return { success: false, error: 'Permission denied' };
+  }
 
-    if (this.currentUser.role === ROLES.ORG_ADMIN &&
-        userData.organizationId !== this.currentUser.organizationId) {
-        return { success: false, error: 'Can only create users in your organization' };
-    }
+  if (
+    this.currentUser.role === ROLES.ORG_ADMIN &&
+    userData.organizationId !== this.currentUser.organizationId
+  ) {
+    return { success: false, error: 'Can only create users in your organization' };
+  }
 
-    if ((userData.role === ROLES.ADMIN || userData.role === ROLES.ORG_ADMIN) &&
-        !this.isAdmin()) {
-        return { success: false, error: 'Insufficient permissions to create admin users' };
-    }
+  if ((userData.role === ROLES.ADMIN || userData.role === ROLES.ORG_ADMIN) && !this.isAdmin()) {
+    return { success: false, error: 'Insufficient permissions to create admin users' };
+  }
 
-    const orgId = userData.organizationId ? String(userData.organizationId) : null;
+  const orgId = userData.organizationId ? String(userData.organizationId) : null;
 
-    const { data, error } = await sb.functions.invoke('create-user', {
-        body: {
-            email: userData.email,
-            username: userData.username,
-            password: userData.password,
-            role: userData.role || 'viewer',
-            organization_id: orgId,
-        },
-    });
+  const { data, error } = await sb.functions.invoke('create-user', {
+    body: {
+      email: userData.email,
+      username: userData.username,
+      password: userData.password,
+      role: userData.role || 'viewer',
+      organization_id: orgId,
+    },
+  });
 
-    if (error) {
-        const errorMessage = (error as any).context?.error || error.message;
-        return { success: false, error: errorMessage };
-    }
+  if (error) {
+    const errorMessage = await extractInvokeError(error);
+    return { success: false, error: errorMessage };
+  }
 
-    if (data?.error) {
-        return { success: false, error: data.error };
-    }
+  if (data?.error) {
+    return { success: false, error: data.error };
+  }
 
-    if (!data?.user) {
-        return { success: false, error: 'User creation failed - no user returned' };
-    }
+  if (!data?.user) {
+    return { success: false, error: 'User creation failed - no user returned' };
+  }
 
-    return { success: true, user: data.user };
+  return { success: true, user: data.user };
 }
 
 export async function syncUsers(this: any): Promise<AuthResult> {
-    try {
-        const { data, error } = await sb.functions.invoke('sync-users');
-
-        if (error) {
-            return { success: false, error: error.message };
-        }
-
-        if (data?.error) {
-            return { success: false, error: data.error };
-        }
-
-        return { success: true, ...data };
-    } catch (err: any) {
-        return { success: false, error: err.message };
-    }
-}
-
-export async function getUsers(this: any): Promise<any[]> {
-    await this.syncUsers();
-
-    let query = sb
-        .from('profiles')
-        .select('*, organizations(*)');
-
-    if (this.currentUser?.role === ROLES.ORG_ADMIN) {
-        query = query.eq('organization_id', this.currentUser.organizationId);
-    }
-
-    const { data, error } = await query;
+  try {
+    const { data, error } = await sb.functions.invoke('sync-users');
 
     if (error) {
-        return [];
-    }
-
-    return data || [];
-}
-
-export async function getUser(this: any, userId: string): Promise<any> {
-    const { data, error } = await sb
-        .from('profiles')
-        .select('*, organizations(*)')
-        .eq('id', userId)
-        .single();
-
-    if (error) {
-        return null;
-    }
-
-    return data;
-}
-
-export async function updateUser(
-    this: any,
-    userId: string,
-    updates: Record<string, any>,
-): Promise<AuthResult> {
-    const user = await this.getUser(userId);
-    if (!user) {
-        return { success: false, error: 'User not found' };
-    }
-
-    if (!this.isAdmin() && this.currentUser?.role !== ROLES.ORG_ADMIN) {
-        return { success: false, error: 'Permission denied' };
-    }
-
-    if (this.currentUser?.role === ROLES.ORG_ADMIN &&
-        user.organization_id !== this.currentUser.organizationId) {
-        return { success: false, error: 'Can only update users in your organization' };
-    }
-
-    const { data: updatedRows, error: updateError } = await sb
-        .from('profiles')
-        .update(updates)
-        .eq('id', userId)
-        .select();
-
-    if (updateError) {
-        return { success: false, error: updateError.message };
-    }
-
-    if (!updatedRows || updatedRows.length === 0) {
-        return {
-            success: false,
-            error: 'Unable to update user. You may not have permission to modify this user.',
-        };
-    }
-
-    const data = updatedRows[0];
-
-    if (updates.role && data.role !== updates.role) {
-        return {
-            success: false,
-            error: 'Unable to update user role. Database policy may have blocked this change.',
-        };
-    }
-
-    if (userId === this.currentUser?.id) {
-        await this.loadUserProfile(userId);
-    }
-
-    return { success: true, user: data };
-}
-
-export async function deleteUser(this: any, userId: string): Promise<AuthResult> {
-    const user = await this.getUser(userId);
-    if (!user) {
-        return { success: false, error: 'User not found' };
-    }
-
-    if (userId === this.currentUser?.id) {
-        return { success: false, error: 'Cannot delete yourself' };
-    }
-
-    if (!this.hasPermission(PERMISSIONS.MANAGE_USERS)) {
-        return { success: false, error: 'Permission denied' };
-    }
-
-    if (this.currentUser?.role === ROLES.ORG_ADMIN &&
-        user.organization_id !== this.currentUser.organizationId) {
-        return { success: false, error: 'Can only delete users in your organization' };
-    }
-
-    const { data, error } = await sb.functions.invoke('delete-user', {
-        body: { userId },
-    });
-
-    if (error) {
-        return { success: false, error: error.message };
+      return { success: false, error: error.message };
     }
 
     if (data?.error) {
-        return { success: false, error: data.error };
+      return { success: false, error: data.error };
     }
 
-    return { success: true };
+    return { success: true, ...data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function getUsers(this: any): Promise<any[]> {
+  await this.syncUsers();
+
+  let query = sb.from('profiles').select('*, organizations(*)');
+
+  if (this.currentUser?.role === ROLES.ORG_ADMIN) {
+    query = query.eq('organization_id', this.currentUser.organizationId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return [];
+  }
+
+  return data || [];
+}
+
+export async function getUser(this: any, userId: string): Promise<any> {
+  const { data, error } = await sb
+    .from('profiles')
+    .select('*, organizations(*)')
+    .eq('id', userId)
+    .single();
+
+  if (error) {
+    return null;
+  }
+
+  return data;
+}
+
+export async function updateUser(
+  this: any,
+  userId: string,
+  updates: Record<string, any>
+): Promise<AuthResult> {
+  const user = await this.getUser(userId);
+  if (!user) {
+    return { success: false, error: 'User not found' };
+  }
+
+  if (!this.isAdmin() && this.currentUser?.role !== ROLES.ORG_ADMIN) {
+    return { success: false, error: 'Permission denied' };
+  }
+
+  if (
+    this.currentUser?.role === ROLES.ORG_ADMIN &&
+    user.organization_id !== this.currentUser.organizationId
+  ) {
+    return { success: false, error: 'Can only update users in your organization' };
+  }
+
+  const { data: updatedRows, error: updateError } = await sb
+    .from('profiles')
+    .update(updates)
+    .eq('id', userId)
+    .select();
+
+  if (updateError) {
+    return { success: false, error: updateError.message };
+  }
+
+  if (!updatedRows || updatedRows.length === 0) {
+    return {
+      success: false,
+      error: 'Unable to update user. You may not have permission to modify this user.',
+    };
+  }
+
+  const data = updatedRows[0];
+
+  if (updates.role && data.role !== updates.role) {
+    return {
+      success: false,
+      error: 'Unable to update user role. Database policy may have blocked this change.',
+    };
+  }
+
+  if (userId === this.currentUser?.id) {
+    await this.loadUserProfile(userId);
+  }
+
+  return { success: true, user: data };
+}
+
+export async function deleteUser(this: any, userId: string): Promise<AuthResult> {
+  const user = await this.getUser(userId);
+  if (!user) {
+    return { success: false, error: 'User not found' };
+  }
+
+  if (userId === this.currentUser?.id) {
+    return { success: false, error: 'Cannot delete yourself' };
+  }
+
+  if (!this.hasPermission(PERMISSIONS.MANAGE_USERS)) {
+    return { success: false, error: 'Permission denied' };
+  }
+
+  if (
+    this.currentUser?.role === ROLES.ORG_ADMIN &&
+    user.organization_id !== this.currentUser.organizationId
+  ) {
+    return { success: false, error: 'Can only delete users in your organization' };
+  }
+
+  const { data, error } = await sb.functions.invoke('delete-user', {
+    body: { userId },
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  if (data?.error) {
+    return { success: false, error: data.error };
+  }
+
+  return { success: true };
 }

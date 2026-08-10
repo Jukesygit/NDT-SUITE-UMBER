@@ -7,15 +7,34 @@
 // =============================================================================
 
 import type { CoverageRectConfig, VesselState } from '../types';
+import { buildAllFootprints, type JunctionFootprint } from './junction-footprint';
+import { buildAppendageNozzleFootprints, buildMainShellNozzleFootprints } from './nozzle-footprint';
+
+/**
+ * Main-shell cutout footprints: appendage junctions PLUS unmappable nozzle bores
+ * (design R1), or [] when the vessel has neither. Guards the undefined/empty case
+ * so vessels with no appendages and no shell nozzles never build a footprint and
+ * stay byte-identical (design §9.4 shared predicate). Both consumers below —
+ * region totals and the coverage sweep — use this one array so stats and visuals
+ * always agree.
+ */
+function footprintsFor(vesselState: VesselState): JunctionFootprint[] {
+  const appendageFps =
+    vesselState.appendages && vesselState.appendages.length > 0
+      ? buildAllFootprints(vesselState)
+      : [];
+  const nozzleFps = buildMainShellNozzleFootprints(vesselState);
+  return nozzleFps.length > 0 ? [...appendageFps, ...nozzleFps] : appendageFps;
+}
 
 // ---------------------------------------------------------------------------
 // Result Interface
 // ---------------------------------------------------------------------------
 
 export interface RegionCoverage {
-  covered: number;   // m²
-  total: number;     // m²
-  percent: number;   // 0-100
+  covered: number; // m²
+  total: number; // m²
+  percent: number; // 0-100
 }
 
 export interface CoverageResult {
@@ -40,8 +59,13 @@ interface UnwrappedRect {
 // Convert coverage rects to unwrapped 2D rectangles
 // ---------------------------------------------------------------------------
 
-function toUnwrappedRects(rects: CoverageRectConfig[], vesselState: VesselState): UnwrappedRect[] {
-  const circumference = Math.PI * vesselState.id;
+/**
+ * Unwrap coverage rects into 2D (pos, angle) rectangles for a body whose
+ * developed circumference is `circumference` (mm). Splits rects straddling the
+ * 0/360 seam into two. Shared by the main shell (circumference = π·id) and the
+ * per-appendage covered-area sweep (circumference = 2π·radius).
+ */
+function unwrapRects(rects: CoverageRectConfig[], circumference: number): UnwrappedRect[] {
   const result: UnwrappedRect[] = [];
 
   for (const r of rects) {
@@ -71,6 +95,10 @@ function toUnwrappedRects(rects: CoverageRectConfig[], vesselState: VesselState)
   return result;
 }
 
+function toUnwrappedRects(rects: CoverageRectConfig[], vesselState: VesselState): UnwrappedRect[] {
+  return unwrapRects(rects, Math.PI * vesselState.id);
+}
+
 // ---------------------------------------------------------------------------
 // Surface Area Element Calculations
 // ---------------------------------------------------------------------------
@@ -90,7 +118,7 @@ function ellipsoidCellArea(
   radius: number,
   headDepth: number,
   isLeftHead: boolean,
-  tanTan: number,
+  tanTan: number
 ): number {
   const dTheta = ((angleMaxDeg - angleMinDeg) / 360) * 2 * Math.PI;
   if (dTheta <= 0) return 0;
@@ -123,7 +151,7 @@ function cylinderCellArea(
   posMax: number,
   angleMinDeg: number,
   angleMaxDeg: number,
-  radius: number,
+  radius: number
 ): number {
   const dTheta = ((angleMaxDeg - angleMinDeg) / 360) * 2 * Math.PI;
   const dPos = posMax - posMin;
@@ -147,7 +175,7 @@ function cylinderCellArea(
 export function validAreaFromGrid(
   data: (number | null)[][],
   xAxis: number[],
-  yAxis: number[],
+  yAxis: number[]
 ): number {
   if (!data || data.length === 0 || !data[0] || data[0].length === 0) return 0;
 
@@ -165,7 +193,142 @@ export function validAreaFromGrid(
   return validPoints * cellArea;
 }
 
-export function computeRegionTotalAreas(vesselState: VesselState): { leftHead: number; cylinder: number; rightHead: number } {
+/**
+ * Valid scanned area of a composite in mm². Prefers the persisted
+ * `stats.validArea` (already computed) and falls back to recomputing from the
+ * data grid when it is missing/non-positive — the same pattern Scan Coverage
+ * uses so dome/appendage scans that never carried validArea still register.
+ */
+export function compositeValidArea(c: {
+  stats: { validArea?: number };
+  data: (number | null)[][];
+  xAxis: number[];
+  yAxis: number[];
+}): number {
+  const persisted = c.stats.validArea;
+  if (typeof persisted === 'number' && persisted > 0) return persisted;
+  return validAreaFromGrid(c.data, c.xAxis, c.yAxis);
+}
+
+/** Per-appendage coverage totals (design §9). */
+export interface AppendageCoverageTotals {
+  appendageId: string;
+  name: string;
+  /** Coverable lateral cylinder area in mm² (2πr·L). No end-closure area and no
+   *  cutout on the appendage side in v1 (design §9.2). */
+  totalMm2: number;
+  /** Achieved scanned area in mm² — Σ validArea of this body's scan composites. */
+  achievedMm2: number;
+  /** Covered (coverage-rect) area in mm² on this body's lateral cylinder —
+   *  overlap-aware Σ of the rects whose `bodyId` matches (Phase 4 §4). */
+  coveredMm2: number;
+}
+
+/**
+ * Overlap-aware covered area (mm²) of coverage rects on a plain cylinder of the
+ * given radius/length — the appendage lateral surface (design §9.2: no head
+ * regions, no cutout on the appendage side in v1). `pos` clamps to [0, length];
+ * `angle` wraps at 360. Reuses the same coordinate-compression sweep as the
+ * main-shell cylinder branch so overlapping rects never double-count.
+ */
+export function computeAppendageCoveredArea(
+  rects: CoverageRectConfig[],
+  radius: number,
+  length: number,
+  footprints: JunctionFootprint[] = []
+): number {
+  if (rects.length === 0 || radius <= 0 || length <= 0) return 0;
+
+  const circumference = 2 * Math.PI * radius;
+  const unwrapped = unwrapRects(rects, circumference);
+  if (unwrapped.length === 0) return 0;
+
+  // Coordinate compression over the cylinder span [0, length] × [0, 360].
+  const posSet = new Set<number>([0, length]);
+  const angleSet = new Set<number>([0, 360]);
+  for (const ur of unwrapped) {
+    posSet.add(Math.max(0, Math.min(length, ur.posMin)));
+    posSet.add(Math.max(0, Math.min(length, ur.posMax)));
+    angleSet.add(Math.max(0, ur.angleMin));
+    angleSet.add(Math.min(360, ur.angleMax));
+  }
+
+  const posCoords = Array.from(posSet).sort((a, b) => a - b);
+  const angleCoords = Array.from(angleSet).sort((a, b) => a - b);
+
+  let covered = 0;
+  for (let pi = 0; pi < posCoords.length - 1; pi++) {
+    const pMin = posCoords[pi];
+    const pMax = posCoords[pi + 1];
+    if (pMax <= pMin) continue;
+
+    for (let ai = 0; ai < angleCoords.length - 1; ai++) {
+      const aMin = angleCoords[ai];
+      const aMax = angleCoords[ai + 1];
+      if (aMax <= aMin) continue;
+
+      const isCovered = unwrapped.some(
+        (ur) => ur.posMin <= pMin && ur.posMax >= pMax && ur.angleMin <= aMin && ur.angleMax >= aMax
+      );
+      if (!isCovered) continue;
+
+      // Skip cells inside a boot nozzle bore — unmappable opening, no surface
+      // there (design R1). Same wrap-safe containsCell predicate as the boot
+      // lateral-total subtraction below and the wall-loss worker.
+      if (footprints.length > 0) {
+        const midPos = (pMin + pMax) / 2;
+        const midAngle = (aMin + aMax) / 2;
+        if (footprints.some((fp) => fp.containsCell(midPos, midAngle))) continue;
+      }
+
+      covered += cylinderCellArea(pMin, pMax, aMin, aMax, radius);
+    }
+  }
+
+  return covered;
+}
+
+/**
+ * Per-body coverage wrapper: for every appendage, its coverable lateral area and
+ * the achieved area from scans mounted on that body (design §9). The main shell
+ * keeps flowing through {@link computeRegionTotalAreas} / {@link computeCoverage}.
+ *
+ * Dimensions come straight from `AppendageConfig` (radius = diameter/2, length),
+ * which are exactly `resolveBodyFrame(state, id)`'s `radius` / `axialLength`; read
+ * as scalars here so this pure module stays free of the THREE-backed frame.
+ */
+export function computeAppendageCoverageTotals(
+  vesselState: VesselState
+): AppendageCoverageTotals[] {
+  const appendages = vesselState.appendages ?? [];
+  return appendages.map((a) => {
+    const radius = a.diameter / 2;
+    // Boot nozzle bores are unmappable openings on THIS boot's cylinder: subtract
+    // their footprint area from the boot lateral total AND exclude those cells from
+    // the covered sweep (design R1 — one predicate for stats + visuals). Empty for
+    // boots with no nozzles → totalMm2 unchanged (byte-identical).
+    const nozzleFps = buildAppendageNozzleFootprints(vesselState, a);
+    const cutoutMm2 = nozzleFps.reduce((sum, fp) => sum + fp.areaMm2, 0);
+    const totalMm2 = Math.max(0, 2 * Math.PI * radius * a.length - cutoutMm2);
+    let achievedMm2 = 0;
+    for (const sc of vesselState.scanComposites) {
+      if (sc.bodyId !== a.id) continue;
+      achievedMm2 += compositeValidArea(sc);
+    }
+    // Covered = coverage rects that target THIS body (Phase 4 §4). Overlap-aware
+    // on the appendage's lateral cylinder; main-shell rects (bodyId undefined)
+    // never contribute here, and these rects never contribute to the main shell.
+    const bodyRects = vesselState.coverageRects.filter((r) => r.bodyId === a.id);
+    const coveredMm2 = computeAppendageCoveredArea(bodyRects, radius, a.length, nozzleFps);
+    return { appendageId: a.id, name: a.name, totalMm2, achievedMm2, coveredMm2 };
+  });
+}
+
+export function computeRegionTotalAreas(vesselState: VesselState): {
+  leftHead: number;
+  cylinder: number;
+  rightHead: number;
+} {
   const R = vesselState.id / 2;
   const D = vesselState.id / (2 * vesselState.headRatio);
 
@@ -185,9 +348,15 @@ export function computeRegionTotalAreas(vesselState: VesselState): { leftHead: n
 
   const cylinderArea = 2 * Math.PI * R * vesselState.length;
 
+  // Appendage cutout (design §9.1): each junction footprint removes real shell
+  // surface, so subtract its exact excluded area from the cylinder total. With
+  // no appendages this is a no-op, keeping legacy models byte-identical. The
+  // reconciliation is exact: (cylinder − Σarea) + Σarea === uncut cylinder.
+  const cutoutArea = footprintsFor(vesselState).reduce((sum, fp) => sum + fp.areaMm2, 0);
+
   return {
     leftHead: headArea,
-    cylinder: cylinderArea,
+    cylinder: cylinderArea - cutoutArea,
     rightHead: headArea, // symmetric
   };
 }
@@ -198,8 +367,14 @@ export function computeRegionTotalAreas(vesselState: VesselState): { leftHead: n
 
 export function computeCoverage(
   rects: CoverageRectConfig[],
-  vesselState: VesselState,
+  vesselState: VesselState
 ): CoverageResult {
+  // Only main-shell rects (bodyId undefined) count toward main-shell coverage;
+  // appendage-targeted rects are measured per-body by computeAppendageCoverageTotals.
+  // With no bodyId rects present this is the full list, so legacy models stay
+  // byte-identical.
+  const mainRects = rects.filter((r) => r.bodyId === undefined);
+
   const regionAreas = computeRegionTotalAreas(vesselState);
   const emptyRegion = (total: number): RegionCoverage => ({
     covered: 0,
@@ -207,7 +382,7 @@ export function computeCoverage(
     percent: 0,
   });
 
-  if (rects.length === 0) {
+  if (mainRects.length === 0) {
     return {
       leftHead: emptyRegion(regionAreas.leftHead),
       cylinder: emptyRegion(regionAreas.cylinder),
@@ -220,7 +395,12 @@ export function computeCoverage(
   const D = vesselState.id / (2 * vesselState.headRatio);
   const TAN_TAN = vesselState.length;
 
-  const unwrapped = toUnwrappedRects(rects, vesselState);
+  const unwrapped = toUnwrappedRects(mainRects, vesselState);
+
+  // Appendage cutout predicates (design §9.4): a covered cell whose centre lies
+  // inside a junction footprint sits over the shell opening and is not coverable.
+  // Same buildAllFootprints predicate as the wall-loss worker and heatmap mask.
+  const footprints = footprintsFor(vesselState);
 
   // Collect unique coordinates for coordinate compression
   const posSet = new Set<number>();
@@ -260,15 +440,21 @@ export function computeCoverage(
       if (aMax <= aMin) continue;
 
       // Check if any unwrapped rect covers this cell
-      const covered = unwrapped.some(ur =>
-        ur.posMin <= pMin && ur.posMax >= pMax &&
-        ur.angleMin <= aMin && ur.angleMax >= aMax
+      const covered = unwrapped.some(
+        (ur) => ur.posMin <= pMin && ur.posMax >= pMax && ur.angleMin <= aMin && ur.angleMax >= aMax
       );
       if (!covered) continue;
 
       // Compute true surface area for this cell
       let cellArea: number;
       const midPos = (pMin + pMax) / 2;
+
+      // Skip cells inside an appendage cutout — no shell surface there. The
+      // footprint predicate is wrap-safe, so angles are passed unnormalised.
+      if (footprints.length > 0) {
+        const midAngle = (aMin + aMax) / 2;
+        if (footprints.some((fp) => fp.containsCell(midPos, midAngle))) continue;
+      }
 
       if (midPos < 0) {
         // Left head

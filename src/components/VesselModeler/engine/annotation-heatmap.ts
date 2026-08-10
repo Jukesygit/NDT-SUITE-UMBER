@@ -1,21 +1,32 @@
 // =============================================================================
 // Annotation Heatmap - Cropped mini heatmap canvas for inspection panel
 // =============================================================================
-// Extracts the sub-region of scan composite data under an annotation footprint
-// and renders it to a canvas element for display in the InspectionPanel.
+// Extracts the sub-region of scan data under an annotation footprint and
+// renders it to a canvas for the InspectionPanel. Sampling is delegated to the
+// shared engine (scan-sampling.ts) — the SAME sampler annotation stats use — so
+// the two agree cell-for-cell:
+//   - pure-cylinder rect  -> cropped view of the topmost cylindrical composite
+//                            (byte-identical to the pre-dome behaviour).
+//   - head-touching rect  -> the rigid drape grid sampled region-aware, so an
+//                            annotation on a dome end reads `domeScanComposites`.
+// The pixel buffer is produced by a pure, canvas-free builder
+// ({@link buildAnnotationHeatmapPixels}) — jsdom has no 2D context — with a thin
+// canvas wrapper for the DOM.
 // =============================================================================
 
 import type { AnnotationShapeConfig, ScanCompositeConfig, VesselState } from '../types';
 import { interpolateColor, COLOR_SCALES } from '../../../utils/colorscales';
+import {
+  sampleComposite,
+  sampleAnnotationDrapeGrid,
+  rectIsPureCylinder,
+  resolveBodyDims,
+} from './scan-sampling';
+import { normAngle, datumToVesselAngle, scanArcDeg, scanAngleFromArcDeg } from './vessel-coords';
 
 // ---------------------------------------------------------------------------
-// Helpers (shared with annotation-stats.ts)
+// Composite overlap detection
 // ---------------------------------------------------------------------------
-
-/** Normalise an angle into the 0-360 range */
-function normAngle(deg: number): number {
-  return ((deg % 360) + 360) % 360;
-}
 
 /**
  * Signed shortest angular distance from `a` to `b` on a 360-degree circle.
@@ -28,9 +39,10 @@ function angularDelta(a: number, b: number): number {
   return d;
 }
 
-// ---------------------------------------------------------------------------
-// Composite overlap detection
-// ---------------------------------------------------------------------------
+/** True when the composite's body matches the target body (undefined = main shell). */
+function bodyMatches(compBodyId: string | undefined, body: string | undefined): boolean {
+  return (compBodyId ?? undefined) === (body ?? undefined);
+}
 
 /**
  * Check whether a scan composite's footprint overlaps the annotation's
@@ -39,7 +51,7 @@ function angularDelta(a: number, b: number): number {
 function compositeOverlapsAnnotation(
   composite: ScanCompositeConfig,
   ann: AnnotationShapeConfig,
-  circumference: number,
+  circumference: number
 ): boolean {
   if (!composite.orientationConfirmed) return false;
 
@@ -64,7 +76,7 @@ function compositeOverlapsAnnotation(
 
   // Annotation bounds
   const halfWidthMm = ann.width / 2;
-  const halfHeightDeg = ((ann.height / 2) / circumference) * 360;
+  const halfHeightDeg = (ann.height / 2 / circumference) * 360;
   const annAxialStart = ann.pos - halfWidthMm;
   const annAxialEnd = ann.pos + halfWidthMm;
 
@@ -77,14 +89,9 @@ function compositeOverlapsAnnotation(
 
   // datumAngleDeg uses 0=TDC, annotation angles use 90=TDC — convert.
   // Use directed angular distance (not shortest path) in scan direction.
-  const datumConv = normAngle(datumAngleDeg + 90);
+  const datumConv = normAngle(datumToVesselAngle(datumAngleDeg));
   for (const testAngle of [annAngleMin, annAngleMax, ann.angle]) {
-    let scanOffsetDeg: number;
-    if (scanDirection === 'cw') {
-      scanOffsetDeg = ((datumConv - testAngle) % 360 + 360) % 360;
-    } else {
-      scanOffsetDeg = ((testAngle - datumConv) % 360 + 360) % 360;
-    }
+    const scanOffsetDeg = scanArcDeg(datumConv, testAngle, scanDirection);
     const scanOffsetMm = (scanOffsetDeg / 360) * circumference;
     if (scanOffsetMm >= scanStartMm && scanOffsetMm <= scanEndMm) return true;
   }
@@ -93,12 +100,7 @@ function compositeOverlapsAnnotation(
   // Check if composite start or end angle falls within the annotation
   for (const edgeMm of [scanStartMm, scanEndMm]) {
     const edgeDeg = (edgeMm / circumference) * 360;
-    let edgeAngle: number;
-    if (scanDirection === 'cw') {
-      edgeAngle = normAngle(datumConv - edgeDeg);
-    } else {
-      edgeAngle = normAngle(datumConv + edgeDeg);
-    }
+    const edgeAngle = normAngle(scanAngleFromArcDeg(datumConv, edgeDeg, scanDirection));
     const delta = angularDelta(ann.angle, edgeAngle);
     if (Math.abs(delta) <= halfHeightDeg) return true;
   }
@@ -107,77 +109,26 @@ function compositeOverlapsAnnotation(
 }
 
 // ---------------------------------------------------------------------------
-// Sample a single point from a composite (mirrors annotation-stats.ts)
-// ---------------------------------------------------------------------------
-
-function sampleComposite(
-  composite: ScanCompositeConfig,
-  posMm: number,
-  angleDeg: number,
-  circumference: number,
-): number | undefined {
-  const { data, xAxis, yAxis, indexStartMm, datumAngleDeg, scanDirection, indexDirection } =
-    composite;
-
-  if (data.length === 0 || data[0].length === 0) return undefined;
-  if (yAxis.length === 0 || xAxis.length === 0) return undefined;
-
-  const indexRangeMm = yAxis[yAxis.length - 1] - yAxis[0];
-  let indexOffset: number;
-  if (indexDirection === 'forward') {
-    indexOffset = posMm - indexStartMm;
-  } else {
-    indexOffset = indexStartMm - posMm;
-  }
-  if (indexOffset < 0 || indexOffset > indexRangeMm) return undefined;
-
-  // xAxis values are mm from the datum along the scan direction.
-  const scanStartMm = xAxis[0];
-  const scanEndMm = xAxis[xAxis.length - 1];
-  const scanRangeMm = scanEndMm - scanStartMm;
-
-  // datumAngleDeg uses 0=TDC, annotation angles use 90=TDC — convert.
-  // Use directed angular distance (not shortest path) in scan direction.
-  const datumConv = normAngle(datumAngleDeg + 90);
-  let scanOffsetDeg: number;
-  if (scanDirection === 'cw') {
-    scanOffsetDeg = ((datumConv - angleDeg) % 360 + 360) % 360;
-  } else {
-    scanOffsetDeg = ((angleDeg - datumConv) % 360 + 360) % 360;
-  }
-  const scanOffsetMm = (scanOffsetDeg / 360) * circumference;
-  if (scanOffsetMm < scanStartMm || scanOffsetMm > scanEndMm) return undefined;
-
-  const rowFrac = indexRangeMm > 0 ? (indexOffset / indexRangeMm) * (data.length - 1) : 0;
-  const colFrac = scanRangeMm > 0 ? ((scanOffsetMm - scanStartMm) / scanRangeMm) * (data[0].length - 1) : 0;
-
-  const row = Math.round(rowFrac);
-  const col = Math.round(colFrac);
-
-  if (row < 0 || row >= data.length || col < 0 || col >= data[0].length) return undefined;
-
-  const value = data[row][col];
-  return value ?? undefined;
-}
-
-// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 /**
- * Find the topmost confirmed scan composite that overlaps the annotation.
- * Returns the composite, or undefined if none overlap.
+ * Find the topmost confirmed cylindrical composite that overlaps the
+ * annotation. Composites are scoped by `body` (undefined = main shell),
+ * replacing the former interim `!bodyId` exclusion. Returns undefined if none
+ * overlap (e.g. a head-only annotation — those read dome scans instead).
  */
 export function findOverlappingComposite(
   ann: AnnotationShapeConfig,
   vesselState: VesselState,
+  body?: string
 ): ScanCompositeConfig | undefined {
-  const circumference = Math.PI * vesselState.id;
+  const circumference = resolveBodyDims(vesselState, body).circumference;
   const composites = vesselState.scanComposites;
-
   // Iterate in reverse — last (topmost) composite wins
   for (let i = composites.length - 1; i >= 0; i--) {
     const comp = composites[i];
+    if (!bodyMatches(comp.bodyId, body)) continue;
     if (compositeOverlapsAnnotation(comp, ann, circumference)) {
       return comp;
     }
@@ -185,19 +136,27 @@ export function findOverlappingComposite(
   return undefined;
 }
 
-/**
- * Create an HTMLCanvasElement rendering a cropped mini-heatmap of the scan
- * composite data under an annotation footprint.
- *
- * Returns null if no confirmed composite overlaps the annotation.
- */
-export function createAnnotationHeatmapCanvas(
+/** A pure (canvas-free) heatmap pixel buffer plus its colour domain. */
+export interface HeatmapPixelResult {
+  /** RGBA pixels, row-major, length = width·height·4. */
+  pixels: Uint8ClampedArray;
+  width: number;
+  height: number;
+  /** Colour-domain minimum (thinnest reading painted). */
+  dataMin: number;
+  /** Colour-domain maximum (thickest reading painted). */
+  dataMax: number;
+}
+
+/** Cropped view of the topmost overlapping cylindrical composite (legacy path). */
+function buildCylinderCropPixels(
   ann: AnnotationShapeConfig,
   vesselState: VesselState,
-  colorScale: string = 'Jet',
-): HTMLCanvasElement | null {
-  const circumference = Math.PI * vesselState.id;
-  const composite = findOverlappingComposite(ann, vesselState);
+  colorScale: string,
+  body: string | undefined
+): HeatmapPixelResult | null {
+  const circumference = resolveBodyDims(vesselState, body).circumference;
+  const composite = findOverlappingComposite(ann, vesselState, body);
   if (!composite) return null;
 
   const scale = COLOR_SCALES[colorScale] ?? COLOR_SCALES.Jet;
@@ -209,7 +168,7 @@ export function createAnnotationHeatmapCanvas(
 
   // Annotation spatial bounds
   const halfWidthMm = ann.width / 2;
-  const halfHeightDeg = ((ann.height / 2) / circumference) * 360;
+  const halfHeightDeg = (ann.height / 2 / circumference) * 360;
 
   const axialStart = ann.pos - halfWidthMm;
   const axialEnd = ann.pos + halfWidthMm;
@@ -224,19 +183,12 @@ export function createAnnotationHeatmapCanvas(
   const cols = Math.max(1, Math.ceil((axialEnd - axialStart) / STEP));
   const rows = Math.max(1, Math.ceil((angleEnd - angleStart) / angleDegStep));
 
-  // Cap canvas size to prevent excessive memory usage
+  // Cap size to prevent excessive memory usage
   const maxDim = 256;
   const canvasW = Math.min(cols, maxDim);
   const canvasH = Math.min(rows, maxDim);
 
-  const canvas = document.createElement('canvas');
-  canvas.width = canvasW;
-  canvas.height = canvasH;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return null;
-
-  const imageData = ctx.createImageData(canvasW, canvasH);
-  const pixels = imageData.data;
+  const pixels = new Uint8ClampedArray(canvasW * canvasH * 4);
 
   const axialStep = (axialEnd - axialStart) / canvasW;
   const angleStep = (angleEnd - angleStart) / canvasH;
@@ -248,10 +200,10 @@ export function createAnnotationHeatmapCanvas(
   const flipU = composite.indexDirection === 'forward';
 
   for (let py = 0; py < canvasH; py++) {
-    const yFrac = flipV ? (canvasH - 1 - py) : py;
+    const yFrac = flipV ? canvasH - 1 - py : py;
     const angle = angleStart + (yFrac + 0.5) * angleStep;
     for (let px = 0; px < canvasW; px++) {
-      const xFrac = flipU ? (canvasW - 1 - px) : px;
+      const xFrac = flipU ? canvasW - 1 - px : px;
       const axial = axialStart + (xFrac + 0.5) * axialStep;
       const idx = (py * canvasW + px) * 4;
 
@@ -276,6 +228,109 @@ export function createAnnotationHeatmapCanvas(
     }
   }
 
+  return { pixels, width: canvasW, height: canvasH, dataMin: rangeMin, dataMax: rangeMax };
+}
+
+/**
+ * Rigid-drape heatmap for a head-touching annotation: colour each drape-grid
+ * vertex by the region-aware sample. The colour domain is the sampled min/max,
+ * so the thinnest sampled cell (which drives the stats min) sits at one end —
+ * the heatmap's min equals the stats min by construction (same cell set).
+ * Image axes: `x` = meridian (width), `y` = lateral (height).
+ */
+function buildDrapeHeatmapPixels(
+  ann: AnnotationShapeConfig,
+  vesselState: VesselState,
+  colorScale: string,
+  body: string | undefined
+): HeatmapPixelResult | null {
+  const { values, cols, rows } = sampleAnnotationDrapeGrid(ann, vesselState, body);
+
+  let dataMin = Infinity;
+  let dataMax = -Infinity;
+  for (let c = 0; c <= cols; c++) {
+    for (let r = 0; r <= rows; r++) {
+      const v = values[c][r];
+      if (v === undefined) continue;
+      if (v < dataMin) dataMin = v;
+      if (v > dataMax) dataMax = v;
+    }
+  }
+  if (dataMin === Infinity) return null; // no data under the footprint
+
+  const scale = COLOR_SCALES[colorScale] ?? COLOR_SCALES.Jet;
+  const range = dataMax - dataMin;
+
+  const width = cols + 1;
+  const height = rows + 1;
+  const pixels = new Uint8ClampedArray(width * height * 4);
+
+  for (let r = 0; r <= rows; r++) {
+    for (let c = 0; c <= cols; c++) {
+      const idx = (r * width + c) * 4;
+      const v = values[c][r];
+      if (v === undefined) {
+        pixels[idx] = 0;
+        pixels[idx + 1] = 0;
+        pixels[idx + 2] = 0;
+        pixels[idx + 3] = 0;
+      } else {
+        const t = range > 0 ? (v - dataMin) / range : 0.5;
+        const [rr, gg, bb] = interpolateColor(t, scale, true); // reverse: thin=red, thick=blue
+        pixels[idx] = rr;
+        pixels[idx + 1] = gg;
+        pixels[idx + 2] = bb;
+        pixels[idx + 3] = 255;
+      }
+    }
+  }
+
+  return { pixels, width, height, dataMin, dataMax };
+}
+
+/**
+ * Build the RGBA pixel buffer for an annotation's mini-heatmap without touching
+ * the DOM (pure — jsdom has no 2D context). Routes pure-cylinder rects to the
+ * legacy composite crop and head-touching rects to the rigid drape sampler.
+ * Returns null when no scan data lies under the footprint.
+ */
+export function buildAnnotationHeatmapPixels(
+  ann: AnnotationShapeConfig,
+  vesselState: VesselState,
+  colorScale: string = 'Jet',
+  body?: string
+): HeatmapPixelResult | null {
+  if (rectIsPureCylinder(ann, vesselState)) {
+    return buildCylinderCropPixels(ann, vesselState, colorScale, body);
+  }
+  return buildDrapeHeatmapPixels(ann, vesselState, colorScale, body);
+}
+
+/**
+ * Create an HTMLCanvasElement rendering a cropped mini-heatmap of the scan data
+ * under an annotation footprint. Thin canvas wrapper over
+ * {@link buildAnnotationHeatmapPixels}.
+ *
+ * Returns null if no scan data lies under the annotation, or when no 2D canvas
+ * context is available (e.g. jsdom).
+ */
+export function createAnnotationHeatmapCanvas(
+  ann: AnnotationShapeConfig,
+  vesselState: VesselState,
+  colorScale: string = 'Jet',
+  body?: string
+): HTMLCanvasElement | null {
+  const result = buildAnnotationHeatmapPixels(ann, vesselState, colorScale, body);
+  if (!result) return null;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = result.width;
+  canvas.height = result.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  const imageData = ctx.createImageData(result.width, result.height);
+  imageData.data.set(result.pixels);
   ctx.putImageData(imageData, 0, 0);
   return canvas;
 }

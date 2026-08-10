@@ -18,9 +18,16 @@ import type {
   ParseCompleteMessage,
   CompositeCompleteMessage,
   ThresholdAppliedMessage,
-  ErrorMessage
+  ErrorMessage,
 } from '../utils/efficientTypes';
-import { resolveExpectedStarts, OFFSET_TOLERANCE } from '../utils/offsetExpectations';
+import {
+  resolveExpectedStarts,
+  offsetFromExpected,
+  flagTruncatedRows,
+  OFFSET_TOLERANCE,
+} from '../utils/offsetExpectations';
+import { halvedAxesFromScans, HalvedAxes } from '../utils/metadataHalving';
+import { axisExtents } from '../utils/axisMath';
 
 /** Chrome-only Performance.memory API */
 interface PerformanceWithMemory extends Performance {
@@ -36,11 +43,16 @@ const generateId = () => `cscan_${Date.now()}_${Math.random().toString(36).subst
 /**
  * Post a progress message to main thread
  */
-function postProgress(type: 'PARSE_PROGRESS' | 'COMPOSITE_PROGRESS', current: number, total: number, message: string): void {
+function postProgress(
+  type: 'PARSE_PROGRESS' | 'COMPOSITE_PROGRESS',
+  current: number,
+  total: number,
+  message: string
+): void {
   const memoryUsage = (performance as PerformanceWithMemory).memory?.usedJSHeapSize;
   const msg: ProgressMessage = {
     type,
-    payload: { current, total, message, memoryUsage }
+    payload: { current, total, message, memoryUsage },
   };
   self.postMessage(msg);
 }
@@ -51,7 +63,7 @@ function postProgress(type: 'PARSE_PROGRESS' | 'COMPOSITE_PROGRESS', current: nu
 function postError(message: string, filename?: string): void {
   const msg: ErrorMessage = {
     type: 'ERROR',
-    payload: { message, filename }
+    payload: { message, filename },
   };
   self.postMessage(msg);
 }
@@ -60,7 +72,7 @@ function postError(message: string, filename?: string): void {
  * Allow garbage collection between operations
  */
 async function allowGC(): Promise<void> {
-  await new Promise(resolve => setTimeout(resolve, 10));
+  await new Promise((resolve) => setTimeout(resolve, 10));
 }
 
 /**
@@ -107,9 +119,18 @@ function calculateStats(
 
   if (validCount === 0) {
     return {
-      min: 0, max: 0, mean: 0, median: 0, stdDev: 0,
-      validPoints: 0, totalPoints, totalArea: 0,
-      validArea: 0, ndPercent: 100, ndCount, ndArea: 0
+      min: 0,
+      max: 0,
+      mean: 0,
+      median: 0,
+      stdDev: 0,
+      validPoints: 0,
+      totalPoints,
+      totalArea: 0,
+      validArea: 0,
+      ndPercent: 100,
+      ndCount,
+      ndArea: 0,
     };
   }
 
@@ -155,7 +176,7 @@ function calculateStats(
     validArea,
     ndPercent,
     ndCount,
-    ndArea
+    ndArea,
   };
 }
 
@@ -180,9 +201,11 @@ function parseSingleFile(buffer: ArrayBuffer, filename: string): EfficientCscanD
       break;
     }
 
-    const parts = line.split('=').map(p => p.trim());
+    // Number, not parseFloat: mixed values like "Data File = 0-800MM ..."
+    // must stay strings (the datafile arbitration source reads them).
+    const parts = line.split('=').map((p) => p.trim());
     if (parts.length === 2 && parts[0] && parts[1]) {
-      const value = parseFloat(parts[1]);
+      const value = Number(parts[1]);
       metadata[parts[0]] = isNaN(value) ? parts[1] : value;
     }
   }
@@ -199,10 +222,13 @@ function parseSingleFile(buffer: ArrayBuffer, filename: string): EfficientCscanD
   // IMPORTANT: Must match original fileParser.ts logic exactly
   const headerLine = lines[dataStartIndex];
   const headerParts = headerLine.split(/[\t,]/);
-  xAxisArr = headerParts.slice(1).map(v => {
-    const num = parseFloat(v.trim());
-    return isNaN(num) ? 0 : num;
-  }).filter((_, idx) => !isNaN(headerParts[idx + 1] as unknown as number));
+  xAxisArr = headerParts
+    .slice(1)
+    .map((v) => {
+      const num = parseFloat(v.trim());
+      return isNaN(num) ? 0 : num;
+    })
+    .filter((_, idx) => !isNaN(headerParts[idx + 1] as unknown as number));
 
   // Parse data rows - first pass to count rows
   const dataRows: { y: number; values: (number | null)[] }[] = [];
@@ -216,7 +242,7 @@ function parseSingleFile(buffer: ArrayBuffer, filename: string): EfficientCscanD
 
     if (isNaN(yValue)) continue;
 
-    const rowData = rowValues.slice(1).map(val => {
+    const rowData = rowValues.slice(1).map((val) => {
       const trimmed = val.trim();
       if (trimmed === 'ND' || trimmed === '' || trimmed === '-') {
         return null;
@@ -232,6 +258,8 @@ function parseSingleFile(buffer: ArrayBuffer, filename: string): EfficientCscanD
   if (xAxisArr.length === 0 || yAxisArr.length === 0 || dataRows.length === 0) {
     throw new Error('Failed to parse C-Scan data matrix');
   }
+
+  flagTruncatedRows(metadata, dataRows.length);
 
   // Convert to efficient format
   const width = xAxisArr.length;
@@ -252,7 +280,7 @@ function parseSingleFile(buffer: ArrayBuffer, filename: string): EfficientCscanD
         // Set null bit
         const byteIdx = Math.floor(idx / 8);
         const bitIdx = idx % 8;
-        nullMask[byteIdx] |= (1 << bitIdx);
+        nullMask[byteIdx] |= 1 << bitIdx;
         values[idx] = 0;
       } else {
         values[idx] = val;
@@ -275,7 +303,7 @@ function parseSingleFile(buffer: ArrayBuffer, filename: string): EfficientCscanD
     yAxis,
     stats,
     metadata,
-    timestamp: Date.now()
+    timestamp: Date.now(),
   };
 }
 
@@ -283,10 +311,7 @@ function parseSingleFile(buffer: ArrayBuffer, filename: string): EfficientCscanD
  * Check if metadata indicates a PAUT instrument format
  */
 function isPautInstrumentFormat(metadata: Record<string, unknown>): boolean {
-  return (
-    metadata['Scan Resol. (mm)'] !== undefined &&
-    metadata['Index Resol. (mm)'] !== undefined
-  );
+  return metadata['Scan Resol. (mm)'] !== undefined && metadata['Index Resol. (mm)'] !== undefined;
 }
 
 /**
@@ -323,7 +348,7 @@ function parsePautInstrumentFormat(
     const line = lines[i];
     if (line.trim() === '') continue;
 
-    const rowData = line.split('\t').map(val => {
+    const rowData = line.split('\t').map((val) => {
       const trimmed = val.trim();
       if (trimmed === 'NaN' || trimmed === 'ND' || trimmed === '' || trimmed === '-') {
         return null;
@@ -361,7 +386,7 @@ function parsePautInstrumentFormat(
       if (val === null || val === undefined || isNaN(val) || !isFinite(val)) {
         const byteIdx = Math.floor(idx / 8);
         const bitIdx = idx % 8;
-        nullMask[byteIdx] |= (1 << bitIdx);
+        nullMask[byteIdx] |= 1 << bitIdx;
         values[idx] = 0;
       } else {
         values[idx] = val;
@@ -384,27 +409,30 @@ function parsePautInstrumentFormat(
     yAxis,
     stats,
     metadata,
-    timestamp: Date.now()
+    timestamp: Date.now(),
   };
 }
 
 /**
  * Parse generic format (no metadata header)
  */
-function parseGenericFormat(_buffer: ArrayBuffer, filename: string, lines: string[]): EfficientCscanData {
-  const nonEmptyLines = lines.filter(line => line.trim());
+function parseGenericFormat(
+  _buffer: ArrayBuffer,
+  filename: string,
+  lines: string[]
+): EfficientCscanData {
+  const nonEmptyLines = lines.filter((line) => line.trim());
 
   if (nonEmptyLines.length === 0) {
     throw new Error('Empty file');
   }
 
   const firstLine = nonEmptyLines[0];
-  const delimiter = firstLine.includes('\t') ? '\t' :
-                    firstLine.includes(',') ? ',' : /\s+/;
+  const delimiter = firstLine.includes('\t') ? '\t' : firstLine.includes(',') ? ',' : /\s+/;
 
-  const firstRow = firstLine.split(delimiter).map(v =>
-    typeof v === 'string' ? v.trim() : String(v)
-  );
+  const firstRow = firstLine
+    .split(delimiter)
+    .map((v) => (typeof v === 'string' ? v.trim() : String(v)));
   const firstCellEmpty = firstRow[0] === '' || firstRow[0] === 'mm';
   const hasAxisLabels = firstCellEmpty || isNaN(parseFloat(firstRow[0]));
 
@@ -414,7 +442,7 @@ function parseGenericFormat(_buffer: ArrayBuffer, filename: string, lines: strin
   let dataStartRow = 0;
 
   if (hasAxisLabels) {
-    xAxisArr = firstRow.slice(1).map(v => {
+    xAxisArr = firstRow.slice(1).map((v) => {
       const num = parseFloat(v);
       return isNaN(num) ? 0 : num;
     });
@@ -422,24 +450,28 @@ function parseGenericFormat(_buffer: ArrayBuffer, filename: string, lines: strin
   }
 
   for (let i = dataStartRow; i < nonEmptyLines.length; i++) {
-    const rowValues = nonEmptyLines[i].split(delimiter).map(v =>
-      typeof v === 'string' ? v.trim() : String(v)
-    );
+    const rowValues = nonEmptyLines[i]
+      .split(delimiter)
+      .map((v) => (typeof v === 'string' ? v.trim() : String(v)));
 
     if (hasAxisLabels && rowValues.length > 0) {
       const yVal = parseFloat(rowValues[0]);
       if (!isNaN(yVal)) {
         yAxisArr.push(yVal);
-        dataRows.push(rowValues.slice(1).map(v => {
-          const num = parseFloat(v);
-          return isNaN(num) ? null : num;
-        }));
+        dataRows.push(
+          rowValues.slice(1).map((v) => {
+            const num = parseFloat(v);
+            return isNaN(num) ? null : num;
+          })
+        );
       }
     } else if (!hasAxisLabels) {
-      dataRows.push(rowValues.map(v => {
-        const num = parseFloat(v);
-        return isNaN(num) ? null : num;
-      }));
+      dataRows.push(
+        rowValues.map((v) => {
+          const num = parseFloat(v);
+          return isNaN(num) ? null : num;
+        })
+      );
     }
   }
 
@@ -468,7 +500,7 @@ function parseGenericFormat(_buffer: ArrayBuffer, filename: string, lines: strin
       if (val === null || val === undefined || isNaN(val) || !isFinite(val)) {
         const byteIdx = Math.floor(idx / 8);
         const bitIdx = idx % 8;
-        nullMask[byteIdx] |= (1 << bitIdx);
+        nullMask[byteIdx] |= 1 << bitIdx;
         values[idx] = 0;
       } else {
         values[idx] = val;
@@ -491,33 +523,46 @@ function parseGenericFormat(_buffer: ArrayBuffer, filename: string, lines: strin
     yAxis,
     stats,
     metadata: {},
-    timestamp: Date.now()
+    timestamp: Date.now(),
   };
 }
 
 /**
  * Detect if a scan has offset issues
  * Must stay consistent with detectOffsets in utils/fileParser.ts — both
- * delegate expected-position arbitration to resolveExpectedStarts.
+ * delegate arbitration to resolveExpectedStarts + offsetFromExpected.
  */
-function hasOffsetIssues(scan: EfficientCscanData): boolean {
-  const yArr = Array.from(scan.yAxis);
-  const xArr = Array.from(scan.xAxis);
-
-  const actualIndexStart = yArr.length > 0 ? Math.min(...yArr) : 0;
-  const actualIndexEnd = yArr.length > 0 ? Math.max(...yArr) : 0;
-  const actualScanStart = xArr.length > 0 ? Math.min(...xArr) : 0;
-  const actualScanEnd = xArr.length > 0 ? Math.max(...xArr) : 0;
+function hasOffsetIssues(scan: EfficientCscanData, halvedAxes: HalvedAxes): boolean {
+  const indexExt = axisExtents(scan.yAxis);
+  const scanExt = axisExtents(scan.xAxis);
+  const actualIndexStart = indexExt?.min ?? 0;
+  const actualIndexEnd = indexExt?.max ?? 0;
+  const actualScanStart = scanExt?.min ?? 0;
+  const actualScanEnd = scanExt?.max ?? 0;
 
   const expected = resolveExpectedStarts(
     scan.filename,
     scan.metadata,
     actualScanEnd - actualScanStart,
-    actualIndexEnd - actualIndexStart
+    actualIndexEnd - actualIndexStart,
+    false,
+    {
+      halvedAxes,
+      extents: {
+        scanMin: actualScanStart,
+        scanMax: actualScanEnd,
+        indexMin: actualIndexStart,
+        indexMax: actualIndexEnd,
+      },
+    }
   );
 
-  const indexOffset = expected.indexStart !== null ? expected.indexStart - actualIndexStart : 0;
-  const scanOffset = expected.scanStart !== null ? expected.scanStart - actualScanStart : 0;
+  const indexOffset = offsetFromExpected(
+    expected.indexStart,
+    expected.indexAnchor,
+    actualIndexStart
+  );
+  const scanOffset = offsetFromExpected(expected.scanStart, expected.scanAnchor, actualScanStart);
 
   return Math.abs(indexOffset) > OFFSET_TOLERANCE || Math.abs(scanOffset) > OFFSET_TOLERANCE;
 }
@@ -531,7 +576,6 @@ async function processFilesInBatches(
   batchSize: number
 ): Promise<{ scans: EfficientCscanData[]; hasOffsetIssues: boolean }> {
   const results: EfficientCscanData[] = [];
-  let anyOffsetIssues = false;
   const total = buffers.length;
 
   for (let batchStart = 0; batchStart < total; batchStart += batchSize) {
@@ -553,17 +597,7 @@ async function processFilesInBatches(
         parsedScans.set(scan.id, scan);
         results.push(scan);
 
-        // Check for offset issues
-        if (hasOffsetIssues(scan)) {
-          anyOffsetIssues = true;
-        }
-
-        postProgress(
-          'PARSE_PROGRESS',
-          i + 1,
-          total,
-          `Parsed ${filenames[i]} (${i + 1}/${total})`
-        );
+        postProgress('PARSE_PROGRESS', i + 1, total, `Parsed ${filenames[i]} (${i + 1}/${total})`);
       } catch (error) {
         postError(`Failed to parse: ${(error as Error).message}`, filenames[i]);
       }
@@ -578,6 +612,27 @@ async function processFilesInBatches(
     await allowGC();
   }
 
+  // Offset detection runs after the whole batch is parsed: doubled-metadata
+  // (halving) detection is a batch-level signal, not a per-file one.
+  // Per-scan try/catch: one undetectable file must not drop the whole
+  // successfully parsed batch (PARSE_COMPLETE must still be sent).
+  let anyOffsetIssues = false;
+  try {
+    const halvedAxes = halvedAxesFromScans(results);
+    for (const scan of results) {
+      try {
+        if (hasOffsetIssues(scan, halvedAxes)) {
+          anyOffsetIssues = true;
+          break;
+        }
+      } catch (error) {
+        postError(`Offset detection failed: ${(error as Error).message}`, scan.filename);
+      }
+    }
+  } catch (error) {
+    postError(`Offset detection failed: ${(error as Error).message}`);
+  }
+
   return { scans: results, hasOffsetIssues: anyOffsetIssues };
 }
 
@@ -586,7 +641,7 @@ async function processFilesInBatches(
  * Processes scans one at a time without holding all in memory
  */
 async function createCompositeStreaming(scanIds: string[]): Promise<EfficientCscanData | null> {
-  const scans = scanIds.map(id => parsedScans.get(id)).filter(Boolean) as EfficientCscanData[];
+  const scans = scanIds.map((id) => parsedScans.get(id)).filter(Boolean) as EfficientCscanData[];
 
   if (scans.length < 2) {
     postError('Need at least 2 scans to create composite');
@@ -596,8 +651,10 @@ async function createCompositeStreaming(scanIds: string[]): Promise<EfficientCsc
   postProgress('COMPOSITE_PROGRESS', 0, scans.length + 2, 'Calculating grid bounds...');
 
   // Step 1: Find global extent and per-axis minimum spacing
-  let gMinX = Infinity, gMaxX = -Infinity;
-  let gMinY = Infinity, gMaxY = -Infinity;
+  let gMinX = Infinity,
+    gMaxX = -Infinity;
+  let gMinY = Infinity,
+    gMaxY = -Infinity;
   let minXSpacing = Infinity;
   let minYSpacing = Infinity;
   const sourceRegions: SourceRegion[] = [];
@@ -613,9 +670,12 @@ async function createCompositeStreaming(scanIds: string[]): Promise<EfficientCsc
 
     sourceRegions.push({
       filename: scan.filename,
-      minX, maxX, minY, maxY,
+      minX,
+      maxX,
+      minY,
+      maxY,
       centerX: (minX + maxX) / 2,
-      centerY: (minY + maxY) / 2
+      centerY: (minY + maxY) / 2,
     });
 
     if (minX < gMinX) gMinX = minX;
@@ -639,8 +699,12 @@ async function createCompositeStreaming(scanIds: string[]): Promise<EfficientCsc
   const gridHeight = Math.ceil((gMaxY - gMinY) / yRes) + 1;
   const totalCells = gridWidth * gridHeight;
 
-  postProgress('COMPOSITE_PROGRESS', 1, scans.length + 2,
-    `Allocating ${gridWidth}x${gridHeight} grid (${(totalCells * 8 / 1024 / 1024).toFixed(1)} MB, res ${xRes}x${yRes}mm)...`);
+  postProgress(
+    'COMPOSITE_PROGRESS',
+    1,
+    scans.length + 2,
+    `Allocating ${gridWidth}x${gridHeight} grid (${((totalCells * 8) / 1024 / 1024).toFixed(1)} MB, res ${xRes}x${yRes}mm)...`
+  );
 
   // Step 2: Allocate accumulator grids (streaming approach)
   const compositeGrid = new Float32Array(totalCells);
@@ -652,8 +716,12 @@ async function createCompositeStreaming(scanIds: string[]): Promise<EfficientCsc
   for (let scanIdx = 0; scanIdx < scans.length; scanIdx++) {
     const scan = scans[scanIdx];
 
-    postProgress('COMPOSITE_PROGRESS', scanIdx + 2, scans.length + 2,
-      `Accumulating ${scan.filename} (${scanIdx + 1}/${scans.length})...`);
+    postProgress(
+      'COMPOSITE_PROGRESS',
+      scanIdx + 2,
+      scans.length + 2,
+      `Accumulating ${scan.filename} (${scanIdx + 1}/${scans.length})...`
+    );
 
     const xArr = scan.xAxis;
     const yArr = scan.yAxis;
@@ -729,10 +797,22 @@ async function createCompositeStreaming(scanIds: string[]): Promise<EfficientCsc
           let sum = 0;
           let count = 0;
 
-          if (hasTop) { sum += resultValues[topIdx]; count++; }
-          if (hasBottom) { sum += resultValues[bottomIdx]; count++; }
-          if (hasLeft) { sum += resultValues[leftIdx]; count++; }
-          if (hasRight) { sum += resultValues[rightIdx]; count++; }
+          if (hasTop) {
+            sum += resultValues[topIdx];
+            count++;
+          }
+          if (hasBottom) {
+            sum += resultValues[bottomIdx];
+            count++;
+          }
+          if (hasLeft) {
+            sum += resultValues[leftIdx];
+            count++;
+          }
+          if (hasRight) {
+            sum += resultValues[rightIdx];
+            count++;
+          }
 
           resultValues[idx] = sum / count;
           weightGrid[idx] = 1; // Mark as filled
@@ -746,7 +826,7 @@ async function createCompositeStreaming(scanIds: string[]): Promise<EfficientCsc
     if (weightGrid[i] === 0) {
       const byteIdx = Math.floor(i / 8);
       const bitIdx = i % 8;
-      resultNullMask[byteIdx] |= (1 << bitIdx);
+      resultNullMask[byteIdx] |= 1 << bitIdx;
     }
   }
 
@@ -775,14 +855,14 @@ async function createCompositeStreaming(scanIds: string[]): Promise<EfficientCsc
     metadata: {
       Type: 'Composite',
       'Source Files': scans.length,
-      sourceFileNames: scans.map(s => s.filename),
+      sourceFileNames: scans.map((s) => s.filename),
       compositeType: 'weighted_average',
       gridResolutionX: xRes,
-      gridResolutionY: yRes
+      gridResolutionY: yRes,
     },
     isComposite: true,
     sourceRegions,
-    timestamp: Date.now()
+    timestamp: Date.now(),
   };
 
   // Store composite for potential further operations
@@ -814,8 +894,8 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
           type: 'PARSE_COMPLETE',
           payload: {
             scans: result.scans,
-            hasOffsetIssues: result.hasOffsetIssues
-          }
+            hasOffsetIssues: result.hasOffsetIssues,
+          },
         };
         self.postMessage(response);
         break;
@@ -828,7 +908,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
         if (composite) {
           const response: CompositeCompleteMessage = {
             type: 'COMPOSITE_COMPLETE',
-            payload: { composite }
+            payload: { composite },
           };
           self.postMessage(response);
         }
@@ -875,7 +955,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
               if (val === null || val === undefined || isNaN(val) || !isFinite(val)) {
                 const byteIdx = Math.floor(idx / 8);
                 const bitIdx = idx % 8;
-                nullMask[byteIdx] |= (1 << bitIdx);
+                nullMask[byteIdx] |= 1 << bitIdx;
                 values[idx] = 0;
               } else {
                 values[idx] = val;
@@ -892,8 +972,21 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
             nullMask,
             xAxis: Float32Array.from(scan.xAxis),
             yAxis: Float32Array.from(scan.yAxis),
-            stats: { min: 0, max: 0, mean: 0, median: 0, stdDev: 0, validPoints: 0, totalPoints: totalCells, totalArea: 0, validArea: 0, ndPercent: 0, ndCount: 0, ndArea: 0 },
-            timestamp: Date.now()
+            stats: {
+              min: 0,
+              max: 0,
+              mean: 0,
+              median: 0,
+              stdDev: 0,
+              validPoints: 0,
+              totalPoints: totalCells,
+              totalArea: 0,
+              validArea: 0,
+              ndPercent: 0,
+              ndCount: 0,
+              ndArea: 0,
+            },
+            timestamp: Date.now(),
           });
 
           // Allow GC
@@ -903,14 +996,14 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
         // Now run the streaming composite on these scans
         // Store temporarily in parsedScans for the composite function
         parsedScans.clear();
-        efficientScans.forEach(s => parsedScans.set(s.id, s));
+        efficientScans.forEach((s) => parsedScans.set(s.id, s));
 
-        const composite = await createCompositeStreaming(efficientScans.map(s => s.id));
+        const composite = await createCompositeStreaming(efficientScans.map((s) => s.id));
 
         if (composite) {
           const response: CompositeCompleteMessage = {
             type: 'COMPOSITE_COMPLETE',
-            payload: { composite }
+            payload: { composite },
           };
           self.postMessage(response);
         }
@@ -934,17 +1027,23 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
           const isNullVal = (scan.nullMask[byteIdx] & (1 << bitIdx)) !== 0;
 
           if (!isNullVal && scan.values[i] < threshold) {
-            scan.nullMask[byteIdx] |= (1 << bitIdx);
+            scan.nullMask[byteIdx] |= 1 << bitIdx;
             scan.values[i] = 0;
             removedPoints++;
           }
         }
 
-        const removedPercent = scan.stats.validPoints > 0
-          ? (removedPoints / scan.stats.validPoints) * 100
-          : 0;
+        const removedPercent =
+          scan.stats.validPoints > 0 ? (removedPoints / scan.stats.validPoints) * 100 : 0;
 
-        scan.stats = calculateStats(scan.values, scan.nullMask, scan.width, scan.height, scan.xAxis, scan.yAxis);
+        scan.stats = calculateStats(
+          scan.values,
+          scan.nullMask,
+          scan.width,
+          scan.height,
+          scan.xAxis,
+          scan.yAxis
+        );
 
         scan.metadata = {
           ...scan.metadata,
@@ -955,7 +1054,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
 
         const response: ThresholdAppliedMessage = {
           type: 'THRESHOLD_APPLIED',
-          payload: { composite: scan, removedPoints, removedPercent }
+          payload: { composite: scan, removedPoints, removedPercent },
         };
         self.postMessage(response);
         break;

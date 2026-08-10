@@ -557,15 +557,15 @@ export function getConnectionPoints(
     }
   });
 
-  // Plain-pipe nozzles that don't have a pipeline attached
-  const attachedNozzleIndices = new Set(pipelines.map((p) => p.nozzleIndex));
+  // Plain-pipe nozzles that don't have a pipeline attached (by stable nozzle id)
+  const attachedNozzleIds = new Set(pipelines.map((p) => p.nozzleId).filter(Boolean));
 
   nozzles.forEach((nozzle, idx) => {
     if (nozzle.style !== 'plain-pipe') return;
     const nozzleGroup = nozzleGroups.get(idx);
     if (!nozzleGroup) return;
 
-    if (!attachedNozzleIndices.has(idx)) {
+    if (!attachedNozzleIds.has(nozzle.id)) {
       // Unattached nozzle — connection point at tip
       const frame = computeInitialFrame(nozzleGroup, nozzle, shellRadius);
       const pipe = findClosestPipeSize(nozzle.size);
@@ -584,8 +584,11 @@ export function getConnectionPoints(
     const lastSeg = pipeline.segments[pipeline.segments.length - 1];
     if (lastSeg && isTerminalSegment(lastSeg.type)) continue; // closed off — no connection point
 
-    const nozzle = nozzles[pipeline.nozzleIndex];
-    const nozzleGroup = nozzleGroups.get(pipeline.nozzleIndex);
+    // Resolve the stable nozzle id back to the live array index that the mesh
+    // groups are keyed by (nozzleIdx userData).
+    const nozzleIdx = nozzles.findIndex((n) => n.id === pipeline.nozzleId);
+    const nozzle = nozzleIdx >= 0 ? nozzles[nozzleIdx] : undefined;
+    const nozzleGroup = nozzleGroups.get(nozzleIdx);
     if (!nozzle || !nozzleGroup) continue;
 
     // Walk the chain to get the end frame
@@ -602,7 +605,7 @@ export function getConnectionPoints(
     points.push({
       position: frame.origin,
       type: 'pipeline',
-      nozzleIndex: pipeline.nozzleIndex,
+      nozzleIndex: nozzleIdx,
       pipelineId: pipeline.id,
       pipeDiameter: currentDiameter,
     });

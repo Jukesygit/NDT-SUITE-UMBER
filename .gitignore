@@ -40,6 +40,10 @@ lerna-debug.log*
 .claude/*
 !.claude/
 !.claude/CLAUDE.md
+!.claude/settings.json
+
+# Supabase CLI local cache
+supabase/.temp/
 
 # Obsidian local state
 .obsidian/workspace*.json

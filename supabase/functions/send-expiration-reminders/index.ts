@@ -435,7 +435,8 @@ serve(async (req) => {
         user: userProfile.username,
         email: userProfile.email,
         status: emailResult.success ? 'sent' : 'failed',
-        error: emailResult.error
+        // An unlogged send breaks dedupe silently — surface it in the response
+        error: emailResult.error || (logError ? `email sent but NOT logged (dedupe at risk): ${logError.message}` : undefined)
       })
 
       return jsonResponse(req, {
@@ -522,7 +523,8 @@ serve(async (req) => {
           user: user.username,
           email: user.email,
           status: emailResult.success ? 'sent' : 'failed',
-          error: emailResult.error
+          // An unlogged send breaks dedupe silently — surface it in the response
+          error: emailResult.error || (logError ? `email sent but NOT logged (dedupe at risk): ${logError.message}` : undefined)
         })
 
         // Delay to avoid Resend rate limiting (1 second between emails)

@@ -8,7 +8,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Camera, ChevronLeft, Upload, X, ImagePlus, Trash2 } from 'lucide-react';
-import type { AnnotationShapeConfig, AnnotationShapeType, ThicknessThresholds, VesselState } from '../types';
+import type {
+  AnnotationShapeConfig,
+  AnnotationShapeType,
+  ThicknessThresholds,
+  VesselState,
+} from '../types';
 import type { ProjectImage } from '../../../types/inspection-project';
 import { getProjectFileUrl } from '../../../services/inspection-project-service';
 import {
@@ -31,7 +36,12 @@ interface InspectionPanelProps {
   onUploadImage: (file: File) => void;
   onDeleteAttachment: (attachmentId: string) => void;
   getImageUrl: (storagePath: string) => string;
-  onSaveScanImages: (images: { cscan?: string; bscan?: string; dscan?: string; ascan?: string }) => Promise<void>;
+  onSaveScanImages: (images: {
+    cscan?: string;
+    bscan?: string;
+    dscan?: string;
+    ascan?: string;
+  }) => Promise<void>;
   onClearScanImages: () => Promise<void>;
   projectImages?: ProjectImage[];
 }
@@ -76,9 +86,13 @@ function ProjectImagePickerItem({
   useEffect(() => {
     let cancelled = false;
     getProjectFileUrl(image.storage_path, image.storage_bucket)
-      .then((url) => { if (!cancelled) setThumbUrl(url); })
+      .then((url) => {
+        if (!cancelled) setThumbUrl(url);
+      })
       .catch(() => {});
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [image.storage_path, image.storage_bucket]);
 
   return (
@@ -107,7 +121,15 @@ function ProjectImagePickerItem({
           style={{ width: 22, height: 22, objectFit: 'cover', borderRadius: 3, flexShrink: 0 }}
         />
       ) : (
-        <div style={{ width: 22, height: 22, background: 'rgba(255,255,255,0.06)', borderRadius: 3, flexShrink: 0 }} />
+        <div
+          style={{
+            width: 22,
+            height: 22,
+            background: 'rgba(255,255,255,0.06)',
+            borderRadius: 3,
+            flexShrink: 0,
+          }}
+        />
       )}
       <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {image.name}
@@ -143,20 +165,23 @@ export default function InspectionPanel({
   const [showProjectPicker, setShowProjectPicker] = useState(false);
   const [loadingProjectImage, setLoadingProjectImage] = useState(false);
 
-  const handleAttachProjectImage = useCallback(async (pImg: ProjectImage) => {
-    setLoadingProjectImage(true);
-    try {
-      const url = await getProjectFileUrl(pImg.storage_path, pImg.storage_bucket);
-      const response = await fetch(url);
-      const blob = await response.blob();
-      onUploadImage(new File([blob], pImg.filename, { type: pImg.mime_type ?? 'image/png' }));
-      setShowProjectPicker(false);
-    } catch {
-      // Silently fail
-    } finally {
-      setLoadingProjectImage(false);
-    }
-  }, [onUploadImage]);
+  const handleAttachProjectImage = useCallback(
+    async (pImg: ProjectImage) => {
+      setLoadingProjectImage(true);
+      try {
+        const url = await getProjectFileUrl(pImg.storage_path, pImg.storage_bucket);
+        const response = await fetch(url);
+        const blob = await response.blob();
+        onUploadImage(new File([blob], pImg.filename, { type: pImg.mime_type ?? 'image/png' }));
+        setShowProjectPicker(false);
+      } catch {
+        // Silently fail
+      } finally {
+        setLoadingProjectImage(false);
+      }
+    },
+    [onUploadImage]
+  );
   const stats = annotation.thicknessStats;
   const origin = vesselState.coordinateOrigin ?? { indexMm: 0, scanMm: 0 };
   const scanMm = scanPositionMm(annotation.angle, vesselState.id) - origin.scanMm;
@@ -166,12 +191,15 @@ export default function InspectionPanel({
     ? SEVERITY_COLORS[annotation.severityLevel]
     : 'rgba(255,255,255,0.3)';
 
-  const otherAnnotations = vesselState.annotations.filter(a => a.id !== annotation.id);
+  const otherAnnotations = vesselState.annotations.filter((a) => a.id !== annotation.id);
 
   // --- Mini heatmap ---
   const heatmapContainerRef = useRef<HTMLDivElement>(null);
-  const overlappingComposite = findOverlappingComposite(annotation, vesselState);
+  const overlappingComposite = findOverlappingComposite(annotation, vesselState, annotation.bodyId);
   const heatmapColorScale = overlappingComposite?.colorScale ?? null;
+  // Heatmap surfaces for any annotation with sampled data — a cylindrical
+  // overlap OR (via computed stats) a dome-end annotation over dome scans.
+  const hasScanData = overlappingComposite !== undefined || stats !== undefined;
 
   useEffect(() => {
     const container = heatmapContainerRef.current;
@@ -184,6 +212,7 @@ export default function InspectionPanel({
       annotation,
       vesselState,
       heatmapColorScale ?? 'Jet',
+      annotation.bodyId
     );
 
     if (canvas) {
@@ -215,9 +244,7 @@ export default function InspectionPanel({
         >
           <ChevronLeft size={20} />
         </button>
-        <span style={{ flex: 1, fontWeight: 600, fontSize: '0.95rem' }}>
-          {annotation.name}
-        </span>
+        <span style={{ flex: 1, fontWeight: 600, fontSize: '0.95rem' }}>{annotation.name}</span>
         <span
           style={{
             width: 10,
@@ -264,7 +291,10 @@ export default function InspectionPanel({
           <div
             className="vm-inspection-stat-row hoverable"
             onClick={() => onToggleStatLine('min')}
-            style={{ opacity: visibleStatLines.min ? 1 : 0.5, borderLeft: visibleStatLines.min ? '3px solid #ef4444' : '3px solid transparent' }}
+            style={{
+              opacity: visibleStatLines.min ? 1 : 0.5,
+              borderLeft: visibleStatLines.min ? '3px solid #ef4444' : '3px solid transparent',
+            }}
           >
             <span>Min</span>
             <span>{stats.min.toFixed(2)} mm</span>
@@ -272,7 +302,10 @@ export default function InspectionPanel({
           <div
             className="vm-inspection-stat-row hoverable"
             onClick={() => onToggleStatLine('max')}
-            style={{ opacity: visibleStatLines.max ? 1 : 0.5, borderLeft: visibleStatLines.max ? '3px solid #22c55e' : '3px solid transparent' }}
+            style={{
+              opacity: visibleStatLines.max ? 1 : 0.5,
+              borderLeft: visibleStatLines.max ? '3px solid #22c55e' : '3px solid transparent',
+            }}
           >
             <span>Max</span>
             <span>{stats.max.toFixed(2)} mm</span>
@@ -320,7 +353,7 @@ export default function InspectionPanel({
             </span>
           )}
         </div>
-        {overlappingComposite ? (
+        {hasScanData ? (
           <div
             ref={heatmapContainerRef}
             style={{
@@ -350,65 +383,81 @@ export default function InspectionPanel({
 
       {/* Attachments */}
       <div className="vm-inspection-section">
-        <div className="vm-inspection-section-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div
+          className="vm-inspection-section-title"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+        >
           <span>
             Attachments
-            {annotation.attachments && annotation.attachments.filter(a => a.type !== 'scan-capture').length > 0 && (
-              <span style={{ fontWeight: 400, fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginLeft: 6 }}>
-                ({annotation.attachments.filter(a => a.type !== 'scan-capture').length})
-              </span>
-            )}
+            {annotation.attachments &&
+              annotation.attachments.filter((a) => a.type !== 'scan-capture').length > 0 && (
+                <span
+                  style={{
+                    fontWeight: 400,
+                    fontSize: '0.7rem',
+                    color: 'rgba(255,255,255,0.4)',
+                    marginLeft: 6,
+                  }}
+                >
+                  ({annotation.attachments.filter((a) => a.type !== 'scan-capture').length})
+                </span>
+              )}
           </span>
-          {annotation.attachments && annotation.attachments.filter(a => a.type !== 'scan-capture').length > 0 && (
-            <button
-              onClick={() => {
-                const nonScan = annotation.attachments?.filter(a => a.type !== 'scan-capture') ?? [];
-                for (const att of nonScan) onDeleteAttachment(att.id);
-              }}
-              title="Clear all attachments"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '2px 6px',
-                background: 'rgba(239,68,68,0.1)',
-                border: '1px solid rgba(239,68,68,0.2)',
-                borderRadius: 4,
-                color: '#f87171',
-                cursor: 'pointer',
-                fontSize: '0.65rem',
-              }}
-            >
-              <Trash2 size={10} /> Clear All
-            </button>
-          )}
+          {annotation.attachments &&
+            annotation.attachments.filter((a) => a.type !== 'scan-capture').length > 0 && (
+              <button
+                onClick={() => {
+                  const nonScan =
+                    annotation.attachments?.filter((a) => a.type !== 'scan-capture') ?? [];
+                  for (const att of nonScan) onDeleteAttachment(att.id);
+                }}
+                title="Clear all attachments"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '2px 6px',
+                  background: 'rgba(239,68,68,0.1)',
+                  border: '1px solid rgba(239,68,68,0.2)',
+                  borderRadius: 4,
+                  color: '#f87171',
+                  cursor: 'pointer',
+                  fontSize: '0.65rem',
+                }}
+              >
+                <Trash2 size={10} /> Clear All
+              </button>
+            )}
         </div>
 
         {/* Thumbnail grid (excludes scan-captures — shown in CompanionScanSection) */}
-        {annotation.attachments && annotation.attachments.filter(a => a.type !== 'scan-capture').length > 0 && (
-          <div className="vm-inspection-attachments-grid">
-            {annotation.attachments.filter(a => a.type !== 'scan-capture').map(att => (
-              <div
-                key={att.id}
-                className="vm-inspection-thumbnail"
-                onClick={() => setViewingImageUrl(getImageUrl(att.storagePath))}
-                title={att.type === 'viewport-capture' ? 'Viewport capture' : 'Uploaded image'}
-              >
-                <img src={getImageUrl(att.storagePath)} alt={att.type} />
-                <button
-                  className="vm-inspection-thumbnail-delete"
-                  onClick={e => {
-                    e.stopPropagation();
-                    onDeleteAttachment(att.id);
-                  }}
-                  title="Delete attachment"
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+        {annotation.attachments &&
+          annotation.attachments.filter((a) => a.type !== 'scan-capture').length > 0 && (
+            <div className="vm-inspection-attachments-grid">
+              {annotation.attachments
+                .filter((a) => a.type !== 'scan-capture')
+                .map((att) => (
+                  <div
+                    key={att.id}
+                    className="vm-inspection-thumbnail"
+                    onClick={() => setViewingImageUrl(getImageUrl(att.storagePath))}
+                    title={att.type === 'viewport-capture' ? 'Viewport capture' : 'Uploaded image'}
+                  >
+                    <img src={getImageUrl(att.storagePath)} alt={att.type} />
+                    <button
+                      className="vm-inspection-thumbnail-delete"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteAttachment(att.id);
+                      }}
+                      title="Delete attachment"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+            </div>
+          )}
 
         {/* Action buttons */}
         <div style={{ display: 'flex', gap: 8 }}>
@@ -457,7 +506,7 @@ export default function InspectionPanel({
             type="file"
             accept="image/*"
             style={{ display: 'none' }}
-            onChange={e => {
+            onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) onUploadImage(file);
               e.target.value = '';
@@ -469,7 +518,7 @@ export default function InspectionPanel({
         {projectImages && projectImages.length > 0 && (
           <>
             <button
-              onClick={() => setShowProjectPicker(p => !p)}
+              onClick={() => setShowProjectPicker((p) => !p)}
               disabled={loadingProjectImage}
               style={{
                 width: '100%',
@@ -493,7 +542,16 @@ export default function InspectionPanel({
               {loadingProjectImage ? 'Attaching...' : `From Project Pool (${projectImages.length})`}
             </button>
             {showProjectPicker && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6, maxHeight: 160, overflowY: 'auto' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 4,
+                  marginTop: 6,
+                  maxHeight: 160,
+                  overflowY: 'auto',
+                }}
+              >
                 {projectImages.map((pImg) => (
                   <ProjectImagePickerItem
                     key={pImg.id}
@@ -513,7 +571,7 @@ export default function InspectionPanel({
           <div className="vm-inspection-section-title">
             Other Annotations ({otherAnnotations.length})
           </div>
-          {otherAnnotations.map(a => {
+          {otherAnnotations.map((a) => {
             const aColor = a.severityLevel
               ? SEVERITY_COLORS[a.severityLevel]
               : 'rgba(255,255,255,0.3)';
@@ -535,10 +593,10 @@ export default function InspectionPanel({
                   fontSize: '0.8rem',
                   textAlign: 'left',
                 }}
-                onMouseEnter={e => {
+                onMouseEnter={(e) => {
                   (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)';
                 }}
-                onMouseLeave={e => {
+                onMouseLeave={(e) => {
                   (e.currentTarget as HTMLElement).style.background = 'none';
                 }}
               >
@@ -566,38 +624,45 @@ export default function InspectionPanel({
       {/* Threshold Controls */}
       <div className="vm-inspection-section" style={{ borderBottom: 'none' }}>
         <div className="vm-inspection-section-title">Thresholds</div>
-        <ThresholdSection
-          thresholds={thicknessThresholds}
-          onUpdate={onUpdateThicknessThresholds}
-        />
+        <ThresholdSection thresholds={thicknessThresholds} onUpdate={onUpdateThicknessThresholds} />
       </div>
       {/* Image lightbox — rendered via portal to escape backdrop-filter containing block */}
-      {viewingImageUrl && createPortal(
-        <div
-          className="fixed inset-0 flex items-center justify-center"
-          style={{ zIndex: 9999, background: 'rgba(0,0,0,0.85)', cursor: 'pointer' }}
-          onClick={() => setViewingImageUrl(null)}
-        >
-          <img
-            src={viewingImageUrl}
-            alt="Attachment"
-            style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: 6, objectFit: 'contain' }}
-            onClick={e => e.stopPropagation()}
-          />
-          <button
+      {viewingImageUrl &&
+        createPortal(
+          <div
+            className="fixed inset-0 flex items-center justify-center"
+            style={{ zIndex: 9999, background: 'rgba(0,0,0,0.85)', cursor: 'pointer' }}
             onClick={() => setViewingImageUrl(null)}
-            style={{
-              position: 'absolute', top: 16, right: 16,
-              background: 'rgba(0,0,0,0.6)', border: 'none', color: '#fff',
-              width: 36, height: 36, borderRadius: '50%', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
           >
-            <X size={20} />
-          </button>
-        </div>,
-        document.body,
-      )}
+            <img
+              src={viewingImageUrl}
+              alt="Attachment"
+              style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: 6, objectFit: 'contain' }}
+              onClick={(e) => e.stopPropagation()}
+            />
+            <button
+              onClick={() => setViewingImageUrl(null)}
+              style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                background: 'rgba(0,0,0,0.6)',
+                border: 'none',
+                color: '#fff',
+                width: 36,
+                height: 36,
+                borderRadius: '50%',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <X size={20} />
+            </button>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

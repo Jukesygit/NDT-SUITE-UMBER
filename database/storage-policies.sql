@@ -21,14 +21,38 @@ DROP POLICY IF EXISTS "Users can view their own competency documents" ON storage
 DROP POLICY IF EXISTS "Users can update their own competency documents" ON storage.objects;
 DROP POLICY IF EXISTS "Users can delete their own competency documents" ON storage.objects;
 
--- Policy 1: Users can upload their own documents
+-- Policy 1: Users can upload their own documents (super_admins/admins upload for
+-- anyone; org_admins upload within their org). manager is SELECT-only by design.
+-- NOTE: role list MUST stay in sync with the employee_competencies INSERT policy
+-- and the storage INSERT migration
+-- (supabase/migrations/20260728131000_fix_storage_insert_super_admin.sql).
+-- Omitting super_admin here 403s super_admin uploads on behalf of other users.
 CREATE POLICY "Users can upload their own competency documents"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (
     bucket_id = 'documents'
     AND (storage.foldername(name))[1] = 'competency-documents'
-    AND (storage.foldername(name))[2] = auth.uid()::text
+    AND (
+        -- User can upload their own documents
+        (storage.foldername(name))[2] = auth.uid()::text
+        OR
+        -- Super admins and admins can upload for any user
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role IN ('admin', 'super_admin')
+        )
+        OR
+        -- Org admins can upload for users in their organization
+        EXISTS (
+            SELECT 1 FROM public.profiles admin_profile
+            JOIN public.profiles target_profile
+                ON admin_profile.organization_id = target_profile.organization_id
+            WHERE admin_profile.id = auth.uid()
+            AND admin_profile.role = 'org_admin'
+            AND target_profile.id::text = (storage.foldername(name))[2]
+        )
+    )
 );
 
 -- Policy 2: Users can view their own documents (super_admins/admins/managers see all)

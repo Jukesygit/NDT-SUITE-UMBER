@@ -10,18 +10,19 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import type { ScanCompositeConfig, VesselState } from '../types';
-import { shellPoint } from './annotation-geometry';
+import { resolveBodyFrame, type SurfaceFrame } from './body-frame';
+import { datumToVesselAngle, scanAngleFromArcDeg } from './vessel-coords';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 const ORIGIN_RADIUS = 0.08;
-const RIBBON_HALF_WIDTH = 0.04;        // half-width of the flat ribbon strip
-const ARROW_COLOR_CIRC = 0x00ff88;     // green - circumferential (scan)
-const ARROW_COLOR_LONG = 0xff6633;     // orange - longitudinal (index)
-const SURFACE_OFFSET = 20;             // mm above shell
-const CIRC_ARC_DEG = 150;             // nearly half the vessel circumference
+const RIBBON_HALF_WIDTH = 0.04; // half-width of the flat ribbon strip
+const ARROW_COLOR_CIRC = 0x00ff88; // green - circumferential (scan)
+const ARROW_COLOR_LONG = 0xff6633; // orange - longitudinal (index)
+const SURFACE_OFFSET = 20; // mm above shell
+const CIRC_ARC_DEG = 150; // nearly half the vessel circumference
 const CIRC_SEGMENTS = 24;
 const LONG_SEGMENTS = 12;
 const CONE_RADIUS = 0.08;
@@ -31,11 +32,7 @@ const CONE_HEIGHT = 0.2;
 // Helper: orient a cone mesh so its tip points along a direction
 // ---------------------------------------------------------------------------
 
-function orientCone(
-  cone: THREE.Mesh,
-  position: THREE.Vector3,
-  direction: THREE.Vector3,
-): void {
+function orientCone(cone: THREE.Mesh, position: THREE.Vector3, direction: THREE.Vector3): void {
   cone.position.copy(position);
   const up = new THREE.Vector3(0, 1, 0);
   const quat = new THREE.Quaternion().setFromUnitVectors(up, direction.clone().normalize());
@@ -53,7 +50,7 @@ function buildRibbonArrow(
   points: THREE.Vector3[],
   color: number,
   userData: Record<string, unknown>,
-  vesselCenter: THREE.Vector3,
+  vesselCenter: THREE.Vector3
 ): THREE.Group {
   const group = new THREE.Group();
 
@@ -84,8 +81,12 @@ function buildRibbonArrow(
 
     // Two vertices: left and right of center line
     vertices.push(
-      pt.x + side.x * RIBBON_HALF_WIDTH, pt.y + side.y * RIBBON_HALF_WIDTH, pt.z + side.z * RIBBON_HALF_WIDTH,
-      pt.x - side.x * RIBBON_HALF_WIDTH, pt.y - side.y * RIBBON_HALF_WIDTH, pt.z - side.z * RIBBON_HALF_WIDTH,
+      pt.x + side.x * RIBBON_HALF_WIDTH,
+      pt.y + side.y * RIBBON_HALF_WIDTH,
+      pt.z + side.z * RIBBON_HALF_WIDTH,
+      pt.x - side.x * RIBBON_HALF_WIDTH,
+      pt.y - side.y * RIBBON_HALF_WIDTH,
+      pt.z - side.z * RIBBON_HALF_WIDTH
     );
 
     // Two triangles per quad (connecting this pair to the next)
@@ -141,14 +142,12 @@ function buildRibbonArrow(
 // Compute vessel center for outward direction
 // ---------------------------------------------------------------------------
 
-function getVesselCenter(vesselState: VesselState, posMm: number): THREE.Vector3 {
-  const SCALE = 0.001;
-  const posGlobal = (posMm - vesselState.length / 2) * SCALE;
-  if (vesselState.orientation === 'vertical') {
-    return new THREE.Vector3(0, posGlobal, 0);
-  } else {
-    return new THREE.Vector3(posGlobal, 0, 0);
-  }
+function getVesselCenter(frame: SurfaceFrame, posMm: number): THREE.Vector3 {
+  // Axis point at posMm: the surface point pulled inward by the body radius.
+  // On the cylinder (where scan gizmos live) this is exactly (posGlobal, 0, 0)
+  // for a horizontal vessel and (0, posGlobal, 0) for a vertical one, matching
+  // the legacy hand-written center.
+  return frame.surfacePoint(posMm, 0, -frame.radius);
 }
 
 // ---------------------------------------------------------------------------
@@ -157,25 +156,29 @@ function getVesselCenter(vesselState: VesselState, posMm: number): THREE.Vector3
 
 function buildCircumferentialArrow(
   composite: ScanCompositeConfig,
-  vesselState: VesselState,
+  vesselState: VesselState
 ): THREE.Group {
+  const frame = resolveBodyFrame(vesselState, composite.bodyId);
+  // datumToVesselAngle: user 0°=TDC → vessel 90°=TDC (internal 0°=3-o'clock).
+  const datumDeg = datumToVesselAngle(composite.datumAngleDeg);
   const points: THREE.Vector3[] = [];
   for (let i = 0; i <= CIRC_SEGMENTS; i++) {
     const t = i / CIRC_SEGMENTS;
     const offsetDeg = t * CIRC_ARC_DEG;
-    // +90 converts user-facing 0°=TDC to internal 0°=3-o'clock
-    const angleDeg = composite.scanDirection === 'cw'
-      ? (composite.datumAngleDeg + 90) - offsetDeg
-      : (composite.datumAngleDeg + 90) + offsetDeg;
-    const angleRad = (angleDeg * Math.PI) / 180;
-    points.push(shellPoint(composite.indexStartMm, angleRad, vesselState, SURFACE_OFFSET));
+    const angleDeg = scanAngleFromArcDeg(datumDeg, offsetDeg, composite.scanDirection);
+    points.push(frame.surfacePoint(composite.indexStartMm, angleDeg, SURFACE_OFFSET));
   }
 
-  const center = getVesselCenter(vesselState, composite.indexStartMm);
-  return buildRibbonArrow(points, ARROW_COLOR_CIRC, {
-    type: 'scanGizmoArrowCirc',
-    compositeId: composite.id,
-  }, center);
+  const center = getVesselCenter(frame, composite.indexStartMm);
+  return buildRibbonArrow(
+    points,
+    ARROW_COLOR_CIRC,
+    {
+      type: 'scanGizmoArrowCirc',
+      compositeId: composite.id,
+    },
+    center
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -184,25 +187,32 @@ function buildCircumferentialArrow(
 
 function buildLongitudinalArrow(
   composite: ScanCompositeConfig,
-  vesselState: VesselState,
+  vesselState: VesselState
 ): THREE.Group {
-  const datumRad = ((composite.datumAngleDeg + 90) * Math.PI) / 180;
-  const arrowLengthMm = Math.min(3000, vesselState.length * 0.4);
+  const frame = resolveBodyFrame(vesselState, composite.bodyId);
+  const datumDeg = datumToVesselAngle(composite.datumAngleDeg);
+  const arrowLengthMm = Math.min(3000, frame.axialLength * 0.4);
 
   const points: THREE.Vector3[] = [];
   for (let i = 0; i <= LONG_SEGMENTS; i++) {
     const t = i / LONG_SEGMENTS;
-    const posMm = composite.indexDirection === 'forward'
-      ? Math.min(composite.indexStartMm + t * arrowLengthMm, vesselState.length)
-      : Math.max(composite.indexStartMm - t * arrowLengthMm, 0);
-    points.push(shellPoint(posMm, datumRad, vesselState, SURFACE_OFFSET));
+    const posMm =
+      composite.indexDirection === 'forward'
+        ? Math.min(composite.indexStartMm + t * arrowLengthMm, frame.axialLength)
+        : Math.max(composite.indexStartMm - t * arrowLengthMm, 0);
+    points.push(frame.surfacePoint(posMm, datumDeg, SURFACE_OFFSET));
   }
 
-  const center = getVesselCenter(vesselState, composite.indexStartMm);
-  return buildRibbonArrow(points, ARROW_COLOR_LONG, {
-    type: 'scanGizmoArrowLong',
-    compositeId: composite.id,
-  }, center);
+  const center = getVesselCenter(frame, composite.indexStartMm);
+  return buildRibbonArrow(
+    points,
+    ARROW_COLOR_LONG,
+    {
+      type: 'scanGizmoArrowLong',
+      compositeId: composite.id,
+    },
+    center
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -211,13 +221,14 @@ function buildLongitudinalArrow(
 
 export function buildScanOrientationGizmo(
   composite: ScanCompositeConfig,
-  vesselState: VesselState,
+  vesselState: VesselState
 ): { group: THREE.Group; originMesh: THREE.Mesh } {
   const group = new THREE.Group();
-  const datumRad = ((composite.datumAngleDeg + 90) * Math.PI) / 180;
+  const frame = resolveBodyFrame(vesselState, composite.bodyId);
+  const datumDeg = datumToVesselAngle(composite.datumAngleDeg);
 
   // --- Origin sphere (draggable handle) ---
-  const originPos = shellPoint(composite.indexStartMm, datumRad, vesselState, SURFACE_OFFSET);
+  const originPos = frame.surfacePoint(composite.indexStartMm, datumDeg, SURFACE_OFFSET);
   const sphereGeom = new THREE.SphereGeometry(ORIGIN_RADIUS, 12, 8);
   const sphereMat = new THREE.MeshBasicMaterial({
     color: 0xffffff,
@@ -235,7 +246,8 @@ export function buildScanOrientationGizmo(
 
   // --- CSS2D label showing datum angle and position ---
   const labelEl = document.createElement('div');
-  labelEl.style.cssText = 'font-size:14px;font-weight:700;color:#fff;background:rgba(0,0,0,0.8);padding:5px 10px;border-radius:4px;white-space:nowrap;pointer-events:none;border:1px solid rgba(255,255,255,0.2);';
+  labelEl.style.cssText =
+    'font-size:14px;font-weight:700;color:#fff;background:rgba(0,0,0,0.8);padding:5px 10px;border-radius:4px;white-space:nowrap;pointer-events:none;border:1px solid rgba(255,255,255,0.2);';
   labelEl.textContent = `${Math.round(composite.datumAngleDeg)}\u00B0 \u00B7 ${Math.round(composite.indexStartMm)} mm`;
   const label = new CSS2DObject(labelEl);
   label.position.copy(originPos);

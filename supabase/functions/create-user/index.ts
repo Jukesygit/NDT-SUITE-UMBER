@@ -45,8 +45,23 @@ serve(async (req) => {
     }
 
     // SECURITY: Validate role against allowlist at runtime (TypeScript types are not enforced at runtime)
-    const VALID_ROLES = ['admin', 'org_admin', 'editor', 'viewer']
-    const validatedRole = VALID_ROLES.includes(role) ? role : 'viewer'
+    const VALID_ROLES = ['admin', 'manager', 'org_admin', 'editor', 'viewer']
+    let validatedRole: string
+    if (!role) {
+      // No role provided → safe default
+      validatedRole = 'viewer'
+    } else if (role === 'super_admin') {
+      // SECURITY: Only super admins may create other super admins
+      if (auth.user!.role !== 'super_admin') {
+        return errorResponse(req, 'Only super admins can create super admin users', 403)
+      }
+      validatedRole = 'super_admin'
+    } else if (VALID_ROLES.includes(role)) {
+      validatedRole = role
+    } else {
+      // SECURITY: Reject unknown roles explicitly — no silent downgrade
+      return errorResponse(req, 'Invalid role', 400)
+    }
 
     // Create auth user with admin API - this pre-confirms email and triggers profile creation
     const { data: authData, error: createError } = await supabaseAdmin.auth.admin.createUser({

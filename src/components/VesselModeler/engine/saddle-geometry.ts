@@ -43,7 +43,7 @@ function buildArcPlateGeometry(
   innerRadius: number,
   thickness: number,
   halfArc: number,
-  depth: number,
+  depth: number
 ): THREE.ExtrudeGeometry {
   const outerR = innerRadius + thickness;
 
@@ -54,27 +54,18 @@ function buildArcPlateGeometry(
   const shape = new THREE.Shape();
 
   // Outer arc (from start to end)
-  shape.moveTo(
-    Math.cos(startAngle) * outerR,
-    Math.sin(startAngle) * outerR,
-  );
+  shape.moveTo(Math.cos(startAngle) * outerR, Math.sin(startAngle) * outerR);
   for (let i = 1; i <= ARC_SEGMENTS; i++) {
     const t = i / ARC_SEGMENTS;
     const angle = startAngle + (endAngle - startAngle) * t;
-    shape.lineTo(
-      Math.cos(angle) * outerR,
-      Math.sin(angle) * outerR,
-    );
+    shape.lineTo(Math.cos(angle) * outerR, Math.sin(angle) * outerR);
   }
 
   // Inner arc (reverse direction, from end back to start)
   for (let i = ARC_SEGMENTS; i >= 0; i--) {
     const t = i / ARC_SEGMENTS;
     const angle = startAngle + (endAngle - startAngle) * t;
-    shape.lineTo(
-      Math.cos(angle) * innerRadius,
-      Math.sin(angle) * innerRadius,
-    );
+    shape.lineTo(Math.cos(angle) * innerRadius, Math.sin(angle) * innerRadius);
   }
 
   shape.closePath();
@@ -112,6 +103,7 @@ export function deserializeSaddle(raw: any): SaddleConfig {
     wearPlateThickness: raw?.wearPlateThickness,
     wearPlateArcOverhang: raw?.wearPlateArcOverhang,
     wearPlateAxialOverhang: raw?.wearPlateAxialOverhang,
+    visible: raw?.visible,
   };
 }
 
@@ -146,7 +138,7 @@ export function createSaddleGroup(
   vesselState: VesselState,
   isSelected: boolean,
   highlightMaterial: THREE.Material,
-  baseMaterial: THREE.Material,
+  baseMaterial: THREE.Material
 ): THREE.Group {
   const RADIUS = vesselState.id / 2;
   const TAN_TAN = vesselState.length;
@@ -199,7 +191,7 @@ export function createSaddleGroup(
       RADIUS * SCALE,
       wearPlateThickness * SCALE,
       halfArc + arcOverhangRad,
-      (saddleWidth + 2 * axialOverhang) * SCALE,
+      (saddleWidth + 2 * axialOverhang) * SCALE
     );
     wearPlateGeom.rotateY(Math.PI / 2);
     const wearPlateMesh = new THREE.Mesh(wearPlateGeom, mat);
@@ -212,7 +204,7 @@ export function createSaddleGroup(
     contactRadius * SCALE,
     PLATE_THICKNESS * SCALE,
     halfArc,
-    saddleWidth * SCALE,
+    saddleWidth * SCALE
   );
   // Rotate so extrusion depth goes along X (vessel axis) instead of Z
   cradleGeom.rotateY(Math.PI / 2);
@@ -227,18 +219,14 @@ export function createSaddleGroup(
   const centerWebGeom = new THREE.BoxGeometry(
     saddleWidth * SCALE,
     centerWebHeight,
-    thickness * SCALE,
+    thickness * SCALE
   );
   const centerWeb = new THREE.Mesh(centerWebGeom, mat);
   centerWeb.position.set(0, (cradleBottomY + baseY) / 2, 0);
   group.add(centerWeb);
 
   // -- 3. Side web plates (two ribs at the arc edges) -------------------------
-  const webGeom = new THREE.BoxGeometry(
-    saddleWidth * SCALE,
-    webHeight,
-    thickness * SCALE,
-  );
+  const webGeom = new THREE.BoxGeometry(saddleWidth * SCALE, webHeight, thickness * SCALE);
 
   const leftWeb = new THREE.Mesh(webGeom, mat);
   leftWeb.position.set(0, webCenterY, webZ);
@@ -253,15 +241,12 @@ export function createSaddleGroup(
   // Their top edge follows the cradle inner arc at that Z position.
   const midZ = webZ / 2;
   // The cradle inner radius at this Z: Y = -sqrt(R² - Z²)
-  const midCradleY = -Math.sqrt(contactRadius * contactRadius - (midZ / SCALE) * (midZ / SCALE)) * SCALE;
+  const midCradleY =
+    -Math.sqrt(contactRadius * contactRadius - (midZ / SCALE) * (midZ / SCALE)) * SCALE;
   const midWebHeight = Math.abs(midCradleY - baseY);
   const midWebCenterY = (midCradleY + baseY) / 2;
 
-  const midWebGeom = new THREE.BoxGeometry(
-    saddleWidth * SCALE,
-    midWebHeight,
-    thickness * SCALE,
-  );
+  const midWebGeom = new THREE.BoxGeometry(saddleWidth * SCALE, midWebHeight, thickness * SCALE);
 
   const leftMidWeb = new THREE.Mesh(midWebGeom, mat);
   leftMidWeb.position.set(0, midWebCenterY, midZ);
@@ -273,27 +258,19 @@ export function createSaddleGroup(
 
   // -- 5. Fill panels between webs (front/back thin walls) --------------------
   // These thin panels close the gaps, making the saddle look solid from the side
-  const fillWidth = webZ - thickness * SCALE / 2; // from center web edge to side web edge
-  const fillGeom = new THREE.BoxGeometry(
-    thickness * SCALE,
-    webHeight,
-    fillWidth,
-  );
+  const fillWidth = webZ - (thickness * SCALE) / 2; // from center web edge to side web edge
+  const fillGeom = new THREE.BoxGeometry(thickness * SCALE, webHeight, fillWidth);
 
   const leftFill = new THREE.Mesh(fillGeom, mat);
-  leftFill.position.set(0, webCenterY, fillWidth / 2 + thickness * SCALE / 2);
+  leftFill.position.set(0, webCenterY, fillWidth / 2 + (thickness * SCALE) / 2);
   group.add(leftFill);
 
   const rightFill = new THREE.Mesh(fillGeom, mat);
-  rightFill.position.set(0, webCenterY, -(fillWidth / 2 + thickness * SCALE / 2));
+  rightFill.position.set(0, webCenterY, -(fillWidth / 2 + (thickness * SCALE) / 2));
   group.add(rightFill);
 
   // -- 4. Base plate ----------------------------------------------------------
-  const baseGeom = new THREE.BoxGeometry(
-    saddleWidth * SCALE,
-    thickness * SCALE,
-    baseWidth,
-  );
+  const baseGeom = new THREE.BoxGeometry(saddleWidth * SCALE, thickness * SCALE, baseWidth);
   const basePlate = new THREE.Mesh(baseGeom, mat);
   basePlate.position.set(0, baseY + (thickness * SCALE) / 2, 0);
   group.add(basePlate);

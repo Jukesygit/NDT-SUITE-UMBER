@@ -43,7 +43,7 @@ import {
   createCompositeFromDataWithWorker,
   applyThresholdWithWorker,
   getCscanWorkerManager,
-  type ProcessingProgress
+  type ProcessingProgress,
 } from './utils/workerManager';
 import { useSaveScanComposite } from '../../hooks/mutations/useScanCompositeMutations';
 import { useAuth } from '../../contexts/AuthContext';
@@ -80,6 +80,25 @@ function normalizeDisplaySettings(settings?: Partial<DisplaySettings>): DisplayS
   };
 }
 
+// Load-complete status shared by the direct-add and post-repair paths.
+// Truncated exports (rows missing vs the header's declared count) surface as
+// an error-styled message with a longer display time.
+const loadStatusFor = (
+  scans: CscanData[]
+): { status: { type: 'success' | 'error'; message: string }; timeoutMs: number } => {
+  const truncated = scans.filter((s) => s.metadata?.['_truncatedRows']).length;
+  const base = `${scans.length} file${scans.length !== 1 ? 's' : ''} loaded`;
+  return truncated > 0
+    ? {
+        status: {
+          type: 'error',
+          message: `${base} — ${truncated} truncated (fewer rows than the header declares)`,
+        },
+        timeoutMs: 6000,
+      }
+    : { status: { type: 'success', message: `${base} successfully` }, timeoutMs: 3000 };
+};
+
 const CscanVisualizer: React.FC = () => {
   // Project context from URL params
   const [searchParams] = useSearchParams();
@@ -87,7 +106,10 @@ const CscanVisualizer: React.FC = () => {
   const projectVesselId = searchParams.get('vessel');
 
   // Refs
-  const canvasRef = useRef<{ exportImage: () => Promise<string | null>; exportCleanHeatmap: () => Promise<string | null> }>(null);
+  const canvasRef = useRef<{
+    exportImage: () => Promise<string | null>;
+    exportCleanHeatmap: () => Promise<string | null>;
+  }>(null);
 
   // Core state
   const [scanData, setScanData] = useState<CscanData | null>(null);
@@ -108,7 +130,10 @@ const CscanVisualizer: React.FC = () => {
   // Modal state
   const [showRepairModal, setShowRepairModal] = useState(false);
   const [pendingScans, setPendingScans] = useState<CscanData[]>([]);
-  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [statusMessage, setStatusMessage] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
   const [savedSessions, setSavedSessions] = useState<CscanSessionSummary[]>([]);
   const [sessionName, setSessionName] = useState('');
   const [sessionBusy, setSessionBusy] = useState(false);
@@ -122,14 +147,19 @@ const CscanVisualizer: React.FC = () => {
   const [saveCustomSection, setSaveCustomSection] = useState('');
 
   // Export progress state
-  const [exportProgress, setExportProgress] = useState<{ progress: number; message: string } | null>(null);
+  const [exportProgress, setExportProgress] = useState<{
+    progress: number;
+    message: string;
+  } | null>(null);
   const [scanNotesById, setScanNotesById] = useState<Record<string, string>>({});
 
   // Processing progress state (for file loading and composite creation)
   const [processingProgress, setProcessingProgress] = useState<ProcessingProgress | null>(null);
 
   // Display settings
-  const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(() => normalizeDisplaySettings());
+  const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(() =>
+    normalizeDisplaySettings()
+  );
 
   // Distribution panel state
   const [distributionConfig, setDistributionConfig] = useState<DistributionConfig>({
@@ -178,102 +208,108 @@ const CscanVisualizer: React.FC = () => {
   const addScansToState = useCallback((scans: CscanData[]) => {
     if (scans.length === 0) return;
 
-    setProcessedScans(prev => [...prev, ...scans]);
+    setProcessedScans((prev) => [...prev, ...scans]);
     const firstScan = scans[0];
     setScanData(firstScan);
 
     const metaMin = firstScan.metadata?.['Min Thickness (mm)'];
     const metaMax = firstScan.metadata?.['Max Thickness (mm)'];
     if (metaMin !== undefined && metaMax !== undefined) {
-      setDisplaySettings(prev => ({
+      setDisplaySettings((prev) => ({
         ...prev,
-        range: { min: parseFloat(metaMin), max: parseFloat(metaMax) }
+        range: { min: parseFloat(metaMin), max: parseFloat(metaMax) },
       }));
     }
   }, []);
 
   // Handlers - using Web Worker for memory-efficient processing
-  const handleFileUpload = useCallback(async (files: File[]) => {
-    try {
-      // Show processing progress
-      setProcessingProgress({ current: 0, total: files.length, message: 'Starting...' });
+  const handleFileUpload = useCallback(
+    async (files: File[]) => {
+      try {
+        // Show processing progress
+        setProcessingProgress({ current: 0, total: files.length, message: 'Starting...' });
 
-      const result = await processFilesWithWorker(files, {
-        batchSize: 15, // Process 15 files at a time to manage memory
-        onProgress: (progress) => {
-          setProcessingProgress(progress);
+        const result = await processFilesWithWorker(files, {
+          batchSize: 15, // Process 15 files at a time to manage memory
+          onProgress: (progress) => {
+            setProcessingProgress(progress);
+          },
+        });
+
+        // Clear progress
+        setProcessingProgress(null);
+
+        if (result.scans.length > 0) {
+          // Check if any scans have offset issues
+          if (result.hasOffsetIssues) {
+            // Store scans and show repair modal
+            setPendingScans(result.scans);
+            setShowRepairModal(true);
+          } else {
+            // No issues, add directly
+            addScansToState(result.scans);
+            const { status, timeoutMs } = loadStatusFor(result.scans);
+            setStatusMessage(status);
+            setTimeout(() => setStatusMessage(null), timeoutMs);
+          }
         }
-      });
-
-      // Clear progress
-      setProcessingProgress(null);
-
-      if (result.scans.length > 0) {
-        // Check if any scans have offset issues
-        if (result.hasOffsetIssues) {
-          // Store scans and show repair modal
-          setPendingScans(result.scans);
-          setShowRepairModal(true);
-        } else {
-          // No issues, add directly
-          addScansToState(result.scans);
-          setStatusMessage({
-            type: 'success',
-            message: `${result.scans.length} file${result.scans.length !== 1 ? 's' : ''} loaded successfully`
-          });
-          setTimeout(() => setStatusMessage(null), 3000);
-        }
+      } catch (error) {
+        setProcessingProgress(null);
+        setStatusMessage({
+          type: 'error',
+          message: `Error processing files: ${(error as Error).message}`,
+        });
+        setTimeout(() => setStatusMessage(null), 5000);
       }
-    } catch (error) {
-      setProcessingProgress(null);
-      setStatusMessage({
-        type: 'error',
-        message: `Error processing files: ${(error as Error).message}`
-      });
-      setTimeout(() => setStatusMessage(null), 5000);
-    }
-  }, [addScansToState]);
+    },
+    [addScansToState]
+  );
 
   // Handle repair completion
-  const handleRepairComplete = useCallback((repairedScans: CscanData[]) => {
-    // IMPORTANT: Clear worker cache since repaired scans have different coordinates
-    // than the cached versions. This forces composite creation to use the legacy
-    // algorithm with the corrected data from UI state.
-    getCscanWorkerManager().clearCache();
+  const handleRepairComplete = useCallback(
+    (repairedScans: CscanData[]) => {
+      // IMPORTANT: Clear worker cache since repaired scans have different coordinates
+      // than the cached versions. This forces composite creation to use the legacy
+      // algorithm with the corrected data from UI state.
+      getCscanWorkerManager().clearCache();
 
-    addScansToState(repairedScans);
-    setPendingScans([]);
-    setStatusMessage({
-      type: 'success',
-      message: `${repairedScans.length} file${repairedScans.length !== 1 ? 's' : ''} loaded successfully`
-    });
-    setTimeout(() => setStatusMessage(null), 3000);
-  }, [addScansToState]);
+      addScansToState(repairedScans);
+      setPendingScans([]);
+      const { status, timeoutMs } = loadStatusFor(repairedScans);
+      setStatusMessage(status);
+      setTimeout(() => setStatusMessage(null), timeoutMs);
+    },
+    [addScansToState]
+  );
 
-  const handleFileSelect = useCallback((fileId: string) => {
-    const scan = processedScans.find(s => s.id === fileId);
-    if (scan) {
-      setScanData(scan);
-      const metaMin = scan.metadata?.['Min Thickness (mm)'];
-      const metaMax = scan.metadata?.['Max Thickness (mm)'];
-      if (metaMin !== undefined && metaMax !== undefined) {
-        setDisplaySettings(prev => ({
-          ...prev,
-          range: { min: parseFloat(metaMin), max: parseFloat(metaMax) }
-        }));
-      } else {
-        setDisplaySettings(prev => ({
-          ...prev,
-          range: { min: null, max: null }
-        }));
+  const handleFileSelect = useCallback(
+    (fileId: string) => {
+      const scan = processedScans.find((s) => s.id === fileId);
+      if (scan) {
+        setScanData(scan);
+        const metaMin = scan.metadata?.['Min Thickness (mm)'];
+        const metaMax = scan.metadata?.['Max Thickness (mm)'];
+        if (metaMin !== undefined && metaMax !== undefined) {
+          setDisplaySettings((prev) => ({
+            ...prev,
+            range: { min: parseFloat(metaMin), max: parseFloat(metaMax) },
+          }));
+        } else {
+          setDisplaySettings((prev) => ({
+            ...prev,
+            range: { min: null, max: null },
+          }));
+        }
       }
-    }
-  }, [processedScans]);
+    },
+    [processedScans]
+  );
 
   const handleCreateComposite = useCallback(async () => {
-    const scansToComposite = selectedScans.size > 1
-      ? processedScans.filter(scan => selectedScans.has(scan.id))
-      : processedScans;
+    const scansToComposite =
+      selectedScans.size > 1
+        ? processedScans.filter((scan) => selectedScans.has(scan.id))
+        : processedScans;
 
     if (scansToComposite.length < 2) {
       return;
@@ -283,16 +319,16 @@ const CscanVisualizer: React.FC = () => {
     setProcessingProgress({
       current: 0,
       total: scansToComposite.length + 2,
-      message: 'Creating composite...'
+      message: 'Creating composite...',
     });
 
     try {
       // Try worker-based composite first (streaming algorithm, memory efficient)
-      const scanIds = scansToComposite.map(s => s.id);
+      const scanIds = scansToComposite.map((s) => s.id);
       let workerResult = await createCompositeWithWorker(scanIds, {
         onProgress: (progress) => {
           setProcessingProgress(progress);
-        }
+        },
       });
 
       // If scans aren't in cache (e.g., after repair), send data directly to worker
@@ -300,13 +336,13 @@ const CscanVisualizer: React.FC = () => {
         setProcessingProgress({
           current: 0,
           total: scansToComposite.length + 2,
-          message: 'Processing with corrected data...'
+          message: 'Processing with corrected data...',
         });
 
         workerResult = await createCompositeFromDataWithWorker(scansToComposite, {
           onProgress: (progress) => {
             setProcessingProgress(progress);
-          }
+          },
         });
       }
 
@@ -315,16 +351,16 @@ const CscanVisualizer: React.FC = () => {
       if (workerResult) {
         // Worker succeeded - REPLACE source scans with composite to free memory
         // Keep only scans that weren't used in the composite
-        const compositeSourceIds = new Set(scansToComposite.map(s => s.id));
-        setProcessedScans(prev => {
-          const nonSourceScans = prev.filter(s => !compositeSourceIds.has(s.id));
+        const compositeSourceIds = new Set(scansToComposite.map((s) => s.id));
+        setProcessedScans((prev) => {
+          const nonSourceScans = prev.filter((s) => !compositeSourceIds.has(s.id));
           return [...nonSourceScans, workerResult.composite];
         });
         setScanData(workerResult.composite);
         setSelectedScans(new Set());
-        setDisplaySettings(prev => ({
+        setDisplaySettings((prev) => ({
           ...prev,
-          range: { min: null, max: null }
+          range: { min: null, max: null },
         }));
 
         // Clear worker cache to free memory from source scans
@@ -332,13 +368,13 @@ const CscanVisualizer: React.FC = () => {
 
         setStatusMessage({
           type: 'success',
-          message: `Composite created from ${scansToComposite.length} files (source files removed to free memory)`
+          message: `Composite created from ${scansToComposite.length} files (source files removed to free memory)`,
         });
         setTimeout(() => setStatusMessage(null), 4000);
       } else {
         setStatusMessage({
           type: 'error',
-          message: 'Failed to create composite — worker unavailable. Please use a modern browser.'
+          message: 'Failed to create composite — worker unavailable. Please use a modern browser.',
         });
         setTimeout(() => setStatusMessage(null), 5000);
       }
@@ -355,68 +391,77 @@ const CscanVisualizer: React.FC = () => {
     setScanData(null);
     setSelectedScans(new Set());
     setScanNotesById({});
-    setDisplaySettings(prev => ({
+    setDisplaySettings((prev) => ({
       ...prev,
-      range: { min: null, max: null }
+      range: { min: null, max: null },
     }));
     // Clear worker cache to free memory
     getCscanWorkerManager().clearCache();
   }, []);
 
   // Threshold apply handler — permanently nullifies values below threshold
-  const handleApplyThreshold = useCallback(async (threshold: number) => {
-    if (!scanData) return;
+  const handleApplyThreshold = useCallback(
+    async (threshold: number) => {
+      if (!scanData) return;
 
-    // Count how many points will be removed for the confirmation message
-    const flatData = scanData.data.flat().filter((v): v is number => v !== null && !isNaN(v));
-    const belowCount = flatData.filter(v => v < threshold).length;
-    const belowPercent = flatData.length > 0 ? ((belowCount / flatData.length) * 100).toFixed(1) : '0';
+      // Count how many points will be removed for the confirmation message
+      const flatData = scanData.data.flat().filter((v): v is number => v !== null && !isNaN(v));
+      const belowCount = flatData.filter((v) => v < threshold).length;
+      const belowPercent =
+        flatData.length > 0 ? ((belowCount / flatData.length) * 100).toFixed(1) : '0';
 
-    if (belowCount === 0) {
-      setStatusMessage({ type: 'success', message: 'No values below threshold — nothing to remove.' });
-      setTimeout(() => setStatusMessage(null), 3000);
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Permanently remove ${belowCount.toLocaleString()} points (${belowPercent}%) below ${threshold} mm?\n\nThis cannot be undone — to recover the data you would need to re-composite from source scans.`
-    );
-    if (!confirmed) return;
-
-    try {
-      // The scan needs to be in the worker cache — re-cache if needed
-      const manager = getCscanWorkerManager();
-      if (!manager.getCachedScan(scanData.id)) {
-        const { toEfficientFormat } = await import('./utils/efficientTypes');
-        manager.cacheScan(toEfficientFormat({
-          ...scanData,
-          stats: scanData.stats as unknown as Record<string, number>,
-        }));
-      }
-
-      const result = await applyThresholdWithWorker(scanData.id, threshold);
-      if (result) {
-        setProcessedScans(prev =>
-          prev.map(s => s.id === scanData.id ? result.composite : s)
-        );
-        setScanData(result.composite);
-        setDisplaySettings(prev => ({
-          ...prev,
-          minimumThreshold: null,
-        }));
-
+      if (belowCount === 0) {
         setStatusMessage({
           type: 'success',
-          message: `Threshold applied: ${result.removedPoints.toLocaleString()} points (${result.removedPercent.toFixed(1)}%) below ${threshold} mm removed permanently.`
+          message: 'No values below threshold — nothing to remove.',
         });
+        setTimeout(() => setStatusMessage(null), 3000);
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `Permanently remove ${belowCount.toLocaleString()} points (${belowPercent}%) below ${threshold} mm?\n\nThis cannot be undone — to recover the data you would need to re-composite from source scans.`
+      );
+      if (!confirmed) return;
+
+      try {
+        // The scan needs to be in the worker cache — re-cache if needed
+        const manager = getCscanWorkerManager();
+        if (!manager.getCachedScan(scanData.id)) {
+          const { toEfficientFormat } = await import('./utils/efficientTypes');
+          manager.cacheScan(
+            toEfficientFormat({
+              ...scanData,
+              stats: scanData.stats as unknown as Record<string, number>,
+            })
+          );
+        }
+
+        const result = await applyThresholdWithWorker(scanData.id, threshold);
+        if (result) {
+          setProcessedScans((prev) =>
+            prev.map((s) => (s.id === scanData.id ? result.composite : s))
+          );
+          setScanData(result.composite);
+          setDisplaySettings((prev) => ({
+            ...prev,
+            minimumThreshold: null,
+          }));
+
+          setStatusMessage({
+            type: 'success',
+            message: `Threshold applied: ${result.removedPoints.toLocaleString()} points (${result.removedPercent.toFixed(1)}%) below ${threshold} mm removed permanently.`,
+          });
+          setTimeout(() => setStatusMessage(null), 5000);
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Failed to apply threshold';
+        setStatusMessage({ type: 'error', message: msg });
         setTimeout(() => setStatusMessage(null), 5000);
       }
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Failed to apply threshold';
-      setStatusMessage({ type: 'error', message: msg });
-      setTimeout(() => setStatusMessage(null), 5000);
-    }
-  }, [scanData]);
+    },
+    [scanData]
+  );
 
   const handleSaveSession = useCallback(async () => {
     if (processedScans.length === 0) {
@@ -470,14 +515,13 @@ const CscanVisualizer: React.FC = () => {
         return;
       }
 
-      const currentScan = session.scans.find(scan => scan.id === session.currentScanId)
-        ?? session.scans[0]
-        ?? null;
-      const validIds = new Set(session.scans.map(scan => scan.id));
+      const currentScan =
+        session.scans.find((scan) => scan.id === session.currentScanId) ?? session.scans[0] ?? null;
+      const validIds = new Set(session.scans.map((scan) => scan.id));
 
       setProcessedScans(session.scans);
       setScanData(currentScan);
-      setSelectedScans(new Set(session.selectedScanIds.filter(id => validIds.has(id))));
+      setSelectedScans(new Set(session.selectedScanIds.filter((id) => validIds.has(id))));
       setDisplaySettings(normalizeDisplaySettings(session.displaySettings));
       setDistributionConfig(session.distributionConfig);
       setScanNotesById(session.scanNotesById ?? {});
@@ -498,19 +542,22 @@ const CscanVisualizer: React.FC = () => {
     }
   }, []);
 
-  const handleDeleteSession = useCallback(async (sessionId: string) => {
-    setSessionBusy(true);
-    setSessionError(null);
-    try {
-      await deleteCscanSession(sessionId);
-      await refreshSavedSessions();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete session';
-      setSessionError(message);
-    } finally {
-      setSessionBusy(false);
-    }
-  }, [refreshSavedSessions]);
+  const handleDeleteSession = useCallback(
+    async (sessionId: string) => {
+      setSessionBusy(true);
+      setSessionError(null);
+      try {
+        await deleteCscanSession(sessionId);
+        await refreshSavedSessions();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to delete session';
+        setSessionError(message);
+      } finally {
+        setSessionBusy(false);
+      }
+    },
+    [refreshSavedSessions]
+  );
 
   // Layout mode handlers
   const handleLayoutApply = useCallback(async () => {
@@ -545,19 +592,19 @@ const CscanVisualizer: React.FC = () => {
       const manager = getCscanWorkerManager();
       await manager.shiftScanAxes(shifts);
 
-      const scanIds = processedScans.map(s => s.id);
+      const scanIds = processedScans.map((s) => s.id);
       let result = await createCompositeWithWorker(scanIds, {
         onProgress: (progress) => setProcessingProgress(progress),
       });
 
       if (!result) {
-        const adjustedScans: CscanData[] = processedScans.map(scan => {
-          const shift = shifts.find(s => s.id === scan.id);
+        const adjustedScans: CscanData[] = processedScans.map((scan) => {
+          const shift = shifts.find((s) => s.id === scan.id);
           if (!shift) return scan;
           return {
             ...scan,
-            xAxis: scan.xAxis.map(v => v + shift.deltaX),
-            yAxis: scan.yAxis.map(v => v + shift.deltaY),
+            xAxis: scan.xAxis.map((v) => v + shift.deltaX),
+            yAxis: scan.yAxis.map((v) => v + shift.deltaY),
           };
         });
         result = await createCompositeFromDataWithWorker(adjustedScans, {
@@ -568,16 +615,19 @@ const CscanVisualizer: React.FC = () => {
       setProcessingProgress(null);
 
       if (result) {
-        const compositeSourceIds = new Set(processedScans.map(s => s.id));
-        setProcessedScans(prev => {
-          const nonSourceScans = prev.filter(s => !compositeSourceIds.has(s.id));
+        const compositeSourceIds = new Set(processedScans.map((s) => s.id));
+        setProcessedScans((prev) => {
+          const nonSourceScans = prev.filter((s) => !compositeSourceIds.has(s.id));
           return [...nonSourceScans, result.composite];
         });
         setScanData(result.composite);
         setSelectedScans(new Set());
-        setDisplaySettings(prev => ({ ...prev, range: { min: null, max: null } }));
+        setDisplaySettings((prev) => ({ ...prev, range: { min: null, max: null } }));
         manager.clearCache();
-        setStatusMessage({ type: 'success', message: `Layout composite created from ${processedScans.length} files` });
+        setStatusMessage({
+          type: 'success',
+          message: `Layout composite created from ${processedScans.length} files`,
+        });
         setTimeout(() => setStatusMessage(null), 4000);
       }
     } catch (error) {
@@ -606,8 +656,8 @@ const CscanVisualizer: React.FC = () => {
     if (threshold === null) return scanData;
     return {
       ...scanData,
-      data: scanData.data.map(row =>
-        row.map(val => (val !== null && val < threshold) ? null : val)
+      data: scanData.data.map((row) =>
+        row.map((val) => (val !== null && val < threshold ? null : val))
       ),
     };
   }, [scanData, displaySettings.minimumThreshold]);
@@ -636,18 +686,29 @@ const CscanVisualizer: React.FC = () => {
       setSaveName('');
       setSaveSectionType('Shell');
       setSaveCustomSection('');
-      const savedToLabel = effectiveVesselId ? 'Composite saved to project' : 'Composite saved to cloud';
+      const savedToLabel = effectiveVesselId
+        ? 'Composite saved to project'
+        : 'Composite saved to cloud';
       setStatusMessage({ type: 'success', message: savedToLabel });
       setTimeout(() => setStatusMessage(null), 3000);
     } catch (err) {
       console.error('Failed to save composite:', err);
-      const sizeMsg = err instanceof Error && err.message?.includes('maximum allowed size')
-        ? ' — file too large for storage'
-        : '';
+      const sizeMsg =
+        err instanceof Error && err.message?.includes('maximum allowed size')
+          ? ' — file too large for storage'
+          : '';
       setStatusMessage({ type: 'error', message: `Failed to save composite${sizeMsg}` });
       setTimeout(() => setStatusMessage(null), 5000);
     }
-  }, [effectiveScanData, user, saveName, saveVesselId, saveSectionType, saveCustomSection, saveComposite]);
+  }, [
+    effectiveScanData,
+    user,
+    saveName,
+    saveVesselId,
+    saveSectionType,
+    saveCustomSection,
+    saveComposite,
+  ]);
 
   // Export handlers
   const handleExportImage = useCallback(async () => {
@@ -707,12 +768,15 @@ const CscanVisualizer: React.FC = () => {
     setShowExportMenu(false);
   }, [effectiveScanData]);
 
-  const scanNotes = scanData ? scanNotesById[scanData.id] ?? '' : '';
+  const scanNotes = scanData ? (scanNotesById[scanData.id] ?? '') : '';
 
-  const handleScanNotesChange = useCallback((notes: string) => {
-    if (!scanData) return;
-    setScanNotesById(prev => ({ ...prev, [scanData.id]: notes }));
-  }, [scanData]);
+  const handleScanNotesChange = useCallback(
+    (notes: string) => {
+      if (!scanData) return;
+      setScanNotesById((prev) => ({ ...prev, [scanData.id]: notes }));
+    },
+    [scanData]
+  );
 
   const handleExportAnnotatedImage = useCallback(async () => {
     if (!scanData || !canvasRef.current) return;
@@ -747,8 +811,10 @@ const CscanVisualizer: React.FC = () => {
     <div className="h-full w-full flex flex-col bg-gray-900 overflow-hidden">
       {/* Project context banner */}
       {projectId && (
-        <div className="flex items-center gap-2 px-4 py-1.5 text-xs border-b border-blue-500/20"
-          style={{ background: 'rgba(59,130,246,0.08)', color: '#60a5fa' }}>
+        <div
+          className="flex items-center gap-2 px-4 py-1.5 text-xs border-b border-blue-500/20"
+          style={{ background: 'rgba(59,130,246,0.08)', color: '#60a5fa' }}
+        >
           <FolderOpen size={13} />
           <span>Saving to project</span>
           {projectVesselId && <span className="text-blue-400/60">| Vessel linked</span>}
@@ -765,7 +831,7 @@ const CscanVisualizer: React.FC = () => {
         showStats={showStats}
         onToggleStats={() => setShowStats(!showStats)}
         layoutMode={layoutMode}
-        onToggleLayoutMode={() => setLayoutMode(prev => !prev)}
+        onToggleLayoutMode={() => setLayoutMode((prev) => !prev)}
         layoutModeDisabled={processedScans.length < 2}
         distributionConfig={distributionConfig}
         onDistributionConfigChange={setDistributionConfig}
@@ -813,9 +879,7 @@ const CscanVisualizer: React.FC = () => {
               <div className="text-center">
                 <Grid3x3 className="w-16 h-16 text-gray-600 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-400 mb-2">No C-Scan Loaded</h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  Upload C-Scan files to begin analysis
-                </p>
+                <p className="text-sm text-gray-500 mb-4">Upload C-Scan files to begin analysis</p>
                 <button
                   onClick={() => setLeftPanelOpen(true)}
                   className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
@@ -934,7 +998,7 @@ const CscanVisualizer: React.FC = () => {
             displaySettings={displaySettings}
             statsVisible={showStats}
             leftOffset={viewportInsetLeft + 16}
-            onClose={() => setDistributionConfig(prev => ({ ...prev, enabled: false }))}
+            onClose={() => setDistributionConfig((prev) => ({ ...prev, enabled: false }))}
           />
         )}
 
@@ -997,7 +1061,10 @@ const CscanVisualizer: React.FC = () => {
         )}
 
         {/* RIGHT TOOLBAR - floating overlay */}
-        <div className="absolute right-0 top-0 bottom-0 w-12 z-20 border-l border-gray-700 flex flex-col items-center py-4 space-y-4" style={{ backgroundColor: '#1f2937' }}>
+        <div
+          className="absolute right-0 top-0 bottom-0 w-12 z-20 border-l border-gray-700 flex flex-col items-center py-4 space-y-4"
+          style={{ backgroundColor: '#1f2937' }}
+        >
           <button
             onClick={handleOpenSessionDialog}
             className={`p-2 hover:bg-gray-700 rounded transition-colors ${showSessionDialog ? 'bg-blue-600' : ''}`}
@@ -1067,7 +1134,6 @@ const CscanVisualizer: React.FC = () => {
             </button>
           )}
         </div>
-
       </div>
 
       {/* Fixed Status Bar */}
@@ -1079,11 +1145,15 @@ const CscanVisualizer: React.FC = () => {
               <span>•</span>
               <span>{scanData.filename}</span>
               <span>•</span>
-              <span>Size: {scanData.width}x{scanData.height}</span>
+              <span>
+                Size: {scanData.width}x{scanData.height}
+              </span>
               <span>•</span>
               <span>Valid: {scanData.validPoints?.toLocaleString() || 0} points</span>
               <span>•</span>
-              <span>Range: {dataMin.toFixed(2)} - {dataMax.toFixed(2)} mm</span>
+              <span>
+                Range: {dataMin.toFixed(2)} - {dataMax.toFixed(2)} mm
+              </span>
             </>
           )}
         </div>
@@ -1091,9 +1161,11 @@ const CscanVisualizer: React.FC = () => {
 
       {/* Status Message Toast */}
       {statusMessage && (
-        <div className={`fixed bottom-8 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-lg shadow-lg z-50 ${
-          statusMessage.type === 'success' ? 'bg-green-600' : 'bg-red-600'
-        } text-white text-sm`}>
+        <div
+          className={`fixed bottom-8 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-lg shadow-lg z-50 ${
+            statusMessage.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+          } text-white text-sm`}
+        >
           {statusMessage.message}
         </div>
       )}
@@ -1108,7 +1180,7 @@ const CscanVisualizer: React.FC = () => {
             className="rounded-lg p-6 shadow-xl min-w-[320px]"
             style={{
               backgroundColor: '#1f2937',
-              border: '1px solid #374151'
+              border: '1px solid #374151',
             }}
           >
             <div className="flex items-center gap-3 mb-4">
@@ -1124,7 +1196,7 @@ const CscanVisualizer: React.FC = () => {
                   className="h-full transition-all duration-200"
                   style={{
                     width: `${exportProgress.progress}%`,
-                    backgroundColor: '#3b82f6'
+                    backgroundColor: '#3b82f6',
                   }}
                 />
               </div>
@@ -1147,7 +1219,7 @@ const CscanVisualizer: React.FC = () => {
             className="rounded-lg p-6 shadow-xl min-w-[360px]"
             style={{
               backgroundColor: '#1f2937',
-              border: '1px solid #374151'
+              border: '1px solid #374151',
             }}
           >
             <div className="flex items-center gap-3 mb-4">
@@ -1163,14 +1235,16 @@ const CscanVisualizer: React.FC = () => {
                   className="h-full transition-all duration-200"
                   style={{
                     width: `${(processingProgress.current / processingProgress.total) * 100}%`,
-                    backgroundColor: '#3b82f6'
+                    backgroundColor: '#3b82f6',
                   }}
                 />
               </div>
             </div>
             <div className="flex justify-between text-xs" style={{ color: '#9ca3af' }}>
               <span className="truncate max-w-[240px]">{processingProgress.message}</span>
-              <span className="ml-2 whitespace-nowrap">{processingProgress.current}/{processingProgress.total}</span>
+              <span className="ml-2 whitespace-nowrap">
+                {processingProgress.current}/{processingProgress.total}
+              </span>
             </div>
             {processingProgress.memoryUsage && (
               <div className="mt-2 text-xs" style={{ color: '#6b7280' }}>
@@ -1226,8 +1300,14 @@ const CscanVisualizer: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-5 space-y-5" style={{ maxHeight: 'calc(82vh - 72px)', overflowY: 'auto' }}>
-              <div className="rounded-lg border border-gray-700 p-4" style={{ backgroundColor: '#111827' }}>
+            <div
+              className="p-5 space-y-5"
+              style={{ maxHeight: 'calc(82vh - 72px)', overflowY: 'auto' }}
+            >
+              <div
+                className="rounded-lg border border-gray-700 p-4"
+                style={{ backgroundColor: '#111827' }}
+              >
                 <div className="flex items-end gap-3">
                   <label className="flex-1">
                     <span className="block text-xs text-gray-400 mb-1">Session name</span>
@@ -1243,7 +1323,11 @@ const CscanVisualizer: React.FC = () => {
                     onClick={handleSaveSession}
                     disabled={sessionBusy || processedScans.length === 0}
                     className="px-4 py-2 text-sm rounded bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    title={processedScans.length === 0 ? 'Load a scan before saving a session' : 'Save current session'}
+                    title={
+                      processedScans.length === 0
+                        ? 'Load a scan before saving a session'
+                        : 'Save current session'
+                    }
                   >
                     <Save className="w-4 h-4" />
                     Save Current
@@ -1275,7 +1359,10 @@ const CscanVisualizer: React.FC = () => {
                 </div>
 
                 {savedSessions.length === 0 ? (
-                  <div className="rounded-lg border border-gray-700 px-4 py-8 text-center text-sm text-gray-500" style={{ backgroundColor: '#111827' }}>
+                  <div
+                    className="rounded-lg border border-gray-700 px-4 py-8 text-center text-sm text-gray-500"
+                    style={{ backgroundColor: '#111827' }}
+                  >
                     No saved sessions yet.
                   </div>
                 ) : (
@@ -1289,7 +1376,8 @@ const CscanVisualizer: React.FC = () => {
                         <div className="flex-1 min-w-0">
                           <div className="text-sm text-white truncate">{session.name}</div>
                           <div className="text-xs text-gray-500 mt-0.5">
-                            {session.scanCount} scan{session.scanCount !== 1 ? 's' : ''} - Saved {new Date(session.updatedAt).toLocaleString()}
+                            {session.scanCount} scan{session.scanCount !== 1 ? 's' : ''} - Saved{' '}
+                            {new Date(session.updatedAt).toLocaleString()}
                           </div>
                         </div>
                         <button

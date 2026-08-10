@@ -64,7 +64,15 @@ export type StampType = 'pass' | 'fail' | 'defect' | 'inspector' | 'date';
 export type NozzleOrientationMode = 'radial' | 'horizontal' | 'vertical-up' | 'vertical-down';
 
 export interface NozzleConfig {
+  /** Stable unique id, e.g. 'noz-1'. Referenced by Pipeline.nozzleId. Minted at
+   *  creation and backfilled deterministically at load for legacy saves (see
+   *  engine/nozzle-id.ts). NEVER an array index. */
+  id: string;
   name: string;
+  /** Body this nozzle mounts on. undefined = main shell (legacy path). When set
+   *  to an appendage id, `pos` is interpreted as mm along the appendage axis from
+   *  the junction and `angle` per the appendage datum (see engine/body-frame.ts). */
+  bodyId?: string;
   /** Distance from left tangent line in mm */
   pos: number;
   /** Projection from centerline in mm */
@@ -101,12 +109,18 @@ export interface NozzleConfig {
   repadOD?: number;
   /** Reinforcing pad thickness in mm. Defaults to 10. */
   repadThickness?: number;
+  /** Whether this nozzle is visible in the 3D scene */
+  visible?: boolean;
 }
 
 export type LiftingLugStyle = 'padEye' | 'trunnion';
 
 export interface LiftingLugConfig {
   name: string;
+  /** Body this lug mounts on. undefined = main shell (legacy path). When set to an
+   *  appendage id, `pos` is interpreted as mm along the appendage axis from the
+   *  junction and `angle` per the appendage datum (see engine/body-frame.ts). */
+  bodyId?: string;
   /** Distance from left tangent line in mm */
   pos: number;
   /** Degrees: 90 = Top, 270 = Bottom, 0 = Right, 180 = Left */
@@ -123,6 +137,8 @@ export interface LiftingLugConfig {
   thickness?: number;
   /** Optional hole diameter override in mm */
   holeDiameter?: number;
+  /** Whether this lifting lug is visible in the 3D scene */
+  visible?: boolean;
 }
 
 export interface LiftingLugSize {
@@ -161,12 +177,19 @@ export interface SaddleConfig {
   wearPlateArcOverhang?: number;
   /** Wear plate axial overhang beyond the saddle depth, per side, in mm. Defaults to 50. */
   wearPlateAxialOverhang?: number;
+  /** Whether this saddle is visible in the 3D scene */
+  visible?: boolean;
 }
 
 export type WeldType = 'circumferential' | 'longitudinal';
 
 export interface WeldConfig {
   name: string;
+  /** Body this weld mounts on. undefined = main shell (legacy path). When set to
+   *  an appendage id, `pos` is interpreted as mm along the appendage axis from the
+   *  junction and `angle` (long welds) per the appendage datum (see
+   *  engine/body-frame.ts). */
+  bodyId?: string;
   /** Weld seam type */
   type: WeldType;
   /** For circ welds: axial position. For long welds: start position. mm from left tangent */
@@ -179,6 +202,8 @@ export interface WeldConfig {
   capWidth?: number;
   /** Hex color string */
   color: string;
+  /** Whether this weld is visible in the 3D scene */
+  visible?: boolean;
 }
 
 export interface TextureConfig {
@@ -195,6 +220,8 @@ export interface TextureConfig {
   flipH: boolean;
   flipV: boolean;
   aspectRatio: number;
+  /** Whether this texture is visible in the 3D scene */
+  visible?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -208,6 +235,12 @@ export interface ScanCompositeConfig {
   name: string;
   /** Supabase record ID (if saved to cloud) */
   cloudId?: string;
+  /** Body this scan mounts on. undefined = main shell (legacy path). When set to
+   *  an appendage id, `indexStartMm` is interpreted as mm along the appendage
+   *  axis from the junction and `datumAngleDeg` per the appendage datum (see
+   *  engine/body-frame.ts). Appendage scans ignore `useGlobalOrigin` /
+   *  coordinateOrigin (main-shell concepts) in v1. */
+  bodyId?: string;
   /** 2D thickness matrix [rows][cols] - index axis x scan axis */
   data: (number | null)[][];
   /** Scan axis coordinates in mm (circumferential) */
@@ -248,6 +281,8 @@ export interface ScanCompositeConfig {
   sourceNdeFile?: string;
   /** Source NDE files that make up this composite, with spatial bounds */
   sourceFiles?: ScanCompositeSourceFile[];
+  /** Whether this scan composite is visible in the 3D scene */
+  visible?: boolean;
 }
 
 export interface ScanCompositeSourceFile {
@@ -280,10 +315,22 @@ export interface DomeScanConfig {
   name: string;
   cloudId?: string;
 
-  head: 'left' | 'right';
+  /** Body this dome scan drapes on. undefined = main-shell head (legacy path,
+   *  byte-identical geometry/serialization). When set to an appendage id the scan
+   *  sits on that appendage's END CLOSURE: `head` is 'end', the dome axis is the
+   *  appendage axis (outward), the dome dimensions come from the appendage diameter
+   *  and its endClosure headRatio, and centerTheta is measured from the appendage
+   *  datum (see engine/body-frame.ts). Valid only when the appendage's endClosure
+   *  is 'dished'. */
+  bodyId?: string;
+  /** Which closure the scan sits on. 'left' | 'right' select a main-shell head;
+   *  'end' is an appendage end closure and is valid ONLY with `bodyId` set (an
+   *  appendage has a single closure). */
+  head: 'left' | 'right' | 'end';
   /** Polar angle from dome apex in degrees (0 = apex, 90 = equator) */
   centerPhi: number;
-  /** Azimuthal angle around dome axis in degrees (0° = 3-o'clock, 90° = TDC) */
+  /** Azimuthal angle around dome axis in degrees (0° = 3-o'clock, 90° = TDC).
+   *  On an appendage closure, 0° = the appendage datum. */
   centerTheta: number;
 
   scanDirection: 'cw' | 'ccw';
@@ -315,6 +362,8 @@ export interface DomeScanConfig {
     minY: number;
     maxY: number;
   }>;
+  /** Whether this dome scan is visible in the 3D scene */
+  visible?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -327,6 +376,12 @@ export interface AnnotationShapeConfig {
   id: number;
   name: string;
   type: AnnotationShapeType;
+  /** Body this annotation is mounted on. undefined = main shell (legacy path,
+   *  byte-identical). When set to an appendage id, `pos` is mm along the
+   *  appendage axis from the junction and `angle` is in the appendage datum (see
+   *  engine/body-frame.ts); its stats/heatmap sample that body's composites and
+   *  dished-closure dome scans. An annotation belongs to exactly one body. */
+  bodyId?: string;
   /** Center position: mm from left tangent line */
   pos: number;
   /** Center angle: degrees around circumference (90 = top) */
@@ -404,6 +459,11 @@ export interface InspectionImageConfig {
 export interface CoverageRectConfig {
   id: number;
   name: string;
+  /** Body this coverage rect targets. undefined = main shell (legacy path). When
+   *  set to an appendage id, `pos` is interpreted as mm along the appendage axis
+   *  from the junction and `angle` per the appendage datum (see
+   *  engine/body-frame.ts); the rect contributes to that body's covered area. */
+  bodyId?: string;
   /** Center position: mm from left tangent line */
   pos: number;
   /** Center angle: degrees around circumference (90 = top) */
@@ -422,6 +482,8 @@ export interface CoverageRectConfig {
   fillOpacity: number;
   /** Per-item lock – prevents dragging when true */
   locked?: boolean;
+  /** Whether this coverage rectangle is visible in the 3D scene */
+  visible?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -443,6 +505,8 @@ export interface RulerConfig {
   color: string;
   /** Whether to show the distance label */
   showLabel: boolean;
+  /** Whether this ruler is visible in the 3D scene */
+  visible?: boolean;
 }
 
 export interface MeasurementConfig {
@@ -583,6 +647,60 @@ export interface CoverageTargets {
   leftHead: CoverageTargetEntry;
   cylinder: CoverageTargetEntry;
   rightHead: CoverageTargetEntry;
+  /** Per-appendage coverage targets, keyed by AppendageConfig.id. Additive
+   *  (design §9): legacy JSON without this key loads unchanged via the consumer's
+   *  `?? DEFAULT_TARGETS` defaulting. */
+  appendages?: Record<string, CoverageTargetEntry>;
+}
+
+// ---------------------------------------------------------------------------
+// Appendage Bodies (secondary sump/boot/riser sections mounted on the shell)
+// ---------------------------------------------------------------------------
+
+/** End-closure style for an appendage body's far end. */
+export type AppendageEndClosure = 'dished' | 'flat' | 'open';
+
+/**
+ * A cylindrical secondary body mounted perpendicular to the main shell. Its own
+ * local cylinder frame (see engine/body-frame.ts) carries scans, nozzles and
+ * stats in later phases; Phase 1 covers the entity, geometry and persistence.
+ * See docs/plans/2026-07-21-secondary-appendage-body-design.md §5.
+ */
+export interface AppendageConfig {
+  /** Stable unique id, e.g. 'app-1'. Referenced by attachables' bodyId. NEVER an array index. */
+  id: string;
+  /** Display name, e.g. "Sump" */
+  name: string;
+  /** Mount point on the main shell: mm from left tangent line */
+  mountPos: number;
+  /** Mount clock angle on the main shell: degrees, 90 = top, 270 = bottom */
+  mountAngle: number;
+  /** Inner diameter in mm */
+  diameter: number;
+  /** Cylinder length in mm, from main-shell outer surface to end-closure tangent line */
+  length: number;
+  /** Far-end closure style */
+  endClosure: AppendageEndClosure;
+  /** Head ratio for a dished closure (default 2.0); ignored otherwise */
+  headRatio?: number;
+  /** Optional girth-flange pair rendered at the junction */
+  flangeJoint?: { show: boolean; od?: number; thickness?: number };
+  /** Nominal wall thickness in mm (wall-loss); defaults to shellNominalThickness when absent */
+  nominalThickness?: number;
+  /** Whether the appendage is visible in the 3D scene */
+  visible?: boolean;
+  /** Whether the appendage is locked (not draggable) */
+  locked?: boolean;
+}
+
+/** A saved camera pose the user can recall from the Views dropdown / report. */
+export interface CameraBookmark {
+  id: string;
+  name: string;
+  /** Camera position in world units [x, y, z]. */
+  position: [number, number, number];
+  /** OrbitControls look-at target in world units [x, y, z]. */
+  target: [number, number, number];
 }
 
 export interface VesselState {
@@ -612,6 +730,8 @@ export interface VesselState {
   inspectionImages: InspectionImageConfig[];
   scanComposites: ScanCompositeConfig[];
   domeScanComposites: DomeScanConfig[];
+  /** Secondary appendage bodies (sumps/boots/risers) mounted on the shell */
+  appendages: AppendageConfig[];
   pipelines: Pipeline[];
   /** Reference drawings for report appendix (base64 image data) */
   referenceDrawings: ReferenceDrawing[];
@@ -639,6 +759,8 @@ export interface VesselState {
   annotationTablePosition?: [number, number, number];
   /** Saved size of the annotation summary table in px [width, height] */
   annotationTableSize?: [number, number];
+  /** Saved camera poses (view cube / bookmarks). Undefined ⇒ none (legacy shape). */
+  cameraBookmarks?: CameraBookmark[];
   visuals: VisualSettings;
 }
 
@@ -1060,8 +1182,15 @@ export interface FreeOrigin {
 
 export interface Pipeline {
   id: string;
-  /** Index into vesselState.nozzles — the connection origin. -1 for free-standing pipes. */
-  nozzleIndex: number;
+  /** Stable id of the nozzle this pipeline attaches to (NozzleConfig.id). Absent
+   *  for free-standing pipes (see freeOrigin). Stable across nozzle add/delete/
+   *  reorder — resolve via engine/nozzle-id.ts findNozzleById, never by position. */
+  nozzleId?: string;
+  /** @deprecated Legacy positional index into vesselState.nozzles (-1 = free).
+   *  Retained ONLY as a load-time migration input: the loader resolves it to
+   *  `nozzleId` once (engine/nozzle-id.ts migratePipelineNozzleRefs); saves never
+   *  write it. Do not read at runtime. */
+  nozzleIndex?: number;
   /** Pipe outside diameter in mm */
   pipeDiameter: number;
   /** Optional hex color override */
@@ -1070,7 +1199,7 @@ export interface Pipeline {
   segments: PipeSegment[];
   locked?: boolean;
   visible?: boolean;
-  /** Origin for free-standing pipes (nozzleIndex === -1). Position in mm, direction as unit vector. */
+  /** Origin for free-standing pipes (no nozzleId). Position in mm, direction as unit vector. */
   freeOrigin?: FreeOrigin;
 }
 
@@ -1100,6 +1229,7 @@ export const DEFAULT_VESSEL_STATE: VesselState = {
   inspectionImages: [],
   scanComposites: [],
   domeScanComposites: [],
+  appendages: [],
   pipelines: [],
   referenceDrawings: [],
   measurementConfig: {
@@ -1133,42 +1263,60 @@ export const DEFAULT_VESSEL_STATE: VesselState = {
 // ---------------------------------------------------------------------------
 
 export interface VesselCallbacks {
-  onNozzleMoved?: (index: number, newPos: number, newAngle: number) => void;
+  // Surface-mounted attachables take a trailing `bodyId` (undefined = main shell)
+  // so a cross-body drag can live-reassign the mount within one coalesced gesture
+  // (R2). The callback only writes bodyId into state when the model has boots, so
+  // single-body models keep the exact legacy `{ pos, angle }` update + history key.
+  onNozzleMoved?: (index: number, newPos: number, newAngle: number, bodyId?: string) => void;
   onSaddleMoved?: (index: number, newPos: number) => void;
   onTextureMoved?: (id: number, newPos: number, newAngle: number) => void;
   onNozzleSelected?: (index: number) => void;
   onSaddleSelected?: (index: number) => void;
   onTextureSelected?: (id: number) => void;
   onLugSelected?: (index: number) => void;
-  onLugMoved?: (index: number, newPos: number, newAngle: number) => void;
+  onLugMoved?: (index: number, newPos: number, newAngle: number, bodyId?: string) => void;
   onAnnotationSelected?: (id: number) => void;
-  onAnnotationMoved?: (id: number, newPos: number, newAngle: number) => void;
+  onAnnotationMoved?: (id: number, newPos: number, newAngle: number, bodyId?: string) => void;
   onAnnotationLabelOffsetChanged?: (id: number, offset: [number, number, number]) => void;
   onAnnotationCreated?: (
     type: AnnotationShapeType,
     pos: number,
     angle: number,
     width: number,
-    height: number
+    height: number,
+    bodyId?: string
   ) => void;
   onAnnotationPreview?: (
     type: AnnotationShapeType,
     pos: number,
     angle: number,
     width: number,
-    height: number
+    height: number,
+    bodyId?: string
   ) => void;
   onRulerCreated?: (startPos: number, startAngle: number, endPos: number, endAngle: number) => void;
   onRulerPreview?: (startPos: number, startAngle: number, endPos: number, endAngle: number) => void;
-  onCoverageRectCreated?: (pos: number, angle: number, width: number, height: number) => void;
-  onCoverageRectPreview?: (pos: number, angle: number, width: number, height: number) => void;
+  onCoverageRectCreated?: (
+    pos: number,
+    angle: number,
+    width: number,
+    height: number,
+    bodyId?: string
+  ) => void;
+  onCoverageRectPreview?: (
+    pos: number,
+    angle: number,
+    width: number,
+    height: number,
+    bodyId?: string
+  ) => void;
   onCoverageRectSelected?: (id: number) => void;
-  onCoverageRectMoved?: (id: number, newPos: number, newAngle: number) => void;
+  onCoverageRectMoved?: (id: number, newPos: number, newAngle: number, bodyId?: string) => void;
   onInspectionImageSelected?: (id: number) => void;
   onInspectionImageMoved?: (id: number, newPos: number, newAngle: number) => void;
   onInspectionImageLabelOffsetChanged?: (id: number, offset: [number, number, number]) => void;
   onWeldSelected?: (index: number) => void;
-  onWeldMoved?: (index: number, newPos: number, newAngle: number) => void;
+  onWeldMoved?: (index: number, newPos: number, newAngle: number, bodyId?: string) => void;
   onScanCompositeSelected?: (id: string) => void;
   onScanCompositeHover?: (
     id: string,
@@ -1179,7 +1327,12 @@ export interface VesselCallbacks {
     screenY: number
   ) => void;
   onDomeScanHover?: (info: DomeScanHoverInfo | null) => void;
-  onScanGizmoDatumMoved?: (compositeId: string, angleDeg: number, posMm: number) => void;
+  onScanGizmoDatumMoved?: (
+    compositeId: string,
+    angleDeg: number,
+    posMm: number,
+    bodyId?: string
+  ) => void;
   onScanGizmoDirectionToggle?: (
     compositeId: string,
     field: 'scanDirection' | 'indexDirection'
@@ -1192,6 +1345,8 @@ export interface VesselCallbacks {
   onDomeGizmoClicked?: (compositeId: string) => void;
   onPipeSegmentSelected?: (pipelineId: string, segmentIndex: number) => void;
   onPipeConnectionPointClicked?: (pipelineId: string) => void;
+  onAppendageSelected?: (index: number) => void;
+  onAppendageMoved?: (index: number, newMountPos: number, newMountAngle: number) => void;
   onDeselect?: () => void;
   onDragEnd?: () => void;
   onAnnotationTableMoved?: (position: [number, number, number]) => void;

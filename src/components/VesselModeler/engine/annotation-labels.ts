@@ -65,7 +65,7 @@ function getRadialDirection(angleRad: number, vesselState: VesselState): THREE.V
 /** Get the shell contact point for an annotation. */
 export function getAnnotationShellPoint(
   config: AnnotationShapeConfig,
-  vesselState: VesselState,
+  vesselState: VesselState
 ): THREE.Vector3 {
   const angleRad = (config.angle * Math.PI) / 180;
   return shellPoint(config.pos, angleRad, vesselState, 2);
@@ -77,7 +77,7 @@ export function getAnnotationShellPoint(
  */
 export function getAnnotationLeaderEndPosition(
   config: AnnotationShapeConfig,
-  vesselState: VesselState,
+  vesselState: VesselState
 ): THREE.Vector3 {
   const shell = getAnnotationShellPoint(config, vesselState);
 
@@ -85,7 +85,7 @@ export function getAnnotationLeaderEndPosition(
     return new THREE.Vector3(
       shell.x + config.labelOffset[0],
       shell.y + config.labelOffset[1],
-      shell.z + config.labelOffset[2],
+      shell.z + config.labelOffset[2]
     );
   }
 
@@ -102,7 +102,7 @@ export function getAnnotationLeaderEndPosition(
 export function createAnnotationLeaderLine(
   config: AnnotationShapeConfig,
   vesselState: VesselState,
-  isSelected: boolean,
+  isSelected: boolean
 ): THREE.Group {
   const group = new THREE.Group();
   group.userData = { annotationLeaderId: config.id };
@@ -137,7 +137,7 @@ export function createAnnotationLabel(
   vesselState: VesselState,
   _measurementConfig: MeasurementConfig,
   isSelected: boolean,
-  dragContext?: LabelDragContext,
+  dragContext?: LabelDragContext
 ): CSS2DObject {
   // Line 2: Scan (circumferential mm) and Index (axial mm) relative to global coordinate origin
   const origin = vesselState.coordinateOrigin ?? { indexMm: 0, scanMm: 0 };
@@ -200,7 +200,7 @@ export function attachFreeFormDrag(
   el: HTMLElement,
   itemId: number,
   itemType: 'annotation' | 'inspectionImage',
-  ctx: LabelDragContext,
+  ctx: LabelDragContext
 ): void {
   let isDragging = false;
   let pendingOffset: [number, number, number] | null = null;
@@ -215,10 +215,10 @@ export function attachFreeFormDrag(
     // Check if item is locked - prevent drag if so
     const currentState = ctx.getVesselState();
     if (itemType === 'annotation') {
-      const ann = currentState.annotations.find(a => a.id === itemId);
+      const ann = currentState.annotations.find((a) => a.id === itemId);
       if (ann?.locked) return;
     } else {
-      const img = currentState.inspectionImages.find(i => i.id === itemId);
+      const img = currentState.inspectionImages.find((i) => i.id === itemId);
       if (img?.locked) return;
     }
 
@@ -236,12 +236,12 @@ export function attachFreeFormDrag(
     let currentLabelPos: THREE.Vector3;
 
     if (itemType === 'annotation') {
-      const ann = state.annotations.find(a => a.id === itemId);
+      const ann = state.annotations.find((a) => a.id === itemId);
       if (!ann) return;
       currentLabelPos = getAnnotationLeaderEndPosition(ann, state);
     } else {
       // Import inspection image geometry lazily
-      const img = state.inspectionImages.find(i => i.id === itemId);
+      const img = state.inspectionImages.find((i) => i.id === itemId);
       if (!img) return;
       currentLabelPos = getInspectionImageLabelPos(img, state);
     }
@@ -268,11 +268,11 @@ export function attachFreeFormDrag(
     let shellPos: THREE.Vector3;
 
     if (itemType === 'annotation') {
-      const ann = state.annotations.find(a => a.id === itemId);
+      const ann = state.annotations.find((a) => a.id === itemId);
       if (!ann) return;
       shellPos = getAnnotationShellPoint(ann, state);
     } else {
-      const img = state.inspectionImages.find(i => i.id === itemId);
+      const img = state.inspectionImages.find((i) => i.id === itemId);
       if (!img) return;
       const angleRad = (img.angle * Math.PI) / 180;
       shellPos = shellPoint(img.pos, angleRad, state, 2);
@@ -292,16 +292,24 @@ export function attachFreeFormDrag(
       const newLabelPos = new THREE.Vector3(
         shellPos.x + offset[0],
         shellPos.y + offset[1],
-        shellPos.z + offset[2],
+        shellPos.z + offset[2]
       );
 
       // Find and update the CSS2DObject label position
       vesselGroup.traverse((obj) => {
         if (obj instanceof CSS2DObject) {
           const ud = obj.userData;
-          if (itemType === 'annotation' && ud.annotationId === itemId && ud.type === 'annotation-label') {
+          if (
+            itemType === 'annotation' &&
+            ud.annotationId === itemId &&
+            ud.type === 'annotation-label'
+          ) {
             obj.position.copy(newLabelPos);
-          } else if (itemType === 'inspectionImage' && ud.inspectionImageId === itemId && ud.type === 'inspection-image-label') {
+          } else if (
+            itemType === 'inspectionImage' &&
+            ud.inspectionImageId === itemId &&
+            ud.type === 'inspection-image-label'
+          ) {
             obj.position.copy(newLabelPos);
           }
         }
@@ -352,8 +360,13 @@ export function attachFreeFormDrag(
  * Uses labelOffset if set, otherwise radial * leaderLength.
  */
 function getInspectionImageLabelPos(
-  config: { pos: number; angle: number; leaderLength?: number; labelOffset?: [number, number, number] },
-  vesselState: VesselState,
+  config: {
+    pos: number;
+    angle: number;
+    leaderLength?: number;
+    labelOffset?: [number, number, number];
+  },
+  vesselState: VesselState
 ): THREE.Vector3 {
   const angleRad = (config.angle * Math.PI) / 180;
   const shell = shellPoint(config.pos, angleRad, vesselState, 2);
@@ -362,7 +375,7 @@ function getInspectionImageLabelPos(
     return new THREE.Vector3(
       shell.x + config.labelOffset[0],
       shell.y + config.labelOffset[1],
-      shell.z + config.labelOffset[2],
+      shell.z + config.labelOffset[2]
     );
   }
 
@@ -375,10 +388,7 @@ function getInspectionImageLabelPos(
 // Ruler Label (midpoint tooltip showing distance in mm)
 // ---------------------------------------------------------------------------
 
-export function createRulerLabel(
-  config: RulerConfig,
-  vesselState: VesselState,
-): CSS2DObject {
+export function createRulerLabel(config: RulerConfig, vesselState: VesselState): CSS2DObject {
   const distMm = computeRulerDistance(config, vesselState);
 
   const el = document.createElement('div');
@@ -400,10 +410,10 @@ export function createRulerLabel(
 
   let rLocal: number;
   if (midPos < 0) {
-    const ratio = Math.min(0.99, Math.abs(midPos / HEAD_DEPTH));
+    const ratio = Math.min(1, Math.abs(midPos / HEAD_DEPTH));
     rLocal = RADIUS * Math.sqrt(1 - ratio * ratio);
   } else if (midPos > TAN_TAN) {
-    const ratio = Math.min(0.99, Math.abs((midPos - TAN_TAN) / HEAD_DEPTH));
+    const ratio = Math.min(1, Math.abs((midPos - TAN_TAN) / HEAD_DEPTH));
     rLocal = RADIUS * Math.sqrt(1 - ratio * ratio);
   } else {
     rLocal = RADIUS;

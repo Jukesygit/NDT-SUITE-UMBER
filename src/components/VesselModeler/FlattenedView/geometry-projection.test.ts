@@ -11,9 +11,13 @@ import {
   angleToCircumMm,
   datumToCircumMm,
   projectNozzle,
+  projectCircWeld,
   projectLongWeld,
   projectSaddle,
   projectLiftingLug,
+  projectStripLongWeld,
+  projectStripLiftingLug,
+  projectStripNozzle,
   getCircumference,
   wrapCircumCenters,
   getAxialOrientation,
@@ -21,7 +25,13 @@ import {
   axialFrac,
   fitScale,
   circumDisplayMm,
+  developFootprintBoundary,
+  displayFootprintPolyline,
+  makeDevelopedFrame,
+  axialContentMm,
+  type DevelopedFrameParams,
 } from './geometry-projection';
+import { buildJunctionFootprint } from '../engine/junction-footprint';
 
 // ---------------------------------------------------------------------------
 // Convention under test
@@ -39,7 +49,7 @@ const OD = 1000;
 const CIRC = Math.PI * OD;
 
 function nozzle(angle: number): NozzleConfig {
-  return { name: 'N', pos: 1000, proj: 100, angle, size: 100 };
+  return { id: 'noz-1', name: 'N', pos: 1000, proj: 100, angle, size: 100 };
 }
 
 describe('flattened-view circumferential convention (TDC at top)', () => {
@@ -51,17 +61,22 @@ describe('flattened-view circumferential convention (TDC at top)', () => {
     expect(angleToCircumMm(270, OD)).toBeCloseTo(CIRC / 2, 6);
   });
 
-  it('places a 12-o\'clock nozzle at the top (cy = 0)', () => {
+  it("places a 12-o'clock nozzle at the top (cy = 0)", () => {
     expect(projectNozzle(nozzle(90), OD).cy).toBeCloseTo(0, 6);
   });
 
-  it('places a 3-o\'clock nozzle a quarter of the way down', () => {
+  it("places a 3-o'clock nozzle a quarter of the way down", () => {
     expect(projectNozzle(nozzle(0), OD).cy).toBeCloseTo(CIRC / 4, 6);
   });
 
   it('places a top longitudinal weld at the top (y = 0)', () => {
     const weld: WeldConfig = {
-      name: 'LW', type: 'longitudinal', pos: 0, endPos: 2000, angle: 90, color: '#fff',
+      name: 'LW',
+      type: 'longitudinal',
+      pos: 0,
+      endPos: 2000,
+      angle: 90,
+      color: '#fff',
     };
     expect(projectLongWeld(weld, OD).y1).toBeCloseTo(0, 6);
   });
@@ -72,12 +87,12 @@ describe('flattened-view circumferential convention (TDC at top)', () => {
     expect(rect.y + rect.height / 2).toBeCloseTo(CIRC / 2, 6);
   });
 
-  it('places a 12-o\'clock lifting lug at the top (cy = 0)', () => {
+  it("places a 12-o'clock lifting lug at the top (cy = 0)", () => {
     const lug: LiftingLugConfig = { name: 'L', pos: 1000, angle: 90, style: 'padEye', swl: '1t' };
     expect(projectLiftingLug(lug, OD).cy).toBeCloseTo(0, 6);
   });
 
-  it('maps a datum-0 scan (user TDC) to Y = 0, aligned with a 12-o\'clock nozzle', () => {
+  it("maps a datum-0 scan (user TDC) to Y = 0, aligned with a 12-o'clock nozzle", () => {
     expect(datumToCircumMm(0, OD)).toBeCloseTo(0, 6);
     expect(datumToCircumMm(0, OD)).toBeCloseTo(projectNozzle(nozzle(90), OD).cy, 6);
   });
@@ -133,11 +148,21 @@ describe('wrapCircumCenters (TDC seam wrapping)', () => {
 describe('axial axis orientation (scan-index, 0 on left)', () => {
   function composite(p: Partial<ScanCompositeConfig>): ScanCompositeConfig {
     return {
-      id: 'c', name: 'c', data: [[1]], xAxis: [0], yAxis: [0],
+      id: 'c',
+      name: 'c',
+      data: [[1]],
+      xAxis: [0],
+      yAxis: [0],
       stats: { min: 0, max: 1, mean: 0, median: 0, stdDev: 0 },
-      indexStartMm: 0, datumAngleDeg: 0, scanDirection: 'cw',
-      indexDirection: 'forward', orientationConfirmed: true,
-      colorScale: 'jet', rangeMin: null, rangeMax: null, opacity: 1,
+      indexStartMm: 0,
+      datumAngleDeg: 0,
+      scanDirection: 'cw',
+      indexDirection: 'forward',
+      orientationConfirmed: true,
+      colorScale: 'jet',
+      rangeMin: null,
+      rangeMax: null,
+      opacity: 1,
       ...p,
     } as ScanCompositeConfig;
   }
@@ -237,7 +262,7 @@ describe('circumDisplayMm (circumferential handedness flip)', () => {
     expect(circumDisplayMm(50, C, true)).toBeCloseTo(50, 6);
   });
 
-  it('swaps the quarter points (3 o\'clock ↔ 9 o\'clock) when reversed', () => {
+  it("swaps the quarter points (3 o'clock ↔ 9 o'clock) when reversed", () => {
     expect(circumDisplayMm(25, C, true)).toBeCloseTo(75, 6);
     expect(circumDisplayMm(75, C, true)).toBeCloseTo(25, 6);
   });
@@ -250,5 +275,371 @@ describe('circumDisplayMm (circumferential handedness flip)', () => {
 
   it('falls back to the raw value for non-positive circumference', () => {
     expect(circumDisplayMm(25, 0, true)).toBe(25);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Appendage junction footprints developed onto the main shell
+// ---------------------------------------------------------------------------
+// A footprint boundary carries VESSEL-convention angles (90 = TDC), exactly like
+// nozzle markers, so it maps through angleToCircumMm (never datumToCircumMm). The
+// developed polyline stays continuous about the mount meridian so it does not
+// tear at the TDC seam, and it flips with the reverse-scan view like the markers.
+// ---------------------------------------------------------------------------
+describe('developFootprintBoundary (footprint → developed coords)', () => {
+  const R = OD / 2; // shell radius
+
+  it('centres a TDC-mounted footprint (mountAngle 90) on Y = 0', () => {
+    const fp = buildJunctionFootprint(R, {
+      id: 'a',
+      mountPos: 1000,
+      mountAngle: 90,
+      diameter: 200,
+    });
+    const dev = developFootprintBoundary(fp.boundary, 90, OD);
+    expect(dev.centerMm).toBeCloseTo(0, 6);
+    // Straddles the seam: some points above (yMm < 0), some below (yMm > 0).
+    const ys = dev.points.map((p) => p.yMm);
+    expect(Math.min(...ys)).toBeLessThan(0);
+    expect(Math.max(...ys)).toBeGreaterThan(0);
+    expect(dev.halfExtentMm).toBeGreaterThan(0);
+    // x is the axial position (mount ± the axial half-extent = radius).
+    const xs = dev.points.map((p) => p.x);
+    expect(Math.min(...xs)).toBeCloseTo(900, 4); // mountPos - r
+    expect(Math.max(...xs)).toBeCloseTo(1100, 4); // mountPos + r
+  });
+
+  it('centres the footprint on the same Y a nozzle at the mount angle uses', () => {
+    for (const mountAngle of [0, 45, 90, 210, 270]) {
+      const fp = buildJunctionFootprint(R, { id: 'a', mountPos: 500, mountAngle, diameter: 300 });
+      const dev = developFootprintBoundary(fp.boundary, mountAngle, OD);
+      // projectNozzle uses the same angleToCircumMm — centres must coincide.
+      expect(dev.centerMm).toBeCloseTo(projectNozzle(nozzle(mountAngle), OD).cy, 6);
+    }
+  });
+
+  it('keeps points continuous about the centre (no seam tear at TDC)', () => {
+    const fp = buildJunctionFootprint(R, {
+      id: 'a',
+      mountPos: 1000,
+      mountAngle: 90,
+      diameter: 400,
+    });
+    const dev = developFootprintBoundary(fp.boundary, 90, OD);
+    for (const p of dev.points) {
+      expect(Math.abs(p.yMm - dev.centerMm)).toBeLessThanOrEqual(dev.halfExtentMm + 1e-6);
+    }
+  });
+
+  it('produces two seam-wrapped copies for a TDC footprint (crosses Y = 0)', () => {
+    const fp = buildJunctionFootprint(R, {
+      id: 'a',
+      mountPos: 1000,
+      mountAngle: 90,
+      diameter: 200,
+    });
+    const dev = developFootprintBoundary(fp.boundary, 90, OD);
+    const centers = wrapCircumCenters(dev.centerMm, dev.halfExtentMm, CIRC);
+    expect(centers).toHaveLength(2);
+    expect(centers).toContain(dev.centerMm);
+    expect(centers).toContain(dev.centerMm + CIRC);
+  });
+
+  it('does not wrap a footprint well away from the seam (mid angle)', () => {
+    const fp = buildJunctionFootprint(R, { id: 'a', mountPos: 1000, mountAngle: 0, diameter: 200 });
+    const dev = developFootprintBoundary(fp.boundary, 0, OD);
+    expect(dev.centerMm).toBeCloseTo(CIRC / 4, 6);
+    expect(wrapCircumCenters(dev.centerMm, dev.halfExtentMm, CIRC)).toEqual([dev.centerMm]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Appendage strip weld/lug projection — datum convention (0 = datum meridian)
+// ---------------------------------------------------------------------------
+// A weld/lug tagged with an appendage bodyId lives on that appendage's developed
+// strip. Its angle is the appendage DATUM convention (0 = datum meridian at the
+// strip top) — the SAME convention the strip scan overlay + coverage rects use, and
+// the same angle engine/body-frame.ts feeds to the 3D surfacePoint. So the strip
+// projectors map angle through datumToCircumMm (appendage 0 = datum), NOT
+// angleToCircumMm (vessel 90 = TDC). A circumferential weld is angle-free (a full
+// ring), so it reuses projectCircWeld with the appendage OD.
+// ---------------------------------------------------------------------------
+describe('appendage strip weld/lug projection (datum convention)', () => {
+  const APP_OD = 400;
+  const APP_CIRC = Math.PI * APP_OD;
+
+  function weld(p: Partial<WeldConfig>): WeldConfig {
+    return { name: 'W', type: 'longitudinal', pos: 200, color: '#fff', ...p } as WeldConfig;
+  }
+  function lug(p: Partial<LiftingLugConfig>): LiftingLugConfig {
+    return { name: 'L', pos: 200, angle: 0, style: 'padEye', swl: '1t', ...p } as LiftingLugConfig;
+  }
+
+  it('places a datum-0 longitudinal weld at the strip top (y = 0)', () => {
+    expect(projectStripLongWeld(weld({ bodyId: 'a', angle: 0 }), APP_OD).y1).toBeCloseTo(0, 6);
+  });
+
+  it('maps the long-weld angle through datumToCircumMm, NOT angleToCircumMm', () => {
+    for (const angle of [0, 30, 90, 210]) {
+      const y = projectStripLongWeld(weld({ bodyId: 'a', angle }), APP_OD).y1;
+      expect(y).toBeCloseTo(datumToCircumMm(angle, APP_OD), 6);
+    }
+    // A datum-90 weld is a quarter-turn from the datum, NOT at the strip top.
+    expect(projectStripLongWeld(weld({ bodyId: 'a', angle: 90 }), APP_OD).y1).not.toBeCloseTo(0, 3);
+    expect(angleToCircumMm(90, APP_OD)).toBeCloseTo(0, 6); // guard: the vessel helper WOULD say top
+  });
+
+  it('runs the long weld from pos to endPos along the appendage axis (physical, unmirrored)', () => {
+    const lw = projectStripLongWeld(
+      weld({ bodyId: 'a', angle: 45, pos: 120, endPos: 700 }),
+      APP_OD
+    );
+    expect(lw.x1).toBe(120);
+    expect(lw.x2).toBe(700);
+    expect(lw.y1).toBeCloseTo(lw.y2, 9); // horizontal
+  });
+
+  it('defaults an undefined long-weld angle to 90, matching the 3D appendage builder', () => {
+    const lw = projectStripLongWeld(weld({ bodyId: 'a', angle: undefined }), APP_OD);
+    expect(lw.y1).toBeCloseTo(datumToCircumMm(90, APP_OD), 6);
+  });
+
+  it('places a datum-0 lug at the strip top (cy = 0) at its axial pos', () => {
+    const m = projectStripLiftingLug(lug({ bodyId: 'a', angle: 0, pos: 250 }), APP_OD);
+    expect(m.cy).toBeCloseTo(0, 6);
+    expect(m.cx).toBe(250);
+  });
+
+  it('maps the lug angle through datumToCircumMm (appendage datum), not the vessel convention', () => {
+    for (const angle of [0, 45, 180, 270]) {
+      expect(projectStripLiftingLug(lug({ bodyId: 'a', angle }), APP_OD).cy).toBeCloseTo(
+        datumToCircumMm(angle, APP_OD),
+        6
+      );
+    }
+  });
+
+  it('aligns a strip weld and a strip lug at the same datum angle (share cy)', () => {
+    // Same as the scan overlay: a datum-θ feature lands at datumToCircumMm(θ),
+    // so welds/lugs line up with the body scan on the strip.
+    for (const angle of [0, 60, 200]) {
+      const wy = projectStripLongWeld(weld({ bodyId: 'a', angle }), APP_OD).y1;
+      const ly = projectStripLiftingLug(lug({ bodyId: 'a', angle }), APP_OD).cy;
+      expect(wy).toBeCloseTo(ly, 9);
+    }
+  });
+
+  it('reuses projectCircWeld for a strip circ weld: vertical full-height line at pos', () => {
+    const cw = projectCircWeld(weld({ bodyId: 'a', type: 'circumferential', pos: 333 }), APP_OD);
+    expect(cw.x1).toBe(333);
+    expect(cw.x2).toBe(333); // vertical
+    expect(cw.y1).toBe(0);
+    expect(cw.y2).toBeCloseTo(APP_CIRC, 6); // spans the full appendage circumference
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Appendage strip nozzle projection — datum convention (0 = datum meridian)
+// ---------------------------------------------------------------------------
+// A nozzle tagged with an appendage bodyId lives on that appendage's developed
+// strip. Its angle is the appendage DATUM convention (0 = datum meridian at the
+// strip top) — the SAME angle vessel-geometry.ts feeds straight into
+// bodyFrame.surfacePoint(posMm, n.angle) for the 3D appendage nozzle (no ±90;
+// vessel-geometry.ts:469). So projectStripNozzle maps angle through datumToCircumMm
+// (appendage 0 = datum), NOT angleToCircumMm (vessel 90 = TDC). The bore radius is
+// derived exactly as the main-surface projectNozzle (size / 2).
+// ---------------------------------------------------------------------------
+describe('appendage strip nozzle projection (datum convention)', () => {
+  const APP_OD = 400;
+
+  function nozzle(p: Partial<NozzleConfig>): NozzleConfig {
+    return { name: 'N', pos: 200, proj: 100, angle: 0, size: 80, ...p } as NozzleConfig;
+  }
+
+  it('places a datum-0 nozzle at the strip top (cy = 0) at its axial pos', () => {
+    const c = projectStripNozzle(nozzle({ bodyId: 'a', angle: 0, pos: 250 }), APP_OD);
+    expect(c.cy).toBeCloseTo(0, 6);
+    expect(c.cx).toBe(250);
+  });
+
+  it('maps the nozzle angle through datumToCircumMm, NOT angleToCircumMm', () => {
+    for (const angle of [0, 30, 90, 210]) {
+      expect(projectStripNozzle(nozzle({ bodyId: 'a', angle }), APP_OD).cy).toBeCloseTo(
+        datumToCircumMm(angle, APP_OD),
+        6
+      );
+    }
+    // A datum-90 nozzle is a quarter-turn from the datum, NOT at the strip top.
+    expect(projectStripNozzle(nozzle({ bodyId: 'a', angle: 90 }), APP_OD).cy).not.toBeCloseTo(0, 3);
+    expect(angleToCircumMm(90, APP_OD)).toBeCloseTo(0, 6); // guard: the vessel helper WOULD say top
+  });
+
+  it('derives the bore radius exactly as the main-surface projectNozzle (size / 2)', () => {
+    for (const size of [40, 80, 305]) {
+      const strip = projectStripNozzle(nozzle({ bodyId: 'a', size }), APP_OD);
+      const main = projectNozzle(nozzle({ size }), OD);
+      expect(strip.radius).toBe(size / 2);
+      expect(strip.radius).toBe(main.radius); // same size ⇒ same bore radius on either surface
+    }
+  });
+
+  it('aligns a strip nozzle with a strip lug/weld at the same datum angle (share cy)', () => {
+    // A datum-θ feature lands at datumToCircumMm(θ) regardless of feature type, so a
+    // nozzle lines up with the body scan and its neighbours on the strip.
+    for (const angle of [0, 60, 200]) {
+      const ny = projectStripNozzle(nozzle({ bodyId: 'a', angle }), APP_OD).cy;
+      const ly = projectStripLiftingLug(
+        { name: 'L', pos: 200, angle, style: 'padEye', swl: '1t' } as LiftingLugConfig,
+        APP_OD
+      ).cy;
+      expect(ny).toBeCloseTo(ly, 9);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// makeDevelopedFrame — orientation-aware developed→canvas mapping
+// ---------------------------------------------------------------------------
+// Horizontal reduces BYTE-FOR-BYTE to the historical toCanvasX/toCanvasY (axial→X,
+// circumferential→Y). Vertical presents the developed plane PORTRAIT: axial runs
+// down screen-Y (top of vessel at top), circumference along screen-X (TDC = the
+// LEFT seam edge) — a pure transpose so longitudinal scan strips read as vertical
+// bands. The reverse-scan mirror + circumferential handedness flip still apply.
+// ---------------------------------------------------------------------------
+describe('makeDevelopedFrame (orientation-aware screen mapping)', () => {
+  const P: DevelopedFrameParams = {
+    orientation: 'horizontal',
+    pxPerMm: 2,
+    marginX: 5,
+    marginY: 7,
+    zoom: 1,
+    offsetX: 0,
+    offsetY: 0,
+    originX: 70,
+    originY: 80,
+    vesselLength: 1000,
+    circumference: 800,
+    reversed: false,
+  };
+
+  it('horizontal reduces to the historical toCanvasX/toCanvasY arithmetic', () => {
+    const f = makeDevelopedFrame(P);
+    // px = originX + marginX + axialContent·k ; py = originY + marginY + circDisp·k
+    expect(f.px(100, 200)).toBeCloseTo(70 + 5 + 100 * 2, 6);
+    expect(f.py(100, 200)).toBeCloseTo(80 + 7 + 200 * 2, 6);
+    // A 12-o'clock feature (circ 0) sits at the TOP (py = origin), any axial X.
+    expect(f.py(300, 0)).toBeCloseTo(80 + 7, 6);
+  });
+
+  it('vertical transposes: axial → screen-Y (down), circumference → screen-X', () => {
+    const f = makeDevelopedFrame({ ...P, orientation: 'vertical' });
+    // px now driven by circumference, py by axial (the transpose).
+    expect(f.px(100, 200)).toBeCloseTo(70 + 5 + 200 * 2, 6);
+    expect(f.py(100, 200)).toBeCloseTo(80 + 7 + 100 * 2, 6);
+  });
+
+  it('vertical puts TDC (circ 0) on the LEFT seam edge and axial increasing downward', () => {
+    const f = makeDevelopedFrame({ ...P, orientation: 'vertical' });
+    const leftEdge = 70 + 5; // originX + marginX
+    // A TDC feature (circ 0) at two axial positions: same X (left), Y grows with pos.
+    expect(f.px(200, 0)).toBeCloseTo(leftEdge, 6);
+    expect(f.px(600, 0)).toBeCloseTo(leftEdge, 6);
+    expect(f.py(600, 0)).toBeGreaterThan(f.py(200, 0)); // top of vessel at top
+  });
+
+  it('a nozzle at angle 90 (TDC) / pos P lands consistently in each orientation', () => {
+    const pos = 300;
+    const noz = projectNozzle(nozzle(90), P.circumference / Math.PI); // OD so π·OD = circumference
+    expect(noz.cy).toBeCloseTo(0, 6); // TDC → circ 0
+    const h = makeDevelopedFrame(P);
+    const v = makeDevelopedFrame({ ...P, orientation: 'vertical' });
+    // Horizontal: axial along X, TDC at top (py = origin+margin).
+    expect(h.px(pos, noz.cy)).toBeCloseTo(70 + 5 + pos * 2, 6);
+    expect(h.py(pos, noz.cy)).toBeCloseTo(80 + 7, 6);
+    // Vertical: TDC on the left edge, axial down.
+    expect(v.px(pos, noz.cy)).toBeCloseTo(70 + 5, 6);
+    expect(v.py(pos, noz.cy)).toBeCloseTo(80 + 7 + pos * 2, 6);
+  });
+
+  it('hover round-trips (axialMmAt / circMmAt invert px / py) in both orientations', () => {
+    for (const orientation of ['horizontal', 'vertical'] as const) {
+      for (const reversed of [false, true]) {
+        const f = makeDevelopedFrame({
+          ...P,
+          orientation,
+          reversed,
+          zoom: 1.3,
+          offsetX: 11,
+          offsetY: -9,
+        });
+        // Interior circ values only (circ = circumference is the seam ≡ 0).
+        for (const [a, c] of [
+          [0, 0],
+          [250, 333],
+          [1000, 799],
+          [640, 120],
+        ]) {
+          const x = f.px(a, c);
+          const y = f.py(a, c);
+          expect(f.axialMmAt(x, y)).toBeCloseTo(a, 4);
+          expect(f.circMmAt(x, y)).toBeCloseTo(c, 4);
+        }
+      }
+    }
+  });
+
+  it('applies the reverse-scan axial mirror along whichever screen axis axial occupies', () => {
+    const h = makeDevelopedFrame({ ...P, reversed: true });
+    const v = makeDevelopedFrame({ ...P, orientation: 'vertical', reversed: true });
+    // axialContent mirrors: pos 0 → far end (length), length → 0.
+    expect(axialContentMm(0, P.vesselLength, true)).toBeCloseTo(P.vesselLength, 6);
+    // Horizontal mirror shows on X; vertical mirror shows on Y.
+    expect(h.px(0, 0)).toBeGreaterThan(h.px(P.vesselLength, 0));
+    expect(v.py(0, 0)).toBeGreaterThan(v.py(P.vesselLength, 0));
+  });
+
+  it('collapses px/py to the plot origin and inverses to 0 for a degenerate scale', () => {
+    const f = makeDevelopedFrame({ ...P, pxPerMm: 0 });
+    expect(f.px(500, 400)).toBe(P.originX);
+    expect(f.py(500, 400)).toBe(P.originY);
+    expect(f.axialMmAt(123, 456)).toBe(0);
+    expect(f.circMmAt(123, 456)).toBe(0);
+  });
+});
+
+describe('displayFootprintPolyline (handedness flip, nozzle-consistent)', () => {
+  const R = OD / 2;
+
+  it('is identity when not reversed', () => {
+    const fp = buildJunctionFootprint(R, { id: 'a', mountPos: 800, mountAngle: 30, diameter: 250 });
+    const dev = developFootprintBoundary(fp.boundary, 30, OD);
+    const shown = displayFootprintPolyline(dev, CIRC, false);
+    expect(shown.centerMm).toBeCloseTo(dev.centerMm, 9);
+    expect(shown.points).toEqual(dev.points);
+  });
+
+  it('flips the centre exactly like a reversed nozzle marker', () => {
+    for (const mountAngle of [0, 45, 210, 270]) {
+      const fp = buildJunctionFootprint(R, { id: 'a', mountPos: 500, mountAngle, diameter: 300 });
+      const dev = developFootprintBoundary(fp.boundary, mountAngle, OD);
+      const shown = displayFootprintPolyline(dev, CIRC, true);
+      // A reversed nozzle at the same angle is placed at circumDisplayMm(cy).
+      const nozzleReversedCy = circumDisplayMm(
+        projectNozzle(nozzle(mountAngle), OD).cy,
+        CIRC,
+        true
+      );
+      expect(shown.centerMm).toBeCloseTo(nozzleReversedCy, 6);
+    }
+  });
+
+  it('preserves continuity and half-extent under the flip', () => {
+    const fp = buildJunctionFootprint(R, { id: 'a', mountPos: 500, mountAngle: 90, diameter: 400 });
+    const dev = developFootprintBoundary(fp.boundary, 90, OD);
+    const shown = displayFootprintPolyline(dev, CIRC, true);
+    expect(shown.halfExtentMm).toBeCloseTo(dev.halfExtentMm, 9);
+    for (const p of shown.points) {
+      expect(Math.abs(p.yMm - shown.centerMm)).toBeLessThanOrEqual(shown.halfExtentMm + 1e-6);
+    }
   });
 });

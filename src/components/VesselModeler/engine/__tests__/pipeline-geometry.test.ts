@@ -134,7 +134,6 @@ const ringMat = new THREE.MeshBasicMaterial();
 function freePipeline(segment: PipeSegment): Pipeline {
   return {
     id: 'pipe-1',
-    nozzleIndex: -1,
     pipeDiameter: 100,
     segments: [segment],
     freeOrigin: { position: [0, 0, 0], direction: [0, 1, 0] },
@@ -145,7 +144,6 @@ function freePipeline(segment: PipeSegment): Pipeline {
 function freeMultiSegmentPipeline(segments: PipeSegment[]): Pipeline {
   return {
     id: 'pipe-1',
-    nozzleIndex: -1,
     pipeDiameter: 100,
     segments,
     freeOrigin: { position: [0, 0, 0], direction: [0, 1, 0] },
@@ -215,7 +213,7 @@ describe('buildPipelineGroup — dome termination', () => {
 
 describe('getConnectionPoints — dome termination', () => {
   function makeNozzle(overrides: Partial<NozzleConfig> = {}): NozzleConfig {
-    return { name: 'N', pos: 0, proj: 300, angle: 90, size: 100, ...overrides };
+    return { id: 'noz-1', name: 'N', pos: 0, proj: 300, angle: 90, size: 100, ...overrides };
   }
 
   it('yields no endpoint for a dome-terminated pipeline', () => {
@@ -228,7 +226,7 @@ describe('getConnectionPoints — dome termination', () => {
 
     const pipeline: Pipeline = {
       id: 'pipe-1',
-      nozzleIndex: 0,
+      nozzleId: 'noz-1',
       pipeDiameter: 100,
       segments: [domeSegment()],
     };
@@ -245,7 +243,7 @@ describe('getConnectionPoints — dome termination', () => {
 
     const pipeline: Pipeline = {
       id: 'pipe-1',
-      nozzleIndex: 0,
+      nozzleId: 'noz-1',
       pipeDiameter: 100,
       segments: [{ id: 'straight-1', type: 'straight', rotation: 0, length: 300 }],
     };

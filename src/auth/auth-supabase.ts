@@ -15,304 +15,330 @@ const sb = supabase!;
 // ── Supabase Initialization ────────────────────────────────────────────────
 
 export async function initializeSupabase(this: any): Promise<void> {
-    const INIT_TIMEOUT = 10000; // 10 seconds
+  const INIT_TIMEOUT = 10000; // 10 seconds
 
-    const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Supabase initialization timed out')), INIT_TIMEOUT),
-    );
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Supabase initialization timed out')), INIT_TIMEOUT)
+  );
 
-    try {
-        const sessionPromise = sb.auth.getSession();
-        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
+  try {
+    const sessionPromise = sb.auth.getSession();
+    const {
+      data: { session },
+    } = await Promise.race([sessionPromise, timeoutPromise]);
 
-        if (session?.user) {
-            await this.loadUserProfile(session.user.id);
-        }
-    } catch (_error) {
-        // Allow app to continue - user will be prompted to login
+    if (session?.user) {
+      // Session restored from persistence at boot — flag for the banner (H3).
+      this.sessionWasRestored = true;
+      await this.loadUserProfile(session.user.id);
     }
+  } catch (_error) {
+    // Allow app to continue - user will be prompted to login
+  }
 
-    // Prevent duplicate listener registration (e.g., during HMR)
-    if (this._authSubscription) {
-        this._authSubscription.unsubscribe();
-        this._authSubscription = null;
-    }
+  // Prevent duplicate listener registration (e.g., during HMR)
+  if (this._authSubscription) {
+    this._authSubscription.unsubscribe();
+    this._authSubscription = null;
+  }
 
-    // Listen for auth state changes
-    const { data: { subscription } } = sb.auth.onAuthStateChange(async (event: string, session: any) => {
-        if (event === 'PASSWORD_RECOVERY') {
-            window.dispatchEvent(new CustomEvent('passwordRecoveryMode', { detail: { active: true } }));
-            return;
-        } else if (event === 'SIGNED_IN') {
-            // loginSupabase handles the full login flow including 2FA checks.
-            // Dispatching userLoggedIn here would set user in AuthContext before
-            // the 2FA status is known, briefly making isAuthenticated=true.
-        } else if (event === 'USER_UPDATED') {
-            if (session?.user) {
-                await this.loadUserProfile(session.user.id);
-                window.dispatchEvent(new CustomEvent('authStateChanged'));
-            }
-        } else if (event === 'SIGNED_OUT') {
-            // Verify session is truly gone (Supabase can fire spurious SIGNED_OUT during token rotation)
-            await new Promise(resolve => setTimeout(resolve, 500));
-            try {
-                const { data: { session: currentSession } } = await sb.auth.getSession();
-                if (currentSession?.user) {
-                    return; // Spurious SIGNED_OUT — session is still valid
-                }
-            } catch (_e) {
-                // If getSession fails, treat as truly signed out
-            }
-            this.currentUser = null;
-            this.currentProfile = null;
-            window.dispatchEvent(new CustomEvent('authStateChanged'));
-        } else if (event === 'TOKEN_REFRESHED') {
-            if (session?.user && !this.currentUser) {
-                await this.loadUserProfile(session.user.id);
-                window.dispatchEvent(new CustomEvent('authStateChanged'));
-            }
-        } else if (session?.user && !this.currentUser) {
-            await this.loadUserProfile(session.user.id);
-            window.dispatchEvent(new CustomEvent('authStateChanged'));
+  // Listen for auth state changes
+  const {
+    data: { subscription },
+  } = sb.auth.onAuthStateChange(async (event: string, session: any) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      window.dispatchEvent(new CustomEvent('passwordRecoveryMode', { detail: { active: true } }));
+      return;
+    } else if (event === 'SIGNED_IN') {
+      // loginSupabase handles the full login flow including 2FA checks.
+      // Dispatching userLoggedIn here would set user in AuthContext before
+      // the 2FA status is known, briefly making isAuthenticated=true.
+    } else if (event === 'USER_UPDATED') {
+      if (session?.user) {
+        await this.loadUserProfile(session.user.id);
+        window.dispatchEvent(new CustomEvent('authStateChanged'));
+      }
+    } else if (event === 'SIGNED_OUT') {
+      // Verify session is truly gone (Supabase can fire spurious SIGNED_OUT during token rotation)
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      try {
+        const {
+          data: { session: currentSession },
+        } = await sb.auth.getSession();
+        if (currentSession?.user) {
+          return; // Spurious SIGNED_OUT — session is still valid
         }
-    });
-    this._authSubscription = subscription;
+      } catch (_e) {
+        // If getSession fails, treat as truly signed out
+      }
+      this.currentUser = null;
+      this.currentProfile = null;
+      window.dispatchEvent(new CustomEvent('authStateChanged'));
+    } else if (event === 'TOKEN_REFRESHED') {
+      // Reload on identity CHANGE, not merely when we have no user. A stale
+      // `!this.currentUser` check never refreshed after an identity swap (H2).
+      if (session?.user && session.user.id !== this.currentUser?.id) {
+        await this.loadUserProfile(session.user.id);
+        window.dispatchEvent(new CustomEvent('authStateChanged'));
+      }
+    } else if (session?.user && session.user.id !== this.currentUser?.id) {
+      await this.loadUserProfile(session.user.id);
+      window.dispatchEvent(new CustomEvent('authStateChanged'));
+    }
+  });
+  this._authSubscription = subscription;
 }
 
 // ── Profile Loading ────────────────────────────────────────────────────────
 
-export async function loadUserProfile(
-    this: any,
-    userId: string,
-): Promise<void> {
-    const { data: profile, error: profileError } = await sb
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+export async function loadUserProfile(this: any, userId: string): Promise<void> {
+  const { data: profile, error: profileError } = await sb
+    .from('profiles')
+    .select('*')
+    .eq('id', userId)
+    .single();
 
-    if (profileError || !profile) {
-        console.log(`[AUTH-DEBUG] loadUserProfile FAILED for ${userId}:`, profileError?.message || 'no profile found');
-        return;
+  if (profileError || !profile) {
+    return;
+  }
+
+  let organization = null;
+  if (profile.organization_id) {
+    const { data: orgData, error: orgError } = await sb
+      .from('organizations')
+      .select('*')
+      .eq('id', profile.organization_id)
+      .single();
+
+    if (!orgError && orgData) {
+      organization = orgData;
     }
+  }
 
-    let organization = null;
-    if (profile.organization_id) {
-        const { data: orgData, error: orgError } = await sb
-            .from('organizations')
-            .select('*')
-            .eq('id', profile.organization_id)
-            .single();
+  this.currentUser = {
+    id: profile.id,
+    username: profile.username,
+    email: profile.email,
+    role: profile.role,
+    organizationId: profile.organization_id || null,
+    isActive: profile.is_active,
+  } as AuthCurrentUser;
 
-        if (!orgError && orgData) {
-            organization = orgData;
-        }
-    }
-
-    this.currentUser = {
-        id: profile.id,
-        username: profile.username,
-        email: profile.email,
-        role: profile.role,
-        organizationId: profile.organization_id || null,
-        isActive: profile.is_active,
-    } as AuthCurrentUser;
-
-    this.currentProfile = { ...profile, organizations: organization } as AuthProfile;
+  this.currentProfile = { ...profile, organizations: organization } as AuthProfile;
 }
 
 // ── Supabase Login ─────────────────────────────────────────────────────────
 
 export async function loginSupabase(
-    this: any,
-    email: string,
-    password: string,
-    loginRateLimiter: any,
+  this: any,
+  email: string,
+  password: string,
+  loginRateLimiter: any
 ): Promise<AuthResult> {
-    let data: any, error: any;
-    try {
-        const response = await sb.auth.signInWithPassword({ email, password });
-        data = response.data;
-        error = response.error;
-    } catch (_fetchError) {
-        return { success: false, error: 'Unable to connect to authentication service. Please check your internet connection or try again later.' };
+  let data: any, error: any;
+  try {
+    const response = await sb.auth.signInWithPassword({ email, password });
+    data = response.data;
+    error = response.error;
+  } catch (_fetchError) {
+    return {
+      success: false,
+      error:
+        'Unable to connect to authentication service. Please check your internet connection or try again later.',
+    };
+  }
+
+  if (error) {
+    return { success: false, error: 'Invalid email or password' };
+  }
+
+  if (data.user) {
+    // Explicit sign-in — this session was NOT silently restored (H3).
+    this.sessionWasRestored = false;
+    await this.loadUserProfile(data.user.id);
+
+    if (!this.currentUser) {
+      await sb.auth.signOut();
+      return {
+        success: false,
+        error:
+          'Unable to load your profile. The database may be temporarily unavailable — please try again in a moment.',
+      };
     }
 
-    if (error) {
-        return { success: false, error: 'Invalid email or password' };
+    if (!this.currentUser.isActive) {
+      await sb.auth.signOut();
+      return { success: false, error: 'Invalid email or password' };
     }
 
-    if (data.user) {
-        await this.loadUserProfile(data.user.id);
+    loginRateLimiter.reset(email.toLowerCase());
 
-        if (!this.currentUser) {
-            await sb.auth.signOut();
-            return { success: false, error: 'Unable to load your profile. The database may be temporarily unavailable — please try again in a moment.' };
-        }
+    // Check 2FA — read factors directly from the user object returned by signInWithPassword
+    // to avoid an extra API call.
+    const userFactors = data.user.factors || [];
+    const hasVerifiedTotp = userFactors.some(
+      (f: { factor_type: string; status: string }) =>
+        f.factor_type === 'totp' && f.status === 'verified'
+    );
 
-        if (!this.currentUser.isActive) {
-            await sb.auth.signOut();
-            return { success: false, error: 'Invalid email or password' };
-        }
-
-        loginRateLimiter.reset(email.toLowerCase());
-
-        // Check 2FA — read factors directly from the user object returned by signInWithPassword
-        // to avoid an extra API call.
-        const userFactors = data.user.factors || [];
-        const hasVerifiedTotp = userFactors.some(
-            (f: { factor_type: string; status: string }) => f.factor_type === 'totp' && f.status === 'verified',
-        );
-
-        if (hasVerifiedTotp) {
-            // User has TOTP — session is AAL1 right after password login
-            return { success: true, requires2FA: true, user: this.currentUser };
-        }
-
-        logActivity({
-            userId: this.currentUser.id,
-            actionType: 'login_success',
-            actionCategory: 'auth',
-            description: `User ${this.currentUser.username || email} logged in successfully`,
-        });
-
-        window.dispatchEvent(new CustomEvent('userLoggedIn', {
-            detail: { user: this.currentUser },
-        }));
-
-        return { success: true, user: this.currentUser };
+    if (hasVerifiedTotp) {
+      // User has TOTP — session is AAL1 right after password login
+      return { success: true, requires2FA: true, user: this.currentUser };
     }
 
     logActivity({
-        actionType: 'login_failed',
-        actionCategory: 'auth',
-        description: `Login failed for ${email}`,
-        details: { email },
+      userId: this.currentUser.id,
+      actionType: 'login_success',
+      actionCategory: 'auth',
+      description: `User ${this.currentUser.username || email} logged in successfully`,
     });
 
-    return { success: false, error: 'Login failed' };
+    window.dispatchEvent(
+      new CustomEvent('userLoggedIn', {
+        detail: { user: this.currentUser },
+      })
+    );
+
+    return { success: true, user: this.currentUser };
+  }
+
+  logActivity({
+    actionType: 'login_failed',
+    actionCategory: 'auth',
+    description: `Login failed for ${email}`,
+    details: { email },
+  });
+
+  return { success: false, error: 'Login failed' };
 }
 
 // ── Signup ──────────────────────────────────────────────────────────────────
 
 export async function signUpSupabase(
-    this: any,
-    email: string,
-    password: string,
+  this: any,
+  email: string,
+  password: string
 ): Promise<AuthResult> {
-    const { data, error } = await sb.auth.signUp({
-        email,
-        password,
-        options: {
-            emailRedirectTo: `${window.location.origin}/login`,
-        },
-    });
+  const { data, error } = await sb.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo: `${window.location.origin}/login`,
+    },
+  });
 
-    if (error) {
-        return { success: false, error };
-    }
+  if (error) {
+    return { success: false, error };
+  }
 
-    return { success: true, data };
+  return { success: true, data };
 }
 
 // ── Password Reset ─────────────────────────────────────────────────────────
 
-export async function resetPasswordSupabase(
-    _this: any,
-    email: string,
-): Promise<AuthResult> {
-    try {
-        const { data, error } = await sb.functions.invoke('send-reset-code', {
-            body: { email },
-        });
+export async function resetPasswordSupabase(_this: any, email: string): Promise<AuthResult> {
+  try {
+    const { data, error } = await sb.functions.invoke('send-reset-code', {
+      body: { email },
+    });
 
-        if (error) {
-            return { success: false, error: { message: error.message || 'Failed to send reset code' } };
-        }
-
-        if (data?.error) {
-            return { success: false, error: { message: data.error } };
-        }
-
-        return { success: true, data, useCodeFlow: true };
-    } catch (err: any) {
-        return { success: false, error: { message: err.message || 'Failed to send password reset code' } };
+    if (error) {
+      return { success: false, error: { message: error.message || 'Failed to send reset code' } };
     }
+
+    if (data?.error) {
+      return { success: false, error: { message: data.error } };
+    }
+
+    return { success: true, data, useCodeFlow: true };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: { message: err.message || 'Failed to send password reset code' },
+    };
+  }
 }
 
 export async function verifyResetCodeSupabase(
-    _this: any,
-    email: string,
-    code: string,
-    newPassword: string,
+  _this: any,
+  email: string,
+  code: string,
+  newPassword: string
 ): Promise<AuthResult> {
-    try {
-        const { data, error } = await sb.functions.invoke('verify-reset-code', {
-            body: { email, code, newPassword },
-        });
+  try {
+    const { data, error } = await sb.functions.invoke('verify-reset-code', {
+      body: { email, code, newPassword },
+    });
 
-        if (error) {
-            return { success: false, error: { message: error.message || 'Failed to verify reset code' } };
-        }
-
-        if (data?.error) {
-            return { success: false, error: { message: data.error } };
-        }
-
-        return { success: true, message: data?.message };
-    } catch (err: any) {
-        return { success: false, error: { message: err.message || 'Failed to verify reset code' } };
+    if (error) {
+      return { success: false, error: { message: error.message || 'Failed to verify reset code' } };
     }
+
+    if (data?.error) {
+      return { success: false, error: { message: data.error } };
+    }
+
+    return { success: true, message: data?.message };
+  } catch (err: any) {
+    return { success: false, error: { message: err.message || 'Failed to verify reset code' } };
+  }
 }
 
 // ── Session Management ─────────────────────────────────────────────────────
 
 export async function getSessionSupabase(timeoutMs: number = 10000): Promise<any> {
-    const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Session check timed out')), timeoutMs);
-    });
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error('Session check timed out')), timeoutMs);
+  });
 
-    try {
-        const sessionPromise = sb.auth.getSession();
-        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
-        return session;
-    } catch (_error) {
-        return null;
-    }
+  try {
+    const sessionPromise = sb.auth.getSession();
+    const {
+      data: { session },
+    } = await Promise.race([sessionPromise, timeoutPromise]);
+    return session;
+  } catch (_error) {
+    return null;
+  }
 }
 
 export async function refreshSessionSupabase(timeoutMs: number = 10000): Promise<any> {
-    let timeoutId: ReturnType<typeof setTimeout>;
-    const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error('Session refresh timed out')), timeoutMs);
-    });
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error('Session refresh timed out')), timeoutMs);
+  });
 
-    try {
-        const refreshPromise = sb.auth.refreshSession();
-        const { data: { session }, error } = await Promise.race([refreshPromise, timeoutPromise]);
+  try {
+    const refreshPromise = sb.auth.refreshSession();
+    const {
+      data: { session },
+      error,
+    } = await Promise.race([refreshPromise, timeoutPromise]);
 
-        clearTimeout(timeoutId!);
+    clearTimeout(timeoutId!);
 
-        if (error) {
-            return null;
-        }
-
-        return session;
-    } catch (_error) {
-        clearTimeout(timeoutId!);
-        return null;
+    if (error) {
+      return null;
     }
+
+    return session;
+  } catch (_error) {
+    clearTimeout(timeoutId!);
+    return null;
+  }
 }
 
 export function onAuthStateChangeSupabase(callback: (session: any) => void): () => void {
-    const { data: { subscription } } = sb.auth.onAuthStateChange((_event: string, session: any) => {
-        callback(session);
-    });
-    return () => subscription.unsubscribe();
+  const {
+    data: { subscription },
+  } = sb.auth.onAuthStateChange((_event: string, session: any) => {
+    callback(session);
+  });
+  return () => subscription.unsubscribe();
 }
 
 // ── Supabase Logout ────────────────────────────────────────────────────────
 
 export async function logoutSupabase(): Promise<void> {
-    await sb.auth.signOut({ scope: 'local' });
+  await sb.auth.signOut({ scope: 'local' });
 }

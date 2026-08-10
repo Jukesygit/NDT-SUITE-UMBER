@@ -1,7 +1,18 @@
 import React, { useState, useMemo } from 'react';
 import { X, AlertTriangle, Wrench, Check, ChevronDown, ChevronRight } from 'lucide-react';
-import { CscanData } from './types';
+import { CscanData, OffsetSource } from './types';
 import { detectOffsetsForScans, applyOffsetCorrections } from './utils/fileParser';
+import CsvRepairOverlapPanel, { useRepairCrossCheck } from './CsvRepairOverlapPanel';
+
+const SOURCE_LABELS: Record<OffsetSource, string> = {
+  metadata: 'metadata',
+  filename: 'filename',
+  datafile: 'data-file header',
+  'metadata-halved': 'metadata ÷2',
+};
+
+const sourceLabel = (source: OffsetSource | null | undefined): string =>
+  source ? SOURCE_LABELS[source] : '—';
 
 interface CsvRepairModalProps {
   isOpen: boolean;
@@ -14,7 +25,7 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
   isOpen,
   onClose,
   scans,
-  onRepairComplete
+  onRepairComplete,
 }) => {
   const [correctIndex, setCorrectIndex] = useState(true);
   const [correctScan, setCorrectScan] = useState(true);
@@ -29,8 +40,15 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
   }, [scans, preferFilename]);
 
   // Separate by type
-  const indexIssues = detections.filter(d => d.indexNeedsCorrection);
-  const scanIssues = detections.filter(d => d.scanNeedsCorrection);
+  const indexIssues = detections.filter((d) => d.indexNeedsCorrection);
+  const scanIssues = detections.filter((d) => d.scanNeedsCorrection);
+
+  const { overlapChecks, truncatedFiles, usesHalving } = useRepairCrossCheck(
+    scans,
+    detections,
+    correctIndex,
+    correctScan
+  );
 
   const handleRepair = () => {
     const repairedScans = applyOffsetCorrections(scans, correctIndex, correctScan, preferFilename);
@@ -61,18 +79,14 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
               <AlertTriangle className="w-5 h-5 text-yellow-500" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-white">
-                CSV Offset Issues Detected
-              </h2>
+              <h2 className="text-lg font-semibold text-white">CSV Offset Issues Detected</h2>
               <p className="text-sm text-gray-400">
-                {detections.length} file{detections.length !== 1 ? 's' : ''} may have incorrect axis values
+                {detections.length} file{detections.length !== 1 ? 's' : ''} may have incorrect axis
+                values
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-gray-700 rounded-lg transition-colors"
-          >
+          <button onClick={onClose} className="p-1 hover:bg-gray-700 rounded-lg transition-colors">
             <X className="w-5 h-5 text-gray-400" />
           </button>
         </div>
@@ -80,17 +94,23 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
         {/* Content */}
         <div className="p-4 space-y-4">
           {/* Explanation */}
-          <div className="p-3 rounded-lg text-sm text-gray-300" style={{ backgroundColor: '#374151' }}>
+          <div
+            className="p-3 rounded-lg text-sm text-gray-300"
+            style={{ backgroundColor: '#374151' }}
+          >
             <p>
-              These files appear to have axis values that don't match their expected positions
-              based on the filename or metadata. This commonly occurs when the scanner outputs
-              relative positions instead of absolute positions.
+              These files appear to have axis values that don't match their expected positions based
+              on the filename or metadata. This commonly occurs when the scanner outputs relative
+              positions instead of absolute positions.
             </p>
           </div>
 
           {/* Placement source override */}
           <div className="space-y-2">
-            <div className="flex items-center gap-3 p-3 border border-teal-500/50 rounded-lg" style={{ backgroundColor: '#0f3b3a' }}>
+            <div
+              className="flex items-center gap-3 p-3 border border-teal-500/50 rounded-lg"
+              style={{ backgroundColor: '#0f3b3a' }}
+            >
               <input
                 type="checkbox"
                 id="prefer-filename"
@@ -101,18 +121,21 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
               <label htmlFor="prefer-filename" className="flex-1 cursor-pointer">
                 <span className="font-medium text-white">Prioritize filenames for placement</span>
                 <p className="text-sm text-gray-400">
-                  Use the range in each filename as the true position, even when it
-                  disagrees with — or isn&apos;t confirmed by — the file metadata.
+                  Use the range in each filename as the true position, even when it disagrees with —
+                  or isn&apos;t confirmed by — the file metadata.
                 </p>
               </label>
             </div>
             {preferFilename && (
-              <div className="flex items-start gap-2 p-3 rounded-lg text-sm" style={{ backgroundColor: '#3a2f0f' }}>
+              <div
+                className="flex items-start gap-2 p-3 rounded-lg text-sm"
+                style={{ backgroundColor: '#3a2f0f' }}
+              >
                 <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
                 <p className="text-amber-200/90">
-                  Filenames are trusted for placement, including ranges whose span
-                  doesn&apos;t match the scan data. Verify the resulting positions —
-                  the Source column below shows what drove each file.
+                  Filenames are trusted for placement, including ranges whose span doesn&apos;t
+                  match the scan data. Verify the resulting positions — the Source column below
+                  shows what drove each file.
                 </p>
               </div>
             )}
@@ -122,7 +145,10 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
           <div className="space-y-3">
             {/* Index Issues */}
             {indexIssues.length > 0 && (
-              <div className="flex items-center gap-3 p-3 border border-blue-500/50 rounded-lg" style={{ backgroundColor: '#1e3a5f' }}>
+              <div
+                className="flex items-center gap-3 p-3 border border-blue-500/50 rounded-lg"
+                style={{ backgroundColor: '#1e3a5f' }}
+              >
                 <input
                   type="checkbox"
                   id="fix-index"
@@ -133,7 +159,8 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
                 <label htmlFor="fix-index" className="flex-1 cursor-pointer">
                   <span className="font-medium text-white">Fix Index Axis (Y)</span>
                   <p className="text-sm text-gray-400">
-                    {indexIssues.length} file{indexIssues.length !== 1 ? 's' : ''} have incorrect Index values
+                    {indexIssues.length} file{indexIssues.length !== 1 ? 's' : ''} have incorrect
+                    Index values
                   </p>
                 </label>
               </div>
@@ -141,7 +168,10 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
 
             {/* Scan Issues */}
             {scanIssues.length > 0 && (
-              <div className="flex items-center gap-3 p-3 border border-purple-500/50 rounded-lg" style={{ backgroundColor: '#3b1f5f' }}>
+              <div
+                className="flex items-center gap-3 p-3 border border-purple-500/50 rounded-lg"
+                style={{ backgroundColor: '#3b1f5f' }}
+              >
                 <input
                   type="checkbox"
                   id="fix-scan"
@@ -152,7 +182,8 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
                 <label htmlFor="fix-scan" className="flex-1 cursor-pointer">
                   <span className="font-medium text-white">Fix Scan Axis (X)</span>
                   <p className="text-sm text-gray-400">
-                    {scanIssues.length} file{scanIssues.length !== 1 ? 's' : ''} have incorrect Scan values
+                    {scanIssues.length} file{scanIssues.length !== 1 ? 's' : ''} have incorrect Scan
+                    values
                   </p>
                 </label>
               </div>
@@ -174,7 +205,10 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
             </button>
 
             {showDetails && (
-              <div className="mt-3 max-h-48 overflow-y-auto rounded-lg border border-gray-700" style={{ backgroundColor: '#111827' }}>
+              <div
+                className="mt-3 max-h-48 overflow-y-auto rounded-lg border border-gray-700"
+                style={{ backgroundColor: '#111827' }}
+              >
                 <table className="w-full text-xs">
                   <thead className="sticky top-0" style={{ backgroundColor: '#1f2937' }}>
                     <tr>
@@ -186,7 +220,10 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
                   </thead>
                   <tbody>
                     {detections.map((d, idx) => (
-                      <tr key={d.fileId} style={{ backgroundColor: idx % 2 === 0 ? '#1f2937' : '#111827' }}>
+                      <tr
+                        key={d.fileId}
+                        style={{ backgroundColor: idx % 2 === 0 ? '#1f2937' : '#111827' }}
+                      >
                         <td className="p-2 text-gray-300 truncate max-w-[200px]" title={d.filename}>
                           {d.filename}
                         </td>
@@ -205,7 +242,7 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
                           )}
                         </td>
                         <td className="p-2 text-right text-gray-400">
-                          {(d.indexNeedsCorrection ? d.indexSource : d.scanSource) ?? '—'}
+                          {sourceLabel(d.indexNeedsCorrection ? d.indexSource : d.scanSource)}
                         </td>
                       </tr>
                     ))}
@@ -214,6 +251,13 @@ const CsvRepairModal: React.FC<CsvRepairModalProps> = ({
               </div>
             )}
           </div>
+
+          {/* Halving note + truncation warnings + overlap cross-check */}
+          <CsvRepairOverlapPanel
+            checks={overlapChecks}
+            truncatedFiles={truncatedFiles}
+            usesHalving={usesHalving}
+          />
 
           {/* Preview Example */}
           {detections.length > 0 && (

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { VesselState } from '../types';
 import { useWallLossWorker } from '../../../hooks/useWallLossWorker';
 
@@ -28,7 +29,10 @@ function binColor(index: number, total: number): string {
   return BIN_COLORS[mapped];
 }
 
-function binRangeLabel(bin: { minPct: number; maxPct: number; minMm?: number; maxMm?: number; label?: string }, mode: string): string {
+function binRangeLabel(
+  bin: { minPct: number; maxPct: number; minMm?: number; maxMm?: number; label?: string },
+  mode: string
+): string {
   if (bin.label) return bin.label;
   if (mode === 'custom' && bin.minMm != null && bin.maxMm != null) {
     return `${bin.minMm.toFixed(1)}–${bin.maxMm.toFixed(1)}`;
@@ -36,24 +40,71 @@ function binRangeLabel(bin: { minPct: number; maxPct: number; minMm?: number; ma
   return `${bin.minPct.toFixed(0)}–${bin.maxPct.toFixed(0)}%`;
 }
 
+/** Selector key for the main shell body (bodyId is undefined on that body). */
+const MAIN_KEY = 'main';
+/** Selector key for the merged, all-bodies view (the default). */
+const COMBINED_KEY = 'combined';
+
 export default function WallLossStatsSection({ vesselState }: WallLossStatsSectionProps) {
   const config = vesselState.wallLossGroups;
   const result = useWallLossWorker(vesselState, config);
   const binNames = config?.binNames;
   const mode = config?.binMode ?? 'equal';
 
-  if (!result || result.totalDataPoints === 0) return null;
+  // Combined is the default view (design §16). Selector keys: 'combined', 'main',
+  // or an appendage id.
+  const [selectedBody, setSelectedBody] = useState<string>(COMBINED_KEY);
 
-  const hasSpurious = (result.spuriousCount ?? 0) > 0;
+  if (!result || result.combined.totalDataPoints === 0) return null;
+
+  const { combined, bodies } = result;
+  const appendageBodies = bodies.filter((b) => b.bodyId);
+  // Only offer the selector once there is more than the main shell to choose from.
+  const showSelector = appendageBodies.length > 0;
+
+  // Resolve the active selection back to combined if a picked appendage vanished.
+  const keyFor = (bodyId?: string) => bodyId ?? MAIN_KEY;
+  const selectionValid =
+    selectedBody === COMBINED_KEY || bodies.some((b) => keyFor(b.bodyId) === selectedBody);
+  const effective = selectionValid ? selectedBody : COMBINED_KEY;
+
+  const active =
+    effective === COMBINED_KEY
+      ? combined
+      : (bodies.find((b) => keyFor(b.bodyId) === effective) ?? combined);
+
+  const bins = active.bins;
+  const totalScannedArea = active.totalScannedArea;
+  const totalDataPoints = active.totalDataPoints;
+  const spuriousCount = active.spuriousCount ?? 0;
+  const spuriousArea = active.spuriousArea ?? 0;
+  const spuriousAreaPercent = active.spuriousAreaPercent ?? 0;
+  const hasSpurious = spuriousCount > 0;
 
   return (
     <div className="vm-stats-section">
       <div className="vm-wallloss-title">
         Wall Loss Distribution
-        <span className="vm-wallloss-nominal">
-          Nom. {result.nominalThickness}mm
-        </span>
+        <span className="vm-wallloss-nominal">Nom. {combined.nominalThickness}mm</span>
       </div>
+      {showSelector && (
+        <div className="vm-wallloss-row" style={{ paddingBottom: 6 }}>
+          <select
+            className="vm-select"
+            style={{ fontSize: '0.7rem', padding: '3px 6px' }}
+            value={effective}
+            onChange={(e) => setSelectedBody(e.target.value)}
+          >
+            <option value={COMBINED_KEY}>Combined</option>
+            <option value={MAIN_KEY}>Main shell</option>
+            {appendageBodies.map((b) => (
+              <option key={b.bodyId} value={b.bodyId}>
+                {b.name || b.bodyId}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="vm-wallloss-row vm-wallloss-header">
         <span className="vm-wallloss-name">Name</span>
         <span className="vm-wallloss-range">Range</span>
@@ -61,18 +112,16 @@ export default function WallLossStatsSection({ vesselState }: WallLossStatsSecti
         <span className="vm-wallloss-pct">%</span>
         <span className="vm-wallloss-count">Pts</span>
       </div>
-      {result.bins.map((bin, i) => (
+      {bins.map((bin, i) => (
         <div key={i} className="vm-wallloss-row">
           <span
             className="vm-wallloss-swatch"
-            style={{ backgroundColor: binColor(i, result.bins.length) }}
+            style={{ backgroundColor: binColor(i, bins.length) }}
           />
           <span className="vm-wallloss-name" title={binNames?.[i] || bin.label || ''}>
             {binNames?.[i] || bin.label || `Bin ${i + 1}`}
           </span>
-          <span className="vm-wallloss-range">
-            {binRangeLabel(bin, mode)}
-          </span>
+          <span className="vm-wallloss-range">{binRangeLabel(bin, mode)}</span>
           <span className="vm-wallloss-area">{formatArea(bin.area)} m&sup2;</span>
           <span className="vm-wallloss-pct">{formatPct(bin.areaPercent)}%</span>
           <span className="vm-wallloss-count">{bin.count}</span>
@@ -90,9 +139,9 @@ export default function WallLossStatsSection({ vesselState }: WallLossStatsSecti
               Spurious
             </span>
             <span className="vm-wallloss-range">Outside</span>
-            <span className="vm-wallloss-area">{formatArea(result.spuriousArea ?? 0)} m&sup2;</span>
-            <span className="vm-wallloss-pct">{formatPct(result.spuriousAreaPercent ?? 0)}%</span>
-            <span className="vm-wallloss-count">{result.spuriousCount ?? 0}</span>
+            <span className="vm-wallloss-area">{formatArea(spuriousArea)} m&sup2;</span>
+            <span className="vm-wallloss-pct">{formatPct(spuriousAreaPercent)}%</span>
+            <span className="vm-wallloss-count">{spuriousCount}</span>
           </div>
         </>
       )}
@@ -100,9 +149,9 @@ export default function WallLossStatsSection({ vesselState }: WallLossStatsSecti
       <div className="vm-wallloss-row vm-wallloss-total">
         <span className="vm-wallloss-name" />
         <span className="vm-wallloss-range">Total</span>
-        <span className="vm-wallloss-area">{formatArea(result.totalScannedArea)} m&sup2;</span>
+        <span className="vm-wallloss-area">{formatArea(totalScannedArea)} m&sup2;</span>
         <span className="vm-wallloss-pct">100%</span>
-        <span className="vm-wallloss-count">{result.totalDataPoints}</span>
+        <span className="vm-wallloss-count">{totalDataPoints}</span>
       </div>
     </div>
   );

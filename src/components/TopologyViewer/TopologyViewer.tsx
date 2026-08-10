@@ -24,12 +24,7 @@ import TopologyToolbar from './TopologyToolbar';
 import TopologyInfoPanel from './TopologyInfoPanel';
 import CrossSectionPanel from './CrossSectionPanel';
 import TopologyAnnotationPanel from './TopologyAnnotationPanel';
-import {
-  Move3d,
-  ScissorsLineDashed,
-  Ruler,
-  MapPin,
-} from 'lucide-react';
+import { Move3d, ScissorsLineDashed, Ruler, MapPin } from 'lucide-react';
 import './topology-viewer.css';
 
 const TOOL_DEFS: { id: TopologyTool; icon: typeof Move3d; label: string }[] = [
@@ -46,20 +41,16 @@ const TOOL_DEFS: { id: TopologyTool; icon: typeof Move3d; label: string }[] = [
 export default function TopologyViewer() {
   const [cscanData, setCscanData] = useState<CscanData | null>(null);
   const [processedScans, setProcessedScans] = useState<CscanData[]>([]);
-  const [surfaceOptions, setSurfaceOptions] = useState<SurfaceOptions>(
-    DEFAULT_SURFACE_OPTIONS,
-  );
+  const [surfaceOptions, setSurfaceOptions] = useState<SurfaceOptions>(DEFAULT_SURFACE_OPTIONS);
   const [activeTool, setActiveTool] = useState<TopologyTool>('orbit');
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
-  const [crossSection, setCrossSection] = useState<CrossSectionData | null>(
-    null,
-  );
+  const [crossSection, setCrossSection] = useState<CrossSectionData | null>(null);
   const [measurement, setMeasurement] = useState<MeasurementState>({
     pointA: null,
     pointB: null,
   });
-  const [processingProgress, setProcessingProgress] =
-    useState<ProcessingProgress | null>(null);
+  const [processingProgress, setProcessingProgress] = useState<ProcessingProgress | null>(null);
+  const [truncationWarning, setTruncationWarning] = useState<string | null>(null);
   const [showRepairModal, setShowRepairModal] = useState(false);
   const [pendingScans, setPendingScans] = useState<CscanData[]>([]);
   const [lightAzimuth, setLightAzimuth] = useState(45);
@@ -70,9 +61,8 @@ export default function TopologyViewer() {
   // ---- Computed values ---------------------------------------------------
 
   const resolvedNominal = useMemo(
-    () =>
-      cscanData ? resolveNominal(surfaceOptions.nominalThickness, cscanData.data) : 0,
-    [cscanData, surfaceOptions.nominalThickness],
+    () => (cscanData ? resolveNominal(surfaceOptions.nominalThickness, cscanData.data) : 0),
+    [cscanData, surfaceOptions.nominalThickness]
   );
 
   const isDecimated = useMemo(() => {
@@ -87,6 +77,14 @@ export default function TopologyViewer() {
 
   const addScansToState = useCallback(
     (newScans: CscanData[]) => {
+      // Truncated exports still load, but the missing rows are absent from
+      // the surface — warn (count vs the header's declared sample count).
+      const truncated = newScans.filter((s) => s.metadata?.['_truncatedRows']).length;
+      setTruncationWarning(
+        truncated > 0
+          ? `${truncated} file${truncated !== 1 ? 's' : ''} truncated (fewer rows than the header declares) — missing regions stay empty`
+          : null
+      );
       const allScans = [...processedScans, ...newScans];
       setProcessedScans(allScans);
 
@@ -99,7 +97,7 @@ export default function TopologyViewer() {
         });
       }
     },
-    [processedScans],
+    [processedScans]
   );
 
   // ---- Handlers ----------------------------------------------------------
@@ -134,7 +132,7 @@ export default function TopologyViewer() {
         console.error('File processing error:', error);
       }
     },
-    [addScansToState],
+    [addScansToState]
   );
 
   const handleRepairComplete = useCallback(
@@ -144,7 +142,7 @@ export default function TopologyViewer() {
       setShowRepairModal(false);
       setPendingScans([]);
     },
-    [addScansToState],
+    [addScansToState]
   );
 
   const handleRepairClose = useCallback(() => {
@@ -160,36 +158,30 @@ export default function TopologyViewer() {
     });
   }, []);
 
-  const handleOptionsChange = useCallback(
-    (updates: Partial<SurfaceOptions>) => {
-      setSurfaceOptions((prev) => ({ ...prev, ...updates }));
-    },
-    [],
-  );
+  const handleOptionsChange = useCallback((updates: Partial<SurfaceOptions>) => {
+    setSurfaceOptions((prev) => ({ ...prev, ...updates }));
+  }, []);
 
   const handleExport = useCallback(() => {
     const name = cscanData?.filename?.replace(/\.[^.]+$/, '') ?? 'topology';
     sceneRef.current?.exportGLB(`${name}.glb`);
   }, [cscanData]);
 
-  const handleLightChange = useCallback(
-    (updates: { azimuth?: number; elevation?: number }) => {
-      if (updates.azimuth != null) setLightAzimuth(updates.azimuth);
-      if (updates.elevation != null) setLightElevation(updates.elevation);
-    },
-    [],
-  );
+  const handleLightChange = useCallback((updates: { azimuth?: number; elevation?: number }) => {
+    if (updates.azimuth != null) setLightAzimuth(updates.azimuth);
+    if (updates.elevation != null) setLightElevation(updates.elevation);
+  }, []);
 
   const handleAddAnnotation = useCallback((annotation: TopologyAnnotation) => {
-    setAnnotations(prev => [...prev, annotation]);
+    setAnnotations((prev) => [...prev, annotation]);
   }, []);
 
   const handleUpdateAnnotation = useCallback((id: string, updates: Partial<TopologyAnnotation>) => {
-    setAnnotations(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+    setAnnotations((prev) => prev.map((a) => (a.id === id ? { ...a, ...updates } : a)));
   }, []);
 
   const handleDeleteAnnotation = useCallback((id: string) => {
-    setAnnotations(prev => prev.filter(a => a.id !== id));
+    setAnnotations((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
   // ---- Render ------------------------------------------------------------
@@ -202,9 +194,7 @@ export default function TopologyViewer() {
         onFileUpload={handleFileUpload}
         onExport={handleExport}
         hasData={cscanData != null}
-        autoNominal={
-          cscanData ? resolveNominal(null, cscanData.data) : null
-        }
+        autoNominal={cscanData ? resolveNominal(null, cscanData.data) : null}
         lightAzimuth={lightAzimuth}
         lightElevation={lightElevation}
         onLightChange={handleLightChange}
@@ -237,16 +227,15 @@ export default function TopologyViewer() {
           nominalThickness={resolvedNominal}
           lightAzimuth={lightAzimuth}
           lightElevation={lightElevation}
-          onSceneReady={(mgr) => { sceneRef.current = mgr; }}
+          onSceneReady={(mgr) => {
+            sceneRef.current = mgr;
+          }}
           annotations={annotations}
           onAddAnnotation={handleAddAnnotation}
           onUpdateAnnotation={handleUpdateAnnotation}
         />
 
-        <TopologyAnnotationPanel
-          annotations={annotations}
-          onDelete={handleDeleteAnnotation}
-        />
+        <TopologyAnnotationPanel annotations={annotations} onDelete={handleDeleteAnnotation} />
 
         {cscanData && (
           <TopologyInfoPanel
@@ -280,6 +269,18 @@ export default function TopologyViewer() {
       {processingProgress && (
         <div className="topology-viewer__progress">
           Processing {processingProgress.current}/{processingProgress.total}...
+        </div>
+      )}
+
+      {truncationWarning && (
+        <div
+          className="topology-viewer__progress"
+          role="alert"
+          title="Click to dismiss"
+          style={{ background: 'rgba(58,47,15,0.95)', color: '#fcd34d', cursor: 'pointer' }}
+          onClick={() => setTruncationWarning(null)}
+        >
+          {truncationWarning}
         </div>
       )}
     </div>
