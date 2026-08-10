@@ -87,7 +87,12 @@ import HistoryDropdown from './HistoryDropdown';
 import BookmarksDropdown from './BookmarksDropdown';
 import ViewCube from './ViewCube';
 import OutlinerPanel from './OutlinerPanel';
+import CommandPalette from './CommandPalette';
 import type { OutlinerToggleRef } from './outliner-tree';
+import { buildPaletteItems, type PaletteAction } from './engine/palette-registry';
+import { frameEntityPose, type FrameEntityRef } from './engine/frame-entity';
+import { canonicalPose, type CanonicalViewId } from './engine/canonical-views';
+import { computeVesselBounds } from './engine/report-image-capture';
 import UnifiedStatsPanel from './UnifiedStatsPanel';
 import SnapControl from './SnapControl';
 import InspectionPanel from './sidebar/InspectionPanel';
@@ -692,6 +697,141 @@ export default function VesselModeler() {
   }, [vesselState.scanComposites, selection.scanCompositeId]);
   const topoEnabled = activeTopoComposite != null;
 
+  // --- Command palette (C14) ---
+  // Registry rebuilt only when the document or Topo availability changes (not on
+  // hover/orbit re-renders). Consumed solely by CommandPalette (no scene effect).
+  const paletteItems = useMemo(
+    () => buildPaletteItems(vesselState, { topoEnabled }),
+    [vesselState, topoEnabled]
+  );
+
+  // A canonical-view / entity-frame flight that must wait for the 3D viewport to
+  // (re)mount when the palette was invoked from 2D/Topo. Held off React state.
+  const pendingFlightRef = useRef<{ view: CanonicalViewId } | { frame: FrameEntityRef } | null>(
+    null
+  );
+
+  const flyToPose = useCallback(
+    (pose: { position: THREE.Vector3; target: THREE.Vector3 } | null) => {
+      if (!pose) return;
+      const camera = viewportRef.current?.getCamera();
+      const controls = viewportRef.current?.getControls();
+      if (!camera || !controls) return;
+      animateCamera(camera, controls, pose.position, pose.target, 400);
+    },
+    []
+  );
+
+  // Canonical-view pose using the SAME bounds source ViewCube uses.
+  const resolveViewPose = useCallback(
+    (view: CanonicalViewId) => {
+      const handle = viewportRef.current;
+      const camera = handle?.getCamera();
+      if (!handle || !camera) return null;
+      const boundsTarget = handle.getSceneManager()?.getVesselGroup() ?? handle.getScene();
+      if (!boundsTarget) return null;
+      return canonicalPose(view, vesselState, computeVesselBounds(boundsTarget));
+    },
+    [vesselState]
+  );
+
+  const resolveFramePose = useCallback(
+    (frame: FrameEntityRef) => {
+      const camera = viewportRef.current?.getCamera();
+      if (!camera) return null;
+      return frameEntityPose(frame, vesselState, camera);
+    },
+    [vesselState]
+  );
+
+  // Run a deferred flight once the viewport is back in 3D and mounted.
+  useEffect(() => {
+    if (ui.viewMode !== '3d') return;
+    const pending = pendingFlightRef.current;
+    if (!pending) return;
+    const raf = requestAnimationFrame(() => {
+      pendingFlightRef.current = null;
+      flyToPose('view' in pending ? resolveViewPose(pending.view) : resolveFramePose(pending.frame));
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [ui.viewMode, resolveViewPose, resolveFramePose, flyToPose]);
+
+  // Execute one palette descriptor: dispatch the state change and, where a camera
+  // move is implied, fly there (deferring past a 2D/Topo→3D switch if needed).
+  const handlePaletteAction = useCallback(
+    (action: PaletteAction) => {
+      dispatch({ type: 'SET_PALETTE_OPEN', open: false });
+
+      if ('select' in action) {
+        dispatch(action.select);
+        if (action.frame) {
+          if (ui.viewMode !== '3d') {
+            pendingFlightRef.current = { frame: action.frame };
+            dispatch({ type: 'SET_VIEW_MODE', mode: '3d' });
+          } else {
+            flyToPose(resolveFramePose(action.frame));
+          }
+        }
+        return;
+      }
+      if ('view' in action) {
+        if (ui.viewMode !== '3d') {
+          pendingFlightRef.current = { view: action.view };
+          dispatch({ type: 'SET_VIEW_MODE', mode: '3d' });
+        } else {
+          flyToPose(resolveViewPose(action.view));
+        }
+        return;
+      }
+      if ('bookmark' in action) {
+        const bm = (vesselState.cameraBookmarks ?? []).find((b) => b.id === action.bookmark);
+        if (!bm) return;
+        if (ui.viewMode !== '3d') {
+          dispatch({ type: 'SET_VIEW_MODE', mode: '3d' });
+          requestAnimationFrame(() => requestAnimationFrame(() => handleRecallBookmark(bm)));
+        } else {
+          handleRecallBookmark(bm);
+        }
+        return;
+      }
+      if ('toggle' in action) {
+        switch (action.toggle) {
+          case 'snap':
+            dispatch({ type: 'TOGGLE_SNAP' });
+            break;
+          case 'tidy':
+            dispatch({ type: 'TOGGLE_LABELS_TIDIED' });
+            break;
+          case 'outliner':
+            dispatch({ type: 'TOGGLE_OUTLINER' });
+            break;
+          case 'statsCoverage':
+            dispatch({ type: 'TOGGLE_STATS_COVERAGE' });
+            break;
+          case 'statsWallLoss':
+            dispatch({ type: 'TOGGLE_STATS_WALL_LOSS' });
+            break;
+          case 'statsScanCoverage':
+            dispatch({ type: 'TOGGLE_STATS_SCAN_COVERAGE' });
+            break;
+        }
+        return;
+      }
+      if ('viewMode' in action) {
+        dispatch({ type: 'SET_VIEW_MODE', mode: action.viewMode });
+        return;
+      }
+      if ('undo' in action) {
+        dispatch({ type: 'UNDO' });
+        return;
+      }
+      if ('redo' in action) {
+        dispatch({ type: 'REDO' });
+      }
+    },
+    [ui.viewMode, vesselState, flyToPose, resolveFramePose, resolveViewPose, handleRecallBookmark]
+  );
+
   // --- Interaction callbacks (from Three.js viewport) — T2-D / D3 ---
   // Assembly moved verbatim into useViewportCallbacks; it composes the D1 entity
   // callbacks + dispatch/setters threaded below. The hook returns a FRESH object
@@ -780,6 +920,13 @@ export default function VesselModeler() {
       }
 
       const key = e.key.toLowerCase();
+      // Command palette (Ctrl/Cmd+K, Ctrl/Cmd+P alias). preventDefault so the
+      // browser's own K/P bindings (e.g. print) don't steal it.
+      if ((e.ctrlKey || e.metaKey) && (key === 'k' || key === 'p')) {
+        e.preventDefault();
+        dispatch({ type: 'SET_PALETTE_OPEN', open: true });
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && key === 'z') {
         e.preventDefault();
         dispatch({ type: e.shiftKey ? 'REDO' : 'UNDO' });
@@ -940,6 +1087,7 @@ export default function VesselModeler() {
               <OutlinerPanel
                 vesselState={vesselState}
                 selection={selection}
+                sidebarOpen={ui.sidebarOpen}
                 onClose={() => dispatch({ type: 'TOGGLE_OUTLINER' })}
                 onSelect={(action) => dispatch(action)}
                 onToggleVisible={handleOutlinerToggleVisible}
@@ -982,6 +1130,15 @@ export default function VesselModeler() {
               </div>
             )}
           </Suspense>
+        )}
+
+        {/* Command palette (C14) — available in every view mode (Ctrl/Cmd+K) */}
+        {ui.paletteOpen && (
+          <CommandPalette
+            items={paletteItems}
+            onExecute={handlePaletteAction}
+            onClose={() => dispatch({ type: 'SET_PALETTE_OPEN', open: false })}
+          />
         )}
 
         {/* Pipe part popup — shown when clicking a connection point */}

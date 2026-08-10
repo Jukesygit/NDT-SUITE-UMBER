@@ -28,6 +28,29 @@ interface AnimationState {
 let currentAnimation: AnimationState | null = null;
 
 // ---------------------------------------------------------------------------
+// Framing distance (shared with frame-entity.ts — keep byte-identical)
+// ---------------------------------------------------------------------------
+
+/**
+ * Distance along the surface normal that frames a `footprintWorld`-wide feature
+ * at ~70% of the viewport, using the LIVE camera's fov + aspect. This is the
+ * EXACT formula {@link computeInspectionCameraTarget} used inline, factored out
+ * so the command palette's entity framing (frame-entity.ts) and inspection mode
+ * cannot drift. Inspection-mode output stays byte-identical because the same
+ * camera is passed and the arithmetic is unchanged.
+ */
+export function framingDistanceForCamera(
+    footprintWorld: number,
+    camera: THREE.PerspectiveCamera,
+): number {
+    const vFovRad = (camera.fov * Math.PI) / 180;
+    const hFovRad = 2 * Math.atan(Math.tan(vFovRad / 2) * camera.aspect);
+    // Use whichever FOV is narrower to ensure the footprint fits
+    const fov = Math.min(vFovRad, hFovRad);
+    return (footprintWorld / 0.7) / (2 * Math.tan(fov / 2));
+}
+
+// ---------------------------------------------------------------------------
 // computeInspectionCameraTarget
 // ---------------------------------------------------------------------------
 
@@ -62,11 +85,7 @@ export function computeInspectionCameraTarget(
 
     // Calculate distance so the annotation footprint fills ~70% of viewport
     const footprint = Math.max(ann.width, ann.height) * SCALE;
-    const vFovRad = (camera.fov * Math.PI) / 180;
-    const hFovRad = 2 * Math.atan(Math.tan(vFovRad / 2) * camera.aspect);
-    // Use whichever FOV is narrower to ensure the footprint fits
-    const fov = Math.min(vFovRad, hFovRad);
-    const distance = (footprint / 0.7) / (2 * Math.tan(fov / 2));
+    const distance = framingDistanceForCamera(footprint, camera);
 
     // Position camera along the normal at the computed distance
     const position = target.clone().add(normal.multiplyScalar(distance));

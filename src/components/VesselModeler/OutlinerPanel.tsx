@@ -11,6 +11,8 @@ import {
 interface OutlinerPanelProps {
   vesselState: VesselState;
   selection: SelectionState;
+  /** Sidebar overlays the viewport's left 340px — offset beside it when open. */
+  sidebarOpen: boolean;
   /** Close the whole panel (toolbar toggle). */
   onClose: () => void;
   /** Dispatch a verbatim SELECT_* descriptor. */
@@ -29,6 +31,7 @@ interface OutlinerPanelProps {
 export default function OutlinerPanel({
   vesselState,
   selection,
+  sidebarOpen,
   onClose,
   onSelect,
   onToggleVisible,
@@ -54,7 +57,12 @@ export default function OutlinerPanel({
     visible ? undefined : { color: 'rgba(255,255,255,0.25)' };
 
   return (
-    <div className="vm-outliner" role="tree" aria-label="Entity outliner">
+    <div
+      className="vm-outliner"
+      style={{ left: sidebarOpen ? 354 : 14 }}
+      role="tree"
+      aria-label="Entity outliner"
+    >
       <div className="vm-outliner__header">
         <ListTree size={13} />
         <span className="vm-outliner__title">Outliner</span>

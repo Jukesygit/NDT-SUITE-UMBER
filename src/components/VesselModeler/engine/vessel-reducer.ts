@@ -83,6 +83,8 @@ export interface UIState {
   snapDeg: number;
   /** Whether the entity outliner panel is open (transient — never serialized). */
   outlinerOpen: boolean;
+  /** Whether the command palette is open (transient — never serialized, no history). */
+  paletteOpen: boolean;
   /** ID of annotation being inspected (null = not in inspection mode) */
   inspectingAnnotationId: number | null;
   /** Camera state saved before entering inspection mode */
@@ -142,6 +144,7 @@ export const INITIAL_STATE: VesselModelerState = {
     snapEnabled: false,
     snapDeg: 5,
     outlinerOpen: false,
+    paletteOpen: false,
     inspectingAnnotationId: null,
     savedCameraState: null,
     viewMode: '3d',
@@ -233,6 +236,7 @@ export type VesselAction =
   | { type: 'SET_HOVER_DATA'; data: UIState['hoverData'] }
   | { type: 'TOGGLE_SCAN_TOOLTIP_FOLLOW' }
   | { type: 'TOGGLE_OUTLINER' }
+  | { type: 'SET_PALETTE_OPEN'; open: boolean }
   | { type: 'TOGGLE_SNAP' }
   | { type: 'SET_SNAP_DEG'; deg: number }
   | { type: 'CANCEL_ALL_DRAW_MODES' }
@@ -394,6 +398,10 @@ export function vesselReducer(
     case 'TOGGLE_OUTLINER':
       // Transient UI only — never serialized, records no history entry.
       return { ...state, ui: { ...state.ui, outlinerOpen: !state.ui.outlinerOpen } };
+    case 'SET_PALETTE_OPEN':
+      // Transient UI only — never serialized, records no history entry. Explicit
+      // open flag (not a toggle) so an executed action can force-close it.
+      return { ...state, ui: { ...state.ui, paletteOpen: action.open } };
     case 'TOGGLE_SNAP':
       return { ...state, ui: { ...state.ui, snapEnabled: !state.ui.snapEnabled } };
     case 'SET_SNAP_DEG':

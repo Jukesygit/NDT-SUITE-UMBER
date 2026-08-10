@@ -750,8 +750,12 @@
    is driven per frame from the camera by ViewCube.tsx (no React state). */
 .vm-viewcube {
     position: absolute;
-    top: 14px;
-    left: 14px;
+    /* Top-RIGHT corner (CAD convention), below the right actions cluster
+       (.vm-popout-menu-right at top:10). The left edge is sidebar territory
+       (.vm-sidebar overlays left 340px) — never anchor viewport UI at left
+       without a sidebar-aware offset. */
+    top: 52px;
+    right: 14px;
     z-index: 15;
     display: flex;
     flex-direction: column;
@@ -841,11 +845,13 @@
 /* --- Entity outliner panel (C13b) ----------------------------------------- */
 .vm-outliner {
     position: absolute;
-    top: 130px;
-    left: 14px;
+    /* `left` is set inline by OutlinerPanel (sidebar-aware: 354/14 —
+       UnifiedStatsPanel precedent) because .vm-sidebar overlays left 340px. */
+    top: 52px;
     z-index: 16;
     width: 244px;
-    max-height: calc(100% - 160px);
+    max-height: calc(100% - 82px);
+    transition: left 0.3s ease;
     display: flex;
     flex-direction: column;
     background: rgba(20, 25, 35, 0.9);
@@ -1012,6 +1018,133 @@
 .vm-outliner .vm-btn-icon.vm-outliner__eye:hover {
     opacity: 1;
     color: var(--color-primary-400, #60a5fa);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Command palette (C14)                                                      */
+/* -------------------------------------------------------------------------- */
+.vm-cmdk__backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 14vh;
+    background: rgba(6, 9, 15, 0.45);
+    backdrop-filter: blur(2px);
+}
+
+.vm-cmdk {
+    width: min(560px, 92%);
+    max-height: 62vh;
+    display: flex;
+    flex-direction: column;
+    background: rgba(20, 25, 35, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    color: rgba(255, 255, 255, 0.9);
+    overflow: hidden;
+}
+
+.vm-cmdk__input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+}
+
+.vm-cmdk__search-icon {
+    color: rgba(255, 255, 255, 0.45);
+    flex-shrink: 0;
+}
+
+.vm-cmdk__input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: #fff;
+    font-size: 0.9rem;
+}
+
+.vm-cmdk__input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.vm-cmdk__hint {
+    font-size: 0.62rem;
+    padding: 1px 5px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: rgba(255, 255, 255, 0.5);
+    flex-shrink: 0;
+}
+
+.vm-cmdk__list {
+    overflow-y: auto;
+    padding: 5px;
+}
+
+.vm-cmdk__empty {
+    padding: 16px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.78rem;
+}
+
+.vm-cmdk__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 9px;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+    font-size: 0.8rem;
+}
+
+.vm-cmdk__row.is-active {
+    background: rgba(56, 132, 255, 0.24);
+}
+
+.vm-cmdk__badge {
+    font-size: 0.56rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 1px 5px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    font-weight: 600;
+}
+
+.vm-cmdk__badge--entity {
+    background: rgba(96, 165, 250, 0.18);
+    color: #93c5fd;
+}
+
+.vm-cmdk__badge--command {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.vm-cmdk__label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vm-cmdk__enter {
+    color: rgba(255, 255, 255, 0.5);
+    flex-shrink: 0;
 }
 
 .vm-bookmark-row {

@@ -160,4 +160,18 @@ describe('vesselReducer', () => {
     expect(closed.ui.outlinerOpen).toBe(false);
     expect(closed.history).toBe(INITIAL_STATE.history);
   });
+
+  it('SET_PALETTE_OPEN sets ui.paletteOpen transiently, recording no history', () => {
+    expect(INITIAL_STATE.ui.paletteOpen).toBe(false);
+
+    const opened = vesselReducer(INITIAL_STATE, { type: 'SET_PALETTE_OPEN', open: true });
+    expect(opened.ui.paletteOpen).toBe(true);
+    // Transient UI only: document + history slices untouched (shared by reference).
+    expect(opened.vessel).toBe(INITIAL_STATE.vessel);
+    expect(opened.history).toBe(INITIAL_STATE.history);
+
+    const closed = vesselReducer(opened, { type: 'SET_PALETTE_OPEN', open: false });
+    expect(closed.ui.paletteOpen).toBe(false);
+    expect(closed.history).toBe(INITIAL_STATE.history);
+  });
 });
