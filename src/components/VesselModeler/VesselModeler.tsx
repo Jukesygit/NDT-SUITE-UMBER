@@ -85,6 +85,7 @@ import * as THREE from 'three';
 import StatsDropdown from './StatsDropdown';
 import HistoryDropdown from './HistoryDropdown';
 import BookmarksDropdown from './BookmarksDropdown';
+import ClipPlanesControl from './ClipPlanesControl';
 import ViewCube from './ViewCube';
 import OutlinerPanel from './OutlinerPanel';
 import CommandPalette from './CommandPalette';
@@ -1078,6 +1079,7 @@ export default function VesselModeler() {
                 selectedPipelineId={selection.pipelineId}
                 selectedPipeSegmentIdx={selection.pipeSegmentIdx}
                 inspectingAnnotationId={ui.inspectingAnnotationId}
+                clipConfig={ui.clip}
               />
             </ErrorBoundary>
             {/* View cube — orientation indicator + canonical-view launcher (3D only) */}
@@ -1451,6 +1453,16 @@ export default function VesselModeler() {
             onRecall={handleRecallBookmark}
             onRename={handleRenameBookmark}
             onDelete={handleDeleteBookmark}
+          />
+          {/* Section clip planes (C15) — transient ui.clip, never serialized */}
+          <ClipPlanesControl
+            clip={ui.clip}
+            lengthMm={vesselState.length}
+            diameterMm={vesselState.id}
+            headDepthMm={
+              vesselState.headRatio > 0 ? vesselState.id / (2 * vesselState.headRatio) : 0
+            }
+            onChange={(clip) => dispatch({ type: 'SET_CLIP', clip })}
           />
           {/* 3D / 2D / Topo toggle */}
           <div className="vm-toolbar-segmented">

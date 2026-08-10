@@ -174,4 +174,38 @@ describe('vesselReducer', () => {
     expect(closed.ui.paletteOpen).toBe(false);
     expect(closed.history).toBe(INITIAL_STATE.history);
   });
+
+  it('SET_CLIP merges into ui.clip transiently, recording no history', () => {
+    expect(INITIAL_STATE.ui.clip).toEqual({
+      enabled: false,
+      mode: 'transverse',
+      offsetMm: 0,
+      flip: false,
+      showHelper: false,
+    });
+
+    const enabled = vesselReducer(INITIAL_STATE, { type: 'SET_CLIP', clip: { enabled: true } });
+    expect(enabled.ui.clip.enabled).toBe(true);
+    // Untouched fields survive the partial merge.
+    expect(enabled.ui.clip.mode).toBe('transverse');
+    expect(enabled.ui.clip.offsetMm).toBe(0);
+    // Transient UI only: document + history slices untouched (shared by reference).
+    expect(enabled.vessel).toBe(INITIAL_STATE.vessel);
+    expect(enabled.history).toBe(INITIAL_STATE.history);
+    // The initial config object is never mutated in place.
+    expect(INITIAL_STATE.ui.clip.enabled).toBe(false);
+
+    const moved = vesselReducer(enabled, {
+      type: 'SET_CLIP',
+      clip: { mode: 'longitudinal-h', offsetMm: -250, flip: true, showHelper: true },
+    });
+    expect(moved.ui.clip).toEqual({
+      enabled: true,
+      mode: 'longitudinal-h',
+      offsetMm: -250,
+      flip: true,
+      showHelper: true,
+    });
+    expect(moved.history).toBe(INITIAL_STATE.history);
+  });
 });

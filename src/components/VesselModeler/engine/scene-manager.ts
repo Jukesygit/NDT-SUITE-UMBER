@@ -33,6 +33,8 @@ export class SceneManager {
   private shadowPlane: THREE.Mesh | null = null;
   private keyLight: THREE.DirectionalLight | null = null;
   private cardinalGroup: THREE.Group | null = null;
+  /** C15 section cut — world-space planes currently applied scene-wide (empty = off). */
+  private clippingPlanes: THREE.Plane[] = [];
   private disposed = false;
   private boundContextLost: (e: Event) => void;
   private boundContextRestored: () => void;
@@ -303,6 +305,63 @@ export class SceneManager {
       this.vesselGroup.add(group);
       this.pipelineGroup = group;
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Clipping planes (C15 section cut)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Apply a set of world-space clipping planes across the WHOLE scene.
+   *
+   * Scene-wide application is what makes shared materials safe: every mesh gets
+   * the same plane list, so a material reused by several meshes can never clip
+   * inconsistently. An empty array turns clipping off (`localClippingEnabled`
+   * false + `clippingPlanes = null` everywhere), restoring the untouched
+   * renderer state exactly.
+   *
+   * Objects marked `userData.noClip` (e.g. the section's own PlaneHelper) are
+   * skipped so the helper does not clip itself at its own surface. CSS2D label
+   * objects have no `material` and are skipped implicitly — they are DOM
+   * overlays and do not clip (documented v1 limit).
+   */
+  setClippingPlanes(planes: THREE.Plane[]): void {
+    this.clippingPlanes = planes;
+    this.renderer.localClippingEnabled = planes.length > 0;
+    this.applyClippingToScene();
+  }
+
+  /** The planes currently applied (live array — treat as read-only). */
+  getClippingPlanes(): THREE.Plane[] {
+    return this.clippingPlanes;
+  }
+
+  /**
+   * Re-apply the stored planes to the scene. Structural rebuilds create fresh
+   * materials that have never seen the plane list, so the rebuild path calls
+   * this at the end. A no-plane state costs nothing (early return, no traverse).
+   */
+  reapplyClippingPlanes(): void {
+    if (this.clippingPlanes.length === 0) return;
+    this.applyClippingToScene();
+  }
+
+  private applyClippingToScene(): void {
+    // three.js recompiles a material's program by itself when the active plane
+    // count changes (WebGLRenderer compares materialProperties.numClippingPlanes),
+    // so we deliberately do NOT set needsUpdate here — that would force a shader
+    // recompile of every material on every structural rebuild.
+    const planes = this.clippingPlanes.length > 0 ? this.clippingPlanes : null;
+    this.scene.traverse((obj) => {
+      if (obj.userData?.noClip) return;
+      const material = (obj as Partial<THREE.Mesh>).material;
+      if (!material) return;
+      const list = Array.isArray(material) ? material : [material];
+      for (const mat of list) {
+        mat.clippingPlanes = planes;
+        mat.clipShadows = true;
+      }
+    });
   }
 
   /**

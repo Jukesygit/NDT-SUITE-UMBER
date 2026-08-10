@@ -56,6 +56,7 @@ import { buildPipelineGroup, computeNozzleTipY } from './engine/pipeline-geometr
 import { createScanCompositePlane, footprintFingerprint } from './engine/texture-manager';
 import { createDomeScanPlane } from './engine/dome-scan-geometry';
 import { useSettledValue } from '../../hooks/useSettledValue';
+import { DEFAULT_CLIP_CONFIG, buildClipPlanes, type ClipConfig } from './engine/clip-planes';
 import * as THREE from 'three';
 
 // Footprint cutouts (nozzle bores + junctions) baked into scan-composite heatmap
@@ -162,6 +163,8 @@ interface ThreeViewportProps {
   selectedPipelineId?: string;
   selectedPipeSegmentIdx?: number;
   inspectingAnnotationId?: number | null;
+  /** C15 section cut. Transient UI state (`ui.clip`); defaults to "off". */
+  clipConfig?: ClipConfig;
 }
 
 const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(function ThreeViewport(
@@ -197,6 +200,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
     selectedPipelineId = '',
     selectedPipeSegmentIdx = -1,
     inspectingAnnotationId,
+    clipConfig = DEFAULT_CLIP_CONFIG,
   },
   ref
 ) {
@@ -1159,6 +1163,11 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
       interactionRef.current.inspectionImageDotMeshes = inspectionImageDotMeshes;
       interactionRef.current.vesselGroup = result.vesselGroup;
     }
+
+    // C15 — every material in the scene was just recreated, so none of them
+    // carry the section planes. Re-apply the stored list; a no-plane state early
+    // -returns inside the manager, so clipping-off costs a single length check.
+    manager.reapplyClippingPlanes();
   }, [
     textureObjects,
     selectedNozzleIndex,
@@ -1589,6 +1598,70 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
     vesselState.scanComposites,
     vesselState.domeScanComposites,
   ]);
+
+  // =========================================================================
+  // C15 — section clip planes
+  // =========================================================================
+  // ONE effect owns the whole feature: build the planes, hand them to the scene
+  // manager (which applies them scene-wide), and add/remove the optional helper.
+  //
+  // DEPS — deliberately minimal (orbit-stutter scar): `buildClipPlanes` reads
+  // ONLY `state.orientation` from the vessel (the shell is centred on the world
+  // origin and offsetMm is measured from that centre), so the sole vessel dep is
+  // that primitive — the full state is read through `vesselStateRef` for the
+  // helper's sizing. Never dep on `vesselState` (a nozzle drag streams a new
+  // object every pointer-move → a scene traverse per frame), and never on
+  // rebuildScene/updatePreviews (their useCallback identity churns every render).
+  // New materials from a structural rebuild are covered by the
+  // `reapplyClippingPlanes()` call at the end of rebuildScene, not by this effect.
+  const clipHelperRef = useRef<THREE.PlaneHelper | null>(null);
+  useEffect(() => {
+    const manager = sceneManagerRef.current;
+    if (!manager) return;
+
+    const state = vesselStateRef.current;
+    const planes = buildClipPlanes(clipConfig, state);
+    manager.setClippingPlanes(planes);
+
+    // Persistent materials that may not be attached to any mesh right now (the
+    // highlight variants are swapped in later by the Tier-2 selection path), so
+    // the scene traverse cannot reach them. Keep them in sync explicitly.
+    const materials = materialsRef.current;
+    if (materials) {
+      const list = planes.length > 0 ? planes : null;
+      Object.values(materials).forEach((mat) => {
+        mat.clippingPlanes = list;
+        mat.clipShadows = true;
+      });
+    }
+
+    // Optional faint helper at the cut plane. Marked noClip so it is not clipped
+    // by itself (it lies exactly on the plane).
+    const scene = manager.getScene();
+    if (planes.length > 0 && clipConfig.showHelper) {
+      const size = Math.max(state.length, state.id) * SCALE * 1.4;
+      const helper = new THREE.PlaneHelper(planes[0], size, 0x38bdf8);
+      helper.traverse((obj) => {
+        obj.userData.noClip = true;
+      });
+      scene.add(helper);
+      clipHelperRef.current = helper;
+    }
+
+    return () => {
+      const helper = clipHelperRef.current;
+      if (!helper) return;
+      clipHelperRef.current = null;
+      helper.removeFromParent();
+      helper.traverse((obj) => {
+        const mesh = obj as Partial<THREE.Mesh>;
+        mesh.geometry?.dispose();
+        const material = mesh.material;
+        if (!material) return;
+        (Array.isArray(material) ? material : [material]).forEach((m) => m.dispose());
+      });
+    };
+  }, [clipConfig, vesselState.orientation]);
 
   // =========================================================================
   // Tier 3 effect — Preview overlay fast-path (only preview group changes)

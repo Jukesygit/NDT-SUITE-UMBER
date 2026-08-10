@@ -27,6 +27,7 @@ import {
   type VesselHistoryState,
   type HistoryMeta,
 } from './vessel-history';
+import { DEFAULT_CLIP_CONFIG, type ClipConfig } from './clip-planes';
 
 export interface SelectionState {
   nozzleIndex: number;
@@ -85,6 +86,8 @@ export interface UIState {
   outlinerOpen: boolean;
   /** Whether the command palette is open (transient — never serialized, no history). */
   paletteOpen: boolean;
+  /** Section clip-plane config (transient — never serialized, no history). */
+  clip: ClipConfig;
   /** ID of annotation being inspected (null = not in inspection mode) */
   inspectingAnnotationId: number | null;
   /** Camera state saved before entering inspection mode */
@@ -145,6 +148,7 @@ export const INITIAL_STATE: VesselModelerState = {
     snapDeg: 5,
     outlinerOpen: false,
     paletteOpen: false,
+    clip: DEFAULT_CLIP_CONFIG,
     inspectingAnnotationId: null,
     savedCameraState: null,
     viewMode: '3d',
@@ -237,6 +241,7 @@ export type VesselAction =
   | { type: 'TOGGLE_SCAN_TOOLTIP_FOLLOW' }
   | { type: 'TOGGLE_OUTLINER' }
   | { type: 'SET_PALETTE_OPEN'; open: boolean }
+  | { type: 'SET_CLIP'; clip: Partial<ClipConfig> }
   | { type: 'TOGGLE_SNAP' }
   | { type: 'SET_SNAP_DEG'; deg: number }
   | { type: 'CANCEL_ALL_DRAW_MODES' }
@@ -402,6 +407,12 @@ export function vesselReducer(
       // Transient UI only — never serialized, records no history entry. Explicit
       // open flag (not a toggle) so an executed action can force-close it.
       return { ...state, ui: { ...state.ui, paletteOpen: action.open } };
+    case 'SET_CLIP':
+      // Transient UI only — never serialized, records no history entry. Partial
+      // merge so each control (mode/offset/flip/helper) dispatches just its field;
+      // the resulting ui.clip identity is what the viewport effect keys on, so it
+      // must only change when a clip field actually changes.
+      return { ...state, ui: { ...state.ui, clip: { ...state.ui.clip, ...action.clip } } };
     case 'TOGGLE_SNAP':
       return { ...state, ui: { ...state.ui, snapEnabled: !state.ui.snapEnabled } };
     case 'SET_SNAP_DEG':
