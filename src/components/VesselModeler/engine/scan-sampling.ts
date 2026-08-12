@@ -283,12 +283,21 @@ export interface FootprintSample {
   value: number;
 }
 
+/** The routing-relevant subset of a rect. Structural so BOTH
+ *  `AnnotationShapeConfig` and `CoverageRectConfig` pass unchanged — there is
+ *  exactly one geometry-routing predicate, never a re-derived copy. */
+export interface RectRoutingShape {
+  pos: number;
+  width: number;
+  bodyId?: string;
+}
+
 /**
  * True when the annotation's whole meridian-arc extent lies on the cylinder
  * [0, L]. Mirrors annotation-geometry.ts `rectIsPureCylinder`, so stats/heatmap
  * route to the legacy box vs the rigid drape EXACTLY where the geometry does.
  */
-export function rectIsPureCylinder(ann: AnnotationShapeConfig, vesselState: VesselState): boolean {
+export function rectIsPureCylinder(ann: RectRoutingShape, vesselState: VesselState): boolean {
   const { R, D, L } = resolveBodyDims(vesselState, ann.bodyId);
   // A flat/open closure (D = 0) has no curved head to drape on — matches
   // annotation-geometry.ts so stats/heatmap route exactly where geometry does.
