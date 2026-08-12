@@ -4,11 +4,25 @@
 // Pure math module for computing overlap-aware shell coverage.
 // Uses coordinate compression to handle arbitrary rectangle overlaps
 // and numerical integration for true ellipsoidal surface area on dome regions.
+//
+// Geometry routing (must mirror how the rect is DRAWN — see head-coverage.ts):
+//   - pure-cylinder rects (whole meridian-arc extent within [0, L]) keep the
+//     legacy compressed box sweep, byte-identical;
+//   - head-touching rects are drawn as rigid geodesic drapes, so their cylinder
+//     part enters the same sweep clamped to [0, L] and their HEAD part is
+//     measured on the drape raster in head-coverage.ts.
+// The routing predicate itself is imported (scan-sampling.ts `rectIsPureCylinder`),
+// never re-derived here.
 // =============================================================================
 
 import type { CoverageRectConfig, VesselState } from '../types';
+import { computeHeadCoveredAreas } from './head-coverage';
 import { buildAllFootprints, type JunctionFootprint } from './junction-footprint';
-import { buildAppendageNozzleFootprints, buildMainShellNozzleFootprints } from './nozzle-footprint';
+import {
+  buildAppendageNozzleFootprints,
+  buildMainShellNozzleFootprints,
+} from './nozzle-footprint';
+import { rectIsPureCylinder } from './scan-sampling';
 
 /**
  * Main-shell cutout footprints: appendage junctions PLUS unmappable nozzle bores
@@ -32,9 +46,9 @@ function footprintsFor(vesselState: VesselState): JunctionFootprint[] {
 // ---------------------------------------------------------------------------
 
 export interface RegionCoverage {
-  covered: number; // m²
-  total: number; // m²
-  percent: number; // 0-100
+  covered: number;   // m²
+  total: number;     // m²
+  percent: number;   // 0-100
 }
 
 export interface CoverageResult {
@@ -118,7 +132,7 @@ function ellipsoidCellArea(
   radius: number,
   headDepth: number,
   isLeftHead: boolean,
-  tanTan: number
+  tanTan: number,
 ): number {
   const dTheta = ((angleMaxDeg - angleMinDeg) / 360) * 2 * Math.PI;
   if (dTheta <= 0) return 0;
@@ -151,7 +165,7 @@ function cylinderCellArea(
   posMax: number,
   angleMinDeg: number,
   angleMaxDeg: number,
-  radius: number
+  radius: number,
 ): number {
   const dTheta = ((angleMaxDeg - angleMinDeg) / 360) * 2 * Math.PI;
   const dPos = posMax - posMin;
@@ -175,7 +189,7 @@ function cylinderCellArea(
 export function validAreaFromGrid(
   data: (number | null)[][],
   xAxis: number[],
-  yAxis: number[]
+  yAxis: number[],
 ): number {
   if (!data || data.length === 0 || !data[0] || data[0].length === 0) return 0;
 
@@ -235,7 +249,7 @@ export function computeAppendageCoveredArea(
   rects: CoverageRectConfig[],
   radius: number,
   length: number,
-  footprints: JunctionFootprint[] = []
+  footprints: JunctionFootprint[] = [],
 ): number {
   if (rects.length === 0 || radius <= 0 || length <= 0) return 0;
 
@@ -268,7 +282,7 @@ export function computeAppendageCoveredArea(
       if (aMax <= aMin) continue;
 
       const isCovered = unwrapped.some(
-        (ur) => ur.posMin <= pMin && ur.posMax >= pMax && ur.angleMin <= aMin && ur.angleMax >= aMax
+        (ur) => ur.posMin <= pMin && ur.posMax >= pMax && ur.angleMin <= aMin && ur.angleMax >= aMax,
       );
       if (!isCovered) continue;
 
@@ -297,9 +311,7 @@ export function computeAppendageCoveredArea(
  * which are exactly `resolveBodyFrame(state, id)`'s `radius` / `axialLength`; read
  * as scalars here so this pure module stays free of the THREE-backed frame.
  */
-export function computeAppendageCoverageTotals(
-  vesselState: VesselState
-): AppendageCoverageTotals[] {
+export function computeAppendageCoverageTotals(vesselState: VesselState): AppendageCoverageTotals[] {
   const appendages = vesselState.appendages ?? [];
   return appendages.map((a) => {
     const radius = a.diameter / 2;
@@ -324,11 +336,7 @@ export function computeAppendageCoverageTotals(
   });
 }
 
-export function computeRegionTotalAreas(vesselState: VesselState): {
-  leftHead: number;
-  cylinder: number;
-  rightHead: number;
-} {
+export function computeRegionTotalAreas(vesselState: VesselState): { leftHead: number; cylinder: number; rightHead: number } {
   const R = vesselState.id / 2;
   const D = vesselState.id / (2 * vesselState.headRatio);
 
@@ -367,7 +375,7 @@ export function computeRegionTotalAreas(vesselState: VesselState): {
 
 export function computeCoverage(
   rects: CoverageRectConfig[],
-  vesselState: VesselState
+  vesselState: VesselState,
 ): CoverageResult {
   // Only main-shell rects (bodyId undefined) count toward main-shell coverage;
   // appendage-targeted rects are measured per-body by computeAppendageCoverageTotals.
@@ -395,7 +403,30 @@ export function computeCoverage(
   const D = vesselState.id / (2 * vesselState.headRatio);
   const TAN_TAN = vesselState.length;
 
-  const unwrapped = toUnwrappedRects(mainRects, vesselState);
+  // Geometry routing. A rect whose whole meridian-arc extent lies on the
+  // cylinder is DRAWN as a plain box (legacy path); anything touching a head is
+  // DRAWN as a rigid geodesic drape (surface-drape.ts). Reuse the geometry's own
+  // predicate — never a re-derived copy — so stats can never route differently
+  // from the visual (project rule: sampling mirrors the overlay projection).
+  const cylRects = mainRects.filter((r) => rectIsPureCylinder(r, vesselState));
+  const headRects = mainRects.filter((r) => !rectIsPureCylinder(r, vesselState));
+
+  // Between the tangent lines the drape IS the box, so head-touching rects join
+  // the SAME compressed sweep with their boxes clamped to pos ∈ [0, L]: the Shell
+  // number stays exact and overlap with pure-cylinder rects is resolved by the one
+  // sweep. Their head area comes solely from the drape raster below, so the
+  // tangent line is never double-counted. With no head-touching rects the list is
+  // the legacy one, so pure-cylinder models stay byte-identical.
+  const unwrapped = [
+    ...toUnwrappedRects(cylRects, vesselState),
+    ...toUnwrappedRects(headRects, vesselState)
+      .map((ur) => ({
+        ...ur,
+        posMin: Math.max(0, Math.min(TAN_TAN, ur.posMin)),
+        posMax: Math.max(0, Math.min(TAN_TAN, ur.posMax)),
+      }))
+      .filter((ur) => ur.posMax > ur.posMin),
+  ];
 
   // Appendage cutout predicates (design §9.4): a covered cell whose centre lies
   // inside a junction footprint sits over the shell opening and is not coverable.
@@ -440,8 +471,9 @@ export function computeCoverage(
       if (aMax <= aMin) continue;
 
       // Check if any unwrapped rect covers this cell
-      const covered = unwrapped.some(
-        (ur) => ur.posMin <= pMin && ur.posMax >= pMax && ur.angleMin <= aMin && ur.angleMax >= aMax
+      const covered = unwrapped.some(ur =>
+        ur.posMin <= pMin && ur.posMax >= pMax &&
+        ur.angleMin <= aMin && ur.angleMax >= aMax
       );
       if (!covered) continue;
 
@@ -453,7 +485,7 @@ export function computeCoverage(
       // footprint predicate is wrap-safe, so angles are passed unnormalised.
       if (footprints.length > 0) {
         const midAngle = (aMin + aMax) / 2;
-        if (footprints.some((fp) => fp.containsCell(midPos, midAngle))) continue;
+        if (footprints.some(fp => fp.containsCell(midPos, midAngle))) continue;
       }
 
       if (midPos < 0) {
@@ -471,6 +503,23 @@ export function computeCoverage(
       }
     }
   }
+
+  // Head contribution of the drape-routed rects, measured on the geodesic drape
+  // the viewport actually draws (head-coverage.ts). The box sweep above cannot
+  // reach a head any more — every box it saw was clamped to [0, L] — so this is
+  // an addition, not a double count.
+  if (headRects.length > 0) {
+    const headCovered = computeHeadCoveredAreas({ R, D, L: TAN_TAN, rects: headRects });
+    leftHeadCovered += headCovered.left;
+    rightHeadCovered += headCovered.right;
+  }
+
+  // The raster sums the head band area in the meridian-arc metric while the
+  // region total integrates it axially (skipping the last 0.1% of the apex), so a
+  // fully covered head can land a fraction of a percent over its total. Clamp so
+  // the UI never shows >100%; a no-op for every partially covered head.
+  leftHeadCovered = Math.min(leftHeadCovered, regionAreas.leftHead);
+  rightHeadCovered = Math.min(rightHeadCovered, regionAreas.rightHead);
 
   const makeRegion = (covered: number, total: number): RegionCoverage => ({
     covered: covered / 1e6,
