@@ -12,63 +12,77 @@ import supabaseImport from '../../supabase-client';
 const supabase: SupabaseClient = supabaseImport;
 
 interface UploadAvatarResult {
-    url: string;
+  url: string;
 }
 
+// Images only — the file input accepts `image/*`, so this is the real gate.
+// Both extension and MIME type are checked so a renamed file cannot slip past either.
+const ALLOWED_AVATAR_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
+const ALLOWED_AVATAR_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5MB
+
 async function uploadAvatar(userId: string, file: File): Promise<UploadAvatarResult> {
-    // Generate unique filename
-    const fileExt = file.name.split('.').pop()?.toLowerCase();
-    const fileName = `${userId}/avatar-${Date.now()}.${fileExt}`;
+  // Generate unique filename
+  const fileExt = file.name.split('.').pop()?.toLowerCase();
+  const fileName = `${userId}/avatar-${Date.now()}.${fileExt}`;
 
-    // Validate file type before upload
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-        throw new Error(`Invalid file type. Allowed types: ${allowedTypes.join(', ')}`);
+  // Validate file type and size before upload
+  if (!fileExt || !ALLOWED_AVATAR_EXTENSIONS.includes(fileExt)) {
+    throw new Error(
+      `Invalid file type. Allowed types: ${ALLOWED_AVATAR_EXTENSIONS.map((ext) => `.${ext}`).join(', ')}`
+    );
+  }
+
+  if (!ALLOWED_AVATAR_MIME_TYPES.includes(file.type)) {
+    throw new Error(`Invalid file type. Allowed types: ${ALLOWED_AVATAR_MIME_TYPES.join(', ')}`);
+  }
+
+  if (file.size > MAX_AVATAR_BYTES) {
+    throw new Error(`File is too large. Maximum size is ${MAX_AVATAR_BYTES / (1024 * 1024)}MB.`);
+  }
+
+  // Upload to storage
+  const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, file, {
+    cacheControl: '3600',
+    upsert: true,
+  });
+
+  if (uploadError) {
+    // Provide more helpful error messages
+    if (uploadError.message?.includes('Bucket not found')) {
+      throw new Error('Avatar storage is not configured. Please contact support.');
     }
-
-    // Upload to storage
-    const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(fileName, file, {
-            cacheControl: '3600',
-            upsert: true,
-        });
-
-    if (uploadError) {
-        // Provide more helpful error messages
-        if (uploadError.message?.includes('Bucket not found')) {
-            throw new Error('Avatar storage is not configured. Please contact support.');
-        }
-        if (uploadError.message?.includes('row-level security') || uploadError.message?.includes('policy')) {
-            throw new Error('You do not have permission to upload avatars. Please contact support.');
-        }
-        if (uploadError.message?.includes('mime type') || uploadError.message?.includes('file type')) {
-            throw new Error('This file type is not allowed. Please use JPEG, PNG, GIF, or WebP.');
-        }
-        if (uploadError.message?.includes('size')) {
-            throw new Error('File is too large. Maximum size is 2MB.');
-        }
-        throw new Error(`Upload failed: ${uploadError.message}`);
+    if (
+      uploadError.message?.includes('row-level security') ||
+      uploadError.message?.includes('policy')
+    ) {
+      throw new Error('You do not have permission to upload avatars. Please contact support.');
     }
-
-    // Get public URL
-    const { data: urlData } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(fileName);
-
-    const avatarUrl = urlData.publicUrl;
-
-    // Update profile with new avatar URL
-    const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ avatar_url: avatarUrl })
-        .eq('id', userId);
-
-    if (updateError) {
-        throw new Error(`Failed to save avatar to profile: ${updateError.message}`);
+    if (uploadError.message?.includes('mime type') || uploadError.message?.includes('file type')) {
+      throw new Error('This file type is not allowed. Please use JPEG, PNG, or WebP.');
     }
+    if (uploadError.message?.includes('size')) {
+      throw new Error('File is too large. Maximum size is 2MB.');
+    }
+    throw new Error(`Upload failed: ${uploadError.message}`);
+  }
 
-    return { url: avatarUrl };
+  // Get public URL
+  const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
+
+  const avatarUrl = urlData.publicUrl;
+
+  // Update profile with new avatar URL
+  const { error: updateError } = await supabase
+    .from('profiles')
+    .update({ avatar_url: avatarUrl })
+    .eq('id', userId);
+
+  if (updateError) {
+    throw new Error(`Failed to save avatar to profile: ${updateError.message}`);
+  }
+
+  return { url: avatarUrl };
 }
 
 /**
@@ -85,16 +99,15 @@ async function uploadAvatar(userId: string, file: File): Promise<UploadAvatarRes
  * };
  */
 export function useUploadAvatar() {
-    const queryClient = useQueryClient();
+  const queryClient = useQueryClient();
 
-    return useMutation({
-        mutationFn: ({ userId, file }: { userId: string; file: File }) =>
-            uploadAvatar(userId, file),
-        onSuccess: (_, variables) => {
-            // Invalidate profile query to refetch with new avatar
-            queryClient.invalidateQueries({ queryKey: ['profile', variables.userId] });
-        },
-    });
+  return useMutation({
+    mutationFn: ({ userId, file }: { userId: string; file: File }) => uploadAvatar(userId, file),
+    onSuccess: (_, variables) => {
+      // Invalidate profile query to refetch with new avatar
+      queryClient.invalidateQueries({ queryKey: ['profile', variables.userId] });
+    },
+  });
 }
 
 export default useUploadAvatar;

@@ -26,7 +26,8 @@ interface CompanionScanSectionProps {
     ascan?: string;
   }) => Promise<void>;
   onClearScanImages: () => Promise<void>;
-  getImageUrl: (storagePath: string) => string;
+  /** Resolves an attachment storage path to a short-lived signed URL (private bucket). */
+  getImageUrl: (storagePath: string) => Promise<string | null>;
 }
 
 interface RenderResponse {
@@ -331,6 +332,35 @@ export default function CompanionScanSection({
   // Saved scan-capture attachments for this annotation
   const savedScans = annotation.attachments?.filter((a) => a.type === 'scan-capture') ?? [];
 
+  // Saved scans live in a private bucket: resolve each storage path to a
+  // short-lived signed URL before rendering it.
+  const [savedScanUrls, setSavedScanUrls] = useState<Record<string, string>>({});
+  const savedScanPathsKey = savedScans.map((a) => a.storagePath).join('|');
+
+  useEffect(() => {
+    let cancelled = false;
+    const paths = savedScanPathsKey ? savedScanPathsKey.split('|') : [];
+    if (paths.length === 0) {
+      setSavedScanUrls({});
+    } else {
+      Promise.all(
+        paths.map((path) =>
+          getImageUrl(path)
+            .then((url) => [path, url] as const)
+            .catch(() => [path, null] as const)
+        )
+      ).then((entries) => {
+        if (cancelled) return;
+        const next: Record<string, string> = {};
+        for (const [path, url] of entries) if (url) next[path] = url;
+        setSavedScanUrls(next);
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [savedScanPathsKey, getImageUrl]);
+
   // Renders saved scan images (used when no live companion images are showing)
   const savedScansBlock =
     savedScans.length > 0 && !scanImages ? (
@@ -349,22 +379,25 @@ export default function CompanionScanSection({
                 : scanType === 'bscan'
                   ? 'B-scan'
                   : 'A-scan';
+          const url = savedScanUrls[att.storagePath];
           return (
             <div key={scanType} style={{ marginBottom: 6 }}>
               <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', marginBottom: 2 }}>
                 {label}
               </div>
-              <img
-                src={getImageUrl(att.storagePath)}
-                alt={label}
-                onClick={() => onViewImage(getImageUrl(att.storagePath))}
-                style={{
-                  width: '100%',
-                  borderRadius: 4,
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  cursor: 'pointer',
-                }}
-              />
+              {url && (
+                <img
+                  src={url}
+                  alt={label}
+                  onClick={() => onViewImage(url)}
+                  style={{
+                    width: '100%',
+                    borderRadius: 4,
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    cursor: 'pointer',
+                  }}
+                />
+              )}
             </div>
           );
         })}

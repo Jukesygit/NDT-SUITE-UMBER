@@ -52,16 +52,18 @@ serve(async (req) => {
       if (!profileIds.has(authUser.id)) {
         const metadata = authUser.user_metadata || {}
         const username = metadata.username || authUser.email?.split('@')[0] || 'user'
-        const role = metadata.role || 'viewer'
         const organizationId = metadata.organization_id || null
 
+        // SECURITY: user_metadata is client-controllable, so it must never
+        // decide a role. Recreated profiles always start as 'viewer', mirroring
+        // the handle_new_user trigger; elevate deliberately afterwards.
         const { error: insertError } = await supabaseAdmin
           .from('profiles')
           .insert({
             id: authUser.id,
             email: authUser.email,
             username: username,
-            role: role,
+            role: 'viewer',
             organization_id: organizationId,
             is_active: true
           })

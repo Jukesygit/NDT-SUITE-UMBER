@@ -7,6 +7,7 @@ import { RandomMatrixSpinner } from '../components/MatrixSpinners';
 import { useAuth } from '../contexts/AuthContext';
 import { twoFactorService } from '../services/two-factor-service';
 import { TwoFactorVerifyInput } from '../components/two-factor/TwoFactorVerifyInput';
+import { validatePasswordStrength } from '../config/security';
 import './login.css';
 
 // Single-color brand mark; inherits its color from the surrounding text color
@@ -31,7 +32,14 @@ function BrandMark({ width = 56 }: { width?: number }) {
 // Storage key for tracking password reset mode
 const PASSWORD_RESET_KEY = 'ndt_password_reset_pending';
 
-type LoginMode = 'login' | 'register' | 'reset' | 'verify-code' | 'update-password' | 'processing' | 'verify-2fa';
+type LoginMode =
+  | 'login'
+  | 'register'
+  | 'reset'
+  | 'verify-code'
+  | 'update-password'
+  | 'processing'
+  | 'verify-2fa';
 
 // Check for recovery mode before component mounts (synchronous check)
 const getInitialMode = (): LoginMode => {
@@ -135,19 +143,24 @@ function LoginPageNew() {
     // All other auth events (SIGNED_IN, PASSWORD_RECOVERY, etc.) are handled by
     // auth-manager's single Supabase listener + custom events above.
     // Avoiding duplicate onAuthStateChange listeners prevents race conditions.
-    const { data: { subscription } } = supabase!.auth.onAuthStateChange((event, _session) => {
+    const {
+      data: { subscription },
+    } = supabase!.auth.onAuthStateChange((event, _session) => {
       const currentPasswordResetMode = sessionStorage.getItem(PASSWORD_RESET_KEY) === 'true';
 
       if (event === 'USER_UPDATED' && currentPasswordResetMode) {
         // Password was updated successfully - this fires faster than the promise resolves
         window.history.replaceState(null, '', window.location.pathname);
-        setSuccessMessage('Password updated successfully! You can now sign in with your new password.');
+        setSuccessMessage(
+          'Password updated successfully! You can now sign in with your new password.'
+        );
         setNewPassword('');
         setConfirmPassword('');
         setIsLoading(false);
         setMode('login');
         // Sign out and THEN clear the password reset flag (prevents redirect while still logged in)
-        supabase!.auth.signOut()
+        supabase!.auth
+          .signOut()
           .then(() => {
             sessionStorage.removeItem(PASSWORD_RESET_KEY);
           })
@@ -158,7 +171,12 @@ function LoginPageNew() {
     });
 
     // Only redirect if logged in and NOT in password reset or 2FA verify mode
-    if (isAuthenticated && !isPasswordResetMode && mode !== 'update-password' && mode !== 'verify-2fa') {
+    if (
+      isAuthenticated &&
+      !isPasswordResetMode &&
+      mode !== 'update-password' &&
+      mode !== 'verify-2fa'
+    ) {
       navigate('/');
     }
 
@@ -179,7 +197,10 @@ function LoginPageNew() {
         const result = await authManager.login(email, password);
         if (result.error) {
           // Handle both string errors and object errors
-          const errorMsg = typeof result.error === 'string' ? result.error : (result.error?.message || 'Login failed');
+          const errorMsg =
+            typeof result.error === 'string'
+              ? result.error
+              : result.error?.message || 'Login failed';
           setError(errorMsg);
           setIsLoading(false);
           return;
@@ -209,20 +230,32 @@ function LoginPageNew() {
       } else if (mode === 'register') {
         const result = await authManager.signUp(email, password);
         if (result.error) {
-          const errorMsg = typeof result.error === 'string' ? result.error : (result.error?.message || 'Registration failed');
+          const errorMsg =
+            typeof result.error === 'string'
+              ? result.error
+              : result.error?.message || 'Registration failed';
           setError(errorMsg);
         } else {
           setError('');
           setMode('login');
-          alert('Registration successful! Please check your email to verify your account, then log in.');
+          alert(
+            'Registration successful! Please check your email to verify your account, then log in.'
+          );
         }
       } else if (mode === 'reset') {
         const result = await authManager.resetPassword(email);
         if (result.error) {
-          const errorMsg = typeof result.error === 'string' ? result.error : result.error?.message || 'Password reset failed';
+          const errorMsg =
+            typeof result.error === 'string'
+              ? result.error
+              : result.error?.message || 'Password reset failed';
 
           // Check for rate limit error
-          if (errorMsg.includes('rate limit') || errorMsg.includes('429') || errorMsg.includes('wait')) {
+          if (
+            errorMsg.includes('rate limit') ||
+            errorMsg.includes('429') ||
+            errorMsg.includes('wait')
+          ) {
             setError(errorMsg);
           } else {
             setError(errorMsg);
@@ -242,30 +275,12 @@ function LoginPageNew() {
           return;
         }
 
-        // Validate password meets server requirements (must match password-validation.ts)
-        if (newPassword.length < 12) {
-          setError('Password must be at least 12 characters');
-          setIsLoading(false);
-          return;
-        }
-        if (!/[A-Z]/.test(newPassword)) {
-          setError('Password must contain at least one uppercase letter');
-          setIsLoading(false);
-          return;
-        }
-        if (!/[a-z]/.test(newPassword)) {
-          setError('Password must contain at least one lowercase letter');
-          setIsLoading(false);
-          return;
-        }
-        if (!/[0-9]/.test(newPassword)) {
-          setError('Password must contain at least one number');
-          setIsLoading(false);
-          return;
-        }
-        // eslint-disable-next-line no-useless-escape
-        if (!/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(newPassword)) {
-          setError('Password must contain at least one special character (!@#$%^&*)');
+        // Mirror ALL server-side checks (length, case, number, special, common-password
+        // and email-local-part) via the shared validator. The user-info/common-password
+        // checks live only in feedback (not in `isValid`), so gate on feedback presence.
+        const passwordResult = validatePasswordStrength(newPassword, { email: resetEmail });
+        if (passwordResult.feedback.length > 0) {
+          setError(passwordResult.feedback[0] || 'Password does not meet requirements');
           setIsLoading(false);
           return;
         }
@@ -278,10 +293,16 @@ function LoginPageNew() {
 
         const result = await authManager.verifyResetCode(resetEmail, resetCode, newPassword);
         if (result.error) {
-          setError(typeof result.error === 'string' ? result.error : result.error?.message || 'Failed to verify code');
+          setError(
+            typeof result.error === 'string'
+              ? result.error
+              : result.error?.message || 'Failed to verify code'
+          );
         } else {
           setError('');
-          setSuccessMessage(result.message || 'Password updated successfully! You can now sign in.');
+          setSuccessMessage(
+            result.message || 'Password updated successfully! You can now sign in.'
+          );
           setResetCode('');
           setNewPassword('');
           setConfirmPassword('');
@@ -296,42 +317,29 @@ function LoginPageNew() {
           return;
         }
 
-        // Validate password meets server requirements (must match password-validation.ts)
-        if (newPassword.length < 12) {
-          setError('Password must be at least 12 characters');
-          setIsLoading(false);
-          return;
-        }
-        if (!/[A-Z]/.test(newPassword)) {
-          setError('Password must contain at least one uppercase letter');
-          setIsLoading(false);
-          return;
-        }
-        if (!/[a-z]/.test(newPassword)) {
-          setError('Password must contain at least one lowercase letter');
-          setIsLoading(false);
-          return;
-        }
-        if (!/[0-9]/.test(newPassword)) {
-          setError('Password must contain at least one number');
-          setIsLoading(false);
-          return;
-        }
-        // eslint-disable-next-line no-useless-escape
-        if (!/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(newPassword)) {
-          setError('Password must contain at least one special character (!@#$%^&*)');
+        // Mirror ALL server-side checks (length, case, number, special, common-password
+        // and email-local-part) via the shared validator. The user-info/common-password
+        // checks live only in feedback (not in `isValid`), so gate on feedback presence.
+        const passwordResult = validatePasswordStrength(newPassword, {
+          email: email || resetEmail,
+        });
+        if (passwordResult.feedback.length > 0) {
+          setError(passwordResult.feedback[0] || 'Password does not meet requirements');
           setIsLoading(false);
           return;
         }
 
         // Check if we have a session (the code should have been exchanged for a session)
-        let { data: { session } } = await supabase!.auth.getSession();
+        let {
+          data: { session },
+        } = await supabase!.auth.getSession();
         if (!session) {
           // Try to exchange the code if it's still in the URL
           const params = new URLSearchParams(window.location.search);
           const code = params.get('code');
           if (code) {
-            const { data: exchangeData, error: exchangeError } = await supabase!.auth.exchangeCodeForSession(code);
+            const { data: exchangeData, error: exchangeError } =
+              await supabase!.auth.exchangeCodeForSession(code);
             if (exchangeError) {
               setError('Your password reset link has expired. Please request a new one.');
               setIsLoading(false);
@@ -339,7 +347,9 @@ function LoginPageNew() {
             }
             session = exchangeData?.session;
           } else {
-            setError('Your password reset session has expired. Please request a new password reset link.');
+            setError(
+              'Your password reset session has expired. Please request a new password reset link.'
+            );
             setIsLoading(false);
             return;
           }
@@ -348,12 +358,15 @@ function LoginPageNew() {
         // Use Edge Function to update password AND confirm email
         // This is necessary because clicking the reset link proves email ownership
         try {
-          const { data, error: updateError } = await supabase!.functions.invoke('update-password-confirm-email', {
-            body: {
-              newPassword,
-              accessToken: session?.access_token
+          const { data, error: updateError } = await supabase!.functions.invoke(
+            'update-password-confirm-email',
+            {
+              body: {
+                newPassword,
+                accessToken: session?.access_token,
+              },
             }
-          });
+          );
 
           if (updateError) {
             setError('Error updating password: ' + updateError.message);
@@ -361,7 +374,9 @@ function LoginPageNew() {
             setError('Error updating password: ' + data.error);
           } else {
             // Success - show message and redirect to login
-            setSuccessMessage(data?.message || 'Password updated successfully. You can now sign in.');
+            setSuccessMessage(
+              data?.message || 'Password updated successfully. You can now sign in.'
+            );
             setNewPassword('');
             setConfirmPassword('');
             // Sign out the recovery session and redirect to login
@@ -384,21 +399,32 @@ function LoginPageNew() {
   };
 
   const heading =
-    mode === 'login' ? 'Sign in'
-    : mode === 'register' ? 'Create an account'
-    : mode === 'reset' ? 'Reset your password'
-    : mode === 'verify-code' ? 'Check your email'
-    : mode === 'update-password' ? 'Set a new password'
-    : mode === 'verify-2fa' ? 'Two-factor authentication'
-    : '';
+    mode === 'login'
+      ? 'Sign in'
+      : mode === 'register'
+        ? 'Create an account'
+        : mode === 'reset'
+          ? 'Reset your password'
+          : mode === 'verify-code'
+            ? 'Check your email'
+            : mode === 'update-password'
+              ? 'Set a new password'
+              : mode === 'verify-2fa'
+                ? 'Two-factor authentication'
+                : '';
 
   const subheading =
-    mode === 'register' ? "We'll send you a verification email."
-    : mode === 'reset' ? "We'll email you a 6-digit code to reset it."
-    : mode === 'verify-code' ? `Enter the code we sent to ${resetEmail || 'your email'} and choose a new password.`
-    : mode === 'update-password' ? 'Choose a new password for your account.'
-    : mode === 'verify-2fa' ? 'Enter the 6-digit code from your authenticator app.'
-    : '';
+    mode === 'register'
+      ? "We'll send you a verification email."
+      : mode === 'reset'
+        ? "We'll email you a 6-digit code to reset it."
+        : mode === 'verify-code'
+          ? `Enter the code we sent to ${resetEmail || 'your email'} and choose a new password.`
+          : mode === 'update-password'
+            ? 'Choose a new password for your account.'
+            : mode === 'verify-2fa'
+              ? 'Enter the 6-digit code from your authenticator app.'
+              : '';
 
   return (
     <div className="lg-page">
@@ -417,12 +443,12 @@ function LoginPageNew() {
           )}
 
           {error && (
-            <div className="lg-alert error" role="alert">{error}</div>
+            <div className="lg-alert error" role="alert">
+              {error}
+            </div>
           )}
 
-          {successMessage && (
-            <div className="lg-alert success">{successMessage}</div>
-          )}
+          {successMessage && <div className="lg-alert success">{successMessage}</div>}
 
           {mode === 'processing' && (
             <div className="lg-processing">
@@ -553,7 +579,8 @@ function LoginPageNew() {
                     disabled={isLoading}
                   />
                   <p className="lg-hint">
-                    At least 12 characters, with uppercase, lowercase, a number and a special character.
+                    At least 12 characters, with uppercase, lowercase, a number and a special
+                    character.
                   </p>
                 </div>
 
@@ -689,7 +716,8 @@ function LoginPageNew() {
                       setError('');
                       setSuccessMessage('');
                       // Sign out and THEN clear flag (prevents redirect while still logged in)
-                      supabase!.auth.signOut()
+                      supabase!.auth
+                        .signOut()
                         .then(() => {
                           sessionStorage.removeItem(PASSWORD_RESET_KEY);
                         })

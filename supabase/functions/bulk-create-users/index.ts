@@ -5,6 +5,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import { requireAdmin } from '../_shared/auth.ts'
+import { canGrantRole } from '../_shared/role-rank.ts'
 import { logAuditEvent, maskEmail } from '../_shared/audit.ts'
 
 interface UserToCreate {
@@ -67,6 +68,19 @@ serve(async (req) => {
 
         // SECURITY: Validate role against allowlist at runtime
         const validatedRole = VALID_ROLES.includes(user.role) ? user.role : 'viewer'
+
+        // SECURITY: A caller may only hand out roles below their own rank —
+        // only a super_admin can mint admins, and manager requires admin+.
+        if (!canGrantRole(auth.user!.role, validatedRole)) {
+          results.push({
+            email: user.email,
+            success: false,
+            error: validatedRole === 'admin'
+              ? 'Only super admins can create admin users'
+              : `Insufficient privileges to create a user with the ${validatedRole} role`
+          })
+          continue
+        }
 
         // Check if user already exists using pre-fetched set
         if (existingEmails.has(user.email.toLowerCase())) {

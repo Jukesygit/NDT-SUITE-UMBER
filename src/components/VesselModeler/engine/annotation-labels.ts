@@ -129,6 +129,61 @@ export function createAnnotationLeaderLine(
 }
 
 // ---------------------------------------------------------------------------
+// Label DOM Builders
+// ---------------------------------------------------------------------------
+// Label fields (name, notes, image) are user-supplied and persist in
+// vessel_models.config, which is readable by the whole organization. They are
+// therefore built with DOM APIs and never interpolated into innerHTML.
+
+/** Marks a restriction image that lives in the (private) vessel-annotations bucket. */
+const ANNOTATION_BUCKET_MARKER = '/vessel-annotations/';
+
+/** One label text line: content is assigned as text, never parsed as markup. */
+function labelLine(className: string, text: string): HTMLDivElement {
+  const div = document.createElement('div');
+  div.className = className;
+  div.textContent = text;
+  return div;
+}
+
+/** Only https URLs and inline image data URLs may ever reach an <img> src. */
+function isSafeImageUrl(url: string): boolean {
+  return /^https:\/\//i.test(url) || /^data:image\//i.test(url);
+}
+
+function createRestrictionImage(stored: string): HTMLImageElement {
+  const img = document.createElement('img');
+  img.className = 'vm-annotation-label-img';
+  applyRestrictionImageSrc(img, stored);
+  return img;
+}
+
+/**
+ * Assign the restriction image source via the src property (never markup).
+ * Inline data URLs (the FileReader path used by the annotation sidebar) and
+ * plain external https images are used directly; anything else is treated as a
+ * vessel-annotations object reference and resolved to a short-lived signed URL,
+ * because that bucket is private. The service is imported lazily so the engine
+ * module graph stays free of the Supabase client.
+ */
+function applyRestrictionImageSrc(img: HTMLImageElement, stored: string): void {
+  const value = stored.trim();
+  if (isSafeImageUrl(value) && !value.includes(ANNOTATION_BUCKET_MARKER)) {
+    img.src = value;
+    return;
+  }
+
+  void import('../../../services/annotation-attachment-service')
+    .then(({ resolveAnnotationAttachmentUrl }) => resolveAnnotationAttachmentUrl(value))
+    .then((url) => {
+      if (url && isSafeImageUrl(url)) img.src = url;
+    })
+    .catch(() => {
+      // Unresolvable reference: the label simply renders without an image
+    });
+}
+
+// ---------------------------------------------------------------------------
 // Public Factory - Annotation Label
 // ---------------------------------------------------------------------------
 
@@ -153,26 +208,22 @@ export function createAnnotationLabel(
     el.dataset.severity = config.severityLevel;
   }
 
+  const positionText = `Scan: ${scanMm}mm \u00a0 Index: ${indexMm}mm`;
+
   if (config.type === 'restriction') {
     // Restriction labels: name, notes, position, optional image
-    const notesHtml = config.restrictionNotes
-      ? `<div class="vm-annotation-label-notes">${config.restrictionNotes}</div>`
-      : '';
-    const imageHtml = config.restrictionImage
-      ? `<img class="vm-annotation-label-img" src="${config.restrictionImage}" />`
-      : '';
-    el.innerHTML = `
-      <div class="vm-annotation-label-name">\u26A0 ${config.name}</div>
-      ${notesHtml}
-      <div class="vm-annotation-label-pos">Scan: ${scanMm}mm \u00a0 Index: ${indexMm}mm</div>
-      ${imageHtml}
-    `.trim();
+    el.appendChild(labelLine('vm-annotation-label-name', `\u26A0 ${config.name}`));
+    if (config.restrictionNotes) {
+      el.appendChild(labelLine('vm-annotation-label-notes', config.restrictionNotes));
+    }
+    el.appendChild(labelLine('vm-annotation-label-pos', positionText));
+    if (config.restrictionImage) {
+      el.appendChild(createRestrictionImage(config.restrictionImage));
+    }
   } else {
-    el.innerHTML = `
-      <div class="vm-annotation-label-name">${config.name}</div>
-      <div class="vm-annotation-label-pos">Scan: ${scanMm}mm \u00a0 Index: ${indexMm}mm</div>
-      <div class="vm-annotation-label-area">${areaSqM.toFixed(2)} m\u00b2</div>
-    `.trim();
+    el.appendChild(labelLine('vm-annotation-label-name', config.name));
+    el.appendChild(labelLine('vm-annotation-label-pos', positionText));
+    el.appendChild(labelLine('vm-annotation-label-area', `${areaSqM.toFixed(2)} m\u00b2`));
   }
 
   if (dragContext) {

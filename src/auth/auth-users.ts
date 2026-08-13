@@ -9,6 +9,7 @@
 
 import supabase from '../supabase-client';
 import { ROLES, PERMISSIONS, type AuthResult, type CreateUserData } from './auth-types';
+import { extractFunctionErrorMessage } from '../utils/edge-function-error';
 
 // Supabase is guaranteed initialized when auth services are called
 const sb = supabase!;
@@ -217,7 +218,14 @@ export async function deleteUser(this: any, userId: string): Promise<AuthResult>
   });
 
   if (error) {
-    return { success: false, error: error.message };
+    // The edge function answers 409 (controlled documents still attributed) and
+    // 500 (partial erasure — account NOT deleted, retry) with a JSON `error`
+    // body. FunctionsHttpError.message is only the generic non-2xx string, so the
+    // real reason has to be read off `.context` or the admin sees nothing useful.
+    return {
+      success: false,
+      error: await extractFunctionErrorMessage(error, 'Failed to delete user'),
+    };
   }
 
   if (data?.error) {

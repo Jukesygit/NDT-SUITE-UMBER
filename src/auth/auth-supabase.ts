@@ -340,5 +340,8 @@ export function onAuthStateChangeSupabase(callback: (session: any) => void): () 
 // ── Supabase Logout ────────────────────────────────────────────────────────
 
 export async function logoutSupabase(): Promise<void> {
-  await sb.auth.signOut({ scope: 'local' });
+  // Global scope so the refresh token is revoked server-side, not just cleared
+  // from local storage — a leaked refresh token must not outlive an explicit
+  // user logout.
+  await sb.auth.signOut({ scope: 'global' });
 }

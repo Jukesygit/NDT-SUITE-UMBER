@@ -4,5 +4,36 @@
       "source": "/((?!assets/).*)",
       "destination": "/index.html"
     }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co http://localhost:18923 ws://localhost:18923 http://localhost:18924 ws://localhost:18924 http://localhost:18925 ws://localhost:18925 http://localhost:18926 ws://localhost:18926 http://localhost:18927 ws://localhost:18927 http://localhost:18928 ws://localhost:18928 http://localhost:18929 ws://localhost:18929 http://localhost:18930 ws://localhost:18930 http://localhost:18931 ws://localhost:18931 http://localhost:18932 ws://localhost:18932; worker-src 'self' blob:; frame-src 'self' https://*.supabase.co blob:; object-src 'self' https://*.supabase.co blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        }
+      ]
+    }
   ]
 }
