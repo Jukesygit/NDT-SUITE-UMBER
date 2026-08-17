@@ -71,6 +71,14 @@ const FOOTPRINT_SETTLE_MS = 250;
 import { structuralHash } from './engine/structural-hash';
 export { structuralHash } from './engine/structural-hash';
 
+import {
+  isEffectivelyVisible,
+  isLayerVisible,
+  MAIN_BODY_KEY,
+  type LayerVisibility,
+} from './engine/layer-visibility';
+import type { LayerKey } from './outliner-tree';
+
 // =============================================================================
 // Heatmap visual-param in-place swap (Tier 2, review §4.4)
 // =============================================================================
@@ -165,7 +173,15 @@ interface ThreeViewportProps {
   inspectingAnnotationId?: number | null;
   /** C15 section cut. Transient UI state (`ui.clip`); defaults to "off". */
   clipConfig?: ClipConfig;
+  /**
+   * Per-body/category layer overlay (`ui.layers`); ABSENT key ⇒ visible, so the
+   * default empty map shows everything. Visual only — stats never read it.
+   */
+  layers?: LayerVisibility;
 }
+
+/** Stable identity for the "no layers" default so effect deps never churn. */
+const EMPTY_LAYERS: LayerVisibility = {};
 
 const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(function ThreeViewport(
   {
@@ -201,6 +217,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
     selectedPipeSegmentIdx = -1,
     inspectingAnnotationId,
     clipConfig = DEFAULT_CLIP_CONFIG,
+    layers = EMPTY_LAYERS,
   },
   ref
 ) {
@@ -234,6 +251,9 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
   // assembled in this component, not in vessel-geometry).
   const rulerMeshesRef = useRef<THREE.Object3D[]>([]);
   const coverageMeshesRef = useRef<THREE.Object3D[]>([]);
+  // Layers: the pipeline root parents every pipeline group, so the `pipelines`
+  // layer is one write on it (pipelines are main-shell only — no bodyId).
+  const pipelineRootRef = useRef<THREE.Object3D | null>(null);
   const weldGlowRef = useRef<THREE.Object3D | null>(null);
   const weldLabelsRef = useRef<{ label: CSS2DObject; weld: import('./types').WeldConfig }[]>([]);
 
@@ -263,6 +283,81 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
   const settledFootprintState = useSettledValue(vesselState, FOOTPRINT_SETTLE_MS);
   const settledFootprintStateRef = useRef(settledFootprintState);
   settledFootprintStateRef.current = settledFootprintState;
+
+  const layersRef = useRef(layers);
+  layersRef.current = layers;
+
+  // =========================================================================
+  // Effective visibility pass (entity ∧ layer ∧ body) — in place, no rebuild
+  // =========================================================================
+  // Walks the cached entity registries and writes the composed value into
+  // Object3D.visible. Called from the Tier-2 effect (live toggles) AND at the end
+  // of rebuildScene, because the geometry builders apply only the per-entity flag
+  // — layers are deliberately not threaded into them, so freshly built meshes
+  // need this one pass to pick the overlay back up.
+  //
+  // Reads state through refs and is dep-free, so its identity never churns and it
+  // is safe inside rebuildScene's dep array. Visual only: stats / coverage /
+  // wall-loss never read `visible`.
+  const applyEntityVisibility = useCallback(() => {
+    const br = buildResultRef.current;
+    const state = vesselStateRef.current;
+    const activeLayers = layersRef.current;
+    const bodyVisible = new Map(state.appendages.map((a) => [a.id, a.visible !== false]));
+    // bodyId undefined ⇒ main shell, which is never hidden as a whole.
+    const isBodyVisible = (bodyId?: string) =>
+      bodyId === undefined ? true : (bodyVisible.get(bodyId) ?? true);
+
+    const applyByUserData = (
+      meshes: THREE.Object3D[] | undefined,
+      key: string,
+      category: LayerKey,
+      lookup: (k: unknown) => { visible?: boolean; bodyId?: string } | undefined
+    ) => {
+      if (!meshes) return;
+      for (const m of meshes) {
+        const k = m.userData?.[key];
+        if (k === undefined) continue;
+        const cfg = lookup(k);
+        if (cfg) {
+          m.visible = isEffectivelyVisible(cfg, category, activeLayers) && isBodyVisible(cfg.bodyId);
+        }
+      }
+    };
+
+    applyByUserData(br?.nozzleMeshes, 'nozzleIdx', 'nozzles', (k) => state.nozzles[k as number]);
+    applyByUserData(br?.lugMeshes, 'lugIdx', 'lugs', (k) => state.liftingLugs[k as number]);
+    applyByUserData(br?.saddleMeshes, 'saddleIdx', 'saddles', (k) => state.saddles[k as number]);
+    applyByUserData(weldMeshesRef.current, 'weldIdx', 'welds', (k) => state.welds[k as number]);
+    applyByUserData(coverageMeshesRef.current, 'coverageRectId', 'coverage', (k) =>
+      state.coverageRects.find((c) => c.id === k)
+    );
+    applyByUserData(rulerMeshesRef.current, 'rulerId', 'rulers', (k) =>
+      state.rulers.find((r) => r.id === k)
+    );
+    applyByUserData(br?.textureMeshes, 'textureIdx', 'textures', (k) =>
+      state.textures.find((t) => t.id === k)
+    );
+    applyByUserData(br?.scanCompositeMeshes, 'id', 'scans', (k) =>
+      state.scanComposites.find((s) => s.id === k)
+    );
+    applyByUserData(br?.domeScanMeshes, 'id', 'domeScans', (k) =>
+      (state.domeScanComposites ?? []).find((s) => s.id === k)
+    );
+
+    // Pipelines have no per-mesh registry; their shared root carries the layer.
+    if (pipelineRootRef.current) {
+      pipelineRootRef.current.visible = isLayerVisible(activeLayers, MAIN_BODY_KEY, 'pipelines');
+    }
+
+    // Boot shells carry only the body term — a body is not a layer category. The
+    // appendage effect below writes the same value for live toggles (plus the
+    // `locked` flag it owns); repeating it here covers the post-rebuild pass.
+    for (const group of br?.appendageMeshes ?? []) {
+      const bodyId = group.userData?.bodyId as string | undefined;
+      if (bodyId !== undefined) group.visible = isBodyVisible(bodyId);
+    }
+  }, []);
 
   // Expose imperative methods
   useImperativeHandle(
@@ -508,6 +603,15 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
 
     const state = vesselStateRef.current;
     const scene = manager.getScene();
+    // Annotations and inspection images are FILTERED at build time (their CSS2D
+    // leader labels / thumbnails are separate objects with no in-place registry),
+    // so their layers ride the rebuild path — see the layer-rebuild effect below.
+    const buildLayers = layersRef.current;
+    const imagesLayerVisible = isLayerVisible(buildLayers, MAIN_BODY_KEY, 'images');
+    const annotationVisible = (ann: { visible?: boolean; bodyId?: string }) =>
+      isEffectivelyVisible(ann, 'annotations', buildLayers) &&
+      (ann.bodyId === undefined ||
+        state.appendages.find((a) => a.id === ann.bodyId)?.visible !== false);
 
     // Remove old vessel group
     const oldGroup = manager.getVesselGroup();
@@ -539,7 +643,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
     // -- Annotation shapes (outlines + hit meshes) --
     const annotationMeshes: THREE.Object3D[] = [];
     state.annotations.forEach((ann) => {
-      if (ann.visible === false) return;
+      if (!annotationVisible(ann)) return;
       const group = createAnnotationShape(ann, state, ann.id === selectedAnnotationId);
       result.vesselGroup.add(group);
       annotationMeshes.push(group);
@@ -655,14 +759,14 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
 
     // -- Inspection image dot markers --
     const inspectionImageDotMeshes: THREE.Object3D[] = [];
-    if (state.inspectionImages.length > 0) {
+    if (state.inspectionImages.length > 0 && imagesLayerVisible) {
       const imgMarkers = createAllInspectionImageMarkers(state, selectedInspectionImageId);
       result.vesselGroup.add(imgMarkers.group);
       inspectionImageDotMeshes.push(...imgMarkers.dotMeshes);
     }
 
     // Add CSS2D inspection image thumbnails
-    if (state.inspectionImages.length > 0) {
+    if (state.inspectionImages.length > 0 && imagesLayerVisible) {
       const clickHandler: InspectionImageClickHandler = {
         onThumbnailClick: (id) => onInspectionImageThumbnailClick(id),
       };
@@ -713,7 +817,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
         : undefined;
 
       state.annotations.forEach((ann) => {
-        if (ann.visible === false) return;
+        if (!annotationVisible(ann)) return;
         // Hide leader line + label for the annotation being inspected
         if (inspectingAnnotationId != null && ann.id === inspectingAnnotationId) return;
 
@@ -769,7 +873,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
       // Build annotation summary table as a CSS2D label in the scene
       {
         const tableAnnotations = state.annotations.filter(
-          (a) => a.labelMode === 'table' && a.visible !== false
+          (a) => a.labelMode === 'table' && annotationVisible(a)
         );
         if (tableAnnotations.length > 0) {
           const origin = state.coordinateOrigin ?? { indexMm: 0, scanMm: 0 };
@@ -1128,8 +1232,10 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
       }
 
       manager.setPipelineGroup(pipelineParent);
+      pipelineRootRef.current = pipelineParent;
     } else {
       manager.setPipelineGroup(null);
+      pipelineRootRef.current = null;
     }
 
     // Cache build result for Tier 2 (selection highlight fast-path)
@@ -1137,6 +1243,12 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
     weldMeshesRef.current = weldMeshes;
     rulerMeshesRef.current = rulerMeshes;
     coverageMeshesRef.current = coverageMeshes;
+
+    // Layers: the builders applied only per-entity `visible`, so re-compose the
+    // layer/body terms onto the meshes that were just recreated (a rebuild that
+    // does not change any entity array — e.g. a selection change — would
+    // otherwise leave hidden layers showing until the next Tier-2 run).
+    applyEntityVisibility();
 
     // Seed heatmap visual signatures: the meshes just built already carry the
     // current palette/opacity, so the in-place visual effect stays a no-op until
@@ -1181,6 +1293,7 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
     selectedWeldIndex,
     onInspectionImageThumbnailClick,
     inspectingAnnotationId,
+    applyEntityVisibility,
   ]);
 
   // =========================================================================
@@ -1530,7 +1643,10 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
     updateSelectionHighlights();
   }, [updateSelectionHighlights]);
 
-  // Cosmetic appendage state is intentionally excluded from structuralHash.
+  // Cosmetic appendage state is intentionally excluded from structuralHash. This
+  // is the body-term writer: it owns the boot shell's own visibility and the
+  // `locked` flag. Entities MOUNTED on a boot are siblings of this group, not
+  // children, so their body term is composed separately in applyEntityVisibility.
   useEffect(() => {
     const groups = buildResultRef.current?.appendageMeshes ?? [];
     const appendagesById = new Map(
@@ -1544,49 +1660,18 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
     });
   }, [vesselState.appendages]);
 
-  // C13 — uniform per-entity visibility fast-path. `visible` is excluded from the
-  // structural hash for these types, so a visibility toggle does NOT rebuild the
-  // scene: this in-place effect walks the cached entity registries and sets
-  // group.visible from each config. Dep'd ONLY on the entity arrays — never on
-  // rebuildScene/updatePreviews (orbit-stutter scar). Visual only: stats /
-  // coverage / wall-loss never read `visible`. Annotations & inspection images are
-  // intentionally NOT here — they stay on the rebuild path (their CSS2D leader
-  // labels/thumbnails are separate objects filtered at build time).
+  // C13 — uniform per-entity visibility fast-path, extended with the layer/body
+  // terms. `visible` is excluded from the structural hash for these types, and
+  // `ui.layers` is unreachable from it at all, so neither a per-entity toggle nor
+  // a layer toggle rebuilds the scene: this in-place effect re-runs the shared
+  // composition pass. Dep'd ONLY on the entity arrays + the (identity-stable)
+  // layers map — never on rebuildScene/updatePreviews (orbit-stutter scar).
+  // Visual only: stats / coverage / wall-loss never read `visible`. Annotations &
+  // inspection images are intentionally NOT here — they stay on the rebuild path
+  // (their CSS2D leader labels/thumbnails are separate objects filtered at build
+  // time), so their layer is handled by the rebuild effect below.
   useEffect(() => {
-    const br = buildResultRef.current;
-    const applyByUserData = (
-      meshes: THREE.Object3D[] | undefined,
-      key: string,
-      lookup: (k: unknown) => { visible?: boolean } | undefined
-    ) => {
-      if (!meshes) return;
-      for (const m of meshes) {
-        const k = m.userData?.[key];
-        if (k === undefined) continue;
-        const cfg = lookup(k);
-        if (cfg) m.visible = cfg.visible !== false;
-      }
-    };
-
-    applyByUserData(br?.nozzleMeshes, 'nozzleIdx', (k) => vesselState.nozzles[k as number]);
-    applyByUserData(br?.lugMeshes, 'lugIdx', (k) => vesselState.liftingLugs[k as number]);
-    applyByUserData(br?.saddleMeshes, 'saddleIdx', (k) => vesselState.saddles[k as number]);
-    applyByUserData(weldMeshesRef.current, 'weldIdx', (k) => vesselState.welds[k as number]);
-    applyByUserData(coverageMeshesRef.current, 'coverageRectId', (k) =>
-      vesselState.coverageRects.find((c) => c.id === k)
-    );
-    applyByUserData(rulerMeshesRef.current, 'rulerId', (k) =>
-      vesselState.rulers.find((r) => r.id === k)
-    );
-    applyByUserData(br?.textureMeshes, 'textureIdx', (k) =>
-      vesselState.textures.find((t) => t.id === k)
-    );
-    applyByUserData(br?.scanCompositeMeshes, 'id', (k) =>
-      vesselState.scanComposites.find((s) => s.id === k)
-    );
-    applyByUserData(br?.domeScanMeshes, 'id', (k) =>
-      (vesselState.domeScanComposites ?? []).find((s) => s.id === k)
-    );
+    applyEntityVisibility();
   }, [
     vesselState.nozzles,
     vesselState.liftingLugs,
@@ -1597,7 +1682,33 @@ const ThreeViewport = forwardRef<ThreeViewportHandle, ThreeViewportProps>(functi
     vesselState.textures,
     vesselState.scanComposites,
     vesselState.domeScanComposites,
+    vesselState.pipelines,
+    vesselState.appendages,
+    layers,
+    applyEntityVisibility,
   ]);
+
+  // Annotation / inspection-image layers ride the rebuild path (see above), so a
+  // change to just those two keys has to force one rebuild — nothing else reacts
+  // to them. Guarded on a signature of exactly those keys so every OTHER layer
+  // toggle stays on the in-place fast-path, and rebuildScene/updatePreviews are
+  // reached through their refs, never dep-listed (orbit-stutter scar).
+  const bakedLabelLayerSigRef = useRef<string | null>(null);
+  useEffect(() => {
+    const sig = Object.keys(layers)
+      .filter((k) => k.endsWith('/annotations') || k.endsWith('/images'))
+      .sort()
+      .map((k) => `${k}=${layers[k] !== false}`)
+      .join('|');
+    if (bakedLabelLayerSigRef.current === null) {
+      bakedLabelLayerSigRef.current = sig;
+      return;
+    }
+    if (bakedLabelLayerSigRef.current === sig) return;
+    bakedLabelLayerSigRef.current = sig;
+    rebuildSceneRef.current();
+    updatePreviewsRef.current();
+  }, [layers]);
 
   // =========================================================================
   // C15 — section clip planes

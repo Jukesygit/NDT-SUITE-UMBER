@@ -208,4 +208,65 @@ describe('vesselReducer', () => {
     });
     expect(moved.history).toBe(INITIAL_STATE.history);
   });
+
+  it('SET_LAYERS merges into ui.layers transiently, recording no history', () => {
+    // Sparse by default: no key present ⇒ everything visible.
+    expect(INITIAL_STATE.ui.layers).toEqual({});
+
+    const hidden = vesselReducer(INITIAL_STATE, {
+      type: 'SET_LAYERS',
+      layers: { 'main/coverage': false },
+    });
+    expect(hidden.ui.layers).toEqual({ 'main/coverage': false });
+    // Transient UI only: document + history slices untouched (shared by reference).
+    expect(hidden.vessel).toBe(INITIAL_STATE.vessel);
+    expect(hidden.history).toBe(INITIAL_STATE.history);
+    // The initial map is never mutated in place.
+    expect(INITIAL_STATE.ui.layers).toEqual({});
+
+    // Partial merge: a second key joins the first rather than replacing it.
+    const both = vesselReducer(hidden, {
+      type: 'SET_LAYERS',
+      layers: { 'app-1/scans': false },
+    });
+    expect(both.ui.layers).toEqual({ 'main/coverage': false, 'app-1/scans': false });
+    expect(both.history).toBe(INITIAL_STATE.history);
+
+    // Re-showing flips the stored value, leaving the sibling key alone.
+    const reshown = vesselReducer(both, {
+      type: 'SET_LAYERS',
+      layers: { 'main/coverage': true },
+    });
+    expect(reshown.ui.layers).toEqual({ 'main/coverage': true, 'app-1/scans': false });
+  });
+
+  it('SET_LAYERS keeps state identity when no layer resolves differently', () => {
+    // ABSENT and `true` both mean visible, so patching an absent key to `true` is
+    // a no-op — identity must NOT churn (the viewport effect keys on it).
+    const noop = vesselReducer(INITIAL_STATE, {
+      type: 'SET_LAYERS',
+      layers: { 'main/coverage': true, 'app-1/welds': true },
+    });
+    expect(noop).toBe(INITIAL_STATE);
+
+    const hidden = vesselReducer(INITIAL_STATE, {
+      type: 'SET_LAYERS',
+      layers: { 'main/coverage': false },
+    });
+    // Re-hiding an already-hidden layer is likewise a no-op.
+    const again = vesselReducer(hidden, {
+      type: 'SET_LAYERS',
+      layers: { 'main/coverage': false },
+    });
+    expect(again).toBe(hidden);
+    expect(again.ui.layers).toBe(hidden.ui.layers);
+
+    // A mixed patch where at least one key genuinely flips DOES produce a new map.
+    const mixed = vesselReducer(hidden, {
+      type: 'SET_LAYERS',
+      layers: { 'main/coverage': false, 'main/scans': false },
+    });
+    expect(mixed).not.toBe(hidden);
+    expect(mixed.ui.layers).toEqual({ 'main/coverage': false, 'main/scans': false });
+  });
 });

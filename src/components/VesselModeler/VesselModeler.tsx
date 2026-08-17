@@ -27,7 +27,9 @@ import {
   Settings2,
   FolderOpen,
   AlignVerticalDistributeCenter,
-  ListTree,
+  Layers,
+  Eye,
+  EyeOff,
   Undo2,
   Redo2,
 } from 'lucide-react';
@@ -89,7 +91,14 @@ import ClipPlanesControl from './ClipPlanesControl';
 import ViewCube from './ViewCube';
 import OutlinerPanel from './OutlinerPanel';
 import CommandPalette from './CommandPalette';
-import type { OutlinerToggleRef } from './outliner-tree';
+import type { LayerKey, OutlinerToggleRef } from './outliner-tree';
+import {
+  categoryLayerPatch,
+  isCategoryVisibleAnywhere,
+  isLayerVisible,
+  layerKey,
+  MAIN_BODY_KEY,
+} from './engine/layer-visibility';
 import { buildPaletteItems, type PaletteAction } from './engine/palette-registry';
 import { frameEntityPose, type FrameEntityRef } from './engine/frame-entity';
 import { canonicalPose, type CanonicalViewId } from './engine/canonical-views';
@@ -616,6 +625,40 @@ export default function VesselModeler() {
     ]
   );
 
+  // --- Layers (transient `ui.layers`; ABSENT key ⇒ visible) ------------------
+  // Every body that can own a layer: the main shell plus each boot.
+  const layerBodyKeys = useMemo(
+    () => [MAIN_BODY_KEY, ...vesselState.appendages.map((a) => a.id)],
+    [vesselState.appendages]
+  );
+
+  /** Panel eye: flip exactly one body's slice of one category. */
+  const handleToggleLayer = useCallback(
+    (bodyKey: string, categoryKey: LayerKey) => {
+      dispatch({
+        type: 'SET_LAYERS',
+        layers: {
+          [layerKey(bodyKey, categoryKey)]: !isLayerVisible(ui.layers, bodyKey, categoryKey),
+        },
+      });
+    },
+    [ui.layers]
+  );
+
+  /** Master toggle: any body still showing → hide everywhere, else show everywhere. */
+  const toggleCategoryLayerEverywhere = useCallback(
+    (categoryKey: LayerKey) => {
+      const anyVisible = isCategoryVisibleAnywhere(ui.layers, layerBodyKeys, categoryKey);
+      dispatch({
+        type: 'SET_LAYERS',
+        layers: categoryLayerPatch(layerBodyKeys, categoryKey, !anyVisible),
+      });
+    },
+    [ui.layers, layerBodyKeys]
+  );
+
+  const coverageLayerVisible = isCategoryVisibleAnywhere(ui.layers, layerBodyKeys, 'coverage');
+
   const updateMeasurementConfig = useCallback(
     (updates: Partial<MeasurementConfig>) => {
       updateVessel(
@@ -815,6 +858,11 @@ export default function VesselModeler() {
           case 'statsScanCoverage':
             dispatch({ type: 'TOGGLE_STATS_SCAN_COVERAGE' });
             break;
+          default:
+            // `layer:<category>` — the palette has no body context, so it flips
+            // the category across every body (the panel is the per-body surface).
+            toggleCategoryLayerEverywhere(action.toggle.slice('layer:'.length) as LayerKey);
+            break;
         }
         return;
       }
@@ -830,7 +878,15 @@ export default function VesselModeler() {
         dispatch({ type: 'REDO' });
       }
     },
-    [ui.viewMode, vesselState, flyToPose, resolveFramePose, resolveViewPose, handleRecallBookmark]
+    [
+      ui.viewMode,
+      vesselState,
+      flyToPose,
+      resolveFramePose,
+      resolveViewPose,
+      handleRecallBookmark,
+      toggleCategoryLayerEverywhere,
+    ]
   );
 
   // --- Interaction callbacks (from Three.js viewport) — T2-D / D3 ---
@@ -921,6 +977,14 @@ export default function VesselModeler() {
       }
 
       const key = e.key.toLowerCase();
+      // Coverage-layer master — same any-visible → hide-all behaviour as the
+      // toolbar button. Plain Shift (no Ctrl/Cmd) so it can't shadow a browser
+      // binding; nothing else in the modeler claims C.
+      if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && key === 'c') {
+        e.preventDefault();
+        toggleCategoryLayerEverywhere('coverage');
+        return;
+      }
       // Command palette (Ctrl/Cmd+K, Ctrl/Cmd+P alias). preventDefault so the
       // browser's own K/P bindings (e.g. print) don't steal it.
       if ((e.ctrlKey || e.metaKey) && (key === 'k' || key === 'p')) {
@@ -938,7 +1002,7 @@ export default function VesselModeler() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [drawModeState, ui.inspectingAnnotationId, exitInspectionMode]);
+  }, [drawModeState, ui.inspectingAnnotationId, exitInspectionMode, toggleCategoryLayerEverywhere]);
 
   // --- Viewport drag-and-drop (T2-D / D3) ---
   // Nozzle-library / lug / weld / pipe-part drops moved verbatim into
@@ -1080,19 +1144,22 @@ export default function VesselModeler() {
                 selectedPipeSegmentIdx={selection.pipeSegmentIdx}
                 inspectingAnnotationId={ui.inspectingAnnotationId}
                 clipConfig={ui.clip}
+                layers={ui.layers}
               />
             </ErrorBoundary>
             {/* View cube — orientation indicator + canonical-view launcher (3D only) */}
             <ViewCube viewportRef={viewportRef} vesselState={vesselState} />
-            {/* Entity outliner (C13b) — left-edge tree, 3D only, toolbar-toggled */}
+            {/* Layers panel (C13b outliner) — left-edge tree, 3D only, toolbar-toggled */}
             {ui.outlinerOpen && (
               <OutlinerPanel
                 vesselState={vesselState}
                 selection={selection}
+                layers={ui.layers}
                 sidebarOpen={ui.sidebarOpen}
                 onClose={() => dispatch({ type: 'TOGGLE_OUTLINER' })}
                 onSelect={(action) => dispatch(action)}
                 onToggleVisible={handleOutlinerToggleVisible}
+                onToggleLayer={handleToggleLayer}
               />
             )}
           </>
@@ -1501,14 +1568,28 @@ export default function VesselModeler() {
             <AlignVerticalDistributeCenter size={14} />
             Tidy
           </button>
-          {/* Entity outliner toggle (C13b) */}
+          {/* Layers panel toggle (C13b outliner, repurposed) */}
           <button
             className={`vm-popout-trigger ${ui.outlinerOpen ? 'vm-popout-trigger--active' : ''}`}
             onClick={() => dispatch({ type: 'TOGGLE_OUTLINER' })}
-            title="Outliner"
+            title="Layers"
           >
-            <ListTree size={14} />
-            Outliner
+            <Layers size={14} />
+            Layers
+          </button>
+          {/* Coverage-layer master (Shift+C). "layer", never bare "coverage" —
+              coverage is also a draw mode. */}
+          <button
+            className={`vm-popout-trigger ${coverageLayerVisible ? 'vm-popout-trigger--active' : ''}`}
+            onClick={() => toggleCategoryLayerEverywhere('coverage')}
+            title={
+              coverageLayerVisible
+                ? 'Hide coverage layer on all bodies (Shift+C)'
+                : 'Show coverage layer on all bodies (Shift+C)'
+            }
+          >
+            {coverageLayerVisible ? <Eye size={14} /> : <EyeOff size={14} />}
+            Coverage
           </button>
           <StatsDropdown
             showCoverage={ui.showStatsCoverage}

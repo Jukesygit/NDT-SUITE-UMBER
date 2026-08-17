@@ -224,18 +224,61 @@ export function compositeValidArea(c: {
   return validAreaFromGrid(c.data, c.xAxis, c.yAxis);
 }
 
-/** Per-appendage coverage totals (design §9). */
+/** Per-appendage coverage totals (design §9; shell/dome split 2026-08-17). */
 export interface AppendageCoverageTotals {
   appendageId: string;
   name: string;
-  /** Coverable lateral cylinder area in mm² (2πr·L). No end-closure area and no
-   *  cutout on the appendage side in v1 (design §9.2). */
+  /** Coverable lateral cylinder area in mm² (2πr·L, minus this boot's nozzle
+   *  bores). Alias of {@link shellTotalMm2}, kept so existing consumers render
+   *  identical numbers; new code should read the explicit shell/dome fields. */
   totalMm2: number;
-  /** Achieved scanned area in mm² — Σ validArea of this body's scan composites. */
+  /** Achieved scanned area in mm² on the lateral shell — Σ validArea of this
+   *  body's scan composites. Alias of {@link shellAchievedMm2}. */
   achievedMm2: number;
   /** Covered (coverage-rect) area in mm² on this body's lateral cylinder —
    *  overlap-aware Σ of the rects whose `bodyId` matches (Phase 4 §4). */
   coveredMm2: number;
+  /** Coverable lateral cylinder area in mm² — the boot SHELL feature instance. */
+  shellTotalMm2: number;
+  /** Achieved scanned area in mm² on the boot shell. */
+  shellAchievedMm2: number;
+  /** Coverable end-closure area in mm², present only for a `dished` closure —
+   *  the boot DOME feature instance. Same ellipsoidal integration as the main
+   *  heads, over the appendage's own diameter / headRatio. */
+  domeTotalMm2?: number;
+  /** Achieved scanned area in mm² on the boot dome — Σ validArea of this body's
+   *  dome scan composites (`head: 'end'`). Present with `domeTotalMm2`. */
+  domeAchievedMm2?: number;
+}
+
+/** Achieved (scanned) area per main-shell region, in mm². */
+export interface RegionAchievedAreas {
+  leftHead: number;
+  cylinder: number;
+  rightHead: number;
+}
+
+/**
+ * Ellipsoidal head surface area in mm² for a head of equator radius `R` and
+ * depth `D` — numerical integration from z=0 to z=D of 2πR · r(z) · √(1+(dr/dz)²).
+ *
+ * The ONE head-area integration: the main heads and every dished appendage
+ * closure share it (same step count, same arithmetic order, so the main-head
+ * numbers stay bit-for-bit what the inline loop produced).
+ */
+function ellipsoidalHeadArea(R: number, D: number): number {
+  const steps = 200;
+  const dz = D / steps;
+  let headArea = 0;
+  for (let i = 0; i < steps; i++) {
+    const z = (i + 0.5) * dz;
+    const ratio = z / D;
+    if (ratio >= 0.999) continue;
+    const rLocal = R * Math.sqrt(1 - ratio * ratio);
+    const drdz = (R * ratio) / (D * Math.sqrt(1 - ratio * ratio));
+    headArea += rLocal * Math.sqrt(1 + drdz * drdz) * 2 * Math.PI * dz;
+  }
+  return headArea;
 }
 
 /**
@@ -321,38 +364,87 @@ export function computeAppendageCoverageTotals(vesselState: VesselState): Append
     // boots with no nozzles → totalMm2 unchanged (byte-identical).
     const nozzleFps = buildAppendageNozzleFootprints(vesselState, a);
     const cutoutMm2 = nozzleFps.reduce((sum, fp) => sum + fp.areaMm2, 0);
-    const totalMm2 = Math.max(0, 2 * Math.PI * radius * a.length - cutoutMm2);
-    let achievedMm2 = 0;
+    const shellTotalMm2 = Math.max(0, 2 * Math.PI * radius * a.length - cutoutMm2);
+    let shellAchievedMm2 = 0;
     for (const sc of vesselState.scanComposites) {
       if (sc.bodyId !== a.id) continue;
-      achievedMm2 += compositeValidArea(sc);
+      shellAchievedMm2 += compositeValidArea(sc);
     }
     // Covered = coverage rects that target THIS body (Phase 4 §4). Overlap-aware
     // on the appendage's lateral cylinder; main-shell rects (bodyId undefined)
     // never contribute here, and these rects never contribute to the main shell.
     const bodyRects = vesselState.coverageRects.filter((r) => r.bodyId === a.id);
     const coveredMm2 = computeAppendageCoveredArea(bodyRects, radius, a.length, nozzleFps);
-    return { appendageId: a.id, name: a.name, totalMm2, achievedMm2, coveredMm2 };
+
+    // End-closure dome = its OWN feature instance, and only a dished closure has
+    // one. Its scans (`head: 'end'` + this bodyId) were previously orphaned — no
+    // bucket read them — so they land here and nowhere else; `computeRegionAchievedAreas`
+    // skips every dome scan carrying a bodyId. Flat/open closures emit no dome
+    // fields at all, leaving those boots' rows exactly as before.
+    let dome: { domeTotalMm2: number; domeAchievedMm2: number } | undefined;
+    if (a.endClosure === 'dished') {
+      // Depth = radius / headRatio, exactly as body-frame.ts / scan-sampling.ts
+      // derive the appendage closure — never re-derived differently here.
+      let domeAchievedMm2 = 0;
+      for (const ds of vesselState.domeScanComposites ?? []) {
+        if (ds.bodyId !== a.id) continue;
+        domeAchievedMm2 += compositeValidArea(ds);
+      }
+      dome = {
+        domeTotalMm2: ellipsoidalHeadArea(radius, radius / (a.headRatio ?? 2.0)),
+        domeAchievedMm2,
+      };
+    }
+
+    return {
+      appendageId: a.id,
+      name: a.name,
+      // Legacy aliases — shell-only, byte-identical to what consumers rendered
+      // before the split (the dome is additive and surfaces via dome* only).
+      totalMm2: shellTotalMm2,
+      achievedMm2: shellAchievedMm2,
+      coveredMm2,
+      shellTotalMm2,
+      shellAchievedMm2,
+      ...dome,
+    };
   });
+}
+
+/**
+ * Achieved (scanned) area per main-shell region, in mm². The single engine
+ * source for the Coverage tab, the modeler stats section, the vessel-card strip
+ * and generated reports (design 2026-08-17, work item 2).
+ *
+ * Attribution rules — both guards are load-bearing:
+ *   - scan composites carrying a `bodyId` belong to that appendage body and are
+ *     reported by {@link computeAppendageCoverageTotals}, never the main shell;
+ *   - dome scans carrying a `bodyId` sit on an appendage END CLOSURE (`head` is
+ *     the third enum member `'end'`), so they must be skipped before the
+ *     left/right split — otherwise every `'end'` scan misfiles as right-head.
+ */
+export function computeRegionAchievedAreas(vesselState: VesselState): RegionAchievedAreas {
+  const result: RegionAchievedAreas = { leftHead: 0, cylinder: 0, rightHead: 0 };
+  for (const sc of vesselState.scanComposites) {
+    if (sc.bodyId) continue;
+    result.cylinder += compositeValidArea(sc);
+  }
+  for (const ds of vesselState.domeScanComposites ?? []) {
+    if (ds.bodyId) continue;
+    const area = compositeValidArea(ds);
+    if (ds.head === 'left') result.leftHead += area;
+    else result.rightHead += area;
+  }
+  return result;
 }
 
 export function computeRegionTotalAreas(vesselState: VesselState): { leftHead: number; cylinder: number; rightHead: number } {
   const R = vesselState.id / 2;
   const D = vesselState.id / (2 * vesselState.headRatio);
 
-  // Ellipsoidal head surface area (numerical integration for one head)
-  // Integrate from z=0 to z=D: 2πR * r(z) * sqrt(1 + (dr/dz)²) dz
-  const steps = 200;
-  const dz = D / steps;
-  let headArea = 0;
-  for (let i = 0; i < steps; i++) {
-    const z = (i + 0.5) * dz;
-    const ratio = z / D;
-    if (ratio >= 0.999) continue;
-    const rLocal = R * Math.sqrt(1 - ratio * ratio);
-    const drdz = (R * ratio) / (D * Math.sqrt(1 - ratio * ratio));
-    headArea += rLocal * Math.sqrt(1 + drdz * drdz) * 2 * Math.PI * dz;
-  }
+  // Ellipsoidal head surface area (numerical integration for one head) — the
+  // shared integration, also used for dished appendage closures.
+  const headArea = ellipsoidalHeadArea(R, D);
 
   const cylinderArea = 2 * Math.PI * R * vesselState.length;
 

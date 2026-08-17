@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildOutlinerTree } from '../outliner-tree';
+import { buildOutlinerTree, LAYER_CATEGORIES } from '../outliner-tree';
 import { DESELECTED, type SelectionState } from '../engine/vessel-reducer';
 import { DEFAULT_VESSEL_STATE, type VesselState } from '../types';
 
@@ -225,5 +225,51 @@ describe('buildOutlinerTree', () => {
     const rows = buildOutlinerTree(v, sel())[0].categories.find((c) => c.key === 'nozzles')!.rows;
     expect(rows.find((r) => r.label === 'N1')!.visible).toBe(false);
     expect(rows.find((r) => r.label === 'N2')!.visible).toBe(true);
+  });
+
+  it('resolves category layer visibility from `${bodyKey}/${categoryKey}` (absent ⇒ visible)', () => {
+    // No layer map at all ⇒ every category visible.
+    const bare = buildOutlinerTree(makeVessel(), sel());
+    expect(bare[0].categories.every((c) => c.visible)).toBe(true);
+    expect(bare[1].categories.every((c) => c.visible)).toBe(true);
+
+    const tree = buildOutlinerTree(makeVessel(), sel(), {
+      'main/nozzles': false,
+      // An explicit `true` reads the same as an absent key.
+      'main/welds': true,
+    });
+    const main = tree[0];
+    expect(main.categories.find((c) => c.key === 'nozzles')!.visible).toBe(false);
+    expect(main.categories.find((c) => c.key === 'welds')!.visible).toBe(true);
+    // Layers are per body: the boot's own nozzles layer is untouched.
+    expect(tree[1].categories.find((c) => c.key === 'nozzles')!.visible).toBe(true);
+  });
+
+  it('keeps row `visible` independent of its layer (the two compose, never merge)', () => {
+    const tree = buildOutlinerTree(makeVessel(), sel(), { 'main/nozzles': false });
+    const row = tree[0].categories.find((c) => c.key === 'nozzles')!.rows[0];
+    // The row still reports its OWN flag so its eye keeps working inside a hidden
+    // layer; the panel dims it by combining the two.
+    expect(row.visible).toBe(true);
+  });
+
+  it('LAYER_CATEGORIES is the category order the tree emits', () => {
+    expect(LAYER_CATEGORIES.map((c) => c.key)).toEqual([
+      'nozzles',
+      'welds',
+      'lugs',
+      'saddles',
+      'scans',
+      'domeScans',
+      'annotations',
+      'coverage',
+      'images',
+      'rulers',
+      'pipelines',
+      'textures',
+    ]);
+    const emitted = buildOutlinerTree(makeVessel(), sel())[0].categories.map((c) => c.key);
+    const order = LAYER_CATEGORIES.map((c) => c.key);
+    expect(emitted).toEqual(order.filter((k) => emitted.includes(k)));
   });
 });

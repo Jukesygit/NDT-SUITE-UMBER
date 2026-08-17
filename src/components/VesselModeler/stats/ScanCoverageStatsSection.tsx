@@ -2,7 +2,7 @@ import { useMemo, useState, useCallback, type KeyboardEvent } from 'react';
 import type { VesselState, CoverageTargets, CoverageTargetEntry } from '../types';
 import {
   computeRegionTotalAreas,
-  compositeValidArea,
+  computeRegionAchievedAreas,
   computeAppendageCoverageTotals,
 } from '../engine/coverage-calculator';
 import { cardinalForHead } from '../engine/cardinal-directions';
@@ -151,25 +151,10 @@ export default function ScanCoverageStatsSection({
   // lateral total, R1) change so rows appear/update on release.
   const appendageTotals = useMemo(() => computeAppendageCoverageTotals(s), [s]);
 
-  const achievedMm2 = useMemo(() => {
-    const result = { leftHead: 0, cylinder: 0, rightHead: 0 };
-    for (const sc of s.scanComposites) {
-      // Appendage scans are surfaced in the per-appendage rows below (via
-      // appendageTotals), not folded into the main shell.
-      if (sc.bodyId) continue;
-      result.cylinder += compositeValidArea(sc);
-    }
-    for (const ds of s.domeScanComposites ?? []) {
-      // Appendage end-closure dome scans belong to their body, not the main
-      // heads — they surface in the per-appendage rows (later phase), so keep
-      // them out of the main leftHead / rightHead totals.
-      if (ds.bodyId) continue;
-      const area = compositeValidArea(ds);
-      if (ds.head === 'left') result.leftHead += area;
-      else result.rightHead += area;
-    }
-    return result;
-  }, [s]);
+  // Achieved area per main-shell region. The attribution (appendage scans and
+  // 'end' dome scans stay out of the main buckets) lives in the engine so the
+  // Coverage tab, card strip and reports read the same numbers.
+  const achievedMm2 = useMemo(() => computeRegionAchievedAreas(s), [s]);
 
   const handleUpdate = useCallback(
     (section: SectionKey, field: TargetField, value: number) => {
@@ -185,10 +170,16 @@ export default function ScanCoverageStatsSection({
   const handleUpdateAppendage = useCallback(
     (appId: string, field: TargetField, value: number) => {
       const prevAppendages = targets.appendages ?? {};
-      const entry = prevAppendages[appId] ?? DEFAULT_ENTRY;
+      const prev = prevAppendages[appId];
+      const shell = prev?.shell ?? DEFAULT_ENTRY;
       const updated: CoverageTargets = {
         ...targets,
-        appendages: { ...prevAppendages, [appId]: { ...entry, [field]: value } },
+        appendages: {
+          ...prevAppendages,
+          // Shell targets only here; the dome entry (dished boots) is edited in
+          // the coverage panel — preserve it untouched.
+          [appId]: { ...prev, shell: { ...shell, [field]: value } },
+        },
       };
       onUpdateTargets(updated);
     },
@@ -214,8 +205,9 @@ export default function ScanCoverageStatsSection({
   const visibleSections = sections.filter((s) => s.show);
 
   // Totals span the main shell sections AND every appendage body.
+  // Shell entry of an appendage's targets (dome rows land in a later phase).
   const appendageTargetFor = (id: string): CoverageTargetEntry =>
-    targets.appendages?.[id] ?? DEFAULT_ENTRY;
+    targets.appendages?.[id]?.shell ?? DEFAULT_ENTRY;
 
   const totalArea =
     visibleSections.reduce((sum, s) => sum + regionAreas[s.key], 0) +

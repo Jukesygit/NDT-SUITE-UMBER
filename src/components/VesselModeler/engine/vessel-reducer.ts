@@ -28,6 +28,7 @@ import {
   type HistoryMeta,
 } from './vessel-history';
 import { DEFAULT_CLIP_CONFIG, type ClipConfig } from './clip-planes';
+import type { LayerVisibility } from './layer-visibility';
 
 export interface SelectionState {
   nozzleIndex: number;
@@ -88,6 +89,11 @@ export interface UIState {
   paletteOpen: boolean;
   /** Section clip-plane config (transient — never serialized, no history). */
   clip: ClipConfig;
+  /**
+   * Layer visibility overlay (transient — never serialized, no history).
+   * Key `${bodyKey}/${categoryKey}`; ABSENT ⇒ visible, so the default is `{}`.
+   */
+  layers: LayerVisibility;
   /** ID of annotation being inspected (null = not in inspection mode) */
   inspectingAnnotationId: number | null;
   /** Camera state saved before entering inspection mode */
@@ -149,6 +155,7 @@ export const INITIAL_STATE: VesselModelerState = {
     outlinerOpen: false,
     paletteOpen: false,
     clip: DEFAULT_CLIP_CONFIG,
+    layers: {},
     inspectingAnnotationId: null,
     savedCameraState: null,
     viewMode: '3d',
@@ -242,6 +249,7 @@ export type VesselAction =
   | { type: 'TOGGLE_OUTLINER' }
   | { type: 'SET_PALETTE_OPEN'; open: boolean }
   | { type: 'SET_CLIP'; clip: Partial<ClipConfig> }
+  | { type: 'SET_LAYERS'; layers: LayerVisibility }
   | { type: 'TOGGLE_SNAP' }
   | { type: 'SET_SNAP_DEG'; deg: number }
   | { type: 'CANCEL_ALL_DRAW_MODES' }
@@ -413,6 +421,20 @@ export function vesselReducer(
       // the resulting ui.clip identity is what the viewport effect keys on, so it
       // must only change when a clip field actually changes.
       return { ...state, ui: { ...state.ui, clip: { ...state.ui.clip, ...action.clip } } };
+    case 'SET_LAYERS': {
+      // Transient UI only — never serialized, records no history entry. Partial
+      // merge over the sparse map so a caller dispatches just the keys it owns;
+      // the resulting ui.layers identity is what the viewport's visibility effect
+      // keys on, so it must only change when a layer's RESOLVED visibility flips
+      // (absent and `true` both mean visible — patching an absent key to `true`
+      // is a no-op and must not churn the identity).
+      const current = state.ui.layers;
+      const flipped = Object.entries(action.layers).some(
+        ([key, next]) => (current[key] !== false) !== (next !== false)
+      );
+      if (!flipped) return state;
+      return { ...state, ui: { ...state.ui, layers: { ...current, ...action.layers } } };
+    }
     case 'TOGGLE_SNAP':
       return { ...state, ui: { ...state.ui, snapEnabled: !state.ui.snapEnabled } };
     case 'SET_SNAP_DEG':

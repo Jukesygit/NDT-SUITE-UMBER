@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Outliner tree builder (C13b) — pure.
+// Outliner / Layers tree builder (C13b) — pure.
 //
 // Projects the flat VesselState entity collections into a body → category → row
 // tree for the OutlinerPanel. Bodies: "Vessel" (main shell) always first, then
@@ -7,11 +7,13 @@
 // (undefined ⇒ main shell); collections without a bodyId (saddles, textures,
 // inspection images, rulers, pipelines) always land on the main shell. A row's
 // `selectAction` is a verbatim SELECT_* descriptor the panel dispatches; its
-// `toggleRef` names the visibility callback the panel routes to. No React here.
+// `toggleRef` names the visibility callback the panel routes to. Each category
+// also carries its resolved LAYER visibility for that body. No React here.
 // ---------------------------------------------------------------------------
 
 import type { VesselState } from './types';
 import type { SelectionState } from './engine/vessel-reducer';
+import { isLayerVisible, MAIN_BODY_KEY, type LayerVisibility } from './engine/layer-visibility';
 
 /** Verbatim SELECT_* descriptor — a subset of VesselAction the panel dispatches. */
 export type OutlinerSelectAction =
@@ -59,8 +61,10 @@ export interface OutlinerRow {
 }
 
 export interface OutlinerCategory {
-  key: string;
+  key: LayerKey;
   label: string;
+  /** Resolved layer visibility for `${body.key}/${key}` (absent ⇒ visible). */
+  visible: boolean;
   rows: OutlinerRow[];
 }
 
@@ -77,10 +81,14 @@ export interface OutlinerBody {
   categories: OutlinerCategory[];
 }
 
-export const MAIN_BODY_KEY = 'main';
+export { MAIN_BODY_KEY };
 
-/** Fixed category order; empty categories are omitted per body. */
-const CATEGORY_ORDER: { key: string; label: string }[] = [
+/**
+ * Fixed category order (empty categories are omitted per body) AND the layer
+ * vocabulary — one layer per `${bodyKey}/${categoryKey}` pair. Single source for
+ * the command palette and the future read-only viewer.
+ */
+export const LAYER_CATEGORIES = [
   { key: 'nozzles', label: 'Nozzles' },
   { key: 'welds', label: 'Welds' },
   { key: 'lugs', label: 'Lifting lugs' },
@@ -93,11 +101,13 @@ const CATEGORY_ORDER: { key: string; label: string }[] = [
   { key: 'rulers', label: 'Rulers' },
   { key: 'pipelines', label: 'Pipelines' },
   { key: 'textures', label: 'Textures' },
-];
+] as const satisfies readonly { key: string; label: string }[];
+
+export type LayerKey = (typeof LAYER_CATEGORIES)[number]['key'];
 
 interface FlatEntry {
   bodyKey: string;
-  categoryKey: string;
+  categoryKey: LayerKey;
   row: OutlinerRow;
 }
 
@@ -109,10 +119,11 @@ interface FlatEntry {
  */
 export function buildOutlinerTree(
   vessel: VesselState,
-  selection: SelectionState
+  selection: SelectionState,
+  layers?: LayerVisibility
 ): OutlinerBody[] {
   const entries: FlatEntry[] = [];
-  const push = (bodyKey: string | undefined, categoryKey: string, row: OutlinerRow) =>
+  const push = (bodyKey: string | undefined, categoryKey: LayerKey, row: OutlinerRow) =>
     entries.push({ bodyKey: bodyKey ?? MAIN_BODY_KEY, categoryKey, row });
 
   vessel.nozzles.forEach((n, i) => {
@@ -263,9 +274,10 @@ export function buildOutlinerTree(
 
   const categoriesFor = (bodyKey: string): OutlinerCategory[] => {
     const own = entries.filter((e) => e.bodyKey === bodyKey);
-    return CATEGORY_ORDER.map(({ key, label }) => ({
+    return LAYER_CATEGORIES.map(({ key, label }) => ({
       key,
       label,
+      visible: isLayerVisible(layers, bodyKey, key),
       rows: own.filter((e) => e.categoryKey === key).map((e) => e.row),
     })).filter((c) => c.rows.length > 0);
   };

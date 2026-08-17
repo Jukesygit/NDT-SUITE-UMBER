@@ -456,6 +456,36 @@ export interface InspectionImageConfig {
 // Coverage Rectangles
 // ---------------------------------------------------------------------------
 
+/** Inspection technique a coverage rect prescribes (scope-planning guidance —
+ *  coverage rects are where/how instructions, never measured against scans).
+ *  See docs/plans/2026-08-17-coverage-comparison-design.md. */
+export type CoverageTechnique =
+  | 'paut-corrosion-mapping'
+  | 'ut-0'
+  | 'shear-wave'
+  | 'tofd'
+  | 'mpi'
+  | 'dpi'
+  | 'ect'
+  | 'visual'
+  | 'rt'
+  | 'other';
+
+/** The technique vocabulary + display labels — the single source for pickers and
+ *  report rendering. Ids are the persisted values (never the labels). */
+export const COVERAGE_TECHNIQUES: readonly { id: CoverageTechnique; label: string }[] = [
+  { id: 'paut-corrosion-mapping', label: 'PAUT corrosion mapping' },
+  { id: 'ut-0', label: 'UT thickness (0°)' },
+  { id: 'shear-wave', label: 'Shear-wave UT' },
+  { id: 'tofd', label: 'TOFD' },
+  { id: 'mpi', label: 'MPI' },
+  { id: 'dpi', label: 'DPI' },
+  { id: 'ect', label: 'ECT' },
+  { id: 'visual', label: 'Visual' },
+  { id: 'rt', label: 'RT' },
+  { id: 'other', label: 'Other' },
+];
+
 export interface CoverageRectConfig {
   id: number;
   name: string;
@@ -484,6 +514,13 @@ export interface CoverageRectConfig {
   locked?: boolean;
   /** Whether this coverage rectangle is visible in the 3D scene */
   visible?: boolean;
+  /** Prescribed inspection technique (scope guidance). Absent ⇒ unspecified;
+   *  spec-declared optional, so legacy saves stay byte-identical. */
+  technique?: CoverageTechnique;
+  /** Free-text technique, meaningful only with `technique: 'other'`. */
+  techniqueOther?: string;
+  /** Free-text, inspector-facing instruction for this rect. */
+  note?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -643,14 +680,26 @@ export interface CoverageTargetEntry {
   scopedPct: number;
 }
 
+/** Targets for one appendage body: its lateral shell, plus its end-closure dome
+ *  when `endClosure === 'dished'` (the dome is a separate feature instance —
+ *  docs/plans/2026-08-17-coverage-comparison-design.md). Legacy saves stored a
+ *  bare {@link CoverageTargetEntry} here; `deserializeVesselState` normalizes
+ *  that to `{ shell: entry }` on load, so runtime state is always this shape. */
+export interface AppendageCoverageTargets {
+  shell: CoverageTargetEntry;
+  dome?: CoverageTargetEntry;
+}
+
 export interface CoverageTargets {
   leftHead: CoverageTargetEntry;
   cylinder: CoverageTargetEntry;
   rightHead: CoverageTargetEntry;
   /** Per-appendage coverage targets, keyed by AppendageConfig.id. Additive
    *  (design §9): legacy JSON without this key loads unchanged via the consumer's
-   *  `?? DEFAULT_TARGETS` defaulting. */
-  appendages?: Record<string, CoverageTargetEntry>;
+   *  `?? DEFAULT_TARGETS` defaulting. The persisted key vocabulary
+   *  (leftHead/cylinder/rightHead/appendages) never changes — only the appendage
+   *  VALUE gained the shell/dome split. */
+  appendages?: Record<string, AppendageCoverageTargets>;
 }
 
 // ---------------------------------------------------------------------------

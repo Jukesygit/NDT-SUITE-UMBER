@@ -194,7 +194,10 @@ export const RULER_SPEC: FieldSpec[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Coverage rectangles — bodyId round-trips on both paths (undefined = main shell)
+// Coverage rectangles — bodyId round-trips on both paths (undefined = main shell).
+// technique / techniqueOther / note are scope-planning guidance metadata
+// (design 2026-08-17); like bodyId they are passthrough optionals, so a rect
+// without them serializes byte-identically to a legacy save.
 // ---------------------------------------------------------------------------
 export const COVERAGE_RECT_SPEC: FieldSpec[] = [
   { key: 'id', load: { or: 0 } },
@@ -210,6 +213,9 @@ export const COVERAGE_RECT_SPEC: FieldSpec[] = [
   { key: 'fillOpacity', load: { nullish: 0.2 } },
   { key: 'locked' },
   { key: 'visible' },
+  { key: 'technique' },
+  { key: 'techniqueOther' },
+  { key: 'note' },
 ];
 
 // ---------------------------------------------------------------------------

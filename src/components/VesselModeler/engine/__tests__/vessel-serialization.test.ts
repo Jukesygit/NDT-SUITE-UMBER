@@ -719,8 +719,10 @@ describe('coverageTargets round-trip (incl. appendage targets)', () => {
       cylinder: { rbaPct: 30, scopedPct: 40 },
       rightHead: { rbaPct: 5, scopedPct: 15 },
       appendages: {
-        'app-1': { rbaPct: 50, scopedPct: 60 },
-        'app-2': { rbaPct: 70, scopedPct: 80 },
+        // A dished boot carries shell + closure-dome targets; a flat one has no
+        // dome feature, so only `shell` (design 2026-08-17).
+        'app-1': { shell: { rbaPct: 50, scopedPct: 60 }, dome: { rbaPct: 25, scopedPct: 35 } },
+        'app-2': { shell: { rbaPct: 70, scopedPct: 80 } },
       },
     };
     return fixture;
@@ -732,8 +734,36 @@ describe('coverageTargets round-trip (incl. appendage targets)', () => {
       const restored = roundTrip(fixture, path);
       expect(restored.coverageTargets).toEqual(fixture.coverageTargets);
       // The nested appendage entries specifically survive the JSON boundary.
-      expect(restored.coverageTargets?.appendages?.['app-1']).toEqual({ rbaPct: 50, scopedPct: 60 });
-      expect(restored.coverageTargets?.appendages?.['app-2']).toEqual({ rbaPct: 70, scopedPct: 80 });
+      expect(restored.coverageTargets?.appendages?.['app-1']).toEqual({
+        shell: { rbaPct: 50, scopedPct: 60 },
+        dome: { rbaPct: 25, scopedPct: 35 },
+      });
+      expect(restored.coverageTargets?.appendages?.['app-2']).toEqual({
+        shell: { rbaPct: 70, scopedPct: 80 },
+      });
+    });
+
+    it(`normalizes a legacy bare appendage target entry to { shell } on the ${path} path`, () => {
+      // Saves written before the shell/dome split stored a bare
+      // CoverageTargetEntry as the appendage value. Persisted KEYS are unchanged
+      // (leftHead / cylinder / rightHead / appendages) — only the value shape.
+      const legacy = {
+        version: 1,
+        vessel: { id: 3000, length: 8000, headRatio: 2.0, orientation: 'horizontal' },
+        coverageTargets: {
+          leftHead: { rbaPct: 10, scopedPct: 20 },
+          cylinder: { rbaPct: 30, scopedPct: 40 },
+          rightHead: { rbaPct: 5, scopedPct: 15 },
+          appendages: { 'app-1': { rbaPct: 50, scopedPct: 60 } },
+        },
+      };
+      const restored = deserializeVesselState(legacy, { path, textures: [] });
+
+      expect(restored.coverageTargets?.appendages?.['app-1']).toEqual({
+        shell: { rbaPct: 50, scopedPct: 60 },
+      });
+      // The base region keys are untouched by the normalization.
+      expect(restored.coverageTargets?.cylinder).toEqual({ rbaPct: 30, scopedPct: 40 });
     });
   }
 
@@ -760,6 +790,81 @@ describe('coverageTargets round-trip (incl. appendage targets)', () => {
     const fixture = makeFixture(); // no coverageTargets set
     const local = JSON.parse(JSON.stringify(serializeVesselState(fixture, { path: 'local' })));
     expect(local).not.toHaveProperty('coverageTargets');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Coverage-rect scope metadata (technique / techniqueOther / note, design
+// 2026-08-17) — spec-declared optionals on the bodyId precedent: they round-trip
+// on both paths when present, and are absent from the serialized JSON otherwise
+// (byte-identical legacy saves).
+// ---------------------------------------------------------------------------
+
+describe('coverage-rect technique / note metadata', () => {
+  function makeRectMetaFixture(): VesselState {
+    const fixture = makeFixture();
+    fixture.coverageRects = [
+      // A legacy rect: no metadata at all.
+      { ...fixture.coverageRects[0], id: 1, name: 'C1' },
+      {
+        ...fixture.coverageRects[0],
+        id: 2,
+        name: 'C2',
+        technique: 'paut-corrosion-mapping',
+        note: 'Scan both sides of the long seam.',
+      },
+      {
+        ...fixture.coverageRects[0],
+        id: 3,
+        name: 'C3',
+        technique: 'other',
+        techniqueOther: 'Guided wave',
+        note: '',
+      },
+    ];
+    return fixture;
+  }
+
+  for (const path of ['local', 'cloud'] as const) {
+    it(`round-trips technique / techniqueOther / note on the ${path} path`, () => {
+      const restored = roundTrip(makeRectMetaFixture(), path);
+
+      expect(restored.coverageRects[1].technique).toBe('paut-corrosion-mapping');
+      expect(restored.coverageRects[1].note).toBe('Scan both sides of the long seam.');
+      expect(restored.coverageRects[1].techniqueOther).toBeUndefined();
+
+      expect(restored.coverageRects[2].technique).toBe('other');
+      expect(restored.coverageRects[2].techniqueOther).toBe('Guided wave');
+
+      // The legacy rect stays metadata-free.
+      expect(restored.coverageRects[0].technique).toBeUndefined();
+      expect(restored.coverageRects[0].techniqueOther).toBeUndefined();
+      expect(restored.coverageRects[0].note).toBeUndefined();
+    });
+
+    it(`omits absent metadata from the serialized JSON on the ${path} path (byte-identical shape)`, () => {
+      const json = JSON.parse(
+        JSON.stringify(serializeVesselState(makeRectMetaFixture(), { path, modelType: 'blank' }))
+      ) as { coverageRects: Array<Record<string, unknown>> };
+
+      expect(json.coverageRects[0]).not.toHaveProperty('technique');
+      expect(json.coverageRects[0]).not.toHaveProperty('techniqueOther');
+      expect(json.coverageRects[0]).not.toHaveProperty('note');
+      // Present fields are written; an unused techniqueOther still drops out.
+      expect(json.coverageRects[1].technique).toBe('paut-corrosion-mapping');
+      expect(json.coverageRects[1]).not.toHaveProperty('techniqueOther');
+    });
+  }
+
+  it('a fixture with no rect metadata serializes exactly as before (both paths)', () => {
+    for (const path of ['local', 'cloud'] as const) {
+      const json = JSON.parse(
+        JSON.stringify(serializeVesselState(makeFixture(), { path, modelType: 'blank' }))
+      ) as { coverageRects: Array<Record<string, unknown>> };
+      expect(json.coverageRects[0]).not.toHaveProperty('technique');
+      expect(json.coverageRects[0]).not.toHaveProperty('techniqueOther');
+      expect(json.coverageRects[0]).not.toHaveProperty('note');
+    }
   });
 });
 
