@@ -690,11 +690,22 @@ export default function VesselModeler() {
     [updateVessel]
   );
 
+  // Coverage targets are undoable VESSEL state (never transient ui). The optional
+  // featureKey/field make the coalesce key per-feature-per-field
+  // (`coverageTargets:<featureKey>:<field>`), so typing into the Shell's Scoped
+  // box collapses into ONE undo entry without swallowing an edit to another
+  // feature. Callers that replace the whole map wholesale keep the legacy key.
   const handleUpdateCoverageTargets = useCallback(
-    (targets: CoverageTargets) => {
+    (targets: CoverageTargets | undefined, featureKey?: string, field?: string) => {
       updateVessel(
         (prev) => ({ ...prev, coverageTargets: targets }),
-        historyFor('coverageTargets', '', targets)
+        featureKey
+          ? {
+              key: `coverageTargets:${featureKey}:${field ?? ''}`,
+              at: Date.now(),
+              label: `Edit coverage target ${featureKey}`,
+            }
+          : historyFor('coverageTargets', '', targets ?? {})
       );
     },
     [updateVessel]
@@ -857,6 +868,9 @@ export default function VesselModeler() {
             break;
           case 'statsScanCoverage':
             dispatch({ type: 'TOGGLE_STATS_SCAN_COVERAGE' });
+            break;
+          case 'statsComparison':
+            dispatch({ type: 'TOGGLE_STATS_COMPARISON' });
             break;
           default:
             // `layer:<category>` — the palette has no body context, so it flips
@@ -1350,6 +1364,7 @@ export default function VesselModeler() {
             onUpdateCoverageRect={updateCoverageRect}
             onRemoveCoverageRect={removeCoverageRect}
             onSelectCoverageRect={(id) => dispatch({ type: 'SELECT_COVERAGE_RECT', id })}
+            onUpdateCoverageTargets={handleUpdateCoverageTargets}
             selectedCoverageRectId={selection.coverageRectId}
             getNextCoverageRectId={getNextCoverageRectId}
             rulerDrawMode={drawModeState.ruler}
@@ -1595,11 +1610,13 @@ export default function VesselModeler() {
             showCoverage={ui.showStatsCoverage}
             showWallLoss={ui.showStatsWallLoss}
             showScanCoverage={ui.showStatsScanCoverage}
+            showComparison={ui.showStatsComparison}
             hasCoverageData={vesselState.coverageRects.length > 0}
             hasWallLossData={!!vesselState.wallLossGroups?.enabled}
             onToggleCoverage={() => dispatch({ type: 'TOGGLE_STATS_COVERAGE' })}
             onToggleWallLoss={() => dispatch({ type: 'TOGGLE_STATS_WALL_LOSS' })}
             onToggleScanCoverage={() => dispatch({ type: 'TOGGLE_STATS_SCAN_COVERAGE' })}
+            onToggleComparison={() => dispatch({ type: 'TOGGLE_STATS_COMPARISON' })}
           />
           <SnapControl
             enabled={ui.snapEnabled}
@@ -1758,7 +1775,7 @@ export default function VesselModeler() {
           showCoverage={ui.showStatsCoverage}
           showWallLoss={ui.showStatsWallLoss}
           showScanCoverage={ui.showStatsScanCoverage}
-          onUpdateCoverageTargets={handleUpdateCoverageTargets}
+          showComparison={ui.showStatsComparison}
         />
 
         {/* Inspection mode overlay (right-side panel + camera lock indicator) */}

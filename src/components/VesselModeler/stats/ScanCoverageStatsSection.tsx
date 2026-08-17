@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, type KeyboardEvent } from 'react';
+import { useMemo } from 'react';
 import type { VesselState, CoverageTargets, CoverageTargetEntry } from '../types';
 import {
   computeRegionTotalAreas,
@@ -9,13 +9,15 @@ import { cardinalForHead } from '../engine/cardinal-directions';
 import { useSettledValue } from '../../../hooks/useSettledValue';
 
 // Area sweeps are heavy; settle the state they read so a nozzle drag / slider
-// scrub recomputes once on release, not per frame (R1 perf). Target-percentage
-// editing stays on live state so typed values apply immediately.
+// scrub recomputes once on release, not per frame (R1 perf).
 const STATS_SETTLE_MS = 250;
 
+// DISPLAY-ONLY. Targets are edited in ONE place — the Coverage sidebar panel's
+// CoverageTargetsEditor (design 2026-08-17, "Surfaces §2") — so there is no
+// second edit surface to keep in sync. This section reads the same entries and
+// renders them alongside the achieved figures.
 interface ScanCoverageStatsSectionProps {
   vesselState: VesselState;
-  onUpdateTargets: (targets: CoverageTargets) => void;
 }
 
 const DEFAULT_ENTRY: CoverageTargetEntry = { rbaPct: 0, scopedPct: 0 };
@@ -35,56 +37,6 @@ function formatPct(pct: number): string {
 }
 
 type SectionKey = 'leftHead' | 'cylinder' | 'rightHead';
-type TargetField = 'rbaPct' | 'scopedPct';
-
-function InlineEdit({ value, onCommit }: { value: number; onCommit: (v: number) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState('');
-
-  const start = useCallback(() => {
-    setDraft(value.toString());
-    setEditing(true);
-  }, [value]);
-
-  const commit = useCallback(() => {
-    const parsed = parseFloat(draft);
-    if (!isNaN(parsed) && parsed >= 0 && parsed <= 100) {
-      onCommit(parsed);
-    }
-    setEditing(false);
-  }, [draft, onCommit]);
-
-  const handleKey = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') commit();
-      if (e.key === 'Escape') setEditing(false);
-    },
-    [commit]
-  );
-
-  if (editing) {
-    return (
-      <input
-        className="vm-scancov-input"
-        type="number"
-        min={0}
-        max={100}
-        step={0.1}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={handleKey}
-        autoFocus
-      />
-    );
-  }
-
-  return (
-    <span className="vm-scancov-editable" onClick={start} title="Click to edit">
-      {formatPct(value)}%
-    </span>
-  );
-}
 
 function StatCell({ pct, area, isAchieved }: { pct: string; area: string; isAchieved?: boolean }) {
   return (
@@ -95,19 +47,17 @@ function StatCell({ pct, area, isAchieved }: { pct: string; area: string; isAchi
   );
 }
 
-/** A single editable RBA / Scoped / Achieved row (shared by shell + appendage rows). */
+/** A single RBA / Scoped / Achieved row (shared by shell + appendage rows). */
 function TargetRow({
   label,
   totalMm2,
   achievedMm2,
   entry,
-  onUpdate,
 }: {
   label: string;
   totalMm2: number;
   achievedMm2: number;
   entry: CoverageTargetEntry;
-  onUpdate: (field: TargetField, value: number) => void;
 }) {
   const rbaSqm = (entry.rbaPct / 100) * totalMm2;
   const scopedSqm = (entry.scopedPct / 100) * totalMm2;
@@ -116,23 +66,14 @@ function TargetRow({
   return (
     <div className="vm-scancov-row">
       <span className="vm-scancov-section-col">{label}</span>
-      <div className="vm-scancov-cell">
-        <InlineEdit value={entry.rbaPct} onCommit={(v) => onUpdate('rbaPct', v)} />
-        <span className="vm-scancov-cell-area">{formatArea(rbaSqm)} m²</span>
-      </div>
-      <div className="vm-scancov-cell">
-        <InlineEdit value={entry.scopedPct} onCommit={(v) => onUpdate('scopedPct', v)} />
-        <span className="vm-scancov-cell-area">{formatArea(scopedSqm)} m²</span>
-      </div>
+      <StatCell pct={`${formatPct(entry.rbaPct)}%`} area={formatArea(rbaSqm)} />
+      <StatCell pct={`${formatPct(entry.scopedPct)}%`} area={formatArea(scopedSqm)} />
       <StatCell pct={`${formatPct(achievedPct)}%`} area={formatArea(achievedMm2)} isAchieved />
     </div>
   );
 }
 
-export default function ScanCoverageStatsSection({
-  vesselState,
-  onUpdateTargets,
-}: ScanCoverageStatsSectionProps) {
+export default function ScanCoverageStatsSection({ vesselState }: ScanCoverageStatsSectionProps) {
   const targets = vesselState.coverageTargets ?? DEFAULT_TARGETS;
   const isPipe = vesselState.vesselShape === 'pipe';
   const isVertical = vesselState.orientation === 'vertical';
@@ -155,36 +96,6 @@ export default function ScanCoverageStatsSection({
   // 'end' dome scans stay out of the main buckets) lives in the engine so the
   // Coverage tab, card strip and reports read the same numbers.
   const achievedMm2 = useMemo(() => computeRegionAchievedAreas(s), [s]);
-
-  const handleUpdate = useCallback(
-    (section: SectionKey, field: TargetField, value: number) => {
-      const updated: CoverageTargets = {
-        ...targets,
-        [section]: { ...targets[section], [field]: value },
-      };
-      onUpdateTargets(updated);
-    },
-    [targets, onUpdateTargets]
-  );
-
-  const handleUpdateAppendage = useCallback(
-    (appId: string, field: TargetField, value: number) => {
-      const prevAppendages = targets.appendages ?? {};
-      const prev = prevAppendages[appId];
-      const shell = prev?.shell ?? DEFAULT_ENTRY;
-      const updated: CoverageTargets = {
-        ...targets,
-        appendages: {
-          ...prevAppendages,
-          // Shell targets only here; the dome entry (dished boots) is edited in
-          // the coverage panel — preserve it untouched.
-          [appId]: { ...prev, shell: { ...shell, [field]: value } },
-        },
-      };
-      onUpdateTargets(updated);
-    },
-    [targets, onUpdateTargets]
-  );
 
   // Horizontal heads face world ±X; name them by the scene's North Heading.
   const cardinalRotation = vesselState.visuals?.cardinalRotation ?? 0;
@@ -248,7 +159,6 @@ export default function ScanCoverageStatsSection({
           totalMm2={regionAreas[key]}
           achievedMm2={achievedMm2[key]}
           entry={targets[key] ?? DEFAULT_ENTRY}
-          onUpdate={(field, value) => handleUpdate(key, field, value)}
         />
       ))}
 
@@ -259,7 +169,6 @@ export default function ScanCoverageStatsSection({
           totalMm2={a.totalMm2}
           achievedMm2={a.achievedMm2}
           entry={appendageTargetFor(a.appendageId)}
-          onUpdate={(field, value) => handleUpdateAppendage(a.appendageId, field, value)}
         />
       ))}
 

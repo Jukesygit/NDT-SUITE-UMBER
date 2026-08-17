@@ -8,6 +8,7 @@ import type {
   AnnotationShapeConfig,
   AnnotationShapeType,
   CoverageRectConfig,
+  CoverageTargets,
   InspectionImageConfig,
   MeasurementConfig,
   WeldConfig,
@@ -124,6 +125,11 @@ export interface SidebarPanelProps {
   onSelectCoverageRect: (id: number) => void;
   selectedCoverageRectId: number;
   getNextCoverageRectId: () => number;
+  onUpdateCoverageTargets: (
+    targets: CoverageTargets | undefined,
+    featureKey?: string,
+    field?: string
+  ) => void;
   // Inspection image props
   selectedInspectionImageId: number;
   onAddInspectionImage: (img: InspectionImageConfig) => void;
@@ -546,6 +552,7 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                 onSelectCoverageRect={props.onSelectCoverageRect}
                 selectedCoverageRectId={props.selectedCoverageRectId}
                 getNextCoverageRectId={props.getNextCoverageRectId}
+                onUpdateCoverageTargets={props.onUpdateCoverageTargets}
                 isOpen={activeInspectionSub === 'coverage'}
                 onToggle={() => toggleInspSub('coverage')}
               />
@@ -672,6 +679,7 @@ export default function SidebarPanel(props: SidebarPanelProps) {
                 onSelectCoverageRect={props.onSelectCoverageRect}
                 selectedCoverageRectId={props.selectedCoverageRectId}
                 getNextCoverageRectId={props.getNextCoverageRectId}
+                onUpdateCoverageTargets={props.onUpdateCoverageTargets}
                 isOpen={activeInspectionSub === 'coverage'}
                 onToggle={() => toggleInspSub('coverage')}
               />

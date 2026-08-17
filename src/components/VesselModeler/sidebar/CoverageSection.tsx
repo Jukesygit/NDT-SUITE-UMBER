@@ -1,8 +1,10 @@
 import React from 'react';
 import { Trash2, Square, Plus, Lock, Unlock, Copy } from 'lucide-react';
-import type { VesselState, CoverageRectConfig } from '../types';
+import type { CoverageTargets, VesselState, CoverageRectConfig } from '../types';
 import { SubSection } from './SliderRow';
 import { MountedOnChip } from './MountedOnChip';
+import { CoverageTargetsEditor } from './CoverageTargetsEditor';
+import { CoverageRectMetaFields } from './CoverageRectMetaFields';
 
 export interface CoverageSectionProps {
     vesselState: VesselState;
@@ -14,6 +16,12 @@ export interface CoverageSectionProps {
     onSelectCoverageRect: (id: number) => void;
     selectedCoverageRectId: number;
     getNextCoverageRectId: () => number;
+    /** Per-feature coverage targets (undoable vessel state) — edited here only. */
+    onUpdateCoverageTargets: (
+        targets: CoverageTargets | undefined,
+        featureKey?: string,
+        field?: string
+    ) => void;
     isOpen?: boolean;
     onToggle?: () => void;
 }
@@ -22,7 +30,7 @@ export function CoverageSection({
     vesselState, coverageDrawMode, onSetCoverageDrawMode,
     onAddCoverageRect, onUpdateCoverageRect, onRemoveCoverageRect,
     onSelectCoverageRect, selectedCoverageRectId, getNextCoverageRectId,
-    isOpen, onToggle,
+    onUpdateCoverageTargets, isOpen, onToggle,
 }: CoverageSectionProps) {
     const sel = vesselState.coverageRects.find(r => r.id === selectedCoverageRectId);
     // Position clamps to the mounted body's length (appendage) or main vessel length.
@@ -87,6 +95,8 @@ export function CoverageSection({
                     <Plus size={14} /> Add
                 </button>
             </div>
+
+            <CoverageTargetsEditor vesselState={vesselState} onUpdateTargets={onUpdateCoverageTargets} />
 
             {/* Coverage rect list */}
             {vesselState.coverageRects.map((r) => {
@@ -250,6 +260,7 @@ export function CoverageSection({
                                         />
                                     </div>
                                 )}
+                                <CoverageRectMetaFields rect={sel} onUpdate={onUpdateCoverageRect} />
                                 <p style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)', margin: '6px 0 0 0' }}>
                                     Drag to move
                                 </p>

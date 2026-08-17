@@ -77,6 +77,8 @@ export interface UIState {
   showStatsCoverage: boolean;
   showStatsWallLoss: boolean;
   showStatsScanCoverage: boolean;
+  /** Coverage-vs-Scope section (targets vs achieved). Transient like its siblings. */
+  showStatsComparison: boolean;
   hoverData: { thickness: number | null; scanMm: number; indexMm: number } | null;
   scanTooltipFollow: boolean;
   /** Whether drag angle-snapping is enabled (nozzles + lifting lugs) */
@@ -163,6 +165,7 @@ export const INITIAL_STATE: VesselModelerState = {
     showStatsCoverage: false,
     showStatsWallLoss: false,
     showStatsScanCoverage: false,
+    showStatsComparison: false,
   },
   history: createEmptyHistory(),
 };
@@ -270,6 +273,7 @@ export type VesselAction =
   | { type: 'TOGGLE_STATS_COVERAGE' }
   | { type: 'TOGGLE_STATS_WALL_LOSS' }
   | { type: 'TOGGLE_STATS_SCAN_COVERAGE' }
+  | { type: 'TOGGLE_STATS_COMPARISON' }
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'UNDO_TO'; index: number }
@@ -504,6 +508,11 @@ export function vesselReducer(
       return {
         ...state,
         ui: { ...state.ui, showStatsScanCoverage: !state.ui.showStatsScanCoverage },
+      };
+    case 'TOGGLE_STATS_COMPARISON':
+      return {
+        ...state,
+        ui: { ...state.ui, showStatsComparison: !state.ui.showStatsComparison },
       };
     case 'UNDO': {
       const result = undoStep(state.history, state.vessel);

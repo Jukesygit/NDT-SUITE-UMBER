@@ -31,6 +31,7 @@ export type PaletteToggle =
   | 'statsCoverage'
   | 'statsWallLoss'
   | 'statsScanCoverage'
+  | 'statsComparison'
   | `layer:${LayerKey}`;
 
 export type PaletteViewMode = '3d' | 'flattened' | 'topo';
@@ -296,6 +297,13 @@ export function buildPaletteItems(state: VesselState, ctx: PaletteContext): Pale
     { toggle: 'statsCoverage', label: 'Toggle coverage stats', kw: ['coverage', 'stats'] },
     { toggle: 'statsWallLoss', label: 'Toggle wall-loss stats', kw: ['wall loss', 'wall-loss', 'stats'] },
     { toggle: 'statsScanCoverage', label: 'Toggle scan-coverage stats', kw: ['scan coverage', 'stats'] },
+    // The jump-to for the Coverage-vs-Scope section (design "Surfaces §2"): not
+    // search-only, so it is reachable from the empty-query default list.
+    {
+      toggle: 'statsComparison',
+      label: 'Coverage comparison',
+      kw: ['comparison', 'coverage', 'target', 'scope', 'achieved', 'stats'],
+    },
     // One per layer category, each flipping that category on every body — so the
     // coverage entry IS the coverage master (same semantics as Shift+C), which is
     // why there is no separate master command here. Labels always say "layer":

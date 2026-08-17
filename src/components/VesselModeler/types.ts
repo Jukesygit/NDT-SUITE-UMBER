@@ -686,14 +686,21 @@ export interface CoverageTargetEntry {
  *  bare {@link CoverageTargetEntry} here; `deserializeVesselState` normalizes
  *  that to `{ shell: entry }` on load, so runtime state is always this shape. */
 export interface AppendageCoverageTargets {
-  shell: CoverageTargetEntry;
+  /** Absent ⇒ this boot's shell is UNTRACKED (no target), not zero. */
+  shell?: CoverageTargetEntry;
   dome?: CoverageTargetEntry;
 }
 
 export interface CoverageTargets {
-  leftHead: CoverageTargetEntry;
-  cylinder: CoverageTargetEntry;
-  rightHead: CoverageTargetEntry;
+  /** Every feature key is optional: an ABSENT entry means the feature is
+   *  untracked (excluded from comparison rollups), which is distinct from a
+   *  0% target. Legacy JSON has always been able to omit keys — the loader
+   *  passes the payload through — so the optionality makes the type honest and
+   *  lets the coverage panel clear a target back to untracked. See
+   *  engine/coverage-comparison.ts (readTargetEntry / writeTargetEntry). */
+  leftHead?: CoverageTargetEntry;
+  cylinder?: CoverageTargetEntry;
+  rightHead?: CoverageTargetEntry;
   /** Per-appendage coverage targets, keyed by AppendageConfig.id. Additive
    *  (design §9): legacy JSON without this key loads unchanged via the consumer's
    *  `?? DEFAULT_TARGETS` defaulting. The persisted key vocabulary

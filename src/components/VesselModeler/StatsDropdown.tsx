@@ -5,28 +5,33 @@ interface StatsDropdownProps {
   showCoverage: boolean;
   showWallLoss: boolean;
   showScanCoverage: boolean;
+  showComparison: boolean;
   hasCoverageData: boolean;
   hasWallLossData: boolean;
   onToggleCoverage: () => void;
   onToggleWallLoss: () => void;
   onToggleScanCoverage: () => void;
+  onToggleComparison: () => void;
 }
 
-const items: { key: 'coverage' | 'wallLoss' | 'scanCoverage'; label: string }[] = [
+const items: { key: 'coverage' | 'wallLoss' | 'scanCoverage' | 'comparison'; label: string }[] = [
   { key: 'coverage', label: 'Coverage' },
   { key: 'wallLoss', label: 'Wall Loss' },
   { key: 'scanCoverage', label: 'Scan Coverage' },
+  { key: 'comparison', label: 'Coverage vs Scope' },
 ];
 
 export default function StatsDropdown({
   showCoverage,
   showWallLoss,
   showScanCoverage,
+  showComparison,
   hasCoverageData,
   hasWallLossData,
   onToggleCoverage,
   onToggleWallLoss,
   onToggleScanCoverage,
+  onToggleComparison,
 }: StatsDropdownProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -40,11 +45,21 @@ export default function StatsDropdown({
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  const anyActive = showCoverage || showWallLoss || showScanCoverage;
+  const anyActive = showCoverage || showWallLoss || showScanCoverage || showComparison;
 
-  const toggleMap = { coverage: onToggleCoverage, wallLoss: onToggleWallLoss, scanCoverage: onToggleScanCoverage };
-  const checkedMap = { coverage: showCoverage, wallLoss: showWallLoss, scanCoverage: showScanCoverage };
-  const hasDataMap = { coverage: hasCoverageData, wallLoss: hasWallLossData, scanCoverage: true };
+  const toggleMap = {
+    coverage: onToggleCoverage,
+    wallLoss: onToggleWallLoss,
+    scanCoverage: onToggleScanCoverage,
+    comparison: onToggleComparison,
+  };
+  const checkedMap = {
+    coverage: showCoverage,
+    wallLoss: showWallLoss,
+    scanCoverage: showScanCoverage,
+    comparison: showComparison,
+  };
+  const hasDataMap = { coverage: hasCoverageData, wallLoss: hasWallLossData, scanCoverage: true, comparison: true };
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>

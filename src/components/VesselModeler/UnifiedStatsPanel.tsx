@@ -1,6 +1,11 @@
 import { useState, useCallback, useRef, useEffect, memo, type PointerEvent as ReactPointerEvent } from 'react';
-import type { VesselState, CoverageTargets } from './types';
-import { CoverageStatsSection, WallLossStatsSection, ScanCoverageStatsSection } from './stats';
+import type { VesselState } from './types';
+import {
+  CoverageStatsSection,
+  WallLossStatsSection,
+  ScanCoverageStatsSection,
+  CoverageComparisonSection,
+} from './stats';
 
 interface UnifiedStatsPanelProps {
   vesselState: VesselState;
@@ -8,7 +13,7 @@ interface UnifiedStatsPanelProps {
   showCoverage: boolean;
   showWallLoss: boolean;
   showScanCoverage: boolean;
-  onUpdateCoverageTargets: (targets: CoverageTargets) => void;
+  showComparison: boolean;
 }
 
 const MIN_WIDTH = 340;
@@ -17,6 +22,7 @@ const MIN_HEIGHT = 120;
 const MemoedCoverage = memo(CoverageStatsSection);
 const MemoedWallLoss = memo(WallLossStatsSection);
 const MemoedScanCoverage = memo(ScanCoverageStatsSection);
+const MemoedComparison = memo(CoverageComparisonSection);
 
 export default function UnifiedStatsPanel({
   vesselState,
@@ -24,7 +30,7 @@ export default function UnifiedStatsPanel({
   showCoverage,
   showWallLoss,
   showScanCoverage,
-  onUpdateCoverageTargets,
+  showComparison,
 }: UnifiedStatsPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
@@ -32,7 +38,7 @@ export default function UnifiedStatsPanel({
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
   const resizeRef = useRef<{ startX: number; startY: number; origW: number; origH: number } | null>(null);
 
-  const anyVisible = showCoverage || showWallLoss || showScanCoverage;
+  const anyVisible = showCoverage || showWallLoss || showScanCoverage || showComparison;
 
   useEffect(() => {
     if (!anyVisible) { setPos(null); setSize(null); }
@@ -131,9 +137,10 @@ export default function UnifiedStatsPanel({
   if (showCoverage) sections.push(<MemoedCoverage key="coverage" vesselState={vesselState} />);
   if (showWallLoss) sections.push(<MemoedWallLoss key="wallloss" vesselState={vesselState} />);
   if (showScanCoverage) {
-    sections.push(
-      <MemoedScanCoverage key="scancov" vesselState={vesselState} onUpdateTargets={onUpdateCoverageTargets} />,
-    );
+    sections.push(<MemoedScanCoverage key="scancov" vesselState={vesselState} />);
+  }
+  if (showComparison) {
+    sections.push(<MemoedComparison key="comparison" vesselState={vesselState} />);
   }
 
   return (
