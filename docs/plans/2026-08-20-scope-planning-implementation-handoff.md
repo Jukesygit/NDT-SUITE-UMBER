@@ -48,6 +48,16 @@ Work runs on branch **`feature/scope-planning-suite`** (branched off `feature/ap
 - Chunk isolation verified against `dist/`: `ProjectDetailPage` and `VesselOverviewPage` chunks reach no 3D chunk; the share page's static closure reaches no auth/editor code (`npm run verify:share-chunk`, added this session).
 - **NOT performed:** any runtime verification in a browser, and any execution of the SQL. There is no Docker/Postgres in this environment, so the migration is *reviewed, not proven*. Nothing was deployed.
 
+### Re-verified 2026-08-20 (takeover session — NO code changes)
+
+This session read the specs + memory layer, re-ran the gate, and wrote this update. It wrote no source code, so the claims above stand on the previous session's work; what follows is an independent re-run of the gate on a second machine.
+
+- `npm run build` — clean (`built in 1m 31s`).
+- `npm run lint` — **0 errors**, 400 warnings (all pre-existing and repo-wide: `no-explicit-any`, `max-lines`).
+- `npx vitest run` — **122 files, 1785 passed / 3 skipped**, exit 0, with `useLayoutMode.test.ts` excluded exactly as CI excludes it. Run it that way (`--exclude '**/node_modules/**' --exclude '**/dist/**' --exclude '**/.claude/**' --exclude '**/useLayoutMode.test.ts'`, or set `CI=1`): a plain `npx vitest run` HANGS on that file rather than failing, so an unqualified run looks like an infinite test suite, not a flake.
+- `npm run verify:share-chunk` — OK against the fresh `dist/`; share page's static closure is 23 chunks, no auth or editor code.
+- Still **NOT performed:** browser runtime verification, any SQL execution, any deployment. Open item 1 below is untouched.
+
 ## Open items for the next session
 
 1. **Runtime-verify the Phase 3 surfaces in the dev app** (the `/verify` skill has the auth workaround + Playwright recipe): expand the Coverage section on a vessel with a linked model, click rows to frame features, toggle layers, and confirm the strip numbers match the section.
@@ -57,9 +67,11 @@ Work runs on branch **`feature/scope-planning-suite`** (branched off `feature/ap
 5. **Dead code:** `src/components/projects/VesselCard.tsx` and `ProjectVesselsTab.tsx` are imported by nothing. Left untouched deliberately; deleting them is a separate call.
 6. **The React project print report still has no coverage page** — only the modeler's generated .docx does. Needs modelConfig→VesselState plumbing; outside the specs' scope.
 7. **`AppendageCoverageTotals.totalMm2/achievedMm2` are shell-only legacy aliases.** Retire them when `CoverageStatsSection.tsx` is next reworked.
+8. **Uncommitted and unrelated:** `docs/Engineering Log.md` carries an unstaged entry about the machine-local `iai-pme` agent-memory engine install (venv, MCP registration, three Windows defects patched by hand). It predates this session and has nothing to do with the scope-planning branch. Commit it or drop it deliberately — don't let it ride along inside a scope-planning commit.
 
 ## Things that will bite you
 
+- **`npm install` before you trust a red build.** This working tree's `node_modules` was stale and `npm run build` failed with three errors that read as defects on this branch — `src/components/import/parseUtils.ts` TS2578 plus two in `src/test/mocks/companion-handlers.ts` (`msw` is a declared devDependency but was simply absent). All three vanished after `npm install`; none of them were real. Separately and genuinely: `parseUtils.ts` dynamic-imports `xlsx`, which commit `32dca90` ("resolve all high-severity npm audit vulnerabilities") deleted from `package.json`. That is pre-existing on master, nothing to do with this branch, and worth its own look.
 - Anything on a **projects page** that statically imports `coverage-comparison` drags three.js into the projects chunk — rollup groups the engine modules together. Derive through `hooks/queries/useVesselPlanningSummary.ts`, which dynamic-imports the engine inside its queryFn.
 - A **dynamic `import()` in the share page** makes Vite hang its preload helper off the supabase-vendor chunk, pulling supabase-js into a logged-out page. Its imports are static for that reason; `npm run verify:share-chunk` catches a regression.
 - `surfacePoint(pos, 0, -radius)` is an axis point **only inside the cylinder**. At a closure station the profile radius shrinks and the offset overshoots past the axis — `coverage-feature-framing.ts` steps along the frame's own axis instead.
