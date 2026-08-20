@@ -22,6 +22,7 @@ import { useParams } from 'react-router-dom';
 import type * as THREE from 'three';
 import {
   ShareFetchError,
+  fetchShareBlobUrl,
   fetchShareJson,
   fetchShareManifest,
   type ShareFetchFailure,
@@ -85,6 +86,9 @@ export default function ClientSharePage() {
   const [textureObjects, setTextureObjects] = useState<Record<number, THREE.Texture>>(NO_TEXTURES);
   const [vesselError, setVesselError] = useState(false);
 
+  // Card images, vesselId → object URL. Filled in AFTER the manifest renders.
+  const [screenshots, setScreenshots] = useState<Record<string, string>>({});
+
   const load = useCallback(
     async (candidate: string | null) => {
       setState((prev) =>
@@ -141,6 +145,44 @@ export default function ClientSharePage() {
       cancelled = true;
     };
   }, [openVessel, token, passcode]);
+
+  // Card screenshots. Deliberately AFTER the cards have rendered and one at a
+  // time: the landing page must paint from the manifest alone, and each image
+  // is a separate round trip through the share function, so they arrive as they
+  // arrive rather than as a burst. A failure is silent — that card keeps its
+  // typographic tile, which is also what a pre-screenshot bundle shows.
+  const readyManifest = state.kind === 'ready' ? state.manifest : null;
+  useEffect(() => {
+    const pending = (readyManifest?.vessels ?? []).flatMap((vessel) =>
+      vessel.screenshotPath ? [{ id: vessel.id, path: vessel.screenshotPath }] : []
+    );
+    if (pending.length === 0) return;
+
+    let cancelled = false;
+    const created: string[] = [];
+
+    void (async () => {
+      for (const vessel of pending) {
+        try {
+          const url = await fetchShareBlobUrl(token, passcode, vessel.path);
+          if (cancelled) {
+            URL.revokeObjectURL(url);
+            return;
+          }
+          created.push(url);
+          setScreenshots((prev) => ({ ...prev, [vessel.id]: url }));
+        } catch {
+          // Cosmetic. The client is never told a thumbnail was missing.
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      created.forEach((url) => URL.revokeObjectURL(url));
+      setScreenshots({});
+    };
+  }, [readyManifest, token, passcode]);
 
   if (state.kind === 'loading') {
     return <div className="cs-page cs-centered">Loading…</div>;
@@ -224,7 +266,7 @@ export default function ClientSharePage() {
         {!openVessel ? (
           <ShareVesselCards
             manifest={manifest}
-            screenshots={{}}
+            screenshots={screenshots}
             onOpen={(vessel) => setOpenVessel(vessel)}
           />
         ) : vesselError ? (

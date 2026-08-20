@@ -18,6 +18,7 @@
 // ---------------------------------------------------------------------------
 
 import type { ComparisonStatus } from '../VesselModeler/engine/coverage-comparison';
+import type { LayerVisibility } from '../VesselModeler/engine/layer-visibility';
 import type { LayerKey } from '../VesselModeler/outliner-tree';
 
 /**
@@ -53,6 +54,25 @@ export const SHARE_LAYER_DEFAULTS: Record<LayerKey, boolean> = {
   annotations: false,
   images: false,
 };
+
+/**
+ * The layer overlay the client viewer OPENS with — and therefore the one a
+ * publish-time card screenshot must be rendered with.
+ *
+ * Empty on purpose. `LayerVisibility` is sparse and an ABSENT key means visible
+ * (`engine/layer-visibility`), so `{}` shows everything the sanitised model
+ * still contains — which, since exclusion is removal rather than hiding, is
+ * exactly the published set. There is deliberately no projection from
+ * `publishedLayers` or `SHARE_LAYER_DEFAULTS` here: an unpublished category has
+ * no entities left to hide.
+ *
+ * It lives in the format module because it is a publisher/viewer contract, not
+ * a component detail: `ShareVesselViewer` seeds its state from it and
+ * `clientShare/vessel-screenshot-state.ts` renders with it, so a card and the
+ * viewport it opens agree by construction. Frozen — both sides spread it into a
+ * new object and neither may mutate the shared value.
+ */
+export const SHARE_VIEWER_INITIAL_LAYERS: LayerVisibility = Object.freeze({});
 
 /** One feature row, carrying NUMBERS — the viewer formats with the shared
  *  engine formatters so paper, app and client page round identically. */

@@ -5,9 +5,11 @@
  * rollup as a chip. Opening a vessel is what fetches its model, so a client on a
  * phone downloads one vessel's worth of geometry, not the whole project's.
  *
- * Screenshots are supported by the bundle format but are not captured yet — a
- * card without one falls back to a typographic tile rather than a broken image
- * frame, which is also what an older bundle will hit.
+ * Screenshots are captured at publish time and arrive after this renders, one
+ * fetch per vessel — a card without one falls back to a typographic tile rather
+ * than a broken image frame. That fallback is load-bearing, not defensive: a
+ * pre-screenshot bundle, a publisher whose browser had no WebGL, and an image
+ * still in flight all land on it.
  */
 
 import { ChevronRight } from 'lucide-react';

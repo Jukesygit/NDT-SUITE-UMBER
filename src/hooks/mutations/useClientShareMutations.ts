@@ -4,9 +4,9 @@
  * The publish mutation is the orchestrator: it gathers each vessel's linked
  * model, builds the bundle, uploads it and only then points the link at it.
  *
- * CHUNKING: the bundle builder reaches the vessel serializer and therefore
- * three.js, so it is imported dynamically INSIDE the mutation. A project page
- * that never publishes never loads the 3D engine.
+ * CHUNKING: the bundle builder and the screenshot capture both reach the vessel
+ * engine and therefore three.js, so both are imported dynamically INSIDE the
+ * mutation. A project page that never publishes never loads the 3D engine.
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -82,7 +82,10 @@ export function usePublishClientShare() {
 
   return useMutation({
     mutationFn: async (params: PublishClientShareParams): Promise<PublishClientShareResult> => {
-      const { buildShareBundle } = await import('../../components/clientShare/bundle-builder');
+      const [{ buildShareBundle }, { createScreenshotSession }] = await Promise.all([
+        import('../../components/clientShare/bundle-builder'),
+        import('../../components/clientShare/vessel-screenshot'),
+      ]);
 
       const sources: {
         id: string;
@@ -90,22 +93,61 @@ export function usePublishClientShare() {
         tag?: string;
         type?: string;
         vesselState: VesselState;
+        screenshot?: Blob;
       }[] = [];
       const skipped: string[] = [];
 
-      for (const vessel of params.vessels) {
-        const vesselState = await loadVesselState(vessel.id);
-        if (!vesselState) {
-          skipped.push(vessel.vessel_name);
-          continue;
+      // The ONE published set. Both the bundle and the card images are built
+      // from it, so a screenshot can never show a category the model omits.
+      const published = new Set(params.publishedLayers);
+
+      // Card images are decoration: a share must not fail, or even stall, over
+      // a thumbnail. A session that cannot open (no WebGL) simply yields none,
+      // and the client page falls back to its typographic cards.
+      const screenshots = createScreenshotSession();
+      // Warned once per publish, not once per vessel: a browser that cannot
+      // render one card cannot render twenty, and the console is not a log.
+      const warned = new Set<string>();
+      const warnOnce = (message: string) => {
+        if (warned.has(message)) return;
+        warned.add(message);
+        console.warn(message);
+      };
+      if (!screenshots) {
+        warnOnce('Client share: no WebGL context — publishing without vessel card images.');
+      }
+
+      try {
+        for (const vessel of params.vessels) {
+          const vesselState = await loadVesselState(vessel.id);
+          if (!vesselState) {
+            skipped.push(vessel.vessel_name);
+            continue;
+          }
+
+          let screenshot: Blob | undefined;
+          try {
+            screenshot = (await screenshots?.capture(vesselState, published)) ?? undefined;
+          } catch {
+            screenshot = undefined;
+          }
+          if (screenshots && !screenshot) {
+            warnOnce(
+              'Client share: a vessel screenshot could not be captured — that card falls back to its typographic tile.'
+            );
+          }
+
+          sources.push({
+            id: vessel.id,
+            name: vessel.vessel_name,
+            tag: vessel.vessel_tag ?? undefined,
+            type: vessel.vessel_type ?? undefined,
+            vesselState,
+            screenshot,
+          });
         }
-        sources.push({
-          id: vessel.id,
-          name: vessel.vessel_name,
-          tag: vessel.vessel_tag ?? undefined,
-          type: vessel.vessel_type ?? undefined,
-          vesselState,
-        });
+      } finally {
+        screenshots?.dispose();
       }
 
       if (sources.length === 0) {
@@ -149,7 +191,7 @@ export function usePublishClientShare() {
           location: params.project.site_name ?? params.project.location_description ?? undefined,
         },
         vessels: sources,
-        published: new Set(params.publishedLayers),
+        published,
         revision,
         publishedAt: new Date().toISOString(),
       });

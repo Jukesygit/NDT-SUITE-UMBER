@@ -25,7 +25,7 @@ import {
 import { layerBodyKeys, presentLayerCategories } from '../VesselModeler/engine/layer-presence';
 import type { LayerKey } from '../VesselModeler/outliner-tree';
 import { ShareStatsTable } from './ShareStatsTable';
-import type { ShareManifestVessel } from './bundle-types';
+import { SHARE_VIEWER_INITIAL_LAYERS, type ShareManifestVessel } from './bundle-types';
 
 interface ShareVesselViewerProps {
   vessel: ShareManifestVessel;
@@ -44,7 +44,10 @@ export function ShareVesselViewer({
   publishedLayers,
   onBack,
 }: ShareVesselViewerProps) {
-  const [layers, setLayers] = useState<LayerVisibility>({});
+  // Seeded from the shared constant, not a local `{}`: the publish-time card
+  // screenshot renders with the SAME value, so the tile a client clicks and the
+  // view it opens show the same thing. See `bundle-types`.
+  const [layers, setLayers] = useState<LayerVisibility>(SHARE_VIEWER_INITIAL_LAYERS);
   const [pose, setPose] = useState<CameraPose | undefined>(undefined);
   const [readout, setReadout] = useState<string | null>(null);
 
