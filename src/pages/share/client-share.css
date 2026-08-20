@@ -129,6 +129,10 @@
 .cs-gate-title {
   font-size: 18px;
   font-weight: 600;
+  /* Named, not inherited: base.css's global `h1` rule paints app-theme
+     `--text-primary` and would win over inheritance outright. See the
+     element-rule reclaim block near the bottom of this file. */
+  color: var(--clean-text-primary);
   margin: 0;
 }
 
@@ -144,9 +148,15 @@
   letter-spacing: 0.4px;
   text-transform: uppercase;
   color: var(--clean-text-tertiary);
+  /* base.css's global `label` rule adds a bottom margin; the card is a flex
+     column with its own gap, so the label must not carry a second one. */
+  margin: 0;
 }
 
-.cs-gate-input {
+/* Scoped under .cs-page so these beat main.css's global `input[type=...]`
+   rules, which repaint the field in raw neutrals — the same scar login.css
+   carries under `.lg-page`. An attribute selector outranks a bare class. */
+.cs-page .cs-gate-input {
   padding: 9px 11px;
   border: 1px solid var(--clean-input-border);
   border-radius: 8px;
@@ -155,7 +165,7 @@
   font-size: 14px;
 }
 
-.cs-gate-input:focus {
+.cs-page .cs-gate-input:focus {
   outline: none;
   border-color: var(--clean-input-border-focus);
   box-shadow: var(--clean-focus-ring);
@@ -173,7 +183,7 @@
   border: none;
   border-radius: 8px;
   background: var(--clean-green);
-  color: #fff;
+  color: var(--clean-green-text);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -197,6 +207,8 @@
 .cs-landing-title {
   font-size: 22px;
   font-weight: 600;
+  /* Named, not inherited — base.css's global `h1` rule would win otherwise. */
+  color: var(--clean-text-primary);
   margin: 0 0 4px;
 }
 
@@ -222,6 +234,7 @@
   border: 1px solid var(--clean-border);
   border-radius: 12px;
   background: var(--clean-surface);
+  color: var(--clean-text-primary);
   text-align: left;
   cursor: pointer;
   transition: all 150ms ease;
@@ -344,6 +357,7 @@
 .cs-vessel-title {
   font-size: 16px;
   font-weight: 600;
+  color: var(--clean-text-primary);
 }
 
 .cs-viewer {
@@ -427,6 +441,7 @@
 .cs-stats-rollup-main {
   font-size: 16px;
   font-weight: 600;
+  color: var(--clean-text-primary);
 }
 
 .cs-stats-rollup-note {
@@ -438,6 +453,9 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
+  /* base.css's global `table` rule adds a bottom margin this layout never asked
+     for; the section spacing is owned by `.cs-vessel`'s gap. */
+  margin: 0;
 }
 
 .cs-stats-table th,
@@ -464,12 +482,41 @@
   font-weight: 500;
 }
 
-.cs-stats-table .cs-achieved {
+/* ---- Global element-rule reclaim (contrast) -------------------------------
+   base.css styles bare `th` / `td` / `tr:hover td` with the APP theme's tokens —
+   a near-white `--text-primary` / `--text-secondary` and a `--surface-raised`
+   grey — and a rule that MATCHES an element beats inheritance outright, so every
+   cell that did not name its own colour was painted in app-theme values on this
+   light page (measured 1.1:1 on the value cells, 1.7:1 on the headers).
+   Scoping under `.cs-page` clears the global element rules with room to spare;
+   login.css does the same under `.lg-page`. Never "fix" this in base.css — that
+   stylesheet is app-wide. -------------------------------------------------- */
+.cs-page .cs-stats-table th,
+.cs-page .cs-stats-table td {
+  color: var(--clean-text-primary);
+  background: transparent;
+}
+
+.cs-page .cs-stats-table thead th {
+  color: var(--clean-text-quaternary);
+}
+
+/* base.css tints a hovered row with the app theme's `--surface-hover`; keep the
+   affordance, in this page's palette. */
+.cs-page .cs-stats-table tbody tr:hover td {
+  background: var(--clean-hover-bg);
+}
+
+.cs-page .cs-stats-table .cs-achieved {
   font-weight: 600;
   color: var(--clean-badge-blue-text);
 }
 
-.cs-row-untracked {
+/* On the `tr` this only ever set an INHERITED colour, which the global `td` rule
+   outranked — so the cells have to carry it. Same specificity as the generic
+   cell rule above, so it must stay AFTER it. */
+.cs-page .cs-row-untracked th,
+.cs-page .cs-row-untracked td {
   color: var(--clean-text-tertiary);
 }
 
@@ -504,6 +551,18 @@
 @media (max-width: 640px) {
   .cs-main {
     padding: 14px;
+  }
+
+  /* Stack the header. Side by side at 390px the project name is squeezed into
+     ~150px, wraps over five lines, and the revision sits alongside the wreckage;
+     a full-width basis gives the name the row and drops the revision below it. */
+  .cs-header {
+    row-gap: 2px;
+  }
+
+  .cs-header-project,
+  .cs-header-rev {
+    flex: 1 0 100%;
   }
 
   .cs-stats-table thead {
