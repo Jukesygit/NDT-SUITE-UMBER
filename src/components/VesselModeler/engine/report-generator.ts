@@ -27,6 +27,10 @@ import type {
   VesselState,
   AnnotationShapeConfig,
 } from '../types';
+import {
+  UNTRACKED_PRINT_COLOR,
+  buildCoverageScopeSectionData,
+} from './coverage-scope-report';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -147,10 +151,10 @@ function textRun(text: string, opts?: { bold?: boolean; size?: number; font?: st
   });
 }
 
-function cellText(text: string, opts?: { bold?: boolean; alignment?: (typeof AlignmentType)[keyof typeof AlignmentType] }): TableCell {
+function cellText(text: string, opts?: { bold?: boolean; alignment?: (typeof AlignmentType)[keyof typeof AlignmentType]; color?: string }): TableCell {
   return new TableCell({
     children: [new Paragraph({
-      children: [textRun(text, { bold: opts?.bold })],
+      children: [textRun(text, { bold: opts?.bold, color: opts?.color })],
       alignment: opts?.alignment ?? AlignmentType.LEFT,
       spacing: { before: 40, after: 40 },
     })],
@@ -530,6 +534,90 @@ function buildVesselOverviewPage(config: ReportConfig): (Paragraph | Table)[] {
   return children;
 }
 
+/**
+ * "Coverage vs Scope" — planned target % vs achieved % per feature instance,
+ * plus the area-weighted vessel rollup. Sits next to the scan log because it is
+ * the scope context for those scans.
+ *
+ * Returns an EMPTY array when no feature carries a target, so the caller drops
+ * the section (and its page break) entirely — an all-untracked table of dashes
+ * is noise on paper. Same "empty builder ⇒ no section" contract as
+ * `buildRestrictionsPage`.
+ *
+ * Every number comes from `buildCoverageScopeSectionData` (→ the coverage
+ * comparison engine); nothing is recomputed here. Status is printed as a
+ * coloured dot AND a word, so greyscale prints stay readable.
+ */
+function buildCoverageScopeTable(vessel: VesselState): (Paragraph | Table)[] {
+  const children: (Paragraph | Table)[] = [];
+
+  const section = buildCoverageScopeSectionData(vessel);
+  if (!section) return children;
+
+  children.push(sectionHeading(section.title));
+
+  const headerRow = new TableRow({
+    children: [
+      headerCell('Feature'), headerCell('Target %'), headerCell('Achieved %'),
+      headerCell('Δ (points)'), headerCell('Status'),
+    ],
+  });
+
+  const dataRows = section.rows.map(row => {
+    const dim = row.untracked ? UNTRACKED_PRINT_COLOR : undefined;
+
+    // Dot + word in one cell: the dot carries the colour, the word carries the
+    // meaning. Untracked rows print the dash alone (no dot to mis-read).
+    const statusCell = new TableCell({
+      children: [new Paragraph({
+        children: row.untracked
+          ? [textRun(row.statusLabel, { color: row.statusColor })]
+          : [
+              textRun('● ', { color: row.statusColor }),
+              textRun(row.statusLabel, { bold: true, color: row.statusColor }),
+            ],
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 40, after: 40 },
+      })],
+      borders: CELL_BORDERS,
+      verticalAlign: VerticalAlign.CENTER,
+    });
+
+    return new TableRow({
+      children: [
+        cellText(row.label, { alignment: AlignmentType.LEFT, color: dim }),
+        cellText(row.targetText, { alignment: AlignmentType.CENTER, color: dim }),
+        cellText(row.achievedText, { alignment: AlignmentType.CENTER, color: dim }),
+        cellText(row.deltaText, { alignment: AlignmentType.CENTER, color: dim }),
+        statusCell,
+      ],
+    });
+  });
+
+  children.push(new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    layout: TableLayoutType.FIXED,
+    rows: [headerRow, ...dataRows],
+  }));
+
+  children.push(new Paragraph({
+    children: [textRun(section.rollupMain, { bold: true })],
+    spacing: { before: 120 },
+  }));
+
+  children.push(new Paragraph({
+    children: [textRun(section.rollupNote, { size: FONT_SIZE_SMALL })],
+    spacing: { before: 40 },
+  }));
+
+  children.push(new Paragraph({
+    children: [textRun(section.legend, { size: FONT_SIZE_SMALL })],
+    spacing: { before: 80 },
+  }));
+
+  return children;
+}
+
 function buildScanLogTable(vessel: VesselState, config: ReportConfig): (Paragraph | Table)[] {
   const children: (Paragraph | Table)[] = [];
 
@@ -856,19 +944,26 @@ export async function generateReport(
     sections.push(new Paragraph({ children: [new PageBreak()] }));
   }
 
-  // 4. Scan log table
+  // 5. Coverage vs scope — omitted entirely when no feature carries a target
+  const coverageScopeContent = buildCoverageScopeTable(vessel);
+  if (coverageScopeContent.length > 0) {
+    sections.push(...coverageScopeContent);
+    sections.push(new Paragraph({ children: [new PageBreak()] }));
+  }
+
+  // 6. Scan log table
   sections.push(...buildScanLogTable(vessel, config));
   sections.push(new Paragraph({ children: [new PageBreak()] }));
 
-  // 5. Calibration log (populated from inspection data if available)
+  // 7. Calibration log (populated from inspection data if available)
   sections.push(...buildCalibrationLogTemplate(config));
   sections.push(new Paragraph({ children: [new PageBreak()] }));
 
-  // 6. Photographs
+  // 8. Photographs
   sections.push(...buildPhotographsPage(vessel, config));
   sections.push(new Paragraph({ children: [new PageBreak()] }));
 
-  // 7. Reference drawings
+  // 9. Reference drawings
   sections.push(...buildReferenceDrawingsPages(vessel));
 
   // Build document

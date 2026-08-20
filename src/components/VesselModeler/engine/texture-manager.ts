@@ -751,16 +751,29 @@ export function loadTextureFromFile(
 // ---------------------------------------------------------------------------
 
 /**
+ * Anisotropy requested when no renderer is available to report the device
+ * maximum. three's WebGLTextures clamps with
+ * `Math.min(texture.anisotropy, capabilities.getMaxAnisotropy())` at upload, so
+ * this is an upper bound, never an illegal value.
+ */
+export const RENDERERLESS_ANISOTROPY = 8;
+
+/**
  * Recreate a THREE.Texture from a base64 data URL (used when loading a saved
  * project). Matches the same texture settings as loadTextureFromFile.
  *
  * @param imageData - Base64 data URL string (e.g. "data:image/png;base64,...")
- * @param renderer  - The active WebGLRenderer (used for max anisotropy)
+ * @param renderer  - The active WebGLRenderer (used for max anisotropy). Callers
+ *                    that build textures BEFORE a renderer exists (the read-only
+ *                    viewer hydrates from a query, and ReadOnlyViewport owns its
+ *                    renderer privately) pass null and get
+ *                    {@link RENDERERLESS_ANISOTROPY}; three clamps anisotropy to
+ *                    the device maximum at upload, so the value is always legal.
  * @returns Promise with the THREE.Texture and calculated aspectRatio
  */
 export function loadTextureFromData(
   imageData: string,
-  renderer: THREE.WebGLRenderer
+  renderer: THREE.WebGLRenderer | null
 ): Promise<{ texture: THREE.Texture; aspectRatio: number }> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -778,8 +791,9 @@ export function loadTextureFromData(
       texture.minFilter = THREE.LinearMipmapLinearFilter;
       texture.magFilter = THREE.LinearFilter;
 
-      const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
-      texture.anisotropy = maxAnisotropy;
+      texture.anisotropy = renderer
+        ? renderer.capabilities.getMaxAnisotropy()
+        : RENDERERLESS_ANISOTROPY;
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.needsUpdate = true;
 
