@@ -14,6 +14,7 @@ import type { LayerKey } from '../../components/VesselModeler/outliner-tree';
 import type { VesselState } from '../../components/VesselModeler/types';
 import type { ProjectVessel, InspectionProject } from '../../types/inspection-project';
 import { getVesselModelByProjectVessel } from '../../services/vessel-model-service';
+import { describeHydrationFailures, hydrateScanGrids } from '../../services/scan-grid-hydration';
 import {
   bumpClientShareRevision,
   createClientShare,
@@ -55,8 +56,16 @@ export interface PublishClientShareResult {
   skipped: string[];
 }
 
-/** Load a project vessel's saved model, or null when it has none. */
-async function loadVesselState(vesselId: string): Promise<VesselState | null> {
+/**
+ * Load a project vessel's saved model, or null when it has none.
+ *
+ * @internal Exported for `__tests__/publish-hydration.test.ts`, which pins the
+ * refusal below; nothing outside this module should call it.
+ */
+export async function loadVesselState(
+  vesselId: string,
+  vesselName: string
+): Promise<VesselState | null> {
   const record = await getVesselModelByProjectVessel(vesselId);
   const config = record?.config as Record<string, unknown> | undefined;
   if (!record || !config?.vessel || !config?.version) return null;
@@ -74,7 +83,21 @@ async function loadVesselState(vesselId: string): Promise<VesselState | null> {
   const saved = Array.isArray(config.textures) ? config.textures : [];
   const { configs } = await hydrateSavedTextures(saved, null);
 
-  return deserializeVesselState(config, { path: 'cloud', textures: configs });
+  const deserialized = deserializeVesselState(config, { path: 'cloud', textures: configs });
+
+  // A cloud save strips composite grids (they live in `scan_composites`), but a
+  // bundle is the client's ONLY copy — an unhydrated publish ships stats with no
+  // heatmap and no hover thickness. Refuse rather than ship that: a publisher
+  // who is told nothing assumes the report is complete.
+  const { state, failures } = await hydrateScanGrids(deserialized);
+  if (failures.length > 0) {
+    throw new Error(
+      `Could not load scan data for ${vesselName} (${describeHydrationFailures(failures)}) — ` +
+        'the share was not published. Check your connection and try again.'
+    );
+  }
+
+  return state;
 }
 
 export function usePublishClientShare() {
@@ -119,7 +142,7 @@ export function usePublishClientShare() {
 
       try {
         for (const vessel of params.vessels) {
-          const vesselState = await loadVesselState(vessel.id);
+          const vesselState = await loadVesselState(vessel.id, vessel.vessel_name);
           if (!vesselState) {
             skipped.push(vessel.vessel_name);
             continue;

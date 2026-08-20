@@ -7,6 +7,11 @@
  * for them — rebuilds the THREE textures through the shared hydration path
  * (`engine/texture-hydration.ts`, the modeler load path's own helper).
  *
+ * Cloud saves strip composite thickness grids (they live in `scan_composites`),
+ * so the model queryFn also re-fetches them through `services/scan-grid-hydration`
+ * — the shared mirror of the modeler's own post-load rehydration. The grids ride
+ * inside `vesselState`; the cache shape is unchanged.
+ *
  * Two cache entries, deliberately:
  *   ['linkedVesselModel', vesselId]              → record + VesselState
  *   ['linkedVesselModel', vesselId, 'textures']  → texture configs + GPU objects
@@ -24,6 +29,7 @@ import { useQuery } from '@tanstack/react-query';
 import type * as THREE from 'three';
 import { getVesselModelByProjectVessel } from '../../services/vessel-model-service';
 import type { VesselModelRecord } from '../../services/vessel-model-service';
+import { describeHydrationFailures, hydrateScanGrids } from '../../services/scan-grid-hydration';
 import type { VesselState, TextureConfig } from '../../components/VesselModeler/types';
 
 const STALE_TIME_MS = 5 * 60 * 1000;
@@ -77,12 +83,26 @@ async function fetchLinkedModel(projectVesselId: string): Promise<LinkedModelPay
   );
   // Textures are the caller's separate, opt-in concern — the deserializer never
   // reads `raw.textures` because aspectRatio is only known once decoded.
-  return { record, vesselState: deserializeVesselState(config, { path: 'cloud', textures: [] }) };
+  const deserialized = deserializeVesselState(config, { path: 'cloud', textures: [] });
+
+  // A cloud save strips composite grids (they live in `scan_composites`), so a
+  // model loaded here renders with no heatmap and no hover thickness until the
+  // grids come back — the same re-fetch the modeler does after its own load.
+  // Unlike the publish path this is READ-ONLY: a grid we cannot reach costs a
+  // heatmap, not a client's report, so the panel degrades instead of failing.
+  const { state, failures } = await hydrateScanGrids(deserialized);
+  if (failures.length > 0) {
+    console.warn(
+      `useLinkedVesselModel: scan grids unavailable for ${describeHydrationFailures(failures)} — ` +
+        'those overlays will not render.',
+      failures.map((failure) => failure.cloudId)
+    );
+  }
+
+  return { record, vesselState: state };
 }
 
-async function fetchLinkedTextures(
-  config: Record<string, unknown>
-): Promise<LinkedTexturePayload> {
+async function fetchLinkedTextures(config: Record<string, unknown>): Promise<LinkedTexturePayload> {
   const { hydrateSavedTextures } = await import(
     '../../components/VesselModeler/engine/texture-hydration'
   );
