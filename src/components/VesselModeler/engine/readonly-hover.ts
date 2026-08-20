@@ -36,6 +36,15 @@ export interface ReadOnlyHoverInfo {
   userData: Record<string, unknown>;
   /** World-space intersection point, as a plain tuple (keeps this module THREE-free). */
   point: readonly [number, number, number];
+  /** Surface UV of the hit, when the hit geometry carries one. Absent for
+   *  geometry built without UVs (welds, lugs); present on the textured planes,
+   *  which is where it is actually wanted. */
+  uv?: readonly [number, number];
+  /**
+   * Thickness in mm under the cursor, for a hit on a scan/dome heatmap. null
+   * when that cell holds no reading; undefined when the hit is not a heatmap.
+   */
+  thicknessMm?: number | null;
 }
 
 /**
@@ -129,7 +138,8 @@ export function describeHover(
   state: VesselState,
   node: HoverNode | null,
   root: HoverNode | null,
-  point: readonly [number, number, number]
+  point: readonly [number, number, number],
+  uv?: readonly [number, number]
 ): ReadOnlyHoverInfo | null {
   if (!isComposedVisible(node, root)) return null;
   const userData = findEntityUserData(node, root);
@@ -139,5 +149,40 @@ export function describeHover(
     label: hoverLabelFor(state, userData),
     userData,
     point,
+    uv,
+    thicknessMm: thicknessAtUv(userData, uv),
   };
+}
+
+/**
+ * Thickness under a heatmap hit, read straight out of the grid the mesh carries
+ * in its userData.
+ *
+ * The index maths mirrors `interaction-manager`'s scan/dome hover exactly —
+ * `col` from u, `row` from FLIPPED v, both clamped to the last cell — because
+ * the two must agree: the modeler and a published client page reading the same
+ * pixel have to report the same millimetre.
+ *
+ * @returns mm, `null` for a cell with no reading, `undefined` when the hit is
+ *          not a heatmap at all (so callers can tell "no data here" from "not
+ *          that kind of surface").
+ */
+export function thicknessAtUv(
+  userData: Record<string, unknown>,
+  uv: readonly [number, number] | undefined
+): number | null | undefined {
+  if (!uv) return undefined;
+  const { type } = userData;
+  if (type !== 'scanComposite' && type !== 'domeScan') return undefined;
+
+  const data = userData.data as (number | null)[][] | undefined;
+  const width = asIndex(userData.width);
+  const height = asIndex(userData.height);
+  if (!Array.isArray(data) || width === null || height === null || width < 1 || height < 1) {
+    return undefined;
+  }
+
+  const col = Math.min(Math.max(Math.floor(uv[0] * width), 0), width - 1);
+  const row = Math.min(Math.max(Math.floor((1 - uv[1]) * height), 0), height - 1);
+  return data[row]?.[col] ?? null;
 }

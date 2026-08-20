@@ -4,6 +4,7 @@ import {
   findEntityUserData,
   hoverLabelFor,
   isComposedVisible,
+  thicknessAtUv,
   type HoverNode,
 } from '../readonly-hover';
 import type { VesselState } from '../../types';
@@ -115,7 +116,7 @@ describe('describeHover', () => {
   it('reports type, label, verbatim userData and the world point', () => {
     const ud = { type: 'scanComposite', id: 'sc-1', data: [[1, 2]] };
     const hit = describeHover(state, node(undefined, node(ud, root)), root, [1, 2, 3]);
-    expect(hit).toEqual({
+    expect(hit).toMatchObject({
       type: 'scanComposite',
       label: 'Shell scan',
       userData: ud,
@@ -134,5 +135,58 @@ describe('describeHover', () => {
     expect(
       describeHover(state, node({ role: 'domeScan-border' }, root), root, [0, 0, 0])
     ).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Heatmap thickness readout
+// ---------------------------------------------------------------------------
+// The client page and the modeler read the same pixel and must report the same
+// millimetre, so the index maths here is pinned against the shape
+// `interaction-manager` uses: col from u, row from FLIPPED v, both clamped.
+
+describe('thicknessAtUv', () => {
+  const grid = {
+    type: 'scanComposite',
+    id: 'sc-1',
+    width: 2,
+    height: 2,
+    // rows are top-to-bottom in the texture; v is bottom-up.
+    data: [
+      [10, 11],
+      [12, null],
+    ],
+  };
+
+  it('flips v, so the TOP row of the grid is the TOP of the texture', () => {
+    expect(thicknessAtUv(grid, [0.25, 0.75])).toBe(10);
+    expect(thicknessAtUv(grid, [0.75, 0.75])).toBe(11);
+    expect(thicknessAtUv(grid, [0.25, 0.25])).toBe(12);
+  });
+
+  it('reports null for a cell with no reading — distinct from "not a heatmap"', () => {
+    expect(thicknessAtUv(grid, [0.75, 0.25])).toBeNull();
+  });
+
+  it('clamps the edges instead of reading past the grid', () => {
+    // u=1 would index col 2 in a 2-wide grid; v=1 is the top row.
+    expect(thicknessAtUv(grid, [1, 1])).toBe(11);
+    expect(thicknessAtUv(grid, [0, 0])).toBe(12);
+  });
+
+  it('is undefined when the hit is not a heatmap, or carries no uv', () => {
+    expect(thicknessAtUv({ type: 'nozzle' }, [0.5, 0.5])).toBeUndefined();
+    expect(thicknessAtUv(grid, undefined)).toBeUndefined();
+  });
+
+  it('is undefined when the mesh carries no usable grid', () => {
+    expect(thicknessAtUv({ type: 'scanComposite' }, [0.5, 0.5])).toBeUndefined();
+    expect(
+      thicknessAtUv({ type: 'scanComposite', data: [], width: 0, height: 0 }, [0.5, 0.5])
+    ).toBeUndefined();
+  });
+
+  it('works the same for dome scans', () => {
+    expect(thicknessAtUv({ ...grid, type: 'domeScan' }, [0.25, 0.75])).toBe(10);
   });
 });

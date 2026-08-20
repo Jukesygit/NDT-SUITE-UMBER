@@ -41,6 +41,16 @@ Current state (file:line from the region-granularity audit):
 
 **Guard:** `head === 'end'` is a third enum member — every left/right split must keep the `bodyId` guard (`ScanCoverageStatsSection.tsx:166` precedent) or `'end'` scans misfile as right-head.
 
+## Amendment (2026-08-20, implementation ruling — binding)
+
+**`scopedPct` is THE comparison target.** `CoverageTargetEntry` carries two numbers: `rbaPct` (the risk-based-assessment recommendation) and `scopedPct` (the committed scope). Achieved is measured against `scopedPct` and never against `rbaPct` — the RBA figure *informs* the scope and is otherwise informational. `targetPctOf()` in `engine/coverage-comparison.ts` is the ONE place that decides this; no surface may pick a target for itself.
+
+Also settled during implementation:
+- Surfaces §1 and §3 named `InspectionDetailPage` and `VesselCard`. The live components are **`VesselOverviewPage`** and **`ProjectVesselList`**; `VesselCard.tsx` / `ProjectVesselsTab.tsx` are dead code imported by nothing. The section and the strip landed on the live surfaces.
+- `formatCoveragePct` / `formatCoverageDelta` live in `coverage-comparison.ts` and are re-exported by `coverage-scope-report.ts`. Every surface formats through them; none re-declares them.
+- The React *project* print report still has no coverage page — only the modeler's generated .docx does. It needs modelConfig→VesselState plumbing and is a deliberate follow-up, outside this spec's scope.
+- `ScopeProgressCard` / `ScopeSection` still read the OLD rect-area scope number from `utils/coverage-calc.ts`, not the target-percentage model. Two coverage vocabularies now coexist on the vessel page; reconciling them is a separate call.
+
 ## Status semantics (locked in #12)
 
 - **Green** — achieved ≥ target. **Amber** — within 5 percentage points below. **Red** — short by more than 5 points. Fixed values, no configuration.

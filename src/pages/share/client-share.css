@@ -1,0 +1,545 @@
+/* ==========================================================================
+   Client share page (/share/:token) — the loginless published report.
+   ==========================================================================
+   Its own stylesheet, `cs-` prefixed, because this page is outside the app
+   shell: no sidebar, no header, no navigation. It still uses the global design
+   tokens so a published report looks like the product it came from.
+
+   Mobile is a first-class case, not a fallback: a client opens these on a phone
+   from an email. Nothing is hidden below a breakpoint — the table stacks and the
+   viewer keeps a usable height.
+   ========================================================================== */
+
+.cs-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--clean-bg);
+  color: var(--clean-text-primary);
+  font-family: var(--font-sans);
+}
+
+.cs-centered {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  color: var(--clean-text-secondary);
+}
+
+/* ---- Header / footer ---- */
+.cs-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--clean-border);
+  background: var(--clean-surface);
+}
+
+.cs-brand {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--clean-text-secondary);
+}
+
+.cs-header-project {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--clean-text-primary);
+}
+
+.cs-header-rev {
+  font-size: 12px;
+  color: var(--clean-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.cs-main {
+  flex: 1;
+  padding: 20px;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.cs-footer {
+  padding: 16px 20px 28px;
+  border-top: 1px solid var(--clean-border);
+  font-size: 12px;
+  color: var(--clean-text-tertiary);
+  text-align: center;
+}
+
+/* ---- Messages (dead link, network, unsupported) ---- */
+.cs-message {
+  max-width: 46ch;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.cs-message-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--clean-text-primary);
+  margin: 0;
+}
+
+.cs-message-text {
+  font-size: 14px;
+  color: var(--clean-text-secondary);
+  margin: 0;
+}
+
+/* ---- Passcode gate ---- */
+.cs-gate {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 20px;
+}
+
+.cs-gate-card {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 28px 24px;
+  border: 1px solid var(--clean-border);
+  border-radius: 12px;
+  background: var(--clean-surface);
+  box-shadow: var(--clean-shadow-md);
+}
+
+.cs-gate-icon {
+  color: var(--clean-text-tertiary);
+}
+
+.cs-gate-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.cs-gate-text {
+  font-size: 13px;
+  color: var(--clean-text-secondary);
+  margin: 0 0 8px;
+}
+
+.cs-gate-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--clean-text-tertiary);
+}
+
+.cs-gate-input {
+  padding: 9px 11px;
+  border: 1px solid var(--clean-input-border);
+  border-radius: 8px;
+  background: var(--clean-input-bg);
+  color: var(--clean-input-text);
+  font-size: 14px;
+}
+
+.cs-gate-input:focus {
+  outline: none;
+  border-color: var(--clean-input-border-focus);
+  box-shadow: var(--clean-focus-ring);
+}
+
+.cs-gate-error {
+  font-size: 12px;
+  color: var(--clean-badge-red-text);
+  margin: 0;
+}
+
+.cs-gate-submit {
+  margin-top: 8px;
+  padding: 9px 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--clean-green);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.cs-gate-submit:hover:not(:disabled) {
+  background: var(--clean-green-hover);
+}
+
+.cs-gate-submit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---- Landing: vessel cards ---- */
+.cs-landing-head {
+  margin-bottom: 18px;
+}
+
+.cs-landing-title {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.cs-landing-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--clean-text-tertiary);
+}
+
+.cs-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.cs-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--clean-border);
+  border-radius: 12px;
+  background: var(--clean-surface);
+  text-align: left;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.cs-card:hover {
+  border-color: var(--clean-border-strong);
+  box-shadow: var(--clean-shadow-sm);
+}
+
+.cs-card-figure {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--clean-surface-secondary);
+  overflow: hidden;
+}
+
+.cs-card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cs-card-initials {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--clean-text-quaternary);
+}
+
+.cs-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cs-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--clean-text-primary);
+}
+
+.cs-card-type {
+  font-size: 12px;
+  color: var(--clean-text-tertiary);
+}
+
+.cs-card-chevron {
+  color: var(--clean-text-quaternary);
+  flex-shrink: 0;
+}
+
+.cs-chip {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cs-chip--met {
+  background: var(--clean-badge-green-bg);
+  color: var(--clean-badge-green-text);
+}
+
+.cs-chip--near {
+  background: var(--clean-badge-amber-bg);
+  color: var(--clean-badge-amber-text);
+}
+
+.cs-chip--short {
+  background: var(--clean-badge-red-bg);
+  color: var(--clean-badge-red-text);
+}
+
+.cs-chip--untracked {
+  background: var(--clean-badge-neutral-bg);
+  color: var(--clean-badge-neutral-text);
+}
+
+/* ---- Vessel view ---- */
+.cs-vessel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cs-vessel-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cs-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid var(--clean-border);
+  border-radius: 8px;
+  background: var(--clean-surface);
+  color: var(--clean-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.cs-back:hover {
+  background: var(--clean-hover-bg);
+}
+
+.cs-vessel-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.cs-viewer {
+  position: relative;
+  height: min(62vh, 560px);
+  min-height: 300px;
+  border: 1px solid var(--clean-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--clean-surface-secondary);
+  /* Touch orbit: the viewport handles the gesture, so the page must not also
+     pan underneath it. */
+  touch-action: none;
+}
+
+.cs-layer-bar,
+.cs-bookmark-bar {
+  position: absolute;
+  left: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: calc(100% - 20px);
+}
+
+.cs-layer-bar {
+  top: 10px;
+}
+
+.cs-bookmark-bar {
+  bottom: 10px;
+}
+
+.cs-layer-chip {
+  padding: 4px 10px;
+  border: 1px solid var(--clean-chip-border);
+  border-radius: 999px;
+  background: var(--clean-chip-bg);
+  color: var(--clean-text-tertiary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.cs-layer-chip:hover {
+  background: var(--clean-chip-hover-bg);
+}
+
+.cs-layer-chip.on {
+  background: var(--clean-chip-active-bg);
+  color: var(--clean-chip-active-text);
+  border-color: var(--clean-border-strong);
+}
+
+.cs-readout {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  max-width: calc(100% - 20px);
+  padding: 5px 10px;
+  border: 1px solid var(--clean-border);
+  border-radius: 8px;
+  background: var(--clean-surface);
+  color: var(--clean-text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+/* ---- Stats table ---- */
+.cs-stats-rollup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.cs-stats-rollup-main {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.cs-stats-rollup-note {
+  font-size: 12px;
+  color: var(--clean-text-tertiary);
+}
+
+.cs-stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.cs-stats-table th,
+.cs-stats-table td {
+  padding: 8px 10px;
+  text-align: right;
+  border-bottom: 1px solid var(--clean-divider);
+  font-variant-numeric: tabular-nums;
+}
+
+.cs-stats-table thead th {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--clean-text-quaternary);
+  border-bottom: 1px solid var(--clean-border);
+}
+
+.cs-stats-table th:first-child,
+.cs-stats-table td:first-child,
+.cs-stats-table tbody th {
+  text-align: left;
+  font-weight: 500;
+}
+
+.cs-stats-table .cs-achieved {
+  font-weight: 600;
+  color: var(--clean-badge-blue-text);
+}
+
+.cs-row-untracked {
+  color: var(--clean-text-tertiary);
+}
+
+.cs-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cs-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--clean-text-quaternary);
+}
+
+.cs-status--met .cs-status-dot {
+  background: var(--clean-badge-green-text);
+}
+
+.cs-status--near .cs-status-dot {
+  background: var(--clean-badge-amber-text);
+}
+
+.cs-status--short .cs-status-dot {
+  background: var(--clean-badge-red-text);
+}
+
+/* ---- Phones: stack the table instead of scrolling it sideways ---- */
+@media (max-width: 640px) {
+  .cs-main {
+    padding: 14px;
+  }
+
+  .cs-stats-table thead {
+    display: none;
+  }
+
+  .cs-stats-table,
+  .cs-stats-table tbody,
+  .cs-stats-table tr,
+  .cs-stats-table td,
+  .cs-stats-table tbody th {
+    display: block;
+    width: 100%;
+  }
+
+  .cs-stats-table tr {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--clean-border);
+  }
+
+  .cs-stats-table tbody th {
+    padding-bottom: 2px;
+    font-weight: 600;
+  }
+
+  .cs-stats-table td {
+    display: flex;
+    justify-content: space-between;
+    border: none;
+    padding: 2px 0;
+  }
+
+  /* Row labels, so a stacked cell still says what it is. */
+  .cs-stats-table td::before {
+    content: attr(data-label);
+    color: var(--clean-text-quaternary);
+    font-weight: 500;
+  }
+}

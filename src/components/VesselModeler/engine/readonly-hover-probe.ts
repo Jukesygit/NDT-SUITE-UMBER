@@ -61,11 +61,13 @@ export function attachHoverProbe({
     // Hits come back depth-sorted, so the first that resolves is the nearest.
     let hit: ReadOnlyHoverInfo | null = null;
     for (const intersection of raycaster.intersectObject(root, true)) {
-      hit = describeHover(getState(), intersection.object, root, [
-        intersection.point.x,
-        intersection.point.y,
-        intersection.point.z,
-      ]);
+      hit = describeHover(
+        getState(),
+        intersection.object,
+        root,
+        [intersection.point.x, intersection.point.y, intersection.point.z],
+        intersection.uv ? [intersection.uv.x, intersection.uv.y] : undefined
+      );
       if (hit) break;
     }
 

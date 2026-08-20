@@ -13,53 +13,55 @@ status: active
 Implement the three locked wayfinder specs (map [Jukesygit/NDT-SUITE-UMBER#6](https://github.com/Jukesygit/NDT-SUITE-UMBER/issues/6), all decisions final — do **not** re-litigate them):
 
 1. `docs/plans/2026-08-13-layers-system-design.md` — **DONE** (Phase 1)
-2. `docs/plans/2026-08-17-coverage-comparison-design.md` — **~75% done** (Phases 1–3; projects surfaces partial)
-3. `docs/plans/2026-08-17-client-sharing-design.md` — **viewer done; everything else NOT started** (Phase 4)
+2. `docs/plans/2026-08-17-coverage-comparison-design.md` — **DONE** (Phases 1–3; see its Amendment section for the implementation rulings)
+3. `docs/plans/2026-08-17-client-sharing-design.md` — **code complete, NOTHING DEPLOYED** (Phase 4; see its Amendment section)
 
 Work runs on branch **`feature/scope-planning-suite`** (branched off `feature/appendage-bodies` after phase 2).
 
 ## Context Read
 
-- `AGENTS.md`, `.claude/CLAUDE.md` (orchestration policy — **subagents are opus-only, sonnet is banned in this repo**; subagents NEVER run git state-changing commands; every implementation prompt states files-in-scope + verification command)
-- [[agent-memory/Project Brief]], [[agent-memory/Module Map]] (updated during this work — CoveragePanel.tsx reference was stale, now corrected)
-- The three specs above — they carry verified `file:line` anchors and hard invariants
-- `dev-docs/design-system.md` before ANY UI work
+- `AGENTS.md`, `.claude/CLAUDE.md`, [[agent-memory/Project Brief]], [[agent-memory/Module Map]], [[Engineering Log]]
+- The three specs above — they carry verified `file:line` anchors, hard invariants, and now an Amendment section each recording what implementation settled.
+- `dev-docs/design-system.md` before ANY UI work. The projects area uses its own `pj-` system in `src/pages/projects/projects.css`; match it there rather than the glass classes.
 
-## Files Touched (by commit)
+## Commits
 
 - `b2ee1e0` — the three specs.
-- `86dffbb` **Phase 1** (19 files): layers system (`engine/layer-visibility.ts` NEW + reducer/ThreeViewport/OutlinerPanel/VesselModeler/palette) + comparison engine (`coverage-calculator.ts` boot-dome split + `computeRegionAchievedAreas`; `types.ts` `CoverageTargets`→`{shell,dome?}` + rect `technique/techniqueOther/note` + `COVERAGE_TECHNIQUES`; serialization spec fields + `normalizeCoverageTargets`).
-- `c6fff2d` **Phase 2** (23 files): `ReadOnlyViewport.tsx` + `engine/readonly-{scene,sync,hover,hover-probe}.ts` (transitive import graph verified free of editor/auth/supabase); `engine/coverage-comparison.ts` (THE row source: rows/bands/rollup; **`scopedPct` is THE target** via `targetPctOf` — `rbaPct` is informational); `sidebar/CoverageTargetsEditor.tsx` (the ONE target-edit surface — editing was MOVED out of `ScanCoverageStatsSection`, now display-only), `sidebar/CoverageRectMetaFields.tsx`, `stats/CoverageComparisonSection.tsx` + `ui.showStatsComparison`.
-- `4c7f8df` **Phase 3 WIP**: docx report "Coverage vs Scope" section (**complete**: `engine/coverage-scope-report.ts` + `report-generator.ts`, omits itself when nothing targeted, print-safe Met/Near/Short words); projects groundwork (**compiles, tested, NOT yet consumed by any UI**): `engine/texture-hydration.ts`, `src/hooks/queries/useLinkedVesselModel.ts`, `src/components/projects/vessel-planning-summary.ts` (+ tests), small edits to `useVesselPersistence.ts` / `useVesselModelMutations.ts`.
+- `86dffbb` **Phase 1** — layers system + comparison engine.
+- `c6fff2d` **Phase 2** — `ReadOnlyViewport` + comparison UI in the modeler.
+- `4c7f8df` **Phase 3 WIP** — docx "Coverage vs Scope" section + projects groundwork.
+- `43a0fa1` **Phase 3 complete** — projects Coverage section + vessel-row planning strip.
+- *(this session)* **Phase 4a + 4b** — client sharing, backend as code + full frontend.
 
-## What Changed
+## Status: what is done
 
-See commit messages — they are the detailed ledger. Design rulings made during implementation (binding):
+**Phase 3 — projects surfaces.** `VesselOverviewPage` gains a collapsed-by-default "Coverage vs Scope" section whose `lazy()` IS the chunk boundary (three.js loads only when someone expands it); project vessel ROWS gain a planning strip + "Plan scope". New pure engine modules, all unit-tested: `coverage-feature-framing.ts`, `coverage-rect-features.ts`, `layer-presence.ts`. The `formatPct`/`formatDelta` duplication is collapsed into `coverage-comparison.ts`.
 
-- `AppendageCoverageTotals.totalMm2/achievedMm2` are **shell-only legacy aliases**; new consumers use `shell*`/`dome*` fields. Retire the aliases when `CoverageStatsSection.tsx` is next reworked.
-- Palette: layer commands except the coverage master are `searchOnly` (default-list regression fix); anything added to the palette must consider the 30-item cap.
-- Hiding a boot now hides its mounted entities (subtree rule — intended per layers design decision 2).
-- `ReadOnlyViewport` omits CSS2D weld labels + the annotation summary table (deliberate; documented in-file).
+**Phase 4a — client-sharing backend, as CODE ONLY.** `supabase/migrations/20260820120000_client_shares.sql` + `supabase/functions/serve-client-share/`. The ordered deploy checklist is the migration's top comment.
 
-## Validation
+**Phase 4b — sharing frontend.** Bundle format + builder, publish dialog on `ProjectDetailPage`, and the public `/share/:token` page with passcode gate, vessel cards, full-bleed viewer, published-layer toggles, bookmark shortcuts, hover thickness and the stats table.
 
-- Phases 1+2 gates: `npm run build` clean; full suite **1596 passed / 3 skipped** (phase 1) and modeler suite **978 passed** (phase 2); `npm run lint` 0 errors both times.
-- WIP commit `4c7f8df`: `npm run typecheck` clean; its 20 new tests pass; **full build/test gate NOT yet run over it** — run the gate before building further.
-- Known pre-existing local flake: `src/components/CscanVisualizer/hooks/__tests__/useLayoutMode.test.ts` hangs/crashes its worker locally — unrelated, ignore.
+## Verification actually performed
 
-## Open Questions
+- `npm run build` clean; `npm run lint` **0 errors**; `npx tsc --noEmit` clean.
+- Full suite green apart from the documented pre-existing flake: `src/components/CscanVisualizer/hooks/__tests__/useLayoutMode.test.ts` crashes its fork worker (reproduced in isolation, unrelated to this work; already excluded in CI).
+- Chunk isolation verified against `dist/`: `ProjectDetailPage` and `VesselOverviewPage` chunks reach no 3D chunk; the share page's static closure reaches no auth/editor code (`npm run verify:share-chunk`, added this session).
+- **NOT performed:** any runtime verification in a browser, and any execution of the SQL. There is no Docker/Postgres in this environment, so the migration is *reviewed, not proven*. Nothing was deployed.
 
-None on design — every decision is locked in the specs + map. Operational only:
+## Open items for the next session
 
-- **Supabase region cutover gates ALL Phase-4 backend deployment** (see memory note `project_supabase-region-migration`). Write migrations/functions as repo code; apply/deploy ONLY to the eu-west-2 target project after cutover, per its runbook.
-- GitLab `glab` token was expired throughout; the wayfinder map + tickets live on **GitHub** (`Jukesygit/NDT-SUITE-UMBER` #6–#20) as a recorded exception.
+1. **Runtime-verify the Phase 3 surfaces in the dev app** (the `/verify` skill has the auth workaround + Playwright recipe): expand the Coverage section on a vessel with a linked model, click rows to frame features, toggle layers, and confirm the strip numbers match the section.
+2. **Publish-time vessel screenshots** are not implemented. `ShareManifestVessel.screenshotPath` exists and the viewer honours it; the landing page falls back to typographic cards. Adding capture later needs no format change.
+3. **Deploy Phase 4, in this order, ONLY after the Supabase region cutover** (memory note `project_supabase-region-migration`): follow the migration's checklist, then smoke-test that nonexistent / revoked / expired tokens return byte-identical responses, then exercise a real publish end-to-end. The publish→serve path has never run against a live database.
+4. **Two coverage vocabularies now coexist** on the vessel page: the new target-percentage model (Coverage section, strip, report) and the old rect-area scope number that `ScopeProgressCard` / `ScopeSection` still read from `utils/coverage-calc.ts`. Reconciling them is a product call, not a bug fix.
+5. **Dead code:** `src/components/projects/VesselCard.tsx` and `ProjectVesselsTab.tsx` are imported by nothing. Left untouched deliberately; deleting them is a separate call.
+6. **The React project print report still has no coverage page** — only the modeler's generated .docx does. Needs modelConfig→VesselState plumbing; outside the specs' scope.
+7. **`AppendageCoverageTotals.totalMm2/achievedMm2` are shell-only legacy aliases.** Retire them when `CoverageStatsSection.tsx` is next reworked.
 
-## Next Agent Should Start Here
+## Things that will bite you
 
-Ordered, with scope fences (delegate each to an **opus** agent; strict grep-first / offset+limit≤150 reads on the huge files):
-
-1. **Finish Phase 3 — projects surfaces** (`docs/plans/2026-08-17-coverage-comparison-design.md` §Surfaces 1+3). Consume the existing groundwork (`useLinkedVesselModel`, `texture-hydration.ts`, `vessel-planning-summary.ts` — audit each first, they're new and uncommitted-history): (a) Coverage tab feature component on `InspectionDetailPage` — lazy `ReadOnlyViewport` (three.js must NOT enter the projects chunk until the tab opens), layer toggles, per-feature table w/ rect expand, rollup, row-click framing via `canonicalPose`/`frame-entity`; (b) `VesselCard` planning strip (model ✓ · targets N/M · achieved %) + **"Plan scope"** action (open linked model in modeler; else create+link+open — reuse the mechanism `useVesselPersistence` exposes). Design-system classes only; React Query only.
-2. **Phase 3 gate**: `npm run build` + `npm run test` + `npm run lint`, then commit.
-3. **Phase 4a — client-sharing backend as CODE ONLY** (`docs/plans/2026-08-17-client-sharing-design.md` §Security model): migration `client_shares` (+view-audit table, private `client-shares` bucket + storage policies) and edge function `serve-client-share`. Non-negotiable scars: RLS via existing `get_my_role()`-style helpers (never profile self-subqueries); no anon grants anywhere; indistinguishable 404 for missing/revoked/expired; adversarial SQL self-review. Top-of-migration comment = deploy checklist gated on the cutover. NO `db push`/`functions deploy`/`link`.
-4. **Phase 4b — sharing frontend**: bundle builder (serialized model + baked heatmap PNGs + **decimated grids** + stats from `computeComparisonRows` + bookmarks + layer selection; NO rect notes, NO PII — hard-coded), "Share with client" dialog on `ProjectDetailPage` (layer picker defaults, expiry 30/90/365/none default 90, optional passcode), public `/share/:token` route as its OWN lazy chunk (must never import `VesselModeler.tsx`/auth — verify the module graph like Phase 2 did), passcode gate, vessels-cards landing → full-bleed viewer + published-layers-only toggles + hover thickness from grids + stats table, uniform "link no longer active" state.
-5. **Final sweep**: re-run all three specs' verification-plan checklists; runtime-verify in the dev app (`/verify` skill has the auth workaround + Playwright recipe); amend the comparison spec with the `scopedPct`-is-target ruling; note the React *project* print report still lacks a coverage page (needs modelConfig→VesselState plumbing — deliberate follow-up, not in the specs' scope); collapse the `formatPct`/`formatDelta` duplication between `CoverageComparisonSection.tsx` and `coverage-scope-report.ts`; update Module Map + Engineering Log + this handoff's status.
+- Anything on a **projects page** that statically imports `coverage-comparison` drags three.js into the projects chunk — rollup groups the engine modules together. Derive through `hooks/queries/useVesselPlanningSummary.ts`, which dynamic-imports the engine inside its queryFn.
+- A **dynamic `import()` in the share page** makes Vite hang its preload helper off the supabase-vendor chunk, pulling supabase-js into a logged-out page. Its imports are static for that reason; `npm run verify:share-chunk` catches a regression.
+- `surfacePoint(pos, 0, -radius)` is an axis point **only inside the cylinder**. At a closure station the profile radius shrinks and the offset overshoots past the axis — `coverage-feature-framing.ts` steps along the frame's own axis instead.
+- The **read-only hover probe fires every animation frame.** Diff the readout through a ref before touching React state, or the whole panel re-renders at 60 Hz.
+- `docs/plans/*` Amendment sections are binding rulings, not notes. Read them before changing anything they name.

@@ -28,6 +28,10 @@ const AdminPage = lazy(() => import('./pages/admin/index.tsx'));
 const VesselModelerPage = lazy(() => import('./pages/VesselModelerPage.tsx'));
 const DownloadsPage = lazy(() => import('./pages/DownloadsPage.tsx'));
 const DocumentsPage = lazy(() => import('./pages/documents/index.tsx'));
+// Public client-share viewer. Its own chunk BY DESIGN: the page must never pull
+// VesselModeler.tsx, the auth context or supabase-js into a logged-out session
+// (docs/plans/2026-08-17-client-sharing-design.md, "Client page").
+const ClientSharePage = lazy(() => import('./pages/share/ClientSharePage'));
 const ProjectListPage = lazy(() => import('./pages/projects/ProjectListPage'));
 const ProjectSetupPage = lazy(() => import('./pages/projects/ProjectSetupPage'));
 const ProjectDetailPage = lazy(() => import('./pages/projects/ProjectDetailPage'));
@@ -43,231 +47,358 @@ const ScanViewerDemoC = lazy(() => import('./pages/demos/ScanViewerDemoC'));
 const LogoShowcase = lazy(() => import('./pages/demos/LogoShowcase'));
 
 interface SuspenseRoutesProps {
-    children: ReactNode;
-    fallback: ReactNode;
+  children: ReactNode;
+  fallback: ReactNode;
 }
 
 function SuspenseRoutes({ children, fallback }: SuspenseRoutesProps) {
-    const location = useLocation();
-    return (
-        <Suspense key={location.pathname} fallback={fallback}>
-            {children}
-        </Suspense>
-    );
+  const location = useLocation();
+  return (
+    <Suspense key={location.pathname} fallback={fallback}>
+      {children}
+    </Suspense>
+  );
 }
 
 function BackgroundManager() {
-    const location = useLocation();
+  const location = useLocation();
 
-    useEffect(() => {
-        if (location.pathname !== '/login') return;
+  useEffect(() => {
+    if (location.pathname !== '/login') return;
 
-        const canvas = document.createElement('canvas');
-        canvas.id = 'app-background-canvas';
-        Object.assign(canvas.style, {
-            position: 'fixed',
-            top: '0',
-            left: '0',
-            width: '100%',
-            height: '100%',
-            zIndex: '0',
-            pointerEvents: 'none',
-        });
-        document.body.appendChild(canvas);
+    const canvas = document.createElement('canvas');
+    canvas.id = 'app-background-canvas';
+    Object.assign(canvas.style, {
+      position: 'fixed',
+      top: '0',
+      left: '0',
+      width: '100%',
+      height: '100%',
+      zIndex: '0',
+      pointerEvents: 'none',
+    });
+    document.body.appendChild(canvas);
 
-        const bg = new AnimatedBackground(canvas, {
-            particleCount: 30,
-            waveIntensity: 0.3,
-            vertexDensity: 40,
-        });
-        bg.start();
+    const bg = new AnimatedBackground(canvas, {
+      particleCount: 30,
+      waveIntensity: 0.3,
+      vertexDensity: 40,
+    });
+    bg.start();
 
-        return () => {
-            bg.stop();
-            canvas.remove();
-        };
-    }, [location.pathname]);
+    return () => {
+      bg.stop();
+      canvas.remove();
+    };
+  }, [location.pathname]);
 
-    return null;
+  return null;
 }
 
 const PageLoader = () => (
-    <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
-        <div className="flex flex-col items-center gap-6">
-            <RandomMatrixSpinner size={200} />
-            <div className="text-base text-gray-400 font-medium animate-pulse">Loading...</div>
-        </div>
+  <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
+    <div className="flex flex-col items-center gap-6">
+      <RandomMatrixSpinner size={200} />
+      <div className="text-base text-gray-400 font-medium animate-pulse">Loading...</div>
     </div>
+  </div>
 );
 
 const isMaintenanceMode = environmentConfig.isMaintenanceMode();
 
 function App() {
-    const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
-    useEffect(() => {
-        initializeTheme();
+  useEffect(() => {
+    initializeTheme();
 
-        const initApp = async () => {
-            try {
-                const timeout = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Initialization timeout')), 15000)
-                );
-                await Promise.race([
-                    authManager.initPromise || Promise.resolve(),
-                    timeout,
-                ]).catch(() => {});
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        initApp();
-    }, []);
-
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
-                <div className="flex flex-col items-center gap-6">
-                    <RandomMatrixSpinner size={280} />
-                    <div className="text-lg text-gray-400 font-medium animate-pulse">Loading NDT Suite...</div>
-                </div>
-            </div>
+    const initApp = async () => {
+      try {
+        const timeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Initialization timeout')), 15000)
         );
-    }
+        await Promise.race([authManager.initPromise || Promise.resolve(), timeout]).catch(() => {});
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
+    initApp();
+  }, []);
+
+  if (isLoading) {
     return (
-        <QueryClientProvider client={queryClient}>
-            <ThemeProvider>
-            <AuthProvider>
-                <CompanionNotificationProvider>
-                <GlobalErrorBoundary>
-                    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                        <BackgroundManager />
-                        <SuspenseRoutes fallback={<PageLoader />}>
-                            <Routes>
-                                <Route path="/login" element={<LoginPage />} />
-                                <Route path="/privacy" element={<PrivacyPolicyPage />} />
-                                <Route element={<ProtectedRoute />}>
-                                    <Route element={<Layout />}>
-                                        <Route path="/" element={<Navigate to={isMaintenanceMode ? "/cscan" : "/profile"} replace />} />
-                                        <Route path="/cscan" element={
-                                            <RequireTabVisible tabId="tools">
-                                                <ErrorBoundary><CscanVisualizerPage /></ErrorBoundary>
-                                            </RequireTabVisible>
-                                        } />
-                                        <Route path="/vessel-modeler" element={
-                                            <RequireTabVisible tabId="tools">
-                                                <ErrorBoundary><VesselModelerPage /></ErrorBoundary>
-                                            </RequireTabVisible>
-                                        } />
-                                        <Route path="/scan-viewer" element={
-                                            <RequireTabVisible tabId="tools">
-                                                <ErrorBoundary><ScanViewerLandingPage /></ErrorBoundary>
-                                            </RequireTabVisible>
-                                        } />
-                                        <Route path="/topology" element={
-                                            <RequireTabVisible tabId="tools">
-                                                <ErrorBoundary><TopologyViewerPage /></ErrorBoundary>
-                                            </RequireTabVisible>
-                                        } />
-                                        <Route path="/demos/scan-viewer-a" element={<ErrorBoundary><ScanViewerDemoA /></ErrorBoundary>} />
-                                        <Route path="/demos/scan-viewer-b" element={<ErrorBoundary><ScanViewerDemoB /></ErrorBoundary>} />
-                                        <Route path="/demos/scan-viewer-c" element={<ErrorBoundary><ScanViewerDemoC /></ErrorBoundary>} />
-                                        <Route path="/demos/logos" element={<ErrorBoundary><LogoShowcase /></ErrorBoundary>} />
-                                        <Route path="/downloads" element={
-                                            <RequireTabVisible tabId="tools">
-                                                <ErrorBoundary><DownloadsPage /></ErrorBoundary>
-                                            </RequireTabVisible>
-                                        } />
-                                        <Route path="/projects" element={
-                                            <RequireTabVisible tabId="tools">
-                                                <ErrorBoundary><ProjectListPage /></ErrorBoundary>
-                                            </RequireTabVisible>
-                                        } />
-                                        <Route path="/projects/new" element={
-                                            <RequireTabVisible tabId="tools">
-                                                <ErrorBoundary><ProjectSetupPage /></ErrorBoundary>
-                                            </RequireTabVisible>
-                                        } />
-                                        <Route path="/projects/:id" element={
-                                            <RequireTabVisible tabId="tools">
-                                                <ErrorBoundary><ProjectDetailPage /></ErrorBoundary>
-                                            </RequireTabVisible>
-                                        } />
-                                        <Route path="/projects/:projectId/vessels/:vesselId" element={
-                                            <RequireTabVisible tabId="tools">
-                                                <ErrorBoundary><VesselOverviewPage /></ErrorBoundary>
-                                            </RequireTabVisible>
-                                        } />
-                                        <Route path="/projects/:projectId/vessels/:vesselId/report-builder" element={
-                                            <RequireTabVisible tabId="tools">
-                                                <ErrorBoundary><ReportBuilderPage /></ErrorBoundary>
-                                            </RequireTabVisible>
-                                        } />
-                                        <Route path="/projects/:projectId/vessels/:vesselId/viewer" element={
-                                            <RequireTabVisible tabId="tools">
-                                                <ErrorBoundary><ScanViewerPage /></ErrorBoundary>
-                                            </RequireTabVisible>
-                                        } />
-                                        <Route path="/projects/:id/edit" element={
-                                            <RequireTabVisible tabId="tools">
-                                                <ErrorBoundary><ProjectSetupPage /></ErrorBoundary>
-                                            </RequireTabVisible>
-                                        } />
-                                        {isMaintenanceMode ? (
-                                            <>
-                                                <Route path="/profile" element={<Navigate to="/cscan" replace />} />
-                                                <Route path="/documents" element={<Navigate to="/cscan" replace />} />
-                                                <Route path="/personnel" element={<Navigate to="/cscan" replace />} />
-                                                <Route path="/admin" element={<Navigate to="/cscan" replace />} />
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Route path="/profile" element={
-                                                    <RequireTabVisible tabId="profile">
-                                                        <ErrorBoundary><ProfilePage /></ErrorBoundary>
-                                                    </RequireTabVisible>
-                                                } />
-                                                <Route path="/documents" element={
-                                                    <RequireTabVisible tabId="documents">
-                                                        <ErrorBoundary><DocumentsPage /></ErrorBoundary>
-                                                    </RequireTabVisible>
-                                                } />
-                                                <Route path="/personnel" element={
-                                                    <RequireAccess requireElevatedAccess>
-                                                        <RequireTabVisible tabId="personnel">
-                                                            <ErrorBoundary><PersonnelPage /></ErrorBoundary>
-                                                        </RequireTabVisible>
-                                                    </RequireAccess>
-                                                } />
-                                                <Route path="/admin" element={
-                                                    <RequireAccess requireAdmin>
-                                                        <RequireTabVisible tabId="admin">
-                                                            <ErrorBoundary><AdminPage /></ErrorBoundary>
-                                                        </RequireTabVisible>
-                                                    </RequireAccess>
-                                                } />
-                                            </>
-                                        )}
-                                    </Route>
-                                </Route>
-                                <Route path="/projects/:projectId/vessels/:vesselId/report" element={
-                                    <ProtectedRoute>
-                                        <ErrorBoundary><ReportPage /></ErrorBoundary>
-                                    </ProtectedRoute>
-                                } />
-                                <Route path="*" element={<Navigate to="/" replace />} />
-                            </Routes>
-                        </SuspenseRoutes>
-                    </BrowserRouter>
-                </GlobalErrorBoundary>
-                </CompanionNotificationProvider>
-            </AuthProvider>
-            </ThemeProvider>
-            <ReactQueryDevtools initialIsOpen={false} />
-        </QueryClientProvider>
+      <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
+        <div className="flex flex-col items-center gap-6">
+          <RandomMatrixSpinner size={280} />
+          <div className="text-lg text-gray-400 font-medium animate-pulse">
+            Loading NDT Suite...
+          </div>
+        </div>
+      </div>
     );
+  }
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <AuthProvider>
+          <CompanionNotificationProvider>
+            <GlobalErrorBoundary>
+              <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                <BackgroundManager />
+                <SuspenseRoutes fallback={<PageLoader />}>
+                  <Routes>
+                    <Route path="/login" element={<LoginPage />} />
+                    <Route path="/privacy" element={<PrivacyPolicyPage />} />
+                    {/* Loginless published report — outside ProtectedRoute and
+                                    outside Layout: a client sees no app chrome at all. */}
+                    <Route
+                      path="/share/:token"
+                      element={
+                        <ErrorBoundary>
+                          <ClientSharePage />
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route element={<ProtectedRoute />}>
+                      <Route element={<Layout />}>
+                        <Route
+                          path="/"
+                          element={
+                            <Navigate to={isMaintenanceMode ? '/cscan' : '/profile'} replace />
+                          }
+                        />
+                        <Route
+                          path="/cscan"
+                          element={
+                            <RequireTabVisible tabId="tools">
+                              <ErrorBoundary>
+                                <CscanVisualizerPage />
+                              </ErrorBoundary>
+                            </RequireTabVisible>
+                          }
+                        />
+                        <Route
+                          path="/vessel-modeler"
+                          element={
+                            <RequireTabVisible tabId="tools">
+                              <ErrorBoundary>
+                                <VesselModelerPage />
+                              </ErrorBoundary>
+                            </RequireTabVisible>
+                          }
+                        />
+                        <Route
+                          path="/scan-viewer"
+                          element={
+                            <RequireTabVisible tabId="tools">
+                              <ErrorBoundary>
+                                <ScanViewerLandingPage />
+                              </ErrorBoundary>
+                            </RequireTabVisible>
+                          }
+                        />
+                        <Route
+                          path="/topology"
+                          element={
+                            <RequireTabVisible tabId="tools">
+                              <ErrorBoundary>
+                                <TopologyViewerPage />
+                              </ErrorBoundary>
+                            </RequireTabVisible>
+                          }
+                        />
+                        <Route
+                          path="/demos/scan-viewer-a"
+                          element={
+                            <ErrorBoundary>
+                              <ScanViewerDemoA />
+                            </ErrorBoundary>
+                          }
+                        />
+                        <Route
+                          path="/demos/scan-viewer-b"
+                          element={
+                            <ErrorBoundary>
+                              <ScanViewerDemoB />
+                            </ErrorBoundary>
+                          }
+                        />
+                        <Route
+                          path="/demos/scan-viewer-c"
+                          element={
+                            <ErrorBoundary>
+                              <ScanViewerDemoC />
+                            </ErrorBoundary>
+                          }
+                        />
+                        <Route
+                          path="/demos/logos"
+                          element={
+                            <ErrorBoundary>
+                              <LogoShowcase />
+                            </ErrorBoundary>
+                          }
+                        />
+                        <Route
+                          path="/downloads"
+                          element={
+                            <RequireTabVisible tabId="tools">
+                              <ErrorBoundary>
+                                <DownloadsPage />
+                              </ErrorBoundary>
+                            </RequireTabVisible>
+                          }
+                        />
+                        <Route
+                          path="/projects"
+                          element={
+                            <RequireTabVisible tabId="tools">
+                              <ErrorBoundary>
+                                <ProjectListPage />
+                              </ErrorBoundary>
+                            </RequireTabVisible>
+                          }
+                        />
+                        <Route
+                          path="/projects/new"
+                          element={
+                            <RequireTabVisible tabId="tools">
+                              <ErrorBoundary>
+                                <ProjectSetupPage />
+                              </ErrorBoundary>
+                            </RequireTabVisible>
+                          }
+                        />
+                        <Route
+                          path="/projects/:id"
+                          element={
+                            <RequireTabVisible tabId="tools">
+                              <ErrorBoundary>
+                                <ProjectDetailPage />
+                              </ErrorBoundary>
+                            </RequireTabVisible>
+                          }
+                        />
+                        <Route
+                          path="/projects/:projectId/vessels/:vesselId"
+                          element={
+                            <RequireTabVisible tabId="tools">
+                              <ErrorBoundary>
+                                <VesselOverviewPage />
+                              </ErrorBoundary>
+                            </RequireTabVisible>
+                          }
+                        />
+                        <Route
+                          path="/projects/:projectId/vessels/:vesselId/report-builder"
+                          element={
+                            <RequireTabVisible tabId="tools">
+                              <ErrorBoundary>
+                                <ReportBuilderPage />
+                              </ErrorBoundary>
+                            </RequireTabVisible>
+                          }
+                        />
+                        <Route
+                          path="/projects/:projectId/vessels/:vesselId/viewer"
+                          element={
+                            <RequireTabVisible tabId="tools">
+                              <ErrorBoundary>
+                                <ScanViewerPage />
+                              </ErrorBoundary>
+                            </RequireTabVisible>
+                          }
+                        />
+                        <Route
+                          path="/projects/:id/edit"
+                          element={
+                            <RequireTabVisible tabId="tools">
+                              <ErrorBoundary>
+                                <ProjectSetupPage />
+                              </ErrorBoundary>
+                            </RequireTabVisible>
+                          }
+                        />
+                        {isMaintenanceMode ? (
+                          <>
+                            <Route path="/profile" element={<Navigate to="/cscan" replace />} />
+                            <Route path="/documents" element={<Navigate to="/cscan" replace />} />
+                            <Route path="/personnel" element={<Navigate to="/cscan" replace />} />
+                            <Route path="/admin" element={<Navigate to="/cscan" replace />} />
+                          </>
+                        ) : (
+                          <>
+                            <Route
+                              path="/profile"
+                              element={
+                                <RequireTabVisible tabId="profile">
+                                  <ErrorBoundary>
+                                    <ProfilePage />
+                                  </ErrorBoundary>
+                                </RequireTabVisible>
+                              }
+                            />
+                            <Route
+                              path="/documents"
+                              element={
+                                <RequireTabVisible tabId="documents">
+                                  <ErrorBoundary>
+                                    <DocumentsPage />
+                                  </ErrorBoundary>
+                                </RequireTabVisible>
+                              }
+                            />
+                            <Route
+                              path="/personnel"
+                              element={
+                                <RequireAccess requireElevatedAccess>
+                                  <RequireTabVisible tabId="personnel">
+                                    <ErrorBoundary>
+                                      <PersonnelPage />
+                                    </ErrorBoundary>
+                                  </RequireTabVisible>
+                                </RequireAccess>
+                              }
+                            />
+                            <Route
+                              path="/admin"
+                              element={
+                                <RequireAccess requireAdmin>
+                                  <RequireTabVisible tabId="admin">
+                                    <ErrorBoundary>
+                                      <AdminPage />
+                                    </ErrorBoundary>
+                                  </RequireTabVisible>
+                                </RequireAccess>
+                              }
+                            />
+                          </>
+                        )}
+                      </Route>
+                    </Route>
+                    <Route
+                      path="/projects/:projectId/vessels/:vesselId/report"
+                      element={
+                        <ProtectedRoute>
+                          <ErrorBoundary>
+                            <ReportPage />
+                          </ErrorBoundary>
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </SuspenseRoutes>
+              </BrowserRouter>
+            </GlobalErrorBoundary>
+          </CompanionNotificationProvider>
+        </AuthProvider>
+      </ThemeProvider>
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
+  );
 }
 
 export default App;

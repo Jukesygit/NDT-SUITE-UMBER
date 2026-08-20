@@ -63,6 +63,18 @@ Share unit = **project**. Clients see exactly what was published, never WIP; upd
 
 Live client views · client commenting/annotations · PDF/report export from the client page · per-vessel share links (ride later on the same bundle) · bundle cleanup automation · client-view analytics beyond the activity-trail log.
 
+## Amendment (2026-08-20, implementation rulings — binding)
+
+**Bundle contents: decimated grids only, no pre-baked PNGs.** The spec listed both "pre-baked heatmap textures" and "decimated thickness grids". The read-only viewport already builds its heatmaps from a composite's `data` (a canvas bake, no renderer needed), so a bundle carrying decimated grids inside the serialized model gives the client BOTH the heatmap and the hover readout from one artifact. Pre-baking PNGs as well would have required a headless GL capture at publish time plus a new "externally supplied texture" path through `ReadOnlyViewport` — i.e. the viewer diverging from the modeler for no gain. Decimation is **min-pooled**, so a coarser published grid can never hide a thin spot.
+
+**Publish-time screenshots are not implemented.** `ShareManifestVessel.screenshotPath` exists and the viewer honours it; nothing captures one yet, and the landing page falls back to typographic cards. Adding capture later needs no format change.
+
+**PII exclusions, as implemented:** an unpublished layer's entities are REMOVED from the serialized model (not hidden), and coverage-rect `note` + `techniqueOther` are stripped unconditionally. The `technique` enum survives — it is a closed vocabulary and it is what makes a published coverage plan legible. `referenceDrawings` are never published.
+
+**Chunk separation, honestly scoped.** The share page's own static closure contains no auth, no supabase-js and no editor code, and `npm run verify:share-chunk` enforces it after a build. The SPA **entry** chunk loads on every route, including `/share`, and does contain auth — that is inherent to a single-entry SPA and would need a separate HTML entry point to change. Scar: a dynamic `import()` in the share page made Vite place its preload helper in the supabase-vendor chunk, pulling supabase-js into the logged-out page; the page's imports are static for that reason.
+
+**Ordering:** a re-publish uploads rev-N+1 in full BEFORE bumping the row, so a failed publish leaves the client's live link serving the previous revision; within a revision the manifest uploads last, so a partial upload reads as a dead link rather than a half-published project.
+
 ## Verification plan (implementation gate)
 
 - `npm run build`, `npm run test`, `npm run lint`.
