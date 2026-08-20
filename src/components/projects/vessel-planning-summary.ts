@@ -14,6 +14,7 @@
 
 import {
   computeComparisonRollup,
+  formatCoveragePct,
   type FeatureComparisonRow,
 } from '../VesselModeler/engine/coverage-comparison';
 
@@ -46,5 +47,25 @@ export function summarizePlanning(rows: FeatureComparisonRow[]): VesselPlanningS
     total: rollup.total,
     achievedPct: rollup.tracked === 0 ? null : rollup.achievedPct,
     short: rollup.short,
+  };
+}
+
+/**
+ * The summary plus its display text, formatted by the comparison engine's own
+ * formatter so a card, the Coverage section and the printed report never round
+ * a percentage differently. Built here rather than in the component because the
+ * component must stay free of the (three.js-adjacent) engine graph — see
+ * `hooks/queries/useVesselPlanningSummary.ts`.
+ */
+export interface VesselPlanningDescription extends VesselPlanningSummary {
+  /** Achieved %, or an em dash when nothing is tracked. */
+  achievedText: string;
+}
+
+export function describePlanning(rows: FeatureComparisonRow[]): VesselPlanningDescription {
+  const summary = summarizePlanning(rows);
+  return {
+    ...summary,
+    achievedText: summary.achievedPct === null ? '—' : `${formatCoveragePct(summary.achievedPct)}%`,
   };
 }

@@ -22,6 +22,8 @@ import {
   NEAR_BAND_POINTS,
   computeComparisonRollup,
   computeComparisonRows,
+  formatCoverageDelta,
+  formatCoveragePct,
   type ComparisonStatus,
 } from './coverage-comparison';
 
@@ -57,16 +59,10 @@ export const STATUS_PRINT_COLOR: Record<ComparisonStatus, string> = {
 /** Text colour for an untracked row — the print equivalent of the UI's dimming. */
 export const UNTRACKED_PRINT_COLOR = '808080';
 
-/** Percentage formatting, mirroring `CoverageComparisonSection`. */
-export function formatCoveragePct(pct: number): string {
-  return pct < 0.1 && pct > 0 ? pct.toFixed(2) : pct.toFixed(1);
-}
-
-/** Signed delta in percentage points, always carrying its sign. */
-export function formatCoverageDelta(delta: number): string {
-  const rounded = Math.abs(delta) < 0.05 ? 0 : delta;
-  return `${rounded > 0 ? '+' : rounded < 0 ? '−' : ''}${Math.abs(rounded).toFixed(1)}`;
-}
+// Formatting is the comparison engine's, re-exported so the report's own
+// consumers (and its tests) keep one import — paper and screen must round the
+// same numbers the same way.
+export { formatCoveragePct, formatCoverageDelta };
 
 /** One printed table row: pre-formatted strings plus its print colours. */
 export interface CoverageScopeReportRow {

@@ -10,7 +10,11 @@
 import { describe, it, expect } from 'vitest';
 
 import type { FeatureComparisonRow } from '../../VesselModeler/engine/coverage-comparison';
-import { EMPTY_PLANNING_SUMMARY, summarizePlanning } from '../vessel-planning-summary';
+import {
+  EMPTY_PLANNING_SUMMARY,
+  describePlanning,
+  summarizePlanning,
+} from '../vessel-planning-summary';
 
 /** Row factory — mirrors what computeComparisonRows emits for one feature. */
 function row(
@@ -65,10 +69,7 @@ describe('summarizePlanning', () => {
   it('weights achieved by area, not by row count', () => {
     // 900/1000 on a big feature, 0/10 on a tiny one: a row-count mean would be
     // 45%, the area-weighted truth is 900/1010.
-    const summary = summarizePlanning([
-      row('cylinder', 1000, 900, 50),
-      row('leftHead', 10, 0, 50),
-    ]);
+    const summary = summarizePlanning([row('cylinder', 1000, 900, 50), row('leftHead', 10, 0, 50)]);
 
     expect(summary.achievedPct).toBeCloseTo((900 / 1010) * 100, 6);
   });
@@ -96,5 +97,24 @@ describe('summarizePlanning', () => {
 
   it('an empty row list matches the pre-model placeholder', () => {
     expect(summarizePlanning([])).toEqual(EMPTY_PLANNING_SUMMARY);
+  });
+});
+
+describe('describePlanning', () => {
+  it('formats achieved with the shared comparison formatter', () => {
+    // 500/1000 → 50%, which the shared formatter renders to one decimal.
+    expect(describePlanning([row('cylinder', 1000, 500, 40)]).achievedText).toBe('50.0%');
+  });
+
+  it('shows a dash — not 0% — when nothing is tracked', () => {
+    const described = describePlanning([row('cylinder', 1000, 500)]);
+    expect(described.achievedPct).toBeNull();
+    expect(described.achievedText).toBe('—');
+  });
+
+  it('carries the summary through unchanged', () => {
+    const rows = [row('cylinder', 1000, 500, 40), row('leftHead', 1000, 100, 40)];
+    const described = describePlanning(rows);
+    expect(described).toMatchObject(summarizePlanning(rows));
   });
 });

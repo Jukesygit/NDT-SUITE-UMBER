@@ -3,6 +3,8 @@ import type { VesselState } from '../types';
 import {
   computeComparisonRollup,
   computeComparisonRows,
+  formatCoverageDelta as formatDelta,
+  formatCoveragePct as formatPct,
   type ComparisonStatus,
 } from '../engine/coverage-comparison';
 import { useSettledValue } from '../../../hooks/useSettledValue';
@@ -14,16 +16,6 @@ const STATS_SETTLE_MS = 250;
 
 interface CoverageComparisonSectionProps {
   vesselState: VesselState;
-}
-
-function formatPct(pct: number): string {
-  return pct < 0.1 && pct > 0 ? pct.toFixed(2) : pct.toFixed(1);
-}
-
-/** Signed delta in percentage points, always carrying its sign. */
-function formatDelta(delta: number): string {
-  const rounded = Math.abs(delta) < 0.05 ? 0 : delta;
-  return `${rounded > 0 ? '+' : rounded < 0 ? '−' : ''}${Math.abs(rounded).toFixed(1)}`;
 }
 
 const STATUS_TITLE: Record<ComparisonStatus, string> = {
@@ -57,10 +49,7 @@ export default function CoverageComparisonSection({ vesselState }: CoverageCompa
       {rows.map((r) => {
         const untracked = r.status === 'untracked';
         return (
-          <div
-            key={r.key}
-            className={`vm-cmp-row ${untracked ? 'vm-cmp-row--untracked' : ''}`}
-          >
+          <div key={r.key} className={`vm-cmp-row ${untracked ? 'vm-cmp-row--untracked' : ''}`}>
             <span className="vm-cmp-feature" title={r.label}>
               {r.label}
             </span>

@@ -158,11 +158,19 @@ export function listComparisonFeatures(state: VesselState): CoverageFeature[] {
 
   const features: CoverageFeature[] = [];
   if (!isPipe) {
-    features.push({ key: 'leftHead', label: headLabel('left'), ref: { scope: 'main', key: 'leftHead' } });
+    features.push({
+      key: 'leftHead',
+      label: headLabel('left'),
+      ref: { scope: 'main', key: 'leftHead' },
+    });
   }
   features.push({ key: 'cylinder', label: 'Shell', ref: { scope: 'main', key: 'cylinder' } });
   if (!isPipe) {
-    features.push({ key: 'rightHead', label: headLabel('right'), ref: { scope: 'main', key: 'rightHead' } });
+    features.push({
+      key: 'rightHead',
+      label: headLabel('right'),
+      ref: { scope: 'main', key: 'rightHead' },
+    });
   }
 
   for (const a of state.appendages ?? []) {
@@ -188,10 +196,7 @@ export function listComparisonFeatures(state: VesselState): CoverageFeature[] {
 }
 
 /** Bands achieved against target. Untracked when there is no target at all. */
-export function statusFor(
-  targetPct: number | undefined,
-  achievedPct: number
-): ComparisonStatus {
+export function statusFor(targetPct: number | undefined, achievedPct: number): ComparisonStatus {
   if (targetPct === undefined) return 'untracked';
   if (achievedPct >= targetPct - EPS) return 'met';
   if (achievedPct >= targetPct - NEAR_BAND_POINTS - EPS) return 'near';
@@ -274,4 +279,22 @@ export function computeComparisonRollup(rows: FeatureComparisonRow[]): Compariso
     tracked: met + near + short,
     total: rows.length,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Display formatting — shared by EVERY comparison surface
+// ---------------------------------------------------------------------------
+// These live beside the rows on purpose: the modeler stats section, the
+// projects Coverage section and the printed report must round identically, or
+// the "one source" promise leaks at the last inch. Callers format, never derive.
+
+/** Percentage text. Sub-0.1% values keep a second decimal so they never read 0. */
+export function formatCoveragePct(pct: number): string {
+  return pct < 0.1 && pct > 0 ? pct.toFixed(2) : pct.toFixed(1);
+}
+
+/** Signed delta in percentage points, always carrying its sign (− is U+2212). */
+export function formatCoverageDelta(delta: number): string {
+  const rounded = Math.abs(delta) < 0.05 ? 0 : delta;
+  return `${rounded > 0 ? '+' : rounded < 0 ? '−' : ''}${Math.abs(rounded).toFixed(1)}`;
 }
