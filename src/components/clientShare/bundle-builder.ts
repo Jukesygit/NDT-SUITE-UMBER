@@ -2,8 +2,8 @@
 // Client-share bundle builder — pure.
 //
 // Turns saved vessel state into the immutable snapshot a client is served
-// (docs/plans/2026-08-17-client-sharing-design.md, "Bundle format"). Three
-// rules make this module worth reading carefully:
+// (docs/plans/2026-08-17-client-sharing-design.md, "Bundle format"). Four rules
+// make this module worth reading carefully:
 //
 // 1. EXCLUSION IS REMOVAL, NOT HIDING. A layer the publisher did not tick is
 //    not shipped hidden — its entities are deleted from the serialized model.
@@ -17,6 +17,10 @@
 //
 // 3. DECIMATION IS MIN-POOLED, NOT SAMPLED — see `grid-decimation.ts`, which
 //    owns that rule and its reasoning.
+//
+// 4. THE BUNDLE IS SELF-CONTAINED, SO THE GRIDS ARE PUT BACK — the cloud save
+//    path strips `data`; `attachDecimatedGrids` re-attaches it. Without that the
+//    client's heatmaps are blank.
 //
 // CHUNKING: this reaches `serializeVesselState`, whose transitive graph includes
 // three.js. Import it dynamically from the publish flow — never statically from
@@ -121,7 +125,10 @@ export function sanitizeVesselStateForShare(
   // an annotation is an inspection finding, which is the deliverable. Only the
   // coverage rects' planning free-text is stripped unconditionally.
   next.coverageRects = next.coverageRects.map(stripRectGuidance);
+  // Both heatmap kinds are decimated: a dome scan is wall thickness on a head,
+  // and the client hovers it exactly like a shell scan.
   next.scanComposites = next.scanComposites.map((c) => decimateComposite(c, maxDimension));
+  next.domeScanComposites = next.domeScanComposites.map((c) => decimateComposite(c, maxDimension));
 
   // Reference drawings are internal source documents, are not a layer anyone
   // can toggle, and are the largest thing in a saved model. Never published.
@@ -182,6 +189,44 @@ function toWireJson(payload: unknown): Record<string, unknown> {
   return JSON.parse(JSON.stringify(payload)) as Record<string, unknown>;
 }
 
+/**
+ * Re-attach the thickness grids the CLOUD save path deliberately drops.
+ *
+ * The cloud save path writes no `data` for either composite kind (scan
+ * composites are `{ key: 'data', save: 'skip' }`; the dome spec has no `data`
+ * entry at all) because cloud grids live in their own DB table and the model row
+ * must not carry them twice. A bundle has no second table — `model.json` is the
+ * ONLY copy the client ever gets — so without `data` the viewer bakes a blank
+ * heatmap and `thicknessAtUv` reads nothing. The builder therefore puts back
+ * exactly what the spec dropped and nothing else, leaving the spec the single
+ * source for all four modeler save/load paths. Both loaders read a present key
+ * back already (SCAN_COMPOSITE_SPEC's `load: { or: () => [] }`, and
+ * `normalizeDomeScanComposite`'s `raw.data ?? []`).
+ *
+ * IT MUST BE THE DECIMATED GRIDS: the source is the SANITIZED state, already
+ * min-pooled by `decimateComposite`. Re-attaching from the original vesselState
+ * would ship inspector-resolution readings and silently undo the cap.
+ */
+function attachDecimatedGrids(
+  serialized: Record<string, unknown>,
+  shipped: VesselState
+): Record<string, unknown> {
+  // Matched by id, per kind — never positionally, and never across kinds.
+  for (const [key, sources] of [
+    ['scanComposites', shipped.scanComposites],
+    ['domeScanComposites', shipped.domeScanComposites],
+  ] as [string, ReadonlyArray<{ id: string; data: (number | null)[][] }>][]) {
+    const items = serialized[key];
+    if (!Array.isArray(items)) continue;
+    const gridById = new Map(sources.map((c) => [c.id, c.data]));
+    for (const item of items as Record<string, unknown>[]) {
+      const data = gridById.get(item.id as string);
+      if (data !== undefined) item.data = data;
+    }
+  }
+  return serialized;
+}
+
 /** One vessel handed to the builder: its identity plus its saved model. */
 export interface ShareSourceVessel {
   id: string;
@@ -221,9 +266,14 @@ export function buildShareBundle(params: BuildShareBundleParams): ShareBundle {
     const shipped = sanitizeVesselStateForShare(vessel.vesselState, published, maxDimension);
 
     const modelPath = vesselModelPath(vessel.id);
+    // Attach BEFORE the wire round-trip, so the grids the bundle holds are the
+    // JSON copy, never a live alias of the app's state arrays (a small grid is
+    // returned by identity from `decimateComposite`).
     files.push({
       path: modelPath,
-      body: toWireJson(serializeVesselState(shipped, { path: 'cloud' })),
+      body: toWireJson(
+        attachDecimatedGrids(serializeVesselState(shipped, { path: 'cloud' }), shipped)
+      ),
       contentType: 'application/json',
     });
 

@@ -20,11 +20,13 @@ import {
   DEFAULT_VESSEL_STATE,
   type AnnotationShapeConfig,
   type CoverageRectConfig,
+  type DomeScanConfig,
   type ScanCompositeConfig,
   type VesselState,
 } from '../../VesselModeler/types';
 import type { LayerKey } from '../../VesselModeler/outliner-tree';
 import { computeComparisonRows } from '../../VesselModeler/engine/coverage-comparison';
+import { deserializeVesselState } from '../../VesselModeler/engine/vessel-serialization';
 import {
   MAX_GRID_DIMENSION,
   SHARE_LAYER_DEFAULTS,
@@ -88,6 +90,31 @@ function makeComposite(overrides: Partial<ScanCompositeConfig> = {}): ScanCompos
   };
 }
 
+function makeDomeComposite(overrides: Partial<DomeScanConfig> = {}): DomeScanConfig {
+  return {
+    id: 'ds-1',
+    name: 'Dome scan 1',
+    head: 'left',
+    centerPhi: 30,
+    centerTheta: 90,
+    scanDirection: 'cw',
+    indexDirection: 'outward',
+    orientationConfirmed: true,
+    data: [
+      [10, 10],
+      [10, 10],
+    ],
+    xAxis: [0, 100],
+    yAxis: [0, 100],
+    stats: { min: 10, max: 10, mean: 10, median: 10, stdDev: 0, validArea: 1_000_000 },
+    colorScale: 'Jet',
+    rangeMin: null,
+    rangeMax: null,
+    opacity: 1,
+    ...overrides,
+  };
+}
+
 function makeState(overrides: Partial<VesselState> = {}): VesselState {
   return {
     ...DEFAULT_VESSEL_STATE,
@@ -111,6 +138,13 @@ function gridWithHiddenThinSpot(size: number, thinAt: [number, number]): (number
     data.push(row);
   }
   return data;
+}
+
+/** A grid where no two neighbours match, so a min-pool check cannot pass by luck. */
+function variedGrid(size: number, offsetMm = 0): (number | null)[][] {
+  return Array.from({ length: size }, (_, r) =>
+    Array.from({ length: size }, (_, c) => 12 - ((r * 31 + c * 17) % 53) / 10 + offsetMm)
+  );
 }
 
 describe('sanitizeVesselStateForShare — exclusion is removal', () => {
@@ -297,6 +331,22 @@ describe('buildShareBundle', () => {
     expect(bundle.manifest.vessels[0].stats).toEqual(expected);
   });
 
+  it('ships both heatmap kinds decimated — a dome scan is wall thickness too', () => {
+    const size = MAX_GRID_DIMENSION * 2;
+    const axis = Array.from({ length: size }, (_, i) => i * 5);
+    const shipped = sanitizeVesselStateForShare(
+      makeState({
+        domeScanComposites: [
+          makeDomeComposite({ data: variedGrid(size), xAxis: axis, yAxis: axis }),
+        ],
+      }),
+      ALL_LAYERS
+    );
+
+    expect(shipped.domeScanComposites[0].data.length).toBeLessThanOrEqual(MAX_GRID_DIMENSION);
+    expect(shipped.domeScanComposites[0].data[0].length).toBeLessThanOrEqual(MAX_GRID_DIMENSION);
+  });
+
   it('includes a screenshot only when one was captured', () => {
     const withShot = buildShareBundle({
       ...params,
@@ -313,5 +363,161 @@ describe('buildShareBundle', () => {
     expect(withShot.files.some((f) => f.path === 'vessels/v-1/screenshot.png')).toBe(true);
 
     expect(buildShareBundle(params).manifest.vessels[0].screenshotPath).toBeUndefined();
+  });
+});
+
+// =============================================================================
+// The emitted model.json — asserted AFTER serialization, which is where the
+// bundle used to lose its heatmaps.
+// =============================================================================
+// Every test above this line inspects the sanitized STATE. The state was always
+// right; `serializeVesselState(..., { path: 'cloud' })` then dropped every
+// composite's `data` (correct for a cloud save, whose grids live in their own
+// table) and shipped a model with axes, stats and no readings — a blank heatmap
+// and a hover that reports nothing. So these tests parse the file body the
+// client actually downloads.
+// =============================================================================
+
+const GRID_SIZE = MAX_GRID_DIMENSION * 2;
+const AXIS = Array.from({ length: GRID_SIZE }, (_, i) => i * 5);
+
+interface WireComposite {
+  id: string;
+  data?: (number | null)[][];
+  xAxis?: number[];
+  yAxis?: number[];
+  stats?: { min: number };
+}
+
+interface WireModel {
+  scanComposites: WireComposite[];
+  domeScanComposites: WireComposite[];
+}
+
+/** The model.json bytes a client would receive, parsed back. */
+function emittedModel(vesselState: VesselState): WireModel {
+  const bundle = buildShareBundle({
+    project: { name: 'Karstoe 2026' },
+    vessels: [{ id: 'v-1', name: 'Knockout Drum', vesselState }],
+    published: ALL_LAYERS,
+    revision: 1,
+    publishedAt: '2026-08-20T09:00:00.000Z',
+  });
+  const file = bundle.files.find((f) => f.path === 'vessels/v-1/model.json');
+  if (!file || file.body instanceof Blob) throw new Error('bundle has no model.json');
+  // Through JSON on purpose: the client fetches bytes, not this object.
+  return JSON.parse(JSON.stringify(file.body)) as WireModel;
+}
+
+/** Thinnest reading in a source block — the value min-pooling must produce. */
+function blockMin(
+  data: (number | null)[][],
+  rowStart: number,
+  rowEnd: number,
+  colStart: number,
+  colEnd: number
+): number | null {
+  let min: number | null = null;
+  for (let r = rowStart; r < rowEnd; r++) {
+    for (let c = colStart; c < colEnd; c++) {
+      const v = data[r]?.[c];
+      if (v === null || v === undefined) continue;
+      if (min === null || v < min) min = v;
+    }
+  }
+  return min;
+}
+
+/** Assert a shipped grid is the min-pool of `source`, cell for cell. */
+function expectMinPoolOf(shipped: (number | null)[][], source: (number | null)[][]): void {
+  const rowBlock = Math.ceil(source.length / shipped.length);
+  const colBlock = Math.ceil(source[0].length / shipped[0].length);
+  expect(rowBlock).toBeGreaterThan(1);
+
+  for (let r = 0; r < shipped.length; r++) {
+    for (let c = 0; c < shipped[r].length; c++) {
+      const expected = blockMin(
+        source,
+        r * rowBlock,
+        Math.min((r + 1) * rowBlock, source.length),
+        c * colBlock,
+        Math.min((c + 1) * colBlock, source[0].length)
+      );
+      if (shipped[r][c] !== expected) {
+        // One targeted failure beats 36,864 passing assertions of noise.
+        expect({ r, c, got: shipped[r][c] }).toEqual({ r, c, got: expected });
+      }
+    }
+  }
+}
+
+describe('the emitted model.json — the client has no second copy', () => {
+  const scanGrid = variedGrid(GRID_SIZE);
+  const domeGrid = variedGrid(GRID_SIZE, -1.5);
+  const state = makeState({
+    scanComposites: [makeComposite({ id: 'sc-big', data: scanGrid, xAxis: AXIS, yAxis: AXIS })],
+    domeScanComposites: [
+      makeDomeComposite({ id: 'ds-big', data: domeGrid, xAxis: AXIS, yAxis: AXIS }),
+    ],
+  });
+
+  it('carries the thickness grid for a scan composite', () => {
+    const [sc] = emittedModel(state).scanComposites;
+    expect(sc.id).toBe('sc-big');
+    expect(Array.isArray(sc.data)).toBe(true);
+    expect(sc.data?.length).toBeGreaterThan(0);
+  });
+
+  it('carries the thickness grid for a dome scan composite', () => {
+    const [ds] = emittedModel(state).domeScanComposites;
+    expect(ds.id).toBe('ds-big');
+    expect(Array.isArray(ds.data)).toBe(true);
+    expect(ds.data?.length).toBeGreaterThan(0);
+  });
+
+  it('ships the DECIMATED grid, never the inspector-resolution one', () => {
+    const model = emittedModel(state);
+    for (const composite of [model.scanComposites[0], model.domeScanComposites[0]]) {
+      const data = composite.data as (number | null)[][];
+      expect(data.length).toBeLessThanOrEqual(MAX_GRID_DIMENSION);
+      expect(data[0].length).toBeLessThanOrEqual(MAX_GRID_DIMENSION);
+      expect(data.length).toBeLessThan(GRID_SIZE);
+      // Axes must agree with the grid, or the viewer maps cells to the wrong mm.
+      expect(composite.yAxis).toHaveLength(data.length);
+      expect(composite.xAxis).toHaveLength(data[0].length);
+    }
+  });
+
+  it('min-pools every shipped cell, so no thin spot is downsampled away', () => {
+    const model = emittedModel(state);
+    expectMinPoolOf(model.scanComposites[0].data as (number | null)[][], scanGrid);
+    expectMinPoolOf(model.domeScanComposites[0].data as (number | null)[][], domeGrid);
+  });
+
+  it('keeps the two grids distinct — data is matched to its composite by id', () => {
+    const model = emittedModel(state);
+    const scanCell = model.scanComposites[0].data?.[0]?.[0];
+    const domeCell = model.domeScanComposites[0].data?.[0]?.[0];
+    expect(scanCell).not.toBe(domeCell);
+    expect(domeCell).toBeCloseTo((scanCell as number) - 1.5, 6);
+  });
+
+  it('reloads through the deserializer the client uses, grid intact', () => {
+    const model = emittedModel(state) as unknown as Record<string, unknown>;
+    const restored = deserializeVesselState(model, { path: 'cloud', textures: [] });
+
+    expect(restored.scanComposites[0].data.length).toBe(
+      (emittedModel(state).scanComposites[0].data as (number | null)[][]).length
+    );
+    expect(restored.domeScanComposites[0].data.length).toBeGreaterThan(0);
+    expect(restored.scanComposites[0].data[0].length).toBeLessThanOrEqual(MAX_GRID_DIMENSION);
+  });
+
+  it('leaves a small grid alone — decimation caps, it does not always shrink', () => {
+    const [sc] = emittedModel(makeState()).scanComposites;
+    expect(sc.data).toEqual([
+      [10, 10],
+      [10, 10],
+    ]);
   });
 });
