@@ -14,17 +14,63 @@
 // feature's own bounding sphere, so a boot frames tight and the shell frames
 // wide without any per-feature fudge factor.
 //
+// CLOSURE RULE (2026-08-20): a cap row is framed from OUTBOARD of its own cap.
+// A closure's bounding sphere is centred barely past its tangent plane — still
+// well inside the vessel envelope — so the world-fixed iso direction put the
+// camera on the INBOARD side of a left head or a boot dome, above the barrel,
+// looking back along the shell with the head itself hidden behind it. Cap rows
+// therefore keep iso's azimuth around the owning frame's axis but take the
+// axial component's sign from the cap's own outboard direction (and its
+// magnitude clamped to a three-quarter elevation), so the head reads as a 3D
+// object from outside. Shell/barrel rows are untouched — still plain
+// `canonicalPose('iso', …)`.
+//
 // Pure apart from THREE vector maths — no React, no scene access.
 // ---------------------------------------------------------------------------
 
 import type { VesselState } from '../types';
 import { resolveBodyFrame, type SurfaceFrame } from './body-frame';
-import { canonicalPose, type CameraPose, type ViewBounds } from './canonical-views';
+import {
+  canonicalDirection,
+  canonicalPose,
+  fitDistance,
+  type CameraPose,
+  type ViewBounds,
+} from './canonical-views';
 import type { FeatureTargetRef } from './coverage-comparison';
 import { SCALE } from './materials';
 
 /** Below this the bounding sphere is meaningless and the camera lands inside. */
 const MIN_RADIUS_MM = 60;
+
+/**
+ * Shell kept in a cap's frame INBOARD of the tangent plane, as a fraction of the
+ * body radius. A head framed to its own silhouette floats contextless; a strip of
+ * barrel behind it says which end of which vessel you are looking at.
+ */
+const CAP_SHELL_MARGIN_FRACTION = 0.15;
+
+/**
+ * Elevation of a cap view above its tangent plane, as a sine, clamped into a
+ * three-quarter band: too shallow and the camera skims the barrel it is trying to
+ * look past, too steep and the head is a flat-on bullseye with no depth cues.
+ */
+const MIN_CAP_ELEVATION_SIN = Math.sin((25 * Math.PI) / 180);
+const MAX_CAP_ELEVATION_SIN = Math.sin((65 * Math.PI) / 180);
+
+/**
+ * Distance multiplier on `fitDistance` for cap rows. `fitDistance`'s 0.7 fill
+ * factor assumes a loose bounding sphere (a whole vessel's silhouette sits well
+ * inside its sphere); a cap's sphere is nearly TIGHT — its silhouette half-height
+ * is the full body radius — so the shared factor crops ~25% of the head off the
+ * frame (measured in the 2026-08-20 headless-Edge drive). 1.4 lands the cap
+ * silhouette at ~90% of the frame across head ratios without touching the shared
+ * constant, which the whole-vessel reset and report capture rely on.
+ */
+const CAP_FIT_FACTOR = 1.4;
+
+/** Which closure of a body a row refers to: +1 = far end, −1 = near end. */
+type CapEnd = 1 | -1;
 
 /**
  * Axis point at an axial station INSIDE the cylinder, [0, axialLength]: the
@@ -48,6 +94,29 @@ function axisDirection(frame: SurfaceFrame) {
   return span.lengthSq() > 0 ? span.normalize() : null;
 }
 
+/**
+ * Unit vector pointing OUT of the body at one of its ends: the frame's own axis
+ * for the far end, its negation for the near end. This — not the world axis and
+ * not the main vessel's axis — is what "outboard" means for a boot dome, so a
+ * tilted boot needs no special case. Null for a degenerate zero-length body.
+ */
+function outboardDirection(frame: SurfaceFrame, end: CapEnd) {
+  const axis = axisDirection(frame);
+  return axis ? axis.multiplyScalar(end) : null;
+}
+
+/**
+ * Unit radial direction at the frame's own 0° datum, used only as the fallback
+ * azimuth when the iso direction happens to lie along the body's axis (nothing
+ * left to project). Taken from the frame so it obeys the body's datum, never a
+ * hand-picked world axis.
+ */
+function datumRadial(frame: SurfaceFrame) {
+  const mid = frame.axialLength / 2;
+  const radial = frame.surfacePoint(mid, 0, 0).sub(axisPoint(frame, mid));
+  return radial.lengthSq() > 0 ? radial.normalize() : null;
+}
+
 /** Bounds of a body's cylindrical barrel: mid-length on the axis, half-diagonal. */
 function barrelBounds(frame: SurfaceFrame): ViewBounds {
   return {
@@ -56,19 +125,60 @@ function barrelBounds(frame: SurfaceFrame): ViewBounds {
   };
 }
 
-/** Bounds of one closure cap. `outward` is +1 for the far end, −1 for the near.
- *  The centre is half a head-depth OUTBOARD of the tangent plane, stepped along
- *  the axis — never `axisPoint` at a closure station (see its note). */
-function capBounds(frame: SurfaceFrame, outward: 1 | -1): ViewBounds {
-  const tangent = axisPoint(frame, outward > 0 ? frame.axialLength : 0);
-  const axis = axisDirection(frame);
-  const center = axis
-    ? tangent.add(axis.multiplyScalar((outward * frame.headDepth * SCALE) / 2))
-    : tangent;
+/**
+ * Bounds of one closure cap, `end` +1 for the far closure and −1 for the near.
+ *
+ * The sphere spans the WHOLE cap — tangent plane through apex — plus
+ * {@link CAP_SHELL_MARGIN_FRACTION} of barrel behind it, so the axial extent runs
+ * from `−margin` to `+headDepth` measured outboard from the tangent plane. Its
+ * centre is the midpoint of that span, stepped along the frame's own axis — never
+ * `axisPoint` at a closure station (see its note), where the profile radius has
+ * already shrunk. Radially the cap never exceeds the body radius, so
+ * hypot(half-span, radius) contains every point of it.
+ */
+function capBounds(frame: SurfaceFrame, end: CapEnd): ViewBounds {
+  const tangent = axisPoint(frame, end > 0 ? frame.axialLength : 0);
+  const outboard = outboardDirection(frame, end);
+  const marginMm = frame.radius * CAP_SHELL_MARGIN_FRACTION;
+  const halfSpanMm = (frame.headDepth + marginMm) / 2;
+  const centreOffsetMm = (frame.headDepth - marginMm) / 2;
+  const center = outboard ? tangent.addScaledVector(outboard, centreOffsetMm * SCALE) : tangent;
   return {
     center,
-    radius: Math.max(Math.hypot(frame.headDepth / 2, frame.radius), MIN_RADIUS_MM) * SCALE,
+    radius: Math.max(Math.hypot(halfSpanMm, frame.radius), MIN_RADIUS_MM) * SCALE,
   };
+}
+
+/**
+ * View direction (centre → camera) for a cap row: iso's azimuth around the body's
+ * axis, iso's elevation magnitude clamped to the three-quarter band, and the
+ * axial sign forced OUTBOARD. Mirroring iso per end rather than inventing a view
+ * vocabulary keeps a row click reading as a move, not a teleport — the far head
+ * of a horizontal vessel keeps the plain iso direction, stood further back by
+ * {@link CAP_FIT_FACTOR}.
+ *
+ * Null only for a degenerate body with no resolvable axis; callers fall back to
+ * the plain canonical pose there.
+ */
+function capViewDirection(frame: SurfaceFrame, end: CapEnd, state: VesselState) {
+  const outboard = outboardDirection(frame, end);
+  if (!outboard) return null;
+
+  const iso = canonicalDirection('iso', state).normalize();
+  const elevation = iso.dot(outboard);
+  const azimuth = iso.clone().addScaledVector(outboard, -elevation);
+  if (azimuth.lengthSq() < 1e-12) {
+    const fallback = datumRadial(frame);
+    if (!fallback) return outboard;
+    azimuth.copy(fallback);
+  }
+  azimuth.normalize();
+
+  const lift = Math.min(
+    Math.max(Math.abs(elevation), MIN_CAP_ELEVATION_SIN),
+    MAX_CAP_ELEVATION_SIN
+  );
+  return azimuth.multiplyScalar(Math.sqrt(1 - lift * lift)).addScaledVector(outboard, lift);
 }
 
 /**
@@ -97,6 +207,28 @@ function unionBounds(a: ViewBounds, b: ViewBounds): ViewBounds {
 }
 
 /**
+ * The body a comparison row lives on, and which of its closures the row is (null
+ * for a cylindrical row). Null overall when the row's body no longer exists — a
+ * boot deleted between a render and a click.
+ */
+function resolveFeature(
+  state: VesselState,
+  ref: FeatureTargetRef
+): { frame: SurfaceFrame; cap: CapEnd | null } | null {
+  const bodyId = ref.scope === 'main' ? undefined : ref.appendageId;
+  if (bodyId !== undefined && !state.appendages?.some((a) => a.id === bodyId)) return null;
+
+  const frame = resolveBodyFrame(state, bodyId);
+
+  if (ref.scope === 'main') {
+    if (ref.key === 'cylinder') return { frame, cap: null };
+    return { frame, cap: ref.key === 'rightHead' ? 1 : -1 };
+  }
+  // A boot's only closure is its far end; its shell is the barrel.
+  return { frame, cap: ref.slot === 'shell' ? null : 1 };
+}
+
+/**
  * World-space bounds of one comparison feature, or null when the feature's body
  * no longer exists (a boot deleted between a render and a click).
  *
@@ -105,28 +237,37 @@ function unionBounds(a: ViewBounds, b: ViewBounds): ViewBounds {
  * vertical vessel's axis swap are handled by construction.
  */
 export function featureViewBounds(state: VesselState, ref: FeatureTargetRef): ViewBounds | null {
-  const bodyId = ref.scope === 'main' ? undefined : ref.appendageId;
-  if (bodyId !== undefined && !state.appendages?.some((a) => a.id === bodyId)) return null;
-
-  const frame = resolveBodyFrame(state, bodyId);
-
-  if (ref.scope === 'main') {
-    if (ref.key === 'cylinder') return barrelBounds(frame);
-    return capBounds(frame, ref.key === 'rightHead' ? 1 : -1);
-  }
-  // A boot's only closure is its far end; its shell is the barrel.
-  return ref.slot === 'shell' ? barrelBounds(frame) : capBounds(frame, 1);
+  const feature = resolveFeature(state, ref);
+  if (!feature) return null;
+  return feature.cap === null ? barrelBounds(feature.frame) : capBounds(feature.frame, feature.cap);
 }
 
 /**
- * Isometric pose framing one comparison feature, or null when it cannot be
- * resolved. Iso (rather than face-on) keeps the vessel readable as a whole while
- * the feature fills the frame — the same choice `ReadOnlyViewport` makes for its
- * opening pose, so a row click reads as a move, not a teleport.
+ * Pose framing one comparison feature, or null when it cannot be resolved.
+ *
+ * A cylindrical row is the plain canonical iso pose: it keeps the vessel readable
+ * as a whole while the feature fills the frame — the same choice
+ * `ReadOnlyViewport` makes for its opening pose, so a row click reads as a move,
+ * not a teleport. A cap row keeps that iso character but is taken from OUTBOARD
+ * of its own closure (see {@link capViewDirection}); framed on the world-fixed
+ * iso direction a near-end head sits behind its own barrel.
  */
 export function featureFramePose(state: VesselState, ref: FeatureTargetRef): CameraPose | null {
-  const bounds = featureViewBounds(state, ref);
-  return bounds ? canonicalPose('iso', state, bounds) : null;
+  const feature = resolveFeature(state, ref);
+  if (!feature) return null;
+
+  if (feature.cap === null) return canonicalPose('iso', state, barrelBounds(feature.frame));
+
+  const bounds = capBounds(feature.frame, feature.cap);
+  const dir = capViewDirection(feature.frame, feature.cap, state);
+  if (!dir) return canonicalPose('iso', state, bounds);
+
+  return {
+    position: bounds.center
+      .clone()
+      .addScaledVector(dir, fitDistance(bounds.radius) * CAP_FIT_FACTOR),
+    target: bounds.center.clone(),
+  };
 }
 
 /**
