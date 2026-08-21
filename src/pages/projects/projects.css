@@ -654,6 +654,17 @@
   background: var(--clean-badge-red-bg);
 }
 
+/* An action already in flight (a share deletion, say). Listed AFTER the variant
+   hovers deliberately: they tie on specificity, so order is what stops a
+   disabled danger-ghost still lighting up red under the cursor. */
+.pj-vessel-action-btn:disabled,
+.pj-vessel-action-btn:disabled:hover {
+  opacity: 0.55;
+  cursor: not-allowed;
+  color: var(--clean-text-tertiary);
+  background: transparent;
+}
+
 /* ---- Stats Grid ---- */
 .pj-stats-grid {
   display: grid;

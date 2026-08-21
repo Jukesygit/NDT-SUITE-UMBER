@@ -8,9 +8,14 @@
  * delete, so Restore is right beside it. Re-publish does NOT mint a new link —
  * it repoints this one, which is why it sits here rather than in the publish
  * form.
+ *
+ * Delete is the third, deliberately separate action: it erases the published
+ * files and the row for good. It is last in the row and is the only one gated
+ * behind a confirmation, which the parent owns along with the mutation — this
+ * component stays a presentation of what the project has.
  */
 
-import { Check, Copy, RotateCcw, ShieldOff } from 'lucide-react';
+import { Check, Copy, RotateCcw, ShieldOff, Trash2 } from 'lucide-react';
 import {
   clientShareStatus,
   shareUrl,
@@ -25,6 +30,10 @@ interface ShareLinkListProps {
   onRepublish: (share: ClientShareRecord) => void;
   onRevoke: (shareId: string) => void;
   onRestore: (shareId: string) => void;
+  /** Opens the parent's confirmation; deletion never happens on this click. */
+  onDelete: (share: ClientShareRecord) => void;
+  /** Share whose deletion is in flight, so its row cannot be clicked twice. */
+  deletingShareId?: string | null;
 }
 
 function formatDate(iso: string): string {
@@ -42,6 +51,8 @@ export function ShareLinkList({
   onRepublish,
   onRevoke,
   onRestore,
+  onDelete,
+  deletingShareId = null,
 }: ShareLinkListProps) {
   if (shares.length === 0) return null;
 
@@ -101,6 +112,16 @@ export function ShareLinkList({
                   Revoke
                 </button>
               )}
+              <button
+                type="button"
+                className="pj-vessel-action-btn danger-ghost"
+                onClick={() => onDelete(share)}
+                disabled={deletingShareId === share.id}
+                title="Permanently delete this link and its published files"
+              >
+                <Trash2 size={12} />
+                {deletingShareId === share.id ? 'Deleting…' : 'Delete'}
+              </button>
             </div>
           </div>
         );

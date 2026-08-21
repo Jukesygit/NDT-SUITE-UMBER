@@ -60,17 +60,11 @@ export interface VesselScreenshotOptions {
   /** Rendered pixels. Defaults to 512×512 (see DEFAULT_WIDTH). */
   width?: number;
   height?: number;
-  /** Grid decimation cap, forwarded to the sanitiser (defaults to the bundle's). */
-  maxDimension?: number;
 }
 
 export interface VesselScreenshotSession {
   /** One vessel's card image, or null when it could not be captured. */
-  capture(
-    vesselState: VesselState,
-    published: ReadonlySet<LayerKey>,
-    opts?: { maxDimension?: number }
-  ): Promise<Blob | null>;
+  capture(vesselState: VesselState, published: ReadonlySet<LayerKey>): Promise<Blob | null>;
   /** Releases the WebGL context and removes the offscreen container. */
   dispose(): void;
 }
@@ -179,14 +173,13 @@ export function createScreenshotSession(
 
   const capture = async (
     vesselState: VesselState,
-    published: ReadonlySet<LayerKey>,
-    captureOpts: { maxDimension?: number } = {}
+    published: ReadonlySet<LayerKey>
   ): Promise<Blob | null> => {
     try {
       clearVessel();
 
       // The sanitised model, never the caller's. See `vessel-screenshot-state`.
-      const shipped = screenshotSourceState(vesselState, published, captureOpts.maxDimension);
+      const shipped = screenshotSourceState(vesselState, published);
 
       materials = createReadOnlyMaterials(shipped.visuals.material);
       const built = buildReadOnlyScene(shipped, materials, NO_TEXTURES, SCREENSHOT_LAYERS);
@@ -242,7 +235,7 @@ export async function captureVesselScreenshot(
   const session = createScreenshotSession(opts);
   if (!session) return null;
   try {
-    return await session.capture(vesselState, published, { maxDimension: opts.maxDimension });
+    return await session.capture(vesselState, published);
   } finally {
     session.dispose();
   }

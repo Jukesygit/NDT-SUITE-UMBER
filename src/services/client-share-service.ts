@@ -1,5 +1,5 @@
 /**
- * Client Share Service — publish, list and revoke client-share links.
+ * Client Share Service — publish, list, revoke and delete client-share links.
  *
  * Design: docs/plans/2026-08-17-client-sharing-design.md. This is the
  * AUTHENTICATED half; the loginless half is the `serve-client-share` edge
@@ -210,7 +210,12 @@ export async function bumpClientShareRevision(
   return data as ClientShareRecord;
 }
 
-/** Revocation is a state change, never a delete: the audit trail outlives it. */
+/**
+ * Revocation is a state change, never a delete: the audit trail outlives it, and
+ * `restoreClientShare` below undoes it exactly. The irreversible sibling is
+ * `deleteClientShare` at the bottom of this file — the two are deliberately
+ * different actions, and the UI must not blur them.
+ */
 export async function revokeClientShare(shareId: string): Promise<void> {
   if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
 
@@ -235,10 +240,37 @@ export async function restoreClientShare(shareId: string): Promise<void> {
 }
 
 export interface UploadBundleFile {
-  /** Bundle-relative path, e.g. `vessels/<id>/model.json`. */
+  /** Bundle-relative path, e.g. `vessels/<id>/model.json.gz`. */
   path: string;
   body: Record<string, unknown> | Blob;
   contentType: string;
+  /**
+   * Compress this file's JSON body before uploading it. The builder marks the
+   * vessel models and stays pure; the compression is THIS layer's job because it
+   * is async and it is a property of the transfer, not of the bundle's content.
+   * Ignored for bodies that are already Blobs — a PNG is not worth re-packing.
+   */
+  encoding?: 'gzip';
+}
+
+/**
+ * Gzip a JSON payload for storage.
+ *
+ * `CompressionStream` is browser-native (and a Node global since 18), which is
+ * why the share feature gained compression without gaining a dependency — a hard
+ * constraint on the viewer side, and one this side has no reason to break either.
+ *
+ * The bytes are stored gzipped and served back verbatim: the edge function
+ * proxies the object without a `Content-Encoding` header, so no browser inflates
+ * this for us. `client-share-client.ts` does it explicitly, keyed off the `.gz`
+ * in the file name.
+ */
+async function gzipJson(payload: Record<string, unknown>, contentType: string): Promise<Blob> {
+  const source = new Response(JSON.stringify(payload)).body;
+  if (!source) throw new Error('Could not compress the share bundle for upload.');
+  return new Response(source.pipeThrough(new CompressionStream('gzip')), {
+    headers: { 'Content-Type': contentType },
+  }).blob();
 }
 
 /**
@@ -248,6 +280,12 @@ export interface UploadBundleFile {
  * viewer's entry request is the manifest, so a partial upload reads as a dead
  * link rather than as a half-published project. `upsert` is on so a retried
  * publish overwrites its own partial revision instead of erroring out.
+ *
+ * Files marked `encoding: 'gzip'` are compressed here. That is not an
+ * optimisation: a full-resolution vessel model as raw JSON was refused outright
+ * by Storage (2026-08-21, "The object exceeded the maximum allowed size" against
+ * the project's ~50MB upload cap), and a publish that cannot upload is a client
+ * with no report.
  */
 export async function uploadShareBundle(
   bundlePath: string,
@@ -262,10 +300,14 @@ export async function uploadShareBundle(
 
   let done = 0;
   for (const file of ordered) {
-    const body =
-      file.body instanceof Blob
-        ? file.body
-        : new Blob([JSON.stringify(file.body)], { type: file.contentType });
+    let body: Blob;
+    if (file.body instanceof Blob) {
+      body = file.body;
+    } else if (file.encoding === 'gzip') {
+      body = await gzipJson(file.body, file.contentType);
+    } else {
+      body = new Blob([JSON.stringify(file.body)], { type: file.contentType });
+    }
 
     const { error } = await supabase!.storage
       .from(BUCKET)
@@ -276,5 +318,190 @@ export async function uploadShareBundle(
 
     if (error) throw error;
     onProgress?.((done += 1), ordered.length);
+  }
+}
+
+// ============================================================================
+// Deletion and revision pruning
+// ============================================================================
+//
+// Both of these remove objects from the bucket, which the original design
+// deliberately never did ("prior revisions are kept as the audit trail"; bundle
+// cleanup listed under Out of scope). The OWNER relaxed that on 2026-08-21:
+// revisions are full-resolution copies of every published grid and accumulate
+// forever, and a share a publisher wants gone should actually go. The audit
+// weight moved to `client_share_views`, which still records every view for as
+// long as the share exists, and to revocation, which stays reversible.
+//
+// The storage DELETE policy that authorises this is
+// `supabase/migrations/20260821140000_client_share_storage_delete.sql`.
+
+/** Storage lists cap at 1000 entries per call; anything longer is paginated. */
+const LIST_PAGE_SIZE = 1000;
+/** `remove()` takes a path array; batched so a big share is not one giant call. */
+const REMOVE_BATCH_SIZE = 100;
+/**
+ * A bundle is exactly three levels deep below the share id
+ * (`rev-N/vessels/<id>/<file>`), so this cap can never bite a real share. It
+ * exists so a listing that somehow reports a folder as its own child cannot spin
+ * forever against the network.
+ */
+const MAX_LIST_DEPTH = 8;
+
+interface ShareDirEntry {
+  name: string;
+  /**
+   * Storage marks folders with a null `id` — they are prefixes, not rows. A file
+   * always carries an id, so "no id" is the folder test, not a name heuristic.
+   */
+  isFolder: boolean;
+}
+
+/** One directory's entries, following pagination to the end. */
+async function listShareDir(dir: string): Promise<ShareDirEntry[]> {
+  const entries: ShareDirEntry[] = [];
+  let offset = 0;
+
+  for (;;) {
+    const { data, error } = await supabase!.storage
+      .from(BUCKET)
+      .list(dir, { limit: LIST_PAGE_SIZE, offset });
+
+    if (error) throw error;
+
+    const page = (data ?? []) as { name: string; id?: string | null }[];
+    for (const entry of page) {
+      entries.push({ name: entry.name, isFolder: entry.id === null || entry.id === undefined });
+    }
+
+    // A short page is the end of the listing. Asking for one more page would
+    // work too, but this is one fewer round trip on every bundle we walk.
+    if (page.length < LIST_PAGE_SIZE) break;
+    offset += page.length;
+  }
+
+  return entries;
+}
+
+/**
+ * Every object path under `prefix`, recursively.
+ *
+ * Storage has no "delete this prefix" call: `remove()` takes explicit paths, so
+ * anything that deletes has to enumerate first. The walk is written generically
+ * rather than hard-coded to `rev-N/vessels/<id>/<file>` — the bundle layout is a
+ * property of the builder, and a layout change must not silently start leaving
+ * objects behind.
+ *
+ * @internal Exported for `__tests__/client-share-deletion.test.ts`.
+ */
+export async function listShareObjectPaths(prefix: string): Promise<string[]> {
+  if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
+
+  const paths: string[] = [];
+  const pending: { dir: string; depth: number }[] = [{ dir: prefix, depth: 0 }];
+
+  while (pending.length > 0) {
+    const { dir, depth } = pending.shift()!;
+    for (const entry of await listShareDir(dir)) {
+      const path = `${dir}/${entry.name}`;
+      if (!entry.isFolder) {
+        paths.push(path);
+      } else if (depth < MAX_LIST_DEPTH) {
+        pending.push({ dir: path, depth: depth + 1 });
+      }
+    }
+  }
+
+  return paths;
+}
+
+/** Remove paths in batches, stopping at the first storage error. */
+async function removeShareObjects(paths: string[]): Promise<void> {
+  for (let i = 0; i < paths.length; i += REMOVE_BATCH_SIZE) {
+    const { error } = await supabase!.storage
+      .from(BUCKET)
+      .remove(paths.slice(i, i + REMOVE_BATCH_SIZE));
+
+    if (error) throw error;
+  }
+}
+
+/**
+ * Permanently remove a share: its storage objects first, then its row.
+ *
+ * THE ORDER IS LOAD-BEARING. The storage DELETE policy authorises an object by
+ * an EXISTS over the share ROW that owns its prefix, so the row must still be
+ * there while the objects are being removed. Delete the row first and every
+ * object under it becomes an orphan no authenticated session can ever touch
+ * again — only a service-role script could clean up.
+ *
+ * Throws on any error, and the caller reports it. A partial failure leaves the
+ * share in a defined, retryable state: objects gone but the row alive means the
+ * link serves a dead bundle (the edge function 404s on the missing manifest),
+ * which is no worse than the revoked state, and pressing Delete again finishes
+ * the job. `client_share_views` rows go with the row via ON DELETE CASCADE.
+ */
+export async function deleteClientShare(share: Pick<ClientShareRecord, 'id'>): Promise<void> {
+  if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
+
+  await removeShareObjects(await listShareObjectPaths(share.id));
+
+  const { error } = await supabase!.from('client_shares').delete().eq('id', share.id);
+
+  if (error) throw error;
+}
+
+/**
+ * Which `rev-N` folders a share at `currentRevision` no longer needs.
+ *
+ * KEEP THE LATEST TWO: the live revision, and one previous. The previous one is
+ * the quick restore — a publisher who spots a mistake in what they just sent can
+ * re-publish the older bundle rather than reconstruct it. Everything at or below
+ * `currentRevision - 2` goes.
+ *
+ * Pure so the rule is testable without storage. Names that are not exactly
+ * `rev-<digits>` are ignored rather than guessed at: this function's output is
+ * fed straight to a recursive delete, so anything it cannot positively identify
+ * as a superseded revision must be left alone. `rev-0` is likewise ignored —
+ * revisions start at 1 (the table's CHECK constraint), so a `rev-0` is something
+ * this code did not create and does not understand.
+ */
+export function revisionsToPrune(currentRevision: number, folderNames: string[]): string[] {
+  const oldest = currentRevision - 2;
+
+  return folderNames.filter((name) => {
+    const match = /^rev-(\d+)$/.exec(name);
+    if (!match) return false;
+
+    const revision = Number(match[1]);
+    return revision >= 1 && revision <= oldest;
+  });
+}
+
+/**
+ * Delete every superseded revision of a share, keeping the latest two.
+ *
+ * Called after a re-publish has flipped the row, so `share.revision` is the LIVE
+ * revision — pass the record `bumpClientShareRevision` returned, never the
+ * pre-flip one, or this prunes the revision the client is currently reading.
+ *
+ * BEST-EFFORT IS THE CALLER'S CONTRACT, NOT THIS FUNCTION'S. This throws like
+ * everything else here; the publish mutation catches and warns, because a client
+ * link that is live and correct must never be reported as a failed publish just
+ * because some old bytes could not be swept up. Anything left behind is retried
+ * by the next re-publish, which recomputes the whole set from what is actually
+ * in the bucket.
+ */
+export async function pruneShareRevisions(
+  share: Pick<ClientShareRecord, 'id' | 'revision'>
+): Promise<void> {
+  if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
+
+  const revisionFolders = (await listShareDir(share.id))
+    .filter((entry) => entry.isFolder)
+    .map((entry) => entry.name);
+
+  for (const folder of revisionsToPrune(share.revision, revisionFolders)) {
+    await removeShareObjects(await listShareObjectPaths(`${share.id}/${folder}`));
   }
 }

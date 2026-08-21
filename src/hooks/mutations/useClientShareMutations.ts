@@ -18,9 +18,11 @@ import { describeHydrationFailures, hydrateScanGrids } from '../../services/scan
 import {
   bumpClientShareRevision,
   createClientShare,
+  deleteClientShare,
   expiryFromDays,
   mintShareToken,
   nextBundlePath,
+  pruneShareRevisions,
   restoreClientShare,
   revokeClientShare,
   uploadShareBundle,
@@ -228,6 +230,20 @@ export function usePublishClientShare() {
           params.existingShare.revision,
           { expiresAt: expiryFromDays(params.expiryDays), passcodeHash }
         );
+
+        // Housekeeping, strictly after the flip and strictly best-effort: the
+        // publish has already succeeded and the client's link is already live
+        // and correct, so a failure to sweep up superseded bundles must not
+        // fail this mutation, delay its result, or reach the publisher's screen.
+        // Whatever is left behind is recomputed and retried by the next
+        // re-publish. A first publish has nothing to prune.
+        try {
+          await pruneShareRevisions(share);
+        } catch {
+          console.warn(
+            'Client share: superseded revisions could not be removed — the link published successfully; they will be swept up on the next re-publish.'
+          );
+        }
       }
 
       return { share: share!, skipped };
@@ -252,6 +268,23 @@ export function useRestoreClientShare(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (shareId: string) => restoreClientShare(shareId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clientShares', projectId] });
+    },
+  });
+}
+
+/**
+ * Permanent deletion — the irreversible sibling of revoke. The service removes
+ * the published files before the row (see its comment: the storage policy is
+ * authorised by the row, so the reverse order strands the objects); the view
+ * history goes with the row by cascade. Errors surface to the dialog; nothing is
+ * best-effort here, because a publisher who asked for this expects it done.
+ */
+export function useDeleteClientShare(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (shareId: string) => deleteClientShare({ id: shareId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clientShares', projectId] });
     },

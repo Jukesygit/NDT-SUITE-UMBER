@@ -40,6 +40,9 @@ const RECT: CoverageRectConfig = {
   technique: 'other',
   techniqueOther: 'ask Dave about the rate',
   note: 'Client contact is Jane Roe, 07700 900000 — do not scan during shift change',
+  // Hidden while the inspector worked on something else — working state, and
+  // never a publish decision.
+  visible: false,
 };
 
 const ANNOTATION = {
@@ -53,6 +56,7 @@ const ANNOTATION = {
   color: '#ff0000',
   lineWidth: 5,
   showLabel: true,
+  visible: false,
 } as AnnotationShapeConfig;
 
 const state: VesselState = {
@@ -105,6 +109,12 @@ describe('published bundle contains nothing it must not', () => {
     const keys = new Set(allKeys(jsonFiles));
     expect(keys.has('note')).toBe(false);
     expect(keys.has('techniqueOther')).toBe(false);
+  });
+
+  it('carries no `visible` key anywhere, though both fixtures were hidden', () => {
+    // Modeler visibility is working state: a shipped `visible: false` would leave
+    // the client a layer chip that can never reveal what it names.
+    expect(new Set(allKeys(jsonFiles)).has('visible')).toBe(false);
   });
 
   it('carries no personnel or account identifiers', () => {

@@ -6,9 +6,9 @@
  * model at publish time, so there is nothing behind an absent toggle. Offering
  * only the published ones simply avoids a row of switches that do nothing.
  *
- * Hover reports thickness from the decimated grid the bundle carries — the same
- * index maths the modeler uses (`thicknessAtUv`), so a client and an inspector
- * pointing at the same spot read the same millimetre.
+ * Hover reports thickness from the full-resolution grid the bundle carries — the
+ * same index maths the modeler uses (`thicknessAtUv`) over the same cells, so a
+ * client and an inspector pointing at the same spot read the same millimetre.
  */
 
 import { useCallback, useMemo, useRef, useState } from 'react';

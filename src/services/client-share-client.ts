@@ -92,14 +92,42 @@ export async function fetchShareManifest(token: string, passcode: string | null)
   return response.json();
 }
 
-/** One JSON file from the bundle (a vessel model). */
+/**
+ * Inflate a gzipped JSON response.
+ *
+ * `DecompressionStream` is browser-native, which is the whole reason the bundle
+ * can be compressed at all: this module must stay dependency-free, and a
+ * pako-sized library on a loginless page would be both a chunk-guard failure and
+ * a download the client did not need.
+ *
+ * `response.body` is a stream in every browser that has `DecompressionStream`,
+ * but the spec allows null — buffering the blob and re-wrapping it yields the
+ * same bytes without reaching for `Blob.stream()`, which is less widely present.
+ */
+async function inflateJson(response: Response): Promise<unknown> {
+  const source = response.body ?? new Response(await response.blob()).body;
+  if (!source) throw new ShareFetchError({ kind: 'unavailable' });
+  return new Response(source.pipeThrough(new DecompressionStream('gzip'))).json();
+}
+
+/**
+ * One JSON file from the bundle (a vessel model).
+ *
+ * Vessel models are stored gzipped — full-resolution thickness grids as raw JSON
+ * exceeded Storage's upload cap — and the edge function serves stored bytes
+ * verbatim, with no `Content-Encoding` header, so nothing inflates them on the
+ * way in. The FILE NAME is the signal, taken from whatever `modelPath` the
+ * manifest names: `.gz` means inflate, anything else means parse as-is. That
+ * branch is what lets a bundle published before compression keep working without
+ * a format-version bump.
+ */
 export async function fetchShareJson(
   token: string,
   passcode: string | null,
   path: string
 ): Promise<unknown> {
   const response = await request(token, passcode, path);
-  return response.json();
+  return path.endsWith('.gz') ? inflateJson(response) : response.json();
 }
 
 /** One binary file from the bundle (a screenshot), as an object URL. */

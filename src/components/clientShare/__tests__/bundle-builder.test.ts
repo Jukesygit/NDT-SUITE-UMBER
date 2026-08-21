@@ -8,10 +8,12 @@
 //   • the hard-coded exclusions hold no matter which layers were ticked
 //     (the design's "automated grep over a test bundle" is its own file,
 //     `bundle-exclusions.test.ts`);
-//   • publishing never changes a number — stats come from the full-fidelity
-//     state, before any decimation;
-//   • decimation is conservative: the thinnest reading survives downsampling,
-//     because a published grid that hides a thin spot is worse than no grid.
+//   • no shipped entity carries a `visible` flag — what the modeler had hidden
+//     is working state, and the client's layer chips are their only control;
+//   • publishing never changes a number, and never changes a reading: stats come
+//     from the full-fidelity state and the grids ship at full resolution, cell
+//     for cell — quantised to 0.0001 mm as a WIRE ENCODING, which is a hundred
+//     times finer than the gauge and is the only thing that may differ.
 // =============================================================================
 
 import { describe, it, expect } from 'vitest';
@@ -19,6 +21,7 @@ import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_VESSEL_STATE,
   type AnnotationShapeConfig,
+  type AppendageConfig,
   type CoverageRectConfig,
   type DomeScanConfig,
   type ScanCompositeConfig,
@@ -28,11 +31,9 @@ import type { LayerKey } from '../../VesselModeler/outliner-tree';
 import { computeComparisonRows } from '../../VesselModeler/engine/coverage-comparison';
 import { deserializeVesselState } from '../../VesselModeler/engine/vessel-serialization';
 import {
-  MAX_GRID_DIMENSION,
   SHARE_LAYER_DEFAULTS,
   buildShareBundle,
   buildShareStats,
-  decimateComposite,
   sanitizeVesselStateForShare,
 } from '../bundle-builder';
 import { MANIFEST_PATH, SHARE_BUNDLE_FORMAT } from '../bundle-types';
@@ -65,6 +66,17 @@ const ANNOTATION = {
   lineWidth: 5,
   showLabel: true,
 } as AnnotationShapeConfig;
+
+const APPENDAGE: AppendageConfig = {
+  id: 'app-1',
+  name: 'Boot 1',
+  mountPos: 3000,
+  mountAngle: 270,
+  diameter: 600,
+  length: 900,
+  endClosure: 'dished',
+  headRatio: 2,
+};
 
 function makeComposite(overrides: Partial<ScanCompositeConfig> = {}): ScanCompositeConfig {
   return {
@@ -127,24 +139,70 @@ function makeState(overrides: Partial<VesselState> = {}): VesselState {
 
 const ALL_LAYERS = new Set(Object.keys(SHARE_LAYER_DEFAULTS) as LayerKey[]);
 
-/** Grid whose one thin cell would be lost by any stride-based decimation. */
-function gridWithHiddenThinSpot(size: number, thinAt: [number, number]): (number | null)[][] {
-  const data: (number | null)[][] = [];
-  for (let r = 0; r < size; r++) {
-    const row: (number | null)[] = [];
-    for (let c = 0; c < size; c++) {
-      row.push(r === thinAt[0] && c === thinAt[1] ? 2.1 : 12);
-    }
-    data.push(row);
-  }
-  return data;
+/**
+ * An inspector-resolution grid: no two neighbours match, and roughly one cell in
+ * a hundred is a null where the probe read nothing. Both properties matter —
+ * equality against a grid of one repeated value could pass while shipping the
+ * wrong cells, and nulls are the part a lossy transform would quietly fill in.
+ */
+function variedGrid(rows: number, cols: number, offsetMm = 0): (number | null)[][] {
+  return Array.from({ length: rows }, (_, r) =>
+    Array.from({ length: cols }, (_, c) =>
+      (r * 7 + c * 13) % 97 === 0 ? null : 12 - ((r * 31 + c * 17) % 53) / 10 + offsetMm
+    )
+  );
 }
 
-/** A grid where no two neighbours match, so a min-pool check cannot pass by luck. */
-function variedGrid(size: number, offsetMm = 0): (number | null)[][] {
-  return Array.from({ length: size }, (_, r) =>
-    Array.from({ length: size }, (_, c) => 12 - ((r * 31 + c * 17) % 53) / 10 + offsetMm)
+/**
+ * The same grid as it is WRITTEN to the wire: 4 decimal places, nulls kept.
+ *
+ * The rule is restated here rather than imported so the expectation is a
+ * statement of the contract, not a re-run of the implementation. For readings
+ * that already have short decimals it is the identity — the fixtures above are
+ * built with arithmetic like `12 - 5.3`, whose Float64 result is
+ * `6.699999999999999`, and that difference is exactly what the wire encoding
+ * exists to drop.
+ */
+function quantized(grid: (number | null)[][]): (number | null)[][] {
+  return grid.map((row) => row.map((v) => (typeof v === 'number' ? Math.round(v * 1e4) / 1e4 : v)));
+}
+
+/** Deliberately non-square and far past any historical cap, so a reintroduced
+ *  decimation step could not hide behind a coincidence. */
+const GRID_ROWS = 400;
+const GRID_COLS = 500;
+const X_AXIS = Array.from({ length: GRID_COLS }, (_, i) => i * 5);
+const Y_AXIS = Array.from({ length: GRID_ROWS }, (_, i) => i * 4);
+
+/** Every collection whose entities must ship without a `visible` flag. */
+const VISIBILITY_NORMALIZED = [
+  'nozzles',
+  'welds',
+  'liftingLugs',
+  'saddles',
+  'scanComposites',
+  'domeScanComposites',
+  'annotations',
+  'coverageRects',
+  'inspectionImages',
+  'rulers',
+  'pipelines',
+  'textures',
+  // Not a layer anyone can toggle, but its flag hides a whole body.
+  'appendages',
+] as const;
+
+/** One hidden entity in every collection above, shaped only enough to copy. */
+function stateWithEverythingHidden(): VesselState {
+  const hidden = Object.fromEntries(
+    VISIBILITY_NORMALIZED.map((key) => [key, [{ id: `${key}-1`, name: 'hidden', visible: false }]])
   );
+  return { ...DEFAULT_VESSEL_STATE, ...(hidden as unknown as Partial<VesselState>) };
+}
+
+/** Own-property check — `visible: undefined` is a different (and wrong) answer. */
+function hasVisibleKey(entity: unknown): boolean {
+  return Object.prototype.hasOwnProperty.call(entity as object, 'visible');
 }
 
 describe('sanitizeVesselStateForShare — exclusion is removal', () => {
@@ -198,67 +256,59 @@ describe('sanitizeVesselStateForShare — hard-coded exclusions', () => {
   });
 });
 
-describe('decimateComposite', () => {
-  it('leaves a grid that is already small alone, identity-and-all', () => {
-    const composite = makeComposite();
-    expect(decimateComposite(composite)).toBe(composite);
+// =============================================================================
+// Modeler visibility is working state, not publish intent
+// =============================================================================
+// A model saved with entities hidden used to ship those flags, and the client's
+// chip for that category could then never reveal them: effective visibility in
+// the read-only scene is `entity.visible !== false` AND the layer. Inclusion is
+// the publish dialog's decision; display is the client's.
+// =============================================================================
+
+describe('sanitizeVesselStateForShare — visibility normalisation', () => {
+  const view = (state: VesselState): Record<string, { visible?: boolean }[]> =>
+    state as unknown as Record<string, { visible?: boolean }[]>;
+
+  it('removes the visible key from every shipped collection, appendages included', () => {
+    const shipped = view(sanitizeVesselStateForShare(stateWithEverythingHidden(), ALL_LAYERS));
+
+    for (const collection of VISIBILITY_NORMALIZED) {
+      const [entity] = shipped[collection];
+      expect(entity, `${collection} was emptied, so nothing was asserted`).toBeDefined();
+      // REMOVED, not `visible: true` — absent-means-visible is the wire format's
+      // own convention, and a legacy model has no key here either.
+      expect(hasVisibleKey(entity), `${collection} still carries a visible key`).toBe(false);
+    }
   });
 
-  it('brings both axes within the cap', () => {
-    const size = MAX_GRID_DIMENSION * 3;
-    const decimated = decimateComposite(
-      makeComposite({
-        data: gridWithHiddenThinSpot(size, [5, 7]),
-        xAxis: Array.from({ length: size }, (_, i) => i),
-        yAxis: Array.from({ length: size }, (_, i) => i),
-      })
-    );
+  it('leaves a visible entity alone — it had no key to begin with', () => {
+    const state = makeState({ scanComposites: [makeComposite()], coverageRects: [RECT] });
+    const shipped = sanitizeVesselStateForShare(state, ALL_LAYERS);
 
-    expect(decimated.data.length).toBeLessThanOrEqual(MAX_GRID_DIMENSION);
-    expect(decimated.data[0].length).toBeLessThanOrEqual(MAX_GRID_DIMENSION);
-    expect(decimated.yAxis).toHaveLength(decimated.data.length);
-    expect(decimated.xAxis).toHaveLength(decimated.data[0].length);
+    expect(hasVisibleKey(shipped.scanComposites[0])).toBe(false);
+    expect(hasVisibleKey(shipped.coverageRects[0])).toBe(false);
   });
 
-  it('keeps the thinnest reading — a stride would have dropped it', () => {
-    const size = MAX_GRID_DIMENSION * 3;
-    const decimated = decimateComposite(
-      makeComposite({
-        // Index 5,7 is not on any block boundary, so sampling would miss it.
-        data: gridWithHiddenThinSpot(size, [5, 7]),
-        xAxis: Array.from({ length: size }, (_, i) => i),
-        yAxis: Array.from({ length: size }, (_, i) => i),
-      })
-    );
-
-    const flattened = decimated.data.flat().filter((v): v is number => v !== null);
-    expect(Math.min(...flattened)).toBeCloseTo(2.1, 6);
-  });
-
-  it('carries nulls through as nulls when a block held no reading', () => {
-    const size = MAX_GRID_DIMENSION * 2;
-    const data: (number | null)[][] = Array.from({ length: size }, () =>
-      Array.from({ length: size }, () => null)
-    );
-    const decimated = decimateComposite(
-      makeComposite({
-        data,
-        xAxis: Array.from({ length: size }, (_, i) => i),
-        yAxis: Array.from({ length: size }, (_, i) => i),
-      })
-    );
-    expect(decimated.data.flat().every((v) => v === null)).toBe(true);
-  });
-
-  it('leaves stats alone — they describe the real scan, not the shipped grid', () => {
-    const size = MAX_GRID_DIMENSION * 2;
-    const composite = makeComposite({
-      data: gridWithHiddenThinSpot(size, [3, 3]),
-      xAxis: Array.from({ length: size }, (_, i) => i),
-      yAxis: Array.from({ length: size }, (_, i) => i),
-      stats: { min: 2.1, max: 12, mean: 11.9, median: 12, stdDev: 0.3, validArea: 5 },
+  it('touches nothing but `visible`', () => {
+    const state = makeState({
+      scanComposites: [makeComposite({ visible: false })],
+      appendages: [{ ...APPENDAGE, visible: false, locked: true }],
     });
-    expect(decimateComposite(composite).stats).toEqual(composite.stats);
+    const shipped = sanitizeVesselStateForShare(state, ALL_LAYERS);
+
+    expect(shipped.scanComposites[0]).toEqual({ ...makeComposite(), visible: undefined });
+    expect(shipped.appendages[0]).toMatchObject({ ...APPENDAGE, locked: true });
+    expect(hasVisibleKey(shipped.appendages[0])).toBe(false);
+  });
+
+  it('never mutates the publisher’s own entities', () => {
+    const state = stateWithEverythingHidden();
+    sanitizeVesselStateForShare(state, ALL_LAYERS);
+
+    for (const collection of VISIBILITY_NORMALIZED) {
+      const [entity] = view(state)[collection];
+      expect(entity.visible, `${collection} was mutated in place`).toBe(false);
+    }
   });
 });
 
@@ -311,15 +361,13 @@ describe('buildShareBundle', () => {
     expect([...bundle.manifest.publishedLayers].sort()).toEqual(['coverage', 'scans']);
   });
 
-  it('computes stats from the FULL state, not the decimated one', () => {
-    // A grid coarse enough to be decimated must not move the coverage numbers.
-    const size = MAX_GRID_DIMENSION * 2;
+  it('computes stats from the full-fidelity state — publishing changes no number', () => {
     const state = makeState({
       scanComposites: [
         makeComposite({
-          data: gridWithHiddenThinSpot(size, [4, 4]),
-          xAxis: Array.from({ length: size }, (_, i) => i * 10),
-          yAxis: Array.from({ length: size }, (_, i) => i * 10),
+          data: variedGrid(GRID_ROWS, GRID_COLS),
+          xAxis: X_AXIS,
+          yAxis: Y_AXIS,
         }),
       ],
     });
@@ -329,22 +377,6 @@ describe('buildShareBundle', () => {
       vessels: [{ id: 'v-1', name: 'V', vesselState: state }],
     });
     expect(bundle.manifest.vessels[0].stats).toEqual(expected);
-  });
-
-  it('ships both heatmap kinds decimated — a dome scan is wall thickness too', () => {
-    const size = MAX_GRID_DIMENSION * 2;
-    const axis = Array.from({ length: size }, (_, i) => i * 5);
-    const shipped = sanitizeVesselStateForShare(
-      makeState({
-        domeScanComposites: [
-          makeDomeComposite({ data: variedGrid(size), xAxis: axis, yAxis: axis }),
-        ],
-      }),
-      ALL_LAYERS
-    );
-
-    expect(shipped.domeScanComposites[0].data.length).toBeLessThanOrEqual(MAX_GRID_DIMENSION);
-    expect(shipped.domeScanComposites[0].data[0].length).toBeLessThanOrEqual(MAX_GRID_DIMENSION);
   });
 
   it('includes a screenshot only when one was captured', () => {
@@ -367,8 +399,8 @@ describe('buildShareBundle', () => {
 });
 
 // =============================================================================
-// The emitted model.json — asserted AFTER serialization, which is where the
-// bundle used to lose its heatmaps.
+// The emitted model — asserted AFTER serialization, which is where the bundle
+// used to lose its heatmaps.
 // =============================================================================
 // Every test above this line inspects the sanitized STATE. The state was always
 // right; `serializeVesselState(..., { path: 'cloud' })` then dropped every
@@ -376,148 +408,268 @@ describe('buildShareBundle', () => {
 // table) and shipped a model with axes, stats and no readings — a blank heatmap
 // and a hover that reports nothing. So these tests parse the file body the
 // client actually downloads.
+//
+// They are also where "the bundle ships every cell the inspector scanned" is
+// pinned: a DECIMATION step reintroduced anywhere between the sanitiser and the
+// wire would show up here as a grid of the wrong shape. The 4-decimal wire
+// encoding is the one permitted difference, and it is pinned too.
 // =============================================================================
 
-const GRID_SIZE = MAX_GRID_DIMENSION * 2;
-const AXIS = Array.from({ length: GRID_SIZE }, (_, i) => i * 5);
+interface WireEntity {
+  id?: string | number;
+  visible?: boolean;
+}
 
-interface WireComposite {
-  id: string;
+interface WireComposite extends WireEntity {
   data?: (number | null)[][];
   xAxis?: number[];
   yAxis?: number[];
-  stats?: { min: number };
+  stats?: Record<string, number>;
 }
 
 interface WireModel {
   scanComposites: WireComposite[];
   domeScanComposites: WireComposite[];
+  coverageRects: WireEntity[];
+  appendages: WireEntity[];
 }
 
-/** The model.json bytes a client would receive, parsed back. */
-function emittedModel(vesselState: VesselState): WireModel {
+const MODEL_PATH = 'vessels/v-1/model.json.gz';
+
+function emittedModelFile(vesselState: VesselState, published: ReadonlySet<LayerKey> = ALL_LAYERS) {
   const bundle = buildShareBundle({
     project: { name: 'Karstoe 2026' },
     vessels: [{ id: 'v-1', name: 'Knockout Drum', vesselState }],
-    published: ALL_LAYERS,
+    published,
     revision: 1,
     publishedAt: '2026-08-20T09:00:00.000Z',
   });
-  const file = bundle.files.find((f) => f.path === 'vessels/v-1/model.json');
-  if (!file || file.body instanceof Blob) throw new Error('bundle has no model.json');
+  const file = bundle.files.find((f) => f.path === MODEL_PATH);
+  if (!file) throw new Error(`bundle has no ${MODEL_PATH}`);
+  return file;
+}
+
+/** The model bytes a client would receive, parsed back. */
+function emittedModel(vesselState: VesselState, published: ReadonlySet<LayerKey> = ALL_LAYERS) {
+  const file = emittedModelFile(vesselState, published);
+  if (file.body instanceof Blob) throw new Error('the model body is not inspectable JSON');
   // Through JSON on purpose: the client fetches bytes, not this object.
   return JSON.parse(JSON.stringify(file.body)) as WireModel;
 }
 
-/** Thinnest reading in a source block — the value min-pooling must produce. */
-function blockMin(
-  data: (number | null)[][],
-  rowStart: number,
-  rowEnd: number,
-  colStart: number,
-  colEnd: number
-): number | null {
-  let min: number | null = null;
-  for (let r = rowStart; r < rowEnd; r++) {
-    for (let c = colStart; c < colEnd; c++) {
-      const v = data[r]?.[c];
-      if (v === null || v === undefined) continue;
-      if (min === null || v < min) min = v;
-    }
-  }
-  return min;
-}
+// =============================================================================
+// Wire encoding — how the model is written, not what it says
+// =============================================================================
+// A publish of full-resolution grids as raw JSON was refused outright by Storage
+// (2026-08-21: "The object exceeded the maximum allowed size", the project's
+// ~50MB cap). Two things fixed that, and neither may quietly regress: gzip, and
+// 4-decimal readings. Compression itself happens in the upload layer — the
+// builder only MARKS the file — so that the object here stays plain JSON the
+// exclusion sweep can grep.
+// =============================================================================
 
-/** Assert a shipped grid is the min-pool of `source`, cell for cell. */
-function expectMinPoolOf(shipped: (number | null)[][], source: (number | null)[][]): void {
-  const rowBlock = Math.ceil(source.length / shipped.length);
-  const colBlock = Math.ceil(source[0].length / shipped[0].length);
-  expect(rowBlock).toBeGreaterThan(1);
+describe('the model file — wire encoding', () => {
+  it('names the model with a .gz suffix, which is what tells the viewer to inflate', () => {
+    const bundle = buildShareBundle({
+      project: { name: 'Karstoe 2026' },
+      vessels: [{ id: 'v-1', name: 'Knockout Drum', vesselState: makeState() }],
+      published: ALL_LAYERS,
+      revision: 1,
+      publishedAt: '2026-08-20T09:00:00.000Z',
+    });
 
-  for (let r = 0; r < shipped.length; r++) {
-    for (let c = 0; c < shipped[r].length; c++) {
-      const expected = blockMin(
-        source,
-        r * rowBlock,
-        Math.min((r + 1) * rowBlock, source.length),
-        c * colBlock,
-        Math.min((c + 1) * colBlock, source[0].length)
-      );
-      if (shipped[r][c] !== expected) {
-        // One targeted failure beats 36,864 passing assertions of noise.
-        expect({ r, c, got: shipped[r][c] }).toEqual({ r, c, got: expected });
-      }
-    }
-  }
-}
+    // The manifest is the contract: the viewer branches on the path it names.
+    expect(bundle.manifest.vessels[0].modelPath).toBe(MODEL_PATH);
+    expect(bundle.files.some((f) => f.path === MODEL_PATH)).toBe(true);
+  });
 
-describe('the emitted model.json — the client has no second copy', () => {
-  const scanGrid = variedGrid(GRID_SIZE);
-  const domeGrid = variedGrid(GRID_SIZE, -1.5);
-  const state = makeState({
-    scanComposites: [makeComposite({ id: 'sc-big', data: scanGrid, xAxis: AXIS, yAxis: AXIS })],
-    domeScanComposites: [
-      makeDomeComposite({ id: 'ds-big', data: domeGrid, xAxis: AXIS, yAxis: AXIS }),
+  it('marks the model for gzip and types it as gzip', () => {
+    const file = emittedModelFile(makeState());
+    expect(file.encoding).toBe('gzip');
+    expect(file.contentType).toBe('application/gzip');
+  });
+
+  it('leaves the body as plain JSON — the builder is pure and sync', () => {
+    // Compression is the upload layer's job. If the body were bytes here, the
+    // exclusion sweep could no longer read what a client receives.
+    expect(emittedModelFile(makeState()).body).not.toBeInstanceOf(Blob);
+  });
+
+  it('does not gzip the manifest — it is small and it is the entry request', () => {
+    const bundle = buildShareBundle({
+      project: { name: 'Karstoe 2026' },
+      vessels: [{ id: 'v-1', name: 'Knockout Drum', vesselState: makeState() }],
+      published: ALL_LAYERS,
+      revision: 1,
+      publishedAt: '2026-08-20T09:00:00.000Z',
+    });
+    const manifest = bundle.files.find((f) => f.path === MANIFEST_PATH);
+    expect(manifest?.encoding).toBeUndefined();
+    expect(manifest?.contentType).toBe('application/json');
+  });
+});
+
+describe('the emitted model — readings are quantised to 0.0001 mm', () => {
+  const NOISY = 12.699999809265137;
+  const noisyState = makeState({
+    scanComposites: [
+      makeComposite({
+        // A Float64 reading as it arrives from a probe, a hole, and a value that
+        // is already short enough that quantising must be the identity.
+        data: [[NOISY, null, 12.34]],
+        xAxis: [0.1, 0.30000000000000004, 0.7],
+        yAxis: [0.30000000000000004],
+      }),
     ],
   });
 
-  it('carries the thickness grid for a scan composite', () => {
+  it('rounds a Float64 reading to four places', () => {
+    const [sc] = emittedModel(noisyState).scanComposites;
+    expect(sc.data?.[0][0]).toBe(12.7);
+  });
+
+  it('rides nulls through — a hole is where the probe read nothing', () => {
+    expect(emittedModel(noisyState).scanComposites[0].data?.[0][1]).toBeNull();
+  });
+
+  it('leaves a reading that already fits alone', () => {
+    expect(emittedModel(noisyState).scanComposites[0].data?.[0][2]).toBe(12.34);
+  });
+
+  it('does not touch the axes — those are positions, not readings', () => {
+    const [sc] = emittedModel(noisyState).scanComposites;
+    expect(sc.xAxis).toEqual([0.1, 0.30000000000000004, 0.7]);
+    expect(sc.yAxis).toEqual([0.30000000000000004]);
+  });
+
+  it('never rewrites the app’s own grid', () => {
+    const state = makeState({ scanComposites: [makeComposite({ data: [[NOISY]] })] });
+    emittedModel(state);
+    expect(state.scanComposites[0].data[0][0]).toBe(NOISY);
+  });
+});
+
+describe('the emitted model — the client has no second copy', () => {
+  const scanGrid = variedGrid(GRID_ROWS, GRID_COLS);
+  const domeGrid = variedGrid(GRID_ROWS, GRID_COLS, -1.5);
+  const scanStats = { min: 2.1, max: 12, mean: 11.4, median: 11.6, stdDev: 0.4, validArea: 7 };
+  const state = makeState({
+    scanComposites: [
+      makeComposite({
+        id: 'sc-big',
+        data: scanGrid,
+        xAxis: X_AXIS,
+        yAxis: Y_AXIS,
+        stats: scanStats,
+      }),
+    ],
+    domeScanComposites: [
+      makeDomeComposite({ id: 'ds-big', data: domeGrid, xAxis: X_AXIS, yAxis: Y_AXIS }),
+    ],
+  });
+
+  it('carries the scan composite’s grid, cell for cell', () => {
     const [sc] = emittedModel(state).scanComposites;
     expect(sc.id).toBe('sc-big');
-    expect(Array.isArray(sc.data)).toBe(true);
-    expect(sc.data?.length).toBeGreaterThan(0);
+    // Cell for cell, nulls included: the client hovers the reading the inspector
+    // took, at the position the inspector took it — written to 0.0001 mm.
+    expect(sc.data).toEqual(quantized(scanGrid));
+    expect(sc.xAxis).toEqual(X_AXIS);
+    expect(sc.yAxis).toEqual(Y_AXIS);
   });
 
-  it('carries the thickness grid for a dome scan composite', () => {
+  it('carries the dome composite’s grid, cell for cell', () => {
     const [ds] = emittedModel(state).domeScanComposites;
     expect(ds.id).toBe('ds-big');
-    expect(Array.isArray(ds.data)).toBe(true);
-    expect(ds.data?.length).toBeGreaterThan(0);
+    // A dome scan is wall thickness on a head — no less a deliverable than a
+    // shell scan, and shipped at the same fidelity.
+    expect(ds.data).toEqual(quantized(domeGrid));
+    expect(ds.xAxis).toEqual(X_AXIS);
+    expect(ds.yAxis).toEqual(Y_AXIS);
   });
 
-  it('ships the DECIMATED grid, never the inspector-resolution one', () => {
+  it('ships the full grid dimensions — nothing downsamples on the way out', () => {
     const model = emittedModel(state);
     for (const composite of [model.scanComposites[0], model.domeScanComposites[0]]) {
       const data = composite.data as (number | null)[][];
-      expect(data.length).toBeLessThanOrEqual(MAX_GRID_DIMENSION);
-      expect(data[0].length).toBeLessThanOrEqual(MAX_GRID_DIMENSION);
-      expect(data.length).toBeLessThan(GRID_SIZE);
+      expect(data).toHaveLength(GRID_ROWS);
+      expect(data[0]).toHaveLength(GRID_COLS);
       // Axes must agree with the grid, or the viewer maps cells to the wrong mm.
       expect(composite.yAxis).toHaveLength(data.length);
       expect(composite.xAxis).toHaveLength(data[0].length);
     }
   });
 
-  it('min-pools every shipped cell, so no thin spot is downsampled away', () => {
-    const model = emittedModel(state);
-    expectMinPoolOf(model.scanComposites[0].data as (number | null)[][], scanGrid);
-    expectMinPoolOf(model.domeScanComposites[0].data as (number | null)[][], domeGrid);
+  it('leaves stats alone — they describe the scan, not the file', () => {
+    expect(emittedModel(state).scanComposites[0].stats).toEqual(scanStats);
   });
 
   it('keeps the two grids distinct — data is matched to its composite by id', () => {
     const model = emittedModel(state);
-    const scanCell = model.scanComposites[0].data?.[0]?.[0];
-    const domeCell = model.domeScanComposites[0].data?.[0]?.[0];
-    expect(scanCell).not.toBe(domeCell);
-    expect(domeCell).toBeCloseTo((scanCell as number) - 1.5, 6);
+    expect(model.scanComposites[0].data).not.toEqual(quantized(domeGrid));
+    expect(model.domeScanComposites[0].data).not.toEqual(quantized(scanGrid));
+  });
+
+  it('attaches from the SANITIZED state — an unpublished scan stays unpublished', () => {
+    // The grids are re-attached after serialization, so the source of that
+    // attach is load-bearing: reading the caller's raw state would put back the
+    // very composites the layer ticks had just deleted.
+    const model = emittedModel(state, new Set<LayerKey>(['coverage']));
+
+    expect(model.scanComposites).toEqual([]);
+    expect(model.domeScanComposites).toEqual([]);
   });
 
   it('reloads through the deserializer the client uses, grid intact', () => {
     const model = emittedModel(state) as unknown as Record<string, unknown>;
     const restored = deserializeVesselState(model, { path: 'cloud', textures: [] });
 
-    expect(restored.scanComposites[0].data.length).toBe(
-      (emittedModel(state).scanComposites[0].data as (number | null)[][]).length
-    );
-    expect(restored.domeScanComposites[0].data.length).toBeGreaterThan(0);
-    expect(restored.scanComposites[0].data[0].length).toBeLessThanOrEqual(MAX_GRID_DIMENSION);
+    expect(restored.scanComposites[0].data).toEqual(quantized(scanGrid));
+    expect(restored.domeScanComposites[0].data).toEqual(quantized(domeGrid));
   });
 
-  it('leaves a small grid alone — decimation caps, it does not always shrink', () => {
+  it('ships a small grid unchanged too', () => {
     const [sc] = emittedModel(makeState()).scanComposites;
     expect(sc.data).toEqual([
       [10, 10],
       [10, 10],
     ]);
+  });
+});
+
+describe('the emitted model — no entity ships a visibility flag', () => {
+  const hiddenState = makeState({
+    coverageRects: [{ ...RECT, visible: false }],
+    scanComposites: [makeComposite({ visible: false, data: variedGrid(8, 8) })],
+    appendages: [{ ...APPENDAGE, visible: false }],
+  });
+
+  it('drops a hidden coverage rect’s flag while still shipping the rect', () => {
+    const [rect] = emittedModel(hiddenState).coverageRects;
+    expect(rect).toMatchObject({ id: 1, name: 'Shell band A' });
+    expect(hasVisibleKey(rect)).toBe(false);
+  });
+
+  it('drops a hidden scan composite’s flag while still shipping its grid', () => {
+    const [sc] = emittedModel(hiddenState).scanComposites;
+    expect(hasVisibleKey(sc)).toBe(false);
+    expect(sc.data).toEqual(quantized(variedGrid(8, 8)));
+  });
+
+  it('drops a hidden appendage’s flag — otherwise the whole body is unreachable', () => {
+    const [appendage] = emittedModel(hiddenState).appendages;
+    expect(appendage).toMatchObject({ id: 'app-1', name: 'Boot 1' });
+    expect(hasVisibleKey(appendage)).toBe(false);
+  });
+
+  it('restores as visible through the client’s own deserializer', () => {
+    const model = emittedModel(hiddenState) as unknown as Record<string, unknown>;
+    const restored = deserializeVesselState(model, { path: 'cloud', textures: [] });
+
+    // `visible !== false` is what the read-only scene tests, so an absent key
+    // renders — which is the entire point of removing it rather than setting it.
+    expect(restored.coverageRects[0].visible).not.toBe(false);
+    expect(restored.scanComposites[0].visible).not.toBe(false);
+    expect(restored.appendages[0].visible).not.toBe(false);
   });
 });

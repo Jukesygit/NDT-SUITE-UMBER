@@ -11,16 +11,33 @@
 //    in the file. The same applies to the hard-coded exclusions below, which are
 //    NOT publish-dialog options and must never become options.
 //
-// 2. STATS ARE COMPUTED BEFORE DECIMATION. Coverage percentages come from the
-//    full-fidelity state; only the grids the viewer draws and hovers are
-//    downsampled. Publishing must never change a number.
+// 2. MODELER VISIBILITY IS WORKING STATE, NOT PUBLISH INTENT. An entity the
+//    inspector hid in the modeler was hidden to get a job done — to see past a
+//    wall of coverage rectangles — not to say "the client must not see this".
+//    That decision is the publish dialog's layer ticks, and rule 1 carries it
+//    out. On the client's side the layer chips are the ONLY display control they
+//    have, and effective visibility in the read-only scene is
+//    `entity.visible !== false` AND the layer — so a shipped `visible: false`
+//    leaves a chip that is present, toggleable, and unable to reveal anything.
+//    The sanitiser therefore strips per-entity `visible` from everything it
+//    ships. It is REMOVED, never set to `true`: absent-means-visible is the wire
+//    format's own convention, and honouring it keeps a published model shaped
+//    exactly like a legacy one.
 //
-// 3. DECIMATION IS MIN-POOLED, NOT SAMPLED — see `grid-decimation.ts`, which
-//    owns that rule and its reasoning.
+// 3. STATS ARE COMPUTED FROM THE FULL-FIDELITY STATE, before anything is
+//    emptied or normalised. Coverage percentages describe the model the
+//    inspector worked on. Publishing must never change a number.
 //
 // 4. THE BUNDLE IS SELF-CONTAINED, SO THE GRIDS ARE PUT BACK — the cloud save
-//    path strips `data`; `attachDecimatedGrids` re-attaches it. Without that the
+//    path strips `data`; `attachShippedGrids` re-attaches it. Without that the
 //    client's heatmaps are blank.
+//
+// 5. DISPLAY IS FULL FIDELITY; THE WIRE ENCODING IS NOT THE DISPLAY. Every grid
+//    ships at full resolution — no decimation, no downsampling, so a client
+//    hovers the cell the inspector scanned. What changes on the way out is only
+//    how those numbers are WRITTEN: values are quantised to 4 decimal places
+//    (0.0001 mm) and the file is gzipped by the upload layer. Both are lossless
+//    where it matters — see `quantizeGrid` below and `bundle-types`' header.
 //
 // CHUNKING: this reaches `serializeVesselState`, whose transitive graph includes
 // three.js. Import it dynamically from the publish flow — never statically from
@@ -34,7 +51,6 @@ import {
   computeComparisonRows,
 } from '../VesselModeler/engine/coverage-comparison';
 import { serializeVesselState } from '../VesselModeler/engine/vessel-serialization';
-import { MAX_GRID_DIMENSION, decimateComposite } from './grid-decimation';
 import {
   MANIFEST_PATH,
   PREPARED_BY,
@@ -50,8 +66,6 @@ import {
   type ShareStatRollup,
   type ShareStatRow,
 } from './bundle-types';
-
-export { MAX_GRID_DIMENSION, decimateComposite } from './grid-decimation';
 
 // The publish defaults live in `bundle-types` (the dialog needs them without
 // this module's three.js-bearing graph); re-exported so builder consumers have
@@ -94,19 +108,49 @@ function stripRectGuidance(rect: CoverageRectConfig): CoverageRectConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Visibility normalisation (rule 2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Collections whose entities ship with no `visible` flag: every layer-gated
+ * collection, plus appendages.
+ *
+ * Derived from {@link LAYER_COLLECTIONS} rather than re-listed, so a new layer
+ * category is normalised the day it is added instead of the day someone notices
+ * its chip does nothing. Appendages are the one addition: they are not a layer
+ * anyone can toggle, but an appendage's own `visible` flag hides a whole body in
+ * the read-only scene, and a client has no control that could bring it back.
+ */
+const VISIBILITY_NORMALIZED_COLLECTIONS: readonly (keyof VesselState)[] = [
+  ...Object.values(LAYER_COLLECTIONS),
+  'appendages',
+];
+
+/** One entity, copied, without its `visible` key. Never mutates the original —
+ *  this module is pure and the caller's state is the live app's. */
+function stripVisible<T extends object>(entity: T): T {
+  const stripped = { ...entity } as T & { visible?: boolean };
+  delete stripped.visible;
+  return stripped;
+}
+
+// ---------------------------------------------------------------------------
 // Sanitisation
 // ---------------------------------------------------------------------------
 
 /**
  * The state that actually ships: unpublished categories emptied, hard-coded
- * exclusions applied, grids decimated.
+ * exclusions applied, per-entity visibility flags stripped.
+ *
+ * Thickness grids ride through UNTOUCHED — the client is shown the model at the
+ * resolution the app holds it, so a hovered millimetre on the share page is the
+ * millimetre the inspector read.
  *
  * @param published Layer categories the publisher ticked.
  */
 export function sanitizeVesselStateForShare(
   state: VesselState,
-  published: ReadonlySet<LayerKey>,
-  maxDimension = MAX_GRID_DIMENSION
+  published: ReadonlySet<LayerKey>
 ): VesselState {
   const next: VesselState = { ...state };
 
@@ -125,10 +169,16 @@ export function sanitizeVesselStateForShare(
   // an annotation is an inspection finding, which is the deliverable. Only the
   // coverage rects' planning free-text is stripped unconditionally.
   next.coverageRects = next.coverageRects.map(stripRectGuidance);
-  // Both heatmap kinds are decimated: a dome scan is wall thickness on a head,
-  // and the client hovers it exactly like a shell scan.
-  next.scanComposites = next.scanComposites.map((c) => decimateComposite(c, maxDimension));
-  next.domeScanComposites = next.domeScanComposites.map((c) => decimateComposite(c, maxDimension));
+
+  // Rule 2: what the modeler had hidden is not a publish decision, so no shipped
+  // entity carries a `visible` flag the client's layer chips could not overrule.
+  // Only that one key is touched; the copies are fresh, never the caller's items.
+  const collections = next as unknown as Record<string, unknown>;
+  for (const collection of VISIBILITY_NORMALIZED_COLLECTIONS) {
+    const items = collections[collection];
+    if (!Array.isArray(items)) continue;
+    collections[collection] = (items as object[]).map(stripVisible);
+  }
 
   // Reference drawings are internal source documents, are not a layer anyone
   // can toggle, and are the largest thing in a saved model. Never published.
@@ -190,24 +240,65 @@ function toWireJson(payload: unknown): Record<string, unknown> {
 }
 
 /**
+ * Decimal places kept in a shipped thickness reading.
+ *
+ * 0.0001 mm is roughly a hundred times finer than any UT gauge resolves, so
+ * nothing a client could measure survives past here — but the Float64 noise that
+ * comes with converting a probe's reading does not, and that noise is most of
+ * the file. `12.699999809265137` is 19 bytes of JSON; `12.7` is four.
+ */
+const WIRE_DECIMALS = 4;
+const WIRE_SCALE = 10 ** WIRE_DECIMALS;
+
+/**
+ * A grid rewritten for the wire: same shape, same nulls, each reading rounded to
+ * {@link WIRE_DECIMALS} places.
+ *
+ * Returns NEW arrays. The app's own grid is never touched — this module is pure
+ * and the state it is handed is the live editor's — and the copy also ends the
+ * by-reference aliasing the shipped grids otherwise have with app state.
+ *
+ * Only `data` is quantised. Axes are positions, not readings, and `stats` are
+ * computed from the full-fidelity state (rule 3) and never re-derived from what
+ * ships here — so neither is rounded, and a published percentage stays the
+ * percentage the app showed.
+ */
+function quantizeGrid(grid: (number | null)[][]): (number | null)[][] {
+  return grid.map((row) =>
+    row.map((value) =>
+      // `null` is "the probe read nothing here" and must survive as a hole —
+      // a lossy transform quietly filling those in is exactly what this guards.
+      typeof value === 'number' && Number.isFinite(value)
+        ? Math.round(value * WIRE_SCALE) / WIRE_SCALE
+        : value
+    )
+  );
+}
+
+/**
  * Re-attach the thickness grids the CLOUD save path deliberately drops.
  *
- * The cloud save path writes no `data` for either composite kind (scan
+ * STILL REQUIRED even though the bundle now ships grids exactly as the app holds
+ * them. The cloud save path writes no `data` for either composite kind (scan
  * composites are `{ key: 'data', save: 'skip' }`; the dome spec has no `data`
  * entry at all) because cloud grids live in their own DB table and the model row
- * must not carry them twice. A bundle has no second table — `model.json` is the
- * ONLY copy the client ever gets — so without `data` the viewer bakes a blank
+ * must not carry them twice. A bundle has no second table — the model file is
+ * the ONLY copy the client ever gets — so without `data` the viewer bakes a blank
  * heatmap and `thicknessAtUv` reads nothing. The builder therefore puts back
  * exactly what the spec dropped and nothing else, leaving the spec the single
  * source for all four modeler save/load paths. Both loaders read a present key
  * back already (SCAN_COMPOSITE_SPEC's `load: { or: () => [] }`, and
  * `normalizeDomeScanComposite`'s `raw.data ?? []`).
  *
- * IT MUST BE THE DECIMATED GRIDS: the source is the SANITIZED state, already
- * min-pooled by `decimateComposite`. Re-attaching from the original vesselState
- * would ship inspector-resolution readings and silently undo the cap.
+ * IT MUST BE THE SANITIZED STATE, never the caller's `vesselState`. When the
+ * scans layer is unpublished, `shipped.scanComposites` is empty and there is
+ * nothing to attach — which is the correct outcome. Sourcing from the raw state
+ * would resurrect the grids of composites rule 1 had just deleted, re-publishing
+ * unpublished readings through the back door.
+ *
+ * What is attached is the QUANTISED copy (rule 5), never the app's array itself.
  */
-function attachDecimatedGrids(
+function attachShippedGrids(
   serialized: Record<string, unknown>,
   shipped: VesselState
 ): Record<string, unknown> {
@@ -221,7 +312,7 @@ function attachDecimatedGrids(
     const gridById = new Map(sources.map((c) => [c.id, c.data]));
     for (const item of items as Record<string, unknown>[]) {
       const data = gridById.get(item.id as string);
-      if (data !== undefined) item.data = data;
+      if (data !== undefined) item.data = quantizeGrid(data);
     }
   }
   return serialized;
@@ -245,7 +336,6 @@ export interface BuildShareBundleParams {
   revision: number;
   /** Publish timestamp, injected so the builder stays pure and testable. */
   publishedAt: string;
-  maxDimension?: number;
 }
 
 /**
@@ -253,28 +343,36 @@ export interface BuildShareBundleParams {
  * screenshot) per vessel.
  *
  * Order matters and is load-bearing: stats are computed from the FULL state,
- * then the state is sanitised and decimated for shipping. Swapping those two
- * lines would make a published coverage percentage disagree with the app's.
+ * then the state is sanitised for shipping. Swapping those two lines would make
+ * a published coverage percentage disagree with the app's.
  */
 export function buildShareBundle(params: BuildShareBundleParams): ShareBundle {
-  const { project, vessels, published, revision, publishedAt, maxDimension } = params;
+  const { project, vessels, published, revision, publishedAt } = params;
   const files: ShareBundleFile[] = [];
   const manifestVessels: ShareManifestVessel[] = [];
 
   for (const vessel of vessels) {
     const { rows, rollup } = buildShareStats(vessel.vesselState);
-    const shipped = sanitizeVesselStateForShare(vessel.vesselState, published, maxDimension);
+    const shipped = sanitizeVesselStateForShare(vessel.vesselState, published);
 
     const modelPath = vesselModelPath(vessel.id);
-    // Attach BEFORE the wire round-trip, so the grids the bundle holds are the
-    // JSON copy, never a live alias of the app's state arrays (a small grid is
-    // returned by identity from `decimateComposite`).
+    // Attach BEFORE the wire round-trip. Nothing copies the grids on the way
+    // through the sanitiser, so `shipped` still points at the app's own arrays —
+    // but `attachShippedGrids` quantises, which means what lands in the bundle is
+    // already a fresh copy; the round-trip then settles the rest of the object,
+    // and between them a later edit to the model cannot reach into a published
+    // snapshot.
+    //
+    // `encoding` is a note to the UPLOAD layer, which is where the gzip happens:
+    // `body` stays the plain wire JSON so this object can still be read (and
+    // grepped by the exclusion tests) as the thing the client receives.
     files.push({
       path: modelPath,
       body: toWireJson(
-        attachDecimatedGrids(serializeVesselState(shipped, { path: 'cloud' }), shipped)
+        attachShippedGrids(serializeVesselState(shipped, { path: 'cloud' }), shipped)
       ),
-      contentType: 'application/json',
+      contentType: 'application/gzip',
+      encoding: 'gzip',
     });
 
     let screenshotPath: string | undefined;

@@ -35,10 +35,9 @@ import { SHARE_VIEWER_INITIAL_LAYERS } from './bundle-types';
  */
 export function screenshotSourceState(
   state: VesselState,
-  published: ReadonlySet<LayerKey>,
-  maxDimension?: number
+  published: ReadonlySet<LayerKey>
 ): VesselState {
-  return sanitizeVesselStateForShare(state, published, maxDimension);
+  return sanitizeVesselStateForShare(state, published);
 }
 
 /**

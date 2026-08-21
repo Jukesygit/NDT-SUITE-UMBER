@@ -27,6 +27,7 @@ import {
   type ClientShareRecord,
 } from '../../services/client-share-service';
 import { ShareLinkList } from './ShareLinkList';
+import { ShareDeleteConfirm, useShareDeletion } from './ShareDeleteConfirm';
 import { useClientShares } from '../../hooks/queries/useClientShares';
 import {
   usePublishClientShare,
@@ -61,6 +62,9 @@ export function ShareWithClientDialog({
   const [expiryDays, setExpiryDays] = useState<number | null>(DEFAULT_SHARE_EXPIRY_DAYS);
   const [passcode, setPasscode] = useState('');
   const [republishTarget, setRepublishTarget] = useState<ClientShareRecord | null>(null);
+  const deletion = useShareDeletion(project.id, (shareId) => {
+    if (republishTarget?.id === shareId) setRepublishTarget(null);
+  });
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [result, setResult] = useState<{ token: string; skipped: string[] } | null>(null);
@@ -110,6 +114,8 @@ export function ShareWithClientDialog({
           onRepublish={setRepublishTarget}
           onRevoke={(id) => revoke.mutate(id)}
           onRestore={(id) => restore.mutate(id)}
+          onDelete={deletion.ask}
+          deletingShareId={deletion.pendingId}
         />
 
         {republishTarget && (
@@ -269,6 +275,8 @@ export function ShareWithClientDialog({
                 : 'Publish link'}
           </button>
         </div>
+
+        <ShareDeleteConfirm {...deletion.confirmProps} />
       </div>
     </Modal>
   );

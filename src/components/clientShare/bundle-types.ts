@@ -10,11 +10,23 @@
 // Layout under `<shareId>/rev-<N>/` in the private `client-shares` bucket:
 //
 //   manifest.json                      ← everything below, minus the models
-//   vessels/<vesselId>/model.json      ← serialized VesselState (sanitised)
+//   vessels/<vesselId>/model.json.gz   ← serialized VesselState (sanitised), gzipped
 //   vessels/<vesselId>/screenshot.png  ← publish-time card image (optional)
 //
 // The models are separate files so the landing page can render vessel cards
 // from the manifest alone, and only pay for a model when a vessel is opened.
+//
+// WHY THE MODELS ARE GZIPPED AND THE MANIFEST IS NOT (2026-08-21). A model
+// carries every thickness grid at full resolution, and raw JSON of Float64
+// readings is a terrible wire encoding — a real publish was refused by Supabase
+// Storage ("The object exceeded the maximum allowed size", the project's ~50MB
+// global upload cap). Gzip over quantised decimals cuts that by an order of
+// magnitude. The manifest stays plain: it is small, and it is the viewer's ENTRY
+// request, so keeping it directly readable is worth more than the bytes.
+//
+// The viewer branches on the `.gz` suffix of whatever `modelPath` the manifest
+// names, so this is NOT a format-version change: a bundle published before this
+// still names a plain `model.json` and still loads.
 // ---------------------------------------------------------------------------
 
 import type { ComparisonStatus } from '../VesselModeler/engine/coverage-comparison';
@@ -156,18 +168,36 @@ export interface ShareBundle {
 }
 
 export interface ShareBundleFile {
-  /** Bundle-relative path, e.g. `vessels/<id>/model.json`. */
+  /** Bundle-relative path, e.g. `vessels/<id>/model.json.gz`. */
   path: string;
   /** JSON payloads are objects; binary payloads (screenshots) are Blobs. */
   body: Record<string, unknown> | Blob;
   contentType: string;
+  /**
+   * Wire encoding applied by the UPLOAD layer, not by the builder.
+   *
+   * The builder stays pure and synchronous — compression is async and belongs
+   * next to the transfer — so `body` here is always the plain, parseable wire
+   * JSON. That is deliberate and load-bearing for review: the exclusion sweep
+   * (`__tests__/bundle-exclusions.test.ts`) greps the real bytes a client
+   * receives, and it could not do that through a gzip frame.
+   *
+   * Absent ⇒ upload the body as-is.
+   */
+  encoding?: 'gzip';
 }
 
 /** Path of the manifest inside every bundle revision. */
 export const MANIFEST_PATH = 'manifest.json';
 
+/**
+ * Where a vessel's serialized model lives. The `.gz` is part of the NAME, not a
+ * transport detail: the edge function proxies stored bytes verbatim (no
+ * `Content-Encoding`), so the extension is the only thing that tells the viewer
+ * to inflate. See the module header for why models are compressed.
+ */
 export function vesselModelPath(vesselId: string): string {
-  return `vessels/${vesselId}/model.json`;
+  return `vessels/${vesselId}/model.json.gz`;
 }
 
 export function vesselScreenshotPath(vesselId: string): string {

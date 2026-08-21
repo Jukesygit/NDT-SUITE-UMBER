@@ -21,6 +21,7 @@ import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_VESSEL_STATE,
   type AnnotationShapeConfig,
+  type AppendageConfig,
   type CoverageRectConfig,
   type VesselState,
 } from '../../VesselModeler/types';
@@ -58,6 +59,16 @@ const ANNOTATION = {
   showLabel: true,
 } as AnnotationShapeConfig;
 
+const APPENDAGE: AppendageConfig = {
+  id: 'app-1',
+  name: 'Boot 1',
+  mountPos: 3000,
+  mountAngle: 270,
+  diameter: 600,
+  length: 900,
+  endClosure: 'dished',
+};
+
 const ALL_LAYERS = new Set(Object.keys(SHARE_LAYER_DEFAULTS) as LayerKey[]);
 
 function makeState(overrides: Partial<VesselState> = {}): VesselState {
@@ -94,6 +105,24 @@ describe('screenshotSourceState — the renderer never sees the raw model', () =
   it('never publishes reference drawings', () => {
     const source = screenshotSourceState(makeState(), ALL_LAYERS);
     expect(source.referenceDrawings).toEqual([]);
+  });
+
+  it('renders the same visibility-normalised state the bundle ships', () => {
+    // The card is a picture of the published model, so it must be drawn from a
+    // model normalised the same way: an entity the modeler had hidden is shown,
+    // exactly as it will be when the client opens the vessel.
+    const source = screenshotSourceState(
+      makeState({
+        coverageRects: [{ ...RECT, visible: false }],
+        appendages: [{ ...APPENDAGE, visible: false }],
+      }),
+      ALL_LAYERS
+    );
+
+    for (const entity of [source.coverageRects[0], source.appendages[0]]) {
+      // Removed, not set true — same rule the wire format follows.
+      expect(Object.prototype.hasOwnProperty.call(entity, 'visible')).toBe(false);
+    }
   });
 
   it('leaves the publisher’s own state untouched', () => {
