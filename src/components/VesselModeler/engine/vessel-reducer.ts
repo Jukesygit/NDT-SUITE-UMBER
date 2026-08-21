@@ -74,11 +74,13 @@ export interface UIState {
   viewingInspectionImageId: number;
   viewMode: '3d' | 'flattened' | 'topo';
   labelsTidied: boolean;
+  /**
+   * The ONE merged coverage stats section — RBA · Scoped · Achieved · Δ
+   * (design 2026-08-21; collapsed from the former coverage / scan-coverage /
+   * comparison trio). Transient: never serialized, no history.
+   */
   showStatsCoverage: boolean;
   showStatsWallLoss: boolean;
-  showStatsScanCoverage: boolean;
-  /** Coverage-vs-Scope section (targets vs achieved). Transient like its siblings. */
-  showStatsComparison: boolean;
   hoverData: { thickness: number | null; scanMm: number; indexMm: number } | null;
   scanTooltipFollow: boolean;
   /** Whether drag angle-snapping is enabled (nozzles + lifting lugs) */
@@ -164,8 +166,6 @@ export const INITIAL_STATE: VesselModelerState = {
     labelsTidied: false,
     showStatsCoverage: false,
     showStatsWallLoss: false,
-    showStatsScanCoverage: false,
-    showStatsComparison: false,
   },
   history: createEmptyHistory(),
 };
@@ -272,8 +272,6 @@ export type VesselAction =
   | { type: 'TOGGLE_LABELS_TIDIED'; history?: HistoryControl }
   | { type: 'TOGGLE_STATS_COVERAGE' }
   | { type: 'TOGGLE_STATS_WALL_LOSS' }
-  | { type: 'TOGGLE_STATS_SCAN_COVERAGE' }
-  | { type: 'TOGGLE_STATS_COMPARISON' }
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'UNDO_TO'; index: number }
@@ -309,10 +307,7 @@ function withRestoredVessel(
   };
 }
 
-export function vesselReducer(
-  state: VesselModelerState,
-  action: VesselAction
-): VesselModelerState {
+export function vesselReducer(state: VesselModelerState, action: VesselAction): VesselModelerState {
   switch (action.type) {
     case 'SET_VESSEL':
       // A load/import is a document boundary — undo never crosses it (v1).
@@ -504,16 +499,6 @@ export function vesselReducer(
       return { ...state, ui: { ...state.ui, showStatsCoverage: !state.ui.showStatsCoverage } };
     case 'TOGGLE_STATS_WALL_LOSS':
       return { ...state, ui: { ...state.ui, showStatsWallLoss: !state.ui.showStatsWallLoss } };
-    case 'TOGGLE_STATS_SCAN_COVERAGE':
-      return {
-        ...state,
-        ui: { ...state.ui, showStatsScanCoverage: !state.ui.showStatsScanCoverage },
-      };
-    case 'TOGGLE_STATS_COMPARISON':
-      return {
-        ...state,
-        ui: { ...state.ui, showStatsComparison: !state.ui.showStatsComparison },
-      };
     case 'UNDO': {
       const result = undoStep(state.history, state.vessel);
       return result ? withRestoredVessel(state, result) : state;

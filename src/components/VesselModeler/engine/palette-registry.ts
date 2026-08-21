@@ -30,8 +30,6 @@ export type PaletteToggle =
   | 'outliner'
   | 'statsCoverage'
   | 'statsWallLoss'
-  | 'statsScanCoverage'
-  | 'statsComparison'
   | `layer:${LayerKey}`;
 
 export type PaletteViewMode = '3d' | 'flattened' | 'topo';
@@ -102,7 +100,7 @@ export function buildPaletteItems(state: VesselState, ctx: PaletteContext): Pale
     label: string,
     keywords: (string | undefined)[],
     select: OutlinerSelectAction,
-    frame: FrameEntityRef,
+    frame: FrameEntityRef
   ): void => {
     items.push({ id, kind: 'entity', label, keywords: clean(keywords), action: { select, frame } });
   };
@@ -115,7 +113,7 @@ export function buildPaletteItems(state: VesselState, ctx: PaletteContext): Pale
       label,
       [label, n.name, n.id, 'nozzle', bodyName(n.bodyId)],
       { type: 'SELECT_NOZZLE', index: i },
-      { type: 'nozzle', index: i },
+      { type: 'nozzle', index: i }
     );
   });
 
@@ -126,7 +124,7 @@ export function buildPaletteItems(state: VesselState, ctx: PaletteContext): Pale
       label,
       [label, w.name, 'weld', w.type, bodyName(w.bodyId)],
       { type: 'SELECT_WELD', index: i },
-      { type: 'weld', index: i },
+      { type: 'weld', index: i }
     );
   });
 
@@ -137,7 +135,7 @@ export function buildPaletteItems(state: VesselState, ctx: PaletteContext): Pale
       label,
       [label, l.name, 'lifting lug', 'lug', l.swl, bodyName(l.bodyId)],
       { type: 'SELECT_LUG', index: i },
-      { type: 'lug', index: i },
+      { type: 'lug', index: i }
     );
   });
 
@@ -148,7 +146,7 @@ export function buildPaletteItems(state: VesselState, ctx: PaletteContext): Pale
       label,
       [label, 'saddle', 'support', 'Vessel'],
       { type: 'SELECT_SADDLE', index: i },
-      { type: 'saddle', index: i },
+      { type: 'saddle', index: i }
     );
   });
 
@@ -158,7 +156,7 @@ export function buildPaletteItems(state: VesselState, ctx: PaletteContext): Pale
       app.name,
       [app.name, app.id, 'boot', 'appendage', 'sump'],
       { type: 'SELECT_APPENDAGE', index: i },
-      { type: 'appendage', index: i },
+      { type: 'appendage', index: i }
     );
   });
 
@@ -169,7 +167,7 @@ export function buildPaletteItems(state: VesselState, ctx: PaletteContext): Pale
       label,
       [label, s.name, 'scan', 'composite', bodyName(s.bodyId)],
       { type: 'SELECT_SCAN_COMPOSITE', id: s.id },
-      { type: 'scanComposite', id: s.id },
+      { type: 'scanComposite', id: s.id }
     );
   });
 
@@ -180,7 +178,7 @@ export function buildPaletteItems(state: VesselState, ctx: PaletteContext): Pale
       label,
       [label, d.name, 'dome scan', 'dome', bodyName(d.bodyId)],
       { type: 'SELECT_DOME_SCAN', id: d.id },
-      { type: 'domeScan', id: d.id },
+      { type: 'domeScan', id: d.id }
     );
   });
 
@@ -191,7 +189,7 @@ export function buildPaletteItems(state: VesselState, ctx: PaletteContext): Pale
       label,
       [label, a.name, 'annotation', a.type, bodyName(a.bodyId)],
       { type: 'SELECT_ANNOTATION', id: a.id },
-      { type: 'annotation', id: a.id },
+      { type: 'annotation', id: a.id }
     );
   });
 
@@ -202,7 +200,7 @@ export function buildPaletteItems(state: VesselState, ctx: PaletteContext): Pale
       label,
       [label, c.name, 'coverage', 'rect', bodyName(c.bodyId)],
       { type: 'SELECT_COVERAGE_RECT', id: c.id },
-      { type: 'coverageRect', id: c.id },
+      { type: 'coverageRect', id: c.id }
     );
   });
 
@@ -213,7 +211,7 @@ export function buildPaletteItems(state: VesselState, ctx: PaletteContext): Pale
       label,
       [label, img.name, 'inspection image', 'image', img.method],
       { type: 'SELECT_INSPECTION_IMAGE', id: img.id },
-      { type: 'inspectionImage', id: img.id },
+      { type: 'inspectionImage', id: img.id }
     );
   });
 
@@ -224,7 +222,7 @@ export function buildPaletteItems(state: VesselState, ctx: PaletteContext): Pale
       label,
       [label, r.name, 'ruler', 'measurement'],
       { type: 'SELECT_RULER', id: r.id },
-      { type: 'ruler', id: r.id },
+      { type: 'ruler', id: r.id }
     );
   });
 
@@ -235,7 +233,7 @@ export function buildPaletteItems(state: VesselState, ctx: PaletteContext): Pale
       label,
       [label, 'pipeline', 'pipe'],
       { type: 'SELECT_PIPE_SEGMENT', pipelineId: p.id, segmentIndex: 0 },
-      { type: 'pipeline', id: p.id },
+      { type: 'pipeline', id: p.id }
     );
   });
 
@@ -246,7 +244,7 @@ export function buildPaletteItems(state: VesselState, ctx: PaletteContext): Pale
       label,
       [label, t.name, 'texture', 'image overlay'],
       { type: 'SELECT_TEXTURE', id: t.id },
-      { type: 'texture', id: t.id },
+      { type: 'texture', id: t.id }
     );
   });
 
@@ -256,9 +254,16 @@ export function buildPaletteItems(state: VesselState, ctx: PaletteContext): Pale
     label: string,
     keywords: string[],
     action: PaletteAction,
-    searchOnly?: boolean,
+    searchOnly?: boolean
   ): void => {
-    items.push({ id, kind: 'command', label, keywords: clean(keywords), action, ...(searchOnly ? { searchOnly } : {}) });
+    items.push({
+      id,
+      kind: 'command',
+      label,
+      keywords: clean(keywords),
+      action,
+      ...(searchOnly ? { searchOnly } : {}),
+    });
   };
 
   const VIEWS: { view: CanonicalViewId; label: string; kw: string[] }[] = [
@@ -294,15 +299,28 @@ export function buildPaletteItems(state: VesselState, ctx: PaletteContext): Pale
     { toggle: 'snap', label: 'Toggle angle snap', kw: ['snap', 'angle'] },
     { toggle: 'tidy', label: 'Toggle tidy labels', kw: ['tidy', 'labels', 'table'] },
     { toggle: 'outliner', label: 'Toggle outliner', kw: ['outliner', 'tree', 'entities'] },
-    { toggle: 'statsCoverage', label: 'Toggle coverage stats', kw: ['coverage', 'stats'] },
-    { toggle: 'statsWallLoss', label: 'Toggle wall-loss stats', kw: ['wall loss', 'wall-loss', 'stats'] },
-    { toggle: 'statsScanCoverage', label: 'Toggle scan-coverage stats', kw: ['scan coverage', 'stats'] },
-    // The jump-to for the Coverage-vs-Scope section (design "Surfaces §2"): not
-    // search-only, so it is reachable from the empty-query default list.
+    // ONE coverage-stats entry since the three sections merged (design
+    // 2026-08-21). It keeps the old comparison entry's search terms so
+    // "scope" / "target" / "achieved" / "scan coverage" still land here, and
+    // stays out of searchOnly so it shows in the empty-query default list.
     {
-      toggle: 'statsComparison',
-      label: 'Coverage comparison',
-      kw: ['comparison', 'coverage', 'target', 'scope', 'achieved', 'stats'],
+      toggle: 'statsCoverage',
+      label: 'Toggle coverage stats',
+      kw: [
+        'coverage',
+        'stats',
+        'scan coverage',
+        'comparison',
+        'target',
+        'scope',
+        'rba',
+        'achieved',
+      ],
+    },
+    {
+      toggle: 'statsWallLoss',
+      label: 'Toggle wall-loss stats',
+      kw: ['wall loss', 'wall-loss', 'stats'],
     },
     // One per layer category, each flipping that category on every body — so the
     // coverage entry IS the coverage master (same semantics as Shift+C), which is

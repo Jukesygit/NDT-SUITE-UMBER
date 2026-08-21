@@ -41,7 +41,10 @@ function makeScan(overrides: Partial<ScanCompositeConfig>): ScanCompositeConfig 
   return {
     id: 'sc',
     name: 'Scan',
-    data: [[8, 8], [8, 8]],
+    data: [
+      [8, 8],
+      [8, 8],
+    ],
     xAxis: [0, 10],
     yAxis: [0, 10],
     stats: { min: 8, max: 8, mean: 8, median: 8, stdDev: 0, validArea: 1_000_000 },
@@ -68,7 +71,10 @@ function makeDomeScan(overrides: Partial<DomeScanConfig>): DomeScanConfig {
     scanDirection: 'cw',
     indexDirection: 'outward',
     orientationConfirmed: true,
-    data: [[8, 8], [8, 8]],
+    data: [
+      [8, 8],
+      [8, 8],
+    ],
     xAxis: [0, 10],
     yAxis: [0, 10],
     stats: { min: 8, max: 8, mean: 8, median: 8, stdDev: 0, validArea: 1_000_000 },
@@ -100,11 +106,22 @@ describe('computeAppendageCoverageTotals', () => {
     const state = makeState({
       appendages: [SUMP],
       scanComposites: [
-        makeScan({ id: 'app-scan', bodyId: 'app-1', stats: { min: 8, max: 8, mean: 8, median: 8, stdDev: 0, validArea: 1_000_000 } }),
+        makeScan({
+          id: 'app-scan',
+          bodyId: 'app-1',
+          stats: { min: 8, max: 8, mean: 8, median: 8, stdDev: 0, validArea: 1_000_000 },
+        }),
         // A main-shell scan (no bodyId) must NOT count toward the appendage.
-        makeScan({ id: 'main-scan', stats: { min: 8, max: 8, mean: 8, median: 8, stdDev: 0, validArea: 5_000_000 } }),
+        makeScan({
+          id: 'main-scan',
+          stats: { min: 8, max: 8, mean: 8, median: 8, stdDev: 0, validArea: 5_000_000 },
+        }),
         // A scan on a different appendage must NOT count either.
-        makeScan({ id: 'other-scan', bodyId: 'app-2', stats: { min: 8, max: 8, mean: 8, median: 8, stdDev: 0, validArea: 9_000_000 } }),
+        makeScan({
+          id: 'other-scan',
+          bodyId: 'app-2',
+          stats: { min: 8, max: 8, mean: 8, median: 8, stdDev: 0, validArea: 9_000_000 },
+        }),
       ],
     });
     const rows = computeAppendageCoverageTotals(state);
@@ -245,15 +262,22 @@ describe('computeAppendageCoverageTotals — boot dome split', () => {
 
 // ---------------------------------------------------------------------------
 // computeRegionAchievedAreas (design 2026-08-17, work item 2) — the engine lift
-// of the ScanCoverageStatsSection memo. Same semantics, one source.
+// of the former stats-section memo (section since merged, 2026-08-21). Same
+// semantics, one source.
 // ---------------------------------------------------------------------------
 
 describe('computeRegionAchievedAreas', () => {
   it('splits main dome scans by head and sums main shell composites', () => {
     const state = makeState({
       scanComposites: [
-        makeScan({ id: 'a', stats: { min: 8, max: 8, mean: 8, median: 8, stdDev: 0, validArea: 2_000_000 } }),
-        makeScan({ id: 'b', stats: { min: 8, max: 8, mean: 8, median: 8, stdDev: 0, validArea: 3_000_000 } }),
+        makeScan({
+          id: 'a',
+          stats: { min: 8, max: 8, mean: 8, median: 8, stdDev: 0, validArea: 2_000_000 },
+        }),
+        makeScan({
+          id: 'b',
+          stats: { min: 8, max: 8, mean: 8, median: 8, stdDev: 0, validArea: 3_000_000 },
+        }),
       ],
       domeScanComposites: [
         makeDomeScan({ id: 'l', head: 'left' }),
@@ -293,7 +317,10 @@ describe('computeRegionAchievedAreas', () => {
     const state = makeState({
       appendages: [SUMP],
       scanComposites: [
-        makeScan({ id: 'main', stats: { min: 8, max: 8, mean: 8, median: 8, stdDev: 0, validArea: 6_000_000 } }),
+        makeScan({
+          id: 'main',
+          stats: { min: 8, max: 8, mean: 8, median: 8, stdDev: 0, validArea: 6_000_000 },
+        }),
         makeScan({ id: 'boot', bodyId: 'app-1' }),
       ],
     });
@@ -302,7 +329,9 @@ describe('computeRegionAchievedAreas', () => {
 
   it('falls back to grid area and tolerates a missing domeScanComposites array', () => {
     const state = makeState({
-      scanComposites: [makeScan({ id: 'g', stats: { min: 8, max: 8, mean: 8, median: 8, stdDev: 0 } })],
+      scanComposites: [
+        makeScan({ id: 'g', stats: { min: 8, max: 8, mean: 8, median: 8, stdDev: 0 } }),
+      ],
       domeScanComposites: undefined as unknown as DomeScanConfig[],
     });
     expect(computeRegionAchievedAreas(state)).toEqual({ leftHead: 0, cylinder: 400, rightHead: 0 });
@@ -318,7 +347,15 @@ describe('compositeValidArea helper', () => {
 
   it('recomputes from the grid when validArea is missing or zero', () => {
     expect(
-      compositeValidArea({ stats: {}, data: [[8, 8], [8, 8]], xAxis: [0, 10], yAxis: [0, 10] })
+      compositeValidArea({
+        stats: {},
+        data: [
+          [8, 8],
+          [8, 8],
+        ],
+        xAxis: [0, 10],
+        yAxis: [0, 10],
+      })
     ).toBe(400);
   });
 });

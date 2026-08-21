@@ -18,10 +18,7 @@
 import type { CoverageRectConfig, VesselState } from '../types';
 import { computeHeadCoveredAreas } from './head-coverage';
 import { buildAllFootprints, type JunctionFootprint } from './junction-footprint';
-import {
-  buildAppendageNozzleFootprints,
-  buildMainShellNozzleFootprints,
-} from './nozzle-footprint';
+import { buildAppendageNozzleFootprints, buildMainShellNozzleFootprints } from './nozzle-footprint';
 import { rectIsPureCylinder } from './scan-sampling';
 
 /**
@@ -46,9 +43,9 @@ function footprintsFor(vesselState: VesselState): JunctionFootprint[] {
 // ---------------------------------------------------------------------------
 
 export interface RegionCoverage {
-  covered: number;   // m²
-  total: number;     // m²
-  percent: number;   // 0-100
+  covered: number; // m²
+  total: number; // m²
+  percent: number; // 0-100
 }
 
 export interface CoverageResult {
@@ -132,7 +129,7 @@ function ellipsoidCellArea(
   radius: number,
   headDepth: number,
   isLeftHead: boolean,
-  tanTan: number,
+  tanTan: number
 ): number {
   const dTheta = ((angleMaxDeg - angleMinDeg) / 360) * 2 * Math.PI;
   if (dTheta <= 0) return 0;
@@ -165,7 +162,7 @@ function cylinderCellArea(
   posMax: number,
   angleMinDeg: number,
   angleMaxDeg: number,
-  radius: number,
+  radius: number
 ): number {
   const dTheta = ((angleMaxDeg - angleMinDeg) / 360) * 2 * Math.PI;
   const dPos = posMax - posMin;
@@ -189,7 +186,7 @@ function cylinderCellArea(
 export function validAreaFromGrid(
   data: (number | null)[][],
   xAxis: number[],
-  yAxis: number[],
+  yAxis: number[]
 ): number {
   if (!data || data.length === 0 || !data[0] || data[0].length === 0) return 0;
 
@@ -258,6 +255,13 @@ export interface RegionAchievedAreas {
   rightHead: number;
 }
 
+/** Rect-DRAWN covered area per main-shell region, in mm² (the scope side). */
+export interface RegionCoveredAreas {
+  leftHead: number;
+  cylinder: number;
+  rightHead: number;
+}
+
 /**
  * Ellipsoidal head surface area in mm² for a head of equator radius `R` and
  * depth `D` — numerical integration from z=0 to z=D of 2πR · r(z) · √(1+(dr/dz)²).
@@ -292,7 +296,7 @@ export function computeAppendageCoveredArea(
   rects: CoverageRectConfig[],
   radius: number,
   length: number,
-  footprints: JunctionFootprint[] = [],
+  footprints: JunctionFootprint[] = []
 ): number {
   if (rects.length === 0 || radius <= 0 || length <= 0) return 0;
 
@@ -325,7 +329,7 @@ export function computeAppendageCoveredArea(
       if (aMax <= aMin) continue;
 
       const isCovered = unwrapped.some(
-        (ur) => ur.posMin <= pMin && ur.posMax >= pMax && ur.angleMin <= aMin && ur.angleMax >= aMax,
+        (ur) => ur.posMin <= pMin && ur.posMax >= pMax && ur.angleMin <= aMin && ur.angleMax >= aMax
       );
       if (!isCovered) continue;
 
@@ -354,7 +358,9 @@ export function computeAppendageCoveredArea(
  * which are exactly `resolveBodyFrame(state, id)`'s `radius` / `axialLength`; read
  * as scalars here so this pure module stays free of the THREE-backed frame.
  */
-export function computeAppendageCoverageTotals(vesselState: VesselState): AppendageCoverageTotals[] {
+export function computeAppendageCoverageTotals(
+  vesselState: VesselState
+): AppendageCoverageTotals[] {
   const appendages = vesselState.appendages ?? [];
   return appendages.map((a) => {
     const radius = a.diameter / 2;
@@ -438,7 +444,11 @@ export function computeRegionAchievedAreas(vesselState: VesselState): RegionAchi
   return result;
 }
 
-export function computeRegionTotalAreas(vesselState: VesselState): { leftHead: number; cylinder: number; rightHead: number } {
+export function computeRegionTotalAreas(vesselState: VesselState): {
+  leftHead: number;
+  cylinder: number;
+  rightHead: number;
+} {
   const R = vesselState.id / 2;
   const D = vesselState.id / (2 * vesselState.headRatio);
 
@@ -467,7 +477,7 @@ export function computeRegionTotalAreas(vesselState: VesselState): { leftHead: n
 
 export function computeCoverage(
   rects: CoverageRectConfig[],
-  vesselState: VesselState,
+  vesselState: VesselState
 ): CoverageResult {
   // Only main-shell rects (bodyId undefined) count toward main-shell coverage;
   // appendage-targeted rects are measured per-body by computeAppendageCoverageTotals.
@@ -563,9 +573,8 @@ export function computeCoverage(
       if (aMax <= aMin) continue;
 
       // Check if any unwrapped rect covers this cell
-      const covered = unwrapped.some(ur =>
-        ur.posMin <= pMin && ur.posMax >= pMax &&
-        ur.angleMin <= aMin && ur.angleMax >= aMax
+      const covered = unwrapped.some(
+        (ur) => ur.posMin <= pMin && ur.posMax >= pMax && ur.angleMin <= aMin && ur.angleMax >= aMax
       );
       if (!covered) continue;
 
@@ -577,7 +586,7 @@ export function computeCoverage(
       // footprint predicate is wrap-safe, so angles are passed unnormalised.
       if (footprints.length > 0) {
         const midAngle = (aMin + aMax) / 2;
-        if (footprints.some(fp => fp.containsCell(midPos, midAngle))) continue;
+        if (footprints.some((fp) => fp.containsCell(midPos, midAngle))) continue;
       }
 
       if (midPos < 0) {
@@ -627,5 +636,30 @@ export function computeCoverage(
     cylinder: makeRegion(cylinderCovered, regionAreas.cylinder),
     rightHead: makeRegion(rightHeadCovered, regionAreas.rightHead),
     total: makeRegion(totalCovered, totalArea),
+  };
+}
+
+/**
+ * Rect-DRAWN covered area per main-shell region, in mm² — the SCOPE side of the
+ * coverage comparison (owner ruling 2026-08-21: drawn rects are how coverage is
+ * scoped; see docs/plans/2026-08-21-rect-derived-scope-design.md).
+ *
+ * A pure projection of {@link computeCoverage}: no new maths, no second sweep
+ * routing. It exists so `coverage-comparison.ts` can consume mm² like every other
+ * area it handles instead of the m²-shaped {@link CoverageResult} the stats UI
+ * renders — one raster, two unit shapes, never two calculations.
+ *
+ * Main-shell rects only (`bodyId === undefined`), cutout-adjusted, head-drape
+ * raster included — exactly the numbers the Coverage stats section shows, ×1e6.
+ * Boot bodies are NOT here: their rect coverage is
+ * {@link computeAppendageCoverageTotals}'s `coveredMm2`, and boot closure domes
+ * have no rect raster at all.
+ */
+export function computeRegionCoveredAreas(vesselState: VesselState): RegionCoveredAreas {
+  const coverage = computeCoverage(vesselState.coverageRects ?? [], vesselState);
+  return {
+    leftHead: coverage.leftHead.covered * 1e6, // m² → mm²
+    cylinder: coverage.cylinder.covered * 1e6,
+    rightHead: coverage.rightHead.covered * 1e6,
   };
 }

@@ -1,47 +1,51 @@
-import { useState, useCallback, useRef, useEffect, memo, type PointerEvent as ReactPointerEvent } from 'react';
-import type { VesselState } from './types';
 import {
-  CoverageStatsSection,
-  WallLossStatsSection,
-  ScanCoverageStatsSection,
-  CoverageComparisonSection,
-} from './stats';
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  memo,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
+import type { VesselState } from './types';
+import { CoverageScopeSection, WallLossStatsSection } from './stats';
 
 interface UnifiedStatsPanelProps {
   vesselState: VesselState;
   sidebarOpen: boolean;
+  /** The ONE merged coverage section (RBA · Scoped · Achieved · Δ). */
   showCoverage: boolean;
   showWallLoss: boolean;
-  showScanCoverage: boolean;
-  showComparison: boolean;
 }
 
 const MIN_WIDTH = 340;
 const MIN_HEIGHT = 120;
 
-const MemoedCoverage = memo(CoverageStatsSection);
+const MemoedCoverage = memo(CoverageScopeSection);
 const MemoedWallLoss = memo(WallLossStatsSection);
-const MemoedScanCoverage = memo(ScanCoverageStatsSection);
-const MemoedComparison = memo(CoverageComparisonSection);
 
 export default function UnifiedStatsPanel({
   vesselState,
   sidebarOpen,
   showCoverage,
   showWallLoss,
-  showScanCoverage,
-  showComparison,
 }: UnifiedStatsPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
-  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
-  const resizeRef = useRef<{ startX: number; startY: number; origW: number; origH: number } | null>(null);
+  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(
+    null
+  );
+  const resizeRef = useRef<{ startX: number; startY: number; origW: number; origH: number } | null>(
+    null
+  );
 
-  const anyVisible = showCoverage || showWallLoss || showScanCoverage || showComparison;
+  const anyVisible = showCoverage || showWallLoss;
 
   useEffect(() => {
-    if (!anyVisible) { setPos(null); setSize(null); }
+    if (!anyVisible) {
+      setPos(null);
+      setSize(null);
+    }
   }, [anyVisible]);
 
   const onDragStart = useCallback((e: ReactPointerEvent) => {
@@ -89,7 +93,12 @@ export default function UnifiedStatsPanel({
     const el = panelRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    resizeRef.current = { startX: e.clientX, startY: e.clientY, origW: rect.width, origH: rect.height };
+    resizeRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origW: rect.width,
+      origH: rect.height,
+    };
 
     el.style.transition = 'none';
     el.style.left = `${rect.left}px`;
@@ -109,7 +118,7 @@ export default function UnifiedStatsPanel({
       if (resizeRef.current) {
         const dx = ev.clientX - resizeRef.current.startX;
         const dy = ev.clientY - resizeRef.current.startY;
-        setPos(prev => prev ?? { x: parseFloat(el.style.left), y: parseFloat(el.style.top) });
+        setPos((prev) => prev ?? { x: parseFloat(el.style.left), y: parseFloat(el.style.top) });
         setSize({
           w: Math.max(MIN_WIDTH, resizeRef.current.origW + dx),
           h: Math.max(MIN_HEIGHT, resizeRef.current.origH + dy),
@@ -129,26 +138,14 @@ export default function UnifiedStatsPanel({
     ? { left: pos.x, top: pos.y, bottom: 'auto', right: 'auto' }
     : { left: sidebarOpen ? 350 : 16, bottom: 48 };
 
-  const sizeStyle: React.CSSProperties = size
-    ? { width: size.w, minHeight: size.h }
-    : {};
+  const sizeStyle: React.CSSProperties = size ? { width: size.w, minHeight: size.h } : {};
 
   const sections: React.ReactNode[] = [];
   if (showCoverage) sections.push(<MemoedCoverage key="coverage" vesselState={vesselState} />);
   if (showWallLoss) sections.push(<MemoedWallLoss key="wallloss" vesselState={vesselState} />);
-  if (showScanCoverage) {
-    sections.push(<MemoedScanCoverage key="scancov" vesselState={vesselState} />);
-  }
-  if (showComparison) {
-    sections.push(<MemoedComparison key="comparison" vesselState={vesselState} />);
-  }
 
   return (
-    <div
-      ref={panelRef}
-      className="vm-unified-stats-panel"
-      style={{ ...posStyle, ...sizeStyle }}
-    >
+    <div ref={panelRef} className="vm-unified-stats-panel" style={{ ...posStyle, ...sizeStyle }}>
       <div className="vm-scancov-titlebar" onPointerDown={onDragStart}>
         <span className="vm-scancov-drag-dots">⋮⋮</span>
         <span className="vm-scancov-title">Statistics</span>

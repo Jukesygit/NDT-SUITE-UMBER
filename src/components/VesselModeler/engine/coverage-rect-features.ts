@@ -3,10 +3,18 @@
 //
 // A comparison row's expand shows "what did the planner draw here": the rects
 // sitting on that feature, with their technique and note
-// (docs/plans/2026-08-17-coverage-comparison-design.md, Surfaces §1). It is
-// deliberately NOT a coverage calculation — the pivot locked in #12 made rects
-// where/how guidance, and achieved % is measured against the feature, never
-// against a rect. Nothing downstream may treat this grouping as area.
+// (docs/plans/2026-08-17-coverage-comparison-design.md, Surfaces §1).
+//
+// LISTING ONLY — this grouping is not, and must never become, an area. Drawn
+// rects DO define the scope side of the comparison now (owner ruling 2026-08-21,
+// docs/plans/2026-08-21-rect-derived-scope-design.md), but that area comes from
+// the coverage calculator's real rasters — `computeRegionCoveredAreas` for the
+// main shell, `computeAppendageCoverageTotals().coveredMm2` for a boot — which
+// are overlap-aware and cutout-adjusted. This map is neither: it double-lists a
+// draping rect under both the barrel and the closure it reaches, exactly as a
+// guidance listing should and exactly as an area must not. Achieved % likewise
+// stays measured against the FEATURE, never against a rect (the per-rect
+// drill-down remains future work).
 //
 // Routing rule, one call deep: `rectIsPureCylinder` — the SAME canonical
 // predicate `computeCoverage` routes area with — decides whether a rect stays on

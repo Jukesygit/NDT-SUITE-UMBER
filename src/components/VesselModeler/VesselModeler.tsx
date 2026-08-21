@@ -193,10 +193,7 @@ export default function VesselModeler() {
   // Three.js texture objects (imperative, not React state)
   const textureObjectsRef = useRef<Record<number, THREE.Texture>>({});
   const [, setTextureObjectsVersion] = useState(0);
-  const bumpTextureObjectsVersion = useCallback(
-    () => setTextureObjectsVersion((v) => v + 1),
-    []
-  );
+  const bumpTextureObjectsVersion = useCallback(() => setTextureObjectsVersion((v) => v + 1), []);
   const nextTextureIdRef = useRef(1);
 
   // ID counter refs
@@ -711,7 +708,6 @@ export default function VesselModeler() {
     [updateVessel]
   );
 
-
   // Dome scan hover tooltip state
   const [domeScanHoverInfo, setDomeScanHoverInfo] = useState<DomeScanHoverInfo | null>(null);
 
@@ -806,7 +802,9 @@ export default function VesselModeler() {
     if (!pending) return;
     const raf = requestAnimationFrame(() => {
       pendingFlightRef.current = null;
-      flyToPose('view' in pending ? resolveViewPose(pending.view) : resolveFramePose(pending.frame));
+      flyToPose(
+        'view' in pending ? resolveViewPose(pending.view) : resolveFramePose(pending.frame)
+      );
     });
     return () => cancelAnimationFrame(raf);
   }, [ui.viewMode, resolveViewPose, resolveFramePose, flyToPose]);
@@ -865,12 +863,6 @@ export default function VesselModeler() {
             break;
           case 'statsWallLoss':
             dispatch({ type: 'TOGGLE_STATS_WALL_LOSS' });
-            break;
-          case 'statsScanCoverage':
-            dispatch({ type: 'TOGGLE_STATS_SCAN_COVERAGE' });
-            break;
-          case 'statsComparison':
-            dispatch({ type: 'TOGGLE_STATS_COMPARISON' });
             break;
           default:
             // `layer:<category>` — the palette has no body context, so it flips
@@ -1203,10 +1195,7 @@ export default function VesselModeler() {
             }
           >
             {activeTopoComposite ? (
-              <ReliefViewportPane
-                key={activeTopoComposite.id}
-                composite={activeTopoComposite}
-              />
+              <ReliefViewportPane key={activeTopoComposite.id} composite={activeTopoComposite} />
             ) : (
               <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-400 text-sm">
                 No scan composite to show
@@ -1609,14 +1598,9 @@ export default function VesselModeler() {
           <StatsDropdown
             showCoverage={ui.showStatsCoverage}
             showWallLoss={ui.showStatsWallLoss}
-            showScanCoverage={ui.showStatsScanCoverage}
-            showComparison={ui.showStatsComparison}
-            hasCoverageData={vesselState.coverageRects.length > 0}
             hasWallLossData={!!vesselState.wallLossGroups?.enabled}
             onToggleCoverage={() => dispatch({ type: 'TOGGLE_STATS_COVERAGE' })}
             onToggleWallLoss={() => dispatch({ type: 'TOGGLE_STATS_WALL_LOSS' })}
-            onToggleScanCoverage={() => dispatch({ type: 'TOGGLE_STATS_SCAN_COVERAGE' })}
-            onToggleComparison={() => dispatch({ type: 'TOGGLE_STATS_COMPARISON' })}
           />
           <SnapControl
             enabled={ui.snapEnabled}
@@ -1774,8 +1758,6 @@ export default function VesselModeler() {
           sidebarOpen={ui.sidebarOpen}
           showCoverage={ui.showStatsCoverage}
           showWallLoss={ui.showStatsWallLoss}
-          showScanCoverage={ui.showStatsScanCoverage}
-          showComparison={ui.showStatsComparison}
         />
 
         {/* Inspection mode overlay (right-side panel + camera lock indicator) */}

@@ -50,6 +50,7 @@ Also settled during implementation:
 - `formatCoveragePct` / `formatCoverageDelta` live in `coverage-comparison.ts` and are re-exported by `coverage-scope-report.ts`. Every surface formats through them; none re-declares them.
 - The React *project* print report still has no coverage page — only the modeler's generated .docx does. It needs modelConfig→VesselState plumbing and is a deliberate follow-up, outside this spec's scope.
 - `ScopeProgressCard` / `ScopeSection` still read the OLD rect-area scope number from `utils/coverage-calc.ts`, not the target-percentage model. Two coverage vocabularies now coexist on the vessel page; reconciling them is a separate call.
+- **SUPERSEDED 2026-08-21 (owner ruling — see `docs/plans/2026-08-21-rect-derived-scope-design.md`):** drawn coverage rects ARE how coverage is scoped, so the comparison target is the *resolved* scope — rect-derived (`rectCoveredMm2 / totalMm2`) whenever the feature has rect coverage, with the manual `scopedPct` demoted to a fallback for features that have none (boot closure domes permanently, since no dome-rect raster exists). This also supersedes §"The model"'s "rects are not measured against scans". Unchanged: `rbaPct` is never the yardstick, and `targetPctOf()` in `engine/coverage-comparison.ts` remains the ONE place a target is decided — it now returns `{ pct, source: 'rects' | 'manual', mm2 } | undefined`.
 
 ## Status semantics (locked in #12)
 

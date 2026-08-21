@@ -25,6 +25,7 @@ import type {
 import {
   computeAppendageCoverageTotals,
   computeRegionAchievedAreas,
+  computeRegionCoveredAreas,
   computeRegionTotalAreas,
 } from './coverage-calculator';
 import { cardinalForHead } from './cardinal-directions';
@@ -60,10 +61,26 @@ export interface CoverageFeature {
   ref: FeatureTargetRef;
 }
 
+/** Where a resolved target came from — see {@link targetPctOf}. */
+export type TargetSource = 'rects' | 'manual';
+
+/** A feature's resolved scope: the ONE answer {@link targetPctOf} hands out. */
+export interface ResolvedTarget {
+  /** The comparison target, 0-100. */
+  pct: number;
+  source: TargetSource;
+  /** The same target expressed as area (mm²) of the feature. */
+  mm2: number;
+}
+
 /** One comparison row: a feature instance with its target, achieved and status. */
 export interface FeatureComparisonRow extends CoverageFeature {
   /** undefined ⇒ untracked (no target entry). Never coerced to 0. */
   targetPct?: number;
+  /** How `targetPct` was resolved. Absent ⇔ untracked (mirrors `targetPct`). */
+  targetSource?: TargetSource;
+  /** `targetPct` as area (mm²). Absent ⇔ untracked. */
+  targetMm2?: number;
   achievedPct: number;
   /** achieved − target, in percentage points. undefined when untracked. */
   deltaPct?: number;
@@ -88,12 +105,47 @@ export interface ComparisonRollup {
 }
 
 /**
- * The comparison target of an entry. `scopedPct` is the committed scope — the
- * plan achieved work is measured against; `rbaPct` is the risk-assessment
- * recommendation that INFORMS the scope and is never itself the yardstick.
+ * THE single place a comparison target is decided. No surface — stats section,
+ * target editor, report, share bundle — may pick a target for itself.
+ *
+ * Owner ruling 2026-08-21 (docs/plans/2026-08-21-rect-derived-scope-design.md):
+ * **drawn coverage rects ARE how coverage is scoped.** This SUPERSEDES the
+ * 2026-08-20 amendment in the 2026-08-17 design ("`scopedPct` is THE comparison
+ * target"): the resolved scope is the target, and `scopedPct` is now only the
+ * fallback leg of that resolution. `rbaPct` never moves — it is the
+ * risk-assessment recommendation that INFORMS the scope and is never the
+ * yardstick, on either leg.
+ *
+ * Resolution order:
+ *   1. `rectCoveredMm2 > 0` → rect-derived (`covered / total`). A stored manual
+ *      `scopedPct` is INERT while rects cover the feature: kept in state, not
+ *      consulted, so clearing the rects restores it untouched.
+ *   2. else an entry exists → its `scopedPct`, source `'manual'`.
+ *   3. else undefined → UNTRACKED, which stays distinct from a 0% target.
+ *
+ * `rectCoveredMm2` is always 0 for a boot closure dome: no dome-rect raster
+ * exists anywhere, so domes are permanently manual/untracked (design non-goal).
  */
-export function targetPctOf(entry: CoverageTargetEntry): number {
-  return entry.scopedPct;
+export function targetPctOf(
+  entry: CoverageTargetEntry | undefined,
+  rectCoveredMm2: number,
+  totalMm2: number
+): ResolvedTarget | undefined {
+  if (rectCoveredMm2 > 0) {
+    return {
+      pct: totalMm2 > 0 ? (rectCoveredMm2 / totalMm2) * 100 : 0,
+      source: 'rects',
+      mm2: rectCoveredMm2,
+    };
+  }
+  if (entry) {
+    return {
+      pct: entry.scopedPct,
+      source: 'manual',
+      mm2: (entry.scopedPct / 100) * totalMm2,
+    };
+  }
+  return undefined;
 }
 
 /** Reads a feature's target entry. undefined ⇒ untracked. */
@@ -149,7 +201,7 @@ export function listComparisonFeatures(state: VesselState): CoverageFeature[] {
   const isVertical = state.orientation === 'vertical';
   const rotation = state.visuals?.cardinalRotation ?? 0;
 
-  // Same naming as the Scan Coverage section so the two never disagree: a
+  // Same naming the modeler's Coverage section has always used: a
   // vertical vessel reads Top/Bottom, a horizontal one reads by compass heading.
   const headLabel = (head: 'left' | 'right'): string => {
     if (isVertical) return head === 'left' ? 'Top Dome' : 'Bottom Dome';
@@ -203,20 +255,34 @@ export function statusFor(targetPct: number | undefined, achievedPct: number): C
   return 'short';
 }
 
-/** One comparison row per feature instance — the single source for all surfaces. */
+/**
+ * One comparison row per feature instance — the single source for all surfaces.
+ *
+ * PERF: this runs the rect sweep (`computeRegionCoveredAreas` → `computeCoverage`)
+ * as well as the achieved sweeps, because the scope side is now rect-derived.
+ * Every call site is settled or one-shot by construction (modeler sections settle
+ * at 250ms; the planning summary, the report and the share stats are one-shot) —
+ * acceptable as-is. Do NOT wire this to live drag state (standing PERF RULE), and
+ * do not paper over a misuse with caching here.
+ */
 export function computeComparisonRows(state: VesselState): FeatureComparisonRow[] {
   const regionTotals = computeRegionTotalAreas(state);
   const regionAchieved = computeRegionAchievedAreas(state);
+  const regionCovered = computeRegionCoveredAreas(state);
   const appendageTotals = computeAppendageCoverageTotals(state);
   const byAppendage = new Map(appendageTotals.map((t) => [t.appendageId, t]));
 
   return listComparisonFeatures(state).map((feature) => {
     let totalMm2 = 0;
     let achievedMm2 = 0;
+    // Rect-DRAWN area of this feature — the scope side. Stays 0 wherever no rect
+    // raster exists, which routes that feature to the manual/untracked legs.
+    let rectCoveredMm2 = 0;
 
     if (feature.ref.scope === 'main') {
       totalMm2 = regionTotals[feature.ref.key];
       achievedMm2 = regionAchieved[feature.ref.key];
+      rectCoveredMm2 = regionCovered[feature.ref.key];
     } else {
       const totals = byAppendage.get(feature.ref.appendageId);
       if (totals) {
@@ -225,23 +291,33 @@ export function computeComparisonRows(state: VesselState): FeatureComparisonRow[
         if (feature.ref.slot === 'shell') {
           totalMm2 = totals.shellTotalMm2;
           achievedMm2 = totals.shellAchievedMm2;
+          // `coveredMm2` is the boot's LATERAL rect sweep — shell only, by
+          // construction (computeAppendageCoveredArea takes the boot cylinder).
+          rectCoveredMm2 = totals.coveredMm2;
         } else {
           totalMm2 = totals.domeTotalMm2 ?? 0;
           achievedMm2 = totals.domeAchievedMm2 ?? 0;
+          // A boot closure dome has NO rect raster anywhere in the engine, so it
+          // is never rect-derived — permanently manual/untracked (design
+          // 2026-08-21 non-goal). Crediting it the boot's shell `coveredMm2`
+          // would be the exact alias leak the shell*/dome* split exists to stop.
+          rectCoveredMm2 = 0;
         }
       }
     }
 
     const achievedPct = totalMm2 > 0 ? (achievedMm2 / totalMm2) * 100 : 0;
     const entry = readTargetEntry(state.coverageTargets, feature.ref);
-    const targetPct = entry ? targetPctOf(entry) : undefined;
+    const target = targetPctOf(entry, rectCoveredMm2, totalMm2);
 
     return {
       ...feature,
-      targetPct,
+      targetPct: target?.pct,
+      targetSource: target?.source,
+      targetMm2: target?.mm2,
       achievedPct,
-      deltaPct: targetPct === undefined ? undefined : achievedPct - targetPct,
-      status: statusFor(targetPct, achievedPct),
+      deltaPct: target === undefined ? undefined : achievedPct - target.pct,
+      status: statusFor(target?.pct, achievedPct),
       totalMm2,
       achievedMm2,
     };

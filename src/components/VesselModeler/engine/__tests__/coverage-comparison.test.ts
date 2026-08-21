@@ -6,6 +6,11 @@
 // here: the band edges are exact, untracked features are excluded from every
 // rollup, weighting is by AREA (not row count), dome rows exist only for dished
 // boots, and a pipe emits no head rows.
+//
+// Since the 2026-08-21 owner ruling the SCOPE side is rect-derived: drawn rects
+// decide the target where they exist, the manual `scopedPct` is the fallback,
+// and `targetPctOf` is still the one place that chooses
+// (docs/plans/2026-08-21-rect-derived-scope-design.md).
 // =============================================================================
 
 import { describe, it, expect } from 'vitest';
@@ -13,11 +18,13 @@ import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_VESSEL_STATE,
   type AppendageConfig,
+  type CoverageRectConfig,
   type CoverageTargets,
   type DomeScanConfig,
   type ScanCompositeConfig,
   type VesselState,
 } from '../../types';
+import { computeCoverage, computeRegionCoveredAreas } from '../coverage-calculator';
 import {
   NEAR_BAND_POINTS,
   computeComparisonRollup,
@@ -25,6 +32,7 @@ import {
   listComparisonFeatures,
   readTargetEntry,
   statusFor,
+  targetPctOf,
   writeTargetEntry,
   type FeatureComparisonRow,
 } from '../coverage-comparison';
@@ -46,11 +54,39 @@ function makeState(overrides: Partial<VesselState> = {}): VesselState {
   return { ...DEFAULT_VESSEL_STATE, ...overrides };
 }
 
+function makeRect(overrides: Partial<CoverageRectConfig> = {}): CoverageRectConfig {
+  return {
+    id: 1,
+    name: 'Rect',
+    pos: 4000,
+    angle: 90,
+    width: 1000,
+    height: 1000,
+    color: '#00ff00',
+    lineWidth: 10,
+    filled: true,
+    fillOpacity: 0.2,
+    ...overrides,
+  };
+}
+
+/**
+ * The default vessel is id 3000 / length 8000, so a 1000×1000 mm rect parked mid
+ * barrel is a pure-cylinder rect covering exactly R·(h/R)·w = 1 m²: the covered
+ * area below is arithmetic, not a snapshot of the sweep.
+ */
+const MAIN_RECT_COVERED_MM2 = 1_000_000;
+/** Boot radius 500 × a 500×500 rect on its lateral cylinder = 0.25 m². */
+const BOOT_RECT_COVERED_MM2 = 250_000;
+
 function makeScan(overrides: Partial<ScanCompositeConfig>): ScanCompositeConfig {
   return {
     id: 'sc',
     name: 'Scan',
-    data: [[8, 8], [8, 8]],
+    data: [
+      [8, 8],
+      [8, 8],
+    ],
     xAxis: [0, 10],
     yAxis: [0, 10],
     stats: { min: 8, max: 8, mean: 8, median: 8, stdDev: 0, validArea: 1_000_000 },
@@ -77,7 +113,10 @@ function makeDomeScan(overrides: Partial<DomeScanConfig>): DomeScanConfig {
     scanDirection: 'cw',
     indexDirection: 'outward',
     orientationConfirmed: true,
-    data: [[8, 8], [8, 8]],
+    data: [
+      [8, 8],
+      [8, 8],
+    ],
     xAxis: [0, 10],
     yAxis: [0, 10],
     stats: { min: 8, max: 8, mean: 8, median: 8, stdDev: 0, validArea: 1_000_000 },
@@ -210,7 +249,9 @@ describe('readTargetEntry / writeTargetEntry', () => {
       { scope: 'appendage', appendageId: 'app-1', slot: 'dome' },
       entry
     );
-    expect(readTargetEntry(dome, { scope: 'appendage', appendageId: 'app-1', slot: 'dome' })).toEqual(entry);
+    expect(
+      readTargetEntry(dome, { scope: 'appendage', appendageId: 'app-1', slot: 'dome' })
+    ).toEqual(entry);
   });
 
   it('returns undefined for a missing entry rather than a zero entry', () => {
@@ -241,13 +282,25 @@ describe('readTargetEntry / writeTargetEntry', () => {
       { scope: 'appendage', appendageId: 'app-1', slot: 'shell' },
       entry
     );
-    targets = writeTargetEntry(targets, { scope: 'appendage', appendageId: 'app-1', slot: 'dome' }, entry);
+    targets = writeTargetEntry(
+      targets,
+      { scope: 'appendage', appendageId: 'app-1', slot: 'dome' },
+      entry
+    );
     expect(Object.keys(targets!.appendages!)).toEqual(['app-1']);
 
-    targets = writeTargetEntry(targets, { scope: 'appendage', appendageId: 'app-1', slot: 'dome' }, undefined);
+    targets = writeTargetEntry(
+      targets,
+      { scope: 'appendage', appendageId: 'app-1', slot: 'dome' },
+      undefined
+    );
     expect(targets!.appendages!['app-1']).toEqual({ shell: entry });
 
-    targets = writeTargetEntry(targets, { scope: 'appendage', appendageId: 'app-1', slot: 'shell' }, undefined);
+    targets = writeTargetEntry(
+      targets,
+      { scope: 'appendage', appendageId: 'app-1', slot: 'shell' },
+      undefined
+    );
     expect(targets).toBeUndefined();
   });
 
@@ -257,8 +310,16 @@ describe('readTargetEntry / writeTargetEntry', () => {
       { scope: 'appendage', appendageId: 'app-1', slot: 'shell' },
       entry
     );
-    targets = writeTargetEntry(targets, { scope: 'appendage', appendageId: 'app-2', slot: 'shell' }, entry);
-    targets = writeTargetEntry(targets, { scope: 'appendage', appendageId: 'app-1', slot: 'shell' }, undefined);
+    targets = writeTargetEntry(
+      targets,
+      { scope: 'appendage', appendageId: 'app-2', slot: 'shell' },
+      entry
+    );
+    targets = writeTargetEntry(
+      targets,
+      { scope: 'appendage', appendageId: 'app-1', slot: 'shell' },
+      undefined
+    );
     expect(targets!.appendages).toEqual({ 'app-2': { shell: entry } });
   });
 
@@ -273,12 +334,14 @@ describe('readTargetEntry / writeTargetEntry', () => {
 // ---------------------------------------------------------------------------
 
 describe('computeComparisonRows', () => {
-  it('marks every feature untracked when the model carries no targets', () => {
+  it('marks every feature untracked when the model carries no targets and no rects', () => {
     const rows = computeComparisonRows(makeState({ appendages: [SUMP] }));
     expect(rows).toHaveLength(5);
     for (const r of rows) {
       expect(r.status).toBe('untracked');
       expect(r.targetPct).toBeUndefined();
+      expect(r.targetSource).toBeUndefined();
+      expect(r.targetMm2).toBeUndefined();
       expect(r.deltaPct).toBeUndefined();
     }
   });
@@ -302,10 +365,13 @@ describe('computeComparisonRows', () => {
     expect(shell.status).toBe('short'); // 1 m² of a multi-m² shell
   });
 
-  it('uses scopedPct as the target and ignores rbaPct entirely', () => {
+  it('uses scopedPct as the target and ignores rbaPct entirely (manual path)', () => {
+    // No rects anywhere, so this is the manual fallback leg — rbaPct is never the
+    // yardstick on EITHER leg (2026-08-21 ruling left that part untouched).
     const state = makeState({ coverageTargets: { cylinder: { rbaPct: 90, scopedPct: 0 } } });
     const shell = computeComparisonRows(state).find((r) => r.key === 'cylinder')!;
     expect(shell.targetPct).toBe(0);
+    expect(shell.targetSource).toBe('manual');
     expect(shell.status).toBe('met');
   });
 
@@ -356,6 +422,200 @@ describe('computeComparisonRows', () => {
     const shell = computeComparisonRows(state).find((r) => r.key === 'app-1:shell')!;
     expect(shell.totalMm2).toBe(0);
     expect(shell.achievedPct).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeRegionCoveredAreas — the mm² projection of the rect sweep
+// ---------------------------------------------------------------------------
+
+describe('computeRegionCoveredAreas', () => {
+  it('is computeCoverage`s regions in mm², not a second calculation', () => {
+    // A rect draping past the left tangent so the head raster contributes too —
+    // the projection must carry that branch, not just the barrel sweep.
+    const state = makeState({
+      coverageRects: [
+        makeRect({ id: 1 }),
+        makeRect({ id: 2, pos: 200, width: 1600, height: 800, angle: 270 }),
+      ],
+    });
+    const expected = computeCoverage(state.coverageRects, state);
+    const covered = computeRegionCoveredAreas(state);
+
+    expect(covered.leftHead).toBeCloseTo(expected.leftHead.covered * 1e6, 6);
+    expect(covered.cylinder).toBeCloseTo(expected.cylinder.covered * 1e6, 6);
+    expect(covered.rightHead).toBeCloseTo(expected.rightHead.covered * 1e6, 6);
+    expect(covered.leftHead).toBeGreaterThan(0); // the drape branch really ran
+  });
+
+  it('measures a mid-barrel rect as its exact unrolled area', () => {
+    const covered = computeRegionCoveredAreas(makeState({ coverageRects: [makeRect()] }));
+    expect(covered.cylinder).toBeCloseTo(MAIN_RECT_COVERED_MM2, 6);
+    expect(covered.leftHead).toBe(0);
+    expect(covered.rightHead).toBe(0);
+  });
+
+  it('is all-zero with no rects, and ignores rects belonging to a boot', () => {
+    expect(computeRegionCoveredAreas(makeState())).toEqual({
+      leftHead: 0,
+      cylinder: 0,
+      rightHead: 0,
+    });
+    // bodyId rects are the boot`s own coverage — never the main shell`s.
+    const bootOnly = makeState({
+      appendages: [SUMP],
+      coverageRects: [makeRect({ bodyId: 'app-1', pos: 750, width: 500, height: 500, angle: 180 })],
+    });
+    expect(computeRegionCoveredAreas(bootOnly)).toEqual({
+      leftHead: 0,
+      cylinder: 0,
+      rightHead: 0,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// targetPctOf — the ONE place a target is decided (2026-08-21 ruling)
+// ---------------------------------------------------------------------------
+
+describe('targetPctOf — resolution order', () => {
+  const entry = { rbaPct: 90, scopedPct: 25 };
+
+  it('derives from rect coverage when there is any, ignoring a stored manual entry', () => {
+    expect(targetPctOf(entry, 250, 1000)).toEqual({ pct: 25, source: 'rects', mm2: 250 });
+    // Same rects, wildly different manual entry → same answer: the entry is inert.
+    expect(targetPctOf({ rbaPct: 0, scopedPct: 99 }, 250, 1000)).toEqual({
+      pct: 25,
+      source: 'rects',
+      mm2: 250,
+    });
+    expect(targetPctOf(undefined, 250, 1000)).toEqual({ pct: 25, source: 'rects', mm2: 250 });
+  });
+
+  it('falls back to the manual scopedPct only when no rect covers the feature', () => {
+    expect(targetPctOf(entry, 0, 1000)).toEqual({ pct: 25, source: 'manual', mm2: 250 });
+  });
+
+  it('is undefined — untracked — with neither rects nor an entry', () => {
+    expect(targetPctOf(undefined, 0, 1000)).toBeUndefined();
+  });
+
+  it('keeps a 0% manual target tracked, distinct from untracked', () => {
+    expect(targetPctOf({ rbaPct: 40, scopedPct: 0 }, 0, 1000)).toEqual({
+      pct: 0,
+      source: 'manual',
+      mm2: 0,
+    });
+  });
+
+  it('never divides by a zero feature area', () => {
+    expect(targetPctOf(undefined, 250, 0)).toEqual({ pct: 0, source: 'rects', mm2: 250 });
+    expect(targetPctOf(entry, 0, 0)).toEqual({ pct: 25, source: 'manual', mm2: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeComparisonRows — rect-derived scope (2026-08-21 ruling)
+// ---------------------------------------------------------------------------
+
+describe('computeComparisonRows — rect-derived scope', () => {
+  it('derives the shell target from its drawn rects when the model has no targets', () => {
+    const state = makeState({ coverageRects: [makeRect()] });
+    const shell = computeComparisonRows(state).find((r) => r.key === 'cylinder')!;
+
+    expect(shell.targetSource).toBe('rects');
+    expect(shell.targetMm2).toBeCloseTo(MAIN_RECT_COVERED_MM2, 6);
+    expect(shell.targetPct).toBeCloseTo((MAIN_RECT_COVERED_MM2 / shell.totalMm2) * 100, 10);
+    // Drawing a rect TRACKS the feature — it is no longer a dash.
+    expect(shell.status).not.toBe('untracked');
+    expect(shell.deltaPct).toBeCloseTo(shell.achievedPct - shell.targetPct!, 10);
+  });
+
+  it('lets rects win over a stored manual scopedPct, leaving the entry inert', () => {
+    const targets: CoverageTargets = { cylinder: { rbaPct: 90, scopedPct: 80 } };
+    const state = makeState({ coverageRects: [makeRect()], coverageTargets: targets });
+    const shell = computeComparisonRows(state).find((r) => r.key === 'cylinder')!;
+
+    expect(shell.targetSource).toBe('rects');
+    expect(shell.targetPct).not.toBeCloseTo(80, 6);
+    expect(shell.targetPct).toBeCloseTo((MAIN_RECT_COVERED_MM2 / shell.totalMm2) * 100, 10);
+    // Inert, not consumed: the manual entry is still sitting in state untouched,
+    // so clearing the rects restores exactly what the planner typed.
+    expect(state.coverageTargets).toEqual(targets);
+    expect(
+      computeComparisonRows(makeState({ coverageTargets: targets })).find(
+        (r) => r.key === 'cylinder'
+      )!
+    ).toMatchObject({ targetPct: 80, targetSource: 'manual' });
+  });
+
+  it('leaves features the rects do not touch on the manual / untracked legs', () => {
+    const state = makeState({
+      coverageRects: [makeRect()], // pure barrel: neither head is covered
+      coverageTargets: { leftHead: { rbaPct: 0, scopedPct: 40 } },
+    });
+    const rows = computeComparisonRows(state);
+
+    expect(rows.find((r) => r.key === 'leftHead')).toMatchObject({
+      targetPct: 40,
+      targetSource: 'manual',
+    });
+    const right = rows.find((r) => r.key === 'rightHead')!;
+    expect(right.targetPct).toBeUndefined();
+    expect(right.targetSource).toBeUndefined();
+    expect(right.status).toBe('untracked');
+  });
+
+  it('reports the manual target as area too, so both legs carry mm²', () => {
+    const state = makeState({ coverageTargets: { cylinder: { rbaPct: 0, scopedPct: 40 } } });
+    const shell = computeComparisonRows(state).find((r) => r.key === 'cylinder')!;
+    expect(shell.targetSource).toBe('manual');
+    expect(shell.targetMm2).toBeCloseTo(0.4 * shell.totalMm2, 6);
+  });
+
+  it("derives a boot SHELL target from that boot's own rects, by bodyId", () => {
+    const state = makeState({
+      appendages: [SUMP],
+      coverageRects: [makeRect({ bodyId: 'app-1', pos: 750, width: 500, height: 500, angle: 180 })],
+    });
+    const rows = computeComparisonRows(state);
+    const bootShell = rows.find((r) => r.key === 'app-1:shell')!;
+
+    expect(bootShell.targetSource).toBe('rects');
+    expect(bootShell.targetMm2).toBeCloseTo(BOOT_RECT_COVERED_MM2, 6);
+    expect(bootShell.targetPct).toBeCloseTo((BOOT_RECT_COVERED_MM2 / bootShell.totalMm2) * 100, 10);
+
+    // The boot's rect belongs to the boot and nowhere else: the main shell and
+    // both heads stay untracked.
+    for (const key of ['leftHead', 'cylinder', 'rightHead']) {
+      expect(rows.find((r) => r.key === key)!.targetSource).toBeUndefined();
+    }
+  });
+
+  it('never rect-derives a boot dome, even when that boot is covered in rects', () => {
+    const state = makeState({
+      appendages: [SUMP],
+      coverageRects: [
+        makeRect({ bodyId: 'app-1', pos: 750, width: 1500, height: 4000, angle: 180 }),
+      ],
+    });
+    const rows = computeComparisonRows(state);
+
+    // No dome-rect raster exists in the engine, so the dome is untracked here…
+    const dome = rows.find((r) => r.key === 'app-1:dome')!;
+    expect(rows.find((r) => r.key === 'app-1:shell')!.targetSource).toBe('rects');
+    expect(dome.targetSource).toBeUndefined();
+    expect(dome.targetPct).toBeUndefined();
+    expect(dome.status).toBe('untracked');
+
+    // …and manual whenever the planner types a number, never the shell's area.
+    const withDomeTarget = computeComparisonRows(
+      makeState({
+        ...state,
+        coverageTargets: { appendages: { 'app-1': { dome: { rbaPct: 0, scopedPct: 30 } } } },
+      })
+    ).find((r) => r.key === 'app-1:dome')!;
+    expect(withDomeTarget).toMatchObject({ targetPct: 30, targetSource: 'manual' });
   });
 });
 
@@ -434,6 +694,36 @@ describe('computeComparisonRollup', () => {
     expect(rollup.achievedPct).toBe(0);
     expect(rollup.targetPct).toBe(0);
     expect(rollup.tracked).toBe(1);
+  });
+
+  it('counts rect-derived rows as tracked and area-weights them like any other', () => {
+    // Shell rect + boot-shell rect, no manual targets anywhere: two derived rows
+    // tracked, three rows (both heads + the boot dome) still untracked.
+    const state = makeState({
+      appendages: [SUMP],
+      coverageRects: [
+        makeRect(),
+        makeRect({ id: 2, bodyId: 'app-1', pos: 750, width: 500, height: 500, angle: 180 }),
+      ],
+    });
+    const rows = computeComparisonRows(state);
+    const rollup = computeComparisonRollup(rows);
+
+    expect(rows.filter((r) => r.targetSource === 'rects')).toHaveLength(2);
+    expect(rollup.tracked).toBe(2);
+    expect(rollup.total).toBe(5);
+
+    const shell = rows.find((r) => r.key === 'cylinder')!;
+    const boot = rows.find((r) => r.key === 'app-1:shell')!;
+    const weighted =
+      ((shell.targetMm2! + boot.targetMm2!) / (shell.totalMm2 + boot.totalMm2)) * 100;
+    expect(rollup.targetPct).toBeCloseTo(weighted, 10);
+    // The untracked heads carry the vessel's biggest untouched areas, and still
+    // contribute nothing — the derived rows did not change that rule.
+    expect(rollup.targetPct).toBeCloseTo(
+      ((MAIN_RECT_COVERED_MM2 + BOOT_RECT_COVERED_MM2) / (shell.totalMm2 + boot.totalMm2)) * 100,
+      10
+    );
   });
 
   it('rolls up real rows end-to-end from a vessel state', () => {
