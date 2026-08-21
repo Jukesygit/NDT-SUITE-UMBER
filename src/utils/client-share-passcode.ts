@@ -27,14 +27,15 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(String.fromCharCode(...bytes));
 }
 
-async function derive(passcode: string, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
-  // WebCrypto's BufferSource wants an ArrayBuffer-backed view; TS's default
-  // Uint8Array is ArrayBufferLike (SharedArrayBuffer included), so the salt is
-  // handed over as its own buffer slice.
-  const saltBuffer = salt.buffer.slice(
-    salt.byteOffset,
-    salt.byteOffset + salt.byteLength
-  ) as ArrayBuffer;
+async function derive(
+  passcode: string,
+  // ArrayBuffer-backed by declaration (not ArrayBufferLike) so the view can be
+  // handed to WebCrypto directly, exactly as the Deno mirror does. A detached
+  // `.buffer.slice()` copy was rejected by Node 20's webcrypto under jsdom
+  // (realm-sensitive instanceof check) while the view form passes everywhere.
+  salt: Uint8Array<ArrayBuffer>,
+  iterations: number
+): Promise<Uint8Array> {
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(passcode),
@@ -43,7 +44,7 @@ async function derive(passcode: string, salt: Uint8Array, iterations: number): P
     ['deriveBits']
   );
   const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', hash: 'SHA-256', salt: saltBuffer, iterations },
+    { name: 'PBKDF2', hash: 'SHA-256', salt, iterations },
     key,
     KEY_BITS
   );
