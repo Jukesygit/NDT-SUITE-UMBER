@@ -3,7 +3,7 @@ import '@testing-library/jest-dom';
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
-  value: vi.fn().mockImplementation(query => ({
+  value: vi.fn().mockImplementation((query) => ({
     matches: false,
     media: query,
     onchange: null,
@@ -26,29 +26,13 @@ global.IntersectionObserver = class IntersectionObserver {
   }
 };
 
-// Mock crypto for tests
-if (!global.crypto) {
-  global.crypto = {
-    getRandomValues: (arr) => {
-      for (let i = 0; i < arr.length; i++) {
-        arr[i] = Math.floor(Math.random() * 256);
-      }
-      return arr;
-    },
-    randomUUID: () => {
-      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-        const r = (Math.random() * 16) | 0;
-        const v = c === 'x' ? r : (r & 0x3) | 0x8;
-        return v.toString(16);
-      });
-    },
-    subtle: {
-      digest: async (algorithm, data) => {
-        // Simple mock implementation
-        return new ArrayBuffer(32);
-      }
-    }
-  };
+// Real WebCrypto for tests. A hand-rolled mock here once stubbed subtle.digest
+// only, so environments where jsdom lacks `crypto` (CI's Node 20 runner) threw
+// on importKey/deriveBits while local Node 22 — where the global exists — used
+// the real thing. Node's webcrypto keeps both environments on real crypto.
+if (!global.crypto?.subtle) {
+  const { webcrypto } = await import('node:crypto');
+  Object.defineProperty(global, 'crypto', { value: webcrypto, configurable: true });
 }
 
 // Mock localStorage
@@ -73,10 +57,7 @@ global.sessionStorage = sessionStorageMock;
 const originalError = console.error;
 beforeAll(() => {
   console.error = (...args) => {
-    if (
-      typeof args[0] === 'string' &&
-      args[0].includes('Warning: ReactDOM.render')
-    ) {
+    if (typeof args[0] === 'string' && args[0].includes('Warning: ReactDOM.render')) {
       return;
     }
     originalError.call(console, ...args);

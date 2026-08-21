@@ -9,22 +9,28 @@
 // Pure: no THREE, no React, no scene access. Entity SELECT_* descriptors reuse
 // the outliner vocabulary (OutlinerSelectAction); the optional `frame` ref reuses
 // frame-entity's FrameEntityRef so a select can fly the camera. Both are imported
-// as types only, so this module stays free of THREE and safe to unit-test alone.
+// as types only, so this module stays free of THREE and safe to unit-test alone
+// — as is LAYER_CATEGORIES, the one layer vocabulary, whose module is likewise
+// THREE-free.
 // =============================================================================
 
 import type { VesselState } from '../types';
-import type { OutlinerSelectAction } from '../outliner-tree';
+import { LAYER_CATEGORIES, type LayerKey, type OutlinerSelectAction } from '../outliner-tree';
 import type { FrameEntityRef } from './frame-entity';
 import type { CanonicalViewId } from './canonical-views';
 
-/** The transient/UI toggles the palette can flip (mirrors the reducer actions). */
+/**
+ * The transient/UI toggles the palette can flip (mirrors the reducer actions).
+ * `layer:<category>` flips that category's layer across EVERY body — the palette
+ * has no body context, so per-body layer control stays in the Layers panel.
+ */
 export type PaletteToggle =
   | 'snap'
   | 'tidy'
   | 'outliner'
   | 'statsCoverage'
   | 'statsWallLoss'
-  | 'statsScanCoverage';
+  | `layer:${LayerKey}`;
 
 export type PaletteViewMode = '3d' | 'flattened' | 'topo';
 
@@ -46,6 +52,9 @@ export interface PaletteItem {
   /** Extra search terms (name, id, type word, body name, synonyms). */
   keywords: string[];
   action: PaletteAction;
+  /** Omitted from the empty-query default list (still fully searchable) — keeps
+   *  low-frequency command families from crowding entities out of the cap. */
+  searchOnly?: boolean;
 }
 
 export interface PaletteContext {
@@ -240,8 +249,21 @@ export function buildPaletteItems(state: VesselState, ctx: PaletteContext): Pale
   });
 
   // --- Commands: canonical views ---
-  const command = (id: string, label: string, keywords: string[], action: PaletteAction): void => {
-    items.push({ id, kind: 'command', label, keywords: clean(keywords), action });
+  const command = (
+    id: string,
+    label: string,
+    keywords: string[],
+    action: PaletteAction,
+    searchOnly?: boolean
+  ): void => {
+    items.push({
+      id,
+      kind: 'command',
+      label,
+      keywords: clean(keywords),
+      action,
+      ...(searchOnly ? { searchOnly } : {}),
+    });
   };
 
   const VIEWS: { view: CanonicalViewId; label: string; kw: string[] }[] = [
@@ -273,23 +295,57 @@ export function buildPaletteItems(state: VesselState, ctx: PaletteContext): Pale
   }
 
   // --- Commands: toggles ---
-  const TOGGLES: { toggle: PaletteToggle; label: string; kw: string[] }[] = [
+  const TOGGLES: { toggle: PaletteToggle; label: string; kw: string[]; searchOnly?: boolean }[] = [
     { toggle: 'snap', label: 'Toggle angle snap', kw: ['snap', 'angle'] },
     { toggle: 'tidy', label: 'Toggle tidy labels', kw: ['tidy', 'labels', 'table'] },
     { toggle: 'outliner', label: 'Toggle outliner', kw: ['outliner', 'tree', 'entities'] },
-    { toggle: 'statsCoverage', label: 'Toggle coverage stats', kw: ['coverage', 'stats'] },
+    // ONE coverage-stats entry since the three sections merged (design
+    // 2026-08-21). It keeps the old comparison entry's search terms so
+    // "scope" / "target" / "achieved" / "scan coverage" still land here, and
+    // stays out of searchOnly so it shows in the empty-query default list.
+    {
+      toggle: 'statsCoverage',
+      label: 'Toggle coverage stats',
+      kw: [
+        'coverage',
+        'stats',
+        'scan coverage',
+        'comparison',
+        'target',
+        'scope',
+        'rba',
+        'achieved',
+      ],
+    },
     {
       toggle: 'statsWallLoss',
       label: 'Toggle wall-loss stats',
       kw: ['wall loss', 'wall-loss', 'stats'],
     },
-    {
-      toggle: 'statsScanCoverage',
-      label: 'Toggle scan-coverage stats',
-      kw: ['scan coverage', 'stats'],
-    },
+    // One per layer category, each flipping that category on every body — so the
+    // coverage entry IS the coverage master (same semantics as Shift+C), which is
+    // why there is no separate master command here. Labels always say "layer":
+    // `coverage` also names a draw mode, so a bare "Toggle coverage" is ambiguous.
+    // Only the coverage entry appears in the empty-query default list; the other
+    // eleven are search-only so the layer family doesn't crowd entities out of
+    // PALETTE_RESULT_CAP (they'd otherwise displace every entity slot).
+    ...LAYER_CATEGORIES.map((c) => ({
+      toggle: `layer:${c.key}` as PaletteToggle,
+      label: `Toggle ${c.label.toLowerCase()} layer`,
+      searchOnly: c.key !== 'coverage',
+      kw: [
+        'layer',
+        c.key,
+        c.label.toLowerCase(),
+        'visibility',
+        'hide',
+        'show',
+        ...(c.key === 'coverage' ? ['master', 'shift+c'] : []),
+      ],
+    })),
   ];
-  for (const t of TOGGLES) command(`cmd:toggle:${t.toggle}`, t.label, t.kw, { toggle: t.toggle });
+  for (const t of TOGGLES)
+    command(`cmd:toggle:${t.toggle}`, t.label, t.kw, { toggle: t.toggle }, t.searchOnly);
 
   // --- Commands: undo / redo ---
   command('cmd:undo', 'Undo', ['undo', 'back'], { undo: true });
@@ -334,7 +390,7 @@ function scoreItem(item: PaletteItem, q: string): number {
 export function filterPaletteItems(items: PaletteItem[], query: string): PaletteItem[] {
   const q = query.trim().toLowerCase();
   if (!q) {
-    const commands = items.filter((i) => i.kind === 'command');
+    const commands = items.filter((i) => i.kind === 'command' && !i.searchOnly);
     const entities = items.filter((i) => i.kind === 'entity');
     return [...commands, ...entities].slice(0, PALETTE_RESULT_CAP);
   }

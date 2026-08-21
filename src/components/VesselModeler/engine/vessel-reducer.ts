@@ -28,6 +28,7 @@ import {
   type HistoryMeta,
 } from './vessel-history';
 import { DEFAULT_CLIP_CONFIG, type ClipConfig } from './clip-planes';
+import type { LayerVisibility } from './layer-visibility';
 
 export interface SelectionState {
   nozzleIndex: number;
@@ -73,9 +74,13 @@ export interface UIState {
   viewingInspectionImageId: number;
   viewMode: '3d' | 'flattened' | 'topo';
   labelsTidied: boolean;
+  /**
+   * The ONE merged coverage stats section — RBA · Scoped · Achieved · Δ
+   * (design 2026-08-21; collapsed from the former coverage / scan-coverage /
+   * comparison trio). Transient: never serialized, no history.
+   */
   showStatsCoverage: boolean;
   showStatsWallLoss: boolean;
-  showStatsScanCoverage: boolean;
   hoverData: { thickness: number | null; scanMm: number; indexMm: number } | null;
   scanTooltipFollow: boolean;
   /** Whether drag angle-snapping is enabled (nozzles + lifting lugs) */
@@ -88,6 +93,11 @@ export interface UIState {
   paletteOpen: boolean;
   /** Section clip-plane config (transient — never serialized, no history). */
   clip: ClipConfig;
+  /**
+   * Layer visibility overlay (transient — never serialized, no history).
+   * Key `${bodyKey}/${categoryKey}`; ABSENT ⇒ visible, so the default is `{}`.
+   */
+  layers: LayerVisibility;
   /** ID of annotation being inspected (null = not in inspection mode) */
   inspectingAnnotationId: number | null;
   /** Camera state saved before entering inspection mode */
@@ -149,13 +159,13 @@ export const INITIAL_STATE: VesselModelerState = {
     outlinerOpen: false,
     paletteOpen: false,
     clip: DEFAULT_CLIP_CONFIG,
+    layers: {},
     inspectingAnnotationId: null,
     savedCameraState: null,
     viewMode: '3d',
     labelsTidied: false,
     showStatsCoverage: false,
     showStatsWallLoss: false,
-    showStatsScanCoverage: false,
   },
   history: createEmptyHistory(),
 };
@@ -242,6 +252,7 @@ export type VesselAction =
   | { type: 'TOGGLE_OUTLINER' }
   | { type: 'SET_PALETTE_OPEN'; open: boolean }
   | { type: 'SET_CLIP'; clip: Partial<ClipConfig> }
+  | { type: 'SET_LAYERS'; layers: LayerVisibility }
   | { type: 'TOGGLE_SNAP' }
   | { type: 'SET_SNAP_DEG'; deg: number }
   | { type: 'CANCEL_ALL_DRAW_MODES' }
@@ -261,7 +272,6 @@ export type VesselAction =
   | { type: 'TOGGLE_LABELS_TIDIED'; history?: HistoryControl }
   | { type: 'TOGGLE_STATS_COVERAGE' }
   | { type: 'TOGGLE_STATS_WALL_LOSS' }
-  | { type: 'TOGGLE_STATS_SCAN_COVERAGE' }
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'UNDO_TO'; index: number }
@@ -410,6 +420,20 @@ export function vesselReducer(state: VesselModelerState, action: VesselAction): 
       // the resulting ui.clip identity is what the viewport effect keys on, so it
       // must only change when a clip field actually changes.
       return { ...state, ui: { ...state.ui, clip: { ...state.ui.clip, ...action.clip } } };
+    case 'SET_LAYERS': {
+      // Transient UI only — never serialized, records no history entry. Partial
+      // merge over the sparse map so a caller dispatches just the keys it owns;
+      // the resulting ui.layers identity is what the viewport's visibility effect
+      // keys on, so it must only change when a layer's RESOLVED visibility flips
+      // (absent and `true` both mean visible — patching an absent key to `true`
+      // is a no-op and must not churn the identity).
+      const current = state.ui.layers;
+      const flipped = Object.entries(action.layers).some(
+        ([key, next]) => (current[key] !== false) !== (next !== false)
+      );
+      if (!flipped) return state;
+      return { ...state, ui: { ...state.ui, layers: { ...current, ...action.layers } } };
+    }
     case 'TOGGLE_SNAP':
       return { ...state, ui: { ...state.ui, snapEnabled: !state.ui.snapEnabled } };
     case 'SET_SNAP_DEG':
@@ -475,11 +499,6 @@ export function vesselReducer(state: VesselModelerState, action: VesselAction): 
       return { ...state, ui: { ...state.ui, showStatsCoverage: !state.ui.showStatsCoverage } };
     case 'TOGGLE_STATS_WALL_LOSS':
       return { ...state, ui: { ...state.ui, showStatsWallLoss: !state.ui.showStatsWallLoss } };
-    case 'TOGGLE_STATS_SCAN_COVERAGE':
-      return {
-        ...state,
-        ui: { ...state.ui, showStatsScanCoverage: !state.ui.showStatsScanCoverage },
-      };
     case 'UNDO': {
       const result = undoStep(state.history, state.vessel);
       return result ? withRestoredVessel(state, result) : state;

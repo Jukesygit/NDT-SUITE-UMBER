@@ -247,6 +247,24 @@ describe('filterPaletteItems', () => {
     expect(results[0].kind).toBe('command');
   });
 
+  it('empty query omits search-only layer commands but keeps the coverage master and entities', () => {
+    const items = buildPaletteItems(makeVessel(), { topoEnabled: true });
+    const results = filterPaletteItems(items, '');
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain('cmd:toggle:layer:coverage');
+    expect(ids).not.toContain('cmd:toggle:layer:welds');
+    expect(ids).not.toContain('cmd:toggle:layer:annotations');
+    // Entities are no longer crowded out of the default list by the layer family.
+    expect(results.some((r) => r.kind === 'entity')).toBe(true);
+  });
+
+  it('search still reaches every layer command', () => {
+    const items = buildPaletteItems(makeVessel(), { topoEnabled: true });
+    const ids = filterPaletteItems(items, 'layer').map((r) => r.id);
+    expect(ids).toContain('cmd:toggle:layer:welds');
+    expect(ids).toContain('cmd:toggle:layer:coverage');
+  });
+
   it('caps a broad match at PALETTE_RESULT_CAP', () => {
     const nozzles = Array.from({ length: 40 }, (_, i) => ({
       id: `noz-${i + 1}`,

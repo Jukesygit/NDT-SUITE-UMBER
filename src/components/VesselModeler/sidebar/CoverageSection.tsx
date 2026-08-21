@@ -1,8 +1,10 @@
 import React from 'react';
 import { Trash2, Square, Plus, Lock, Unlock, Copy } from 'lucide-react';
-import type { VesselState, CoverageRectConfig } from '../types';
+import type { CoverageTargets, VesselState, CoverageRectConfig } from '../types';
 import { SubSection } from './SliderRow';
 import { MountedOnChip } from './MountedOnChip';
+import { CoverageTargetsEditor } from './CoverageTargetsEditor';
+import { CoverageRectMetaFields } from './CoverageRectMetaFields';
 
 export interface CoverageSectionProps {
   vesselState: VesselState;
@@ -14,6 +16,12 @@ export interface CoverageSectionProps {
   onSelectCoverageRect: (id: number) => void;
   selectedCoverageRectId: number;
   getNextCoverageRectId: () => number;
+  /** Per-feature coverage targets (undoable vessel state) — edited here only. */
+  onUpdateCoverageTargets: (
+    targets: CoverageTargets | undefined,
+    featureKey?: string,
+    field?: string
+  ) => void;
   isOpen?: boolean;
   onToggle?: () => void;
 }
@@ -28,6 +36,7 @@ export function CoverageSection({
   onSelectCoverageRect,
   selectedCoverageRectId,
   getNextCoverageRectId,
+  onUpdateCoverageTargets,
   isOpen,
   onToggle,
 }: CoverageSectionProps) {
@@ -81,7 +90,7 @@ export function CoverageSection({
       onToggle={onToggle}
     >
       <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', margin: '0 0 8px 0' }}>
-        Draw or add rectangles to track shell coverage
+        Drawn rectangles define the scoped coverage for each feature
       </p>
       <div className="vm-toggle-group" style={{ marginBottom: 10 }}>
         <button
@@ -99,6 +108,8 @@ export function CoverageSection({
           <Plus size={14} /> Add
         </button>
       </div>
+
+      <CoverageTargetsEditor vesselState={vesselState} onUpdateTargets={onUpdateCoverageTargets} />
 
       {/* Coverage rect list */}
       {vesselState.coverageRects.map((r) => {
@@ -316,6 +327,7 @@ export function CoverageSection({
                     />
                   </div>
                 )}
+                <CoverageRectMetaFields rect={sel} onUpdate={onUpdateCoverageRect} />
                 <p
                   style={{
                     fontSize: '0.65rem',

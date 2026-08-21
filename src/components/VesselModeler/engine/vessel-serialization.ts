@@ -138,6 +138,33 @@ function deserializeReferenceDrawing(d: RawItem): RawItem {
   };
 }
 
+/**
+ * Coverage targets load as an opaque object EXCEPT for one shape migration: the
+ * per-appendage value used to be a bare `CoverageTargetEntry` and is now
+ * `{ shell, dome? }` (design 2026-08-17). Saves written before that split are
+ * normalized here — bare entry ⇒ `{ shell: entry }` — so runtime state carries
+ * exactly one shape. The persisted KEYS (leftHead / cylinder / rightHead /
+ * appendages) are unchanged, and a payload already in the new shape passes
+ * through untouched (byte-identical re-save).
+ */
+function normalizeCoverageTargets(raw: unknown): VesselState['coverageTargets'] {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const targets = raw as Record<string, unknown>;
+  const appendages = targets.appendages;
+  if (!appendages || typeof appendages !== 'object') {
+    return targets as unknown as VesselState['coverageTargets'];
+  }
+
+  const normalized: Record<string, unknown> = {};
+  for (const [id, value] of Object.entries(appendages as Record<string, unknown>)) {
+    if (!value || typeof value !== 'object') continue;
+    // A legacy bare entry is recognised by its own scalar keys; the current
+    // shape is recognised by `shell`.
+    normalized[id] = 'shell' in value ? value : { shell: value };
+  }
+  return { ...targets, appendages: normalized } as unknown as VesselState['coverageTargets'];
+}
+
 // ---------------------------------------------------------------------------
 // Serialize
 // ---------------------------------------------------------------------------
@@ -310,8 +337,8 @@ export function deserializeVesselState(
     wallLossGroups: raw.wallLossGroups as VesselState['wallLossGroups'],
     // Coverage targets restore as an opaque object (undefined for legacy models;
     // the consumer defaults via `?? DEFAULT_TARGETS`). The nested `appendages`
-    // map round-trips with it.
-    coverageTargets: raw.coverageTargets as VesselState['coverageTargets'],
+    // map round-trips with it, normalized to the `{ shell, dome? }` value shape.
+    coverageTargets: normalizeCoverageTargets(raw.coverageTargets),
   };
 
   // The cloud load mapper (applyModelConfig) restored these three; the local

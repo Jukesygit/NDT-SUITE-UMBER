@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
-import { ChevronRight, ChevronDown, Eye, EyeOff, Lock, ListTree, X } from 'lucide-react';
+import { ChevronRight, ChevronDown, Eye, EyeOff, Lock, Layers, X } from 'lucide-react';
 import type { VesselState } from './types';
 import type { SelectionState } from './engine/vessel-reducer';
+import type { LayerVisibility } from './engine/layer-visibility';
 import {
   buildOutlinerTree,
+  type LayerKey,
   type OutlinerSelectAction,
   type OutlinerToggleRef,
 } from './outliner-tree';
@@ -11,6 +13,8 @@ import {
 interface OutlinerPanelProps {
   vesselState: VesselState;
   selection: SelectionState;
+  /** Layer overlay (`ui.layers`); ABSENT key ⇒ visible. */
+  layers?: LayerVisibility;
   /** Sidebar overlays the viewport's left 340px — offset beside it when open. */
   sidebarOpen: boolean;
   /** Close the whole panel (toolbar toggle). */
@@ -19,24 +23,34 @@ interface OutlinerPanelProps {
   onSelect: (action: OutlinerSelectAction) => void;
   /** Route a per-row / per-body visibility toggle to its owning hook callback. */
   onToggleVisible: (ref: OutlinerToggleRef) => void;
+  /** Flip one body's slice of one category layer. */
+  onToggleLayer: (bodyKey: string, categoryKey: LayerKey) => void;
 }
 
 /**
- * Entity outliner (C13b) — a collapsible floating panel on the left edge of the
- * 3D viewport. Renders the body → category → row tree from `outliner-tree.ts`.
- * Row click dispatches the row's SELECT_* action; the Eye button toggles visual
- * visibility (visual only — stats are never filtered). Body/category collapse is
- * local component state. Rendered by VesselModeler in viewMode === '3d' only.
+ * Layers panel (the C13b outliner, repurposed) — a collapsible floating panel on
+ * the left edge of the 3D viewport. Renders the body → category → row tree from
+ * `outliner-tree.ts`. Row click dispatches the row's SELECT_* action; the row Eye
+ * toggles that entity, the category Eye toggles the whole layer for that body.
+ * Both are visual only — stats are never filtered. A row inside a hidden layer
+ * renders dimmed but keeps its own eye functional (the two flags are independent
+ * and compose). Body/category collapse is local component state. Rendered by
+ * VesselModeler in viewMode === '3d' only.
  */
 export default function OutlinerPanel({
   vesselState,
   selection,
+  layers,
   sidebarOpen,
   onClose,
   onSelect,
   onToggleVisible,
+  onToggleLayer,
 }: OutlinerPanelProps) {
-  const tree = useMemo(() => buildOutlinerTree(vesselState, selection), [vesselState, selection]);
+  const tree = useMemo(
+    () => buildOutlinerTree(vesselState, selection, layers),
+    [vesselState, selection, layers]
+  );
 
   // Collapsed keys (default: everything expanded). Bodies keyed by body key;
   // categories keyed by `${bodyKey}/${categoryKey}` for cross-body uniqueness.
@@ -58,16 +72,16 @@ export default function OutlinerPanel({
       className="vm-outliner"
       style={{ left: sidebarOpen ? 354 : 14 }}
       role="tree"
-      aria-label="Entity outliner"
+      aria-label="Layers"
     >
       <div className="vm-outliner__header">
-        <ListTree size={13} />
-        <span className="vm-outliner__title">Outliner</span>
+        <Layers size={13} />
+        <span className="vm-outliner__title">Layers</span>
         <button
           className="vm-outliner__close"
           onClick={onClose}
-          title="Close outliner"
-          aria-label="Close outliner"
+          title="Close layers"
+          aria-label="Close layers"
         >
           <X size={13} />
         </button>
@@ -115,14 +129,31 @@ export default function OutlinerPanel({
                   const catCollapsed = isCollapsed(catKey);
                   return (
                     <div key={catKey} className="vm-outliner__cat">
-                      <button
-                        className="vm-outliner__cat-head"
-                        onClick={() => toggleCollapsed(catKey)}
-                      >
-                        {catCollapsed ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
-                        <span className="vm-outliner__cat-label">{cat.label}</span>
+                      <div className={`vm-outliner__cat-head ${cat.visible ? '' : 'is-hidden'}`}>
+                        <button
+                          className="vm-outliner__twisty"
+                          onClick={() => toggleCollapsed(catKey)}
+                          aria-label={catCollapsed ? 'Expand layer' : 'Collapse layer'}
+                        >
+                          {catCollapsed ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
+                        </button>
+                        <span
+                          className="vm-outliner__cat-label"
+                          onClick={() => toggleCollapsed(catKey)}
+                        >
+                          {cat.label}
+                        </span>
                         <span className="vm-outliner__count">{cat.rows.length}</span>
-                      </button>
+                        <button
+                          className="vm-btn-icon vm-outliner__eye"
+                          onClick={() => onToggleLayer(body.key, cat.key)}
+                          title={cat.visible ? 'Hide layer' : 'Show layer'}
+                          aria-label={cat.visible ? 'Hide layer' : 'Show layer'}
+                          style={eyeStyle(cat.visible)}
+                        >
+                          {cat.visible ? <Eye size={11} /> : <EyeOff size={11} />}
+                        </button>
+                      </div>
 
                       {!catCollapsed &&
                         cat.rows.map((row) => (
@@ -132,7 +163,9 @@ export default function OutlinerPanel({
                             onClick={() => onSelect(row.selectAction)}
                           >
                             <span
-                              className={`vm-outliner__row-label ${row.visible ? '' : 'is-hidden'}`}
+                              className={`vm-outliner__row-label ${
+                                row.visible && cat.visible ? '' : 'is-hidden'
+                              }`}
                               title={row.label}
                             >
                               {row.label}

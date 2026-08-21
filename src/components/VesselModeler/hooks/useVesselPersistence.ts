@@ -23,6 +23,7 @@ import type { VesselAction } from '../engine/vessel-reducer';
 import type { AuthUser } from '../../../contexts/AuthContext';
 import type { VesselModelRecord } from '../../../services/vessel-model-service';
 import { loadTextureFromData, clearHeatmapCache } from '../engine/texture-manager';
+import { hydrateSavedTextures, emptyHydratedTextures } from '../engine/texture-hydration';
 import { clearDomeHeatmapCache } from '../engine/dome-scan-geometry';
 import { serializeVesselState, deserializeVesselState } from '../engine/vessel-serialization';
 import { exportVesselGLB } from '../engine/gltf-export';
@@ -132,36 +133,21 @@ export function useVesselPersistence({
     }
     textureObjectsRef.current = {};
 
-    // Reconstruct Three.js textures
+    // Reconstruct Three.js textures. `hydrateSavedTextures` is the shared
+    // config+THREE pair builder (engine/texture-hydration.ts) — the read-only
+    // viewer's query hook loads the same payloads through it. The renderer guard
+    // stays here: with no renderer the modeler loads no texture overlays at all.
     const renderer = viewportRef.current?.getRenderer();
-    const loadedTextures: TextureConfig[] = [];
     const savedTextures = projectData.textures || [];
-
-    if (renderer && savedTextures.length > 0) {
-      for (const texData of savedTextures) {
-        if (!texData.imageData) continue;
-        try {
-          const result = await loadTextureFromData(texData.imageData, renderer);
-          textureObjectsRef.current[Number(texData.id)] = result.texture;
-          loadedTextures.push({
-            id: texData.id,
-            name: texData.name || 'Untitled',
-            imageData: texData.imageData,
-            pos: texData.pos ?? 0,
-            angle: texData.angle ?? 90,
-            scaleX: texData.scaleX ?? 1.0,
-            scaleY: texData.scaleY ?? 1.0,
-            rotation: texData.rotation || 0,
-            flipH: texData.flipH || false,
-            flipV: texData.flipV || false,
-            aspectRatio: result.aspectRatio,
-            visible: texData.visible,
-          });
-        } catch {
-          // Skip textures that fail to load
-        }
-      }
-    }
+    const hydrated =
+      renderer && savedTextures.length > 0
+        ? await hydrateSavedTextures(savedTextures, renderer)
+        : emptyHydratedTextures();
+    const loadedTextures: TextureConfig[] = hydrated.configs;
+    // Fresh object (the map was emptied above): the viewport detects texture
+    // changes by ref identity, exactly as the original in-place fill + version
+    // bump did.
+    textureObjectsRef.current = hydrated.objects;
 
     // Single field-spec deserializer (engine/vessel-serialization.ts). Textures
     // are reconstructed above (async/renderer-bound) and passed in; everything
