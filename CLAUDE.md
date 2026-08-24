@@ -30,7 +30,7 @@ Skip this workflow only for tiny mechanical requests where reading memory would 
 When a Claude Code session runs on Claude Fable 5, Fable is the **orchestrator and design lead** for every request:
 
 - Fable keeps the high-level work: requirements, architecture/design decisions, task decomposition, cross-agent integration, and final review.
-- Implementation is delegated to subagents by complexity: **opus** for complex tasks (feature code, multi-file refactors, engine/math work), **sonnet** for simple/mechanical tasks (research, search, inventories, renames, verification runs).
+- Implementation is delegated to **opus subagents only** — all delegated work (feature code, refactors, engine/math work, research, search, inventories, renames, verification runs) runs on opus. **Never use sonnet agents** (user rule 2026-08-17; sonnet agents repeatedly die with context-overflow errors in this repo).
 - Before ending any request, Fable verifies every deliverable against the original ask with evidence (build/test/lint output) so the deliverables are met every time.
 
 Full rules of engagement live in `.claude/CLAUDE.md` (Agent Orchestration Policy section); the policy is also injected per-prompt by the hook in `.claude/settings.json`.

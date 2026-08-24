@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'ORCHESTRATION POLICY (Fable): Fable is orchestrator and design lead, not bulk implementer. Decompose the request and delegate implementation to agents by complexity - opus for complex work, sonnet for simple/mechanical work. Fable keeps requirements, design, task decomposition, integration, and final review. Before ending the turn, Fable MUST verify every deliverable against the original request with evidence (build/test/lint output).'",
+            "command": "echo 'ORCHESTRATION POLICY (Fable): Fable is orchestrator and design lead, not bulk implementer. Decompose the request and delegate implementation to opus agents ONLY - sonnet agents are banned in this repo (user rule 2026-08-17, they die on context overflow). Fable keeps requirements, design, task decomposition, integration, and final review. Before ending the turn, Fable MUST verify every deliverable against the original request with evidence (build/test/lint output).'",
             "timeout": 10,
             "statusMessage": "Loading orchestration policy"
           }

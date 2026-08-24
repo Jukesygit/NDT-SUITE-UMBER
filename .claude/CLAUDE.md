@@ -8,17 +8,17 @@ Role split:
 
 - **Fable (main loop) — high-level work only:** requirements clarification, architecture and design decisions, design docs in `docs/plans/`, task decomposition, delegation, cross-agent integration, final review/synthesis, and deliverable verification. Fable writes code directly only for small surgical edits (single-file, few-line changes).
 - **Opus agents** (`model: "opus"` via the Agent/Workflow tools) — complex tasks: code implementation, new features, multi-file refactors, geometry/math-heavy engine work, subtle debugging, and the tests that accompany those changes.
-- **Sonnet agents** (`model: "sonnet"`) — simple/mechanical tasks: research, code search and exploration, file/usage inventories, documentation lookups, mechanical edits (renames, boilerplate), and verification runs (build/test/lint).
+- **Simple/mechanical tasks** (research, code search and exploration, file/usage inventories, documentation lookups, mechanical edits, verification runs) are still delegated — but also to **opus agents**. **Sonnet agents are banned** (user rule 2026-08-17): they repeatedly died with "Prompt is too long" context overflows in this repo (2026-08-12, 2026-08-17).
 
-Delegation rule: pick the tier by task complexity, not convenience. If the task needs design judgment mid-flight, it goes to opus; if it is well-specified and mechanical, it goes to sonnet. Neither tier makes design decisions — those stay with Fable.
+Delegation rule: there is one delegation tier — opus. Size the task, not the model. Agents never make design decisions — those stay with Fable.
 
 Rules of engagement:
 
-1. For every non-trivial request: Fable decomposes the work into delegable tasks and names the intended tier (opus/sonnet) for each before dispatching. For substantial features, a design doc in `docs/plans/` comes first, then a phased implementation plan.
+1. For every non-trivial request: Fable decomposes the work into delegable tasks before dispatching (all agents run on opus). For substantial features, a design doc in `docs/plans/` comes first, then a phased implementation plan.
 2. Fan out independent tasks in parallel; keep dependent tasks sequential.
 3. Every implementation task delegated to an agent must state: files in scope, the design constraint it serves, and the verification command to run.
 4. Fable reviews agent output against the design before integrating; discrepancies go back to the agent, not silently patched.
-5. **Deliverable verification gate (mandatory, every request):** before ending a request, Fable re-reads the original ask, confirms each requested deliverable exists and works, and runs (or delegates to a sonnet agent) the relevant verification commands — `npm run build`, `npm run test`, `npm run lint` as applicable. Completion is claimed only with the verification evidence in hand; failures are reported honestly, never papered over.
+5. **Deliverable verification gate (mandatory, every request):** before ending a request, Fable re-reads the original ask, confirms each requested deliverable exists and works, and runs (or delegates to an opus agent) the relevant verification commands — `npm run build`, `npm run test`, `npm run lint` as applicable. Completion is claimed only with the verification evidence in hand; failures are reported honestly, never papered over.
 6. The user has standing-approved multi-agent Workflow orchestration for vessel-modeler feature work of this kind; still confirm before unusually large runs (~30+ agents).
 7. **Subagents never run git state-changing commands** (`stash`, `checkout`, `switch`, `merge`, `reset`, `rebase`, `commit`, `push`, `restore`) — read-only git (`status`, `diff`, `log`, `show`) is fine. All repository state changes stay with Fable in the main loop, and every implementation-agent prompt must state this prohibition explicitly. Additionally, **branch switches/merges in the shared working tree are forbidden for everyone while another session may be active** — do repo-state surgery (merges, conflict resolution) in an isolated `git worktree` instead. (Scar 2026-08-10: a concurrent Claude session's main loop stashed this session's WIP, checked out `master`, and started a merge in the shared tree, leaving a conflicted tree that broke the running dev app; the merge was then redone safely in an isolated worktree.)
 
@@ -34,7 +34,7 @@ The only third-party skill pack in use is `mattpocock-skills@mattpocock` (the su
 - **Research legwork:** `research` (captures findings as Markdown in the repo).
 - **One-time setup:** `setup-matt-pocock-skills` configures the issue tracker, triage labels, and domain doc layout — run it before first use of the engineering skills (this repo is on GitLab; `glab` CLI is installed).
 
-Division of labour stays per the orchestration policy: Fable drives the grilling/spec/design/review skills itself (high-level work); implementation steps inside `implement`, `tdd`, and similar are delegated to opus agents, and mechanical verification runs to sonnet agents.
+Division of labour stays per the orchestration policy: Fable drives the grilling/spec/design/review skills itself (high-level work); implementation steps inside `implement`, `tdd`, and similar are delegated to opus agents; mechanical verification runs also go to opus agents (never sonnet).
 
 ## Mandatory Memory Workflow
 
