@@ -1,3 +1,45 @@
+-- #############################################################################
+-- ##  DEPRECATED — DO NOT RUN  ################################################
+-- ##  (security audit 2026-08-12, finding L5 — docs/security-audit-2026-08-12.md)
+-- #############################################################################
+--
+-- This script is a 2026-02-25 snapshot of pg_policies. Re-running it now REVERTS
+-- security fixes that landed after that snapshot. Concretely, it re-introduces:
+--
+--   1. PUBLIC AVATAR READ.
+--      Line ~1064: CREATE POLICY "Anyone can view avatars" ON storage.objects
+--      FOR SELECT TO public USING (bucket_id = 'avatars') — undoes the 2026-02
+--      pen-test fix (database/migrations/security-audit-fix-2026-02.sql:52-59)
+--      that dropped exactly this policy and replaced it with an
+--      authenticated-only one. See also audit finding M11.
+--
+--   2. CLIENT-WRITABLE ACTIVITY LOG.
+--      Line ~296: CREATE POLICY "Authenticated users can log activity" ON
+--      activity_log FOR INSERT TO authenticated — this exact policy name is
+--      DROPped, and INSERT/UPDATE/DELETE on activity_log is REVOKEd from
+--      `authenticated`, by 20260626150000_activity_log_integrity.sql:88-91. The
+--      audit trail is server-authoritative and immutable by design; restoring a
+--      client INSERT path breaks that control.
+--
+--   3. BROKEN super_admin / manager DOCUMENT REVIEW.
+--      Line ~1120: CREATE POLICY "Users can view their own competency documents"
+--      ON storage.objects with a privileged branch of role = 'admin' ONLY.
+--      20260629120000_fix_competency_document_storage_policies.sql added
+--      super_admin and manager to that branch; re-running this script re-breaks
+--      competency document review with 403/400s (known repo scar).
+--
+--   Bonus regression: line ~1052 also recreates the un-org-scoped
+--   "Users can view controlled documents" storage policy — i.e. audit finding
+--   H1 itself, which 20260812121000_controlled_docs_storage_org_scope.sql fixes.
+--
+-- KEPT FOR FORENSIC REFERENCE ONLY: this file documents what the policy set
+-- looked like on 2026-02-25 and is useful when reconstructing history. It is NOT
+-- a runnable recovery path. The authoritative policy set is the migration chain
+-- in supabase/migrations/ (plus the live pg_policies dump — audit finding M12).
+-- If a recovery script is genuinely needed, generate a fresh one from current
+-- production pg_policies; do not run this one.
+-- #############################################################################
+
 -- =============================================================================
 -- RESTORE RLS POLICIES FROM CSV EXPORT
 -- =============================================================================

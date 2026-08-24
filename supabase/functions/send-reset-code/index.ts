@@ -4,8 +4,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
+import { maskEmail } from '../_shared/audit.ts'
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
+
+// SECURITY (audit M9): user-enumeration oracle.
+// Every request that passes shape validation resolves to this exact body with
+// HTTP 200 — account found, account missing, throttled, or internal failure.
+// The previous version returned 200 for unknown emails and 429 for known ones,
+// so two requests distinguished registered accounts. Any divergence in status
+// code, body, or headers re-opens the oracle.
+const GENERIC_RESET_MESSAGE = 'If an account exists with this email, a reset code has been sent.'
 
 // SECURITY: Generate a cryptographically secure 6-digit code
 function generateCode(): string {
@@ -105,152 +114,164 @@ function getEmailText(code: string): string {
   ].join('\n')
 }
 
+/**
+ * Account-dependent half of the reset flow.
+ *
+ * SECURITY (audit M9): this function never produces a Response. Every outcome —
+ * unknown email, throttled, storage failure, mail-provider failure — exits via
+ * a plain `return` (or throws to the caller's catch) so the handler can emit a
+ * single, identical 200 for all of them. Do not add a Response return here.
+ */
+async function processResetRequest(normalizedEmail: string): Promise<void> {
+  // Create Supabase client with service role for admin operations
+  const supabaseAdmin = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    }
+  )
+
+  // Check if user exists using targeted lookup (not listUsers which has pagination issues)
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('id')
+    .eq('email', normalizedEmail)
+    .maybeSingle()
+
+  const userExists = !!profile
+
+  // Rate limiting: check for recent codes sent to this email.
+  // SECURITY (audit M9): this query runs on EVERY request, including unknown
+  // emails, so both cases perform the same two DB round-trips before they
+  // diverge. Residual timing risk remains: a known + unthrottled address still
+  // does the extra invalidate/insert plus an outbound Resend call, so the
+  // "send" path is measurably slower than the others. Closing that fully needs
+  // IP-scoped limiting or a fixed-duration response budget.
+  const { data: recentCodes } = await supabaseAdmin
+    .from('password_reset_codes')
+    .select('created_at')
+    .eq('email', normalizedEmail)
+    .gte('created_at', new Date(Date.now() - 60000).toISOString()) // Last 1 minute
+    .order('created_at', { ascending: false })
+    .limit(1)
+
+  const throttled = !!recentCodes && recentCodes.length > 0
+
+  if (throttled) {
+    // Internal-only signal: the caller still receives the generic 200.
+    console.log('Reset code request throttled (1 min window):', maskEmail(normalizedEmail))
+    return
+  }
+
+  if (!userExists) {
+    console.log('Reset code requested for unknown address:', maskEmail(normalizedEmail))
+    return
+  }
+
+  // Generate code and expiration (15 minutes)
+  const code = generateCode()
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
+
+  // Invalidate any existing unused codes for this email
+  await supabaseAdmin
+    .from('password_reset_codes')
+    .update({ used_at: new Date().toISOString() })
+    .eq('email', normalizedEmail)
+    .is('used_at', null)
+
+  // Store the new code
+  const { error: insertError } = await supabaseAdmin
+    .from('password_reset_codes')
+    .insert({
+      email: normalizedEmail,
+      code,
+      expires_at: expiresAt
+    })
+
+  if (insertError) {
+    console.error('Failed to store reset code:', insertError)
+    return
+  }
+
+  // Send email via Resend
+  if (!RESEND_API_KEY) {
+    console.error('RESEND_API_KEY not configured')
+    return
+  }
+
+  const resendResponse = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: 'Matrix Portal <noreply@updates.matrixportal.io>',
+      to: [normalizedEmail],
+      subject: 'Your Password Reset Code - Matrix Portal',
+      html: getEmailHtml(code),
+      text: getEmailText(code),
+    }),
+  })
+
+  // Drain the provider body so the connection is released. It is deliberately
+  // not logged: Resend echoes the recipient address back in its payload.
+  await resendResponse.body?.cancel()
+
+  if (!resendResponse.ok) {
+    // Clean up the code since email failed
+    await supabaseAdmin
+      .from('password_reset_codes')
+      .delete()
+      .eq('email', normalizedEmail)
+      .eq('code', code)
+
+    // Log status only — the Resend payload echoes the recipient address.
+    console.error('Failed to send reset code email. Provider status:', resendResponse.status)
+    return
+  }
+
+  console.log('Reset code sent successfully')
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return handleCorsPreflightRequest(req)
   }
 
+  // Request-shape validation happens before any account lookup, so these 400s
+  // carry no information about whether an account exists.
+  let email: unknown
   try {
-    const { email } = await req.json()
-
-    // Validate email
-    if (!email || typeof email !== 'string') {
-      return errorResponse(req, 'Email is required', 400)
-    }
-
-    const normalizedEmail = email.toLowerCase().trim()
-
-    // Create Supabase client with service role for admin operations
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
-
-    // Check if user exists using targeted lookup (not listUsers which has pagination issues)
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .select('id')
-      .eq('email', normalizedEmail)
-      .single()
-
-    if (profileError) {
-      // SECURITY: Don't reveal if user exists or not
-      // Fall through to the !userExists check below
-    }
-
-    const userExists = !!profile
-
-    if (!userExists) {
-      // SECURITY: Don't reveal that user doesn't exist
-      console.log('User not found, returning success anyway')
-      return jsonResponse(req, {
-        success: true,
-        message: 'If an account exists with this email, a reset code has been sent.'
-      })
-    }
-
-    // Rate limiting: Check for recent codes sent to this email
-    const { data: recentCodes } = await supabaseAdmin
-      .from('password_reset_codes')
-      .select('created_at')
-      .eq('email', normalizedEmail)
-      .gte('created_at', new Date(Date.now() - 60000).toISOString()) // Last 1 minute
-      .order('created_at', { ascending: false })
-      .limit(1)
-
-    if (recentCodes && recentCodes.length > 0) {
-      return errorResponse(req, 'Please wait 1 minute before requesting another code.', 429)
-    }
-
-    // Generate code and expiration (15 minutes)
-    const code = generateCode()
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
-
-    // Invalidate any existing unused codes for this email
-    await supabaseAdmin
-      .from('password_reset_codes')
-      .update({ used_at: new Date().toISOString() })
-      .eq('email', normalizedEmail)
-      .is('used_at', null)
-
-    // Store the new code
-    const { error: insertError } = await supabaseAdmin
-      .from('password_reset_codes')
-      .insert({
-        email: normalizedEmail,
-        code,
-        expires_at: expiresAt
-      })
-
-    if (insertError) {
-      return errorResponse(
-        req,
-        'Failed to generate reset code. Please try again.',
-        500,
-        insertError
-      )
-    }
-
-    // Send email via Resend
-    if (!RESEND_API_KEY) {
-      console.error('RESEND_API_KEY not configured')
-      return errorResponse(req, 'Email service not configured', 500)
-    }
-
-    const resendResponse = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: 'Matrix Portal <noreply@updates.matrixportal.io>',
-        to: [normalizedEmail],
-        subject: 'Your Password Reset Code - Matrix Portal',
-        html: getEmailHtml(code),
-        text: getEmailText(code),
-      }),
-    })
-
-    const resendData = await resendResponse.json()
-
-    if (!resendResponse.ok) {
-      // Clean up the code since email failed
-      await supabaseAdmin
-        .from('password_reset_codes')
-        .delete()
-        .eq('email', normalizedEmail)
-        .eq('code', code)
-
-      return errorResponse(
-        req,
-        'Failed to send reset code email. Please try again.',
-        500,
-        resendData
-      )
-    }
-
-    console.log('Reset code sent successfully')
-
-    return jsonResponse(req, {
-      success: true,
-      message: 'If an account exists with this email, a reset code has been sent.'
-    })
-
-  } catch (error) {
-    // SECURITY: Generic error message, log details server-side
-    return errorResponse(
-      req,
-      'An unexpected error occurred. Please try again.',
-      500,
-      error
-    )
+    const body = await req.json()
+    email = body?.email
+  } catch {
+    return errorResponse(req, 'Invalid request body', 400)
   }
+
+  if (!email || typeof email !== 'string') {
+    return errorResponse(req, 'Email is required', 400)
+  }
+
+  const normalizedEmail = email.toLowerCase().trim()
+
+  try {
+    await processResetRequest(normalizedEmail)
+  } catch (error) {
+    // SECURITY (audit M9): swallow the failure into the generic response.
+    // Surfacing a 500 here would only be reachable on the account-exists path
+    // and would therefore re-open the enumeration oracle.
+    console.error('send-reset-code failed:', error)
+  }
+
+  // SECURITY (audit M9): the single exit for every post-validation outcome.
+  return jsonResponse(req, {
+    success: true,
+    message: GENERIC_RESET_MESSAGE
+  })
 })

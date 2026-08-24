@@ -6,6 +6,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import { validatePassword } from '../_shared/password-validation.ts'
 import { requireAdmin } from '../_shared/auth.ts'
+import { canGrantRole, isKnownRole } from '../_shared/role-rank.ts'
 import { logAuditEvent, maskEmail } from '../_shared/audit.ts'
 
 serve(async (req) => {
@@ -44,23 +45,26 @@ serve(async (req) => {
       return errorResponse(req, 'A user with this email already exists', 400)
     }
 
-    // SECURITY: Validate role against allowlist at runtime (TypeScript types are not enforced at runtime)
-    const VALID_ROLES = ['admin', 'manager', 'org_admin', 'editor', 'viewer']
+    // SECURITY: Validate role against the known role set at runtime (TypeScript
+    // types are not enforced at runtime)
     let validatedRole: string
     if (!role) {
       // No role provided → safe default
       validatedRole = 'viewer'
-    } else if (role === 'super_admin') {
-      // SECURITY: Only super admins may create other super admins
-      if (auth.user!.role !== 'super_admin') {
-        return errorResponse(req, 'Only super admins can create super admin users', 403)
-      }
-      validatedRole = 'super_admin'
-    } else if (VALID_ROLES.includes(role)) {
+    } else if (isKnownRole(role)) {
       validatedRole = role
     } else {
       // SECURITY: Reject unknown roles explicitly — no silent downgrade
       return errorResponse(req, 'Invalid role', 400)
+    }
+
+    // SECURITY: A caller may only hand out roles below their own rank — only a
+    // super_admin can mint super_admins or admins, and manager requires admin+.
+    if (!canGrantRole(auth.user!.role, validatedRole)) {
+      const message = validatedRole === 'super_admin'
+        ? 'Only super admins can create super admin users'
+        : `You do not have permission to create a user with the ${validatedRole} role`
+      return errorResponse(req, message, 403)
     }
 
     // Create auth user with admin API - this pre-confirms email and triggers profile creation

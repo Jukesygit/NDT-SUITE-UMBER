@@ -35,7 +35,8 @@ interface InspectionPanelProps {
   onCaptureViewport: () => void;
   onUploadImage: (file: File) => void;
   onDeleteAttachment: (attachmentId: string) => void;
-  getImageUrl: (storagePath: string) => string;
+  /** Resolves an attachment storage path to a short-lived signed URL (private bucket). */
+  getImageUrl: (storagePath: string) => Promise<string | null>;
   onSaveScanImages: (images: {
     cscan?: string;
     bscan?: string;
@@ -164,6 +165,38 @@ export default function InspectionPanel({
   const [viewingImageUrl, setViewingImageUrl] = useState<string | null>(null);
   const [showProjectPicker, setShowProjectPicker] = useState(false);
   const [loadingProjectImage, setLoadingProjectImage] = useState(false);
+
+  // Attachments live in a private bucket: each storage path must be resolved to
+  // a short-lived signed URL before it can be rendered.
+  const [attachmentUrls, setAttachmentUrls] = useState<Record<string, string>>({});
+  const attachmentPathsKey = (annotation.attachments ?? [])
+    .filter((a) => a.type !== 'scan-capture')
+    .map((a) => a.storagePath)
+    .join('|');
+
+  useEffect(() => {
+    let cancelled = false;
+    const paths = attachmentPathsKey ? attachmentPathsKey.split('|') : [];
+    if (paths.length === 0) {
+      setAttachmentUrls({});
+    } else {
+      Promise.all(
+        paths.map((path) =>
+          getImageUrl(path)
+            .then((url) => [path, url] as const)
+            .catch(() => [path, null] as const)
+        )
+      ).then((entries) => {
+        if (cancelled) return;
+        const next: Record<string, string> = {};
+        for (const [path, url] of entries) if (url) next[path] = url;
+        setAttachmentUrls(next);
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [attachmentPathsKey, getImageUrl]);
 
   const handleAttachProjectImage = useCallback(
     async (pImg: ProjectImage) => {
@@ -436,26 +469,31 @@ export default function InspectionPanel({
             <div className="vm-inspection-attachments-grid">
               {annotation.attachments
                 .filter((a) => a.type !== 'scan-capture')
-                .map((att) => (
-                  <div
-                    key={att.id}
-                    className="vm-inspection-thumbnail"
-                    onClick={() => setViewingImageUrl(getImageUrl(att.storagePath))}
-                    title={att.type === 'viewport-capture' ? 'Viewport capture' : 'Uploaded image'}
-                  >
-                    <img src={getImageUrl(att.storagePath)} alt={att.type} />
-                    <button
-                      className="vm-inspection-thumbnail-delete"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteAttachment(att.id);
-                      }}
-                      title="Delete attachment"
+                .map((att) => {
+                  const url = attachmentUrls[att.storagePath];
+                  return (
+                    <div
+                      key={att.id}
+                      className="vm-inspection-thumbnail"
+                      onClick={() => url && setViewingImageUrl(url)}
+                      title={
+                        att.type === 'viewport-capture' ? 'Viewport capture' : 'Uploaded image'
+                      }
                     >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))}
+                      {url && <img src={url} alt={att.type} />}
+                      <button
+                        className="vm-inspection-thumbnail-delete"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteAttachment(att.id);
+                        }}
+                        title="Delete attachment"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  );
+                })}
             </div>
           )}
 

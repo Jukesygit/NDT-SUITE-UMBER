@@ -6,6 +6,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import { validatePassword } from '../_shared/password-validation.ts'
 import { logAuditEvent } from '../_shared/audit.ts'
+import { constantTimeEqual } from '../_shared/auth.ts'
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -90,7 +91,9 @@ serve(async (req) => {
 
     // SECURITY FIX: Compare the submitted code against the stored code
     // Increment attempt counter on EVERY failed comparison
-    if (resetCode.code !== normalizedCode) {
+    // SECURITY (audit L6): constant-time compare so response timing does not
+    // leak how many leading digits of the code were guessed correctly.
+    if (!constantTimeEqual(String(resetCode.code ?? ''), normalizedCode)) {
       await supabaseAdmin
         .from('password_reset_codes')
         .update({ attempts: resetCode.attempts + 1 })

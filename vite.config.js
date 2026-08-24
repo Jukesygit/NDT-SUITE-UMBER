@@ -39,7 +39,7 @@ export default defineConfig({
         // Images
         "img-src 'self' data: blob: https://*.supabase.co",
         // Connections (includes NDT Companion localhost ports)
-        `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://generativelanguage.googleapis.com ${companionPorts}`,
+        `connect-src 'self' https://*.supabase.co wss://*.supabase.co ${companionPorts}`,
         // Workers
         "worker-src 'self' blob:",
         // Frames - allow embedding PDFs from Supabase storage
@@ -74,7 +74,7 @@ export default defineConfig({
         "style-src 'self' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com",
         "img-src 'self' data: blob: https://*.supabase.co",
-        `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://generativelanguage.googleapis.com ${companionPorts}`,
+        `connect-src 'self' https://*.supabase.co wss://*.supabase.co ${companionPorts}`,
         "worker-src 'self' blob:",
         "frame-src 'self' https://*.supabase.co blob:",
         "object-src 'self' https://*.supabase.co blob:",

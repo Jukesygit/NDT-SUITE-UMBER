@@ -93,9 +93,14 @@ export function isAdmin(role: string): boolean {
 
 /**
  * Check if user has org_admin or higher role
+ *
+ * SECURITY: super_admin outranks admin (see _shared/role-rank.ts), so omitting it
+ * here 403'd the highest-privileged role from every requireOrgAdmin function.
+ * 'manager' is deliberately NOT included — that is a product decision, not a
+ * hierarchy one.
  */
 export function isOrgAdminOrHigher(role: string): boolean {
-  return ['admin', 'org_admin'].includes(role)
+  return ['super_admin', 'admin', 'org_admin'].includes(role)
 }
 
 /**
@@ -169,6 +174,34 @@ export async function requireAuth(req: Request): Promise<{ auth: AuthResult; err
 }
 
 /**
+ * SECURITY (audit L6): constant-time string comparison for secrets and
+ * one-time codes. A plain `===` on a secret leaks the length of the matching
+ * prefix through response timing, which lets an attacker recover the secret
+ * byte by byte.
+ *
+ * The loop always runs `max(a.length, b.length)` iterations and folds the
+ * length difference into the accumulator, so a length mismatch never
+ * short-circuits. Deno-compatible (no Node `crypto.timingSafeEqual`).
+ */
+export function constantTimeEqual(a: string, b: string): boolean {
+  const encoder = new TextEncoder()
+  const aBytes = encoder.encode(a)
+  const bBytes = encoder.encode(b)
+  const max = Math.max(aBytes.length, bBytes.length)
+
+  // Seed with the length difference instead of returning early on it.
+  let diff = aBytes.length ^ bBytes.length
+
+  for (let i = 0; i < max; i++) {
+    const aByte = i < aBytes.length ? aBytes[i] : 0
+    const bByte = i < bBytes.length ? bBytes[i] : 0
+    diff |= aByte ^ bByte
+  }
+
+  return diff === 0
+}
+
+/**
  * Verify a cron/system secret for internal-only functions
  * Set CRON_SECRET in your Supabase project secrets
  */
@@ -180,5 +213,10 @@ export function verifyCronSecret(req: Request): boolean {
   }
 
   const providedSecret = req.headers.get('x-cron-secret')
-  return providedSecret === cronSecret
+  if (!providedSecret) {
+    return false
+  }
+
+  // SECURITY (audit L6): constant-time compare, never `===`.
+  return constantTimeEqual(providedSecret, cronSecret)
 }

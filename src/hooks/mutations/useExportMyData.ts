@@ -9,39 +9,45 @@ import { exportUserData, type UserDataExport } from '../../services/gdpr-service
 import { logActivity } from '../../services/activity-log-service';
 
 function formatDate(value: unknown): string {
-    if (!value || typeof value !== 'string') return '-';
-    try {
-        return new Date(value).toLocaleDateString('en-GB', {
-            day: 'numeric', month: 'long', year: 'numeric',
-        });
-    } catch {
-        return String(value);
-    }
+  if (!value || typeof value !== 'string') return '-';
+  try {
+    return new Date(value).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+  } catch {
+    return String(value);
+  }
 }
 
 function formatDateTime(value: unknown): string {
-    if (!value || typeof value !== 'string') return '-';
-    try {
-        return new Date(value).toLocaleDateString('en-GB', {
-            day: 'numeric', month: 'long', year: 'numeric',
-            hour: '2-digit', minute: '2-digit',
-        });
-    } catch {
-        return String(value);
-    }
+  if (!value || typeof value !== 'string') return '-';
+  try {
+    return new Date(value).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return String(value);
+  }
 }
 
 function val(v: unknown): string {
-    if (v === null || v === undefined || v === '') return '-';
-    return String(v);
+  if (v === null || v === undefined || v === '') return '-';
+  return String(v);
 }
 
 function buildHtmlReport(data: UserDataExport): string {
-    const p = data.profile as Record<string, unknown> | null;
-    const jsonBlob = JSON.stringify(data, null, 2);
-    const jsonDataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(jsonBlob);
+  const p = data.profile as Record<string, unknown> | null;
+  const jsonBlob = JSON.stringify(data, null, 2);
+  const jsonDataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(jsonBlob);
 
-    const profileRows = p ? [
+  const profileRows = p
+    ? [
         ['Username', val(p.username)],
         ['Email', val(p.email)],
         ['Contact Email', val(p.email_address)],
@@ -55,9 +61,10 @@ function buildHtmlReport(data: UserDataExport): string {
         ['Role', val(p.role)],
         ['Account Created', formatDateTime(p.created_at)],
         ['Last Updated', formatDateTime(p.updated_at)],
-    ] : [];
+      ]
+    : [];
 
-    return `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -78,7 +85,12 @@ function buildHtmlReport(data: UserDataExport): string {
   .data-table th { width: auto; }
   .data-table tr:hover { background: #f9fafb; }
   .empty { color: #9ca3af; font-style: italic; padding: 20px; text-align: center; }
-  .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+  /* Static hint, not a button: this document is opened from a blob: URL and
+     therefore inherits the app's Content-Security-Policy, which forbids inline
+     script and inline event handlers under script-src 'self'. A print button
+     wired through an inline handler would silently do nothing. */
+  .hint { display: inline-flex; align-items: center; padding: 10px 16px; border-radius: 8px; border: 1px dashed #d1d5db; background: #fff; color: #4b5563; font-size: 13px; }
   .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; text-decoration: none; cursor: pointer; border: 1px solid #d1d5db; background: #fff; color: #374151; transition: background 0.15s; }
   .btn:hover { background: #f3f4f6; }
   .btn-primary { background: #2563eb; color: #fff; border-color: #2563eb; }
@@ -94,86 +106,124 @@ function buildHtmlReport(data: UserDataExport): string {
   <p class="subtitle">Exported from NDT Suite on ${formatDateTime(data.exportedAt)}. This document contains all personal data held about you.</p>
 
   <div class="actions" style="margin-bottom: 24px;">
-    <button class="btn" onclick="window.print()">Print / Save as PDF</button>
+    <div class="hint">To save a PDF, use your browser&rsquo;s Print function (Ctrl&nbsp;+&nbsp;P, or Cmd&nbsp;+&nbsp;P on a Mac) and choose &ldquo;Save as PDF&rdquo;.</div>
     <a class="btn btn-primary" href="${jsonDataUri}" download="ndt-suite-my-data-${new Date().toISOString().split('T')[0]}.json">Download as JSON</a>
   </div>
 
   <div class="card">
     <h2>Personal Details</h2>
-    ${p ? `<table>${profileRows.map(([label, value]) =>
-        `<tr><th>${label}</th><td>${value}</td></tr>`
-    ).join('')}</table>` : '<p class="empty">No profile data found.</p>'}
+    ${
+      p
+        ? `<table>${profileRows
+            .map(([label, value]) => `<tr><th>${label}</th><td>${value}</td></tr>`)
+            .join('')}</table>`
+        : '<p class="empty">No profile data found.</p>'
+    }
   </div>
 
   <div class="card">
     <h2>Competencies & Certifications <span class="count">${data.competencies.length}</span></h2>
-    ${data.competencies.length > 0 ? `
+    ${
+      data.competencies.length > 0
+        ? `
     <table class="data-table">
       <thead><tr><th>Certification ID</th><th>Issuing Body</th><th>Status</th><th>Expiry Date</th><th>Notes</th></tr></thead>
-      <tbody>${data.competencies.map((c) => `
+      <tbody>${data.competencies
+        .map(
+          (c) => `
         <tr>
           <td>${val(c.certification_id)}</td>
           <td>${val(c.issuing_body)}</td>
           <td>${val(c.status)}</td>
           <td>${formatDate(c.expiry_date)}</td>
           <td>${val(c.notes)}</td>
-        </tr>`).join('')}
+        </tr>`
+        )
+        .join('')}
       </tbody>
-    </table>` : '<p class="empty">No competency records.</p>'}
+    </table>`
+        : '<p class="empty">No competency records.</p>'
+    }
   </div>
 
   <div class="card">
     <h2>Competency Change History <span class="count">${data.competencyHistory.length}</span></h2>
-    ${data.competencyHistory.length > 0 ? `
+    ${
+      data.competencyHistory.length > 0
+        ? `
     <table class="data-table">
       <thead><tr><th>Date</th><th>Field</th><th>Old Value</th><th>New Value</th><th>Reason</th></tr></thead>
-      <tbody>${data.competencyHistory.slice(0, 100).map((h) => `
+      <tbody>${data.competencyHistory
+        .slice(0, 100)
+        .map(
+          (h) => `
         <tr>
           <td>${formatDateTime(h.created_at)}</td>
           <td>${val(h.field_name)}</td>
           <td>${val(h.old_value)}</td>
           <td>${val(h.new_value)}</td>
           <td>${val(h.change_reason)}</td>
-        </tr>`).join('')}
+        </tr>`
+        )
+        .join('')}
       </tbody>
     </table>
     ${data.competencyHistory.length > 100 ? `<p style="color:#6b7280;font-size:13px;margin-top:12px;">Showing first 100 of ${data.competencyHistory.length} entries. Download JSON for the full dataset.</p>` : ''}
-    ` : '<p class="empty">No change history.</p>'}
+    `
+        : '<p class="empty">No change history.</p>'
+    }
   </div>
 
   <div class="card">
     <h2>Activity Log <span class="count">${data.activityLogs.length}</span></h2>
-    ${data.activityLogs.length > 0 ? `
+    ${
+      data.activityLogs.length > 0
+        ? `
     <table class="data-table">
       <thead><tr><th>Date</th><th>Action</th><th>Description</th></tr></thead>
-      <tbody>${data.activityLogs.slice(0, 50).map((a) => `
+      <tbody>${data.activityLogs
+        .slice(0, 50)
+        .map(
+          (a) => `
         <tr>
           <td style="white-space:nowrap">${formatDateTime(a.created_at)}</td>
           <td>${val(a.action_type)}</td>
           <td>${val(a.description)}</td>
-        </tr>`).join('')}
+        </tr>`
+        )
+        .join('')}
       </tbody>
     </table>
     ${data.activityLogs.length > 50 ? `<p style="color:#6b7280;font-size:13px;margin-top:12px;">Showing most recent 50 of ${data.activityLogs.length} entries. Download JSON for the full dataset.</p>` : ''}
-    ` : '<p class="empty">No activity logs.</p>'}
+    `
+        : '<p class="empty">No activity logs.</p>'
+    }
   </div>
 
-  ${data.permissionRequests.length > 0 ? `
+  ${
+    data.permissionRequests.length > 0
+      ? `
   <div class="card">
     <h2>Permission Requests <span class="count">${data.permissionRequests.length}</span></h2>
     <table class="data-table">
       <thead><tr><th>Date</th><th>Requested Role</th><th>Previous Role</th><th>Status</th><th>Message</th></tr></thead>
-      <tbody>${data.permissionRequests.map((r) => `
+      <tbody>${data.permissionRequests
+        .map(
+          (r) => `
         <tr>
           <td>${formatDateTime(r.created_at)}</td>
           <td>${val(r.requested_role)}</td>
           <td>${val(r.user_current_role)}</td>
           <td>${val(r.status)}</td>
           <td>${val(r.message)}</td>
-        </tr>`).join('')}
+        </tr>`
+        )
+        .join('')}
       </tbody>
     </table>
-  </div>` : ''}
+  </div>`
+      : ''
+  }
 
   <div class="card" style="background:#f9fafb;">
     <h2>About This Export</h2>
@@ -190,26 +240,26 @@ function buildHtmlReport(data: UserDataExport): string {
 }
 
 export function useExportMyData() {
-    return useMutation({
-        mutationFn: async (userId: string) => {
-            const data = await exportUserData(userId);
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const data = await exportUserData(userId);
 
-            logActivity({
-                userId,
-                actionType: 'data_exported',
-                actionCategory: 'profile',
-                description: 'User exported their personal data (GDPR Article 15/20)',
-            });
+      logActivity({
+        userId,
+        actionType: 'data_exported',
+        actionCategory: 'profile',
+        description: 'User exported their personal data (GDPR Article 15/20)',
+      });
 
-            // Open formatted HTML report in a new tab
-            const html = buildHtmlReport(data);
-            const blob = new Blob([html], { type: 'text/html' });
-            const url = URL.createObjectURL(blob);
-            window.open(url, '_blank');
-            // Revoke after a delay to allow the tab to load
-            setTimeout(() => URL.revokeObjectURL(url), 10000);
+      // Open formatted HTML report in a new tab
+      const html = buildHtmlReport(data);
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      // Revoke after a delay to allow the tab to load
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
 
-            return data;
-        },
-    });
+      return data;
+    },
+  });
 }

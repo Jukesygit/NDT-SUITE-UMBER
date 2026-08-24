@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { getCorsHeaders, handleCorsPreflightRequest, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import { requireAdmin } from '../_shared/auth.ts'
+import { canActOn } from '../_shared/role-rank.ts'
 import { logAuditEvent, maskEmail } from '../_shared/audit.ts'
 
 serve(async (req) => {
@@ -25,9 +26,31 @@ serve(async (req) => {
       return errorResponse(req, 'Invalid email format', 400)
     }
 
-    // Note: admins (including super_admins) may change their own login email
-    // through this endpoint. email_confirm is set below, so the new address is
-    // trusted without a verification round-trip.
+    // Resolve the target BEFORE any mutation: its role drives the privilege
+    // check below, and its email is the audit trail's "old value".
+    const { data: targetProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('email, role')
+      .eq('id', userId)
+      .single()
+
+    // SECURITY: profiles is the only source of truth for a user's role, so a
+    // target without one cannot be rank-checked — fail closed.
+    if (!targetProfile) {
+      return errorResponse(req, 'Target user profile not found. Run user sync before changing this login email.', 404)
+    }
+
+    // SECURITY: email_confirm is set below, so the new address is trusted
+    // without a verification round-trip — changing someone else's login email
+    // is a full account-takeover primitive (the new owner can drive a password
+    // reset). A caller may therefore only do it to users strictly below their
+    // own rank; changing an admin's or a super_admin's login email requires
+    // super_admin. Admins (including super_admins) may still change their OWN
+    // login email through this endpoint.
+    const isSelf = userId === auth.user!.id
+    if (!isSelf && !canActOn(auth.user!.role, targetProfile.role)) {
+      return errorResponse(req, 'You cannot change the login email of a user at or above your own role level', 403)
+    }
 
     // Check the new email isn't already in use
     const { data: existingProfile } = await supabaseAdmin
@@ -40,15 +63,9 @@ serve(async (req) => {
       return errorResponse(req, 'A user with this email already exists', 400)
     }
 
-    // Capture the target's CURRENT email before any mutation, for audit logging.
+    // Capture the target's CURRENT email for audit logging.
     // Prefer profiles.email; fall back to the auth user's email if absent.
-    const { data: targetProfile } = await supabaseAdmin
-      .from('profiles')
-      .select('email')
-      .eq('id', userId)
-      .single()
-
-    let oldEmail: string | null = targetProfile?.email ?? null
+    let oldEmail: string | null = targetProfile.email ?? null
     if (!oldEmail) {
       const { data: targetAuthUser } = await supabaseAdmin.auth.admin.getUserById(userId)
       oldEmail = targetAuthUser?.user?.email ?? null

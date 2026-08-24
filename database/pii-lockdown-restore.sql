@@ -1,3 +1,48 @@
+-- #############################################################################
+-- ##  DEPRECATED — DO NOT RUN  ################################################
+-- ##  (security audit 2026-08-12, finding L5 — docs/security-audit-2026-08-12.md)
+-- #############################################################################
+--
+-- This script reconstructs the pre-lockdown policy set from early-2026 schema
+-- files. Re-running it now REVERTS security fixes that landed afterwards.
+-- Concretely, it re-introduces:
+--
+--   1. UNRESTRICTED ACTIVITY-LOG INSERT.
+--      Line ~190: CREATE POLICY "Allow activity logging" ON activity_log FOR
+--      INSERT TO authenticated WITH CHECK (true) — any authenticated user can
+--      forge arbitrary audit rows. This exact policy name is DROPped, and
+--      INSERT/UPDATE/DELETE on activity_log is REVOKEd from `authenticated`, by
+--      20260626150000_activity_log_integrity.sql:88-91. The audit trail is
+--      server-authoritative and immutable by design.
+--
+--   2. BROKEN super_admin / manager DOCUMENT REVIEW, PLUS A WIDER BUCKET.
+--      Line ~879: CREATE POLICY "Users can view their own competency documents"
+--      ON storage.objects with a privileged branch of role = 'admin' ONLY, and
+--      with NO (storage.foldername(name))[1] = 'competency-documents' check —
+--      so it also reaches other folders of the shared private `documents`
+--      bucket. 20260629120000_fix_competency_document_storage_policies.sql adds
+--      super_admin/manager AND the folder check; re-running this re-breaks
+--      competency document review (known repo scar) while widening bucket reach.
+--
+--   3. AVATAR / BUCKET-ERA POLICY DRIFT.
+--      The storage section here predates the 2026-02 pen-test fix
+--      (database/migrations/security-audit-fix-2026-02.sql), which made the
+--      avatars and vessel-images buckets private and replaced the public avatar
+--      SELECT policy with an authenticated-only one. Restoring this era's
+--      storage policy set undoes that hardening (audit finding M11).
+--
+--   Bonus regression: line ~922 also recreates the un-org-scoped
+--   "Users can view controlled documents" storage policy — i.e. audit finding
+--   H1 itself, which 20260812121000_controlled_docs_storage_org_scope.sql fixes.
+--
+-- KEPT FOR FORENSIC REFERENCE ONLY: it records what the policy set looked like
+-- before the PII lockdown and is useful when reconstructing history. It is NOT a
+-- runnable recovery path. The authoritative policy set is the migration chain in
+-- supabase/migrations/ (plus the live pg_policies dump — audit finding M12).
+-- If a recovery script is genuinely needed, generate a fresh one from current
+-- production pg_policies; do not run this one.
+-- #############################################################################
+
 -- =============================================================================
 -- PII LOCKDOWN RESTORE SCRIPT
 -- Reverses database/pii-lockdown.sql and restores full RLS policies.

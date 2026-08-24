@@ -69,7 +69,7 @@ import { useDrawingApply } from './hooks/useDrawingApply';
 import { useTextureRehydration } from './useTextureRehydration';
 import { useScanCompositeList } from '../../hooks/queries/useScanComposites';
 import { useLinkScanCompositeToProject } from '../../hooks/mutations/useScanCompositeMutations';
-import { getAnnotationImageUrl } from '../../services/annotation-attachment-service';
+import { resolveAnnotationAttachmentUrl } from '../../services/annotation-attachment-service';
 import { useAuth } from '../../contexts/AuthContext';
 import { useVesselModel, useVesselModelByProjectVessel } from '../../hooks/queries/useVesselModels';
 import {
@@ -1782,7 +1782,7 @@ export default function VesselModeler() {
                   onCaptureViewport={captureViewport}
                   onUploadImage={uploadImage}
                   onDeleteAttachment={deleteAttachment}
-                  getImageUrl={getAnnotationImageUrl}
+                  getImageUrl={resolveAnnotationAttachmentUrl}
                   onSaveScanImages={saveScanImages}
                   onClearScanImages={clearScanImages}
                   projectImages={projectImages}
