@@ -95,6 +95,12 @@ Design `plans/2026-08-17-client-sharing-design.md`. **Backend DEPLOYED 2026-08-2
 - `src/workers/heatmap-renderer.worker.ts`, `src/workers/thickness-engine.worker.ts` - worker logic.
 - `src/hooks/useHeatmapRenderer.ts`, `src/hooks/useThicknessEngine.ts` - worker-facing hooks.
 
+## BeamTool (UT Technique Designer)
+
+- `src/pages/BeamToolPage.tsx` - page entry (`/beam-tool`, tools tab), full-bleed wrapper mirroring `TopologyViewerPage.tsx`.
+- `src/components/BeamTool/` - verbatim port (2026-08-28, design `plans/2026-08-28-beamtool-integration-design.md`) of the standalone Notbeamtool app (`C:\Users\jonas\OneDrive\Documents\Notbeamtool`): `BeamTool.tsx` root, `components/` (Canvas SVG renderer, Sidebar, controls, Readouts), `physics/` (Snell refraction, −6 dB spread, materials), `geometry/weld.ts` (bevel profiles), `sheet.ts` (PNG technique-sheet export), `beam-tool.css`. No backend, no persistence beyond a theme localStorage key.
+- Styling is the tool's OWN system, contained not integrated: every rule scoped under `.nbt-page` AND every class `nbt-`-prefixed — suite globals captured the unprefixed names (`layout.css` `.sidebar { position: fixed; left: 0 }` pinned the tool's sidebar to the left until the rename; `.app`/`.header`/`.btn` same class of hazard). Custom props live on `.nbt-page`, not `:root`. Theme: the tool keeps its own dark/light toggle stamping `data-nbt-theme` on the page root — NEVER `documentElement`, whose `data-theme` belongs to ThemeContext. PNG export reads computed style from the SVG element, not documentElement. Prefix boundary: prefix where a string becomes a className (Readouts builds `'nbt-' + cls`), never in data (`sheet.ts` `cls` also drives canvas fillStyle; `accent === 'amber'` is a prop comparison, not a class). Deferred styling pass: suite token/font mapping, element-selector bleed (`input[type=…]`, `button`), 300-line splits (Canvas/Sidebar warn-only).
+
 ## Companion App
 
 - `companion/` - Python companion application.

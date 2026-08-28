@@ -41,6 +41,7 @@ const ReportPage = lazy(() => import('./pages/projects/ReportPage'));
 const ScanViewerPage = lazy(() => import('./pages/projects/ScanViewerPage'));
 const ScanViewerLandingPage = lazy(() => import('./pages/ScanViewerLandingPage'));
 const TopologyViewerPage = lazy(() => import('./pages/TopologyViewerPage'));
+const BeamToolPage = lazy(() => import('./pages/BeamToolPage'));
 const ScanViewerDemoA = lazy(() => import('./pages/demos/ScanViewerDemoA'));
 const ScanViewerDemoB = lazy(() => import('./pages/demos/ScanViewerDemoB'));
 const ScanViewerDemoC = lazy(() => import('./pages/demos/ScanViewerDemoC'));
@@ -205,6 +206,16 @@ function App() {
                             <RequireTabVisible tabId="tools">
                               <ErrorBoundary>
                                 <TopologyViewerPage />
+                              </ErrorBoundary>
+                            </RequireTabVisible>
+                          }
+                        />
+                        <Route
+                          path="/beam-tool"
+                          element={
+                            <RequireTabVisible tabId="tools">
+                              <ErrorBoundary>
+                                <BeamToolPage />
                               </ErrorBoundary>
                             </RequireTabVisible>
                           }

@@ -1,0 +1,449 @@
+.nbt-page {
+  --bg: #0a0d10;
+  --panel: #11161b;
+  --panel-2: #151b21;
+  --inset: #0d1116;
+  --line: #232c35;
+  --line-soft: #1a2129;
+  --text: #d7dee5;
+  --muted: #8b98a5;
+  --faint: #7d8a97;
+  --green: #3fe08f;
+  --green-dim: rgba(63, 224, 143, 0.14);
+  --amber: #ffb454;
+  --amber-dim: rgba(255, 180, 84, 0.16);
+  --cyan: #4fd6e8;
+  --red: #ff6b6b;
+  --steel: #1b232c;
+  --steel-edge: #33404d;
+  /* canvas fills that were previously hardcoded rgba */
+  --hatch-bg: rgba(255, 180, 84, 0.05);
+  --hatch-line: rgba(255, 180, 84, 0.25);
+  --haz-fill: rgba(255, 180, 84, 0.06);
+  --spread-fill: rgba(63, 224, 143, 0.09);
+  --fan-fill: rgba(63, 224, 143, 0.07);
+  --ray-glow: rgba(63, 224, 143, 0.25);
+  --font-ui: 'Chakra Petch', sans-serif;
+  --font-mono: 'Spline Sans Mono', monospace;
+}
+
+/* light theme — warm engineering-paper look */
+.nbt-page[data-nbt-theme='light'] {
+  --bg: #f2efe8;
+  --panel: #faf8f2;
+  --panel-2: #efece3;
+  --inset: #ffffff;
+  --line: #d4cfc0;
+  --line-soft: #ddd8ca;
+  --text: #232a31;
+  --muted: #59646f;
+  --faint: #6d7883;
+  --green: #0b8a53;
+  --green-dim: rgba(11, 138, 83, 0.12);
+  --amber: #a8690f;
+  --amber-dim: rgba(168, 105, 15, 0.14);
+  --cyan: #0b7c99;
+  --red: #c0392b;
+  --steel: #dde2e7;
+  --steel-edge: #9aa5b1;
+  --hatch-bg: rgba(168, 105, 15, 0.07);
+  --hatch-line: rgba(168, 105, 15, 0.3);
+  --haz-fill: rgba(168, 105, 15, 0.09);
+  --spread-fill: rgba(11, 138, 83, 0.1);
+  --fan-fill: rgba(11, 138, 83, 0.08);
+  --ray-glow: rgba(11, 138, 83, 0.2);
+}
+
+.nbt-page,
+.nbt-page *,
+.nbt-page *::before,
+.nbt-page *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.nbt-page.nbt-app {
+  display: grid;
+  grid-template-rows: 48px 1fr auto;
+  grid-template-columns: 1fr minmax(0, 304px);
+  grid-template-areas:
+    'header header'
+    'canvas sidebar'
+    'readout readout';
+  height: 100%;
+}
+
+@media (max-width: 760px) {
+  .nbt-page.nbt-app {
+    grid-template-rows: 48px 1fr auto auto;
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'header'
+      'canvas'
+      'sidebar'
+      'readout';
+  }
+
+  .nbt-page .nbt-sidebar {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    max-height: 40vh;
+  }
+}
+
+/* ---------- header ---------- */
+.nbt-page .nbt-header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+.nbt-page .nbt-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.nbt-page .nbt-brand-name {
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 0.04em;
+}
+
+.nbt-page .nbt-brand-name .nbt-not {
+  color: var(--amber);
+}
+
+.nbt-page .nbt-brand-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.nbt-page .nbt-header-spacer {
+  flex: 1;
+}
+
+/* ---------- sidebar ---------- */
+.nbt-page .nbt-sidebar {
+  grid-area: sidebar;
+  overflow-y: auto;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.nbt-page .nbt-section {
+  border-bottom: 1px solid var(--line-soft);
+  padding: 12px 14px 14px;
+}
+
+.nbt-page .nbt-section-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nbt-page .nbt-section-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line-soft);
+}
+
+.nbt-page .nbt-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.nbt-page .nbt-row.nbt-single {
+  grid-template-columns: 1fr;
+}
+
+.nbt-page .nbt-row.nbt-triple {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+/* ---------- fields ---------- */
+.nbt-page .nbt-field label {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 3px;
+  letter-spacing: 0.03em;
+}
+
+.nbt-page .nbt-field-input {
+  display: flex;
+  align-items: center;
+  background: var(--inset);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  transition: border-color 120ms;
+}
+
+.nbt-page .nbt-field-input:focus-within {
+  border-color: var(--green);
+}
+
+.nbt-page .nbt-field-input.nbt-invalid,
+.nbt-page .nbt-field-input.nbt-invalid:focus-within {
+  border-color: var(--red);
+}
+
+.nbt-page .nbt-field-input input,
+.nbt-page .nbt-field-input select {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 6px 8px;
+  appearance: textfield;
+}
+
+.nbt-page .nbt-field-input input::-webkit-outer-spin-button,
+.nbt-page .nbt-field-input input::-webkit-inner-spin-button {
+  appearance: none;
+}
+
+.nbt-page .nbt-field-input select option {
+  background: var(--panel-2);
+}
+
+.nbt-page .nbt-field-unit {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--faint);
+  padding-right: 8px;
+  user-select: none;
+}
+
+/* ---------- segmented control ---------- */
+.nbt-page .nbt-seg {
+  display: flex;
+  background: var(--inset);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.nbt-page .nbt-seg button {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 4px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition:
+    background 120ms,
+    color 120ms;
+}
+
+.nbt-page .nbt-seg button + button {
+  border-left: 1px solid var(--line);
+}
+
+.nbt-page .nbt-seg button.nbt-on {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.nbt-page .nbt-seg button.nbt-on.nbt-amber {
+  background: var(--amber-dim);
+  color: var(--amber);
+}
+
+/* ---------- toggle ---------- */
+.nbt-page .nbt-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--muted);
+  user-select: none;
+  /* native button reset — Toggle is a <button role="switch"> */
+  background: none;
+  border: 0;
+  font-family: inherit;
+  width: 100%;
+  text-align: left;
+}
+
+.nbt-page .nbt-toggle:focus-visible {
+  outline: 1px solid var(--green);
+  outline-offset: 2px;
+}
+
+.nbt-page .nbt-toggle .nbt-pill {
+  width: 28px;
+  height: 15px;
+  border-radius: 8px;
+  background: var(--inset);
+  border: 1px solid var(--line);
+  position: relative;
+  flex-shrink: 0;
+  transition:
+    background 120ms,
+    border-color 120ms;
+}
+
+.nbt-page .nbt-toggle .nbt-pill::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--faint);
+  transition:
+    transform 120ms,
+    background 120ms;
+}
+
+.nbt-page .nbt-toggle.nbt-on {
+  color: var(--text);
+}
+
+.nbt-page .nbt-toggle.nbt-on .nbt-pill {
+  background: var(--green-dim);
+  border-color: var(--green);
+}
+
+.nbt-page .nbt-toggle.nbt-on .nbt-pill::after {
+  transform: translateX(13px);
+  background: var(--green);
+}
+
+/* ---------- buttons ---------- */
+.nbt-page .nbt-btn {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition:
+    border-color 120ms,
+    background 120ms;
+}
+
+.nbt-page .nbt-btn:hover {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+/* ---------- canvas ---------- */
+.nbt-page .nbt-canvas-wrap {
+  grid-area: canvas;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.nbt-page .nbt-canvas-wrap svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.nbt-page .nbt-canvas-wrap svg.nbt-panning {
+  cursor: grabbing;
+}
+
+.nbt-page .nbt-canvas-hint {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  pointer-events: none;
+  user-select: none;
+}
+
+.nbt-page .nbt-canvas-tools {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  display: flex;
+  gap: 6px;
+}
+
+/* ---------- readout strip ---------- */
+.nbt-page .nbt-readout {
+  grid-area: readout;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+}
+
+.nbt-page .nbt-readout-item {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 44px;
+  padding: 0 16px;
+  border-right: 1px solid var(--line-soft);
+  min-width: 90px;
+}
+
+.nbt-page .nbt-readout-item .nbt-k {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.nbt-page .nbt-readout-item .nbt-v {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--green);
+  white-space: nowrap;
+}
+
+.nbt-page .nbt-readout-item .nbt-v.nbt-plain {
+  color: var(--text);
+}
+
+.nbt-page .nbt-readout-item .nbt-v.nbt-warn {
+  color: var(--amber);
+}

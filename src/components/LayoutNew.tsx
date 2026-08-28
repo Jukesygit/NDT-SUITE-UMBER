@@ -179,6 +179,13 @@ const navigationConfig: NavItem[] = [
         description: 'Interactive 3D surface visualization of scan thickness data',
       },
       {
+        id: 'beam-tool',
+        path: '/beam-tool',
+        label: 'NotBeamTool',
+        description:
+          'UT angle-beam technique designer — weld cross-section, skip legs, sectorial scan',
+      },
+      {
         id: 'downloads',
         path: '/downloads',
         label: 'Downloads',
