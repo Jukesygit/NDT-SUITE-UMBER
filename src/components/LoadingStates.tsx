@@ -1,5 +1,19 @@
 import React, { type CSSProperties } from 'react';
-import '../styles/glassmorphic.css';
+// NO `import '../styles/glassmorphic.css'` here — see below. glassmorphic.css is
+// already loaded globally via `styles/main.css` (App.tsx line 6), so this import
+// was redundant, and it was actively harmful in dev:
+//
+//   App.tsx imports main.css (line 6) BEFORE ProtectedRoute (line 16), which
+//   pulls in this module. Vite's dev server injects each CSS module as its own
+//   <style> tag in module-execution order, so a SECOND copy of glassmorphic
+//   landed AFTER main.css. Both declare `--text-primary` on `:root` at equal
+//   specificity, so the later copy won and flipped the token from the industrial
+//   theme's #1c1b18 to glassmorphic's #ffffff app-wide — rendering the shared
+//   `ui/Modal` (title AND body use `var(--text-primary)`) white-on-light-grey.
+//
+// Production was never affected: Rollup emits the CSS module once, in main.css's
+// inlined position, so industrial-theme.css stayed last. Verified 2026-08-27 by
+// driving headless Edge against both the dev server and the built bundle.
 import { RandomMatrixSpinner } from './MatrixSpinners';
 
 /**
@@ -32,7 +46,7 @@ export const Spinner = ({ size = 'md', color = 'primary', className = '' }: Spin
     sm: '20px',
     md: '32px',
     lg: '48px',
-    xl: '64px'
+    xl: '64px',
   };
 
   const colors: Record<SpinnerColor, string> = {
@@ -40,7 +54,7 @@ export const Spinner = ({ size = 'md', color = 'primary', className = '' }: Spin
     white: 'var(--text-primary)',
     success: 'var(--success)',
     warning: 'var(--warning)',
-    danger: 'var(--danger)'
+    danger: 'var(--danger)',
   };
 
   return (
@@ -74,11 +88,15 @@ interface DotsSpinnerProps {
 /**
  * Dots Spinner - Three animated dots
  */
-export const DotsSpinner = ({ size = 'md', color = 'primary', className = '' }: DotsSpinnerProps) => {
+export const DotsSpinner = ({
+  size = 'md',
+  color = 'primary',
+  className = '',
+}: DotsSpinnerProps) => {
   const sizes: Record<DotsSize, string> = {
     sm: '6px',
     md: '8px',
-    lg: '12px'
+    lg: '12px',
   };
 
   const colors: Record<SpinnerColor, string> = {
@@ -86,7 +104,7 @@ export const DotsSpinner = ({ size = 'md', color = 'primary', className = '' }: 
     white: 'var(--text-primary)',
     success: 'var(--success)',
     warning: 'var(--warning)',
-    danger: 'var(--danger)'
+    danger: 'var(--danger)',
   };
 
   const dotStyle: CSSProperties = {
@@ -94,15 +112,11 @@ export const DotsSpinner = ({ size = 'md', color = 'primary', className = '' }: 
     height: sizes[size],
     borderRadius: '50%',
     backgroundColor: colors[color],
-    animation: 'subtlePulse 1.4s ease-in-out infinite'
+    animation: 'subtlePulse 1.4s ease-in-out infinite',
   };
 
   return (
-    <div
-      className={`flex items-center gap-2 ${className}`}
-      role="status"
-      aria-label="Loading"
-    >
+    <div className={`flex items-center gap-2 ${className}`} role="status" aria-label="Loading">
       <div style={{ ...dotStyle, animationDelay: '0s' }} />
       <div style={{ ...dotStyle, animationDelay: '0.2s' }} />
       <div style={{ ...dotStyle, animationDelay: '0.4s' }} />
@@ -122,7 +136,7 @@ export const RingSpinner = ({ size = 'md', className = '' }: RingSpinnerProps) =
   const sizes: Record<DotsSize, string> = {
     sm: '24px',
     md: '40px',
-    lg: '56px'
+    lg: '56px',
   };
 
   return (
@@ -183,19 +197,19 @@ export const ProgressBar = ({
   showLabel = true,
   color = 'primary',
   height = 'md',
-  className = ''
+  className = '',
 }: ProgressBarProps) => {
   const colors: Record<ProgressColor, string> = {
     primary: 'var(--accent-blue)',
     success: 'var(--success)',
     warning: 'var(--warning)',
-    danger: 'var(--danger)'
+    danger: 'var(--danger)',
   };
 
   const heights: Record<BarHeight, string> = {
     sm: '4px',
     md: '8px',
-    lg: '12px'
+    lg: '12px',
   };
 
   return (
@@ -213,7 +227,7 @@ export const ProgressBar = ({
           backgroundColor: 'var(--glass-bg-secondary)',
           borderRadius: 'var(--radius-full)',
           overflow: 'hidden',
-          border: '1px solid var(--glass-border)'
+          border: '1px solid var(--glass-border)',
         }}
       >
         <div
@@ -222,7 +236,7 @@ export const ProgressBar = ({
             width: `${progress}%`,
             backgroundColor: colors[color],
             transition: 'width var(--transition-base)',
-            boxShadow: `0 0 8px ${colors[color]}40`
+            boxShadow: `0 0 8px ${colors[color]}40`,
           }}
         />
       </div>
@@ -239,18 +253,22 @@ interface IndeterminateProgressProps {
 /**
  * Indeterminate Progress Bar
  */
-export const IndeterminateProgress = ({ color = 'primary', height = 'md', className = '' }: IndeterminateProgressProps) => {
+export const IndeterminateProgress = ({
+  color = 'primary',
+  height = 'md',
+  className = '',
+}: IndeterminateProgressProps) => {
   const colors: Record<ProgressColor, string> = {
     primary: 'var(--accent-blue)',
     success: 'var(--success)',
     warning: 'var(--warning)',
-    danger: 'var(--danger)'
+    danger: 'var(--danger)',
   };
 
   const heights: Record<BarHeight, string> = {
     sm: '4px',
     md: '8px',
-    lg: '12px'
+    lg: '12px',
   };
 
   return (
@@ -263,7 +281,7 @@ export const IndeterminateProgress = ({ color = 'primary', height = 'md', classN
         borderRadius: 'var(--radius-full)',
         overflow: 'hidden',
         border: '1px solid var(--glass-border)',
-        position: 'relative'
+        position: 'relative',
       }}
     >
       <div
@@ -273,7 +291,7 @@ export const IndeterminateProgress = ({ color = 'primary', height = 'md', classN
           width: '40%',
           backgroundColor: colors[color],
           animation: 'shimmer 1.5s ease-in-out infinite',
-          boxShadow: `0 0 8px ${colors[color]}40`
+          boxShadow: `0 0 8px ${colors[color]}40`,
         }}
       />
     </div>
@@ -296,19 +314,19 @@ export const CircularProgress = ({
   size = 'md',
   showLabel = true,
   color = 'primary',
-  className = ''
+  className = '',
 }: CircularProgressProps) => {
   const sizes: Record<DotsSize, { size: number; stroke: number }> = {
     sm: { size: 40, stroke: 3 },
     md: { size: 64, stroke: 4 },
-    lg: { size: 96, stroke: 5 }
+    lg: { size: 96, stroke: 5 },
   };
 
   const colors: Record<ProgressColor, string> = {
     primary: 'var(--accent-blue)',
     success: 'var(--success)',
     warning: 'var(--warning)',
-    danger: 'var(--danger)'
+    danger: 'var(--danger)',
   };
 
   const { size: diameter, stroke } = sizes[size];
@@ -317,7 +335,10 @@ export const CircularProgress = ({
   const offset = circumference - (progress / 100) * circumference;
 
   return (
-    <div className={`relative inline-flex ${className}`} style={{ width: diameter, height: diameter }}>
+    <div
+      className={`relative inline-flex ${className}`}
+      style={{ width: diameter, height: diameter }}
+    >
       <svg width={diameter} height={diameter} className="transform -rotate-90">
         <circle
           cx={diameter / 2}
@@ -339,7 +360,7 @@ export const CircularProgress = ({
           strokeLinecap="round"
           style={{
             transition: 'stroke-dashoffset var(--transition-base)',
-            filter: `drop-shadow(0 0 4px ${colors[color]}40)`
+            filter: `drop-shadow(0 0 4px ${colors[color]}40)`,
           }}
         />
       </svg>
@@ -370,7 +391,7 @@ export const Skeleton = ({
   width = '100%',
   height = '1rem',
   borderRadius = 'var(--radius-md)',
-  className = ''
+  className = '',
 }: SkeletonProps) => {
   return (
     <div
@@ -379,9 +400,10 @@ export const Skeleton = ({
         width,
         height,
         borderRadius,
-        background: 'linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.03) 100%)',
+        background:
+          'linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.03) 100%)',
         backgroundSize: '200% 100%',
-        animation: 'shimmer 1.5s infinite'
+        animation: 'shimmer 1.5s infinite',
       }}
       role="status"
       aria-label="Loading content"
@@ -401,11 +423,7 @@ export const SkeletonText = ({ lines = 3, className = '' }: SkeletonTextProps) =
   return (
     <div className={`space-y-3 ${className}`}>
       {Array.from({ length: lines }).map((_, index) => (
-        <Skeleton
-          key={index}
-          height="0.875rem"
-          width={index === lines - 1 ? '60%' : '100%'}
-        />
+        <Skeleton key={index} height="0.875rem" width={index === lines - 1 ? '60%' : '100%'} />
       ))}
     </div>
   );
@@ -421,17 +439,8 @@ interface SkeletonCardProps {
  */
 export const SkeletonCard = ({ showImage = true, className = '' }: SkeletonCardProps) => {
   return (
-    <div
-      className={`glass-card p-6 ${className}`}
-      style={{ minHeight: '200px' }}
-    >
-      {showImage && (
-        <Skeleton
-          height="140px"
-          borderRadius="var(--radius-lg)"
-          className="mb-4"
-        />
-      )}
+    <div className={`glass-card p-6 ${className}`} style={{ minHeight: '200px' }}>
+      {showImage && <Skeleton height="140px" borderRadius="var(--radius-lg)" className="mb-4" />}
       <Skeleton height="1.25rem" width="70%" className="mb-3" />
       <SkeletonText lines={2} />
       <div className="flex gap-2 mt-4">
@@ -453,13 +462,7 @@ interface SkeletonListItemProps {
 export const SkeletonListItem = ({ showAvatar = true, className = '' }: SkeletonListItemProps) => {
   return (
     <div className={`flex items-center gap-4 p-4 ${className}`}>
-      {showAvatar && (
-        <Skeleton
-          width="48px"
-          height="48px"
-          borderRadius="var(--radius-full)"
-        />
-      )}
+      {showAvatar && <Skeleton width="48px" height="48px" borderRadius="var(--radius-full)" />}
       <div className="flex-1 space-y-2">
         <Skeleton height="1rem" width="40%" />
         <Skeleton height="0.875rem" width="80%" />
@@ -519,7 +522,7 @@ export const SkeletonAvatar = ({ size = 'md', className = '' }: SkeletonAvatarPr
     sm: '32px',
     md: '48px',
     lg: '64px',
-    xl: '96px'
+    xl: '96px',
   };
 
   return (
@@ -552,13 +555,13 @@ export const LoadingOverlay = ({
   message = 'Loading...',
   spinner = 'matrix',
   transparent = false,
-  className = ''
+  className = '',
 }: LoadingOverlayProps) => {
   const spinners: Record<SpinnerType, React.ReactNode> = {
     default: <Spinner size="lg" />,
     ring: <RingSpinner size="lg" />,
     dots: <DotsSpinner size="lg" />,
-    matrix: <RandomMatrixSpinner size={180} />
+    matrix: <RandomMatrixSpinner size={180} />,
   };
 
   // Matrix spinner uses different styling
@@ -569,7 +572,7 @@ export const LoadingOverlay = ({
         style={{
           backgroundColor: transparent ? 'rgba(0, 0, 0, 0.5)' : 'rgba(10, 10, 10, 0.95)',
           backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)'
+          WebkitBackdropFilter: 'blur(8px)',
         }}
       >
         <div className="flex flex-col items-center gap-6">
@@ -588,7 +591,7 @@ export const LoadingOverlay = ({
       style={{
         backgroundColor: transparent ? 'rgba(0, 0, 0, 0.3)' : 'var(--bg-dark-overlay)',
         backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)'
+        WebkitBackdropFilter: 'blur(8px)',
       }}
     >
       <div
@@ -596,9 +599,7 @@ export const LoadingOverlay = ({
         style={{ minWidth: '200px' }}
       >
         {spinners[spinner]}
-        {message && (
-          <p className="text-base text-secondary font-medium">{message}</p>
-        )}
+        {message && <p className="text-base text-secondary font-medium">{message}</p>}
       </div>
     </div>
   );
@@ -616,7 +617,7 @@ interface ContentLoaderProps {
 export const ContentLoader = ({
   type = 'matrix',
   message = 'Loading content...',
-  className = ''
+  className = '',
 }: ContentLoaderProps) => {
   return (
     <div className={`flex flex-col items-center justify-center min-h-[60vh] ${className}`}>
@@ -625,7 +626,11 @@ export const ContentLoader = ({
       {type === 'dots' && <DotsSpinner size="lg" />}
       {type === 'matrix' && <RandomMatrixSpinner size={160} />}
       {message && (
-        <p className={`text-base font-medium mt-4 ${type === 'matrix' ? 'text-gray-400 animate-pulse' : 'text-secondary'}`}>{message}</p>
+        <p
+          className={`text-base font-medium mt-4 ${type === 'matrix' ? 'text-gray-400 animate-pulse' : 'text-secondary'}`}
+        >
+          {message}
+        </p>
       )}
     </div>
   );
@@ -640,9 +645,7 @@ interface InlineLoaderProps {
  * Inline Loader - for buttons and small spaces
  */
 export const InlineLoader = ({ size = 'sm', className = '' }: InlineLoaderProps) => {
-  return (
-    <Spinner size={size} className={className} />
-  );
+  return <Spinner size={size} className={className} />;
 };
 
 // ========================================
@@ -737,5 +740,5 @@ export default {
   ContentLoader,
   InlineLoader,
   DashboardLoader,
-  FormLoader
+  FormLoader,
 };

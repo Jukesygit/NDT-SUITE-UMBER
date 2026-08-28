@@ -23,7 +23,7 @@ const sb = supabase!;
  * (see supabase/functions/_shared/cors.ts errorResponse), so read that body to
  * surface the real message; fall back to `error.message` on anything else.
  */
-async function extractInvokeError(error: unknown): Promise<string> {
+export async function extractInvokeError(error: unknown): Promise<string> {
   const err = error as { message?: string; context?: { json?: () => Promise<unknown> } };
 
   if (typeof err?.context?.json === 'function') {

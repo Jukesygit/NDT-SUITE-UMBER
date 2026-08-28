@@ -34,19 +34,20 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
 
-    /* Paths */
+    /* Paths
+     *
+     * Only the `three` type mappings live here. The eight `@…/*` source aliases
+     * (`@/*`, `@components/*`, `@utils/*`, `@services/*`, `@hooks/*`, `@types/*`,
+     * `@config/*`, `@store/*`) were deleted 2026-08-27: `vite.config.js` has no
+     * matching `resolve.alias`, so an aliased import would typecheck here and
+     * then fail to bundle. Do not re-add an alias to this list without adding
+     * the matching Vite alias in the same change — every import in the codebase
+     * is relative, so there is nothing to migrate.
+     */
     "baseUrl": "./src",
     "paths": {
       "three": ["../node_modules/@types/three"],
-      "three/*": ["../node_modules/@types/three/*"],
-      "@/*": ["*"],
-      "@components/*": ["components/*"],
-      "@utils/*": ["utils/*"],
-      "@services/*": ["services/*"],
-      "@hooks/*": ["hooks/*"],
-      "@types/*": ["types/*"],
-      "@config/*": ["config/*"],
-      "@store/*": ["store/*"]
+      "three/*": ["../node_modules/@types/three/*"]
     }
   },
   "include": ["src"],

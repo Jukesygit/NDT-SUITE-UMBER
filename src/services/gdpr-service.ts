@@ -5,6 +5,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { extractFunctionErrorMessage } from '../utils/edge-function-error';
+import { classifyAvatarRef, resolveAvatarUrl, type AvatarRef } from './avatar-service';
 // @ts-ignore - JS module without type declarations
 import * as supabaseModule from '../supabase-client';
 // @ts-ignore - accessing property from untyped module
@@ -19,6 +20,42 @@ export interface UserDataExport {
   activityLogs: Record<string, unknown>[];
   permissionRequests: Record<string, unknown>[];
   controlledDocuments: Record<string, unknown>[];
+}
+
+/**
+ * Resolve the exported `profiles.avatar_url` to something the data subject can
+ * actually open.
+ *
+ * Since the M11 refactor that column holds one of two shapes: a legacy permanent
+ * public URL, or a bare bucket object path (`<userId>/avatar-<ts>.png`) written
+ * by every upload after it. A path is meaningless outside the app, and an
+ * Article 15/20 export has to be readable on its own, so a path-shaped value is
+ * signed here.
+ *
+ * `avatar-service` is the single source for both halves of that: `classifyAvatarRef`
+ * decides which shape the stored value is, and `resolveAvatarUrl` does the
+ * signing. Legacy full URLs classify as `url` and are therefore never touched —
+ * the same both-shapes contract the render path keeps.
+ *
+ * Failure is deliberately non-fatal. An export that aborts because one signed
+ * URL could not be minted would deny the subject their entire data set over a
+ * profile picture, so the raw stored value is exported instead — still an honest
+ * record of what is held, which is what the right of access asks for.
+ */
+async function withResolvedAvatarUrl(
+  profile: Record<string, unknown> | null
+): Promise<Record<string, unknown> | null> {
+  if (!profile) return profile;
+
+  const stored = profile.avatar_url as AvatarRef;
+  if (classifyAvatarRef(stored).kind !== 'path') return profile;
+
+  try {
+    const signed = await resolveAvatarUrl(stored);
+    return signed ? { ...profile, avatar_url: signed } : profile;
+  } catch {
+    return profile;
+  }
 }
 
 /**
@@ -112,7 +149,7 @@ export async function exportUserData(userId: string): Promise<UserDataExport> {
 
   return {
     exportedAt: new Date().toISOString(),
-    profile: profileRes.data,
+    profile: await withResolvedAvatarUrl(profileRes.data),
     competencies,
     competencyDocuments,
     competencyHistory: historyRes.data || [],

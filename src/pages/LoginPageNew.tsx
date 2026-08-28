@@ -6,8 +6,9 @@ import { MATRIX_LOGO } from '../components/MatrixLogoAnimated';
 import { RandomMatrixSpinner } from '../components/MatrixSpinners';
 import { useAuth } from '../contexts/AuthContext';
 import { twoFactorService } from '../services/two-factor-service';
-import { TwoFactorVerifyInput } from '../components/two-factor/TwoFactorVerifyInput';
+import { TwoFactorChallenge } from '../components/two-factor/TwoFactorChallenge';
 import { validatePasswordStrength } from '../config/security';
+import { hasSessionExpiredReason, SESSION_EXPIRED_NOTICE } from '../lib/session-timebox';
 import './login.css';
 
 // Single-color brand mark; inherits its color from the surrounding text color
@@ -40,6 +41,21 @@ type LoginMode =
   | 'update-password'
   | 'processing'
   | 'verify-2fa';
+
+/**
+ * Why the user is looking at a login form.
+ *
+ * A session the server ended mid-work redirects here carrying
+ * `?reason=session-expired` (plus a sessionStorage fallback for the case where
+ * the hard navigation was cancelled) — see redirectToExpiredLogin. A deliberate
+ * sign-out carries nothing and gets no message: telling someone their session
+ * expired when they clicked Logout is a small lie the app should not tell.
+ * The marker is retired by markSessionStart on the next successful sign-in.
+ */
+const getInitialSessionNotice = (): string => {
+  if (typeof window === 'undefined') return '';
+  return hasSessionExpiredReason(window.location.search) ? SESSION_EXPIRED_NOTICE : '';
+};
 
 // Check for recovery mode before component mounts (synchronous check)
 const getInitialMode = (): LoginMode => {
@@ -88,25 +104,39 @@ function LoginPageNew() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [sessionNotice, setSessionNotice] = useState(getInitialSessionNotice);
   const [mode, setMode] = useState<LoginMode>(getInitialMode); // 'login', 'register', 'reset', 'verify-code', 'update-password'
   const isRedirectingRef = useRef(false); // Track if we're in the process of redirecting
   const [twoFALoading, setTwoFALoading] = useState(false);
   const [twoFAError, setTwoFAError] = useState('');
+
+  /**
+   * Finish a login that was held at the 2FA challenge.
+   *
+   * `complete2FALogin` dispatches `userLoggedIn`, which makes AuthContext
+   * re-read the 2FA status — that is the auth-state refresh both paths need.
+   * After a backup-code redemption the server has deleted the user's factors,
+   * so the re-read reports 2FA disabled, `twoFactorRequired` resolves false,
+   * the login completes, and RequireTwoFactorEnrolled then forces enrollment of
+   * a new authenticator.
+   */
+  const completeTwoFactorLogin = () => {
+    authManager.complete2FALogin();
+    isRedirectingRef.current = true;
+    navigate('/');
+    setTimeout(() => {
+      if (window.location.pathname === '/login') {
+        window.location.href = '/';
+      }
+    }, 1000);
+  };
 
   const handle2FAVerify = async (code: string) => {
     setTwoFALoading(true);
     setTwoFAError('');
     try {
       await twoFactorService.verifyLogin(code);
-      // 2FA verified — complete the login
-      authManager.complete2FALogin();
-      isRedirectingRef.current = true;
-      navigate('/');
-      setTimeout(() => {
-        if (window.location.pathname === '/login') {
-          window.location.href = '/';
-        }
-      }, 1000);
+      completeTwoFactorLogin();
     } catch (err: unknown) {
       setTwoFAError(err instanceof Error ? err.message : 'Invalid code. Please try again.');
       setTwoFALoading(false);
@@ -190,6 +220,7 @@ function LoginPageNew() {
     e.preventDefault();
     setError('');
     setSuccessMessage('');
+    setSessionNotice(''); // the explanation has been read; don't stack it under an error
     setIsLoading(true);
 
     try {
@@ -442,6 +473,12 @@ function LoginPageNew() {
             </div>
           )}
 
+          {sessionNotice && (
+            <div className="lg-alert warning" role="status">
+              {sessionNotice}
+            </div>
+          )}
+
           {error && (
             <div className="lg-alert error" role="alert">
               {error}
@@ -458,25 +495,16 @@ function LoginPageNew() {
           )}
 
           {mode === 'verify-2fa' && (
-            <>
-              <TwoFactorVerifyInput
-                onSubmit={handle2FAVerify}
-                isLoading={twoFALoading}
-                error={twoFAError}
-              />
-              <div className="lg-footer">
-                <button
-                  type="button"
-                  className="lg-link"
-                  onClick={() => {
-                    setMode('login');
-                    setTwoFAError('');
-                  }}
-                >
-                  Back to sign in
-                </button>
-              </div>
-            </>
+            <TwoFactorChallenge
+              onSubmitCode={handle2FAVerify}
+              isVerifying={twoFALoading}
+              verifyError={twoFAError}
+              onBackupCodeAccepted={completeTwoFactorLogin}
+              onBackToSignIn={() => {
+                setMode('login');
+                setTwoFAError('');
+              }}
+            />
           )}
 
           <form

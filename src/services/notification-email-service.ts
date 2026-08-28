@@ -10,6 +10,7 @@ import * as supabaseModule from '../supabase-client';
 const supabase: SupabaseClient | null = supabaseModule.supabase;
 
 import { sendEmail } from './email-service';
+import { SUPPORT_EMAIL } from '../config/contact';
 
 /**
  * List-Unsubscribe header for bulk / notification mail. The admin broadcast is
@@ -21,7 +22,7 @@ import { sendEmail } from './email-service';
  * tsconfig, so that module cannot be imported here directly.
  */
 const REMINDER_EMAIL_HEADERS: Record<string, string> = {
-    'List-Unsubscribe': '<mailto:jonas@matrixinspectionservices.com?subject=unsubscribe>',
+  'List-Unsubscribe': `<mailto:${SUPPORT_EMAIL}?subject=unsubscribe>`,
 };
 
 // ============================================================================
@@ -29,88 +30,88 @@ const REMINDER_EMAIL_HEADERS: Record<string, string> = {
 // ============================================================================
 
 export interface NotificationEmailLog {
-    id: string;
-    sent_by: string;
-    sent_by_email: string | null;
-    sent_by_name: string | null;
-    subject: string;
-    body: string;
-    recipient_ids: string[];
-    recipient_count: number;
-    successful_count: number;
-    failed_count: number;
-    status: 'pending' | 'sending' | 'completed' | 'failed';
-    error_message: string | null;
-    filters_used: Record<string, unknown> | null;
-    created_at: string;
-    completed_at: string | null;
+  id: string;
+  sent_by: string;
+  sent_by_email: string | null;
+  sent_by_name: string | null;
+  subject: string;
+  body: string;
+  recipient_ids: string[];
+  recipient_count: number;
+  successful_count: number;
+  failed_count: number;
+  status: 'pending' | 'sending' | 'completed' | 'failed';
+  error_message: string | null;
+  filters_used: Record<string, unknown> | null;
+  created_at: string;
+  completed_at: string | null;
 }
 
 export interface NotificationRecipient {
-    id: string;
-    notification_id: string;
-    recipient_id: string | null;
-    recipient_email: string;
-    recipient_name: string | null;
-    status: 'pending' | 'sent' | 'failed';
-    error_message: string | null;
-    sent_at: string | null;
+  id: string;
+  notification_id: string;
+  recipient_id: string | null;
+  recipient_email: string;
+  recipient_name: string | null;
+  status: 'pending' | 'sent' | 'failed';
+  error_message: string | null;
+  sent_at: string | null;
 }
 
 export interface RecipientInput {
-    id: string;
-    user_id: string;
-    username: string;
-    email: string;
+  id: string;
+  user_id: string;
+  username: string;
+  email: string;
 }
 
 export interface SendNotificationParams {
-    subject: string;
-    body: string;
-    recipients: RecipientInput[];
-    filters?: {
-        organizationId?: string;
-        role?: string;
-        searchTerm?: string;
-    };
-    /** If true, body is treated as raw HTML and sent directly without wrapper template */
-    isHtmlTemplate?: boolean;
-    /** Optional callback for progress updates */
-    onProgress?: (progress: EmailProgress) => void;
+  subject: string;
+  body: string;
+  recipients: RecipientInput[];
+  filters?: {
+    organizationId?: string;
+    role?: string;
+    searchTerm?: string;
+  };
+  /** If true, body is treated as raw HTML and sent directly without wrapper template */
+  isHtmlTemplate?: boolean;
+  /** Optional callback for progress updates */
+  onProgress?: (progress: EmailProgress) => void;
 }
 
 export interface EmailProgress {
-    current: number;
-    total: number;
-    currentRecipient: string;
-    successCount: number;
-    failCount: number;
+  current: number;
+  total: number;
+  currentRecipient: string;
+  successCount: number;
+  failCount: number;
 }
 
 export interface SendNotificationResult {
-    notificationId: string;
-    totalRecipients: number;
-    successful: number;
-    failed: number;
+  notificationId: string;
+  totalRecipients: number;
+  successful: number;
+  failed: number;
 }
 
 export interface NotificationLogFilters {
-    startDate?: string;
-    endDate?: string;
-    status?: string;
+  startDate?: string;
+  endDate?: string;
+  status?: string;
 }
 
 export interface PaginatedNotificationLogs {
-    data: NotificationEmailLog[];
-    count: number;
-    page: number;
-    pageSize: number;
-    totalPages: number;
+  data: NotificationEmailLog[];
+  count: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface NotificationDetail {
-    notification: NotificationEmailLog;
-    recipients: NotificationRecipient[];
+  notification: NotificationEmailLog;
+  recipients: NotificationRecipient[];
 }
 
 // ============================================================================
@@ -121,24 +122,24 @@ export interface NotificationDetail {
  * HTML-escape a string to prevent XSS
  */
 function escapeHtml(str: string): string {
-    if (typeof str !== 'string') return '';
-    return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#x27;');
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
 }
 
 /**
  * Generate notification email HTML template
  */
 function generateNotificationEmailHtml(body: string, recipientName: string): string {
-    const safeName = escapeHtml(recipientName);
-    // Body is expected to be plain text or simple HTML from the admin
-    // We don't escape it since it's admin-provided content
+  const safeName = escapeHtml(recipientName);
+  // Body is expected to be plain text or simple HTML from the admin
+  // We don't escape it since it's admin-provided content
 
-    return `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -172,7 +173,7 @@ function generateNotificationEmailHtml(body: string, recipientName: string): str
                         <td style="padding: 30px 40px; text-align: center; border-top: 1px solid rgba(148, 163, 184, 0.1);">
                             <p style="margin: 0 0 8px; font-size: 13px; color: #64748b;">
                                 Need help? Contact support at
-                                <a href="mailto:jonas@matrixinspectionservices.com" style="color: #60a5fa; text-decoration: none;">jonas@matrixinspectionservices.com</a>
+                                <a href="mailto:${SUPPORT_EMAIL}" style="color: #60a5fa; text-decoration: none;">${SUPPORT_EMAIL}</a>
                             </p>
                             <p style="margin: 8px 0 0; font-size: 12px; color: #475569;">
                                 &copy; ${new Date().getFullYear()} Matrix Inspection Services. All rights reserved.
@@ -195,212 +196,207 @@ function generateNotificationEmailHtml(body: string, recipientName: string): str
  * Send custom notification emails to selected recipients
  */
 export async function sendNotificationEmails(
-    params: SendNotificationParams
+  params: SendNotificationParams
 ): Promise<SendNotificationResult> {
-    const { subject, body, recipients, filters, isHtmlTemplate, onProgress } = params;
+  const { subject, body, recipients, filters, isHtmlTemplate, onProgress } = params;
 
-    if (!supabase) throw new Error('Supabase not configured');
-    if (!recipients.length) throw new Error('No recipients selected');
+  if (!supabase) throw new Error('Supabase not configured');
+  if (!recipients.length) throw new Error('No recipients selected');
 
-    // Get current user info
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
+  // Get current user info
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('User not authenticated');
 
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('username, email')
-        .eq('id', user.id)
-        .single();
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('username, email')
+    .eq('id', user.id)
+    .single();
 
-    // Create notification log entry
-    const { data: logEntry, error: logError } = await supabase
-        .from('notification_email_log')
-        .insert({
-            sent_by: user.id,
-            sent_by_email: profile?.email || user.email,
-            sent_by_name: profile?.username || 'Admin',
-            subject,
-            body,
-            recipient_ids: recipients.map((r) => r.user_id),
-            recipient_count: recipients.length,
-            status: 'sending',
-            filters_used: filters || null,
-        })
-        .select()
-        .single();
+  // Create notification log entry
+  const { data: logEntry, error: logError } = await supabase
+    .from('notification_email_log')
+    .insert({
+      sent_by: user.id,
+      sent_by_email: profile?.email || user.email,
+      sent_by_name: profile?.username || 'Admin',
+      subject,
+      body,
+      recipient_ids: recipients.map((r) => r.user_id),
+      recipient_count: recipients.length,
+      status: 'sending',
+      filters_used: filters || null,
+    })
+    .select()
+    .single();
 
-    if (logError || !logEntry) {
-        throw new Error(`Failed to create notification log: ${logError?.message}`);
+  if (logError || !logEntry) {
+    throw new Error(`Failed to create notification log: ${logError?.message}`);
+  }
+
+  // Create recipient entries
+  const recipientEntries = recipients.map((r) => ({
+    notification_id: logEntry.id,
+    recipient_id: r.user_id,
+    recipient_email: r.email,
+    recipient_name: r.username,
+    status: 'pending',
+  }));
+
+  await supabase.from('notification_email_recipients').insert(recipientEntries);
+
+  // Send emails sequentially with delay to respect Resend rate limits
+  // Resend free tier allows ~1 email/second, paid tier ~2/second
+  // Using 1.5 second delay to be safe and avoid 429 errors
+  const DELAY_BETWEEN_EMAILS_MS = 1500;
+
+  const allResults: { success: boolean; recipientId: string; error?: string }[] = [];
+
+  let successCount = 0;
+  let failCount = 0;
+
+  for (let i = 0; i < recipients.length; i++) {
+    const recipient = recipients[i];
+
+    // Report progress before sending
+    onProgress?.({
+      current: i + 1,
+      total: recipients.length,
+      currentRecipient: recipient.username || recipient.email,
+      successCount,
+      failCount,
+    });
+
+    try {
+      // Use raw HTML if template provided, otherwise wrap in default template
+      const html = isHtmlTemplate ? body : generateNotificationEmailHtml(body, recipient.username);
+      await sendEmail({ to: recipient.email, subject, html, headers: REMINDER_EMAIL_HEADERS });
+
+      // Update individual recipient status
+      await supabase
+        .from('notification_email_recipients')
+        .update({ status: 'sent', sent_at: new Date().toISOString() })
+        .eq('notification_id', logEntry.id)
+        .eq('recipient_id', recipient.user_id);
+
+      successCount++;
+      allResults.push({ success: true, recipientId: recipient.user_id });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+      // Update individual recipient status with error
+      await supabase
+        .from('notification_email_recipients')
+        .update({ status: 'failed', error_message: errorMessage })
+        .eq('notification_id', logEntry.id)
+        .eq('recipient_id', recipient.user_id);
+
+      failCount++;
+      allResults.push({ success: false, recipientId: recipient.user_id, error: errorMessage });
     }
 
-    // Create recipient entries
-    const recipientEntries = recipients.map((r) => ({
-        notification_id: logEntry.id,
-        recipient_id: r.user_id,
-        recipient_email: r.email,
-        recipient_name: r.username,
-        status: 'pending',
-    }));
-
-    await supabase.from('notification_email_recipients').insert(recipientEntries);
-
-    // Send emails sequentially with delay to respect Resend rate limits
-    // Resend free tier allows ~1 email/second, paid tier ~2/second
-    // Using 1.5 second delay to be safe and avoid 429 errors
-    const DELAY_BETWEEN_EMAILS_MS = 1500;
-
-    const allResults: { success: boolean; recipientId: string; error?: string }[] = [];
-
-    let successCount = 0;
-    let failCount = 0;
-
-    for (let i = 0; i < recipients.length; i++) {
-        const recipient = recipients[i];
-
-        // Report progress before sending
-        onProgress?.({
-            current: i + 1,
-            total: recipients.length,
-            currentRecipient: recipient.username || recipient.email,
-            successCount,
-            failCount,
-        });
-
-        try {
-            // Use raw HTML if template provided, otherwise wrap in default template
-            const html = isHtmlTemplate ? body : generateNotificationEmailHtml(body, recipient.username);
-            await sendEmail({ to: recipient.email, subject, html, headers: REMINDER_EMAIL_HEADERS });
-
-            // Update individual recipient status
-            await supabase
-                .from('notification_email_recipients')
-                .update({ status: 'sent', sent_at: new Date().toISOString() })
-                .eq('notification_id', logEntry.id)
-                .eq('recipient_id', recipient.user_id);
-
-            successCount++;
-            allResults.push({ success: true, recipientId: recipient.user_id });
-        } catch (error: unknown) {
-            const errorMessage =
-                error instanceof Error ? error.message : 'Unknown error';
-
-            // Update individual recipient status with error
-            await supabase
-                .from('notification_email_recipients')
-                .update({ status: 'failed', error_message: errorMessage })
-                .eq('notification_id', logEntry.id)
-                .eq('recipient_id', recipient.user_id);
-
-            failCount++;
-            allResults.push({ success: false, recipientId: recipient.user_id, error: errorMessage });
-        }
-
-        // Delay between emails (except after the last one)
-        if (i < recipients.length - 1) {
-            await new Promise((resolve) => setTimeout(resolve, DELAY_BETWEEN_EMAILS_MS));
-        }
+    // Delay between emails (except after the last one)
+    if (i < recipients.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, DELAY_BETWEEN_EMAILS_MS));
     }
+  }
 
-    const successful = allResults.filter((r) => r.success).length;
-    const failed = recipients.length - successful;
+  const successful = allResults.filter((r) => r.success).length;
+  const failed = recipients.length - successful;
 
-    // Update notification log with results
-    await supabase
-        .from('notification_email_log')
-        .update({
-            successful_count: successful,
-            failed_count: failed,
-            status: failed === recipients.length ? 'failed' : 'completed',
-            completed_at: new Date().toISOString(),
-        })
-        .eq('id', logEntry.id);
+  // Update notification log with results
+  await supabase
+    .from('notification_email_log')
+    .update({
+      successful_count: successful,
+      failed_count: failed,
+      status: failed === recipients.length ? 'failed' : 'completed',
+      completed_at: new Date().toISOString(),
+    })
+    .eq('id', logEntry.id);
 
-    return {
-        notificationId: logEntry.id,
-        totalRecipients: recipients.length,
-        successful,
-        failed,
-    };
+  return {
+    notificationId: logEntry.id,
+    totalRecipients: recipients.length,
+    successful,
+    failed,
+  };
 }
 
 /**
  * Fetch notification email logs with pagination
  */
 export async function getNotificationLogs(
-    filters: NotificationLogFilters = {},
-    page = 1,
-    pageSize = 25
+  filters: NotificationLogFilters = {},
+  page = 1,
+  pageSize = 25
 ): Promise<PaginatedNotificationLogs> {
-    if (!supabase) throw new Error('Supabase not configured');
+  if (!supabase) throw new Error('Supabase not configured');
 
-    let query = supabase
-        .from('notification_email_log')
-        .select('*', { count: 'exact' });
+  let query = supabase.from('notification_email_log').select('*', { count: 'exact' });
 
-    // Apply filters
-    if (filters.startDate) {
-        query = query.gte('created_at', filters.startDate);
-    }
-    if (filters.endDate) {
-        query = query.lte('created_at', filters.endDate);
-    }
-    if (filters.status) {
-        query = query.eq('status', filters.status);
-    }
+  // Apply filters
+  if (filters.startDate) {
+    query = query.gte('created_at', filters.startDate);
+  }
+  if (filters.endDate) {
+    query = query.lte('created_at', filters.endDate);
+  }
+  if (filters.status) {
+    query = query.eq('status', filters.status);
+  }
 
-    // Pagination
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
+  // Pagination
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
 
-    query = query.order('created_at', { ascending: false }).range(from, to);
+  query = query.order('created_at', { ascending: false }).range(from, to);
 
-    const { data, error, count } = await query;
+  const { data, error, count } = await query;
 
-    if (error) throw error;
+  if (error) throw error;
 
-    return {
-        data: (data as NotificationEmailLog[]) || [],
-        count: count || 0,
-        page,
-        pageSize,
-        totalPages: Math.ceil((count || 0) / pageSize),
-    };
+  return {
+    data: (data as NotificationEmailLog[]) || [],
+    count: count || 0,
+    page,
+    pageSize,
+    totalPages: Math.ceil((count || 0) / pageSize),
+  };
 }
 
 /**
  * Get notification details with recipients
  */
-export async function getNotificationDetail(
-    notificationId: string
-): Promise<NotificationDetail> {
-    if (!supabase) throw new Error('Supabase not configured');
+export async function getNotificationDetail(notificationId: string): Promise<NotificationDetail> {
+  if (!supabase) throw new Error('Supabase not configured');
 
-    const { data: notification, error: notificationError } = await supabase
-        .from('notification_email_log')
-        .select('*')
-        .eq('id', notificationId)
-        .single();
+  const { data: notification, error: notificationError } = await supabase
+    .from('notification_email_log')
+    .select('*')
+    .eq('id', notificationId)
+    .single();
 
-    if (notificationError) throw notificationError;
+  if (notificationError) throw notificationError;
 
-    const { data: recipients, error: recipientsError } = await supabase
-        .from('notification_email_recipients')
-        .select('*')
-        .eq('notification_id', notificationId)
-        .order('recipient_name');
+  const { data: recipients, error: recipientsError } = await supabase
+    .from('notification_email_recipients')
+    .select('*')
+    .eq('notification_id', notificationId)
+    .order('recipient_name');
 
-    if (recipientsError) throw recipientsError;
+  if (recipientsError) throw recipientsError;
 
-    return {
-        notification: notification as NotificationEmailLog,
-        recipients: (recipients as NotificationRecipient[]) || [],
-    };
+  return {
+    notification: notification as NotificationEmailLog,
+    recipients: (recipients as NotificationRecipient[]) || [],
+  };
 }
 
 export default {
-    sendNotificationEmails,
-    getNotificationLogs,
-    getNotificationDetail,
+  sendNotificationEmails,
+  getNotificationLogs,
+  getNotificationDetail,
 };

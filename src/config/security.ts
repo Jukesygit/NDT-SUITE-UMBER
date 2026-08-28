@@ -16,13 +16,37 @@ export const PASSWORD_POLICY = {
   minStrengthScore: 3, // 0-4 scale
 } as const;
 
-// Session configuration
-export const SESSION_CONFIG = {
-  timeout: 30 * 60 * 1000, // 30 minutes
-  warningTime: 5 * 60 * 1000, // Warning 5 minutes before timeout
-  refreshInterval: 10 * 60 * 1000, // Refresh token every 10 minutes
-  maxExtensions: 3, // Maximum times session can be extended
+/**
+ * Session time-box — CLIENT WARNING ONLY.
+ *
+ * THE SERVER SETTING IS AUTHORITATIVE. Session length is enforced by Supabase
+ * Auth's "Time-box user sessions" option (set on the ntrg project at production
+ * deploy). Nothing here can shorten or extend a session; these numbers exist
+ * solely so the client can warn the user before the server ends it. If the
+ * server value changes, change `hours` to match — the constant follows the
+ * server, never the other way round.
+ *
+ * TIMING SEMANTICS: the server enforces the box at the next TOKEN REFRESH, so
+ * the real cut-off is roughly `hours` + the access-token TTL (~1h), not a hard
+ * instant kill at the hour mark. The warning is therefore deliberately
+ * imprecise — the banner says the session will expire "soon" and never shows a
+ * countdown, because a countdown would be a promise the server does not keep.
+ */
+export const SESSION_TIMEBOX = {
+  hours: 12,
+  warningMinutes: 30,
+  enabled: true,
 } as const;
+
+// NOTE (2026-08-26): a `SESSION_CONFIG` block used to sit here declaring a
+// 30-minute idle timeout, a 5-minute warning, a 10-minute refresh interval and
+// a maximum number of session extensions. Nothing in the codebase ever read a
+// single one of those fields, and no server setting matched them — the config
+// documented a control that did not exist (flagged by the 2026-08 security
+// audit). It was deleted rather than "fixed", because the real controls live
+// elsewhere: session lifetime = the server time-box (see SESSION_TIMEBOX above),
+// token refresh cadence = src/lib/session-manager.ts. Do not reintroduce
+// timeout constants here unless something actually enforces them.
 
 interface RateLimitConfig {
   attempts: number;
@@ -438,7 +462,7 @@ setInterval(
 
 export default {
   PASSWORD_POLICY,
-  SESSION_CONFIG,
+  SESSION_TIMEBOX,
   RATE_LIMITS,
   validatePasswordStrength,
   generateSecurePassword,

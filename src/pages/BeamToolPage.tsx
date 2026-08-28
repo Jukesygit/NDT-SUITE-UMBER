@@ -1,15 +1,19 @@
 import BeamTool from '../components/BeamTool/BeamTool';
 
+/**
+ * BeamToolPage - Full-bleed page wrapper for the NotBeamTool UT technique designer.
+ * `.tool-container` flips `.main` to padding:0/overflow:hidden via the layout.css
+ * `:has()` rules (same mechanism as VesselModelerPage), so the document is exactly
+ * 100vh tall and the page itself can never scroll — wheel events over the canvas
+ * only zoom, and the tool sidebar keeps its own overflow-y scroller.
+ */
 function BeamToolPage() {
   return (
     <div
-      className="beamtool-page-wrapper"
+      className="tool-container beamtool-page-wrapper"
       style={{
-        marginTop: 'calc(-1 * var(--spacing-8, 2rem))',
-        marginLeft: 'calc(50% - 50vw)',
-        width: '100vw',
         height: 'calc(100vh - var(--header-height, 4rem))',
-        maxWidth: 'none',
+        padding: 0,
         overflow: 'hidden',
       }}
     >

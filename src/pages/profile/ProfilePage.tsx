@@ -9,6 +9,7 @@ import { toDocumentInputs } from '../../utils/competency-documents';
 
 // React Query hooks
 import { useProfile } from '../../hooks/queries/useProfile';
+import { useAvatarUrl } from '../../hooks/queries/useAvatarUrls';
 import {
   useCompetencies,
   useCompetencyDefinitions,
@@ -93,6 +94,9 @@ export default function ProfilePage() {
   };
 
   const profileQuery = useProfile(user?.id);
+  // `avatar_url` may be a bucket path (current) or a legacy public URL; the hook
+  // handles both and yields undefined when there is nothing to show.
+  const avatarUrl = useAvatarUrl(profileQuery.data?.avatar_url);
   const competenciesQuery = useCompetencies(user?.id);
   const definitionsQuery = useCompetencyDefinitions();
   const categoriesQuery = useCompetencyCategories();
@@ -317,7 +321,7 @@ export default function ProfilePage() {
 
           {/* Avatar Section */}
           <ProfileAvatar
-            avatarUrl={profileQuery.data?.avatar_url ?? undefined}
+            avatarUrl={avatarUrl}
             username={user?.username || ''}
             email={user?.email || ''}
             isUploading={uploadAvatarMutation.isPending}

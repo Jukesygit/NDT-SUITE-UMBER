@@ -4,13 +4,17 @@
 
 import { useState, useMemo } from 'react';
 import { usePersonnel, useOrganizations } from '../../../hooks/queries/usePersonnel';
-import { useSendNotification, type EmailProgress } from '../../../hooks/mutations/useNotificationMutations';
+import {
+  useSendNotification,
+  type EmailProgress,
+} from '../../../hooks/mutations/useNotificationMutations';
 import { PersonnelSelector } from './PersonnelSelector';
 import { FormField, FormTextarea, ConfirmDialog } from '../../../components/ui';
+import { SUPPORT_EMAIL } from '../../../config/contact';
 import type { Person } from '../../../hooks/queries/usePersonnel';
 
 interface CustomNotificationsProps {
-    onSuccess?: () => void;
+  onSuccess?: () => void;
 }
 
 // Profile Update Reminder HTML Template
@@ -92,7 +96,7 @@ const PROFILE_UPDATE_TEMPLATE = `<!DOCTYPE html>
                         <td style="padding: 30px 40px; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.08);">
                             <p style="margin: 0 0 8px; font-size: 13px; color: #525252;">
                                 Need help? Contact support at
-                                <a href="mailto:jonas@matrixinspectionservices.com" style="color: #60a5fa; text-decoration: none;">jonas@matrixinspectionservices.com</a>
+                                <a href="mailto:${SUPPORT_EMAIL}" style="color: #60a5fa; text-decoration: none;">${SUPPORT_EMAIL}</a>
                             </p>
                             <p style="margin: 8px 0 0; font-size: 12px; color: #404040;">
                                 &copy; Matrix Advanced Inspection Services. All rights reserved.
@@ -107,452 +111,468 @@ const PROFILE_UPDATE_TEMPLATE = `<!DOCTYPE html>
 </html>`;
 
 export function CustomNotifications({ onSuccess }: CustomNotificationsProps) {
-    const { data: personnel = [], isLoading: isLoadingPersonnel } = usePersonnel();
-    const { data: organizations = [] } = useOrganizations();
-    const sendNotification = useSendNotification();
+  const { data: personnel = [], isLoading: isLoadingPersonnel } = usePersonnel();
+  const { data: organizations = [] } = useOrganizations();
+  const sendNotification = useSendNotification();
 
-    // Form state
-    const [subject, setSubject] = useState('');
-    const [body, setBody] = useState('');
-    const [selectedIds, setSelectedIds] = useState<string[]>([]);
-    const [useHtmlTemplate, setUseHtmlTemplate] = useState(false);
+  // Form state
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [useHtmlTemplate, setUseHtmlTemplate] = useState(false);
 
-    // Filter state
-    const [filterOrg, setFilterOrg] = useState('all');
-    const [filterRole, setFilterRole] = useState('all');
-    const [searchTerm, setSearchTerm] = useState('');
+  // Filter state
+  const [filterOrg, setFilterOrg] = useState('all');
+  const [filterRole, setFilterRole] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
 
-    // Confirmation modal state
-    const [showConfirm, setShowConfirm] = useState(false);
+  // Confirmation modal state
+  const [showConfirm, setShowConfirm] = useState(false);
 
-    // Success message state
-    const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  // Success message state
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-    // Progress tracking state
-    const [progress, setProgress] = useState<EmailProgress | null>(null);
+  // Progress tracking state
+  const [progress, setProgress] = useState<EmailProgress | null>(null);
 
-    // Filter personnel
-    const filteredPersonnel = useMemo(() => {
-        return personnel.filter((person: Person) => {
-            // Organization filter
-            if (filterOrg !== 'all' && person.organization_id !== filterOrg) return false;
-            // Role filter
-            if (filterRole !== 'all' && person.role !== filterRole) return false;
-            // Search term
-            if (searchTerm) {
-                const search = searchTerm.toLowerCase();
-                const matchesName = person.username.toLowerCase().includes(search);
-                const matchesEmail = person.email.toLowerCase().includes(search);
-                const matchesOrg = person.organizations?.name?.toLowerCase().includes(search);
-                if (!matchesName && !matchesEmail && !matchesOrg) return false;
-            }
-            return true;
-        });
-    }, [personnel, filterOrg, filterRole, searchTerm]);
+  // Filter personnel
+  const filteredPersonnel = useMemo(() => {
+    return personnel.filter((person: Person) => {
+      // Organization filter
+      if (filterOrg !== 'all' && person.organization_id !== filterOrg) return false;
+      // Role filter
+      if (filterRole !== 'all' && person.role !== filterRole) return false;
+      // Search term
+      if (searchTerm) {
+        const search = searchTerm.toLowerCase();
+        const matchesName = person.username.toLowerCase().includes(search);
+        const matchesEmail = person.email.toLowerCase().includes(search);
+        const matchesOrg = person.organizations?.name?.toLowerCase().includes(search);
+        if (!matchesName && !matchesEmail && !matchesOrg) return false;
+      }
+      return true;
+    });
+  }, [personnel, filterOrg, filterRole, searchTerm]);
 
-    // Selected recipients (from all personnel, not just filtered)
-    const selectedRecipients = useMemo(() => {
-        return personnel.filter((p: Person) => selectedIds.includes(p.id));
-    }, [personnel, selectedIds]);
+  // Selected recipients (from all personnel, not just filtered)
+  const selectedRecipients = useMemo(() => {
+    return personnel.filter((p: Person) => selectedIds.includes(p.id));
+  }, [personnel, selectedIds]);
 
-    // Validation - HTML template mode only needs subject and recipients
-    const isValid = subject.trim() && (useHtmlTemplate || body.trim()) && selectedIds.length > 0;
+  // Validation - HTML template mode only needs subject and recipients
+  const isValid = subject.trim() && (useHtmlTemplate || body.trim()) && selectedIds.length > 0;
 
-    // Load profile update template
-    const loadProfileUpdateTemplate = () => {
-        setSubject('Please review your Matrix Portal profile');
-        setBody(PROFILE_UPDATE_TEMPLATE);
-        setUseHtmlTemplate(true);
-    };
+  // Load profile update template
+  const loadProfileUpdateTemplate = () => {
+    setSubject('Please review your Matrix Portal profile');
+    setBody(PROFILE_UPDATE_TEMPLATE);
+    setUseHtmlTemplate(true);
+  };
 
-    // Clear template
-    const clearTemplate = () => {
-        setSubject('');
-        setBody('');
-        setUseHtmlTemplate(false);
-    };
+  // Clear template
+  const clearTemplate = () => {
+    setSubject('');
+    setBody('');
+    setUseHtmlTemplate(false);
+  };
 
-    // Handle send
-    const handleSend = async () => {
-        if (!isValid) return;
+  // Handle send
+  const handleSend = async () => {
+    if (!isValid) return;
 
-        // Reset progress
-        setProgress(null);
+    // Reset progress
+    setProgress(null);
 
-        try {
-            const result = await sendNotification.mutateAsync({
-                subject: subject.trim(),
-                body: body.trim(),
-                recipients: selectedRecipients.map((r: Person) => ({
-                    id: r.id,
-                    user_id: r.id,
-                    username: r.username,
-                    email: r.email,
-                })),
-                filters: {
-                    organizationId: filterOrg !== 'all' ? filterOrg : undefined,
-                    role: filterRole !== 'all' ? filterRole : undefined,
-                    searchTerm: searchTerm || undefined,
-                },
-                isHtmlTemplate: useHtmlTemplate,
-                onProgress: setProgress,
-            });
+    try {
+      const result = await sendNotification.mutateAsync({
+        subject: subject.trim(),
+        body: body.trim(),
+        recipients: selectedRecipients.map((r: Person) => ({
+          id: r.id,
+          user_id: r.id,
+          username: r.username,
+          email: r.email,
+        })),
+        filters: {
+          organizationId: filterOrg !== 'all' ? filterOrg : undefined,
+          role: filterRole !== 'all' ? filterRole : undefined,
+          searchTerm: searchTerm || undefined,
+        },
+        isHtmlTemplate: useHtmlTemplate,
+        onProgress: setProgress,
+      });
 
-            // Clear progress
-            setProgress(null);
+      // Clear progress
+      setProgress(null);
 
-            // Show success message
-            setSuccessMessage(
-                `Successfully sent ${result.successful} of ${result.totalRecipients} emails${
-                    result.failed > 0 ? ` (${result.failed} failed)` : ''
-                }`
-            );
+      // Show success message
+      setSuccessMessage(
+        `Successfully sent ${result.successful} of ${result.totalRecipients} emails${
+          result.failed > 0 ? ` (${result.failed} failed)` : ''
+        }`
+      );
 
-            // Reset form
-            setSubject('');
-            setBody('');
-            setSelectedIds([]);
-            setShowConfirm(false);
-            setUseHtmlTemplate(false);
+      // Reset form
+      setSubject('');
+      setBody('');
+      setSelectedIds([]);
+      setShowConfirm(false);
+      setUseHtmlTemplate(false);
 
-            // Clear success message after 5 seconds
-            setTimeout(() => setSuccessMessage(null), 5000);
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccessMessage(null), 5000);
 
-            onSuccess?.();
-        } catch {
-            setProgress(null);
-        }
-    };
+      onSuccess?.();
+    } catch {
+      setProgress(null);
+    }
+  };
 
-    return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left: Personnel Selector */}
-            <div style={{ padding: '24px', border: '1px solid rgba(53, 160, 88, 0.20)', borderRadius: '8px', background: 'rgba(53, 160, 88, 0.05)' }}>
-                <h3
-                    style={{
-                        fontSize: '18px',
-                        fontWeight: 600,
-                        marginBottom: '16px',
-                        color: 'var(--green-bright)',
-                    }}
-                >
-                    Select Recipients
-                </h3>
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Left: Personnel Selector */}
+      <div
+        style={{
+          padding: '24px',
+          border: '1px solid rgba(53, 160, 88, 0.20)',
+          borderRadius: '8px',
+          background: 'rgba(53, 160, 88, 0.05)',
+        }}
+      >
+        <h3
+          style={{
+            fontSize: '18px',
+            fontWeight: 600,
+            marginBottom: '16px',
+            color: 'var(--green-bright)',
+          }}
+        >
+          Select Recipients
+        </h3>
 
-                <PersonnelSelector
-                    personnel={filteredPersonnel}
-                    selectedIds={selectedIds}
-                    onSelectionChange={setSelectedIds}
-                    organizations={organizations}
-                    filterOrg={filterOrg}
-                    onFilterOrgChange={setFilterOrg}
-                    filterRole={filterRole}
-                    onFilterRoleChange={setFilterRole}
-                    searchTerm={searchTerm}
-                    onSearchChange={setSearchTerm}
-                    isLoading={isLoadingPersonnel}
-                />
-            </div>
+        <PersonnelSelector
+          personnel={filteredPersonnel}
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
+          organizations={organizations}
+          filterOrg={filterOrg}
+          onFilterOrgChange={setFilterOrg}
+          filterRole={filterRole}
+          onFilterRoleChange={setFilterRole}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          isLoading={isLoadingPersonnel}
+        />
+      </div>
 
-            {/* Right: Email Compose */}
-            <div style={{ padding: '24px', border: '1px solid rgba(53, 160, 88, 0.20)', borderRadius: '8px', background: 'rgba(53, 160, 88, 0.05)' }}>
-                <h3
-                    style={{
-                        fontSize: '18px',
-                        fontWeight: 600,
-                        marginBottom: '16px',
-                        color: 'var(--green-bright)',
-                    }}
-                >
-                    Compose Email
-                </h3>
+      {/* Right: Email Compose */}
+      <div
+        style={{
+          padding: '24px',
+          border: '1px solid rgba(53, 160, 88, 0.20)',
+          borderRadius: '8px',
+          background: 'rgba(53, 160, 88, 0.05)',
+        }}
+      >
+        <h3
+          style={{
+            fontSize: '18px',
+            fontWeight: 600,
+            marginBottom: '16px',
+            color: 'var(--green-bright)',
+          }}
+        >
+          Compose Email
+        </h3>
 
-                {/* Template Selection */}
-                <div
-                    style={{
-                        padding: '16px',
-                        background: 'rgba(53, 160, 88, 0.08)',
-                        border: '1px solid rgba(53, 160, 88, 0.20)',
-                        borderRadius: '8px',
-                        marginBottom: '16px',
-                    }}
-                >
-                    <p
-                        style={{
-                            margin: '0 0 12px',
-                            fontSize: '13px',
-                            color: 'rgba(53, 160, 88, 0.45)',
-                        }}
-                    >
-                        Quick Templates:
-                    </p>
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        <button
-                            onClick={loadProfileUpdateTemplate}
-                            disabled={useHtmlTemplate}
-                            style={{
-                                padding: '8px 16px',
-                                fontSize: '13px',
-                                fontWeight: 500,
-                                color: useHtmlTemplate ? 'var(--green-bright)' : 'var(--green)',
-                                background: useHtmlTemplate
-                                    ? 'rgba(53, 160, 88, 0.20)'
-                                    : 'rgba(53, 160, 88, 0.10)',
-                                border: '1px solid rgba(53, 160, 88, 0.30)',
-                                borderRadius: '6px',
-                                cursor: useHtmlTemplate ? 'default' : 'pointer',
-                            }}
-                        >
-                            {useHtmlTemplate ? 'Profile Update Reminder (Loaded)' : 'Profile Update Reminder'}
-                        </button>
-                        {useHtmlTemplate && (
-                            <button
-                                onClick={clearTemplate}
-                                style={{
-                                    padding: '8px 16px',
-                                    fontSize: '13px',
-                                    fontWeight: 500,
-                                    color: 'var(--red)',
-                                    background: 'rgba(239, 68, 68, 0.1)',
-                                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                                    borderRadius: '6px',
-                                    cursor: 'pointer',
-                                }}
-                            >
-                                Clear Template
-                            </button>
-                        )}
-                    </div>
-                </div>
-
-                {/* Success message */}
-                {successMessage && (
-                    <div
-                        style={{
-                            padding: '12px 16px',
-                            background: 'rgba(53, 160, 88, 0.10)',
-                            border: '1px solid rgba(53, 160, 88, 0.25)',
-                            borderRadius: '8px',
-                            marginBottom: '16px',
-                            color: 'var(--green-bright)',
-                            fontSize: '14px',
-                        }}
-                    >
-                        {successMessage}
-                    </div>
-                )}
-
-                {/* Progress indicator */}
-                {progress && (
-                    <div
-                        style={{
-                            padding: '16px',
-                            background: 'rgba(53, 160, 88, 0.08)',
-                            border: '1px solid rgba(53, 160, 88, 0.25)',
-                            borderRadius: '8px',
-                            marginBottom: '16px',
-                        }}
-                    >
-                        <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: 'var(--green-bright)', fontWeight: 500, fontSize: '14px' }}>
-                                Sending email {progress.current} of {progress.total}
-                            </span>
-                            <span style={{ color: 'rgba(53, 160, 88, 0.45)', fontSize: '13px' }}>
-                                {progress.successCount} sent{progress.failCount > 0 ? `, ${progress.failCount} failed` : ''}
-                            </span>
-                        </div>
-                        <div
-                            style={{
-                                height: '8px',
-                                background: 'rgba(53, 160, 88, 0.10)',
-                                borderRadius: '4px',
-                                overflow: 'hidden',
-                                marginBottom: '8px',
-                            }}
-                        >
-                            <div
-                                style={{
-                                    height: '100%',
-                                    width: `${(progress.current / progress.total) * 100}%`,
-                                    background: 'linear-gradient(90deg, var(--green), var(--green-bright))',
-                                    borderRadius: '4px',
-                                    transition: 'width 0.3s ease',
-                                }}
-                            />
-                        </div>
-                        <div style={{ color: 'rgba(53, 160, 88, 0.35)', fontSize: '12px' }}>
-                            Currently sending to: {progress.currentRecipient}
-                        </div>
-                    </div>
-                )}
-
-                {/* Selected count */}
-                <div
-                    style={{
-                        padding: '12px 16px',
-                        background:
-                            selectedIds.length > 0
-                                ? 'rgba(53, 160, 88, 0.10)'
-                                : 'rgba(53, 160, 88, 0.03)',
-                        border: `1px solid ${
-                            selectedIds.length > 0
-                                ? 'rgba(53, 160, 88, 0.30)'
-                                : 'rgba(53, 160, 88, 0.15)'
-                        }`,
-                        borderRadius: '8px',
-                        marginBottom: '16px',
-                    }}
-                >
-                    <span
-                        style={{
-                            color: selectedIds.length > 0 ? 'var(--green-bright)' : 'rgba(53, 160, 88, 0.35)',
-                            fontWeight: 500,
-                        }}
-                    >
-                        {selectedIds.length} recipient{selectedIds.length !== 1 ? 's' : ''} selected
-                    </span>
-                </div>
-
-                <div className="space-y-4">
-                    <FormField
-                        label="Subject"
-                        type="text"
-                        value={subject}
-                        onChange={(e) => setSubject(e.target.value)}
-                        placeholder="Enter email subject..."
-                        required
-                    />
-
-                    {useHtmlTemplate ? (
-                        <div>
-                            <label
-                                style={{
-                                    display: 'block',
-                                    marginBottom: '8px',
-                                    fontSize: '14px',
-                                    fontWeight: 500,
-                                    color: 'rgba(53, 160, 88, 0.70)',
-                                }}
-                            >
-                                Message
-                            </label>
-                            <div
-                                style={{
-                                    padding: '16px',
-                                    background: 'rgba(53, 160, 88, 0.08)',
-                                    border: '1px solid rgba(53, 160, 88, 0.25)',
-                                    borderRadius: '8px',
-                                }}
-                            >
-                                <p
-                                    style={{
-                                        margin: 0,
-                                        fontSize: '14px',
-                                        color: 'var(--green-bright)',
-                                        fontWeight: 500,
-                                    }}
-                                >
-                                    HTML Template Loaded: Profile Update Reminder
-                                </p>
-                                <p
-                                    style={{
-                                        margin: '8px 0 0',
-                                        fontSize: '13px',
-                                        color: 'rgba(53, 160, 88, 0.45)',
-                                    }}
-                                >
-                                    This will send a professionally designed email prompting users to
-                                    log in and update their personal details and certifications.
-                                </p>
-                            </div>
-                        </div>
-                    ) : (
-                        <FormTextarea
-                            label="Message"
-                            value={body}
-                            onChange={(e) => setBody(e.target.value)}
-                            placeholder="Enter your message..."
-                            rows={10}
-                            required
-                            helperText="Plain text message. Line breaks will be preserved."
-                        />
-                    )}
-
-                    <button
-                        onClick={() => setShowConfirm(true)}
-                        disabled={!isValid || sendNotification.isPending}
-                        className="ad-btn primary w-full"
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '8px',
-                            opacity: !isValid || sendNotification.isPending ? 0.5 : 1,
-                            cursor: !isValid || sendNotification.isPending ? 'not-allowed' : 'pointer',
-                        }}
-                    >
-                        {sendNotification.isPending ? (
-                            <>
-                                <span
-                                    style={{
-                                        width: '16px',
-                                        height: '16px',
-                                        border: '2px solid rgba(255,255,255,0.3)',
-                                        borderTopColor: '#fff',
-                                        borderRadius: '50%',
-                                        animation: 'spin 1s linear infinite',
-                                    }}
-                                />
-                                Sending...
-                            </>
-                        ) : (
-                            'Send Notification'
-                        )}
-                    </button>
-                </div>
-            </div>
-
-            {/* Confirmation Dialog */}
-            <ConfirmDialog
-                isOpen={showConfirm}
-                onClose={() => setShowConfirm(false)}
-                onConfirm={handleSend}
-                title="Send Notification"
-                message={
-                    <div style={{ textAlign: 'left' }}>
-                        <p>Are you sure you want to send this notification?</p>
-                        <div
-                            style={{
-                                marginTop: '12px',
-                                padding: '12px',
-                                borderRadius: '8px',
-                                background: 'rgba(53, 160, 88, 0.05)',
-                            }}
-                        >
-                            <p style={{ marginBottom: '8px' }}>
-                                <strong>Subject:</strong> {subject}
-                            </p>
-                            <p>
-                                <strong>Recipients:</strong> {selectedIds.length} people
-                            </p>
-                        </div>
-                        <p
-                            style={{
-                                marginTop: '12px',
-                                fontSize: '13px',
-                                color: 'rgba(53, 160, 88, 0.45)',
-                            }}
-                        >
-                            This will send an email to all selected recipients.
-                        </p>
-                    </div>
-                }
-                confirmText="Send Email"
-                variant="info"
-                isLoading={sendNotification.isPending}
-            />
+        {/* Template Selection */}
+        <div
+          style={{
+            padding: '16px',
+            background: 'rgba(53, 160, 88, 0.08)',
+            border: '1px solid rgba(53, 160, 88, 0.20)',
+            borderRadius: '8px',
+            marginBottom: '16px',
+          }}
+        >
+          <p
+            style={{
+              margin: '0 0 12px',
+              fontSize: '13px',
+              color: 'rgba(53, 160, 88, 0.45)',
+            }}
+          >
+            Quick Templates:
+          </p>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              onClick={loadProfileUpdateTemplate}
+              disabled={useHtmlTemplate}
+              style={{
+                padding: '8px 16px',
+                fontSize: '13px',
+                fontWeight: 500,
+                color: useHtmlTemplate ? 'var(--green-bright)' : 'var(--green)',
+                background: useHtmlTemplate ? 'rgba(53, 160, 88, 0.20)' : 'rgba(53, 160, 88, 0.10)',
+                border: '1px solid rgba(53, 160, 88, 0.30)',
+                borderRadius: '6px',
+                cursor: useHtmlTemplate ? 'default' : 'pointer',
+              }}
+            >
+              {useHtmlTemplate ? 'Profile Update Reminder (Loaded)' : 'Profile Update Reminder'}
+            </button>
+            {useHtmlTemplate && (
+              <button
+                onClick={clearTemplate}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  color: 'var(--red)',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                Clear Template
+              </button>
+            )}
+          </div>
         </div>
-    );
+
+        {/* Success message */}
+        {successMessage && (
+          <div
+            style={{
+              padding: '12px 16px',
+              background: 'rgba(53, 160, 88, 0.10)',
+              border: '1px solid rgba(53, 160, 88, 0.25)',
+              borderRadius: '8px',
+              marginBottom: '16px',
+              color: 'var(--green-bright)',
+              fontSize: '14px',
+            }}
+          >
+            {successMessage}
+          </div>
+        )}
+
+        {/* Progress indicator */}
+        {progress && (
+          <div
+            style={{
+              padding: '16px',
+              background: 'rgba(53, 160, 88, 0.08)',
+              border: '1px solid rgba(53, 160, 88, 0.25)',
+              borderRadius: '8px',
+              marginBottom: '16px',
+            }}
+          >
+            <div
+              style={{
+                marginBottom: '12px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <span style={{ color: 'var(--green-bright)', fontWeight: 500, fontSize: '14px' }}>
+                Sending email {progress.current} of {progress.total}
+              </span>
+              <span style={{ color: 'rgba(53, 160, 88, 0.45)', fontSize: '13px' }}>
+                {progress.successCount} sent
+                {progress.failCount > 0 ? `, ${progress.failCount} failed` : ''}
+              </span>
+            </div>
+            <div
+              style={{
+                height: '8px',
+                background: 'rgba(53, 160, 88, 0.10)',
+                borderRadius: '4px',
+                overflow: 'hidden',
+                marginBottom: '8px',
+              }}
+            >
+              <div
+                style={{
+                  height: '100%',
+                  width: `${(progress.current / progress.total) * 100}%`,
+                  background: 'linear-gradient(90deg, var(--green), var(--green-bright))',
+                  borderRadius: '4px',
+                  transition: 'width 0.3s ease',
+                }}
+              />
+            </div>
+            <div style={{ color: 'rgba(53, 160, 88, 0.35)', fontSize: '12px' }}>
+              Currently sending to: {progress.currentRecipient}
+            </div>
+          </div>
+        )}
+
+        {/* Selected count */}
+        <div
+          style={{
+            padding: '12px 16px',
+            background:
+              selectedIds.length > 0 ? 'rgba(53, 160, 88, 0.10)' : 'rgba(53, 160, 88, 0.03)',
+            border: `1px solid ${
+              selectedIds.length > 0 ? 'rgba(53, 160, 88, 0.30)' : 'rgba(53, 160, 88, 0.15)'
+            }`,
+            borderRadius: '8px',
+            marginBottom: '16px',
+          }}
+        >
+          <span
+            style={{
+              color: selectedIds.length > 0 ? 'var(--green-bright)' : 'rgba(53, 160, 88, 0.35)',
+              fontWeight: 500,
+            }}
+          >
+            {selectedIds.length} recipient{selectedIds.length !== 1 ? 's' : ''} selected
+          </span>
+        </div>
+
+        <div className="space-y-4">
+          <FormField
+            label="Subject"
+            type="text"
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            placeholder="Enter email subject..."
+            required
+          />
+
+          {useHtmlTemplate ? (
+            <div>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: 'rgba(53, 160, 88, 0.70)',
+                }}
+              >
+                Message
+              </label>
+              <div
+                style={{
+                  padding: '16px',
+                  background: 'rgba(53, 160, 88, 0.08)',
+                  border: '1px solid rgba(53, 160, 88, 0.25)',
+                  borderRadius: '8px',
+                }}
+              >
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '14px',
+                    color: 'var(--green-bright)',
+                    fontWeight: 500,
+                  }}
+                >
+                  HTML Template Loaded: Profile Update Reminder
+                </p>
+                <p
+                  style={{
+                    margin: '8px 0 0',
+                    fontSize: '13px',
+                    color: 'rgba(53, 160, 88, 0.45)',
+                  }}
+                >
+                  This will send a professionally designed email prompting users to log in and
+                  update their personal details and certifications.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <FormTextarea
+              label="Message"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="Enter your message..."
+              rows={10}
+              required
+              helperText="Plain text message. Line breaks will be preserved."
+            />
+          )}
+
+          <button
+            onClick={() => setShowConfirm(true)}
+            disabled={!isValid || sendNotification.isPending}
+            className="ad-btn primary w-full"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              opacity: !isValid || sendNotification.isPending ? 0.5 : 1,
+              cursor: !isValid || sendNotification.isPending ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {sendNotification.isPending ? (
+              <>
+                <span
+                  style={{
+                    width: '16px',
+                    height: '16px',
+                    border: '2px solid rgba(255,255,255,0.3)',
+                    borderTopColor: '#fff',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite',
+                  }}
+                />
+                Sending...
+              </>
+            ) : (
+              'Send Notification'
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showConfirm}
+        onClose={() => setShowConfirm(false)}
+        onConfirm={handleSend}
+        title="Send Notification"
+        message={
+          <div style={{ textAlign: 'left' }}>
+            <p>Are you sure you want to send this notification?</p>
+            <div
+              style={{
+                marginTop: '12px',
+                padding: '12px',
+                borderRadius: '8px',
+                background: 'rgba(53, 160, 88, 0.05)',
+              }}
+            >
+              <p style={{ marginBottom: '8px' }}>
+                <strong>Subject:</strong> {subject}
+              </p>
+              <p>
+                <strong>Recipients:</strong> {selectedIds.length} people
+              </p>
+            </div>
+            <p
+              style={{
+                marginTop: '12px',
+                fontSize: '13px',
+                color: 'rgba(53, 160, 88, 0.45)',
+              }}
+            >
+              This will send an email to all selected recipients.
+            </p>
+          </div>
+        }
+        confirmText="Send Email"
+        variant="info"
+        isLoading={sendNotification.isPending}
+      />
+    </div>
+  );
 }
 
 export default CustomNotifications;

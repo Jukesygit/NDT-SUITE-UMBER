@@ -1,9 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Modal } from '../ui/Modal/Modal';
 import { TwoFactorVerifyInput } from './TwoFactorVerifyInput';
-import { twoFactorService, type EnrollmentData } from '../../services/two-factor-service';
+import { BackupCodesDisplay } from './BackupCodesDisplay';
+import {
+  useGenerateBackupCodes,
+  useRegenerateBackupCodes,
+} from '../../hooks/mutations/useTwoFactorMutations';
+import {
+  twoFactorService,
+  BackupCodesError,
+  type EnrollmentData,
+} from '../../services/two-factor-service';
 
-type Step = 'qr' | 'verify' | 'done';
+type Step = 'qr' | 'verify' | 'codes' | 'done';
 
 interface TwoFactorSetupWizardProps {
   isOpen: boolean;
@@ -23,15 +32,30 @@ export function TwoFactorSetupWizard({
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  // Backup codes: React Query mutations own the loading/error/result state.
+  const generateCodes = useGenerateBackupCodes();
+  const regenerateCodes = useRegenerateBackupCodes();
+
+  const codes = regenerateCodes.data ?? generateCodes.data ?? null;
+  const codesError = regenerateCodes.error ?? generateCodes.error ?? null;
+  const isMintingCodes = generateCodes.isPending || regenerateCodes.isPending;
+  // 409 means a live set exists; only `regenerate` can replace it.
+  const codesConflict =
+    generateCodes.error instanceof BackupCodesError && generateCodes.error.codesAlreadyExist;
+
   useEffect(() => {
     if (isOpen) {
       setStep('qr');
       setError('');
+      generateCodes.reset();
+      regenerateCodes.reset();
       twoFactorService
         .enroll()
         .then(setEnrollment)
         .catch((err) => setError(err.message));
     }
+    // Intentionally keyed on isOpen only — the mutation objects are recreated
+    // every render and would re-run this effect (and re-enroll) forever.
   }, [isOpen]);
 
   const handleVerify = useCallback(
@@ -41,14 +65,26 @@ export function TwoFactorSetupWizard({
       setError('');
       try {
         await twoFactorService.verifyEnrollment(enrollment.factorId, code);
-        setStep('done');
+        // The verify just elevated this session to aal2 — the only moment
+        // `generate` is permitted. A failure here must NOT block finishing:
+        // working 2FA beats shown codes.
+        setStep('codes');
+        generateCodes.mutate();
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Verification failed');
       } finally {
         setIsLoading(false);
       }
     },
-    [enrollment]
+    [enrollment, generateCodes]
+  );
+
+  /** 409 recovery: rotate the existing set by re-proving the authenticator. */
+  const handleRegenerate = useCallback(
+    (totpCode: string) => {
+      regenerateCodes.mutate(totpCode);
+    },
+    [regenerateCodes]
   );
 
   return (
@@ -59,7 +95,7 @@ export function TwoFactorSetupWizard({
       size="large"
       closeOnBackdropClick={!mandatory}
       closeOnEscape={!mandatory}
-      showCloseButton={!mandatory ? true : false}
+      showCloseButton={!mandatory}
     >
       {step === 'qr' && (
         <div className="two-factor-setup-qr">
@@ -82,23 +118,43 @@ export function TwoFactorSetupWizard({
               <p style={{ fontSize: '0.85rem', textAlign: 'center', marginTop: '0.75rem' }}>
                 Or enter this secret manually:
                 <br />
-                <code style={{
-                  display: 'inline-block',
-                  marginTop: '4px',
-                  padding: '4px 10px',
-                  background: 'rgba(255,255,255,0.08)',
-                  borderRadius: '6px',
-                  letterSpacing: '0.15em',
-                  wordBreak: 'break-all',
-                  userSelect: 'all',
-                }}>{enrollment.secret}</code>
+                <code
+                  style={{
+                    display: 'inline-block',
+                    marginTop: '4px',
+                    padding: '4px 10px',
+                    background: 'rgba(255,255,255,0.08)',
+                    borderRadius: '6px',
+                    letterSpacing: '0.15em',
+                    wordBreak: 'break-all',
+                    userSelect: 'all',
+                  }}
+                >
+                  {enrollment.secret}
+                </code>
               </p>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary, #6b7280)', textAlign: 'center', marginTop: '0.5rem' }}>
+              <p
+                style={{
+                  fontSize: '0.8rem',
+                  color: 'var(--text-tertiary, #6b7280)',
+                  textAlign: 'center',
+                  marginTop: '0.5rem',
+                }}
+              >
                 Tip: Set up on a second device too for recovery
               </p>
             </>
           )}
-          <button type="button" onClick={() => setStep('verify')} style={{ marginTop: '1rem', width: '100%' }}>
+          {error && (
+            <p role="alert" style={{ color: 'var(--clean-badge-red-text, #c0392b)' }}>
+              {error}
+            </p>
+          )}
+          <button
+            type="button"
+            className="btn btn--primary w-full mt-4"
+            onClick={() => setStep('verify')}
+          >
             Next
           </button>
         </div>
@@ -111,19 +167,119 @@ export function TwoFactorSetupWizard({
         </div>
       )}
 
+      {step === 'codes' && (
+        <BackupCodesStep
+          codes={codes ?? null}
+          error={codesError instanceof Error ? codesError.message : ''}
+          isConflict={codesConflict}
+          isLoading={isMintingCodes}
+          onAcknowledge={() => setStep('done')}
+          onRegenerate={handleRegenerate}
+          onSkip={() => setStep('done')}
+        />
+      )}
+
       {step === 'done' && (
-        <div style={{ textAlign: 'center', padding: '1rem 0' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>&#x2705;</div>
-          <h3 style={{ marginBottom: '0.5rem' }}>Two-factor authentication enabled</h3>
-          <p style={{ color: 'var(--text-secondary, #9ca3af)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-            You'll be asked for a code from your authenticator app each time you sign in.
-            For recovery, you can enroll a second device from this page.
+        <div className="text-center py-4">
+          <div className="text-4xl mb-3">&#x2705;</div>
+          <h3 className="mb-2" style={{ color: 'var(--text-primary)' }}>
+            Two-factor authentication enabled
+          </h3>
+          <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
+            You&apos;ll be asked for a code from your authenticator app each time you sign in.
+            {!codes && ' You can issue backup codes from your profile security panel.'}
           </p>
-          <button type="button" onClick={onComplete} style={{ width: '100%' }}>
+          <button type="button" className="btn btn--primary w-full" onClick={onComplete}>
             Done
           </button>
         </div>
       )}
     </Modal>
+  );
+}
+
+interface BackupCodesStepProps {
+  codes: string[] | null;
+  error: string;
+  isConflict: boolean;
+  isLoading: boolean;
+  onAcknowledge: () => void;
+  onRegenerate: (totpCode: string) => void;
+  onSkip: () => void;
+}
+
+function BackupCodesStep({
+  codes,
+  error,
+  isConflict,
+  isLoading,
+  onAcknowledge,
+  onRegenerate,
+  onSkip,
+}: BackupCodesStepProps) {
+  if (codes) {
+    return (
+      <div className="two-factor-setup-codes">
+        <h3 className="mb-2" style={{ color: 'var(--text-primary)' }}>
+          Save your backup codes
+        </h3>
+        <p className="mb-4" style={{ color: 'var(--text-secondary)' }}>
+          Save these codes — each works once if you lose your authenticator.
+        </p>
+        <BackupCodesDisplay codes={codes} />
+        <button type="button" className="btn btn--primary w-full mt-4" onClick={onAcknowledge}>
+          I have saved my backup codes
+        </button>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="two-factor-setup-codes">
+        <p style={{ color: 'var(--text-secondary)' }}>Generating your backup codes...</p>
+      </div>
+    );
+  }
+
+  // 409: a live set already exists (re-enrollment after an admin reset, or a
+  // retry). Rotating requires a fresh TOTP code; skipping is always available so
+  // the wizard never dead-ends.
+  if (isConflict) {
+    return (
+      <div className="two-factor-setup-codes">
+        <h3 className="mb-2" style={{ color: 'var(--text-primary)' }}>
+          You already have backup codes
+        </h3>
+        <p className="mb-4" style={{ color: 'var(--text-secondary)' }}>
+          Backup codes were issued for this account previously. If you still have them, keep using
+          them. If not, enter a code from your authenticator app to replace them — the old codes
+          will stop working.
+        </p>
+        <TwoFactorVerifyInput onSubmit={onRegenerate} isLoading={isLoading} error={error} />
+        <button type="button" className="btn btn--ghost w-full mt-4" onClick={onSkip}>
+          Keep my existing codes
+        </button>
+      </div>
+    );
+  }
+
+  // Any other failure: 2FA is already active and that is what matters.
+  return (
+    <div className="two-factor-setup-codes">
+      <h3 className="mb-2" style={{ color: 'var(--text-primary)' }}>
+        Backup codes unavailable
+      </h3>
+      <p role="alert" className="mb-4" style={{ color: 'var(--text-secondary)' }}>
+        {error || 'Could not generate backup codes'}
+      </p>
+      <p className="mb-4" style={{ color: 'var(--text-secondary)' }}>
+        Your authenticator is set up and two-factor authentication is active. You can issue backup
+        codes later from your profile security panel.
+      </p>
+      <button type="button" className="btn btn--primary w-full" onClick={onSkip}>
+        Continue
+      </button>
+    </div>
   );
 }

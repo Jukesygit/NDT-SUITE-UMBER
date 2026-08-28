@@ -24,6 +24,19 @@ export function useVerifyTwoFactorLogin() {
   });
 }
 
+/**
+ * Redeem a backup code to recover a login that cannot clear the TOTP challenge.
+ *
+ * A successful redemption resets the user's 2FA server-side (all factors and
+ * remaining codes are deleted), so callers must refresh auth state afterwards
+ * and let the enrollment gate take over.
+ */
+export function useVerifyBackupCode() {
+  return useMutation({
+    mutationFn: (code: string) => twoFactorService.verifyBackupCode(code),
+  });
+}
+
 export function useGenerateBackupCodes() {
   return useMutation({
     mutationFn: () => twoFactorService.generateBackupCodes(),

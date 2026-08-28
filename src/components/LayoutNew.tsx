@@ -27,9 +27,11 @@ import {
 import { NotificationBell } from './NotificationBell';
 import { AnnouncementBanner } from './AnnouncementBanner';
 import { useTabVisibility } from '../hooks/queries/useTabVisibility';
+import { isNavTabVisible } from '../services/tab-visibility-service';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { SessionRestoredBanner } from './auth/SessionRestoredBanner';
+import { SessionExpiryWarningBanner } from './auth/SessionExpiryWarningBanner';
 
 interface LogoVariant {
   id: string;
@@ -300,7 +302,9 @@ function LayoutNew() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  // No `isSuperAdmin` here on purpose: the nav no longer grants super admins a
+  // blanket bypass of tab visibility, so the role has nothing left to decide in
+  // this component.
   const [hasElevatedAccess, setHasElevatedAccess] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [logoId, setLogoId] = useState(getStoredLogoId);
@@ -322,7 +326,6 @@ function LayoutNew() {
   useEffect(() => {
     const checkAccess = () => {
       setIsAdmin(authManager.isAdmin());
-      setIsSuperAdmin(authManager.isSuperAdmin());
       setHasElevatedAccess(authManager.hasElevatedAccess());
     };
 
@@ -349,25 +352,27 @@ function LayoutNew() {
     authManager.logout().catch(() => {});
   };
 
-  // Build a map of tab visibility from DB settings
-  const tabVisibilityMap = new Map(tabVisibilitySettings.map((s) => [s.tab_id, s.is_visible]));
-
-  // Filter navigation based on user role, maintenance mode, and tab visibility
-  const visibleNav = navigationConfig.filter((item) => {
-    if (isMaintenanceMode) return item.isGroup;
-    if (item.adminOnly) return isAdmin;
-    if (item.requiresElevatedAccess) return hasElevatedAccess;
-
-    // Super admins always see all tabs regardless of visibility settings
-    if (isSuperAdmin) return true;
-
-    // Check tab visibility settings (if settings exist in DB)
-    if (tabVisibilityMap.size > 0 && tabVisibilityMap.has(item.id)) {
-      return tabVisibilityMap.get(item.id) === true;
-    }
-
-    return true;
-  });
+  // Navigation filtering lives in `isNavTabVisible`, which resolves tab
+  // visibility through the same helper RequireTabVisible uses and checks it
+  // BEFORE role — so the sidebar cannot advertise a route the guard will bounce.
+  // It is a pure function so that ordering is pinned by a test rather than by
+  // the arrangement of early returns that used to live here.
+  const visibleNav = navigationConfig.filter((item) =>
+    isNavTabVisible(
+      {
+        tabId: item.id,
+        adminOnly: item.adminOnly,
+        requiresElevatedAccess: item.requiresElevatedAccess,
+        isGroup: item.isGroup,
+      },
+      {
+        settings: tabVisibilitySettings,
+        isMaintenanceMode,
+        isAdmin,
+        hasElevatedAccess,
+      }
+    )
+  );
 
   return (
     <div className="app">
@@ -480,6 +485,7 @@ function LayoutNew() {
       </header>
 
       <SessionRestoredBanner />
+      <SessionExpiryWarningBanner />
 
       {isMaintenanceMode ? (
         <div

@@ -101,6 +101,12 @@
   color: var(--clean-badge-green-text);
 }
 
+/* Neither a failure nor a success: an explanation, e.g. "your session expired". */
+.lg-alert.warning {
+  background: var(--clean-badge-amber-bg);
+  color: var(--clean-badge-amber-text);
+}
+
 /* ---- Form ---- */
 .lg-form {
   display: flex;
@@ -137,7 +143,9 @@
   font-family: var(--font-sans);
   font-size: 14px;
   outline: none;
-  transition: border-color 150ms ease, box-shadow 150ms ease;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
   width: 100%;
   box-sizing: border-box;
 }

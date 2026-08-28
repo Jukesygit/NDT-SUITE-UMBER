@@ -56,7 +56,15 @@ import { getSupabase } from '../supabase-client';
 import { showPasswordResetForm } from './auth-password-reset-form';
 
 // ── User management ────────────────────────────────────────────────────────
-import { createUser, syncUsers, getUsers, getUser, updateUser, deleteUser } from './auth-users';
+import {
+  createUser,
+  syncUsers,
+  getUsers,
+  getUser,
+  updateUser,
+  deleteUser,
+  extractInvokeError,
+} from './auth-users';
 
 // ── Account requests & bulk creation ───────────────────────────────────────
 import {
@@ -238,7 +246,7 @@ class AuthManager {
     const { data, error } = await getSupabase().functions.invoke('admin-reset-2fa', {
       body: { userId },
     });
-    if (error) return { success: false, error: error.message };
+    if (error) return { success: false, error: await extractInvokeError(error) };
     return data;
   }
 }

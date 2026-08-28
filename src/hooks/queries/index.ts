@@ -1,33 +1,36 @@
 // Profile queries
 export { useProfile } from './useProfile';
 
+// Avatar URL resolution (both-shapes reader over profiles.avatar_url)
+export { useAvatarUrls, useAvatarUrl, avatarKeys } from './useAvatarUrls';
+
 // Competency queries
 export {
-    useCompetencies,
-    useCompetencyDefinitions,
-    useCompetencyCategories,
-    useExpiringCompetencies,
-    useCompetencyComments,
+  useCompetencies,
+  useCompetencyDefinitions,
+  useCompetencyCategories,
+  useExpiringCompetencies,
+  useCompetencyComments,
 } from './useCompetencies';
 
 // Personnel queries
 export {
-    usePersonnel,
-    usePersonDetail,
-    useOrganizations,
-    useCompetencyMatrix,
-    getCompetencyStats,
-    getPendingApprovalCount,
-    getPendingApprovalCompetencies,
-    personnelKeys,
+  usePersonnel,
+  usePersonDetail,
+  useOrganizations,
+  useCompetencyMatrix,
+  getCompetencyStats,
+  getPendingApprovalCount,
+  getPendingApprovalCompetencies,
+  personnelKeys,
 } from './usePersonnel';
 export type {
-    Person,
-    PersonCompetency,
-    Organization,
-    CompetencyStats,
-    CompetencyMatrix,
-    CompetencyMatrixEntry,
+  Person,
+  PersonCompetency,
+  Organization,
+  CompetencyStats,
+  CompetencyMatrix,
+  CompetencyMatrixEntry,
 } from './usePersonnel';
 
 // Admin queries - Dashboard Stats
@@ -35,58 +38,41 @@ export { useAdminStats } from './useAdminStats';
 
 // Admin queries - Organizations
 export {
-    useOrganizations as useAdminOrganizations,
-    useOrganizationsWithStats,
-    organizationKeys,
+  useOrganizations as useAdminOrganizations,
+  useOrganizationsWithStats,
+  organizationKeys,
 } from './useAdminOrganizations';
 
 // Admin queries - Users
-export {
-    useAdminUsers,
-    useAdminUser,
-    userKeys,
-} from './useAdminUsers';
+export { useAdminUsers, useAdminUser, userKeys } from './useAdminUsers';
 
 // Admin queries - Account & Permission Requests
-export {
-    useAccountRequests,
-    usePermissionRequests,
-    requestKeys,
-} from './useAccountRequests';
+export { useAccountRequests, usePermissionRequests, requestKeys } from './useAccountRequests';
 
 // Admin queries - Configuration
-export {
-    useAdminConfig,
-    useConfigMetadata,
-    configKeys,
-} from './useAdminConfig';
+export { useAdminConfig, useConfigMetadata, configKeys } from './useAdminConfig';
 
 // Tab Visibility queries
-export {
-    useTabVisibility,
-    useUpdateTabVisibility,
-    tabVisibilityKeys,
-} from './useTabVisibility';
+export { useTabVisibility, useUpdateTabVisibility, tabVisibilityKeys } from './useTabVisibility';
 
 // Activity Log queries
-export {
-    useActivityLogs,
-    useActivityUsers,
-    activityLogKeys,
-} from './useActivityLog';
+export { useActivityLogs, useActivityUsers, activityLogKeys } from './useActivityLog';
 
 // Document Control queries
 export {
-    useDocuments,
-    useDocument,
-    useDocumentRevisions,
-    useDocumentCategories,
-    useAllDocumentCategories,
-    useDocumentsDueForReview,
-    useDocumentStats,
-    useDocumentReviewSchedule,
-    documentKeys,
+  useDocuments,
+  useDocument,
+  useDocumentRevisions,
+  useDocumentCategories,
+  useAllDocumentCategories,
+  useDocumentsDueForReview,
+  useDocumentStats,
+  useDocumentReviewSchedule,
+  documentKeys,
 } from './useDocuments';
 
 // Companion queries
 export { useCompanionFolders } from './useCompanionFolders';
+
+// Two-factor / MFA queries
+export { useMfaFactors, hasVerifiedTotpFactor, mfaFactorKeys } from './useMfaFactors';

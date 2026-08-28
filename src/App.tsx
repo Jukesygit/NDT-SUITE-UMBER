@@ -14,6 +14,7 @@ import GlobalErrorBoundary from './components/GlobalErrorBoundary';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
 import Layout from './components/LayoutNew';
 import ProtectedRoute from './components/ProtectedRoute';
+import { RequireTwoFactorEnrolled } from './components/auth/RequireTwoFactorEnrolled';
 import RequireAccess from './components/RequireAccess';
 import RequireTabVisible from './components/RequireTabVisible';
 import LoginPage from './pages/LoginPageNew';
@@ -162,240 +163,247 @@ function App() {
                         </ErrorBoundary>
                       }
                     />
+                    {/* Mandatory 2FA enrollment gate (owner decision 2026-08-26):
+                                    inside ProtectedRoute, before every tab/role gate, so no
+                                    protected route is reachable without a verified TOTP factor. */}
                     <Route element={<ProtectedRoute />}>
-                      <Route element={<Layout />}>
-                        <Route
-                          path="/"
-                          element={
-                            <Navigate to={isMaintenanceMode ? '/cscan' : '/profile'} replace />
-                          }
-                        />
-                        <Route
-                          path="/cscan"
-                          element={
-                            <RequireTabVisible tabId="tools">
+                      <Route element={<RequireTwoFactorEnrolled />}>
+                        <Route element={<Layout />}>
+                          <Route
+                            path="/"
+                            element={
+                              <Navigate to={isMaintenanceMode ? '/cscan' : '/profile'} replace />
+                            }
+                          />
+                          <Route
+                            path="/cscan"
+                            element={
+                              <RequireTabVisible tabId="tools">
+                                <ErrorBoundary>
+                                  <CscanVisualizerPage />
+                                </ErrorBoundary>
+                              </RequireTabVisible>
+                            }
+                          />
+                          <Route
+                            path="/vessel-modeler"
+                            element={
+                              <RequireTabVisible tabId="tools">
+                                <ErrorBoundary>
+                                  <VesselModelerPage />
+                                </ErrorBoundary>
+                              </RequireTabVisible>
+                            }
+                          />
+                          <Route
+                            path="/scan-viewer"
+                            element={
+                              <RequireTabVisible tabId="tools">
+                                <ErrorBoundary>
+                                  <ScanViewerLandingPage />
+                                </ErrorBoundary>
+                              </RequireTabVisible>
+                            }
+                          />
+                          <Route
+                            path="/topology"
+                            element={
+                              <RequireTabVisible tabId="tools">
+                                <ErrorBoundary>
+                                  <TopologyViewerPage />
+                                </ErrorBoundary>
+                              </RequireTabVisible>
+                            }
+                          />
+                          <Route
+                            path="/beam-tool"
+                            element={
+                              <RequireTabVisible tabId="tools">
+                                <ErrorBoundary>
+                                  <BeamToolPage />
+                                </ErrorBoundary>
+                              </RequireTabVisible>
+                            }
+                          />
+                          <Route
+                            path="/demos/scan-viewer-a"
+                            element={
                               <ErrorBoundary>
-                                <CscanVisualizerPage />
+                                <ScanViewerDemoA />
                               </ErrorBoundary>
-                            </RequireTabVisible>
-                          }
-                        />
-                        <Route
-                          path="/vessel-modeler"
-                          element={
-                            <RequireTabVisible tabId="tools">
+                            }
+                          />
+                          <Route
+                            path="/demos/scan-viewer-b"
+                            element={
                               <ErrorBoundary>
-                                <VesselModelerPage />
+                                <ScanViewerDemoB />
                               </ErrorBoundary>
-                            </RequireTabVisible>
-                          }
-                        />
-                        <Route
-                          path="/scan-viewer"
-                          element={
-                            <RequireTabVisible tabId="tools">
+                            }
+                          />
+                          <Route
+                            path="/demos/scan-viewer-c"
+                            element={
                               <ErrorBoundary>
-                                <ScanViewerLandingPage />
+                                <ScanViewerDemoC />
                               </ErrorBoundary>
-                            </RequireTabVisible>
-                          }
-                        />
-                        <Route
-                          path="/topology"
-                          element={
-                            <RequireTabVisible tabId="tools">
+                            }
+                          />
+                          <Route
+                            path="/demos/logos"
+                            element={
                               <ErrorBoundary>
-                                <TopologyViewerPage />
+                                <LogoShowcase />
                               </ErrorBoundary>
-                            </RequireTabVisible>
-                          }
-                        />
-                        <Route
-                          path="/beam-tool"
-                          element={
-                            <RequireTabVisible tabId="tools">
-                              <ErrorBoundary>
-                                <BeamToolPage />
-                              </ErrorBoundary>
-                            </RequireTabVisible>
-                          }
-                        />
-                        <Route
-                          path="/demos/scan-viewer-a"
-                          element={
-                            <ErrorBoundary>
-                              <ScanViewerDemoA />
-                            </ErrorBoundary>
-                          }
-                        />
-                        <Route
-                          path="/demos/scan-viewer-b"
-                          element={
-                            <ErrorBoundary>
-                              <ScanViewerDemoB />
-                            </ErrorBoundary>
-                          }
-                        />
-                        <Route
-                          path="/demos/scan-viewer-c"
-                          element={
-                            <ErrorBoundary>
-                              <ScanViewerDemoC />
-                            </ErrorBoundary>
-                          }
-                        />
-                        <Route
-                          path="/demos/logos"
-                          element={
-                            <ErrorBoundary>
-                              <LogoShowcase />
-                            </ErrorBoundary>
-                          }
-                        />
-                        <Route
-                          path="/downloads"
-                          element={
-                            <RequireTabVisible tabId="tools">
-                              <ErrorBoundary>
-                                <DownloadsPage />
-                              </ErrorBoundary>
-                            </RequireTabVisible>
-                          }
-                        />
-                        <Route
-                          path="/projects"
-                          element={
-                            <RequireTabVisible tabId="tools">
-                              <ErrorBoundary>
-                                <ProjectListPage />
-                              </ErrorBoundary>
-                            </RequireTabVisible>
-                          }
-                        />
-                        <Route
-                          path="/projects/new"
-                          element={
-                            <RequireTabVisible tabId="tools">
-                              <ErrorBoundary>
-                                <ProjectSetupPage />
-                              </ErrorBoundary>
-                            </RequireTabVisible>
-                          }
-                        />
-                        <Route
-                          path="/projects/:id"
-                          element={
-                            <RequireTabVisible tabId="tools">
-                              <ErrorBoundary>
-                                <ProjectDetailPage />
-                              </ErrorBoundary>
-                            </RequireTabVisible>
-                          }
-                        />
-                        <Route
-                          path="/projects/:projectId/vessels/:vesselId"
-                          element={
-                            <RequireTabVisible tabId="tools">
-                              <ErrorBoundary>
-                                <VesselOverviewPage />
-                              </ErrorBoundary>
-                            </RequireTabVisible>
-                          }
-                        />
-                        <Route
-                          path="/projects/:projectId/vessels/:vesselId/report-builder"
-                          element={
-                            <RequireTabVisible tabId="tools">
-                              <ErrorBoundary>
-                                <ReportBuilderPage />
-                              </ErrorBoundary>
-                            </RequireTabVisible>
-                          }
-                        />
-                        <Route
-                          path="/projects/:projectId/vessels/:vesselId/viewer"
-                          element={
-                            <RequireTabVisible tabId="tools">
-                              <ErrorBoundary>
-                                <ScanViewerPage />
-                              </ErrorBoundary>
-                            </RequireTabVisible>
-                          }
-                        />
-                        <Route
-                          path="/projects/:id/edit"
-                          element={
-                            <RequireTabVisible tabId="tools">
-                              <ErrorBoundary>
-                                <ProjectSetupPage />
-                              </ErrorBoundary>
-                            </RequireTabVisible>
-                          }
-                        />
-                        {isMaintenanceMode ? (
-                          <>
-                            <Route path="/profile" element={<Navigate to="/cscan" replace />} />
-                            <Route path="/documents" element={<Navigate to="/cscan" replace />} />
-                            <Route path="/personnel" element={<Navigate to="/cscan" replace />} />
-                            <Route path="/admin" element={<Navigate to="/cscan" replace />} />
-                          </>
-                        ) : (
-                          <>
-                            <Route
-                              path="/profile"
-                              element={
-                                <RequireTabVisible tabId="profile">
-                                  <ErrorBoundary>
-                                    <ProfilePage />
-                                  </ErrorBoundary>
-                                </RequireTabVisible>
-                              }
-                            />
-                            <Route
-                              path="/documents"
-                              element={
-                                <RequireTabVisible tabId="documents">
-                                  <ErrorBoundary>
-                                    <DocumentsPage />
-                                  </ErrorBoundary>
-                                </RequireTabVisible>
-                              }
-                            />
-                            <Route
-                              path="/personnel"
-                              element={
-                                <RequireAccess requireElevatedAccess>
-                                  <RequireTabVisible tabId="personnel">
+                            }
+                          />
+                          <Route
+                            path="/downloads"
+                            element={
+                              <RequireTabVisible tabId="tools">
+                                <ErrorBoundary>
+                                  <DownloadsPage />
+                                </ErrorBoundary>
+                              </RequireTabVisible>
+                            }
+                          />
+                          <Route
+                            path="/projects"
+                            element={
+                              <RequireTabVisible tabId="tools">
+                                <ErrorBoundary>
+                                  <ProjectListPage />
+                                </ErrorBoundary>
+                              </RequireTabVisible>
+                            }
+                          />
+                          <Route
+                            path="/projects/new"
+                            element={
+                              <RequireTabVisible tabId="tools">
+                                <ErrorBoundary>
+                                  <ProjectSetupPage />
+                                </ErrorBoundary>
+                              </RequireTabVisible>
+                            }
+                          />
+                          <Route
+                            path="/projects/:id"
+                            element={
+                              <RequireTabVisible tabId="tools">
+                                <ErrorBoundary>
+                                  <ProjectDetailPage />
+                                </ErrorBoundary>
+                              </RequireTabVisible>
+                            }
+                          />
+                          <Route
+                            path="/projects/:projectId/vessels/:vesselId"
+                            element={
+                              <RequireTabVisible tabId="tools">
+                                <ErrorBoundary>
+                                  <VesselOverviewPage />
+                                </ErrorBoundary>
+                              </RequireTabVisible>
+                            }
+                          />
+                          <Route
+                            path="/projects/:projectId/vessels/:vesselId/report-builder"
+                            element={
+                              <RequireTabVisible tabId="tools">
+                                <ErrorBoundary>
+                                  <ReportBuilderPage />
+                                </ErrorBoundary>
+                              </RequireTabVisible>
+                            }
+                          />
+                          <Route
+                            path="/projects/:projectId/vessels/:vesselId/viewer"
+                            element={
+                              <RequireTabVisible tabId="tools">
+                                <ErrorBoundary>
+                                  <ScanViewerPage />
+                                </ErrorBoundary>
+                              </RequireTabVisible>
+                            }
+                          />
+                          <Route
+                            path="/projects/:id/edit"
+                            element={
+                              <RequireTabVisible tabId="tools">
+                                <ErrorBoundary>
+                                  <ProjectSetupPage />
+                                </ErrorBoundary>
+                              </RequireTabVisible>
+                            }
+                          />
+                          {isMaintenanceMode ? (
+                            <>
+                              <Route path="/profile" element={<Navigate to="/cscan" replace />} />
+                              <Route path="/documents" element={<Navigate to="/cscan" replace />} />
+                              <Route path="/personnel" element={<Navigate to="/cscan" replace />} />
+                              <Route path="/admin" element={<Navigate to="/cscan" replace />} />
+                            </>
+                          ) : (
+                            <>
+                              <Route
+                                path="/profile"
+                                element={
+                                  <RequireTabVisible tabId="profile">
                                     <ErrorBoundary>
-                                      <PersonnelPage />
+                                      <ProfilePage />
                                     </ErrorBoundary>
                                   </RequireTabVisible>
-                                </RequireAccess>
-                              }
-                            />
-                            <Route
-                              path="/admin"
-                              element={
-                                <RequireAccess requireAdmin>
-                                  <RequireTabVisible tabId="admin">
+                                }
+                              />
+                              <Route
+                                path="/documents"
+                                element={
+                                  <RequireTabVisible tabId="documents">
                                     <ErrorBoundary>
-                                      <AdminPage />
+                                      <DocumentsPage />
                                     </ErrorBoundary>
                                   </RequireTabVisible>
-                                </RequireAccess>
-                              }
-                            />
-                          </>
-                        )}
+                                }
+                              />
+                              <Route
+                                path="/personnel"
+                                element={
+                                  <RequireAccess requireElevatedAccess>
+                                    <RequireTabVisible tabId="personnel">
+                                      <ErrorBoundary>
+                                        <PersonnelPage />
+                                      </ErrorBoundary>
+                                    </RequireTabVisible>
+                                  </RequireAccess>
+                                }
+                              />
+                              <Route
+                                path="/admin"
+                                element={
+                                  <RequireAccess requireAdmin>
+                                    <RequireTabVisible tabId="admin">
+                                      <ErrorBoundary>
+                                        <AdminPage />
+                                      </ErrorBoundary>
+                                    </RequireTabVisible>
+                                  </RequireAccess>
+                                }
+                              />
+                            </>
+                          )}
+                        </Route>
                       </Route>
                     </Route>
                     <Route
                       path="/projects/:projectId/vessels/:vesselId/report"
                       element={
                         <ProtectedRoute>
-                          <ErrorBoundary>
-                            <ReportPage />
-                          </ErrorBoundary>
+                          <RequireTwoFactorEnrolled>
+                            <ErrorBoundary>
+                              <ReportPage />
+                            </ErrorBoundary>
+                          </RequireTwoFactorEnrolled>
                         </ProtectedRoute>
                       }
                     />
@@ -407,7 +415,7 @@ function App() {
           </CompanionNotificationProvider>
         </AuthProvider>
       </ThemeProvider>
-      <ReactQueryDevtools initialIsOpen={false} />
+      {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
     </QueryClientProvider>
   );
 }

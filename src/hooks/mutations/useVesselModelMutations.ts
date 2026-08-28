@@ -1,5 +1,5 @@
 /**
- * Vessel model mutation hooks - Save, Update, Delete models and placements
+ * Vessel model mutation hooks - Save, Update, Delete models
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -7,13 +7,8 @@ import {
   saveVesselModel,
   updateVesselModel,
   deleteVesselModel,
-  saveScanPlacement,
-  deleteScanPlacement,
 } from '../../services/vessel-model-service';
-import type {
-  SaveVesselModelParams,
-  SaveScanPlacementParams,
-} from '../../services/vessel-model-service';
+import type { SaveVesselModelParams } from '../../services/vessel-model-service';
 
 /**
  * Hook for saving a new vessel model
@@ -127,38 +122,6 @@ export function useDeleteVesselModel() {
       queryClient.invalidateQueries({ queryKey: ['projectVesselModels'] });
       queryClient.invalidateQueries({ queryKey: ['linkedVesselModel'] });
       queryClient.invalidateQueries({ queryKey: ['vesselModelForReport'] });
-    },
-  });
-}
-
-/**
- * Hook for saving a new scan placement on a vessel model
- */
-export function useSaveScanPlacement() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (params: SaveScanPlacementParams) => saveScanPlacement(params),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['vesselModels', variables.vesselModelId, 'placements'],
-      });
-    },
-  });
-}
-
-/**
- * Hook for deleting a scan placement from a vessel model
- */
-export function useDeleteScanPlacement() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ id }: { id: string; vesselModelId: string }) => deleteScanPlacement(id),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['vesselModels', variables.vesselModelId, 'placements'],
-      });
     },
   });
 }

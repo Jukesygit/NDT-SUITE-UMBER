@@ -17,6 +17,13 @@ import {
 import authManager from '../auth-manager.js';
 import { clearQueryCache, invalidateStaleQueries } from '../lib/query-client';
 import { sessionManager } from '../lib/session-manager';
+import {
+  clearSessionStart,
+  ensureSessionStart,
+  markSessionStart,
+  markSessionEndedByExpiry,
+  redirectToExpiredLogin,
+} from '../lib/session-timebox';
 import { twoFactorService } from '../services/two-factor-service';
 
 // Types matching auth-manager
@@ -77,6 +84,14 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+/**
+ * How long after a user-initiated sign-out a SIGNED_OUT event is still assumed
+ * to belong to that sign-out. Generous: a logout round-trip is well under a
+ * second, and mislabelling a deliberate logout as an expiry is the worse error
+ * (it tells the user something untrue about their session).
+ */
+const DELIBERATE_SIGNOUT_WINDOW_MS = 30 * 1000;
+
 interface AuthProviderProps {
   children: ReactNode;
 }
@@ -99,6 +114,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [sessionWasRestored, setSessionWasRestored] = useState(false);
   const isInitializedRef = useRef(false); // Track if auth has fully initialized (ref for event handlers)
   const prevUserIdRef = useRef<string | null>(null); // Last known authenticated id — detect identity swaps (H2)
+  // Epoch ms of the last USER-INITIATED sign-out. Supabase fires SIGNED_OUT for
+  // both a deliberate logout and a server-side session end, and the difference
+  // decides whether the user gets a "your session expired" message or a silent
+  // login form. Second guard only — `prevUserIdRef` is already nulled by the
+  // logout handler, which normally runs first — but ordering between the
+  // `userLoggedOut` event and the (500ms-delayed) SIGNED_OUT verification is not
+  // something this component controls, so the intent is recorded explicitly.
+  const deliberateSignOutAtRef = useRef(0);
 
   // Load auth state from authManager
   const loadAuthState = useCallback(() => {
@@ -128,6 +151,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
           // Initialize session manager if user is already logged in
           if (authManager.isLoggedIn()) {
             sessionManager.initialize();
+            // Restored session: adopt the recorded start, or record now if this
+            // is the first boot that tracks it (conservative — see helper).
+            ensureSessionStart();
             // Check 2FA status on init (handles page refresh)
             try {
               const status = await twoFactorService.getStatus();
@@ -162,9 +188,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // survives the transition (H2).
         if (prevUserIdRef.current && nextId && prevUserIdRef.current !== nextId) {
           clearQueryCache();
+          markSessionStart(); // different person, different session clock
         }
+        // The session ended while the user was working and they did not ask for
+        // it: the server time-boxed them out, or the refresh token stopped being
+        // accepted. auth-supabase.ts has already re-checked getSession() before
+        // nulling the user, so this is not a spurious rotation blip — it is the
+        // authoritative expiry signal. (Refresh FAILURES are deliberately not
+        // treated as expiry; see the sessionManager 'error' branch below.)
+        const wasForcedSignOut =
+          isInitializedRef.current &&
+          prevUserIdRef.current !== null &&
+          nextId === null &&
+          Date.now() - deliberateSignOutAtRef.current > DELIBERATE_SIGNOUT_WINDOW_MS;
+
         prevUserIdRef.current = nextId;
         loadAuthState();
+
+        if (wasForcedSignOut) {
+          sessionManager.stop();
+          clearSessionStart();
+          clearQueryCache();
+          markSessionEndedByExpiry();
+          redirectToExpiredLogin();
+        }
       }
     };
     window.addEventListener('authStateChanged', handleAuthChange);
@@ -175,6 +222,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         loadAuthState();
         setSessionWasRestored(false); // explicit sign-in — not a restored session (H3)
         prevUserIdRef.current = authManager.getCurrentUser()?.id ?? null;
+        // Fresh sign-in — restart the time-box clock from now.
+        markSessionStart();
         // Initialize session manager for proactive refresh
         sessionManager.initialize();
         // Check 2FA status
@@ -193,6 +242,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     // Listen for logout events
     const handleLogout = () => {
+      // Recorded even when unmounted: the flag's whole job is to tell the
+      // SIGNED_OUT that follows apart from an expiry.
+      deliberateSignOutAtRef.current = Date.now();
+      clearSessionStart();
       if (mounted) {
         // Stop session manager
         sessionManager.stop();
@@ -219,7 +272,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       } else if (event.type === 'error') {
         // Refresh failed but this does NOT mean the session is expired.
         // Common cause: Supabase's auto-refresh consumed the token first.
-        // True session expiry is handled by the SIGNED_OUT event in auth-supabase.ts.
+        // True session expiry is handled by the SIGNED_OUT event in
+        // auth-supabase.ts, which arrives here as an `authStateChanged` with a
+        // null user (see handleAuthChange's forced-sign-out branch). Do NOT
+        // redirect from here — a transient network blip would evict working
+        // users.
       }
     });
 
@@ -268,6 +325,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Logout action
   const logout = useCallback(async () => {
+    // Mark intent BEFORE anything can fire SIGNED_OUT, so the resulting
+    // auth-state change is never mistaken for a server-side expiry.
+    deliberateSignOutAtRef.current = Date.now();
+    clearSessionStart();
     // Stop session manager first
     sessionManager.stop();
     await authManager.logout();
