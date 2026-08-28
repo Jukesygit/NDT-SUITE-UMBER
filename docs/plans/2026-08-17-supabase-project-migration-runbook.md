@@ -165,6 +165,20 @@ Executed end-to-end into `oxzteqqrhggdodcnngzn`, production untouched throughout
 
 Old project is untouched throughout — revert the three Vercel env vars and redeploy. Keep the old project live ~1–2 weeks post-cutover, then pause (don't delete) for a further window; only then delete dumps.
 
+## Teardown checklist (due ~2026-08-31 — cutover 2026-08-17 + ~2 weeks)
+
+Recorded here 2026-08-26: the Engineering Log's cutover entry said this checklist "lives in the runbook", but only the 3-line Rollback note above existed. Itemised list, mirroring that entry:
+
+1. Delete the old provider keys at Resend + Google AI Studio (completes the security audit's key-rotation item — see Decisions #3 below).
+2. Delete the dry-run project `oxzteqqrhggdodcnngzn` (takes the `migration.verify@example.com` leftover with it).
+3. Pause, then delete, the old project `cngschckqhfpwjcvsbad`.
+4. Re-reset ALL DB passwords (they transited chat during the migration session — see the Status note at the bottom of this doc).
+5. Revoke the two session tokens used for cutover (Supabase Management API owner token, Vercel REST token).
+6. Delete `C:\Users\jonas\supabase-migration` (holds `data.sql` with production PII + password hashes) and empty the recycle bin.
+7. Raise the ntrg global storage upload limit, then re-add the 100 MB per-file caps on `project-files` and `scan-data`.
+
+Tick each item off in the Engineering Log with date + evidence as it completes.
+
 ## Decisions (owner, 2026-08-17)
 
 1. **Production target = `ntrgjqrbewbvwofupphn`** (created 2026-08-17); spare `oxzteqqrhggdodcnngzn` becomes the dry-run target, deleted after cutover.

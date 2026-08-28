@@ -221,3 +221,20 @@ Attribution (do not regress):
 - Storage INSERT policy privileged branch is `role IN ('admin','super_admin')` (`20260728131000`); manager stays SELECT-only. This is the third instance of the role-omission class — the 2026-06-29 "both table AND storage" grep rule applies to INSERT policies too.
 
 Deferred: the no-op `lock` override + fixed `storageKey` in `src/supabase-client.ts` stays. The no-op exists because the default `navigator.locks` deadlocks (signInWithPassword holds the lock while notifying onAuthStateChange listeners whose DB queries call getSession). The incident did not involve multi-tab clobbering, and the user-facing risk is now mitigated by: header identity display, restored-session banner, identity-change guard in `auth-supabase.ts` (`session.user.id !== currentUser?.id`), and `assertActiveUser` on self-service writes. Revisit the lock alongside a supabase-js upgrade; do not silently re-enable the default lock without retesting the sign-in deadlock.
+
+## 2026-08-27 - Profiles Role Guard Trusts Vetted Definer Contexts
+
+Migration `20260827120000_profiles_role_guard_definer_context.sql` converted the role-escalation guard trigger to SECURITY INVOKER and made it defer to vetted execution contexts (current_user = the guard's own owner, i.e. inside a postgres-owned SECURITY DEFINER function), fixing the org_admin approval defect (the trigger judged the RPC caller, blocking the vetted path) and closing the NULL-role three-valued-logic hole (JWT with no profile row could mint super_admin through a definer function).
+
+- **Invariant: any SECURITY DEFINER function that updates `profiles.role` or `profiles.organization_id` runs INSIDE the guard's vetted context and must carry its own complete, NULL-safe authorization — the trigger will not second-guess it.** The single sanctioned definition of `approve_permission_request` is `20260812120000_security_audit_role_scoping.sql`; the two weaker hand-run copies (`database/supabase-profile-schema.sql`, `database/migrations/security-audit-fix-2026-02.sql`) were neutralized with DO-NOT-RE-ADD blocks 2026-08-27 — never resurrect them (post-migration they would be full escalation chains, not just authorization downgrades).
+- `service_role` is deliberately NOT vetted: `authenticator` is a member of `service_role`, so vetting it would extend the exemption to anyone holding the service key. Service-role edge functions pass via the untouched `auth.uid() IS NULL` path.
+- Self-mutation and super_admin-minting/demotion rules stay absolute in EVERY context, vetted or not.
+- Accepted (pending owner review): org_admin may approve in-org `org_admin` requests — this is `20260812120000`'s deliberate allowlist (elevated = manager/admin/super_admin require admin+), which the defect had been masking. Changing it means editing that allowlist, not the trigger.
+- Known ledger blind spot: the nightly `policy_defs_md5` covers `pg_policies` only — trigger-function changes like this guard are invisible to the drift ledger; cite `pg_proc` checks when evidencing trigger integrity.
+
+## 2026-08-27 - Global CSS Is Imported Once, in main.css Only
+
+A redundant `import '../styles/glassmorphic.css'` in `LoadingStates.tsx` made Vite's DEV server inject a second copy of the stylesheet AFTER main.css (App.tsx imports main.css before the component graph), re-declaring `--text-primary: #ffffff` at equal specificity and winning on source order — every shared `ui/Modal` title and body rendered white-on-light in dev while the production bundle (Rollup emits each module once) was byte-identical and unaffected. The dev/prod divergence is the trap: dev-only visual bugs get chased in production CSS where nothing is wrong.
+
+- **Never add page/component-level imports of stylesheets that main.css already imports globally** (glassmorphic, design-tokens, industrial-theme, components-new…). A guard comment sits at the removal site in LoadingStates.tsx.
+- Symptom signature for recurrence: computed token values differ between dev and `vite preview`; check for duplicate style nodes in dev DOM order before touching any CSS.

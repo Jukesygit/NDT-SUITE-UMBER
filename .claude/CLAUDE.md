@@ -61,7 +61,7 @@ Skip this workflow only for tiny mechanical requests where reading memory would 
 - **Testing:** Vitest 4 + React Testing Library (29 test files, 50% coverage threshold)
 - **CI/CD:** GitLab CI (7 stages) → Vercel (matrixportal.io)
 - **Auth:** Supabase Auth + 2FA/TOTP, 6 roles (super_admin, admin, manager, org_admin, editor, viewer)
-- **Node:** >=18, path aliases: `@/*`, `@components/*`, `@services/*`, `@hooks/*`, `@utils/*`, `@types/*`, `@config/*`
+- **Node:** >=18. **No path aliases** — every import is relative. The eight `@…/*` aliases were deleted from `tsconfig.json` 2026-08-27: `vite.config.js` declared no matching `resolve.alias`, so an aliased import typechecked and then failed to bundle, and nothing in the codebase used them. Re-adding one means adding the tsconfig path AND the Vite alias in the same change.
 
 ## Before Writing Code
 
@@ -182,7 +182,7 @@ Route guards: `ProtectedRoute` (auth), `RequireAccess` (role), `RequireTabVisibl
 - `profiles` — User profiles (extends auth.users)
 - `organizations` — Multi-tenant org records
 - `competency_definitions` / `employee_competencies` — Certifications & qualifications
-- `inspection_projects` / `vessels` / `scans` — Inspection workflow
+- `inspection_projects` / `project_vessels` / `scan_composites` — Inspection workflow (tables named `vessels`/`scans` DO exist in prod but are dormant Data-Hub-era leftovers slated for drop — see `docs/plans/2026-08-27-legacy-table-investigation.md`; never treat them as the live era)
 - `documents` — Document management
 - `activity_logs` — PII-masked audit trail
 - `permission_requests` / `account_requests` — Approval workflows

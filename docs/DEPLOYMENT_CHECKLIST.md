@@ -223,7 +223,7 @@ npm run build
 
 - [ ] **Enable daily database backups** (Settings → Database → Backups)
 - [ ] **Test restore procedure**
-- [ ] **Document backup recovery steps**
+- [x] **Document backup recovery steps** (2026-08-26, see `docs/processes/disaster-recovery.md`)
 
 ### Performance Optimization
 

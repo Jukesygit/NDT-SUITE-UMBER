@@ -1,8 +1,9 @@
 # Records of Processing Activities (ROPA)
 
-> **Data Controller**: [Organisation Name — to be completed per deployment]
-> **Last updated**: 2026-02-20
+> **Data Controller**: Matrix Advanced Inspection Services
+> **Last updated**: 2026-08-26
 > **Legal basis reference**: UK GDPR Article 30
+> **Controller contact for data protection matters**: REVIEW (owner): name, role and email of the Designated Data Protection Contact appointed in `docs/dpo-decision.md`
 
 ## Processing Activities
 
@@ -16,7 +17,7 @@
 | **Data Categories** | Email address, hashed password, login timestamps, IP address |
 | **Recipients** | Supabase (data processor), organisation administrators |
 | **Retention** | Duration of employment + 6 years |
-| **International Transfers** | Supabase hosting region (see DPA) |
+| **International Transfers** | Stored and processed by Supabase in **eu-west-2 (London, UK)**; infrastructure sub-processed to AWS. Supabase Inc. is US-incorporated, so Standard Contractual Clauses apply per the Supabase DPA (see `docs/third-party-dpa.md`) |
 | **Security Measures** | Bcrypt hashing, rate limiting, account lockout, TLS encryption |
 
 ### 2. User Profile Management
@@ -29,7 +30,7 @@
 | **Data Categories** | Name, email, mobile number, home address, date of birth, next of kin, emergency contact, profile photo |
 | **Recipients** | Organisation administrators, managers (elevated access only) |
 | **Retention** | Duration of employment + 6 years |
-| **International Transfers** | Supabase hosting region |
+| **International Transfers** | Stored and processed by Supabase in **eu-west-2 (London, UK)**; infrastructure sub-processed to AWS. Supabase Inc. is US-incorporated, so Standard Contractual Clauses apply per the Supabase DPA (see `docs/third-party-dpa.md`) |
 | **Security Measures** | Row-Level Security, role-based access control, PII masking on personnel views |
 
 ### 3. Competency & Certification Tracking
@@ -42,7 +43,7 @@
 | **Data Categories** | Qualification type, issuing body, certification ID, expiry date, supporting documents, verification records |
 | **Recipients** | Organisation administrators, competency verifiers, regulatory auditors (on request) |
 | **Retention** | Expiry date + 6 years |
-| **International Transfers** | Supabase hosting region |
+| **International Transfers** | Stored and processed by Supabase in **eu-west-2 (London, UK)**; infrastructure sub-processed to AWS. Supabase Inc. is US-incorporated, so Standard Contractual Clauses apply per the Supabase DPA (see `docs/third-party-dpa.md`) |
 | **Security Measures** | Row-Level Security, audit trail for all changes, document access logging |
 
 ### 4. Document Control
@@ -55,7 +56,7 @@
 | **Data Categories** | Document metadata, author name, reviewer name, approval records, revision history |
 | **Recipients** | Organisation members (per document access rules) |
 | **Retention** | Per document control policy (typically lifetime of quality system) |
-| **International Transfers** | Supabase hosting region |
+| **International Transfers** | Stored and processed by Supabase in **eu-west-2 (London, UK)**; infrastructure sub-processed to AWS. Supabase Inc. is US-incorporated, so Standard Contractual Clauses apply per the Supabase DPA (see `docs/third-party-dpa.md`) |
 | **Security Measures** | Row-Level Security, version control, approval workflow enforcement |
 
 ### 5. Activity Logging
@@ -67,8 +68,8 @@
 | **Data Subjects** | All system users |
 | **Data Categories** | User ID, action type, timestamp, entity affected, IP address, user agent |
 | **Recipients** | System administrators |
-| **Retention** | 3 years |
-| **International Transfers** | Supabase hosting region |
+| **Retention** | 730 days (24 months) — see `docs/data-retention-schedule.md` |
+| **International Transfers** | Stored and processed by Supabase in **eu-west-2 (London, UK)**; infrastructure sub-processed to AWS. Supabase Inc. is US-incorporated, so Standard Contractual Clauses apply per the Supabase DPA (see `docs/third-party-dpa.md`) |
 | **Security Measures** | Append-only logging, admin-only access, anonymisation on account deletion |
 
 ### 6. Personnel Management
@@ -81,14 +82,20 @@
 | **Data Categories** | All profile fields, competency records, organisation membership |
 | **Recipients** | Managers, organisation administrators (elevated access only) |
 | **Retention** | Same as user profile |
-| **International Transfers** | Supabase hosting region |
+| **International Transfers** | Stored and processed by Supabase in **eu-west-2 (London, UK)**; infrastructure sub-processed to AWS. Supabase Inc. is US-incorporated, so Standard Contractual Clauses apply per the Supabase DPA (see `docs/third-party-dpa.md`) |
 | **Security Measures** | Elevated access requirement, PII masking with audit-logged reveals |
 
-## Data Processor
+## Data Processors
+
+Full records — including sub-processors, safeguards and outstanding actions — are held in `docs/third-party-dpa.md`.
 
 | Processor | Purpose | DPA Status | Location |
 |---|---|---|---|
-| Supabase Inc. | Database hosting, authentication, file storage | DPA on file (see docs/third-party-dpa.md) | Per project configuration |
+| Supabase Inc. | Database hosting, authentication, file storage, edge functions | REVIEW (owner): countersign pending | eu-west-2 (London, UK); infrastructure sub-processed to AWS |
+| Vercel Inc. | Frontend hosting and edge delivery | REVIEW (owner): not yet established | REVIEW (owner): confirm region |
+| Resend | Transactional email delivery (recipient addresses and message content transit this service) | REVIEW (owner): not yet established | REVIEW (owner): confirm region |
+| GitLab Inc. / GitHub, Inc. | Source code hosting (no data-subject personal data by policy; contributor commit metadata only) | REVIEW (owner): not yet established | REVIEW (owner): confirm region |
+| Google (Gemini API) | Engineering drawing extraction (no personnel personal data by design) | REVIEW (owner): not yet established | REVIEW (owner): confirm region |
 
 ## Data Subject Rights
 

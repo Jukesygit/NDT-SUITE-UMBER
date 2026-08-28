@@ -2,8 +2,8 @@
 
 > **Data Controller**: Matrix Advanced Inspection Services
 > **System**: Matrix — Workforce Competency Management Platform
-> **Assessment Date**: 2026-02-20
-> **Assessor**: [YOUR NAME / ROLE]
+> **Assessment Date**: 2026-02-20 (last updated 2026-08-26)
+> **Assessor**: REVIEW (owner): name + role + date
 > **Review Date**: 2027-02-20 (annual)
 
 ## 1. Why This DPIA Is Required
@@ -51,15 +51,16 @@ Under ICO guidance, a DPIA is required when processing is likely to result in a 
 | Competency tracking | Art. 6(1)(c) Legal obligation | Industry regulations (PED 2014/68/EU, EN ISO 9712, ASME) |
 | Personnel management | Art. 6(1)(f) Legitimate interest | Employer operational management (see LIA) |
 | Activity logging | Art. 6(1)(f) Legitimate interest | Security monitoring, compliance auditing (see LIA) |
-| Document control | Art. 6(1)(f) Legitimate interest | Quality management system maintenance (see LIA) |
+| Document control *(experimental module — disabled via feature flag since before 2026-08; not in active use)* | Art. 6(1)(f) Legitimate interest | Quality management system maintenance (see LIA). Retained here because the module and its stored data exist; remove this row if the module is removed rather than re-enabled |
 
 ### 2.5 Who has access?
 
 | Role | Access Level | Justification |
 |---|---|---|
-| Individual user | Own profile, own competencies | Self-management |
-| Manager (org_admin) | Personnel in their organisation | Operational management |
-| System admin | All data across organisations | System administration |
+| Individual user (`viewer`, `editor`) | Own profile, own competencies | Self-management |
+| `org_admin` | Personnel in their own organisation | Tenant operational management |
+| `manager` | Personnel in their own organisation | Operational management (organisation-scoped since 2026-08) |
+| `admin`, `super_admin` | All data across organisations | System administration |
 | Supabase (processor) | All data (infrastructure) | Hosting and storage (DPA in place) |
 
 ### 2.6 Data retention
@@ -67,12 +68,12 @@ Under ICO guidance, a DPIA is required when processing is likely to result in a 
 See `docs/data-retention-schedule.md` for full retention periods. Summary:
 - Profiles: employment + 6 years
 - Competencies: expiry + 6 years
-- Activity logs: 3 years
+- Activity logs: 730 days (24 months)
 - Resolved requests: 90 days
 
 ### 2.7 International transfers
 
-Data is processed by Supabase Inc. Hosting region is configurable per project. Where data is stored outside the UK, Standard Contractual Clauses apply per the Supabase DPA.
+Data is processed by Supabase Inc. in region **eu-west-2 (London, UK)** — production project `ntrgjqrbewbvwofupphn`, migrated to this region on 2026-08-17. Personal data is therefore stored and processed on UK infrastructure. Supabase Inc. is US-incorporated and its sub-processor is AWS, so processor access from outside the UK remains possible; where data is stored or accessed outside the UK, Standard Contractual Clauses apply per the Supabase DPA. Other processors are recorded in `docs/third-party-dpa.md`.
 
 ## 3. Necessity and Proportionality
 
@@ -119,7 +120,7 @@ Data is processed by Supabase Inc. Hosting region is configurable per project. W
 | Measure | Status | Detail |
 |---|---|---|
 | Row-Level Security | Active | Multi-tenant data isolation enforced at database level |
-| Role-based access control | Active | 5 roles: viewer, editor, org_admin, admin, with cascading permissions |
+| Role-based access control | Active | 6 roles in ascending privilege: `viewer`, `editor`, `org_admin`, `manager`, `admin`, `super_admin`, with cascading permissions. Privileged operations enforce a strict rank rule — a caller may act only on users below their own rank, and actions on a `super_admin` are reserved to `super_admin` |
 | Password hashing | Active | bcrypt with salt |
 | Rate limiting | Active | 5 login attempts per 15 minutes per email |
 | Content Security Policy | Active | Strict CSP preventing XSS, clickjacking, code injection |
@@ -129,6 +130,10 @@ Data is processed by Supabase Inc. Hosting region is configurable per project. W
 | Error log sanitisation | Active | No component stacks or URL query params in localStorage error logs |
 | Dependency monitoring | Active | Automated npm audit in CI pipeline |
 | Input validation | Active | SQL injection prevention, XSS protection, file upload validation |
+| Production security headers | Active (2026-08) | Strict Content-Security-Policy (`default-src 'none'; script-src 'self'`), HSTS (`max-age=63072000; includeSubDomains; preload`), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy` — served on every response by the hosting layer and verified live. `/share/*` additionally carries `X-Robots-Tag: noindex, nofollow` |
+| Append-only audit log | Active (2026-08) | The activity log is server-authoritative and immutable: application users cannot UPDATE or DELETE entries, reads are restricted to administrators, and the only deletion path is the retention purge function. Actions performed by one user on another's record are recorded with an on-behalf-of marker |
+| Multi-factor authentication (mandatory) | **Partial (2026-08)** | Backend live 2026-08-26: TOTP enrolment, verification, hashed single-use backup codes, and a rank-gated administrator reset path. The client-side gate making enrolment **mandatory for all roles** is complete but **not yet deployed** — it reaches users on the next frontend release. Data-layer enforcement (requiring an `aal2` session at the database level) is planned once live enrolment is confirmed complete, and is tracked as risk R-M2 in `docs/risk-register.md` |
+| Account recovery (backup codes) | Active (backend, 2026-08) | Hashed, single-use recovery codes issued at enrolment give a user who loses their authenticator a self-service route back in; previously, authenticator loss was an unrecoverable lockout. Administrator-initiated reset is rank-gated, refuses self-reset, and is written to the audit log |
 
 ### 5.2 Organisational measures (required)
 
@@ -138,6 +143,10 @@ Data is processed by Supabase Inc. Hosting region is configurable per project. W
 | Data retention schedule | Documented | `docs/data-retention-schedule.md` |
 | ROPA | Documented | `docs/ropa.md` |
 | Breach response plan | Documented | `docs/data-breach-response-plan.md` |
+| Breach register | Documented (2026-08) | `docs/breach-register.md` — Article 33(5) record; one entry, notification decisions pending owner sign-off |
+| Information security policy | Documented (2026-08) | `docs/information-security-policy.md` — approval pending |
+| Risk register | Documented (2026-08) | `docs/risk-register.md` — treatment and acceptance status per finding |
+| Processor register | Documented (2026-08) | `docs/third-party-dpa.md` — all six processors recorded |
 | Supabase DPA | [PENDING] | Download and countersign from supabase.com/legal/dpa |
 | Staff training | [PENDING] | See `docs/training-records.md` |
 | Annual audit | [PENDING] | See `docs/annual-audit-checklist.md` |
@@ -164,7 +173,7 @@ Based on this assessment:
 
 **Decision**: Processing may proceed.
 
-**Signed**: [YOUR NAME, ROLE, DATE]
+**Signed**: REVIEW (owner): name + role + date
 
 ## 8. Review
 
@@ -176,4 +185,5 @@ This DPIA must be reviewed:
 
 | Review Date | Reviewer | Changes Made | Outcome |
 |---|---|---|---|
-| 2026-02-20 | [YOUR NAME] | Initial assessment | Approved |
+| 2026-02-20 | REVIEW (owner): name | Initial assessment | Approved |
+| 2026-08-26 | REVIEW (owner): name | Factual update following the 2026-08-12 security audit and the 2026-08-26 posture assessment: role model corrected to 6 roles (§2.5, §5.1); hosting region stated concretely as eu-west-2 (§2.7); activity-log retention aligned to 730 days (§2.6); production security headers, append-only audit log, mandatory MFA and backup-code recovery added to the technical measures (§5.1); breach, risk, processor and policy records added to the organisational measures (§5.2) | REVIEW (owner): confirm the assessment conclusion in §7 still holds and sign |
