@@ -273,54 +273,17 @@ BEGIN
 END;
 $$;
 
--- Fix approve_permission_request function
-DROP FUNCTION IF EXISTS public.approve_permission_request(UUID);
-CREATE OR REPLACE FUNCTION public.approve_permission_request(request_id UUID)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-    request_record permission_requests;
-    result JSONB;
-BEGIN
-    -- Verify caller is admin/org_admin
-    IF NOT EXISTS (
-        SELECT 1 FROM profiles
-        WHERE id = auth.uid() AND role IN ('admin', 'org_admin')
-    ) THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Unauthorized');
-    END IF;
-
-    -- Get the request
-    SELECT * INTO request_record
-    FROM permission_requests
-    WHERE id = request_id AND status = 'pending';
-
-    IF NOT FOUND THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Request not found or already processed');
-    END IF;
-
-    -- Update the user's role
-    UPDATE profiles
-    SET role = request_record.requested_role,
-        updated_at = NOW()
-    WHERE id = request_record.user_id;
-
-    -- Update the request status
-    UPDATE permission_requests
-    SET status = 'approved',
-        approved_by = auth.uid(),
-        approved_at = NOW()
-    WHERE id = request_id;
-
-    RETURN jsonb_build_object('success', true, 'message', 'Permission request approved');
-EXCEPTION
-    WHEN OTHERS THEN
-        RETURN jsonb_build_object('success', false, 'error', SQLERRM);
-END;
-$$;
+-- approve_permission_request — DO NOT RE-ADD (neutralized 2026-08-27).
+-- The version that lived here had a caller gate but NO elevated-role allowlist
+-- (an org_admin could approve an in-org 'admin' request → tenant admin becomes
+-- global admin), and its DROP FUNCTION + CREATE OR REPLACE pattern RESET the
+-- function ACL to default PUBLIC EXECUTE, silently undoing the REVOKE applied
+-- by 20260812120000. The hardened version is single-sourced in
+-- supabase/migrations/20260812120000_security_audit_role_scoping.sql — the only
+-- place this function may be defined. Since migration 20260827120000 the
+-- profiles role guard TRUSTS vetted definer contexts, so a weaker resurrected
+-- copy would no longer be caught by the trigger (adversarial review 2026-08-27,
+-- MAJOR-1). Invariant: docs/agent-memory/Decision Log.md.
 
 -- Fix reject_permission_request function
 DROP FUNCTION IF EXISTS public.reject_permission_request(UUID, TEXT);

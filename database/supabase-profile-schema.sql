@@ -60,41 +60,23 @@ CREATE POLICY "Only admins can update permission requests"
         )
     );
 
--- Function to approve permission request and update user role
-CREATE OR REPLACE FUNCTION approve_permission_request(request_id UUID)
-RETURNS JSONB AS $$
-DECLARE
-    request_record permission_requests;
-    result JSONB;
-BEGIN
-    -- Get the request
-    SELECT * INTO request_record
-    FROM permission_requests
-    WHERE id = request_id AND status = 'pending';
-
-    IF NOT FOUND THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Request not found or already processed');
-    END IF;
-
-    -- Update the user's role
-    UPDATE profiles
-    SET role = request_record.requested_role,
-        updated_at = NOW()
-    WHERE id = request_record.user_id;
-
-    -- Update the request status
-    UPDATE permission_requests
-    SET status = 'approved',
-        approved_by = auth.uid(),
-        approved_at = NOW()
-    WHERE id = request_id;
-
-    RETURN jsonb_build_object('success', true, 'message', 'Permission request approved');
-EXCEPTION
-    WHEN OTHERS THEN
-        RETURN jsonb_build_object('success', false, 'error', SQLERRM);
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- ============================================================================
+-- DO NOT RE-ADD: approve_permission_request()
+-- ============================================================================
+-- An UNGATED SECURITY DEFINER version of approve_permission_request() used to
+-- live here (no caller authorization at all). The hardened version — NULL-safe
+-- caller gates, org scoping, elevated-role allowlist — is single-sourced in
+-- supabase/migrations/20260812120000_security_audit_role_scoping.sql and that
+-- migration is the ONLY place it may be defined.
+--
+-- Why this matters MORE since 2026-08-27: migration 20260827120000 makes the
+-- profiles role-escalation guard trust vetted definer contexts, so a definer
+-- function that updates roles carries its OWN authorization — the trigger will
+-- not second-guess it. Re-running this script as it stood would have re-armed a
+-- version with NO authorization, converting "any viewer approves any request"
+-- into a full role-escalation chain (adversarial review 2026-08-27, MAJOR-1).
+-- Invariant recorded in docs/agent-memory/Decision Log.md.
+-- ============================================================================
 
 -- Function to reject permission request
 CREATE OR REPLACE FUNCTION reject_permission_request(request_id UUID, reason TEXT DEFAULT NULL)

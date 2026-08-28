@@ -143,16 +143,17 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Grant execute permission to authenticated users
 GRANT EXECUTE ON FUNCTION log_activity TO authenticated;
 
--- Optional: Function to clean up old activity logs (retention policy)
-CREATE OR REPLACE FUNCTION cleanup_old_activity_logs(days_to_keep INTEGER DEFAULT 365)
-RETURNS INTEGER AS $$
-DECLARE
-    deleted_count INTEGER;
-BEGIN
-    DELETE FROM activity_log
-    WHERE created_at < NOW() - (days_to_keep || ' days')::INTERVAL;
-
-    GET DIAGNOSTICS deleted_count = ROW_COUNT;
-    RETURN deleted_count;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- ============================================================================
+-- DO NOT RE-ADD: cleanup_old_activity_logs()
+-- ============================================================================
+-- A cleanup_old_activity_logs() function used to live here. It was DROPPED FOR
+-- CAUSE by migration 20260626150000_activity_log_integrity.sql: an ungated (or
+-- under-gated) SECURITY DEFINER delete path into the append-only activity log,
+-- with no self-audit row — a silent history-erasure vector. The standing
+-- invariant (Decision Log): exactly two functions may delete from activity_log
+-- — purge_activity_logs (super_admin-gated) and scheduled_purge_activity_logs
+-- (pg_cron) — and both self-audit. Re-running this script must never re-arm a
+-- third. Retention is enforced by the pg_cron job 'activity-log-retention-
+-- nightly' (migration 20260826150000). (Neutralized 2026-08-27, adversarial
+-- review finding MAJOR-2; same treatment as database/data-retention.sql.)
+-- ============================================================================

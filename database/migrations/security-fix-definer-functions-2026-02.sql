@@ -509,22 +509,13 @@ BEGIN
 END;
 $$;
 
--- cleanup_old_activity_logs
-CREATE OR REPLACE FUNCTION cleanup_old_activity_logs(days_to_keep INTEGER DEFAULT 90)
-RETURNS INTEGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-    deleted_count INTEGER;
-BEGIN
-    DELETE FROM activity_log
-    WHERE created_at < NOW() - (days_to_keep || ' days')::INTERVAL;
-    GET DIAGNOSTICS deleted_count = ROW_COUNT;
-    RETURN deleted_count;
-END;
-$$;
+-- cleanup_old_activity_logs — DO NOT RE-ADD (neutralized 2026-08-27).
+-- This function was DROPPED FOR CAUSE by 20260626150000_activity_log_integrity
+-- .sql: a delete path into the append-only activity log with no role gate that
+-- survives re-runs of this script, and no self-audit row. The invariant
+-- (Decision Log): exactly two functions may delete from activity_log —
+-- purge_activity_logs and scheduled_purge_activity_logs — both self-auditing.
+-- Retention runs via pg_cron 'activity-log-retention-nightly' (20260826150000).
 
 -- cleanup_expired_reset_codes — keep original return type (void)
 CREATE OR REPLACE FUNCTION cleanup_expired_reset_codes()
