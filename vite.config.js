@@ -47,7 +47,7 @@ export default defineConfig({
         // Frame ancestors
         "frame-ancestors 'self'",
         // Object/embed sources for PDFs
-        "object-src 'self' https://*.supabase.co blob:",
+        "object-src 'none'",
         // Base URI
         "base-uri 'self'",
         // Form action
@@ -77,7 +77,7 @@ export default defineConfig({
         `connect-src 'self' https://*.supabase.co wss://*.supabase.co ${companionPorts}`,
         "worker-src 'self' blob:",
         "frame-src 'self' https://*.supabase.co blob:",
-        "object-src 'self' https://*.supabase.co blob:",
+        "object-src 'none'",
         "frame-ancestors 'none'",
         "base-uri 'self'",
         "form-action 'self'",
@@ -99,10 +99,38 @@ export default defineConfig({
     // Split chunks for better caching
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Vendor chunks - core libraries always loaded
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'supabase-vendor': ['@supabase/supabase-js'],
+        // Vendor chunks - core libraries always loaded.
+        //
+        // This is the FUNCTION form on purpose. The object form
+        // (`{'supabase-vendor': ['@supabase/supabase-js'], ...}`) makes Rollup
+        // walk the whole dependency graph of each listed package and pull
+        // everything it reaches into that chunk - including Vite's virtual
+        // `vite/preload-helper` module, which supabase-js reaches via its own
+        // dynamic import(). That helper is shared by EVERY chunk containing an
+        // import(), so parking it inside supabase-vendor gave each such chunk a
+        // static ESM edge onto supabase-vendor. One lazy import() in
+        // engine/annotation-labels.ts was therefore enough to drag supabase-js
+        // (~42 kB gz, auth + database client) onto the loginless /share page,
+        // breaking the client-sharing design invariant. Pinning the helper to
+        // its own tiny chunk cuts that edge. See scripts/check-share-chunk.mjs
+        // and docs/plans/2026-08-17-client-sharing-design.md (2026-08-25).
+        manualChunks(id) {
+          if (id.includes('vite/preload-helper')) return 'preload-helper'
+          // tslib is a transitive dep of the @supabase packages only, so it
+          // stays in supabase-vendor exactly as the object form placed it.
+          if (id.includes('node_modules/@supabase/') || id.includes('node_modules/tslib/')) {
+            return 'supabase-vendor'
+          }
+          if (
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/react-dom/') ||
+            id.includes('node_modules/scheduler/') ||
+            id.includes('node_modules/react-router/') ||
+            id.includes('node_modules/react-router-dom/') ||
+            id.includes('node_modules/@remix-run/')
+          ) {
+            return 'react-vendor'
+          }
           // Heavy libraries are dynamically imported, so we don't bundle them in static chunks
           // Removed: 'three', 'html2canvas', 'jspdf', 'plotly.js-dist-min', 'xlsx'
           // These will be loaded on-demand when their features are used

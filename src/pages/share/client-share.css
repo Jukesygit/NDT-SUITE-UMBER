@@ -430,6 +430,26 @@
   pointer-events: none;
 }
 
+/* ---- Statistics block ----
+   The two published aggregates (coverage, wall loss) under one heading, the way
+   the modeler's stats panel hosts them. `.cs-vessel` already spaces the block
+   from the viewport; the gap here is between the two sections inside it. */
+.cs-statistics {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.cs-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  /* Named, not inherited: base.css's global heading rule paints app-theme
+     `--text-primary` and would win over inheritance outright. */
+  color: var(--clean-text-primary);
+  margin: 0;
+}
+
 /* ---- Stats table ---- */
 .cs-stats-rollup {
   display: flex;
@@ -480,6 +500,55 @@
 .cs-stats-table tbody th {
   text-align: left;
   font-weight: 500;
+}
+
+/* ---- Stacked % / m² cell ----
+   The percentage answers "how much of it", the area answers "how much is that";
+   the modeler's panel stacks them for the same reason. One flex child inside the
+   cell, not two loose spans, so the stacked mobile layout's `space-between` puts
+   the row label against the whole pair rather than pushing them apart. */
+.cs-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.35;
+}
+
+.cs-cell-pct {
+  white-space: nowrap;
+}
+
+.cs-cell-area {
+  font-size: 11px;
+  /* Set here, on the span, because the cell's own colour (the achieved blue, or
+     the untracked grey) is painted on the `td` and would otherwise inherit down
+     onto a sub-line that is meant to recede. */
+  color: var(--clean-text-tertiary);
+}
+
+/* "auto" — the target was derived from drawn rects, not typed in. */
+.cs-cell-auto {
+  margin-left: 5px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--clean-badge-neutral-bg);
+  color: var(--clean-badge-neutral-text);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+/* Total row: area-weighted sums, so it reads as a summary rather than one more
+   feature. Rendered only when every row shipped its areas.
+   Qualified by the table class to outrank the generic cell and `th:first-child`
+   rules above, which would otherwise keep the row's bottom border and weight. */
+.cs-stats-table .cs-stats-total th,
+.cs-stats-table .cs-stats-total td {
+  border-bottom: none;
+  border-top: 2px solid var(--clean-border);
+  font-weight: 600;
 }
 
 /* ---- Global element-rule reclaim (contrast) -------------------------------
@@ -547,6 +616,134 @@
   background: var(--clean-badge-red-text);
 }
 
+/* ---- Wall loss distribution ----
+   Same table idiom as the coverage table above, plus a swatch column that keys
+   the bins to the colours on the model. The swatch COLOUR is an inline style
+   from the component (it is data — how much wall is gone — not theme), so only
+   its size and shape live here. */
+.cs-wl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.cs-wl-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--clean-text-primary);
+}
+
+.cs-wl-nominal {
+  font-size: 12px;
+  color: var(--clean-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Scoped under `.cs-page` for the same reason the passcode input is: base.css
+   and main.css both style a bare `select` in app-theme neutrals, and base.css
+   also stretches it to `width: 100%`. */
+.cs-page .cs-wl-select {
+  width: auto;
+  margin-left: auto;
+  padding: 4px 8px;
+  border: 1px solid var(--clean-input-border);
+  border-radius: 8px;
+  background: var(--clean-input-bg);
+  color: var(--clean-input-text);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.cs-page .cs-wl-select:focus {
+  outline: none;
+  border-color: var(--clean-input-border-focus);
+  box-shadow: var(--clean-focus-ring);
+}
+
+.cs-wl-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  /* base.css's global `table` rule adds a bottom margin; spacing is owned by
+     `.cs-statistics`'s gap. */
+  margin: 0;
+}
+
+.cs-wl-table th,
+.cs-wl-table td {
+  padding: 7px 10px;
+  text-align: right;
+  border-bottom: 1px solid var(--clean-divider);
+  font-variant-numeric: tabular-nums;
+}
+
+.cs-wl-table thead th {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--clean-text-quaternary);
+  border-bottom: 1px solid var(--clean-border);
+}
+
+.cs-wl-table th:first-child,
+.cs-wl-table td:first-child {
+  text-align: left;
+  font-weight: 500;
+}
+
+.cs-wl-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 7px;
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+
+/* Readings outside every bin: divided off from the bands so it never reads as
+   one of them. Its muted colour has to be set in the reclaim block below, where
+   it can outrank the global `td` rule. */
+.cs-wl-table .cs-wl-spurious th,
+.cs-wl-table .cs-wl-spurious td {
+  border-top: 1px solid var(--clean-border);
+}
+
+.cs-wl-table .cs-wl-total th,
+.cs-wl-table .cs-wl-total td {
+  border-bottom: none;
+  border-top: 2px solid var(--clean-border);
+  font-weight: 600;
+}
+
+/* Global element-rule reclaim, as for the coverage table above: base.css paints
+   bare `th` / `td` / `tr:hover td` in app-theme tokens, and an element rule beats
+   inheritance outright. See the block above for the full note. */
+.cs-page .cs-wl-table th,
+.cs-page .cs-wl-table td {
+  color: var(--clean-text-primary);
+  background: transparent;
+}
+
+.cs-page .cs-wl-table thead th {
+  color: var(--clean-text-quaternary);
+}
+
+.cs-page .cs-wl-table tbody tr:hover td {
+  background: var(--clean-hover-bg);
+}
+
+/* Carried on the cells, not the row: on the `tr` this would only ever set an
+   INHERITED colour, which the reclaim rule above outranks — the same shape as
+   `.cs-row-untracked` in the coverage table. */
+.cs-page .cs-wl-table .cs-wl-spurious th,
+.cs-page .cs-wl-table .cs-wl-spurious td {
+  color: var(--clean-text-tertiary);
+}
+
 /* ---- Phones: stack the table instead of scrolling it sideways ---- */
 @media (max-width: 640px) {
   .cs-main {
@@ -565,30 +762,48 @@
     flex: 1 0 100%;
   }
 
-  .cs-stats-table thead {
+  /* Both tables stack the same way: the header row goes, and each cell carries
+     its own label. Every column added on 2026-08-25 (RBA, and the whole wall
+     loss table) is in these lists for exactly that reason. */
+  .cs-stats-table thead,
+  .cs-wl-table thead {
     display: none;
   }
 
   .cs-stats-table,
   .cs-stats-table tbody,
+  .cs-stats-table tfoot,
   .cs-stats-table tr,
   .cs-stats-table td,
-  .cs-stats-table tbody th {
+  .cs-stats-table th,
+  .cs-wl-table,
+  .cs-wl-table tbody,
+  .cs-wl-table tfoot,
+  .cs-wl-table tr,
+  .cs-wl-table td,
+  .cs-wl-table th {
     display: block;
     width: 100%;
   }
 
-  .cs-stats-table tr {
+  .cs-stats-table tr,
+  .cs-wl-table tr {
     padding: 8px 0;
     border-bottom: 1px solid var(--clean-border);
   }
 
-  .cs-stats-table tbody th {
+  /* The row's name, at the top of its stack. `text-align` is reset because the
+     desktop rules right-align every cell but the first, and "first" stops
+     meaning anything once the cells are blocks. */
+  .cs-stats-table th,
+  .cs-wl-table th {
     padding-bottom: 2px;
+    text-align: left;
     font-weight: 600;
   }
 
-  .cs-stats-table td {
+  .cs-stats-table td,
+  .cs-wl-table td {
     display: flex;
     justify-content: space-between;
     border: none;
@@ -596,9 +811,38 @@
   }
 
   /* Row labels, so a stacked cell still says what it is. */
-  .cs-stats-table td::before {
+  .cs-stats-table td::before,
+  .cs-wl-table td::before {
     content: attr(data-label);
     color: var(--clean-text-quaternary);
     font-weight: 500;
+  }
+
+  /* The alignment-only cells (Δ and Status on the total rows) carry no label and
+     nothing to show; stacked, they would be blank lines. */
+  .cs-stats-table tfoot td:empty,
+  .cs-wl-table tfoot td:empty {
+    display: none;
+  }
+
+  /* Stacked, a total row is a block among blocks — its rule has to sit on the
+     row, since the per-cell top border would draw once per line. */
+  .cs-stats-table .cs-stats-total,
+  .cs-wl-table .cs-wl-total {
+    border-top: 2px solid var(--clean-border);
+    border-bottom: none;
+  }
+
+  .cs-stats-table .cs-stats-total th,
+  .cs-stats-table .cs-stats-total td,
+  .cs-wl-table .cs-wl-total th,
+  .cs-wl-table .cs-wl-total td,
+  .cs-wl-table .cs-wl-spurious th,
+  .cs-wl-table .cs-wl-spurious td {
+    border-top: none;
+  }
+
+  .cs-wl-table .cs-wl-spurious {
+    border-top: 1px solid var(--clean-border);
   }
 }

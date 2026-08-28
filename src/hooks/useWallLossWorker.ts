@@ -4,25 +4,11 @@ import type {
   WallLossGroupConfig,
   WallLossDistribution,
   WallLossGroupBin,
-  ScanCompositeConfig,
 } from '../components/VesselModeler/types';
-import type {
-  CompositeSlim,
-  DomeCompositeSlim,
-  FootprintParamsSlim,
-  WallLossBodyInput,
-  WallLossRequest,
-  WallLossResponse,
-} from '../workers/wall-loss-compute';
-import {
-  appendageNozzleFootprintParams,
-  mainShellNozzleFootprintParams,
-} from '../components/VesselModeler/engine/nozzle-footprint';
+import type { WallLossResponse } from '../workers/wall-loss-compute';
+import { buildWallLossRequest, canComputeWallLoss } from '../workers/wall-loss-request';
 
 const DEBOUNCE_MS = 300;
-
-/** Default appendage head ratio (mirrors appendage-config / body-frame). */
-const DEFAULT_APPENDAGE_HEAD_RATIO = 2.0;
 
 /**
  * One body's wall-loss distribution for the WallLossStatsSection selector. Same
@@ -48,21 +34,6 @@ export interface WallLossBodyDistribution {
 export interface WallLossResult {
   combined: WallLossDistribution;
   bodies: WallLossBodyDistribution[];
-}
-
-/** Map a runtime scan composite to the serialisable slim shape for the worker. */
-function toSlim(c: ScanCompositeConfig): CompositeSlim {
-  return {
-    id: c.id,
-    orientationConfirmed: c.orientationConfirmed,
-    data: c.data,
-    xAxis: c.xAxis,
-    yAxis: c.yAxis,
-    indexStartMm: c.indexStartMm,
-    datumAngleDeg: c.datumAngleDeg,
-    scanDirection: c.scanDirection,
-    indexDirection: c.indexDirection,
-  };
 }
 
 export function useWallLossWorker(
@@ -117,14 +88,15 @@ export function useWallLossWorker(
     };
   }, []);
 
-  const hasShellScans = vesselState.scanComposites.some((c) => c.orientationConfirmed);
-  const hasDomeScans = (vesselState.domeScanComposites ?? []).some((d) => d.orientationConfirmed);
-  const hasScans = hasShellScans || hasDomeScans;
+  // The gate and the request both come from `workers/wall-loss-request`, which is
+  // also what the client-share builder calls: the panel and a published bundle
+  // can never be asking `compute` two different questions.
+  const canCompute = canComputeWallLoss(vesselState, config);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
-    if (!config?.enabled || !hasScans || (config.nominalThickness ?? 0) <= 0) {
+    if (!config || !canCompute) {
       setResult(null);
       return;
     }
@@ -132,73 +104,14 @@ export function useWallLossWorker(
     debounceRef.current = setTimeout(() => {
       const id = ++idRef.current;
       latestIdRef.current = id;
-
-      // Main-shell scans (bodyId undefined). Appendage scans are grouped per body
-      // below — the interim `.filter(!bodyId)` drop is gone (design §9.3).
-      const composites: CompositeSlim[] = vesselState.scanComposites
-        .filter((c) => !c.bodyId)
-        .map(toSlim);
-
-      const domeComposites: DomeCompositeSlim[] = (vesselState.domeScanComposites ?? []).map(
-        (d) => ({
-          id: d.id,
-          orientationConfirmed: d.orientationConfirmed,
-          data: d.data,
-          xAxis: d.xAxis,
-          yAxis: d.yAxis,
-        })
-      );
-
-      // Main-shell cutouts (design §9.4 / R1): appendage junctions PLUS unmappable
-      // nozzle bores. Cells inside a footprint drop out of the MAIN body's
-      // distribution. Nozzle params (radial circle / non-radial ellipse) and the
-      // head-mounted skip come from the shared engine helper so the worker cutout
-      // matches coverage + heatmap exactly.
-      const footprints: FootprintParamsSlim[] = [
-        ...(vesselState.appendages ?? []).map((a) => ({
-          id: a.id,
-          mountPos: a.mountPos,
-          mountAngle: a.mountAngle,
-          diameter: a.diameter,
-        })),
-        ...mainShellNozzleFootprintParams(vesselState),
-      ];
-
-      // One appendage body per appendage config, carrying only its own scans, its
-      // own cylinder geometry (design §9.3), and its own nozzle-bore cutouts
-      // (design R1). NWT defaults to the shell NWT.
-      const bodies: WallLossBodyInput[] = (vesselState.appendages ?? []).map((a) => ({
-        bodyId: a.id,
-        name: a.name,
-        composites: vesselState.scanComposites.filter((c) => c.bodyId === a.id).map(toSlim),
-        footprints: appendageNozzleFootprintParams(vesselState, a.id),
-        vesselId: a.diameter,
-        vesselLength: a.length,
-        headRatio: a.headRatio ?? DEFAULT_APPENDAGE_HEAD_RATIO,
-        nominalThickness:
-          a.nominalThickness ?? vesselState.shellNominalThickness ?? config.nominalThickness,
-      }));
-
-      const req: WallLossRequest = {
-        id,
-        composites,
-        domeComposites,
-        footprints,
-        bodies,
-        vesselId: vesselState.id,
-        vesselLength: vesselState.length,
-        headRatio: vesselState.headRatio,
-        nominalThickness: config.nominalThickness,
-        binCount: config.binCount,
-        binMode: config.binMode ?? 'equal',
-        customBoundaries: config.customBoundaries,
-        corrosionAllowance: vesselState.corrosionAllowance,
-        shellNominalThickness: vesselState.shellNominalThickness,
-        domeNominalThickness: vesselState.domeNominalThickness,
-      };
-
-      getWorker().postMessage(req);
+      getWorker().postMessage(buildWallLossRequest(vesselState, config, id));
     }, DEBOUNCE_MS);
+    // Deps are the individual state fields the request reads, NOT `vesselState`
+    // itself — a whole-object dep would restart the 300ms debounce on every
+    // unrelated edit and the distribution would never settle. `canCompute`
+    // stands where `hasScans` did and folds in the two config legs of the gate,
+    // both of which are still listed in their own right because they are also
+    // request inputs.
   }, [
     config?.enabled,
     config?.nominalThickness,
@@ -215,7 +128,7 @@ export function useWallLossWorker(
     vesselState.corrosionAllowance,
     vesselState.shellNominalThickness,
     vesselState.domeNominalThickness,
-    hasScans,
+    canCompute,
     getWorker,
   ]);
 

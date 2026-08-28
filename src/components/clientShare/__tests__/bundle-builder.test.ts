@@ -26,14 +26,18 @@ import {
   type DomeScanConfig,
   type ScanCompositeConfig,
   type VesselState,
+  type WallLossGroupConfig,
 } from '../../VesselModeler/types';
 import type { LayerKey } from '../../VesselModeler/outliner-tree';
 import { computeComparisonRows } from '../../VesselModeler/engine/coverage-comparison';
 import { deserializeVesselState } from '../../VesselModeler/engine/vessel-serialization';
+import { compute } from '../../../workers/wall-loss-compute';
+import { buildWallLossRequest } from '../../../workers/wall-loss-request';
 import {
   SHARE_LAYER_DEFAULTS,
   buildShareBundle,
   buildShareStats,
+  buildShareWallLoss,
   sanitizeVesselStateForShare,
 } from '../bundle-builder';
 import { MANIFEST_PATH, SHARE_BUNDLE_FORMAT } from '../bundle-types';
@@ -324,6 +328,224 @@ describe('buildShareStats', () => {
       expect(row.targetPct).toBe(engineRows[i].targetPct);
       expect(row.status).toBe(engineRows[i].status);
     });
+  });
+
+  it('carries the area figures the client page stacks under each percentage', () => {
+    const state = makeState();
+    const engineRows = computeComparisonRows(state);
+    const { rows } = buildShareStats(state);
+
+    rows.forEach((row, i) => {
+      expect(row.totalMm2).toBe(engineRows[i].totalMm2);
+      expect(row.targetMm2).toBe(engineRows[i].targetMm2);
+      expect(row.achievedMm2).toBe(engineRows[i].achievedMm2);
+    });
+    // The fixture's coverable areas are real, or the assertions above are vacuous.
+    expect(rows.some((r) => (r.totalMm2 ?? 0) > 0)).toBe(true);
+  });
+
+  it('marks a rect-derived target auto, and leaves a manual one unmarked', () => {
+    // The fixture draws a rect on the cylinder, so that row resolves from rects.
+    const { rows } = buildShareStats(makeState());
+    const engineRows = computeComparisonRows(makeState());
+    const auto = engineRows.findIndex((r) => r.targetSource === 'rects');
+    expect(auto, 'fixture no longer produces a rect-derived target').toBeGreaterThanOrEqual(0);
+    expect(rows[auto].targetAuto).toBe(true);
+
+    // No rects anywhere: the stored scope is the target, and it is NOT auto.
+    const manual = buildShareStats(
+      makeState({
+        coverageRects: [],
+        coverageTargets: { cylinder: { rbaPct: 80, scopedPct: 60 } },
+      })
+    ).rows.find((r) => r.key === 'cylinder');
+    expect(manual?.targetPct).toBe(60);
+    expect(manual?.targetAuto).toBeUndefined();
+  });
+});
+
+// =============================================================================
+// RBA — the one figure that is not on the comparison row
+// =============================================================================
+// It is informational: the risk-based recommendation that INFORMS the scope, and
+// never the yardstick the delta is measured against. It is read off the stored
+// target entry, and an absent entry must ship an ABSENT field. Publishing "no
+// recommendation" as "0% recommended" would be a wrong report.
+// =============================================================================
+
+describe('buildShareStats — RBA', () => {
+  const targeted = makeState({
+    coverageTargets: { cylinder: { rbaPct: 85, scopedPct: 60 } },
+  });
+
+  it('ships the stored RBA for a feature that has an entry', () => {
+    const row = buildShareStats(targeted).rows.find((r) => r.key === 'cylinder');
+    expect(row?.rbaPct).toBe(85);
+  });
+
+  it('leaves RBA absent for a feature with no entry — never 0', () => {
+    const rows = buildShareStats(targeted).rows.filter((r) => r.key !== 'cylinder');
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.rbaPct, `${row.key} coerced an absent RBA`).toBeUndefined();
+    }
+  });
+
+  it('leaves RBA absent on every row when nothing is targeted at all', () => {
+    for (const row of buildShareStats(makeState()).rows) {
+      expect(row.rbaPct).toBeUndefined();
+    }
+  });
+
+  it('drops the absent key entirely from the bytes the client receives', () => {
+    const bundle = buildShareBundle({
+      project: { name: 'Karstoe 2026' },
+      vessels: [{ id: 'v-1', name: 'V', vesselState: targeted }],
+      published: ALL_LAYERS,
+      revision: 1,
+      publishedAt: '2026-08-20T09:00:00.000Z',
+    });
+    const manifest = bundle.files.find((f) => f.path === MANIFEST_PATH);
+    const wire = manifest?.body as { vessels: { stats: Record<string, unknown>[] }[] };
+    const untracked = wire.vessels[0].stats.find((r) => r.key !== 'cylinder');
+    expect(untracked && Object.prototype.hasOwnProperty.call(untracked, 'rbaPct')).toBe(false);
+  });
+});
+
+// =============================================================================
+// Wall loss
+// =============================================================================
+// An AGGREGATE DELIVERABLE, not a layer: like the coverage percentages, it is
+// computed from the FULL state and ships whether or not the readings behind it
+// were published. And it is computed through the SAME request builder the
+// modeler's worker hook posts — the whole point of `workers/wall-loss-request`
+// — so a published distribution is the one the inspector approved on screen.
+// =============================================================================
+
+const WALL_LOSS: WallLossGroupConfig = { enabled: true, nominalThickness: 20, binCount: 5 };
+
+/** A model whose confirmed shell scan actually lands cells on the cylinder. */
+function wallLossState(overrides: Partial<VesselState> = {}): VesselState {
+  return makeState({
+    wallLossGroups: WALL_LOSS,
+    scanComposites: [makeComposite({ indexStartMm: 1000 })],
+    ...overrides,
+  });
+}
+
+describe('buildShareWallLoss', () => {
+  it('is absent when the model has no wall-loss config', () => {
+    expect(buildShareWallLoss(makeState())).toBeUndefined();
+  });
+
+  it('is absent when the config is disabled', () => {
+    expect(
+      buildShareWallLoss(wallLossState({ wallLossGroups: { ...WALL_LOSS, enabled: false } }))
+    ).toBeUndefined();
+  });
+
+  it('is absent when no scan has had its orientation confirmed', () => {
+    const unconfirmed = wallLossState({
+      scanComposites: [makeComposite({ indexStartMm: 1000, orientationConfirmed: false })],
+    });
+    expect(buildShareWallLoss(unconfirmed)).toBeUndefined();
+  });
+
+  it('is absent when there are no scans at all', () => {
+    expect(buildShareWallLoss(wallLossState({ scanComposites: [] }))).toBeUndefined();
+  });
+
+  it('is the numbers a direct compute() returns — one request builder, two callers', () => {
+    const state = wallLossState();
+    const wallLoss = buildShareWallLoss(state);
+    const response = compute(buildWallLossRequest(state, WALL_LOSS));
+
+    expect(wallLoss).toBeDefined();
+    // The fixture must actually bin something, or every assertion below is vacuous.
+    expect(response.totalDataPoints).toBeGreaterThan(0);
+
+    expect(wallLoss?.nominalThickness).toBe(response.nominalThickness);
+    expect(wallLoss?.combined.totalScannedArea).toBe(response.totalScannedArea);
+    expect(wallLoss?.combined.totalDataPoints).toBe(response.totalDataPoints);
+    expect(wallLoss?.combined.spuriousArea).toBe(response.spuriousArea);
+    expect(wallLoss?.combined.spuriousCount).toBe(response.spuriousCount);
+    expect(wallLoss?.combined.spuriousAreaPercent).toBe(response.spuriousAreaPercent);
+    expect(wallLoss?.combined.bins).toEqual(
+      response.bins.map((b) => ({
+        minPct: b.minPct,
+        maxPct: b.maxPct,
+        minMm: b.minMm,
+        maxMm: b.maxMm,
+        label: b.label,
+        area: b.area,
+        areaPercent: b.areaPercent,
+        count: b.count,
+      }))
+    );
+  });
+
+  it('carries the bin settings the viewer names its rows from', () => {
+    const state = wallLossState({
+      wallLossGroups: { ...WALL_LOSS, binMode: 'ca-based', binNames: ['Good', 'Watch'] },
+      corrosionAllowance: 3,
+    });
+    const wallLoss = buildShareWallLoss(state);
+    expect(wallLoss?.binMode).toBe('ca-based');
+    expect(wallLoss?.binNames).toEqual(['Good', 'Watch']);
+  });
+
+  it('defaults the bin mode to equal, as the modeler section does', () => {
+    expect(buildShareWallLoss(wallLossState())?.binMode).toBe('equal');
+  });
+
+  it('breaks the distribution down per body, main shell first', () => {
+    const state = wallLossState({
+      appendages: [APPENDAGE],
+      scanComposites: [
+        makeComposite({ indexStartMm: 1000 }),
+        makeComposite({ id: 'sc-boot', bodyId: 'app-1', indexStartMm: 100 }),
+      ],
+    });
+    const wallLoss = buildShareWallLoss(state);
+
+    expect(wallLoss?.bodies[0].bodyId).toBeUndefined();
+    expect(wallLoss?.bodies.map((b) => b.bodyId)).toEqual([undefined, 'app-1']);
+    expect(wallLoss?.bodies[1].name).toBe('Boot 1');
+    // Shared bin template: the per-body rows read against the combined view
+    // index-for-index, which is what makes the selector meaningful.
+    for (const body of wallLoss?.bodies ?? []) {
+      expect(body.bins).toHaveLength(wallLoss?.combined.bins.length ?? 0);
+    }
+  });
+});
+
+describe('buildShareBundle — wall loss', () => {
+  const publish = (vesselState: VesselState, published: ReadonlySet<LayerKey> = ALL_LAYERS) =>
+    buildShareBundle({
+      project: { name: 'Karstoe 2026' },
+      vessels: [{ id: 'v-1', name: 'Knockout Drum', vesselState }],
+      published,
+      revision: 1,
+      publishedAt: '2026-08-20T09:00:00.000Z',
+    }).manifest.vessels[0];
+
+  it('sets the vessel’s wall loss on the manifest entry', () => {
+    expect(publish(wallLossState()).wallLoss).toEqual(buildShareWallLoss(wallLossState()));
+  });
+
+  it('omits the key entirely when there is nothing to publish', () => {
+    expect(publish(makeState()).wallLoss).toBeUndefined();
+  });
+
+  it('computes it from the FULL state — an unpublished scans layer changes no number', () => {
+    // Rule 3. The readings themselves are removed from the model when the layer
+    // is unticked; the aggregate is a deliverable and ships regardless.
+    const state = wallLossState();
+    const withScans = publish(state).wallLoss;
+    const withoutScans = publish(state, new Set<LayerKey>(['coverage'])).wallLoss;
+
+    expect(withoutScans).toBeDefined();
+    expect(withoutScans).toEqual(withScans);
   });
 });
 

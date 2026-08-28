@@ -25,6 +25,7 @@ import {
 import { layerBodyKeys, presentLayerCategories } from '../VesselModeler/engine/layer-presence';
 import type { LayerKey } from '../VesselModeler/outliner-tree';
 import { ShareStatsTable } from './ShareStatsTable';
+import { ShareWallLossSection } from './ShareWallLossSection';
 import { SHARE_VIEWER_INITIAL_LAYERS, type ShareManifestVessel } from './bundle-types';
 
 interface ShareVesselViewerProps {
@@ -137,7 +138,15 @@ export function ShareVesselViewer({
         {readout && <div className="cs-readout">{readout}</div>}
       </div>
 
-      <ShareStatsTable rows={vessel.stats} rollup={vessel.rollup} />
+      {/* One Statistics block, the same two sections the modeler's panel hosts.
+          Both are AGGREGATE DELIVERABLES computed from the full model at publish
+          time, not layers — they say what was found, whatever the client can
+          currently see in the viewport above. */}
+      <section className="cs-statistics">
+        <h2 className="cs-section-title">Statistics</h2>
+        <ShareStatsTable rows={vessel.stats} rollup={vessel.rollup} />
+        <ShareWallLossSection wallLoss={vessel.wallLoss} />
+      </section>
     </div>
   );
 }

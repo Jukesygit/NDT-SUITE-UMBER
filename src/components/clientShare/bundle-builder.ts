@@ -49,8 +49,11 @@ import type { LayerKey } from '../VesselModeler/outliner-tree';
 import {
   computeComparisonRollup,
   computeComparisonRows,
+  readTargetEntry,
 } from '../VesselModeler/engine/coverage-comparison';
 import { serializeVesselState } from '../VesselModeler/engine/vessel-serialization';
+import { compute, type BinResult } from '../../workers/wall-loss-compute';
+import { buildWallLossRequest, canComputeWallLoss } from '../../workers/wall-loss-request';
 import {
   MANIFEST_PATH,
   PREPARED_BY,
@@ -65,6 +68,8 @@ import {
   type ShareManifestVessel,
   type ShareStatRollup,
   type ShareStatRow,
+  type ShareWallLoss,
+  type ShareWallLossBody,
 } from './bundle-types';
 
 // The publish defaults live in `bundle-types` (the dialog needs them without
@@ -191,7 +196,17 @@ export function sanitizeVesselStateForShare(
 // Stats + bookmarks projection
 // ---------------------------------------------------------------------------
 
-/** Per-feature rows for the bundle. Numbers only — the viewer formats them. */
+/**
+ * Per-feature rows for the bundle. Numbers only — the viewer formats them.
+ *
+ * Every figure is the engine's, projected: this never re-derives a percentage, a
+ * delta or a status, and never picks a target (that is `targetPctOf`'s job
+ * alone). RBA is the one field not carried on the comparison row — it is
+ * informational and lives on the stored target entry — so it is read the way
+ * `stats/CoverageScopeSection` reads it, ONLY when an entry exists. An absent
+ * entry ships an absent field and the viewer dashes the cell; coercing it to 0
+ * would publish "no risk-based recommendation" as "0% recommended".
+ */
 export function buildShareStats(state: VesselState): {
   rows: ShareStatRow[];
   rollup: ShareStatRollup;
@@ -199,15 +214,111 @@ export function buildShareStats(state: VesselState): {
   const rows = computeComparisonRows(state);
   const rollup = computeComparisonRollup(rows);
   return {
-    rows: rows.map((r) => ({
-      key: r.key,
-      label: r.label,
-      targetPct: r.targetPct,
-      achievedPct: r.achievedPct,
-      deltaPct: r.deltaPct,
-      status: r.status,
-    })),
+    rows: rows.map((r) => {
+      const entry = readTargetEntry(state.coverageTargets, r.ref);
+      return {
+        key: r.key,
+        label: r.label,
+        targetPct: r.targetPct,
+        achievedPct: r.achievedPct,
+        deltaPct: r.deltaPct,
+        status: r.status,
+        rbaPct: entry?.rbaPct,
+        totalMm2: r.totalMm2,
+        targetMm2: r.targetMm2,
+        achievedMm2: r.achievedMm2,
+        // Present only when true — see `ShareStatRow.targetAuto`.
+        targetAuto: r.targetSource === 'rects' ? true : undefined,
+      };
+    }),
     rollup,
+  };
+}
+
+/**
+ * A distribution as `compute` returns it — either a `WallLossBodyResult` or the
+ * response's own flat combined fields, which carry the same shape without being
+ * the same type. Declared here rather than imported so the translation below is
+ * visibly a translation: the wire type and the engine type are independent, and
+ * a field added to one must be added to the other on purpose.
+ */
+interface WallLossBodySource {
+  bodyId?: string;
+  name?: string;
+  bins: BinResult[];
+  totalScannedArea: number;
+  totalDataPoints: number;
+  spuriousArea?: number;
+  spuriousCount?: number;
+  spuriousAreaPercent?: number;
+}
+
+/** One body's distribution in the bundle's own form — copied field by field, so
+ *  a change to the worker's result shape cannot reach a published bundle. */
+function toShareWallLossBody(body: WallLossBodySource): ShareWallLossBody {
+  return {
+    bodyId: body.bodyId,
+    name: body.name,
+    bins: body.bins.map((bin) => ({
+      minPct: bin.minPct,
+      maxPct: bin.maxPct,
+      minMm: bin.minMm,
+      maxMm: bin.maxMm,
+      label: bin.label,
+      area: bin.area,
+      areaPercent: bin.areaPercent,
+      count: bin.count,
+    })),
+    totalScannedArea: body.totalScannedArea,
+    totalDataPoints: body.totalDataPoints,
+    // `?? 0` mirrors how `stats/WallLossStatsSection` reads these: the spurious
+    // row is driven by `spuriousCount > 0`, so an absent count must read as "no
+    // spurious readings", never as a missing row the viewer has to guess about.
+    spuriousArea: body.spuriousArea ?? 0,
+    spuriousCount: body.spuriousCount ?? 0,
+    spuriousAreaPercent: body.spuriousAreaPercent ?? 0,
+  };
+}
+
+/**
+ * The vessel's wall-loss distribution, or undefined when there is none to
+ * publish.
+ *
+ * Run SYNCHRONOUSLY here, against the same `workers/wall-loss-request` builder
+ * the modeler's worker hook posts — the panel and the bundle ask `compute` one
+ * question, so a client's distribution is the one the inspector approved. The
+ * builder stays pure and sync (publish is a one-off user action that already
+ * serializes megabytes), which is why this calls `compute` directly rather than
+ * standing up a Worker.
+ *
+ * Undefined in the two cases the modeler section renders nothing: not
+ * computable at all, and computable but empty (`totalDataPoints === 0`). An
+ * absent key is how the viewer knows to omit the section.
+ */
+export function buildShareWallLoss(state: VesselState): ShareWallLoss | undefined {
+  const config = state.wallLossGroups;
+  if (!config || !canComputeWallLoss(state, config)) return undefined;
+
+  const response = compute(buildWallLossRequest(state, config));
+  // The combined view IS the response's flat fields (the per-body bins summed
+  // index-for-index), so this is the section's `combined.totalDataPoints` test.
+  if (response.totalDataPoints === 0) return undefined;
+
+  return {
+    // From the RESPONSE, not the config: `compute` resolves the effective
+    // nominal wall, and the header must name the number the bins were cut from.
+    nominalThickness: response.nominalThickness,
+    binMode: config.binMode ?? 'equal',
+    binNames: config.binNames,
+    combined: toShareWallLossBody({
+      bins: response.bins,
+      totalScannedArea: response.totalScannedArea,
+      totalDataPoints: response.totalDataPoints,
+      spuriousArea: response.spuriousArea,
+      spuriousCount: response.spuriousCount,
+      spuriousAreaPercent: response.spuriousAreaPercent,
+    }),
+    bodies: response.bodies.map(toShareWallLossBody),
   };
 }
 
@@ -353,6 +464,11 @@ export function buildShareBundle(params: BuildShareBundleParams): ShareBundle {
 
   for (const vessel of vessels) {
     const { rows, rollup } = buildShareStats(vessel.vesselState);
+    // Rule 3 applies to wall loss exactly as it does to coverage: it is an
+    // AGGREGATE DELIVERABLE, not a layer, so it is computed from the full state
+    // and ships even when the scans layer itself was left unticked. Publishing
+    // must never change a number.
+    const wallLoss = buildShareWallLoss(vessel.vesselState);
     const shipped = sanitizeVesselStateForShare(vessel.vesselState, published);
 
     const modelPath = vesselModelPath(vessel.id);
@@ -395,6 +511,7 @@ export function buildShareBundle(params: BuildShareBundleParams): ShareBundle {
       bookmarks: toShareBookmarks(vessel.vesselState.cameraBookmarks),
       stats: rows,
       rollup,
+      wallLoss,
     });
   }
 
