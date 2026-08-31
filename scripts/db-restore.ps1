@@ -285,9 +285,12 @@ function Get-PublishedDateKeys {
     # Date keys that actually have an ARCHIVE published, newest first. A lone sidecar is not a
     # set: resolving "latest" onto a date whose .7z is missing would report the wrong failure.
     param([Parameter(Mandatory = $true)][string] $Root)
+    # Both returns use the comma operator: PS 5.1 unrolls a returned one-element array to a
+    # bare string, and indexing that string with [0] yields its first CHARACTER ("2" out of
+    # "2026-08-31") - which is exactly the bug the first live restore test hit (2026-08-31).
     $keys = New-Object System.Collections.ArrayList
     $dbRoot = Join-Path $Root 'db'
-    if (-not (Test-Path -LiteralPath $dbRoot)) { return @() }
+    if (-not (Test-Path -LiteralPath $dbRoot)) { return ,@() }
 
     $files = Get-ChildItem -LiteralPath $dbRoot -File -Recurse -Filter 'ndt-backup-*.7z' -ErrorAction SilentlyContinue
     foreach ($file in $files) {
@@ -295,7 +298,7 @@ function Get-PublishedDateKeys {
             if (-not $keys.Contains($Matches[1])) { [void]$keys.Add($Matches[1]) }
         }
     }
-    return @($keys | Sort-Object -Descending)
+    return ,@($keys | Sort-Object -Descending)
 }
 
 # ---------------------------------------------------------------------------
@@ -904,10 +907,114 @@ function Start-LocalTarget {
     }
     Write-Log -Level 'OK' -Message '  container ready'
 
-    # A stock postgres image is not a Supabase project. Create the roles the dumps reference
-    # so the bulk of schema.sql applies; pg_cron / pg_net do not exist in this image at all,
-    # which is exactly why the local path is a smoke test and needs -ContinueOnError.
-    $bootstrap = @'
+    # A stock postgres image is not a Supabase project. Two classes of platform object have to be
+    # stood up before the dumps will apply at all:
+    #
+    #   1. The service ROLES the dumps grant to and ALTER (roles.sql, and the `to authenticated`
+    #      clause on 116 public + 38 storage policies).
+    #   2. The platform-managed `auth` and `storage` SCHEMAS. The dumps reference them but never
+    #      create them - on a real target Supabase has already provisioned them. Concretely:
+    #      schema.sql declares 16 foreign keys REFERENCES auth.users(id) and ~280 auth.uid() calls
+    #      inside policy expressions; storage-policies.sql creates 38 policies ON storage.objects
+    #      using storage.foldername(); and data.sql COPYs into 22 auth and 5 storage tables.
+    #      Without the shim the very first `REFERENCES "auth"."users"` aborts the single
+    #      transaction with `schema "auth" does not exist` (first live drill, 2026-08-31).
+    #
+    # THIS IS A DRILL-ONLY APPROXIMATION. It is not a reimplementation of GoTrue or storage-api,
+    # and it deliberately does not try to be:
+    #   - every shim column is `text`, so COPY accepts whatever literal the dump carries and the
+    #     dump's own values decide what lands. The exception is a column the dump takes a foreign
+    #     key against (auth.users.id), which is `uuid unique` so ALTER TABLE ... REFERENCES works.
+    #   - auth.uid() / auth.role() / auth.jwt() are stable stubs returning null / 'authenticated'
+    #     / '{}'. That is enough for policy expressions to parse and type-check; it enforces
+    #     nothing. Policy LOGIC is never exercised by this drill.
+    #   - storage.foldername() / filename() / extension() do implement the real storage-api
+    #     semantics, because 44 policy expressions index into foldername()'s result.
+    #
+    # The managed table list is DERIVED from data.sql's own COPY headers rather than hardcoded, so
+    # a Supabase release that adds an auth column does not silently rot this drill.
+
+    $dataSqlPath   = Join-Path $restoreDir 'data.sql'
+    $schemaSqlPath = Join-Path $restoreDir 'schema.sql'
+
+    $managedTables = New-Object System.Collections.ArrayList
+    $copiedManaged = @{}
+    $managedSeqs   = @{}
+    if (Test-Path -LiteralPath $dataSqlPath) {
+        # One pass over data.sql (it is large): COPY headers give the exact column lists, setval
+        # calls name sequences that must exist before data.sql runs.
+        $scanHits = Select-String -LiteralPath $dataSqlPath -Pattern '^COPY "(auth|storage)"\.|setval\('
+        foreach ($hit in $scanHits) {
+            $line = [string]$hit.Line
+            if ($line -match '^COPY "(auth|storage)"\."([A-Za-z0-9_]+)" \(([^)]*)\) FROM stdin;') {
+                $key = '{0}.{1}' -f $Matches[1], $Matches[2]
+                if ($copiedManaged.ContainsKey($key)) { continue }
+                $copiedManaged[$key] = $true
+                $cols = New-Object System.Collections.ArrayList
+                foreach ($c in ($Matches[3] -split ',')) { [void]$cols.Add(($c.Trim().Trim('"'))) }
+                [void]$managedTables.Add([pscustomobject]@{
+                    Schema = $Matches[1]; Table = $Matches[2]; Columns = $cols
+                })
+            }
+            else {
+                foreach ($m in [regex]::Matches($line, '"(auth|storage)"\."([A-Za-z0-9_]+)"')) {
+                    $managedSeqs[('{0}.{1}' -f $m.Groups[1].Value, $m.Groups[2].Value)] = $true
+                }
+            }
+        }
+    }
+    # Published for the local-drill branch of the row-counts gate further down.
+    $script:LocalShimCopiedTables = $copiedManaged
+
+    # Columns the dump takes a foreign key against need a unique index and a matching type.
+    $fkTargets = @{}
+    if (Test-Path -LiteralPath $schemaSqlPath) {
+        $fkHits = Select-String -LiteralPath $schemaSqlPath -AllMatches `
+            -Pattern 'REFERENCES "(auth|storage)"\."([A-Za-z0-9_]+)"\("([A-Za-z0-9_]+)"\)'
+        foreach ($hit in $fkHits) {
+            foreach ($m in $hit.Matches) {
+                $fkTargets[('{0}.{1}.{2}' -f $m.Groups[1].Value, $m.Groups[2].Value, $m.Groups[3].Value)] = $true
+            }
+        }
+    }
+
+    # Platform-provisioned tables the manifest counts but the dump never carries (the auth and
+    # storage internal version ledgers, and the vector tables db-backup.ps1 excludes by -x).
+    # They must exist or the row-counts gate reports them MISSING.
+    $stubTables = New-Object System.Collections.ArrayList
+    if ($null -ne $manifest -and $null -ne $manifest.database -and $null -ne $manifest.database.rowCounts) {
+        foreach ($prop in $manifest.database.rowCounts.PSObject.Properties) {
+            if ($copiedManaged.ContainsKey($prop.Name)) { continue }
+            $m = [regex]::Match([string]$prop.Name, '^(auth|storage)\.([A-Za-z0-9_]+)$')
+            if (-not $m.Success) { continue }
+            [void]$stubTables.Add([pscustomobject]@{ Schema = $m.Groups[1].Value; Table = $m.Groups[2].Value })
+        }
+    }
+
+    $ddl = New-Object System.Text.StringBuilder
+    foreach ($t in $managedTables) {
+        $defs = New-Object System.Collections.ArrayList
+        foreach ($c in $t.Columns) {
+            if ($fkTargets.ContainsKey(('{0}.{1}.{2}' -f $t.Schema, $t.Table, $c))) {
+                [void]$defs.Add(('  "{0}" uuid unique' -f $c))
+            }
+            else {
+                [void]$defs.Add(('  "{0}" text' -f $c))
+            }
+        }
+        [void]$ddl.AppendLine(('create table if not exists "{0}"."{1}" (' -f $t.Schema, $t.Table))
+        [void]$ddl.AppendLine(($defs -join ",`n"))
+        [void]$ddl.AppendLine(');')
+    }
+    foreach ($s in $stubTables) {
+        [void]$ddl.AppendLine(('create table if not exists "{0}"."{1}" ("id" text);  -- platform-provisioned, no dump rows' -f $s.Schema, $s.Table))
+    }
+    foreach ($s in ($managedSeqs.Keys | Sort-Object)) {
+        $parts = ([string]$s).Split('.')
+        [void]$ddl.AppendLine(('create sequence if not exists "{0}"."{1}";' -f $parts[0], $parts[1]))
+    }
+
+    $bootstrapHead = @'
 do $$
 declare r text;
 begin
@@ -924,7 +1031,77 @@ end $$;
 create schema if not exists extensions;
 create extension if not exists "uuid-ossp" schema extensions;
 create extension if not exists pgcrypto schema extensions;
+
+-- ---------------------------------------------------------------------------
+-- Managed-schema shim (drill only). See the comment block in Start-LocalTarget.
+-- ---------------------------------------------------------------------------
+create schema if not exists auth;
+create schema if not exists storage;
+
+-- Realtime's publication. schema.sql ends with `ALTER PUBLICATION "supabase_realtime" OWNER TO
+-- "postgres"`, which aborts the single transaction if it does not exist. Created empty: this
+-- drill replicates nothing, it only needs the object to be ALTERable.
+do $pub$
+begin
+  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    create publication supabase_realtime;
+  end if;
+end
+$pub$;
+
+-- Stubs. They let policy expressions type-check; they authorise nothing.
+create or replace function auth.uid() returns uuid
+  language sql stable as $fn$ select null::uuid $fn$;
+create or replace function auth.role() returns text
+  language sql stable as $fn$ select 'authenticated'::text $fn$;
+create or replace function auth.jwt() returns jsonb
+  language sql stable as $fn$ select '{}'::jsonb $fn$;
+
+-- Real storage-api semantics: 44 policy expressions index into foldername()'s result.
+create or replace function storage.foldername(name text) returns text[]
+  language plpgsql immutable as $fn$
+declare _parts text[];
+begin
+  select string_to_array(name, '/') into _parts;
+  return _parts[1 : array_length(_parts, 1) - 1];
+end
+$fn$;
+create or replace function storage.filename(name text) returns text
+  language plpgsql immutable as $fn$
+declare _parts text[];
+begin
+  select string_to_array(name, '/') into _parts;
+  return _parts[array_length(_parts, 1)];
+end
+$fn$;
+create or replace function storage.extension(name text) returns text
+  language plpgsql immutable as $fn$
+declare _parts text[]; _filename text;
+begin
+  select string_to_array(name, '/') into _parts;
+  select _parts[array_length(_parts, 1)] into _filename;
+  return reverse(split_part(reverse(_filename), '.', 1));
+end
+$fn$;
 '@
+
+    # Grants must follow the tables. Nothing in the dumps ALTERs an auth/storage object's owner,
+    # but usage+select keeps the shim shaped like the real thing for anything that reads it.
+    $bootstrapTail = @'
+
+grant usage on schema auth, storage to anon, authenticated, service_role, supabase_auth_admin, supabase_storage_admin;
+grant select on all tables in schema auth    to anon, authenticated, service_role;
+grant select on all tables in schema storage to anon, authenticated, service_role;
+grant execute on all functions in schema auth    to anon, authenticated, service_role;
+grant execute on all functions in schema storage to anon, authenticated, service_role;
+
+-- Matches a real target, where storage RLS is on. The restore runs as superuser, which bypasses
+-- it, so this changes nothing about the load - it only stops the shim from lying about shape.
+alter table storage.objects enable row level security;
+alter table storage.buckets enable row level security;
+'@
+
+    $bootstrap = $bootstrapHead + "`n" + $ddl.ToString() + $bootstrapTail
     $bootstrapPath = Join-Path $restoreDir '_local-bootstrap.sql'
     Write-Utf8File -Path $bootstrapPath -Content $bootstrap
     $boot = Invoke-Native -Exe 'docker' -Arguments @(
@@ -934,9 +1111,56 @@ create extension if not exists pgcrypto schema extensions;
     Write-NativeOutput -Lines $boot.Output
     Remove-Item -LiteralPath $bootstrapPath -Force -ErrorAction SilentlyContinue
     Write-Log -Level 'OK' -Message '  supabase-shaped roles bootstrapped (approximation - see -LocalDocker notes)'
+    Write-Log -Level 'WARN' -Message ('  local drill: shimmed managed schemas - {0} auth/storage tables derived from data.sql COPY headers, {1} platform-provisioned stub(s), {2} sequence(s), auth.uid()/role()/jwt() + storage.foldername()/filename()/extension(). A real Supabase target provides all of this for real.' -f $managedTables.Count, $stubTables.Count, $managedSeqs.Count)
 }
 
 if ($mode -eq 'local') { Start-LocalTarget }
+
+# ---------------------------------------------------------------------------
+# Local-drill extension filter
+#
+# A stock postgres image carries only the contrib extensions; managed Supabase adds pg_cron,
+# pg_net, pg_graphql, vault and friends, and schema.sql CREATEs them - under --single-transaction
+# one missing extension aborts the whole restore (first live drill, 2026-08-31). In -LocalDocker
+# mode only, CREATE/COMMENT ON EXTENSION statements for extensions this container cannot provide
+# are commented out IN THE EXTRACTED COPY (Gate 0 hashes were checked before this; the archive is
+# never touched). A real disaster restore targets a fresh Supabase project where every extension
+# exists - this filter never runs there. Function bodies referencing skipped extensions still
+# apply because dumps SET check_function_bodies = false.
+# ---------------------------------------------------------------------------
+
+if ($mode -eq 'local') {
+    $availRes = Invoke-Native -Exe 'docker' -Arguments @(
+        'exec', $LocalContainerName,
+        'psql', '-U', 'postgres', '-d', 'postgres', '-At', '-c', 'select name from pg_available_extensions'
+    )
+    if ($availRes.ExitCode -ne 0) {
+        Write-Log -Level 'WARN' -Message '  could not list container extensions - schema.sql left unfiltered (restore may abort on CREATE EXTENSION)'
+    }
+    else {
+        $avail = @{}
+        foreach ($line in $availRes.Output) { $n = ('' + $line).Trim(); if ($n) { $avail[$n] = $true } }
+        $schemaPath = Join-Path $restoreDir 'schema.sql'
+        $skippedExt = New-Object System.Collections.ArrayList
+        $schemaLines = [System.IO.File]::ReadAllLines($schemaPath)
+        for ($i = 0; $i -lt $schemaLines.Length; $i++) {
+            if ($schemaLines[$i] -match '^\s*(?:CREATE EXTENSION(?: IF NOT EXISTS)?|COMMENT ON EXTENSION)\s+"?([A-Za-z0-9_\-]+)"?') {
+                $ext = $Matches[1]
+                if (-not $avail.ContainsKey($ext)) {
+                    $schemaLines[$i] = ('-- [local-drill: extension unavailable in this image] ' + $schemaLines[$i])
+                    if (-not $skippedExt.Contains($ext)) { [void]$skippedExt.Add($ext) }
+                }
+            }
+        }
+        if ($skippedExt.Count -gt 0) {
+            [System.IO.File]::WriteAllLines($schemaPath, $schemaLines, (New-Object System.Text.UTF8Encoding($false)))
+            Write-Log -Level 'WARN' -Message ('  local drill: skipped CREATE EXTENSION for {0} (absent from this image; a real Supabase target has them all)' -f ($skippedExt -join ', '))
+        }
+        else {
+            Write-Log -Level 'INFO' -Message '  all extensions in schema.sql are available in this container'
+        }
+    }
+}
 
 # ---------------------------------------------------------------------------
 # psql dispatch
@@ -1159,10 +1383,27 @@ elseif ($null -eq $manifest -or $null -eq $manifest.database -or $null -eq $mani
     Add-Gate -Name 'row-counts' -Passed $true -Detail ('{0} tables counted; no manifest baseline to compare against' -f $n)
 }
 else {
+    # Local-drill exemption, narrowly scoped and reported per table.
+    #
+    # `supabase db dump --data-only` does not carry the platform's own internal version ledgers
+    # (auth.schema_migrations, storage.migrations). On a REAL target that is invisible: Supabase
+    # provisions and populates them before the restore runs, so the manifest baseline matches and
+    # the gate legitimately checks that source and target are on the same platform version.
+    # The local shim cannot reproduce platform state, so a non-zero baseline for a table the dump
+    # never carries a single row for is not a restore defect and cannot be made into one without
+    # fabricating rows. Those tables are excluded from the comparison and named in the gate
+    # detail. Everything the dump DOES carry is still compared exactly, and this branch is
+    # unreachable on the -TargetDbUrl path.
     $mismatches = New-Object System.Collections.ArrayList
+    $skipped    = New-Object System.Collections.ArrayList
     $compared = 0
     foreach ($prop in $manifest.database.rowCounts.PSObject.Properties) {
         $expected = [long]$prop.Value
+        if ($mode -eq 'local' -and $expected -gt 0 -and $prop.Name -match '^(auth|storage)\.' -and
+            -not ($script:LocalShimCopiedTables -and $script:LocalShimCopiedTables.ContainsKey($prop.Name))) {
+            [void]$skipped.Add(('{0} (baseline {1})' -f $prop.Name, $expected))
+            continue
+        }
         $actualProp = $actualRows.PSObject.Properties[$prop.Name]
         if ($null -eq $actualProp) {
             [void]$mismatches.Add(('{0}: table MISSING (expected {1})' -f $prop.Name, $expected))
@@ -1174,12 +1415,19 @@ else {
             [void]$mismatches.Add(('{0}: expected {1}, got {2}' -f $prop.Name, $expected, $actual))
         }
     }
+    foreach ($s in $skipped) {
+        Write-Log -Level 'WARN' -Message ('    local drill: {0} not compared - platform-provisioned, the dump carries no rows for it' -f $s)
+    }
+    $skipNote = ''
+    if ($skipped.Count -gt 0) {
+        $skipNote = ('; {0} platform-provisioned table(s) not carried by the dump were skipped: {1}' -f $skipped.Count, (($skipped -join ', ')))
+    }
     if ($mismatches.Count -eq 0) {
-        Add-Gate -Name 'row-counts' -Passed $true -Detail ('all {0} tables match the manifest baseline' -f $compared)
+        Add-Gate -Name 'row-counts' -Passed $true -Detail ('all {0} tables match the manifest baseline{1}' -f $compared, $skipNote)
     }
     else {
         foreach ($m in $mismatches) { Write-Log -Level 'FAIL' -Message ('    {0}' -f $m) }
-        Add-Gate -Name 'row-counts' -Passed $false -Detail ('{0} table(s) differ from the manifest baseline' -f $mismatches.Count)
+        Add-Gate -Name 'row-counts' -Passed $false -Detail ('{0} table(s) differ from the manifest baseline{1}' -f $mismatches.Count, $skipNote)
     }
 }
 

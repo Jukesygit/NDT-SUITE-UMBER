@@ -190,6 +190,45 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\db-restore.ps1 `
 > read the result as *"the dumps parse and the data loads"*, not *"the platform is reproducible locally"*.
 > A scratch Supabase project is the target that proves recovery.
 
+#### What the local drill fakes — and what that leaves it proving (2026-08-31)
+
+The first live `-LocalDocker` drill aborted on the first `REFERENCES "auth"."users"` with
+`schema "auth" does not exist`. The dumps reference the platform-managed schemas but never create
+them — on a real target Supabase has already provisioned them. `Start-LocalTarget` therefore stands
+up a **drill-only shim** before Step 1, and there is now a matching **extension filter** that comments
+out `CREATE EXTENSION` for anything the stock image lacks (`pg_cron`, `pg_net`, `supabase_vault`)
+*in the extracted copy only* — the archive is never touched, and neither runs on the `-TargetDbUrl` path.
+
+The shim provides, in the bootstrap transaction:
+
+- the Supabase service roles, the `extensions` schema, and an empty `supabase_realtime` publication
+  (`schema.sql` ends by `ALTER PUBLICATION`-ing it);
+- schemas `auth` and `storage`, with their tables' column lists **derived from `data.sql`'s own COPY
+  headers** rather than hardcoded — so a Supabase release that adds an auth column cannot silently
+  rot the drill. Every column is `text` (COPY parses the dump's literals into it); the sole exception
+  is `auth.users.id`, made `uuid unique` because 16 foreign keys reference it;
+- `auth.uid()` / `auth.role()` / `auth.jwt()` as stable stubs returning `null` / `'authenticated'` /
+  `'{}'`, and `storage.foldername()` / `filename()` / `extension()` implementing the **real**
+  storage-api semantics, because 44 policy expressions index into `foldername()`'s result.
+
+**What a green local run does prove:** the archive and every artifact hash clean (Gates P and 0); the
+dumps parse; `roles.sql` + `schema.sql` + `data.sql` apply in one transaction; 116 public and 38
+storage policy expressions type-check and are created; the migration ledger restores non-empty; and
+**every table the dump carries lands with exactly the manifest's row count** — 64 tables, ~24k rows on
+the 2026-08-31 set, largest `auth.audit_log_entries` 16,480.
+
+**What it does not prove.** Policy *logic* is never exercised — with `auth.uid()` returning null, RLS
+is created but never enforced, so a policy that would wrongly expose data still passes here. Column
+*types* are not verified, because the shim's managed tables are all `text`. Nothing covers auth
+behaviour, storage bytes, edge functions, cron, or the persisted-URL rewrite (Steps 4–7). Two
+platform-provisioned ledgers (`auth.schema_migrations`, `storage.migrations`) are excluded from the
+row-count comparison and named in the gate output, because `supabase db dump --data-only` carries no
+rows for them; on a real target they match for free and the gate does check them.
+
+So a local pass is a **regression test for the scripts and the backup set**, not a recovery
+rehearsal. It does not close the [Restore test record](#restore-test-record) — that needs a scratch
+Supabase project.
+
 What the script does, in order:
 
 - **Gate P — archive integrity** (`-FromPublish` only). The copied `.7z` is re-hashed against `archive.sha256` in the manifest sidecar. A mismatch aborts before the passphrase is used, and means sync corruption, an interrupted publish, or a file modified in the library — earlier versions of that same file are in OneDrive version history.
