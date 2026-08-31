@@ -38,12 +38,42 @@
 .PARAMETER BackupPath
     A backup set held locally: either the day folder (containing roles.sql ... manifest.json)
     or the encrypted ndt-backup-<date>.7z, which is extracted first using the secrets file
-    passphrase. Mutually exclusive with -FromS3.
+    passphrase. Mutually exclusive with -FromPublish and -FromS3.
+
+.PARAMETER FromPublish
+    THE NORMAL ENTRY POINT since 2026-08-31. Restores from the published set in the Company
+    OneDrive / SharePoint library, which is the durable copy; local disk is only a cache.
+
+    Takes a partition date (yyyy-MM-dd) or the word "latest" (an empty string means the same),
+    resolved against <publish dir>\db\YYYY\. The date is required-or-"latest" rather than
+    genuinely optional because Windows PowerShell 5.1 binds the NEXT token as the value of a
+    [string] parameter - a bare "-FromPublish -DryRun" would silently set it to "-DryRun".
+
+    The archive and its manifest sidecar are COPIED OUT of the library into the local cache
+    (-PublishCacheRoot) before anything else happens, then the archive is re-hashed against
+    archive.sha256 in that sidecar, and only then does the ordinary local path continue. The
+    copy is not a convenience: extraction writes a plaintext folder beside the archive, and the
+    library must never hold plaintext. That is the same ciphertext-only invariant db-backup.ps1
+    enforces when publishing, read from the other end.
+
+.PARAMETER PublishDir
+    The library folder holding published sets. Default:
+
+        C:\Users\jonas\OneDrive - Matrix\Matrix IMS - Documents\DB Backup
+
+    Overridable with $env:NDT_BACKUP_PUBLISH_DIR or this parameter. Kept identical to
+    db-backup.ps1 -PublishDir.
+
+.PARAMETER PublishCacheRoot
+    Where a set fetched with -FromPublish is copied to, and extracted. Default
+    C:\Users\jonas\ndt-backups\_from-publish\<date>\. Must be off cloud sync and out of git,
+    like every other path that ends up holding a dump.
 
 .PARAMETER FromS3
     Partition date (yyyy-MM-dd) of a set to fetch from the off-site S3 bucket before restoring.
-    This is the durable copy; local disk is only a cache, so after a machine loss this is the
-    normal entry point. The archive and its manifest sidecar are pulled from
+    The S3 stage is DORMANT since 2026-08-31 - this path is kept working for sets published to
+    the bucket while it was live, and for the day it is re-armed. The archive and its manifest
+    sidecar are pulled from
 
         <bucket>/ndt-backups/db/year=YYYY/month=MM/day=DD/
 
@@ -68,6 +98,12 @@
     cloud sync and out of git, like every other path holding a dump.
 
 .EXAMPLE
+    powershell -NoProfile -File scripts\db-restore.ps1 -FromPublish latest -DryRun
+
+.EXAMPLE
+    powershell -NoProfile -File scripts\db-restore.ps1 -FromPublish 2026-08-31 -LocalDocker -ContinueOnError
+
+.EXAMPLE
     powershell -NoProfile -File scripts\db-restore.ps1 -BackupPath C:\Users\jonas\ndt-backups\2026-08-26 -DryRun
 
 .EXAMPLE
@@ -84,12 +120,18 @@
 
 [CmdletBinding()]
 param(
-    # Exactly one of -BackupPath / -FromS3. BackupPath is no longer Mandatory because -FromS3
-    # supplies the set instead; the pair is validated by hand below so the error message can
-    # explain the choice rather than prompting for a path the operator may not have.
+    # Exactly one of -BackupPath / -FromPublish / -FromS3. BackupPath is no longer Mandatory
+    # because the other two supply the set instead; the trio is validated by hand below so the
+    # error message can explain the choice rather than prompting for a path the operator may
+    # not have.
     [string] $BackupPath,
 
-    # --- off-site source (AWS S3) ---
+    # --- durable source (OneDrive for Business) ---
+    [string] $FromPublish,
+    [string] $PublishDir,
+    [string] $PublishCacheRoot = 'C:\Users\jonas\ndt-backups\_from-publish',
+
+    # --- off-site source (AWS S3, dormant) ---
     [string] $FromS3,
     [string] $AwsRemote = 'ndt-aws-restore',
     [string] $AwsBucket,
@@ -220,6 +262,43 @@ function Resolve-SevenZip {
 }
 
 # ---------------------------------------------------------------------------
+# Publish helpers - kept identical in scripts/db-backup.ps1. The two scripts address the same
+# <publish dir>\db\YYYY\ layout from opposite directions, so it must be computed the same way in
+# both; if one changes, change the other in the same commit.
+# ---------------------------------------------------------------------------
+
+function Get-PublishSetPaths {
+    param(
+        [Parameter(Mandatory = $true)][string] $Root,
+        [Parameter(Mandatory = $true)][string] $DateKey
+    )
+    $year = ($DateKey -split '-')[0]
+    $yearDir = Join-Path (Join-Path $Root 'db') $year
+    return [pscustomobject]@{
+        YearDir  = [string]$yearDir
+        Archive  = [string](Join-Path $yearDir ('ndt-backup-{0}.7z' -f $DateKey))
+        Manifest = [string](Join-Path $yearDir ('ndt-backup-{0}.manifest.json' -f $DateKey))
+    }
+}
+
+function Get-PublishedDateKeys {
+    # Date keys that actually have an ARCHIVE published, newest first. A lone sidecar is not a
+    # set: resolving "latest" onto a date whose .7z is missing would report the wrong failure.
+    param([Parameter(Mandatory = $true)][string] $Root)
+    $keys = New-Object System.Collections.ArrayList
+    $dbRoot = Join-Path $Root 'db'
+    if (-not (Test-Path -LiteralPath $dbRoot)) { return @() }
+
+    $files = Get-ChildItem -LiteralPath $dbRoot -File -Recurse -Filter 'ndt-backup-*.7z' -ErrorAction SilentlyContinue
+    foreach ($file in $files) {
+        if ($file.Name -match '^ndt-backup-(\d{4}-\d{2}-\d{2})\.7z$') {
+            if (-not $keys.Contains($Matches[1])) { [void]$keys.Add($Matches[1]) }
+        }
+    }
+    return @($keys | Sort-Object -Descending)
+}
+
+# ---------------------------------------------------------------------------
 # rclone helpers - kept byte-identical in scripts/db-backup.ps1. The two scripts address the
 # same key layout from opposite directions, so the layout must be computed the same way in
 # both; if one changes, change the other in the same commit.
@@ -284,28 +363,182 @@ if ([string]::IsNullOrWhiteSpace($AwsRegion))   { $AwsRegion = $env:NDT_RESTORE_
 if ([string]::IsNullOrWhiteSpace($AwsRegion))   { $AwsRegion = $env:NDT_BACKUP_S3_REGION }
 $passphrase = $env:NDT_BACKUP_PASSPHRASE
 
+# Publish source: -PublishDir, then the environment, then the owner's library. Same resolution
+# order and same default as db-backup.ps1 - a path, not a credential.
+$DefaultPublishDir = 'C:\Users\jonas\OneDrive - Matrix\Matrix IMS - Documents\DB Backup'
+if ([string]::IsNullOrWhiteSpace($PublishDir)) { $PublishDir = $env:NDT_BACKUP_PUBLISH_DIR }
+if ([string]::IsNullOrWhiteSpace($PublishDir)) { $PublishDir = $DefaultPublishDir }
+
 $dockerCmd = Test-CommandAvailable -Name 'docker'
 $rcloneCmd = Test-CommandAvailable -Name 'rclone'
 $sevenZip  = Resolve-SevenZip
 
 # ---------------------------------------------------------------------------
-# Source selection: a local set, or a dated partition fetched from S3
+# Source selection: a local set, the published set in the OneDrive library, or a dated partition
+# fetched from the dormant S3 bucket. Exactly one.
 # ---------------------------------------------------------------------------
 
-$useS3 = -not [string]::IsNullOrWhiteSpace($FromS3)
+# ContainsKey, not a value test: "" and "latest" both mean "the newest published set", so the
+# presence of the switch is what selects this source.
+$usePublish = $PSBoundParameters.ContainsKey('FromPublish')
+$useS3      = -not [string]::IsNullOrWhiteSpace($FromS3)
 
-if ($useS3 -and -not [string]::IsNullOrWhiteSpace($BackupPath)) {
-    Write-Log -Level 'FAIL' -Message '-BackupPath and -FromS3 are mutually exclusive. Pick the local set or the off-site partition.'
+$sourceCount = 0
+if ($usePublish)                                    { $sourceCount = $sourceCount + 1 }
+if ($useS3)                                         { $sourceCount = $sourceCount + 1 }
+if (-not [string]::IsNullOrWhiteSpace($BackupPath)) { $sourceCount = $sourceCount + 1 }
+
+if ($sourceCount -gt 1) {
+    Write-Log -Level 'FAIL' -Message '-BackupPath, -FromPublish and -FromS3 are mutually exclusive. Pick one source.'
     exit 2
 }
-if (-not $useS3 -and [string]::IsNullOrWhiteSpace($BackupPath)) {
+if ($sourceCount -eq 0) {
     Write-Log -Level 'FAIL' -Message 'Nothing to restore from.'
+    Write-Log -Level 'FAIL' -Message '  -FromPublish <yyyy-MM-dd | latest>                the durable copy in the OneDrive library (normal path)'
     Write-Log -Level 'FAIL' -Message '  -BackupPath <day folder | ndt-backup-<date>.7z>   restore a set held locally'
-    Write-Log -Level 'FAIL' -Message '  -FromS3 <yyyy-MM-dd>                              fetch the set from the off-site bucket'
+    Write-Log -Level 'FAIL' -Message '  -FromS3 <yyyy-MM-dd>                              fetch the set from the dormant off-site bucket'
     exit 2
 }
 
-$s3PlanOnly = $false
+$s3PlanOnly      = $false
+$publishPlanOnly = $false
+
+# ---------------------------------------------------------------------------
+# -FromPublish: resolve the set in the library, copy it OUT into the local cache, then prove it
+#
+# The copy is the ciphertext-only invariant read from the restore end. Extraction writes a
+# plaintext folder beside the archive it extracts, so the archive must be moved out of the
+# synced library BEFORE anything is decrypted. Nothing is ever written into the library here.
+# ---------------------------------------------------------------------------
+
+if ($usePublish) {
+    $publishFull = [System.IO.Path]::GetFullPath($PublishDir)
+    $wantLatest = ([string]::IsNullOrWhiteSpace($FromPublish) -or $FromPublish -eq 'latest' -or $FromPublish -eq 'newest')
+
+    if (-not $wantLatest -and $FromPublish -notmatch '^\d{4}-\d{2}-\d{2}$') {
+        Write-Log -Level 'FAIL' -Message ('-FromPublish takes a date in yyyy-MM-dd form, or "latest"; got "{0}".' -f $FromPublish)
+        exit 2
+    }
+
+    $publishMissing = New-Object System.Collections.ArrayList
+    $publishDateKey = $null
+    $publishSet     = $null
+
+    if (-not (Test-Path -LiteralPath $publishFull)) {
+        [void]$publishMissing.Add(('publish directory "{0}" does not exist - OneDrive is not set up on this machine, or that library is not synced yet' -f $publishFull))
+    }
+    else {
+        if ($wantLatest) {
+            $availableKeys = Get-PublishedDateKeys -Root $publishFull
+            if ($availableKeys.Count -eq 0) {
+                [void]$publishMissing.Add(('no published sets under "{0}\db\" - nothing has been published there yet' -f $publishFull))
+            }
+            else {
+                $publishDateKey = [string]$availableKeys[0]
+                Write-Log -Level 'INFO' -Message ('Latest published set: {0} (of {1} available)' -f $publishDateKey, $availableKeys.Count)
+            }
+        }
+        else {
+            $publishDateKey = [string]$FromPublish
+        }
+    }
+
+    if ($null -ne $publishDateKey) {
+        $publishSet = Get-PublishSetPaths -Root $publishFull -DateKey $publishDateKey
+        if (-not (Test-Path -LiteralPath $publishSet.Archive)) {
+            [void]$publishMissing.Add(('archive not found: {0}' -f $publishSet.Archive))
+        }
+        if (-not (Test-Path -LiteralPath $publishSet.Manifest)) {
+            [void]$publishMissing.Add(('manifest sidecar not found: {0}' -f $publishSet.Manifest))
+        }
+    }
+
+    $publishCacheDir     = $null
+    $publishCacheArchive = $null
+    $publishCacheSidecar = $null
+    if ($null -ne $publishDateKey) {
+        $publishCacheDir     = Join-Path $PublishCacheRoot $publishDateKey
+        $publishCacheArchive = Join-Path $publishCacheDir ('ndt-backup-{0}.7z' -f $publishDateKey)
+        $publishCacheSidecar = Join-Path $publishCacheDir ('ndt-backup-{0}.manifest.json' -f $publishDateKey)
+    }
+
+    $publishLabel = $publishDateKey
+    if ([string]::IsNullOrWhiteSpace($publishLabel)) { $publishLabel = '<unresolved>' }
+    Write-Log -Level 'STEP' -Message ('Published set   {0}' -f $publishLabel)
+
+    if ($DryRun) {
+        $publishPlanOnly = $true
+        Write-Log -Level 'PLAN' -Message ('  library      : {0}' -f $publishFull)
+        if ($null -ne $publishSet) {
+            Write-Log -Level 'PLAN' -Message ('  copy "{0}"' -f $publishSet.Archive)
+            Write-Log -Level 'PLAN' -Message ('    -> "{0}"' -f $publishCacheArchive)
+            Write-Log -Level 'PLAN' -Message ('  copy "{0}"' -f $publishSet.Manifest)
+            Write-Log -Level 'PLAN' -Message ('    -> "{0}"' -f $publishCacheSidecar)
+        }
+        Write-Log -Level 'PLAN' -Message '  then sha256(archive) is compared against archive.sha256 in the copied manifest'
+        Write-Log -Level 'PLAN' -Message '  and the ordinary local restore path continues unchanged (extraction happens in the cache,'
+        Write-Log -Level 'PLAN' -Message '  never in the library - the library holds ciphertext only)'
+        if ($publishMissing.Count -gt 0) {
+            foreach ($m in $publishMissing) { Write-Log -Level 'WARN' -Message ('  BLOCKER: {0}' -f $m) }
+        }
+        else {
+            Write-Log -Level 'OK' -Message '  the published set is present and readable'
+        }
+    }
+    else {
+        if ($publishMissing.Count -gt 0) {
+            foreach ($m in $publishMissing) { Write-Log -Level 'FAIL' -Message ('  {0}' -f $m) }
+            exit 2
+        }
+
+        [void](New-Item -ItemType Directory -Path $publishCacheDir -Force)
+
+        Write-Log -Level 'INFO' -Message ('  copying {0}' -f (Split-Path -Leaf $publishSet.Archive))
+        try { Copy-Item -LiteralPath $publishSet.Archive -Destination $publishCacheArchive -Force }
+        catch {
+            Write-Log -Level 'FAIL' -Message ('  could not copy the archive out of the library: {0}' -f $_.Exception.Message)
+            exit 3
+        }
+
+        Write-Log -Level 'INFO' -Message ('  copying {0}' -f (Split-Path -Leaf $publishSet.Manifest))
+        try { Copy-Item -LiteralPath $publishSet.Manifest -Destination $publishCacheSidecar -Force }
+        catch {
+            Write-Log -Level 'FAIL' -Message ('  could not copy the manifest sidecar out of the library: {0}' -f $_.Exception.Message)
+            Write-Log -Level 'FAIL' -Message '  Without it the archive cannot be proven intact before the passphrase is used.'
+            exit 3
+        }
+
+        # Gate publish: prove the bytes before spending the passphrase on them. Same gate as
+        # Gate S3, for the same reason - the sidecar carries the archive's own sha256, which the
+        # manifest sealed inside the archive cannot. Gate 0 then proves the dumps against the
+        # inner manifest, so the set is checked at both levels.
+        $pubRaw = [string](Get-Content -LiteralPath $publishCacheSidecar -Raw)
+        $pubSide = $null
+        try { $pubSide = ConvertFrom-Json -InputObject $pubRaw } catch { $pubSide = $null }
+
+        if ($null -eq $pubSide -or $null -eq $pubSide.archive -or [string]::IsNullOrWhiteSpace([string]$pubSide.archive.sha256)) {
+            Write-Log -Level 'WARN' -Message '  the manifest sidecar carries no archive block - archive-level integrity NOT verified.'
+            Write-Log -Level 'WARN' -Message '  (Gate 0 still checks every dump inside it.)'
+            Add-Gate -Name 'publish-archive-integrity' -Passed $true -Detail 'skipped - manifest has no archive block'
+        }
+        else {
+            $pubActual = [string](Get-FileHash -LiteralPath $publishCacheArchive -Algorithm SHA256).Hash
+            $pubExpected = [string]$pubSide.archive.sha256
+            if ($pubActual -ne $pubExpected) {
+                Add-Gate -Name 'publish-archive-integrity' -Passed $false -Detail ('sha256 mismatch: expected {0}, got {1}' -f $pubExpected, $pubActual)
+                Write-Log -Level 'FAIL' -Message '  The published archive does not match its manifest. Do NOT restore from it.'
+                Write-Log -Level 'FAIL' -Message '  Treat as an incident: sync corruption, an interrupted publish, or the file was modified'
+                Write-Log -Level 'FAIL' -Message '  in the library. OneDrive version history holds earlier versions of this same file.'
+                exit 3
+            }
+            Add-Gate -Name 'publish-archive-integrity' -Passed $true -Detail ('sha256 matches the manifest ({0:N0} bytes)' -f (Get-Item -LiteralPath $publishCacheArchive).Length)
+        }
+
+        $BackupPath = $publishCacheArchive
+        Write-Log -Level 'OK' -Message ('  copied to {0}' -f $publishCacheArchive)
+        Write-Log -Level 'WARN' -Message ('  this copied set is PII on local disk - delete {0} once the restore is signed off.' -f $publishCacheDir)
+    }
+}
 
 if ($useS3) {
     if ($FromS3 -notmatch '^\d{4}-\d{2}-\d{2}$') {
@@ -419,12 +652,13 @@ $extractedTemp = $null
 # later filesystem probe - see the note above $storagePolicyFile.
 $restoreDirIsPlaceholder = $false
 
-if ($s3PlanOnly) {
-    # -FromS3 -DryRun: nothing has been fetched, so there is no set on disk to inspect. The
-    # rest of the plan still prints, against a placeholder. It must contain NO colon and no
-    # slash: downstream Join-Path calls read a colon as a drive qualifier and throw
-    # DriveNotFound. The partition and bucket are already printed in the fetch plan above.
-    $restoreDir = '<archive-fetched-from-s3-then-extracted>'
+if ($s3PlanOnly -or $publishPlanOnly) {
+    # -FromS3 / -FromPublish with -DryRun: nothing has been fetched or copied, so there is no
+    # set on disk to inspect. The rest of the plan still prints, against a placeholder. It must
+    # contain NO colon and no slash: downstream Join-Path calls read a colon as a drive
+    # qualifier and throw DriveNotFound. The source is already printed in the plan above.
+    if ($publishPlanOnly) { $restoreDir = '<archive-copied-from-the-library-then-extracted>' }
+    else                  { $restoreDir = '<archive-fetched-from-s3-then-extracted>' }
     $restoreDirIsPlaceholder = $true
 }
 else {
@@ -602,15 +836,17 @@ if ($mode -eq 'remote') {
 if ($DryRun) {
     Write-Host ''
     Write-Log -Level 'PLAN' -Message '=== NDT Suite restore - DRY RUN (nothing will be changed) ==='
-    if ($useS3) { Write-Log -Level 'PLAN' -Message ('Source       : off-site S3 partition {0} via remote "{1}:"' -f $FromS3, $AwsRemote) }
-    else        { Write-Log -Level 'PLAN' -Message ('Source       : local set {0}' -f $BackupPath) }
+    if ($usePublish)  { Write-Log -Level 'PLAN' -Message ('Source       : published set {0} in {1}' -f $publishLabel, $publishFull) }
+    elseif ($useS3)   { Write-Log -Level 'PLAN' -Message ('Source       : off-site S3 partition {0} via remote "{1}:"' -f $FromS3, $AwsRemote) }
+    else              { Write-Log -Level 'PLAN' -Message ('Source       : local set {0}' -f $BackupPath) }
     Write-Log -Level 'PLAN' -Message ('Backup set   : {0}' -f $restoreDir)
     Write-Log -Level 'PLAN' -Message ('Mode         : {0}' -f $mode)
     if ($mode -eq 'remote') { Write-Log -Level 'PLAN' -Message ('Target       : {0}' -f (Format-MaskedUrl -Url $TargetDbUrl)) }
     else                    { Write-Log -Level 'PLAN' -Message ('Target       : throwaway container "{0}" from postgres:17' -f $LocalContainerName) }
     Write-Log -Level 'PLAN' -Message ('Secrets file : {0} (present: {1})' -f $SecretsFile, $secretsLoaded)
     Write-Host ''
-    if ($useS3) { Write-Log -Level 'PLAN' -Message 'Gate S3 re-hash the fetched .7z against archive.sha256 in the manifest sidecar' }
+    if ($usePublish) { Write-Log -Level 'PLAN' -Message 'Gate P  re-hash the copied .7z against archive.sha256 in the manifest sidecar' }
+    if ($useS3)      { Write-Log -Level 'PLAN' -Message 'Gate S3 re-hash the fetched .7z against archive.sha256 in the manifest sidecar' }
     Write-Log -Level 'PLAN' -Message 'Gate 0  re-hash every artifact against manifest.json (refuse on mismatch)'
     Write-Log -Level 'PLAN' -Message 'Step 1  psql --single-transaction --variable ON_ERROR_STOP=1 \'
     Write-Log -Level 'PLAN' -Message '          --file roles.sql --file schema.sql \'
@@ -1023,6 +1259,10 @@ if ($null -ne $extractedTemp) {
 }
 if ($useS3 -and -not $s3PlanOnly) {
     Write-Log -Level 'WARN' -Message ('Fetched archive remains at {0} - delete it once the restore is signed off.' -f $localSetDir)
+}
+if ($usePublish -and -not $publishPlanOnly) {
+    Write-Log -Level 'WARN' -Message ('Copied archive remains at {0} - delete it once the restore is signed off.' -f $publishCacheDir)
+    Write-Log -Level 'INFO' -Message 'Nothing was written into the OneDrive library by this restore.'
 }
 
 Write-Host ''

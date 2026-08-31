@@ -20,7 +20,7 @@
 > is held in private repositories with an automated CI pipeline performing secret scanning,
 > static security analysis and dependency vulnerability checks on every change. The database is
 > backed up automatically every day by the platform, and a secondary regime of weekly encrypted
-> backups to Company-controlled AWS S3 storage is in commissioning.
+> backups to a Company OneDrive (SharePoint) library is in commissioning.
 >
 > **User base.** Approximately 20 named user accounts, comprising Company inspection,
 > engineering and administrative staff together with a small number of engaged contractor
@@ -49,8 +49,8 @@
 > actions are recorded in an immutable, admin-only audit log.
 
 *Pre-submission sanity checks: if the 2FA frontend has shipped by submission day, change "in
-final rollout" to "enforced for all accounts"; if the S3 backup has had its first verified run,
-change "in commissioning" to "operational". The working notes below informed this text.*
+final rollout" to "enforced for all accounts"; if the OneDrive backup has had its first verified
+run, change "in commissioning" to "operational". The working notes below informed this text.*
 
 ---
 
@@ -86,9 +86,11 @@ The system is cloud-hosted with no on-premises server estate:
 - **Source code and CI** — GitLab (primary, with a 7-stage pipeline including secret scanning,
   static analysis and dependency auditing) plus a GitHub mirror.
 - **Backups** — daily automated platform backups (Supabase); a secondary regime of weekly
-  AES-256-encrypted logical dumps to a Company-controlled AWS S3 bucket is commissioned and
-  awaiting first run **[CONFIRM (owner): state as "in commissioning" or complete depending on
-  status at submission]**.
+  AES-256-encrypted logical dumps published to a Company OneDrive (SharePoint) library is
+  commissioned and awaiting first run **[CONFIRM (owner): state as "in commissioning" or
+  complete depending on status at submission]**. Archives are encrypted on the workstation
+  *before* they sync, so the storage layer holds ciphertext only. An AWS S3 destination was
+  designed but never commissioned and is dormant — do not mention it in a response.
 
 ## User base
 
@@ -144,8 +146,9 @@ repositories, and the operational credentials; deployments and database changes 
 maintainers' workstations, and the CI system deliberately holds no database credentials (a
 single deployment token only). No contractor or third party holds any credential.
 **[CONFIRM (owner): the domain registrar, the Google AI Studio console (Gemini API key) and the
-AWS backup account — confirm whether these are single-held by Jonas Whitehead or also accessible
-to David Emery, and state which in the response.]**
+backup archive passphrase — confirm whether these are single-held by Jonas Whitehead or also
+accessible to David Emery, and state which in the response. The backup library itself sits in the
+Company M365 tenant, so access there follows normal tenant administration.]**
 
 Suggested response wording: *"Privileged access is held by two named individuals — Jonas
 Whitehead and David Emery — who jointly administer and maintain the system. No third party,

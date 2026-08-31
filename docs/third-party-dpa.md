@@ -2,11 +2,17 @@
 
 > **Data Controller**: Matrix Advanced Inspection Services
 > **Statutory basis**: UK GDPR Article 28 (processor obligations) and Article 30(1)(d) (record of recipients)
-> **Last updated**: 2026-08-26
+> **Last updated**: 2026-08-31
 > **Review frequency**: annually, and whenever a service is added, removed, or changes sub-processors
 > **REVIEW (owner): review cadence.** The per-service review dates below are set to an annual cadence with a recommended next-due date of 2027-08-26. Confirm the cadence and the dates, or set your own.
 
 > **Change note (2026-08-26).** This document previously asserted "No Other Third-Party Processors". That statement was **false** — the platform's frontend is hosted by Vercel, transactional email is delivered by Resend, source code is hosted by GitLab and GitHub, and engineering drawings are sent to Google's Gemini API for extraction. The claim has been removed and replaced by the register below. This correction was raised by the ISO 27001-style posture assessment recorded in `docs/plans/2026-08-26-security-hardening-and-platform-ops-plan.md` (finding A9).
+
+> **Change note (2026-08-31).** Microsoft is added as **P7**: by owner decision the weekly off-platform
+> database backup is now published, AES-256 encrypted, to the Company OneDrive (SharePoint) library. The
+> AWS S3 destination decided on 2026-08-27 was never commissioned and is dormant, so Amazon Web Services
+> is **not** added here — no bucket, IAM user or object exists. AWS remains present only as Supabase's
+> sub-processor under P1.
 
 ## Register at a glance
 
@@ -18,6 +24,7 @@
 | P4 | GitLab Inc. | Processor — source code hosting (primary) | Contributor commit metadata only; no data-subject data by policy | **REVIEW (owner): attach link** | Annual, next 2027-08-26 |
 | P5 | GitHub, Inc. | Processor — source code hosting (mirror) | Contributor commit metadata only; no data-subject data by policy | **REVIEW (owner): attach link** | Annual, next 2027-08-26 |
 | P6 | Google (Gemini API) | Processor — engineering drawing extraction | None by design (engineering drawings only) | **REVIEW (owner): attach link** | Annual, next 2027-08-26 |
+| P7 | Microsoft (OneDrive / SharePoint, business tenant) | Processor — storage of **encrypted** database backup archives | **Encrypted ciphertext only** — AES-256 archives whose plaintext holds all application personal data | **REVIEW (owner): attach link** (Microsoft Products and Services DPA — already in force under the Company's M365 agreement; record the version and date) | Annual, next 2027-08-26 |
 
 Detailed records follow. Every entry states what the service actually receives, not what it is capable of receiving.
 
@@ -86,7 +93,7 @@ Both services host the same source repository; GitLab is the primary (and carrie
 | **DPA / terms location** | **REVIEW (owner): attach link** (one for each provider) |
 | **DPA status** | **REVIEW (owner): not yet established** |
 | **Data processed** | **Application source code only — no data-subject personal data, by policy.** The one category of personal data inherently present is **contributor commit metadata**: the name and email address recorded against each commit by version control, which is personal data of the development team rather than of platform data subjects. |
-| **Standing policy — database dumps are banned from the repository** | Production database dumps contain personal data and password hashes and must **never** be committed, and must be held outside both the repository and any cloud-sync folder. This rule was set during the 2026-08-17 project migration and is reasserted in the backup design: backup archives are written encrypted, outside the repository and outside OneDrive. |
+| **Standing policy — database dumps are banned from the repository** | Production database dumps contain personal data and password hashes and must **never** be committed, and **plaintext** dumps must be held outside both the repository and any cloud-sync folder. This rule was set during the 2026-08-17 project migration. Since 2026-08-31 the finished **encrypted archive** is deliberately published to a OneDrive library (P7) — the distinction is exact and enforced by the backup script: ciphertext syncs, plaintext never does, and the two roots may not overlap. |
 | **Safeguards** | No secrets are committed; `.env` is untracked; the CI pipeline runs a blocking `gitleaks` secret scan and a blocking `semgrep` static analysis pass (OWASP Top Ten and security-audit rulesets) on every run, so an accidental credential or a known-insecure pattern fails the build rather than landing silently. The pipeline holds **no Supabase credentials** — a deliberate control that keeps the blast radius of a CI compromise away from production data. |
 | **Data location** | **REVIEW (owner): confirm the hosting region for each provider** and the transfer mechanism relied on. |
 
@@ -106,6 +113,24 @@ Both services host the same source repository; GitLab is the primary (and carrie
 | **Sub-processors** | Per Google's published terms — **REVIEW (owner): obtain and record** |
 | **Data location** | **REVIEW (owner): confirm the processing region.** |
 | **Model-training position** | **REVIEW (owner): confirm** whether the API tier in use excludes submitted content from model training, and record the answer. This determines whether drawing content — which is commercially confidential client engineering data even when it holds no personal data — is retained by the processor. |
+
+---
+
+## P7 — Microsoft (OneDrive for Business / SharePoint Online, Company tenant)
+
+| Field | Detail |
+|---|---|
+| **Processor** | Microsoft Corporation / Microsoft Ireland Operations Ltd, under the Company's Microsoft 365 business tenant |
+| **Services** | Storage and synchronisation of the weekly off-platform database backup archives. Added by owner decision **2026-08-31**, replacing the never-commissioned AWS S3 destination (see `docs/processes/backup-and-restore.md` and the dormancy banner in `docs/processes/aws-backup-setup.md`). |
+| **DPA / terms location** | **REVIEW (owner): attach link.** Microsoft's Products and Services Data Protection Addendum applies automatically to the Company's existing M365 subscription — unlike the other rows here this is a DPA the Company already holds. Record the version in force and the date it was accepted, so the position is evidenced rather than assumed. |
+| **DPA status** | **REVIEW (owner): confirm the in-force version** |
+| **Data processed** | **Ciphertext only.** What is stored is a 7-Zip AES-256 archive with encrypted headers, plus a metadata sidecar carrying file hashes, byte sizes and table row counts. The archive's *plaintext*, were it ever opened, is a full logical database dump: user profiles, competency records and their certificate documents, activity logs, and `auth.users` including password hashes. Microsoft is therefore a processor of personal data in encrypted form, and is recorded as one. |
+| **Safeguards** | **Client-side encryption before sync is the control**, and it is enforced rather than trusted: `scripts/db-backup.ps1` writes plaintext dumps only to a non-synced staging root, and publishes to the library **only after** the archive is sealed and `7z t`-verified — no temp file, no partial manifest and no plaintext ever appears under the synced path. The published copy is re-hashed at the destination against the manifest, so a partial or corrupted sync fails the run. Restores copy the archive *out* of the library before decrypting. Beyond that: Microsoft encryption at rest and TLS in transit; tenant access controls and the site's own membership; version history, the two-stage recycle bin and Files Restore as the recovery net. |
+| **Access position — stated plainly** | The library is a **shared** document library. Any member of that SharePoint site can see and download the archive file. Confidentiality of the personal data inside it rests **entirely on the archive passphrase**, which is held in the owner's password manager and is not on the backup machine's disk in plaintext. **REVIEW (owner): confirm the site membership is appropriate for that**, and consider restricting the `DB Backup` folder to the two maintainers — the passphrase is a strong control, but least privilege on top of it costs nothing. |
+| **Sub-processors** | Per Microsoft's published sub-processor list — **REVIEW (owner): obtain and record** |
+| **Data location** | **REVIEW (owner): confirm the tenant's data residency** (M365 tenants provisioned in the UK store SharePoint/OneDrive data in the UK; confirm rather than assume) and record the transfer mechanism relied on. |
+| **Retention at the processor** | The backup script keeps **8 published sets** (about two months of weekly backups) and prunes older ones itself; the library has no lifecycle rules of its own. Deleted files remain recoverable in the site recycle bin for up to 93 days, so effective retention exceeds the eight-set window — reconcile that with `docs/data-retention-schedule.md`. |
+| **Notes** | The AWS S3 destination is dormant, not in use, and is deliberately **not** recorded as a processor: no bucket, IAM user or object was ever created. If it is re-armed, add Amazon Web Services here as P8 before the first upload. |
 
 ---
 

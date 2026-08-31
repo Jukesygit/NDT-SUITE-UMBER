@@ -1,6 +1,28 @@
 # AWS Off-Site Backup — One-Time Setup
 
-**Owner:** Jonas · **Last reviewed:** 2026-08-27 · **Scripts:** `scripts/db-backup.ps1`, `scripts/db-restore.ps1`
+> # ⚠ DORMANT — nothing below applies today
+>
+> **Owner decision, 2026-08-31: the durable backup destination is a Company OneDrive (SharePoint)
+> library, not AWS S3.** This runbook was written on 2026-08-27 and was **never executed** — no bucket,
+> no IAM users, no lifecycle rules, no `rclone` remote exist.
+>
+> It is kept, unchanged and working, as the **ready alternative**: `scripts/db-backup.ps1` still runs the
+> S3 stage first-class the moment the destination is configured, and `db-restore.ps1 -FromS3` still
+> fetches from it. Nothing here has been deprecated — it is simply not the path in use.
+>
+> **The live process is [backup-and-restore.md](backup-and-restore.md)**, and the durable destination is
+> `…\OneDrive - Matrix\Matrix IMS - Documents\DB Backup\db\<YYYY>\`. Do not follow the steps below unless
+> you are deliberately re-arming the S3 stage; if you do, note that the two destinations coexist rather
+> than replace each other — a run that publishes *and* uploads is simply a run with two durable copies.
+>
+> One thing below still applies whichever destination is used, and is worth reading on its own: the
+> reasoning in *Why this exists* about client-side encryption, and why deletion rights are the control
+> that matters. The OneDrive destination keeps the first property and trades the second for version
+> history and the recycle bin — that trade is stated plainly in
+> [disaster-recovery.md](disaster-recovery.md).
+
+**Owner:** Jonas · **Last reviewed:** 2026-08-31 · **Status:** DORMANT (see banner) ·
+**Scripts:** `scripts/db-backup.ps1`, `scripts/db-restore.ps1`
 
 This is the **one-time console runbook** that turns the off-site stage on. Everything here happens in
 the AWS console and in `rclone config` on the owner machine; nothing in it is automated, and nothing in
