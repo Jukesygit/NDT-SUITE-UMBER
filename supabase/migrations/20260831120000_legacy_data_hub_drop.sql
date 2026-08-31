@@ -44,10 +44,13 @@
 --     complete .rpc() inventory is 8 targets, none of them legacy.
 --   * No type for any of the nine in src/types/database.types.ts.
 --   * Zero references in companion/ (the Python client).
---   * No current-era table has a foreign key into any of the nine, and none of
---     the nine references a current-era table (§4.1). The family is a closed
---     island: every FK points at another of the nine, at organizations, or at
---     auth.users.
+--   * No current-era table has a FOREIGN KEY into any of the nine, and none of
+--     the nine FK-references a current-era table (§4.1): every FK points at
+--     another of the nine, at organizations, or at auth.users. NOTE the claim
+--     is scoped to FOREIGN KEYS — policy dependencies are a separate axis, and
+--     the adversarial review (2026-08-28) found four live storage.objects
+--     policies referencing assets/shared_assets, handled in Phase 1.5 below.
+--     Dependency sweeps must always cover BOTH public AND storage schemas.
 --
 -- The RPCs matter MORE than the tables, and that is the finding that motivated
 -- this file (investigation §5.2). They are SECURITY DEFINER, owned by postgres,
@@ -287,6 +290,10 @@
 --   Dropping the functions first means CASCADE is never needed, which is the
 --   point — see "NO CASCADE" below.
 --
+-- Phase 1.5 — four storage.objects policies depending on assets/shared_assets,
+--   narrowed to their own-org branch (adversarial review 2026-08-28, BLOCKER-1).
+--   Must run before Phase 2 or DROP TABLE public.assets fails on the dependency.
+--
 -- Phase 2 — the NINE tables, children before parents.
 --   The FK graph within the family (all verified in the live dump):
 --     vessels.asset_id        -> assets(id)   ON DELETE CASCADE
@@ -456,10 +463,13 @@ BEGIN
         RAISE WARNING
             'Zero-row gate OVERRIDDEN (c_allow_nonempty = true). Destroying rows in:%',
             v_offenders;
+        RAISE NOTICE
+            'Zero-row gate OVERRIDDEN: % table(s) present (rows destroyed under the recorded override — see WARNING above), % already absent.',
+            v_present, v_absent;
+    ELSE
+        RAISE NOTICE 'Zero-row gate passed: % table(s) present and empty, % already absent.',
+            v_present, v_absent;
     END IF;
-
-    RAISE NOTICE 'Zero-row gate passed: % table(s) present and empty, % already absent.',
-        v_present, v_absent;
 END
 $gate$;
 
@@ -500,6 +510,43 @@ DROP FUNCTION IF EXISTS public.approve_asset_access_request(uuid);
 DROP FUNCTION IF EXISTS public.reject_asset_access_request(uuid, text);
 
 -- ----------------------------------------------------------------------------
+-- Phase 1.5 — storage.objects policies that depend on assets/shared_assets.
+--
+-- ADDED BY ADVERSARIAL REVIEW 2026-08-28 (BLOCKER-1): four live storage
+-- policies ("Users can view accessible {3D models, scan data, scan images,
+-- vessel images}") carry a cross-org branch joining public.assets +
+-- public.shared_assets. pg_depend records that dependency, so the un-CASCADEd
+-- DROP TABLE public.assets below would FAIL and roll the whole migration back.
+-- Second instance of this repo's storage-policy-omission scar class:
+-- dependency sweeps must cover BOTH public AND storage schemas.
+--
+-- Each policy is recreated with its own-org branch ONLY. Access-neutral by
+-- proof, not assertion: the removed cross-org branch joins shared_assets,
+-- which holds 0 rows (GATE 2 / archive 2026-08-28), so it grants nothing to
+-- anyone today. Covered by the owner's option-(a) decision — policies
+-- referencing the dropped family are part of the family.
+-- ----------------------------------------------------------------------------
+DO $storage$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN SELECT * FROM (VALUES
+        ('Users can view accessible 3D models',     '3d-models'),
+        ('Users can view accessible scan data',     'scan-data'),
+        ('Users can view accessible scan images',   'scan-images'),
+        ('Users can view accessible vessel images', 'vessel-images')
+    ) AS v(polname, bucket) LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON storage.objects', r.polname);
+        EXECUTE format(
+            'CREATE POLICY %I ON storage.objects FOR SELECT TO authenticated '
+            'USING (bucket_id = %L AND (storage.foldername(name))[1] IN ('
+            '  SELECT p.organization_id::text FROM public.profiles p WHERE p.id = auth.uid()))',
+            r.polname, r.bucket);
+    END LOOP;
+END
+$storage$;
+
+-- ----------------------------------------------------------------------------
 -- Phase 2 — the nine tables, children before parents.
 --
 -- No CASCADE: an unexpected dependency must fail this migration loudly rather
@@ -509,15 +556,20 @@ DROP FUNCTION IF EXISTS public.reject_asset_access_request(uuid, text);
 
 -- --- the assets family, leaves inward -------------------------------------
 
--- FK -> vessels. Also the only table whose policies call user_can_access_vessel();
--- dropping it here is what releases that function for Phase 3.
-DROP TABLE IF EXISTS public.inspections;
-
 -- FK -> vessels AND -> strakes, so it must precede strakes, not just vessels.
+-- Ordered before inspections as free insurance (review 2026-08-28): the
+-- never-applied hand-run script add-inspections-table.sql declares
+-- scans.inspection_id -> inspections; live has no such FK, but this order is
+-- correct under both states.
 DROP TABLE IF EXISTS public.scans;
 
--- FK -> vessels.
+-- FK -> vessels. (The same never-applied script declares an inspections FK
+-- here too — same insurance.)
 DROP TABLE IF EXISTS public.vessel_images;
+
+-- FK -> vessels. The only table whose policies call user_can_access_vessel();
+-- dropping it here is what releases that function for Phase 3.
+DROP TABLE IF EXISTS public.inspections;
 
 -- FK -> vessels. Safe now that scans (its only inbound FK) is gone.
 DROP TABLE IF EXISTS public.strakes;
